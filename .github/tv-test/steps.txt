@@ -1,0 +1,12 @@
+# Home screen
+shot home
+keys DOWN,DOWN,DOWN 2
+shot home_down3
+keys UP,UP,UP,UP 2
+shot home_up4
+key LEFT
+shot rail
+key DOWN
+shot rail_down
+key RIGHT 2
+shot back_to_content

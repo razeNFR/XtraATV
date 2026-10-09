@@ -1,0 +1,52 @@
+name: Build and TV UI test
+
+on:
+  push:
+    branches-ignore: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v7
+    - name: Setup Java
+      uses: actions/setup-java@v6
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6
+      with:
+        cache-provider: 'basic'
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: apk-debug
+        path: app/build/outputs/apk/debug/*.apk
+
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+    - name: Run Android TV emulator UI script
+      uses: reactivecircus/android-emulator-runner@v2
+      continue-on-error: true
+      with:
+        api-level: 34
+        target: android-tv
+        arch: x86
+        profile: tv_1080p
+        disable-animations: false
+        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+        script: bash .github/tv-test/run.sh
+    - name: Upload TV screenshots
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: tv-screens
+        path: tv-out/
