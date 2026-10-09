@@ -25,13 +25,15 @@ shot card_menu_closed
 # Open a stream
 key DPAD_CENTER 25
 shot player
-key DPAD_CENTER 2
+key DPAD_CENTER 1
 shot player_controls
-keys RIGHT,RIGHT,RIGHT 1
+keys RIGHT,RIGHT,RIGHT 0.5
 shot player_right3
-keys RIGHT,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT 1
+keys RIGHT,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT 0.5
 shot player_right9
-key BACK 2
+keys UP 0.5
+shot player_up_timeline
+key BACK 1
 shot player_back1
 key BACK 3
 shot player_closed

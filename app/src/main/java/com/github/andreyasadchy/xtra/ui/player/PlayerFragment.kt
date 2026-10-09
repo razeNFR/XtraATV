@@ -102,6 +102,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private var isPortrait = false
     private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
+    /** Controls stay longer on TV, moving between them with a remote takes more time than tapping. */
+    protected val controllerHideDelay by lazy { if (isTv) 6000L else 3000L }
     protected var isMaximized = true
     private var isChatOpen = true
     private var isKeyboardShown = false
@@ -652,7 +654,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 seek(position)
                             } else {
                                 if (controllerAutoHide && controllerHideOnTouch) {
-                                    binding.playerControls.root.postDelayed(controllerHideAction, 3000)
+                                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                                 }
                             }
                         }
@@ -1277,6 +1279,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     } else {
                         chatLayout.visibility = View.GONE
                     }
+                    if (isTv) {
+                        // full screen video, chat as an overlay
+                        if (isChatOpen) {
+                            showChatLayout()
+                        } else {
+                            hideChatLayout()
+                        }
+                    }
                 } else {
                     showStatusBar()
                     playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
@@ -1781,7 +1791,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         with(binding) {
             if (canEnterPictureInPicture()) {
                 if (!controllerHideOnTouch && !controllerIsAnimating && controllerAutoHide && !binding.playerControls.progressBar.isPressed) {
-                    playerControls.root.postDelayed(controllerHideAction, 3000)
+                    playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                 }
                 controllerHideOnTouch = true
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
@@ -2010,7 +2020,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                     controllerIsAnimating = false
                                     setListener(null)
                                     if (view != null && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                                        binding.playerControls.root.postDelayed(controllerHideAction, 3000)
+                                        binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                                     }
                                 }
                             }
@@ -2021,7 +2031,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             } else {
                 binding.playerControls.root.removeCallbacks(controllerHideAction)
                 if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                    binding.playerControls.root.postDelayed(controllerHideAction, 3000)
+                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                 }
             }
         } else {
@@ -2031,7 +2041,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 binding.playerControls.root.alpha = 1f
                 binding.playerControls.root.visibility = View.VISIBLE
                 if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                    binding.playerControls.root.postDelayed(controllerHideAction, 3000)
+                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                 }
             }
         }

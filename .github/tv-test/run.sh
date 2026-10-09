@@ -37,6 +37,8 @@ while read -r cmd arg rest <&3; do
   esac
 done 3< .github/tv-test/steps.txt
 adb logcat -d -b crash > $OUT/crash.log 2>&1
+echo "=== FOCUS ==="
+cat $OUT/focus.log
 echo "=== CRASHES ==="
 grep -E "FATAL|Exception|at com.github" $OUT/crash.log | head -40
 adb logcat -d | grep -E "AndroidRuntime|FATAL|$PKG" | tail -300 > $OUT/logcat.log 2>&1
