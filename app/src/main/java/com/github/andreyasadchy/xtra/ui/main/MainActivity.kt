@@ -64,6 +64,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.github.andreyasadchy.xtra.BuildConfig
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.ActivityMainBinding
 import com.github.andreyasadchy.xtra.databinding.DialogUpdateDownloadBinding
@@ -703,6 +704,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (BuildConfig.DEBUG && isTv) {
+            android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
+        }
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
         if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot()) {
             // back on a main screen opens the menu, back again in the menu leaves the app

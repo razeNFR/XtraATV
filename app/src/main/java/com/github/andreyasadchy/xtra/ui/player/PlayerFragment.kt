@@ -58,6 +58,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.TimeBar
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.RecyclerView
+import com.github.andreyasadchy.xtra.BuildConfig
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentPlayerBinding
 import com.github.andreyasadchy.xtra.model.VideoQuality
@@ -1953,6 +1954,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** Handles D-pad keys while the player itself (and not one of its controls) has focus. */
     private fun onPlayerKey(keyCode: Int, event: KeyEvent): Boolean {
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("XtraTv", "playerKey ${KeyEvent.keyCodeToString(keyCode)} action=${event.action} animating=$isAnimating maximized=$isMaximized useController=$useController controlsVisible=${_binding?.playerControls?.root?.isVisible} controllerAnimating=$controllerIsAnimating")
+        }
         if (_binding == null || isAnimating) {
             return false
         }
@@ -1990,6 +1994,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             if (!binding.playerControls.playPause.requestFocus()) {
                                 binding.playerControls.root.requestFocus()
                             }
+                        }
+                        if (BuildConfig.DEBUG && view != null) {
+                            android.util.Log.d("XtraTv", "controls visible=${binding.playerControls.root.isVisible} alpha=${binding.playerControls.root.alpha} hasFocus=${binding.playerControls.root.hasFocus()} playPause visible=${binding.playerControls.playPause.isShown} focusable=${binding.playerControls.playPause.isFocusable}")
                         }
                     }
                 }
