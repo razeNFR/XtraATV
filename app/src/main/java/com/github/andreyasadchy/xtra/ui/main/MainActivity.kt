@@ -79,6 +79,7 @@ import com.github.andreyasadchy.xtra.ui.download.VideoDownloadService
 import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.games.GamesFragmentDirections
+import com.github.andreyasadchy.xtra.ui.login.LoginActivity
 import com.github.andreyasadchy.xtra.ui.main.MainViewModel.Companion.MainViewModelFactory
 import com.github.andreyasadchy.xtra.ui.player.BasePlaybackService
 import com.github.andreyasadchy.xtra.ui.player.ExoPlayerFragment
@@ -87,8 +88,11 @@ import com.github.andreyasadchy.xtra.ui.player.PlayerFragment
 import com.github.andreyasadchy.xtra.ui.saved.SavedMediaFragment
 import com.github.andreyasadchy.xtra.ui.saved.SavedPagerFragment
 import com.github.andreyasadchy.xtra.ui.saved.downloads.DownloadsFragment
+import com.github.andreyasadchy.xtra.ui.search.SearchPagerFragmentDirections
+import com.github.andreyasadchy.xtra.ui.settings.SettingsActivity
 import com.github.andreyasadchy.xtra.ui.team.TeamFragmentDirections
 import com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections
+import com.github.andreyasadchy.xtra.ui.view.TvUi
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.applyTheme
@@ -158,6 +162,17 @@ class MainActivity : AppCompatActivity() {
             if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
                 lastContentFocus = newFocus
             }
+        }
+        if (isTv) {
+            supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
+                override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
+                    TvUi.adapt(v, hideToolbarActions = true)
+                }
+
+                override fun onFragmentResumed(fm: FragmentManager, f: Fragment) {
+                    binding.root.post { ensureFocus() }
+                }
+            }, true)
         }
         setNavBarColor(resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT)
         val ignoreCutouts = prefs.getBoolean(C.UI_DRAW_BEHIND_CUTOUTS, false)
@@ -666,7 +681,63 @@ class MainActivity : AppCompatActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
+        if (isTv && event.action == KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    val focus = currentFocus
+                    if (focus == null || !focus.isShown) {
+                        // the focused view went away (list refresh, navigation...): bring the focus back instead of losing the key
+                        if (ensureFocus(force = true)) {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
         return super.dispatchKeyEvent(event)
+    }
+
+    private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
+
+    /**
+     * Gives the focus back to the screen when nothing visible has it.
+     * Returns true if the focus was moved.
+     */
+    private fun ensureFocus(force: Boolean = false): Boolean {
+        val focus = currentFocus
+        if (!force && focus != null && focus.isShown) {
+            return false
+        }
+        val player = playerFragment as? PlayerFragment
+        if (player != null && player.requestPlayerFocus()) {
+            return true
+        }
+        lastContentFocus?.let {
+            if (it.isAttachedToWindow && it.isShown && it.requestFocus()) {
+                return true
+            }
+        }
+        return binding.navHostFragment.requestFocus() || binding.navBarContainer.requestFocus()
+    }
+
+    fun openSettings() {
+        settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java))
+    }
+
+    fun onAccountClicked() {
+        val isLoggedIn = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank() ||
+                !TwitchApiHelper.getHelixHeaders(this)[C.HEADER_TOKEN].isNullOrBlank()
+        if (isLoggedIn) {
+            getAlertDialogBuilder().apply {
+                setTitle(getString(R.string.logout_title))
+                tokenPrefs().getString(C.USERNAME, null)?.let { setMessage(getString(R.string.logout_msg, it)) }
+                setNegativeButton(getString(R.string.no), null)
+                setPositiveButton(getString(R.string.yes)) { _, _ -> logoutResultLauncher?.launch(Intent(this@MainActivity, LoginActivity::class.java)) }
+            }.show()
+        } else {
+            loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+        }
     }
 
     override fun onUserLeaveHint() {
@@ -1186,7 +1257,10 @@ class MainActivity : AppCompatActivity() {
             if (!prefs.getBoolean(C.UI_THEME_BOTTOM_NAV_COLOR, true) && prefs.getBoolean(C.UI_THEME_MATERIAL3, true)) {
                 setBackgroundColor(MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface))
             }
-            if (tabList.any { it.split(':')[2] != "0" }) {
+            if (isTv) {
+                menu.add(Menu.NONE, R.id.tvNavSearch, Menu.NONE, R.string.search).setIcon(R.drawable.baseline_search_black_24)
+            }
+            if (isTv || tabList.any { it.split(':')[2] != "0" }) {
                 tabList.forEach {
                     val split = it.split(':')
                     val key = split[0]
@@ -1215,8 +1289,26 @@ class MainActivity : AppCompatActivity() {
             } else {
                 binding.navBarContainer.visibility = View.GONE
             }
+            if (isTv) {
+                menu.add(Menu.NONE, R.id.tvNavSettings, Menu.NONE, R.string.settings).setIcon(R.drawable.baseline_settings_black_24)
+                menu.add(Menu.NONE, R.id.tvNavAccount, Menu.NONE, R.string.tv_account).setIcon(R.drawable.baseline_person_black_24)
+            }
             setupWithNavController(navController)
             setOnItemSelectedListener {
+                when (it.itemId) {
+                    R.id.tvNavSearch -> {
+                        navController.navigate(SearchPagerFragmentDirections.actionGlobalSearchPagerFragment())
+                        return@setOnItemSelectedListener false
+                    }
+                    R.id.tvNavSettings -> {
+                        openSettings()
+                        return@setOnItemSelectedListener false
+                    }
+                    R.id.tvNavAccount -> {
+                        onAccountClicked()
+                        return@setOnItemSelectedListener false
+                    }
+                }
                 NavigationUI.onNavDestinationSelected(it, navController)
                 return@setOnItemSelectedListener true
             }

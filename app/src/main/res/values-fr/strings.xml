@@ -577,4 +577,9 @@
     <string name="stopping_video_swap">Stopping video swap</string>
     <string name="starting_proxy">Starting proxy</string>
     <string name="stopping_proxy">Stopping proxy</string>
+    <string name="tv_open_channel">Chaîne : %1$s</string>
+    <string name="tv_open_category">Catégorie : %1$s</string>
+    <string name="tv_more_options">Plus d\'options</string>
+    <string name="tv_more_actions">Plus d\'actions</string>
+    <string name="tv_account">Compte</string>
 </resources>

@@ -100,6 +100,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     protected var started = false
 
     private var isPortrait = false
+    private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
     protected var isMaximized = true
     private var isChatOpen = true
     private var isKeyboardShown = false
@@ -823,7 +824,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         (!TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
                                 !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank())
                     ) {
-                        if (requireContext().prefs().getBoolean(C.PLAYER_CHAT_BAR_TOGGLE, false) && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
+                        if (requireContext().prefs().getBoolean(C.PLAYER_CHAT_BAR_TOGGLE, false) && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && !isTv) {
                             toggleChatInput.visibility = View.VISIBLE
                             toggleChatInput.setOnClickListener {
                                 showController(force = true)
@@ -1195,7 +1196,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 playerLayout.isPortrait = true
                 chatLayout.isPortrait = true
                 with(playerControls) {
-                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true) && !resources.getBoolean(R.bool.isTv)) {
+                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true) && !isTv) {
                         fullscreen.visibility = View.VISIBLE
                         fullscreen.setImageResource(R.drawable.baseline_fullscreen_black_24)
                         fullscreen.setOnClickListener {
@@ -1270,7 +1271,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 playerLayout.isPortrait = false
                 chatLayout.isPortrait = false
                 with(playerControls) {
-                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true) && !resources.getBoolean(R.bool.isTv)) {
+                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true) && !isTv) {
                         fullscreen.visibility = View.VISIBLE
                         fullscreen.setImageResource(R.drawable.baseline_fullscreen_exit_black_24)
                         fullscreen.setOnClickListener {
@@ -1503,6 +1504,26 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private fun showChatLayout() {
         with(binding) {
+            if (isTv) {
+                // TV: chat is a read-only translucent overlay on the right, half the screen height, over the full screen video
+                val metrics = resources.displayMetrics
+                playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                    width = ViewGroup.LayoutParams.MATCH_PARENT
+                    height = ViewGroup.LayoutParams.MATCH_PARENT
+                    marginEnd = 0
+                }
+                chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                    width = (metrics.widthPixels * 0.3f).toInt()
+                    height = metrics.heightPixels / 2
+                    gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                    marginEnd = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+                }
+                chatLayout.setBackgroundResource(R.drawable.tv_chat_overlay_background)
+                chatLayout.clipToOutline = true
+                chatLayout.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                chatLayout.visibility = View.VISIBLE
+                return
+            }
             playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
                 width = ViewGroup.LayoutParams.MATCH_PARENT
                 height = ViewGroup.LayoutParams.MATCH_PARENT
@@ -1740,6 +1761,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
         }
+    }
+
+    /** Gives the focus to the player when it is maximized, returns false if it is not. */
+    fun requestPlayerFocus(): Boolean {
+        if (_binding == null || !isMaximized) {
+            return false
+        }
+        return binding.dragView.requestFocus()
     }
 
     /** Called by the activity for every key event, keeps the controls visible while they are used with a D-pad. */
@@ -2126,7 +2155,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 val keyboardInsets = windowInsets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { if (it > 0) it - (insets?.bottom ?: 0) else it } ?: 0
                 val scaledXDiff = (slidingLayout.width * (1f - minimizedScaleX)) / 2
                 val scaledYDiff = (slidingLayout.height * (1f - minimizedScaleY)) / 2
-                val navBarHeight = if (resources.getBoolean(R.bool.isTv)) {
+                val navBarHeight = if (isTv) {
                     resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
                 } else {
                     requireView().rootView.findViewById<LinearLayout>(R.id.navBarContainer)?.height?.takeIf { it > 0 }?.let { it - keyboardInsets } ?: (insets?.bottom ?: 0)

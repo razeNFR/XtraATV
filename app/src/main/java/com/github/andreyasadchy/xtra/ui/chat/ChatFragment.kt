@@ -287,7 +287,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         }
                         replyView.visibility = View.GONE
                         send.setOnClickListener { sendMessage() }
-                        if ((view.parent?.parent?.parent?.parent as? View)?.id == R.id.slidingLayout && !requireContext().prefs().getBoolean(C.KEY_CHAT_BAR_VISIBLE, true)) {
+                        if ((view.parent?.parent?.parent?.parent as? View)?.id == R.id.slidingLayout && (!requireContext().prefs().getBoolean(C.KEY_CHAT_BAR_VISIBLE, true) || resources.getBoolean(R.bool.isTv))) {
                             messageView.visibility = View.GONE
                         } else {
                             messageView.visibility = View.VISIBLE

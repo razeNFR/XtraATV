@@ -2,11 +2,54 @@
 shot home
 keys DOWN,DOWN,DOWN 2
 shot home_down3
-keys UP,UP,UP,UP 2
-shot home_up4
-key LEFT
+keys UP,UP,UP,UP,UP 2
+shot home_up5
+# Navigation rail
+keys LEFT,LEFT 1
 shot rail
-key DOWN
-shot rail_down
+keys UP,UP,UP,UP,UP,UP 1
+shot rail_top
+keys DOWN,DOWN 1
+shot rail_popular
+key DPAD_CENTER 8
+shot popular_open
 key RIGHT 2
-shot back_to_content
+shot popular_content
+keys RIGHT,RIGHT,DOWN 2
+shot popular_moved
+longkey DPAD_CENTER 3
+shot card_menu
+key BACK 2
+shot card_menu_closed
+# Open a stream
+key DPAD_CENTER 25
+shot player
+key DPAD_CENTER 2
+shot player_controls
+keys RIGHT,RIGHT,RIGHT 1
+shot player_right3
+keys RIGHT,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT 1
+shot player_right9
+keys UP 1
+shot player_up
+key BACK 2
+shot player_back1
+key BACK 3
+shot player_back2_minimized
+keys DOWN,RIGHT 2
+shot after_minimize_nav
+# Settings from the rail
+keys LEFT,LEFT,LEFT 1
+keys DOWN,DOWN,DOWN,DOWN,DOWN,DOWN 1
+shot rail_bottom
+key UP 1
+shot rail_settings
+key DPAD_CENTER 5
+shot settings
+keys DOWN,DOWN,DOWN 1
+shot settings_down3
+key DPAD_CENTER 3
+shot settings_sub
+key BACK 2
+key BACK 3
+shot back_from_settings

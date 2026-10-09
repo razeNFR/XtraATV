@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="tvNavSearch" type="id" />
+    <item name="tvNavSettings" type="id" />
+    <item name="tvNavAccount" type="id" />
+    <item name="tvMoveUp" type="id" />
+    <item name="tvMoveDown" type="id" />
+    <item name="tvRowsHighlighted" type="id" />
+</resources>

@@ -3,6 +3,9 @@ package com.github.andreyasadchy.xtra.ui.view
 import android.content.Context
 import android.content.res.Configuration
 import android.util.AttributeSet
+import android.view.KeyEvent
+import android.view.View
+import android.view.ViewConfiguration
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -33,16 +36,56 @@ class GridRecyclerView : RecyclerView {
 
     private val gridLayoutManager: GridLayoutManager
 
+    private var pressedCard: View? = null
+    private var longPressed = false
+    private val longPressAction = Runnable {
+        pressedCard?.let {
+            longPressed = true
+            it.isPressed = false
+            TvCards.showMenu(it)
+        }
+    }
+    private val focusFirstItemAction = Runnable { focusFirstItemIfFocusLost() }
+    private val dataObserver = object : AdapterDataObserver() {
+        override fun onChanged() = scheduleFocusCheck()
+        override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = scheduleFocusCheck()
+        override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = scheduleFocusCheck()
+        override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = scheduleFocusCheck()
+    }
+
     init {
         val columns = getColumnsForConfiguration(resources.configuration)
         gridLayoutManager = GridLayoutManager(context, columns)
         layoutManager = gridLayoutManager
         addItemDecoration(columns)
+        if (isTv) {
+            // room for the zoomed focused card at the edges
+            val padding = (12 * resources.displayMetrics.density).toInt()
+            setPadding(paddingLeft, padding, paddingRight, padding * 2)
+            clipToPadding = false
+            descendantFocusability = FOCUS_AFTER_DESCENDANTS
+            addOnChildAttachStateChangeListener(object : OnChildAttachStateChangeListener {
+                override fun onChildViewAttachedToWindow(view: View) {
+                    TvCards.prepare(view)
+                }
+
+                override fun onChildViewDetachedFromWindow(view: View) {
+                    if (view == pressedCard) {
+                        cancelPress()
+                    }
+                }
+            })
+        }
     }
 
     override fun setAdapter(adapter: Adapter<*>?) {
+        if (isTv) {
+            this.adapter?.unregisterAdapterDataObserver(dataObserver)
+            adapter?.registerAdapterDataObserver(dataObserver)
+        }
         super.setAdapter(adapter)
         if (isTv) {
+            scheduleFocusCheck()
             val columns = when (adapter) {
                 is GamesAdapter, is FollowedGamesAdapter -> TV_COLUMNS_GAMES
                 is FollowedChannelsAdapter, is ChannelSearchAdapter, is StreamsCompactAdapter, is TeamMembersAdapter -> TV_COLUMNS_CHANNELS
@@ -58,6 +101,68 @@ class GridRecyclerView : RecyclerView {
                 addItemDecoration(columns)
             }
         }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            val card = focusedChild
+            if (card != null && card.hasFocus()) {
+                // click on release, actions menu on long press
+                when (event.action) {
+                    KeyEvent.ACTION_DOWN -> {
+                        if (event.repeatCount == 0) {
+                            cancelPress()
+                            pressedCard = card
+                            longPressed = false
+                            card.isPressed = true
+                            postDelayed(longPressAction, ViewConfiguration.getLongPressTimeout().toLong())
+                        }
+                    }
+                    KeyEvent.ACTION_UP -> {
+                        val wasLongPressed = longPressed
+                        val pressed = pressedCard
+                        cancelPress()
+                        if (!wasLongPressed && pressed == card) {
+                            card.performClick()
+                        }
+                    }
+                }
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun cancelPress() {
+        removeCallbacks(longPressAction)
+        pressedCard?.isPressed = false
+        pressedCard = null
+        longPressed = false
+    }
+
+    private fun scheduleFocusCheck() {
+        removeCallbacks(focusFirstItemAction)
+        postDelayed(focusFirstItemAction, 100)
+    }
+
+    /** Lists load asynchronously, give the focus to the first item when nothing has it so the D-pad never gets lost. */
+    private fun focusFirstItemIfFocusLost() {
+        if (!isAttachedToWindow || !isShown) {
+            return
+        }
+        val currentFocus = rootView.findFocus()
+        if (currentFocus == null || !currentFocus.isShown) {
+            val first = layoutManager?.findViewByPosition(gridLayoutManager.findFirstVisibleItemPosition())
+            if (first == null || !first.requestFocus()) {
+                requestFocus()
+            }
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        cancelPress()
+        removeCallbacks(focusFirstItemAction)
+        super.onDetachedFromWindow()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -93,9 +198,9 @@ class GridRecyclerView : RecyclerView {
     }
 
     companion object {
-        private const val TV_COLUMNS_MEDIA = 4
-        private const val TV_COLUMNS_GAMES = 5
-        private const val TV_COLUMNS_CHANNELS = 3
+        private const val TV_COLUMNS_MEDIA = 5
+        private const val TV_COLUMNS_GAMES = 7
+        private const val TV_COLUMNS_CHANNELS = 4
         private const val TV_COLUMNS_TEXT = 2
     }
 }

@@ -36,6 +36,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -64,6 +65,8 @@ import com.github.andreyasadchy.xtra.model.ui.SettingsDragListItem
 import com.github.andreyasadchy.xtra.model.ui.SettingsSearchItem
 import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
 import com.github.andreyasadchy.xtra.ui.settings.SettingsViewModel.Companion.SettingsViewModelFactory
+import com.github.andreyasadchy.xtra.ui.view.TvReorder
+import com.github.andreyasadchy.xtra.ui.view.TvUi
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.applyTheme
@@ -98,6 +101,14 @@ class SettingsActivity : AppCompatActivity() {
         applyTheme()
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        if (TvUi.isTv(this)) {
+            TvUi.adapt(binding.root, hideToolbarActions = false)
+            supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
+                override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
+                    TvUi.adapt(v, hideToolbarActions = false)
+                }
+            }, true)
+        }
         val ignoreCutouts = prefs().getBoolean(C.UI_DRAW_BEHIND_CUTOUTS, false)
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
@@ -161,34 +172,33 @@ class SettingsActivity : AppCompatActivity() {
 
     fun showDragListDialog(list: List<SettingsDragListItem>, prefKey: String, title: CharSequence?) {
         val listAdapter = SettingsDragListAdapter()
-        val itemTouchHelper = ItemTouchHelper(
-            object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
-                override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
-                    val fromPosition = viewHolder.bindingAdapterPosition
-                    val toPosition = target.bindingAdapterPosition
-                    if (fromPosition < toPosition) {
-                        for (from in fromPosition until toPosition) {
-                            val to = from + 1
-                            Collections.swap(list, from, to)
-                            listAdapter.notifyItemMoved(from, to)
-                        }
-                    } else {
-                        for (to in (toPosition until fromPosition).reversed()) {
-                            val from = to + 1
-                            Collections.swap(list, from, to)
-                            listAdapter.notifyItemMoved(from, to)
-                        }
+        val dragCallback = object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+            override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                val fromPosition = viewHolder.bindingAdapterPosition
+                val toPosition = target.bindingAdapterPosition
+                if (fromPosition < toPosition) {
+                    for (from in fromPosition until toPosition) {
+                        val to = from + 1
+                        Collections.swap(list, from, to)
+                        listAdapter.notifyItemMoved(from, to)
                     }
-                    return true
+                } else {
+                    for (to in (toPosition until fromPosition).reversed()) {
+                        val from = to + 1
+                        Collections.swap(list, from, to)
+                        listAdapter.notifyItemMoved(from, to)
+                    }
                 }
-
-                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
-
-                override fun isLongPressDragEnabled(): Boolean {
-                    return false
-                }
+                return true
             }
-        )
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun isLongPressDragEnabled(): Boolean {
+                return false
+            }
+        }
+        val itemTouchHelper = ItemTouchHelper(dragCallback)
         listAdapter.itemTouchHelper = itemTouchHelper
         val recyclerView = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@SettingsActivity)
@@ -209,6 +219,10 @@ class SettingsActivity : AppCompatActivity() {
             item.default = true
         }
         itemTouchHelper.attachToRecyclerView(recyclerView)
+        TvReorder.install(recyclerView, dragCallback)
+        if (TvUi.isTv(this)) {
+            TvUi.highlightRows(recyclerView)
+        }
         listAdapter.submitList(list)
         getAlertDialogBuilder()
             .setTitle(title)

@@ -26,6 +26,7 @@ import com.github.andreyasadchy.xtra.databinding.DialogVideoSwapEditBinding
 import com.github.andreyasadchy.xtra.databinding.FragmentProxySettingsBinding
 import com.github.andreyasadchy.xtra.model.ui.VideoSwap
 import com.github.andreyasadchy.xtra.ui.settings.VideoSwapSettingsViewModel.Companion.VideoSwapSettingsViewModelFactory
+import com.github.andreyasadchy.xtra.ui.view.TvReorder
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.prefs
@@ -51,40 +52,39 @@ class VideoSwapSettingsFragment : Fragment() {
         with(binding) {
             addItem.text = getString(R.string.add_item)
             val adapter = VideoSwapSettingsAdapter(this@VideoSwapSettingsFragment)
-            val itemTouchHelper = ItemTouchHelper(
-                object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
-                    override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
-                        return if (viewHolder.bindingAdapterPosition == 0 || target.bindingAdapterPosition == 0) {
-                            false
-                        } else {
-                            val list = viewModel.list.value
-                            val fromPosition = viewHolder.bindingAdapterPosition
-                            val toPosition = target.bindingAdapterPosition
-                            if (fromPosition < toPosition) {
-                                for (from in fromPosition until toPosition) {
-                                    val to = from + 1
-                                    Collections.swap(list, from, to)
-                                    adapter.notifyItemMoved(from, to)
-                                }
-                            } else {
-                                for (to in (toPosition until fromPosition).reversed()) {
-                                    val from = to + 1
-                                    Collections.swap(list, from, to)
-                                    adapter.notifyItemMoved(from, to)
-                                }
+            val dragCallback = object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+                override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                    return if (viewHolder.bindingAdapterPosition == 0 || target.bindingAdapterPosition == 0) {
+                        false
+                    } else {
+                        val list = viewModel.list.value
+                        val fromPosition = viewHolder.bindingAdapterPosition
+                        val toPosition = target.bindingAdapterPosition
+                        if (fromPosition < toPosition) {
+                            for (from in fromPosition until toPosition) {
+                                val to = from + 1
+                                Collections.swap(list, from, to)
+                                adapter.notifyItemMoved(from, to)
                             }
-                            viewModel.updateVideoSwapItems()
-                            true
+                        } else {
+                            for (to in (toPosition until fromPosition).reversed()) {
+                                val from = to + 1
+                                Collections.swap(list, from, to)
+                                adapter.notifyItemMoved(from, to)
+                            }
                         }
-                    }
-
-                    override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
-
-                    override fun isLongPressDragEnabled(): Boolean {
-                        return false
+                        viewModel.updateVideoSwapItems()
+                        true
                     }
                 }
-            )
+
+                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+                override fun isLongPressDragEnabled(): Boolean {
+                    return false
+                }
+            }
+            val itemTouchHelper = ItemTouchHelper(dragCallback)
             adapter.itemTouchHelper = itemTouchHelper
             recyclerView.adapter = adapter
             adapter.checkListener = { item ->
@@ -123,6 +123,7 @@ class VideoSwapSettingsFragment : Fragment() {
                     .show()
             }
             itemTouchHelper.attachToRecyclerView(recyclerView)
+            TvReorder.install(recyclerView, dragCallback)
             viewModel.getVideoSwapItems(
                 VideoSwap(
                     platform = requireContext().prefs().getString(C.TOKEN_PLATFORM, "web"),
