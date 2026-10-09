@@ -715,6 +715,23 @@ class MainActivity : AppCompatActivity() {
             }
             return true
         }
+        if (isTv && event.action == KeyEvent.ACTION_DOWN && isTvMenuShown &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
+        ) {
+            // the menu keeps the focus at its ends, only right leaves it
+            val focus = currentFocus
+            if (focus != null && focus.isInside(binding.navBarContainer)) {
+                val direction = when (event.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP
+                    KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN
+                    else -> View.FOCUS_LEFT
+                }
+                val next = FocusFinder.getInstance().findNextFocus(binding.root, focus, direction)
+                if (next == null || !next.isInside(binding.navBarContainer)) {
+                    return true
+                }
+            }
+        }
         if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && !isTvMenuShown) {
             val focus = currentFocus
             if (focus != null && focus.isInside(binding.navHostFragment) && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {

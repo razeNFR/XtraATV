@@ -1943,6 +1943,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return true
     }
 
+    /** Focus goes to play/pause, else to the timeline, else to the first button of the bottom row. */
+    private fun focusPrimaryControl() {
+        with(binding.playerControls) {
+            val candidates = mutableListOf<View>(playPause, progressBar)
+            for (layout in listOf(bottomLeftLayout, bottomRightLayout)) {
+                for (i in 0 until layout.childCount) {
+                    candidates.add(layout.getChildAt(i))
+                }
+            }
+            if (candidates.none { it.isShown && it.isFocusable && it.requestFocus() }) {
+                root.requestFocus()
+            }
+        }
+    }
+
     /** Called by the activity for every key event, keeps the controls visible while they are used with a D-pad. */
     fun onKeyEventDispatched(event: KeyEvent) {
         if (_binding != null && isMaximized && event.action == KeyEvent.ACTION_DOWN &&
@@ -1991,9 +2006,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     showController(force = true)
                     binding.playerControls.root.post {
                         if (view != null && isMaximized && binding.playerControls.root.isVisible && !binding.playerControls.root.hasFocus()) {
-                            if (!binding.playerControls.playPause.requestFocus()) {
-                                binding.playerControls.root.requestFocus()
-                            }
+                            focusPrimaryControl()
                         }
                         if (BuildConfig.DEBUG && view != null) {
                             android.util.Log.d("XtraTv", "controls visible=${binding.playerControls.root.isVisible} alpha=${binding.playerControls.root.alpha} hasFocus=${binding.playerControls.root.hasFocus()} playPause visible=${binding.playerControls.playPause.isShown} focusable=${binding.playerControls.playPause.isFocusable}")
