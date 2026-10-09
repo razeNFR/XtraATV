@@ -187,7 +187,15 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onFragmentResumed(fm: FragmentManager, f: Fragment) {
-                    binding.root.post { ensureFocus() }
+                    binding.root.post {
+                        if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment) {
+                            // browsing starts in the side menu
+                            tvInitialFocusDone = true
+                            showTvMenu(true)
+                        } else {
+                            ensureFocus()
+                        }
+                    }
                 }
             }, true)
         }
@@ -770,6 +778,7 @@ class MainActivity : AppCompatActivity() {
 
     private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
     private var isTvMenuShown = true
+    private var tvInitialFocusDone = false
 
     /** Back on a main screen opens the side menu, back again in the menu leaves the app. */
     private val tvMenuBackCallback = object : OnBackPressedCallback(false) {

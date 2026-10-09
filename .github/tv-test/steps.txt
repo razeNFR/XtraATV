@@ -37,9 +37,7 @@ key BACK 1
 shot player_back1
 key BACK 3
 shot player_closed
-# Settings from the menu
-key BACK 2
-shot menu_from_back
+# Settings from the menu (back after closing the player already opened it)
 keys DOWN,DOWN,DOWN,DOWN,DOWN,DOWN 1
 shot menu_bottom
 key UP 1
