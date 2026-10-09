@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- TV cards: focusable with a visible border and a slight zoom when selected with the D-pad -->
+    <style name="TvCard" parent="Widget.Material3.CardView.Elevated">
+        <item name="android:layout_margin">10dp</item>
+        <item name="android:focusable">true</item>
+        <item name="android:stateListAnimator">@animator/tv_card_focus</item>
+        <item name="strokeColor">@color/tv_card_stroke</item>
+        <item name="strokeWidth">@dimen/tv_card_focus_stroke</item>
+    </style>
+
+    <style name="Card" parent="TvCard" />
+
+    <style name="CardAmoled" parent="TvCard">
+        <item name="materialThemeOverlay">@style/CardOverlayAmoled</item>
+    </style>
+
+    <style name="CompactCard" parent="TvCard">
+        <item name="android:layout_margin">6dp</item>
+    </style>
+
+    <style name="CompactCardAmoled" parent="TvCard">
+        <item name="materialThemeOverlay">@style/CardOverlayAmoled</item>
+        <item name="android:layout_margin">6dp</item>
+    </style>
+
+</resources>

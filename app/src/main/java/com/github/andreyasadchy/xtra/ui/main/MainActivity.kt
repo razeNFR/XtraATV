@@ -23,6 +23,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.ext.SdkExtensions
 import android.text.format.Formatter
+import android.view.KeyEvent
 import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
@@ -153,6 +154,11 @@ class MainActivity : AppCompatActivity() {
         applyTheme()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
+            if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
+                lastContentFocus = newFocus
+            }
+        }
         setNavBarColor(resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT)
         val ignoreCutouts = prefs.getBoolean(C.UI_DRAW_BEHIND_CUTOUTS, false)
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, windowInsets ->
@@ -658,6 +664,11 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
@@ -993,6 +1004,44 @@ class MainActivity : AppCompatActivity() {
 
 //Player methods
 
+    private var lastContentFocus: View? = null
+
+    /**
+     * Blocks D-pad focus from reaching the browsing UI hidden behind the maximized player,
+     * and restores the previously focused item when the player is minimized or closed.
+     */
+    fun setMainContentFocusable(focusable: Boolean) {
+        if (focusable) {
+            if (binding.navHostFragment.descendantFocusability != ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
+                return
+            }
+            binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            binding.navBarContainer.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            val lastFocus = lastContentFocus
+            lastContentFocus = null
+            if (lastFocus == null || !lastFocus.isAttachedToWindow || !lastFocus.requestFocus()) {
+                binding.navHostFragment.requestFocus()
+            }
+        } else {
+            if (binding.navHostFragment.descendantFocusability == ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
+                return
+            }
+            binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            binding.navBarContainer.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        }
+    }
+
+    private fun View.isInside(parent: View): Boolean {
+        var view: View? = this
+        while (view != null) {
+            if (view == parent) {
+                return true
+            }
+            view = view.parent as? View
+        }
+        return false
+    }
+
     private fun startPlayer(fragment: Fragment) {
         playerFragment = fragment
         supportFragmentManager.beginTransaction()
@@ -1007,6 +1056,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closePlayer() {
+        setMainContentFocusable(true)
         supportFragmentManager.beginTransaction()
             .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
             .remove(supportFragmentManager.findFragmentById(R.id.playerContainer)!!)

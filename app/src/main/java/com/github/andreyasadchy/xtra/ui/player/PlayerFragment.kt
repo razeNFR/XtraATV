@@ -21,6 +21,7 @@ import android.text.format.DateUtils
 import android.util.TypedValue
 import android.view.GestureDetector
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.RoundedCorner
@@ -128,7 +129,20 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private val backPressedCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-            minimize()
+            if (_binding != null && controllerAutoHide && controllerHideOnTouch && binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()) {
+                hideController()
+            } else if (_binding != null && binding.chatLayout.hasFocus()) {
+                binding.dragView.requestFocus()
+            } else {
+                minimize()
+            }
+        }
+    }
+
+    private val minimizedBackPressedCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            close()
+            (activity as? MainActivity)?.closePlayer()
         }
     }
 
@@ -242,6 +256,20 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             aspectRatioFrameLayout.setAspectRatio(16f / 9f)
             initLayout()
             changePlayerMode()
+            dragView.setOnKeyListener { _, keyCode, event ->
+                onPlayerKey(keyCode, event)
+            }
+            dragView.setOnFocusChangeListener { _, hasFocus ->
+                minimizedBackPressedCallback.isEnabled = hasFocus && !isMaximized
+            }
+            if (isMaximized) {
+                (activity as? MainActivity)?.setMainContentFocusable(false)
+                dragView.post {
+                    if (view != null && isMaximized) {
+                        binding.dragView.requestFocus()
+                    }
+                }
+            }
             val viewConfiguration = ViewConfiguration.get(requireContext())
             val touchSlop = viewConfiguration.scaledTouchSlop
             val touchSlopRange = -touchSlop.toFloat()..touchSlop.toFloat()
@@ -1167,7 +1195,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 playerLayout.isPortrait = true
                 chatLayout.isPortrait = true
                 with(playerControls) {
-                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true)) {
+                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true) && !resources.getBoolean(R.bool.isTv)) {
                         fullscreen.visibility = View.VISIBLE
                         fullscreen.setImageResource(R.drawable.baseline_fullscreen_black_24)
                         fullscreen.setOnClickListener {
@@ -1242,7 +1270,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 playerLayout.isPortrait = false
                 chatLayout.isPortrait = false
                 with(playerControls) {
-                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true)) {
+                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true) && !resources.getBoolean(R.bool.isTv)) {
                         fullscreen.visibility = View.VISIBLE
                         fullscreen.setImageResource(R.drawable.baseline_fullscreen_exit_black_24)
                         fullscreen.setOnClickListener {
@@ -1714,6 +1742,66 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    /** Called by the activity for every key event, keeps the controls visible while they are used with a D-pad. */
+    fun onKeyEventDispatched(event: KeyEvent) {
+        if (_binding != null && isMaximized && event.action == KeyEvent.ACTION_DOWN &&
+            binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()
+        ) {
+            showController()
+        }
+    }
+
+    /** Handles D-pad keys while the player itself (and not one of its controls) has focus. */
+    private fun onPlayerKey(keyCode: Int, event: KeyEvent): Boolean {
+        if (_binding == null || isAnimating) {
+            return false
+        }
+        val isSelect = keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+        if (!isMaximized) {
+            if (isSelect) {
+                if (event.action == KeyEvent.ACTION_UP) {
+                    maximize()
+                }
+                return true
+            }
+            return false
+        }
+        if (!useController) {
+            return false
+        }
+        return when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (binding.playerControls.progressBar.isVisible) {
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        showController(force = true)
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                            rewind()
+                        } else {
+                            fastForward()
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    showController(force = true)
+                    binding.playerControls.root.post {
+                        if (view != null && isMaximized && binding.playerControls.root.isVisible && !binding.playerControls.root.hasFocus()) {
+                            if (!binding.playerControls.playPause.requestFocus()) {
+                                binding.playerControls.root.requestFocus()
+                            }
+                        }
+                    }
+                }
+                true
+            }
+            else -> false
+        }
+    }
+
     protected fun showController(show: Boolean = true, force: Boolean = false) {
         if (!controllerIsAnimating) {
             if (!binding.playerControls.root.isVisible) {
@@ -1763,6 +1851,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun hideController(force: Boolean = false) {
+        if (binding.playerControls.root.hasFocus() && (force || !controllerIsAnimating)) {
+            binding.dragView.requestFocus()
+        }
         if (!controllerIsAnimating && binding.playerControls.root.isVisible) {
             controllerAnimation = binding.playerControls.root.animate().apply {
                 alpha(0f)
@@ -2021,8 +2112,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatFragment?.toggleBackPressedCallback(false)
             }
             backPressedCallback.remove()
+            minimizedBackPressedCallback.remove()
+            requireActivity().onBackPressedDispatcher.addCallback(this@PlayerFragment, minimizedBackPressedCallback)
             useController = false
             hideController(true)
+            dragView.setBackgroundResource(R.drawable.player_minimized_focus)
+            (activity as? MainActivity)?.setMainContentFocusable(true)
+            minimizedBackPressedCallback.isEnabled = dragView.hasFocus()
             fun animate() {
                 val (minimizedScaleX, minimizedScaleY) = getScaleValues()
                 val windowInsets = ViewCompat.getRootWindowInsets(requireView())
@@ -2030,7 +2126,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 val keyboardInsets = windowInsets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { if (it > 0) it - (insets?.bottom ?: 0) else it } ?: 0
                 val scaledXDiff = (slidingLayout.width * (1f - minimizedScaleX)) / 2
                 val scaledYDiff = (slidingLayout.height * (1f - minimizedScaleY)) / 2
-                val navBarHeight = requireView().rootView.findViewById<LinearLayout>(R.id.navBarContainer)?.height?.takeIf { it > 0 }?.let { it - keyboardInsets } ?: (insets?.bottom ?: 0)
+                val navBarHeight = if (resources.getBoolean(R.bool.isTv)) {
+                    resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+                } else {
+                    requireView().rootView.findViewById<LinearLayout>(R.id.navBarContainer)?.height?.takeIf { it > 0 }?.let { it - keyboardInsets } ?: (insets?.bottom ?: 0)
+                }
                 val playerWidth = if (isPortrait) {
                     playerLayout.width
                 } else {
@@ -2087,6 +2187,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         with(binding) {
             isMaximized = true
             requireActivity().onBackPressedDispatcher.addCallback(this@PlayerFragment, backPressedCallback)
+            minimizedBackPressedCallback.remove()
+            minimizedBackPressedCallback.isEnabled = false
+            dragView.background = null
+            (activity as? MainActivity)?.setMainContentFocusable(false)
+            dragView.requestFocus()
             if (playbackService?.type == BasePlaybackService.STREAM && chatFragment?.emoteMenuIsVisible() == true) {
                 chatFragment?.toggleBackPressedCallback(true)
             }
@@ -2366,6 +2471,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        (activity as? MainActivity)?.let {
+            if (it.playerFragment == null || it.playerFragment === this) {
+                it.setMainContentFocusable(true)
+            }
+        }
         super.onDestroyView()
         _binding = null
     }

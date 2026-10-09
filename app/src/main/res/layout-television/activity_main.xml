@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV layout: navigation rail on the left, content area with overscan safe margins, fullscreen player on top -->
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:colorBackground">
+
+    <LinearLayout
+        android:id="@+id/navBarContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <com.google.android.material.navigationrail.NavigationRailView
+            android:id="@+id/navBar"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:paddingTop="@dimen/tv_overscan_vertical"
+            android:paddingBottom="@dimen/tv_overscan_vertical"
+            app:headerLayout="@layout/tv_nav_rail_header"
+            app:labelVisibilityMode="labeled"
+            app:menuGravity="center"
+            tools:viewBindingType="com.google.android.material.navigation.NavigationBarView" />
+
+        <com.google.android.material.divider.MaterialDivider
+            android:layout_width="1dp"
+            android:layout_height="match_parent" />
+    </LinearLayout>
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/navHostFragment"
+        android:name="androidx.navigation.fragment.NavHostFragment"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:paddingTop="@dimen/tv_overscan_vertical"
+        android:paddingEnd="@dimen/tv_overscan_horizontal"
+        android:paddingStart="16dp"
+        app:defaultNavHost="true"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/navBarContainer"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:layout="@layout/fragment_media_pager" />
+
+    <FrameLayout
+        android:id="@+id/playerContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:focusable="true" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
