@@ -586,4 +586,6 @@
     <string name="close_player">Fermer</string>
     <string name="tv_back_minimizes_player">Le bouton Retour réduit le lecteur au lieu de le fermer</string>
     <string name="tv_switch_stream">Autres streams</string>
+    <string name="tv_looking_for_vod">Recherche de la VOD du stream…</string>
+    <string name="tv_live">DIRECT</string>
 </resources>

@@ -1057,6 +1057,9 @@ class MainActivity : AppCompatActivity() {
     /** Streams of the list the current stream was opened from, to switch between them from the player. */
     var streamQueue: List<Stream> = emptyList()
         private set
+
+    /** Live stream whose in-progress VOD is being watched, to go back to the live from the VOD. */
+    var dvrStream: Stream? = null
     private var currentStreamLogin: String? = null
 
     fun switchStream(offset: Int) {
@@ -1078,6 +1081,7 @@ class MainActivity : AppCompatActivity() {
             streamQueue = queue
         }
         currentStreamLogin = stream.channelLogin
+        dvrStream = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.STREAM,

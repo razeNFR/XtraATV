@@ -61,6 +61,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentPlayerBinding
 import com.github.andreyasadchy.xtra.model.VideoQuality
+import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.model.ui.Video
 import com.github.andreyasadchy.xtra.ui.channel.ChannelPagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.chat.ChatFragment
@@ -900,8 +901,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             viewModel.unlistedVideoQualities.collectLatest { qualities ->
                                 if (qualities != null) {
                                     if (qualities.isNotBlank()) {
-                                        (requireActivity() as MainActivity).startVideo(Video(), 0, qualities = qualities)
+                                        if (pendingDvr) {
+                                            // go back in the live: open the VOD of the stream being broadcast at the chosen position
+                                            pendingDvr = false
+                                            val offset = pendingDvrPosition.coerceAtLeast(0L)
+                                            (requireActivity() as MainActivity).startVideo(
+                                                Video(
+                                                    channelId = playbackService?.channelId,
+                                                    channelLogin = playbackService?.channelLogin,
+                                                    channelName = playbackService?.channelName,
+                                                    gameId = playbackService?.gameId,
+                                                    gameSlug = playbackService?.gameSlug,
+                                                    gameName = playbackService?.gameName,
+                                                    title = playbackService?.title,
+                                                ),
+                                                offset,
+                                                qualities = qualities
+                                            )
+                                        } else {
+                                            (requireActivity() as MainActivity).startVideo(Video(), 0, qualities = qualities)
+                                        }
                                     } else {
+                                        pendingDvr = false
+                                        (activity as? MainActivity)?.dvrStream = null
                                         Toast.makeText(requireContext(), R.string.video_not_found, Toast.LENGTH_SHORT).show()
                                     }
                                     viewModel.unlistedVideoQualities.value = null
@@ -945,9 +967,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                     rewind.visibility = View.GONE
                     fastForward.visibility = View.GONE
-                    position.visibility = View.GONE
-                    progressBar.visibility = View.GONE
-                    duration.visibility = View.GONE
+                    if (isTv) {
+                        // TV: timeline of the whole broadcast, going back in it plays the VOD of the stream
+                        updateTvLiveTimeline()
+                    } else {
+                        position.visibility = View.GONE
+                        progressBar.visibility = View.GONE
+                        duration.visibility = View.GONE
+                    }
                     updateStreamInfo(
                         playbackService?.title,
                         playbackService?.gameId,
@@ -1790,6 +1817,63 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private var tvScrubPosition = -1L
+    private var pendingDvr = false
+    private var pendingDvrPosition = 0L
+
+    protected fun isTvLiveTimeline() = isTv && playbackService?.type == BasePlaybackService.STREAM
+
+    /** VOD of a live stream opened from its timeline, the end of its timeline goes back to the live. */
+    private fun getTvDvrStream(): Stream? {
+        return (activity as? MainActivity)?.dvrStream?.takeIf {
+            isTv && playbackService?.type == BasePlaybackService.VIDEO && playbackService?.videoId == null && it.channelLogin == playbackService?.channelLogin
+        }
+    }
+
+    private fun getStreamUptime(): Long? {
+        return playbackService?.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.let { System.currentTimeMillis() - it }?.takeIf { it > 0 }
+    }
+
+    protected fun updateTvLiveTimeline() {
+        if (_binding == null || tvScrubPosition >= 0) {
+            return
+        }
+        with(binding.playerControls) {
+            val uptime = getStreamUptime()
+            if (uptime == null) {
+                progressBar.visibility = View.GONE
+                position.visibility = View.GONE
+                duration.visibility = View.GONE
+                return
+            }
+            progressBar.visibility = View.VISIBLE
+            position.visibility = View.VISIBLE
+            duration.visibility = View.VISIBLE
+            progressBar.setDuration(uptime)
+            progressBar.setPosition(uptime)
+            progressBar.setBufferedPosition(uptime)
+            position.text = getString(R.string.tv_live)
+            duration.text = DateUtils.formatElapsedTime(uptime / 1000)
+        }
+    }
+
+    private fun startTvDvr(position: Long) {
+        pendingDvr = true
+        pendingDvrPosition = position
+        (activity as? MainActivity)?.dvrStream = Stream(
+            id = playbackService?.streamId,
+            channelId = playbackService?.channelId,
+            channelLogin = playbackService?.channelLogin,
+            channelName = playbackService?.channelName,
+            gameId = playbackService?.gameId,
+            gameSlug = playbackService?.gameSlug,
+            gameName = playbackService?.gameName,
+            title = playbackService?.title,
+            createdAt = playbackService?.createdAt,
+            viewerCount = playbackService?.viewerCount,
+        )
+        Toast.makeText(requireContext(), R.string.tv_looking_for_vod, Toast.LENGTH_SHORT).show()
+        findUnlistedVideo()
+    }
 
     /**
      * D-pad seeking on the time bar: a short press moves 10 seconds, holding the key moves faster and faster.
@@ -1799,12 +1883,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) {
             return false
         }
-        val duration = getTotalDuration()?.takeIf { it > 0 } ?: return false
+        val isLive = isTvLiveTimeline()
+        val duration = (if (isLive) getStreamUptime() else getTotalDuration())?.takeIf { it > 0 } ?: return false
         with(binding.playerControls) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> {
                     if (tvScrubPosition < 0) {
-                        tvScrubPosition = getCurrentPosition() ?: 0
+                        tvScrubPosition = if (isLive) duration else getCurrentPosition() ?: 0
                         progressBar.isPressed = true
                     }
                     val step = when {
@@ -1824,8 +1909,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         val newPosition = tvScrubPosition
                         tvScrubPosition = -1
                         progressBar.isPressed = false
-                        seek(newPosition)
-                        showController()
+                        val dvrStream = getTvDvrStream()
+                        when {
+                            isLive -> {
+                                if (newPosition < duration - LIVE_EDGE_MS) {
+                                    startTvDvr(newPosition)
+                                } else {
+                                    updateTvLiveTimeline()
+                                    showController()
+                                }
+                            }
+                            dvrStream != null && newPosition >= duration - LIVE_EDGE_MS -> (activity as? MainActivity)?.startStream(dvrStream)
+                            else -> {
+                                seek(newPosition)
+                                showController()
+                            }
+                        }
                     }
                 }
             }
@@ -2585,6 +2684,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val REQUEST_CODE_AUDIO_ONLY = 2
         private const val REQUEST_CODE_PLAY_PAUSE = 3
         private const val REQUEST_CODE_CLOSE = 4
+        private const val LIVE_EDGE_MS = 20_000L
         const val KEY_OFFLINE = "offline"
     }
 }

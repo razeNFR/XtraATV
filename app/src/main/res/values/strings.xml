@@ -605,4 +605,6 @@
     <string name="close_player">Close</string>
     <string name="tv_back_minimizes_player">Back button minimizes the player instead of closing it</string>
     <string name="tv_switch_stream">Other streams</string>
+    <string name="tv_looking_for_vod">Looking for the stream VOD…</string>
+    <string name="tv_live">LIVE</string>
 </resources>

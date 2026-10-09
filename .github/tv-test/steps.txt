@@ -1,21 +1,22 @@
-# Home screen
-shot home
-keys DOWN,DOWN,DOWN 2
-shot home_down3
-keys UP,UP,UP,UP,UP 2
-shot home_up5
-# Navigation rail
-keys LEFT,LEFT 1
-shot rail
-keys UP,UP,UP,UP,UP,UP 1
-shot rail_top
-keys DOWN,DOWN 1
-shot rail_popular
-key DPAD_CENTER 8
-shot popular_open
+# Start: leanback menu focused
+shot start_menu
 key RIGHT 2
+shot content
+keys DOWN,DOWN,DOWN 2
+shot content_down3
+keys UP,UP,UP,UP,UP 2
+shot content_up5
+keys LEFT,LEFT,LEFT,LEFT,LEFT 2
+shot menu_back
+keys UP,UP,UP,UP,UP,UP 1
+shot menu_top
+keys DOWN,DOWN 1
+shot menu_popular
+key DPAD_CENTER 8
+shot popular_loaded
+key RIGHT 3
 shot popular_content
-keys RIGHT,RIGHT,DOWN 2
+keys RIGHT,DOWN 3
 shot popular_moved
 longkey DPAD_CENTER 3
 shot card_menu
@@ -30,20 +31,16 @@ keys RIGHT,RIGHT,RIGHT 1
 shot player_right3
 keys RIGHT,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT 1
 shot player_right9
-keys UP 1
-shot player_up
 key BACK 2
 shot player_back1
 key BACK 3
-shot player_back2_minimized
-keys DOWN,RIGHT 2
-shot after_minimize_nav
-# Settings from the rail
-keys LEFT,LEFT,LEFT 1
+shot player_closed
+# Settings from the menu
+key BACK 2
+shot menu_from_back
 keys DOWN,DOWN,DOWN,DOWN,DOWN,DOWN 1
-shot rail_bottom
+shot menu_bottom
 key UP 1
-shot rail_settings
 key DPAD_CENTER 5
 shot settings
 keys DOWN,DOWN,DOWN 1
