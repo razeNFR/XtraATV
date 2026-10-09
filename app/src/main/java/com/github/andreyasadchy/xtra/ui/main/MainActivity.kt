@@ -29,6 +29,7 @@ import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -770,10 +771,22 @@ class MainActivity : AppCompatActivity() {
     private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
     private var isTvMenuShown = true
 
+    /** Back on a main screen opens the side menu, back again in the menu leaves the app. */
+    private val tvMenuBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            showTvMenu(true)
+        }
+    }
+
+    private fun updateTvMenuBackCallback() {
+        tvMenuBackCallback.isEnabled = isTv && !isTvMenuShown && ::navController.isInitialized && navController.previousBackStackEntry == null
+    }
+
     private fun showTvMenu(focus: Boolean) {
         val menu = binding.navBarContainer
         if (!isTvMenuShown) {
             isTvMenuShown = true
+            updateTvMenuBackCallback()
             menu.animate().cancel()
             menu.visibility = View.VISIBLE
             menu.animate().translationX(0f).alpha(1f).setDuration(180L).start()
@@ -790,6 +803,7 @@ class MainActivity : AppCompatActivity() {
         val menu = binding.navBarContainer
         if (isTvMenuShown && menu.width > 0) {
             isTvMenuShown = false
+            updateTvMenuBackCallback()
             menu.animate().cancel()
             menu.animate().translationX(-menu.width.toFloat()).alpha(0f).setDuration(180L).withEndAction {
                 if (!isTvMenuShown) {
@@ -1360,6 +1374,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun initNavigation() {
         navController = (supportFragmentManager.findFragmentById(R.id.navHostFragment) as NavHostFragment).navController
+        if (isTv) {
+            onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
+            navController.addOnDestinationChangedListener { _, _, _ -> updateTvMenuBackCallback() }
+        }
         val tabList = prefs.getString(C.UI_NAVIGATION_TAB_LIST, null).let { tabPref ->
             val defaultTabs = C.DEFAULT_NAVIGATION_TAB_LIST.split(',')
             if (tabPref != null) {
