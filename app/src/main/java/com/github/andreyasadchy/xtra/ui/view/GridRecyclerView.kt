@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.ui.common.GamesAdapter
+import com.github.andreyasadchy.xtra.ui.common.StreamsAdapter
 import com.github.andreyasadchy.xtra.ui.common.StreamsCompactAdapter
 import com.github.andreyasadchy.xtra.ui.following.channels.FollowedChannelsAdapter
 import com.github.andreyasadchy.xtra.ui.following.games.FollowedGamesAdapter
@@ -46,6 +47,7 @@ class GridRecyclerView : RecyclerView {
         }
     }
     private val focusFirstItemAction = Runnable { focusFirstItemIfFocusLost() }
+    private var preview: TvStreamPreview? = null
     private val dataObserver = object : AdapterDataObserver() {
         override fun onChanged() = scheduleFocusCheck()
         override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = scheduleFocusCheck()
@@ -72,6 +74,9 @@ class GridRecyclerView : RecyclerView {
                 override fun onChildViewDetachedFromWindow(view: View) {
                     if (view == pressedCard) {
                         cancelPress()
+                    }
+                    if (preview?.isPreviewing(view) == true) {
+                        preview?.stop()
                     }
                 }
             })
@@ -103,8 +108,8 @@ class GridRecyclerView : RecyclerView {
         }
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+    override fun dispatchKeyEvent(event: KeyEvent?): Boolean {
+        if (event != null && isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
             val card = focusedChild
             if (card != null && card.hasFocus()) {
                 // click on release, actions menu on long press
@@ -131,6 +136,32 @@ class GridRecyclerView : RecyclerView {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun requestChildFocus(child: View?, focused: View?) {
+        super.requestChildFocus(child, focused)
+        if (isTv && child != null) {
+            val streamsAdapter = adapter as? StreamsAdapter
+            if (streamsAdapter != null) {
+                val position = getChildAdapterPosition(child)
+                val channelLogin = if (position != NO_POSITION && position < streamsAdapter.itemCount) {
+                    streamsAdapter.peek(position)?.channelLogin
+                } else null
+                (preview ?: TvStreamPreview(this).also { preview = it }).schedule(child, channelLogin)
+            }
+        }
+    }
+
+    override fun clearChildFocus(child: View?) {
+        super.clearChildFocus(child)
+        preview?.stop()
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (!hasWindowFocus) {
+            preview?.stop()
+        }
     }
 
     private fun cancelPress() {
@@ -161,6 +192,8 @@ class GridRecyclerView : RecyclerView {
 
     override fun onDetachedFromWindow() {
         cancelPress()
+        preview?.release()
+        preview = null
         removeCallbacks(focusFirstItemAction)
         super.onDetachedFromWindow()
     }
@@ -198,9 +231,9 @@ class GridRecyclerView : RecyclerView {
     }
 
     companion object {
-        private const val TV_COLUMNS_MEDIA = 5
-        private const val TV_COLUMNS_GAMES = 7
-        private const val TV_COLUMNS_CHANNELS = 4
+        private const val TV_COLUMNS_MEDIA = 4
+        private const val TV_COLUMNS_GAMES = 6
+        private const val TV_COLUMNS_CHANNELS = 3
         private const val TV_COLUMNS_TEXT = 2
     }
 }

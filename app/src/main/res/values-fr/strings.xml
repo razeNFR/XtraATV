@@ -582,4 +582,7 @@
     <string name="tv_more_options">Plus d\'options</string>
     <string name="tv_more_actions">Plus d\'actions</string>
     <string name="tv_account">Compte</string>
+    <string name="tv_stream_preview">Aperçu en direct du stream sélectionné (TV)</string>
+    <string name="close_player">Fermer</string>
+    <string name="tv_back_minimizes_player">Le bouton Retour réduit le lecteur au lieu de le fermer</string>
 </resources>

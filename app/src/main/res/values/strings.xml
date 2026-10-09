@@ -601,4 +601,7 @@
     <string name="tv_more_options">More options</string>
     <string name="tv_more_actions">More actions</string>
     <string name="tv_account">Account</string>
+    <string name="tv_stream_preview">Live preview on the selected stream (TV)</string>
+    <string name="close_player">Close</string>
+    <string name="tv_back_minimizes_player">Back button minimizes the player instead of closing it</string>
 </resources>

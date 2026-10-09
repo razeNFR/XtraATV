@@ -134,6 +134,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 hideController()
             } else if (_binding != null && binding.chatLayout.hasFocus()) {
                 binding.dragView.requestFocus()
+            } else if (isTv && !requireContext().prefs().getBoolean(C.TV_BACK_MINIMIZES_PLAYER, false)) {
+                // TV: back closes the player, a minimized player is hard to use with a remote
+                close()
+                (activity as? MainActivity)?.closePlayer()
             } else {
                 minimize()
             }
@@ -627,6 +631,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 fastForward.setOnClickListener {
                     showController(force = true)
                     fastForward()
+                }
+                if (isTv) {
+                    progressBar.setOnKeyListener { _, keyCode, event -> onTimeBarKey(keyCode, event) }
                 }
                 progressBar.addListener(
                     object : TimeBar.OnScrubListener {
@@ -1771,6 +1778,50 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return binding.dragView.requestFocus()
     }
 
+    private var tvScrubPosition = -1L
+
+    /**
+     * D-pad seeking on the time bar: a short press moves 10 seconds, holding the key moves faster and faster.
+     * The player seeks once, when the key is released.
+     */
+    private fun onTimeBarKey(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) {
+            return false
+        }
+        val duration = getTotalDuration()?.takeIf { it > 0 } ?: return false
+        with(binding.playerControls) {
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> {
+                    if (tvScrubPosition < 0) {
+                        tvScrubPosition = getCurrentPosition() ?: 0
+                        progressBar.isPressed = true
+                    }
+                    val step = when {
+                        event.repeatCount < 6 -> 10_000L
+                        event.repeatCount < 20 -> 30_000L
+                        event.repeatCount < 40 -> 60_000L
+                        else -> 180_000L
+                    }
+                    tvScrubPosition = (tvScrubPosition + if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -step else step).coerceIn(0, duration)
+                    progressBar.setDuration(duration)
+                    progressBar.setPosition(tvScrubPosition)
+                    position.text = DateUtils.formatElapsedTime(tvScrubPosition / 1000)
+                    root.removeCallbacks(controllerHideAction)
+                }
+                KeyEvent.ACTION_UP -> {
+                    if (tvScrubPosition >= 0) {
+                        val newPosition = tvScrubPosition
+                        tvScrubPosition = -1
+                        progressBar.isPressed = false
+                        seek(newPosition)
+                        showController()
+                    }
+                }
+            }
+        }
+        return true
+    }
+
     /** Called by the activity for every key event, keeps the controls visible while they are used with a D-pad. */
     fun onKeyEventDispatched(event: KeyEvent) {
         if (_binding != null && isMaximized && event.action == KeyEvent.ACTION_DOWN &&
@@ -1801,15 +1852,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (binding.playerControls.progressBar.isVisible) {
+                    // seek with the timeline: the following key events go to the focused time bar
                     if (event.action == KeyEvent.ACTION_DOWN) {
                         showController(force = true)
-                        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                            rewind()
-                        } else {
-                            fastForward()
-                        }
+                        binding.playerControls.progressBar.requestFocus()
                     }
-                    true
+                    onTimeBarKey(keyCode, event)
                 } else {
                     false
                 }
@@ -2013,6 +2061,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 requireContext(),
                                 REQUEST_CODE_AUDIO_ONLY,
                                 Intent(MainActivity.INTENT_START_AUDIO_ONLY).setPackage(requireContext().packageName),
+                                PendingIntent.FLAG_IMMUTABLE
+                            )
+                        ),
+                        RemoteAction(
+                            Icon.createWithResource(requireContext(), R.drawable.baseline_close_black_36),
+                            getString(R.string.close_player),
+                            getString(R.string.close_player),
+                            PendingIntent.getBroadcast(
+                                requireContext(),
+                                REQUEST_CODE_CLOSE,
+                                Intent(MainActivity.INTENT_CLOSE_PLAYER).setPackage(requireContext().packageName),
                                 PendingIntent.FLAG_IMMUTABLE
                             )
                         ),
@@ -2514,6 +2573,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val REQUEST_CODE_SPEED = 1
         private const val REQUEST_CODE_AUDIO_ONLY = 2
         private const val REQUEST_CODE_PLAY_PAUSE = 3
+        private const val REQUEST_CODE_CLOSE = 4
         const val KEY_OFFLINE = "offline"
     }
 }

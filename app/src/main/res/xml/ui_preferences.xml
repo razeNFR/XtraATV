@@ -127,6 +127,14 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:key="ui_tv_preview"
+        android:title="@string/tv_stream_preview"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
         android:key="ui_tags"
         android:title="@string/show_tags"
         app:iconSpaceReserved="false"

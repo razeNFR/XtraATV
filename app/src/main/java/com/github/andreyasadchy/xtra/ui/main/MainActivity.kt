@@ -119,6 +119,7 @@ class MainActivity : AppCompatActivity() {
         const val INTENT_OPEN_PLAYER = "com.github.andreyasadchy.xtra.OPEN_PLAYER"
         const val INTENT_START_AUDIO_ONLY = "com.github.andreyasadchy.xtra.START_AUDIO_ONLY"
         const val INTENT_PLAY_PAUSE_PLAYER = "com.github.andreyasadchy.xtra.PLAY_PAUSE_PLAYER"
+        const val INTENT_CLOSE_PLAYER = "com.github.andreyasadchy.xtra.CLOSE_PLAYER"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -141,6 +142,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = prefs()
         migrateSettings()
+        if (resources.getBoolean(R.bool.isTv) && !prefs.contains(C.PLAYER_PICTURE_IN_PICTURE)) {
+            // on TV leaving the app should stop the stream unless the user turns picture-in-picture on
+            prefs.edit { putBoolean(C.PLAYER_PICTURE_IN_PICTURE, false) }
+        }
         if (tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) <= 0L) {
             tokenPrefs().edit {
                 putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
@@ -457,6 +462,13 @@ class MainActivity : AppCompatActivity() {
                     INTENT_PLAY_PAUSE_PLAYER -> {
                         (playerFragment as? PlayerFragment)?.playPause()
                     }
+                    INTENT_CLOSE_PLAYER -> {
+                        (playerFragment as? PlayerFragment)?.let {
+                            it.close()
+                            closePlayer()
+                        }
+                        moveTaskToBack(false)
+                    }
                 }
             }
         }
@@ -466,6 +478,7 @@ class MainActivity : AppCompatActivity() {
             IntentFilter().apply {
                 addAction(INTENT_START_AUDIO_ONLY)
                 addAction(INTENT_PLAY_PAUSE_PLAYER)
+                addAction(INTENT_CLOSE_PLAYER)
             },
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
