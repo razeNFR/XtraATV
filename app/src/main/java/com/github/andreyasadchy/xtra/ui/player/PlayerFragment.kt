@@ -936,6 +936,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             }
                         }
                     }
+                    if (isTv && ((activity as? MainActivity)?.streamQueue?.size ?: 0) > 1) {
+                        streamList?.visibility = View.VISIBLE
+                        streamList?.setOnClickListener {
+                            hideController()
+                            (activity as? MainActivity)?.showStreamSwitcher()
+                        }
+                    }
                     rewind.visibility = View.GONE
                     fastForward.visibility = View.GONE
                     position.visibility = View.GONE
@@ -1769,6 +1776,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
         }
     }
+
+    fun isMaximizedPlayer() = _binding != null && isMaximized
+
+    fun isPlayingStreamMaximized() = _binding != null && isMaximized && playbackService?.type == BasePlaybackService.STREAM
 
     /** Gives the focus to the player when it is maximized, returns false if it is not. */
     fun requestPlayerFocus(): Boolean {

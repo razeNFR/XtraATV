@@ -604,4 +604,5 @@
     <string name="tv_stream_preview">Live preview on the selected stream (TV)</string>
     <string name="close_player">Close</string>
     <string name="tv_back_minimizes_player">Back button minimizes the player instead of closing it</string>
+    <string name="tv_switch_stream">Other streams</string>
 </resources>

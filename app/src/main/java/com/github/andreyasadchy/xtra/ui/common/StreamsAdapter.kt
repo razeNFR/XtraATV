@@ -80,7 +80,7 @@ class StreamsAdapter(
                         )
                     }
                     root.setOnClickListener {
-                        (fragment.activity as MainActivity).startStream(item)
+                        (fragment.activity as MainActivity).startStream(item, snapshot().items)
                     }
                     if (item.channelImage != null) {
                         userImage.visibility = View.VISIBLE

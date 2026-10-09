@@ -585,4 +585,5 @@
     <string name="tv_stream_preview">Aperçu en direct du stream sélectionné (TV)</string>
     <string name="close_player">Fermer</string>
     <string name="tv_back_minimizes_player">Le bouton Retour réduit le lecteur au lieu de le fermer</string>
+    <string name="tv_switch_stream">Autres streams</string>
 </resources>

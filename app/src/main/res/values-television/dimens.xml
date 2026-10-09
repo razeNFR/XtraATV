@@ -7,4 +7,5 @@
     <dimen name="tv_overscan_vertical">27dp</dimen>
     <dimen name="tv_card_focus_stroke">3dp</dimen>
     <dimen name="tv_settings_side_padding">140dp</dimen>
+    <dimen name="tv_menu_width">120dp</dimen>
 </resources>

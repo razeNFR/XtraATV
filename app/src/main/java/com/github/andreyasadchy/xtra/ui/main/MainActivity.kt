@@ -23,6 +23,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.ext.SdkExtensions
 import android.text.format.Formatter
+import android.view.FocusFinder
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.View
@@ -85,6 +86,7 @@ import com.github.andreyasadchy.xtra.ui.player.BasePlaybackService
 import com.github.andreyasadchy.xtra.ui.player.ExoPlayerFragment
 import com.github.andreyasadchy.xtra.ui.player.MediaPlayerFragment
 import com.github.andreyasadchy.xtra.ui.player.PlayerFragment
+import com.github.andreyasadchy.xtra.ui.player.TvStreamSwitcher
 import com.github.andreyasadchy.xtra.ui.saved.SavedMediaFragment
 import com.github.andreyasadchy.xtra.ui.saved.SavedPagerFragment
 import com.github.andreyasadchy.xtra.ui.saved.downloads.DownloadsFragment
@@ -166,6 +168,14 @@ class MainActivity : AppCompatActivity() {
         binding.root.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
             if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
                 lastContentFocus = newFocus
+            }
+            if (isTv && newFocus != null) {
+                // leanback menu: open while it has the focus, folded away as soon as the content gets it
+                if (newFocus.isInside(binding.navBarContainer)) {
+                    showTvMenu(false)
+                } else if (newFocus.isInside(binding.navHostFragment)) {
+                    hideTvMenu()
+                }
             }
         }
         if (isTv) {
@@ -694,8 +704,33 @@ class MainActivity : AppCompatActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
+        if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot()) {
+            // back on a main screen opens the menu, back again in the menu leaves the app
+            if (event.action == KeyEvent.ACTION_UP) {
+                showTvMenu(true)
+            }
+            return true
+        }
+        if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && !isTvMenuShown) {
+            val focus = currentFocus
+            if (focus != null && focus.isInside(binding.navHostFragment) && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
+                val next = FocusFinder.getInstance().findNextFocus(binding.root, focus, View.FOCUS_LEFT)
+                if (next == null || !next.isInside(binding.navHostFragment)) {
+                    showTvMenu(true)
+                    return true
+                }
+            }
+        }
         if (isTv && event.action == KeyEvent.ACTION_DOWN) {
             when (event.keyCode) {
+                KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                    if ((playerFragment as? PlayerFragment)?.isPlayingStreamMaximized() == true && streamQueue.size > 1) {
+                        if (event.repeatCount == 0) {
+                            switchStream(if (event.keyCode == KeyEvent.KEYCODE_CHANNEL_UP) 1 else -1)
+                        }
+                        return true
+                    }
+                }
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                     val focus = currentFocus
@@ -712,6 +747,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
+    private var isTvMenuShown = true
+
+    private fun showTvMenu(focus: Boolean) {
+        val menu = binding.navBarContainer
+        if (!isTvMenuShown) {
+            isTvMenuShown = true
+            menu.animate().cancel()
+            menu.visibility = View.VISIBLE
+            menu.animate().translationX(0f).alpha(1f).setDuration(180L).start()
+        }
+        if (focus) {
+            val selected = binding.navBar.findViewById<View>(binding.navBar.selectedItemId)
+            if (selected == null || !selected.requestFocus()) {
+                menu.requestFocus()
+            }
+        }
+    }
+
+    private fun hideTvMenu() {
+        val menu = binding.navBarContainer
+        if (isTvMenuShown && menu.width > 0) {
+            isTvMenuShown = false
+            menu.animate().cancel()
+            menu.animate().translationX(-menu.width.toFloat()).alpha(0f).setDuration(180L).withEndAction {
+                if (!isTvMenuShown) {
+                    menu.visibility = View.INVISIBLE
+                }
+            }.start()
+        }
+    }
+
+    private fun isBrowsingRoot(): Boolean {
+        if ((playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true) {
+            return false
+        }
+        val focus = currentFocus
+        if (focus != null && !focus.isInside(binding.navHostFragment)) {
+            return false
+        }
+        return ::navController.isInitialized && navController.previousBackStackEntry == null
+    }
 
     /**
      * Gives the focus back to the screen when nothing visible has it.
@@ -725,6 +801,13 @@ class MainActivity : AppCompatActivity() {
         val player = playerFragment as? PlayerFragment
         if (player != null && player.requestPlayerFocus()) {
             return true
+        }
+        if (isTv && isTvMenuShown && (focus == null || !focus.isShown)) {
+            // the leanback menu is where browsing starts
+            showTvMenu(true)
+            if (currentFocus != null) {
+                return true
+            }
         }
         lastContentFocus?.let {
             if (it.isAttachedToWindow && it.isShown && it.requestFocus()) {
@@ -971,7 +1054,30 @@ class MainActivity : AppCompatActivity() {
 
 //Navigation listeners
 
-    fun startStream(stream: Stream) {
+    /** Streams of the list the current stream was opened from, to switch between them from the player. */
+    var streamQueue: List<Stream> = emptyList()
+        private set
+    private var currentStreamLogin: String? = null
+
+    fun switchStream(offset: Int) {
+        val queue = streamQueue
+        if (queue.size < 2) {
+            return
+        }
+        val index = queue.indexOfFirst { it.channelLogin != null && it.channelLogin == currentStreamLogin }
+        val next = queue.getOrNull(Math.floorMod(index + offset, queue.size)) ?: return
+        startStream(next)
+    }
+
+    fun showStreamSwitcher() {
+        TvStreamSwitcher.show(this, streamQueue, currentStreamLogin)
+    }
+
+    fun startStream(stream: Stream, queue: List<Stream>? = null) {
+        if (queue != null) {
+            streamQueue = queue
+        }
+        currentStreamLogin = stream.channelLogin
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.STREAM,
