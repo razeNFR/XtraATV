@@ -598,4 +598,6 @@
     <string name="tv_send">Envoyer</string>
     <string name="tv_voice_search">Recherche vocale</string>
     <string name="tv_message_hint">Message</string>
+    <string name="adblock">Bloqueur de pub</string>
+    <string name="adblock_summary">Pendant une pub, bascule sur un flux sans pub d\'un autre type de lecteur (comme le script VAFT), masque la pub si aucun n\'est disponible. Fonctionne sans proxy.</string>
 </resources>

@@ -252,7 +252,7 @@ class ExoPlayerService : BasePlaybackService() {
                     if (type == STREAM) {
                         val useProxy = useStreamProxy && !stopProxy && streamProxyList?.getOrNull(currentStreamProxy)?.proxyMediaPlaylist == true
                         val useVideoSwap = useVideoSwap && !stopVideoSwap
-                        val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false)
+                        val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || prefs().getBoolean(C.PLAYER_ADBLOCK, true)
                         if (useProxy || useVideoSwap || hideAds) {
                             val playlist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
                             val ads = checkPlaylist(playlist)
@@ -792,11 +792,15 @@ class ExoPlayerService : BasePlaybackService() {
                                     && (it.proxyPlaybackAccessToken || it.proxyMultivariantPlaylist || it.proxyMediaPlaylist)
                         }.sortedBy { it.position }
                     }
-                    useVideoSwap = !useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, false)
+                    val adblock = prefs().getBoolean(C.PLAYER_ADBLOCK, true)
+                    useVideoSwap = !useCustomProxy && !useStreamProxy && (prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, false) || adblock)
                     if (useVideoSwap) {
                         videoSwapList = xtraModule.playerRepository.getVideoSwapItems().filter {
                             it.enabled && !it.platform.isNullOrBlank() && !it.playerType.isNullOrBlank()
-                        }.sortedBy { it.position }
+                        }.sortedBy { it.position }.ifEmpty {
+                            // ad blocker: like the VAFT userscript, switch to the playlist of another player type while ads play
+                            if (adblock) ADBLOCK_PLAYER_TYPES.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, index) } else emptyList()
+                        }
                     }
                     loadStream(restorePauseState)
                 }
@@ -2822,6 +2826,13 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     companion object {
+        /** Player types whose playlists usually come without ads (same idea as the VAFT userscript). */
+        private val ADBLOCK_PLAYER_TYPES = listOf(
+            "web" to "embed",
+            "android" to "autoplay",
+            "web" to "popout",
+            "web" to "picture-by-picture",
+        )
         const val MULTIVARIANT_PLAYLIST_REGEX = "^usher\\.ttvnw\\.net$"
         const val MEDIA_PLAYLIST_REGEX = "^(?:[a-z0-9-]+\\.playlist\\.(?:live-video|ttvnw)\\.net|video-weaver\\.[a-z0-9-]+\\.hls\\.ttvnw\\.net)$"
 

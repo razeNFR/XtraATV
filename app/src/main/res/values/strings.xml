@@ -617,4 +617,6 @@
     <string name="tv_send">Send</string>
     <string name="tv_voice_search">Voice search</string>
     <string name="tv_message_hint">Message</string>
+    <string name="adblock">Ad blocker</string>
+    <string name="adblock_summary">While an ad plays, switches to an ad-free stream of another player type (like the VAFT userscript), hides the ad if none is available. Works without proxy.</string>
 </resources>
