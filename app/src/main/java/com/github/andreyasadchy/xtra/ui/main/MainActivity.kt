@@ -23,10 +23,13 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.ext.SdkExtensions
 import android.text.format.Formatter
+import android.view.FocusFinder
+import android.view.KeyEvent
 import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -53,6 +56,7 @@ import androidx.lifecycle.withStarted
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.recyclerview.widget.RecyclerView
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.NavigationUI
@@ -62,6 +66,8 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.github.andreyasadchy.xtra.BuildConfig
+import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.ActivityMainBinding
 import com.github.andreyasadchy.xtra.databinding.DialogUpdateDownloadBinding
@@ -78,16 +84,21 @@ import com.github.andreyasadchy.xtra.ui.download.VideoDownloadService
 import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.games.GamesFragmentDirections
+import com.github.andreyasadchy.xtra.ui.login.LoginActivity
 import com.github.andreyasadchy.xtra.ui.main.MainViewModel.Companion.MainViewModelFactory
 import com.github.andreyasadchy.xtra.ui.player.BasePlaybackService
 import com.github.andreyasadchy.xtra.ui.player.ExoPlayerFragment
 import com.github.andreyasadchy.xtra.ui.player.MediaPlayerFragment
 import com.github.andreyasadchy.xtra.ui.player.PlayerFragment
+import com.github.andreyasadchy.xtra.ui.player.TvStreamSwitcher
 import com.github.andreyasadchy.xtra.ui.saved.SavedMediaFragment
 import com.github.andreyasadchy.xtra.ui.saved.SavedPagerFragment
 import com.github.andreyasadchy.xtra.ui.saved.downloads.DownloadsFragment
+import com.github.andreyasadchy.xtra.ui.search.SearchPagerFragmentDirections
+import com.github.andreyasadchy.xtra.ui.settings.SettingsActivity
 import com.github.andreyasadchy.xtra.ui.team.TeamFragmentDirections
 import com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections
+import com.github.andreyasadchy.xtra.ui.view.TvUi
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.applyTheme
@@ -114,6 +125,8 @@ class MainActivity : AppCompatActivity() {
         const val INTENT_OPEN_PLAYER = "com.github.andreyasadchy.xtra.OPEN_PLAYER"
         const val INTENT_START_AUDIO_ONLY = "com.github.andreyasadchy.xtra.START_AUDIO_ONLY"
         const val INTENT_PLAY_PAUSE_PLAYER = "com.github.andreyasadchy.xtra.PLAY_PAUSE_PLAYER"
+        const val INTENT_CLOSE_PLAYER = "com.github.andreyasadchy.xtra.CLOSE_PLAYER"
+        private const val MULTI_STREAM_TAG = "multiStream"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -136,6 +149,19 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = prefs()
         migrateSettings()
+        if (resources.getBoolean(R.bool.isTv) && !prefs.contains(C.PLAYER_PICTURE_IN_PICTURE)) {
+            // on TV leaving the app should stop the stream unless the user turns picture-in-picture on
+            prefs.edit { putBoolean(C.PLAYER_PICTURE_IN_PICTURE, false) }
+        }
+        if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_QUALITY, false)) {
+            // on TV the streams start in Auto (the saved quality of the app is 720p60 at first)
+            prefs.edit {
+                putBoolean(C.TV_DEFAULTS_QUALITY, true)
+                if (!prefs.contains(C.PLAYER_QUALITY)) {
+                    putString(C.PLAYER_QUALITY, "auto")
+                }
+            }
+        }
         if (tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) <= 0L) {
             tokenPrefs().edit {
                 putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
@@ -153,6 +179,57 @@ class MainActivity : AppCompatActivity() {
         applyTheme()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
+            if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
+                lastContentFocus = newFocus
+            }
+            if (isTv && newFocus != null && newFocus.isInside(binding.navHostFragment)) {
+                onTvContentFocus(newFocus)
+            }
+            if (isTv && newFocus != null) {
+                // leanback menu: open while it has the focus, folded away as soon as the content gets it
+                if (newFocus.isInside(binding.navBarContainer)) {
+                    showTvMenu(false)
+                } else if (newFocus.isInside(binding.navHostFragment)) {
+                    hideTvMenu()
+                }
+            }
+        }
+        if (isTv) {
+            supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
+                override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
+                    TvUi.adapt(v, hideToolbarActions = true)
+                    if (f is androidx.fragment.app.DialogFragment) {
+                        v.post { TvUi.adaptDialog(v) }
+                    }
+                }
+
+                override fun onFragmentStarted(fm: FragmentManager, f: Fragment) {
+                    if (f is androidx.fragment.app.DialogFragment) {
+                        // sheets become side panels with the focus inside
+                        TvUi.adaptSheet(f)
+                    }
+                }
+
+                override fun onFragmentResumed(fm: FragmentManager, f: Fragment) {
+                    if (f is androidx.fragment.app.DialogFragment) {
+                        return
+                    }
+                    binding.root.post {
+                        if (tvInitialFocusDone && f.parentFragment is NavHostFragment && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
+                            restoreTvScreenFocus()
+                        }
+                        if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment) {
+                            // browsing starts in the side menu
+                            tvInitialFocusDone = true
+                            showTvMenu(true)
+                        } else {
+                            ensureFocus()
+                        }
+                    }
+                }
+            }, true)
+        }
         setNavBarColor(resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT)
         val ignoreCutouts = prefs.getBoolean(C.UI_DRAW_BEHIND_CUTOUTS, false)
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, windowInsets ->
@@ -233,7 +310,7 @@ class MainActivity : AppCompatActivity() {
                                 ) {
                                     viewModel.checkUpdates(
                                         prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                                        prefs.getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/crackededed/xtra/releases/tags/latest",
+                                        prefs.getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraATV/releases/latest",
                                         tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0)
                                     )
                                 }
@@ -436,6 +513,13 @@ class MainActivity : AppCompatActivity() {
                     INTENT_PLAY_PAUSE_PLAYER -> {
                         (playerFragment as? PlayerFragment)?.playPause()
                     }
+                    INTENT_CLOSE_PLAYER -> {
+                        (playerFragment as? PlayerFragment)?.let {
+                            it.close()
+                            closePlayer()
+                        }
+                        moveTaskToBack(false)
+                    }
                 }
             }
         }
@@ -445,6 +529,7 @@ class MainActivity : AppCompatActivity() {
             IntentFilter().apply {
                 addAction(INTENT_START_AUDIO_ONLY)
                 addAction(INTENT_PLAY_PAUSE_PLAYER)
+                addAction(INTENT_CLOSE_PLAYER)
             },
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
@@ -645,7 +730,38 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (BuildConfig.DEBUG && intent.hasExtra("tv_test")) {
+            runTvTest(intent.getStringExtra("tv_test"))
+            return
+        }
         handleIntent(intent)
+    }
+
+    /** Debug builds only: opens screens directly for the screenshots of the emulator test. */
+    private fun runTvTest(action: String?) {
+        when (action) {
+            "multistream" -> lifecycleScope.launch {
+                val streams = try {
+                    (com.github.andreyasadchy.xtra.repository.datasource.StreamsDataSource(
+                        gqlQueryLanguages = null,
+                        gqlQuerySort = com.github.andreyasadchy.xtra.graphql.type.StreamSort.VIEWER_COUNT,
+                        gqlLanguages = null,
+                        gqlSort = "VIEWER_COUNT",
+                        tags = null,
+                        gqlHeaders = TwitchApiHelper.getGQLHeaders(this@MainActivity),
+                        graphQLRepository = (application as XtraApp).xtraModule.graphQLRepository,
+                        helixHeaders = TwitchApiHelper.getHelixHeaders(this@MainActivity),
+                        helixRepository = (application as XtraApp).xtraModule.helixRepository,
+                        enableIntegrity = false,
+                        networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    ).load(androidx.paging.PagingSource.LoadParams.Refresh(null, 10, false)) as? androidx.paging.PagingSource.LoadResult.Page)?.data
+                } catch (e: Exception) {
+                    null
+                }
+                streams?.take(4)?.let { startMultiStream(it) }
+            }
+            else -> (playerFragment as? PlayerFragment)?.runTvTest(action)
+        }
     }
 
     private fun restartActivity() {
@@ -656,6 +772,352 @@ class MainActivity : AppCompatActivity() {
             },
             ActivityOptions.makeCustomAnimation(this, 0, 0).toBundle()
         )
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (BuildConfig.DEBUG && isTv) {
+            android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
+        }
+        (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
+        if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot()) {
+            // back on a main screen opens the menu, back again in the menu leaves the app
+            if (event.action == KeyEvent.ACTION_UP) {
+                showTvMenu(true)
+            }
+            return true
+        }
+        if (isTv && event.action == KeyEvent.ACTION_DOWN && isTvMenuShown &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
+        ) {
+            // the menu keeps the focus at its ends, only right leaves it
+            val focus = currentFocus
+            // the Compose menu handles its own ends
+            if (focus != null && focus.isInside(binding.navBarContainer) && binding.tvSideMenu?.let { focus.isInside(it) } != true) {
+                val direction = when (event.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP
+                    KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN
+                    else -> View.FOCUS_LEFT
+                }
+                val next = FocusFinder.getInstance().findNextFocus(binding.root, focus, direction)
+                if (next == null || !next.isInside(binding.navBarContainer)) {
+                    return true
+                }
+            }
+        }
+        if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            val focus = currentFocus
+            if (focus != null && focus.isInside(binding.navBarContainer)) {
+                // from the menu, go back to the item last selected in the screen, else to its first item
+                val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(binding.navHostFragment) }
+                if (last != null && last.requestFocus()) {
+                    return true
+                }
+                val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+                if (grid != null && TvUi.focusFirstItem(grid)) {
+                    return true
+                }
+                if (binding.navHostFragment.requestFocus(View.FOCUS_RIGHT)) {
+                    return true
+                }
+            }
+        }
+        if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+            val focus = currentFocus
+            if (focus != null && focus.parent?.parent is com.google.android.material.tabs.TabLayout && focus.isInside(binding.navHostFragment)) {
+                // from the section tabs, go to the list of the selected section
+                val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+                if (grid != null && TvUi.focusFirstItem(grid)) {
+                    return true
+                }
+            }
+        }
+        if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && !isTvMenuShown) {
+            val focus = currentFocus
+            if (focus != null && focus.isInside(binding.navHostFragment) && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true &&
+                focus.parent !is androidx.compose.ui.platform.ComposeView
+            ) {
+                val next = FocusFinder.getInstance().findNextFocus(binding.root, focus, View.FOCUS_LEFT)
+                if (next == null || !next.isInside(binding.navHostFragment)) {
+                    showTvMenu(true)
+                    return true
+                }
+            }
+        }
+        if (isTv && event.action == KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                    if ((playerFragment as? PlayerFragment)?.isPlayingStreamMaximized() == true && streamQueue.size > 1) {
+                        if (event.repeatCount == 0) {
+                            switchStream(if (event.keyCode == KeyEvent.KEYCODE_CHANNEL_UP) 1 else -1)
+                        }
+                        return true
+                    }
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    val focus = currentFocus
+                    if (focus == null || !focus.isShown) {
+                        // the focused view went away (list refresh, navigation...): bring the focus back instead of losing the key
+                        if (ensureFocus(force = true)) {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
+    private var isTvMenuShown = true
+    private var tvInitialFocusDone = false
+
+    /** Back on a main screen opens the side menu, back again in the menu leaves the app. */
+    /** Back far down a list goes up to its top first, like YouTube. */
+    private val tvGridBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            val grid = tvFocusedGrid ?: return
+            isEnabled = false
+            grid.scrollToPosition(0)
+            grid.post {
+                if (grid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus() != true) {
+                    TvUi.focusFirstItem(grid)
+                }
+            }
+        }
+    }
+    private var tvFocusedGrid: com.github.andreyasadchy.xtra.ui.view.GridRecyclerView? = null
+
+    /** Called when the focus moves: remembers the card of the list and enables back to the top. */
+    private fun onTvContentFocus(focus: View) {
+        var view: View? = focus
+        var child: View? = null
+        while (view != null && view !is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView) {
+            child = view
+            view = view.parent as? View
+        }
+        val grid = view as? com.github.andreyasadchy.xtra.ui.view.GridRecyclerView
+        val position = if (grid != null && child != null) grid.getChildAdapterPosition(child) else RecyclerView.NO_POSITION
+        tvFocusedGrid = grid
+        val span = (grid?.layoutManager as? androidx.recyclerview.widget.GridLayoutManager)?.spanCount ?: 1
+        tvGridBackCallback.isEnabled = grid != null && position >= span * 2
+        if (grid != null && position != RecyclerView.NO_POSITION && ::navController.isInitialized) {
+            navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] = position }
+        }
+    }
+
+    /** Position of the focused card of each screen, to give it back when coming back to the screen. */
+    private val tvFocusMemory = HashMap<String, Int>()
+
+    /** Coming back to a screen: focus the card that had the focus there (the views were recreated). */
+    private fun restoreTvScreenFocus(tries: Int = 0) {
+        if (!::navController.isInitialized) {
+            return
+        }
+        val position = navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] } ?: return
+        val focus = currentFocus
+        if (focus != null && focus.isShown && focus.parent is RecyclerView) {
+            return
+        }
+        val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+        val count = grid?.adapter?.itemCount ?: 0
+        if (grid == null || count == 0) {
+            if (tries < 15) {
+                binding.root.postDelayed({ restoreTvScreenFocus(tries + 1) }, 150)
+            }
+            return
+        }
+        val target = position.coerceAtMost(count - 1)
+        val holder = grid.findViewHolderForAdapterPosition(target)
+        if (holder == null || !holder.itemView.requestFocus()) {
+            grid.scrollToPosition(target)
+            grid.post { grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() }
+        }
+    }
+
+    private val tvMenuBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            showTvMenu(true)
+        }
+    }
+
+    private fun updateTvMenuBackCallback() {
+        tvMenuBackCallback.isEnabled = isTv && !isTvMenuShown && ::navController.isInitialized && navController.previousBackStackEntry == null
+    }
+
+    private val tvMenuState = com.github.andreyasadchy.xtra.ui.tv.TvMenuState()
+
+    /** The leanback menu, drawn with Compose from the entries of the navigation bar. */
+    private fun setupTvSideMenu() {
+        val composeView = binding.tvSideMenu ?: return
+        val icons = mapOf(
+            R.id.tvNavSearch to R.drawable.baseline_search_black_24,
+            R.id.tvHomeFragment to R.drawable.baseline_home_black_24,
+            R.id.rootGamesFragment to R.drawable.ic_games_black_24dp,
+            R.id.rootTopFragment to R.drawable.ic_trending_up_black_24dp,
+            R.id.followPagerFragment to R.drawable.ic_favorite_black_24dp,
+            R.id.followMediaFragment to R.drawable.ic_favorite_black_24dp,
+            R.id.savedPagerFragment to R.drawable.ic_file_download_black_24dp,
+            R.id.savedMediaFragment to R.drawable.ic_file_download_black_24dp,
+            R.id.tvNavSettings to R.drawable.baseline_settings_black_24,
+            R.id.tvNavAccount to R.drawable.baseline_person_black_24,
+        )
+        val menu = binding.navBar.menu
+        tvMenuState.items = (0 until menu.size()).map { index ->
+            val item = menu.getItem(index)
+            com.github.andreyasadchy.xtra.ui.tv.TvMenuItem(
+                id = item.itemId,
+                title = item.title.toString(),
+                icon = icons[item.itemId],
+                group = when (item.itemId) {
+                    R.id.tvNavSearch -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_TOP
+                    R.id.tvNavSettings, R.id.tvNavAccount -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_BOTTOM
+                    else -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_MAIN
+                }
+            )
+        }
+        tvMenuState.selected = binding.navBar.selectedItemId
+        com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
+            tvMenuState.items.find { it.id == tvMenuState.selected }?.title
+        }
+        val accent = MaterialColors.getColor(composeView, androidx.appcompat.R.attr.colorPrimary)
+        composeView.setContent {
+            com.github.andreyasadchy.xtra.ui.tv.TvTheme(accent) {
+                com.github.andreyasadchy.xtra.ui.tv.TvSideMenu(tvMenuState) { id ->
+                    binding.navBar.selectedItemId = id
+                    tvMenuState.selected = binding.navBar.selectedItemId
+                    if (id != R.id.tvNavSettings && id != R.id.tvNavAccount) {
+                        // the chosen screen gets the focus, the menu folds away
+                        focusContentAfterMenu(id == R.id.tvNavSearch)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Opens the side menu from a Compose screen (left on its first card). */
+    fun openTvMenu() {
+        showTvMenu(true)
+    }
+
+    /** Goes to a section of the side menu ("see all" of the TV home). */
+    fun openTvSection(id: Int) {
+        binding.navBar.selectedItemId = id
+        tvMenuState.selected = binding.navBar.selectedItemId
+        focusContentAfterMenu(false)
+    }
+
+    private fun focusContentAfterMenu(search: Boolean, tries: Int = 0) {
+        binding.root.postDelayed({
+            val target = if (search) {
+                binding.navHostFragment.findViewById<View>(R.id.tvSearchBar)
+            } else {
+                TvUi.findVisibleGrid(binding.navHostFragment)?.takeIf { (it.adapter?.itemCount ?: 0) > 0 && it.childCount > 0 }
+                    ?: binding.navHostFragment.findViewById<View>(R.id.tvHome)
+            }
+            when {
+                target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> TvUi.focusFirstItem(target)
+                target != null -> target.requestFocus()
+                tries < 15 -> focusContentAfterMenu(search, tries + 1)
+            }
+        }, if (tries == 0) 250L else 150L)
+    }
+
+    private fun showTvMenu(focus: Boolean) {
+        val menu = binding.navBarContainer
+        if (!isTvMenuShown) {
+            isTvMenuShown = true
+            updateTvMenuBackCallback()
+            menu.animate().cancel()
+            menu.visibility = View.VISIBLE
+            menu.animate().translationX(0f).alpha(1f).setDuration(180L).start()
+        }
+        if (focus) {
+            val sideMenu = binding.tvSideMenu
+            if (sideMenu != null) {
+                if (!tvMenuState.focusSelected()) {
+                    sideMenu.requestFocus()
+                    sideMenu.post { tvMenuState.focusSelected() }
+                }
+            } else {
+                val selected = binding.navBar.findViewById<View>(binding.navBar.selectedItemId)
+                if (selected == null || !selected.requestFocus()) {
+                    menu.requestFocus()
+                }
+            }
+        }
+    }
+
+    private fun hideTvMenu() {
+        val menu = binding.navBarContainer
+        if (isTvMenuShown && menu.width > 0) {
+            isTvMenuShown = false
+            updateTvMenuBackCallback()
+            menu.animate().cancel()
+            menu.animate().translationX(-menu.width.toFloat()).alpha(0f).setDuration(180L).withEndAction {
+                if (!isTvMenuShown) {
+                    menu.visibility = View.INVISIBLE
+                }
+            }.start()
+        }
+    }
+
+    private fun isBrowsingRoot(): Boolean {
+        if ((playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true) {
+            return false
+        }
+        val focus = currentFocus
+        if (focus != null && !focus.isInside(binding.navHostFragment)) {
+            return false
+        }
+        return ::navController.isInitialized && navController.previousBackStackEntry == null
+    }
+
+    /**
+     * Gives the focus back to the screen when nothing visible has it.
+     * Returns true if the focus was moved.
+     */
+    private fun ensureFocus(force: Boolean = false): Boolean {
+        val focus = currentFocus
+        if (!force && focus != null && focus.isShown) {
+            return false
+        }
+        val player = playerFragment as? PlayerFragment
+        if (player != null && player.requestPlayerFocus()) {
+            return true
+        }
+        if (isTv && isTvMenuShown && (focus == null || !focus.isShown)) {
+            // the leanback menu is where browsing starts
+            showTvMenu(true)
+            if (currentFocus != null) {
+                return true
+            }
+        }
+        lastContentFocus?.let {
+            if (it.isAttachedToWindow && it.isShown && it.requestFocus()) {
+                return true
+            }
+        }
+        return binding.navHostFragment.requestFocus() || binding.navBarContainer.requestFocus()
+    }
+
+    fun openSettings() {
+        settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java))
+    }
+
+    fun onAccountClicked() {
+        val isLoggedIn = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank() ||
+                !TwitchApiHelper.getHelixHeaders(this)[C.HEADER_TOKEN].isNullOrBlank()
+        if (isLoggedIn) {
+            getAlertDialogBuilder().apply {
+                setTitle(getString(R.string.logout_title))
+                tokenPrefs().getString(C.USERNAME, null)?.let { setMessage(getString(R.string.logout_msg, it)) }
+                setNegativeButton(getString(R.string.no), null)
+                setPositiveButton(getString(R.string.yes)) { _, _ -> logoutResultLauncher?.launch(Intent(this@MainActivity, LoginActivity::class.java)) }
+            }.show()
+        } else {
+            loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+        }
     }
 
     override fun onUserLeaveHint() {
@@ -876,7 +1338,53 @@ class MainActivity : AppCompatActivity() {
 
 //Navigation listeners
 
-    fun startStream(stream: Stream) {
+    /** Streams of the list the current stream was opened from, to switch between them from the player. */
+    var streamQueue: List<Stream> = emptyList()
+        private set
+
+    /** Live stream whose in-progress VOD is being watched, to go back to the live from the VOD. */
+    var dvrStream: Stream? = null
+    private var currentStreamLogin: String? = null
+
+    fun switchStream(offset: Int) {
+        val queue = streamQueue
+        if (queue.size < 2) {
+            return
+        }
+        val index = queue.indexOfFirst { it.channelLogin != null && it.channelLogin == currentStreamLogin }
+        val next = queue.getOrNull(Math.floorMod(index + offset, queue.size)) ?: return
+        startStream(next)
+    }
+
+    /** TV multi-stream: replaces the player with up to 4 streams shown together. */
+    fun startMultiStream(streams: List<Stream>) {
+        (playerFragment as? PlayerFragment)?.let {
+            it.close()
+            closePlayer()
+        }
+        setMainContentFocusable(false)
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.playerContainer, com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment.newInstance(streams), MULTI_STREAM_TAG)
+            .commit()
+    }
+
+    fun closeMultiStream() {
+        supportFragmentManager.findFragmentByTag(MULTI_STREAM_TAG)?.let {
+            supportFragmentManager.beginTransaction().remove(it).commitNow()
+        }
+        setMainContentFocusable(true)
+    }
+
+    fun showStreamSwitcher() {
+        TvStreamSwitcher.show(this, streamQueue, currentStreamLogin)
+    }
+
+    fun startStream(stream: Stream, queue: List<Stream>? = null) {
+        if (queue != null) {
+            streamQueue = queue
+        }
+        currentStreamLogin = stream.channelLogin
+        dvrStream = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.STREAM,
@@ -993,6 +1501,85 @@ class MainActivity : AppCompatActivity() {
 
 //Player methods
 
+    private var lastContentFocus: View? = null
+    private var lastFocusGrid: RecyclerView? = null
+    private var lastFocusPosition = RecyclerView.NO_POSITION
+
+    /**
+     * Blocks D-pad focus from reaching the browsing UI hidden behind the maximized player,
+     * and restores the previously focused item when the player is minimized or closed.
+     */
+    fun setMainContentFocusable(focusable: Boolean) {
+        if (focusable) {
+            if (binding.navHostFragment.descendantFocusability != ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
+                return
+            }
+            binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            binding.navBarContainer.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            val lastFocus = lastContentFocus
+            lastContentFocus = null
+            val grid = lastFocusGrid
+            val position = lastFocusPosition
+            lastFocusGrid = null
+            if (lastFocus != null && lastFocus.isAttachedToWindow && lastFocus.isShown && lastFocus.requestFocus()) {
+                return
+            }
+            // the card was recycled or the list was refreshed while playing: focus the card at the same position
+            if (grid != null && grid.isAttachedToWindow && position != RecyclerView.NO_POSITION) {
+                val count = grid.adapter?.itemCount ?: 0
+                if (count > 0) {
+                    val target = position.coerceAtMost(count - 1)
+                    val holder = grid.findViewHolderForAdapterPosition(target)
+                    if (holder != null && holder.itemView.requestFocus()) {
+                        return
+                    }
+                    grid.scrollToPosition(target)
+                    grid.post {
+                        if (grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() != true) {
+                            ensureFocus(force = true)
+                        }
+                    }
+                    return
+                }
+            }
+            if (!binding.navHostFragment.requestFocus()) {
+                ensureFocus(force = true)
+            }
+        } else {
+            if (binding.navHostFragment.descendantFocusability == ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
+                return
+            }
+            // remember which card was focused, by its position, to come back to it when the player closes
+            lastFocusGrid = null
+            lastFocusPosition = RecyclerView.NO_POSITION
+            var view: View? = lastContentFocus
+            var child: View? = null
+            while (view != null && view !== binding.navHostFragment) {
+                val parent = view.parent as? View
+                if (parent is RecyclerView) {
+                    lastFocusGrid = parent
+                    lastFocusPosition = parent.getChildAdapterPosition(view)
+                    break
+                }
+                child = view
+                view = parent
+            }
+            binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            binding.navBarContainer.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        }
+    }
+
+    private fun View.isInside(parent: View): Boolean {
+        var view: View? = this
+        while (view != null) {
+            if (view == parent) {
+                return true
+            }
+            view = view.parent as? View
+        }
+        return false
+    }
+
     private fun startPlayer(fragment: Fragment) {
         playerFragment = fragment
         supportFragmentManager.beginTransaction()
@@ -1007,6 +1594,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closePlayer() {
+        setMainContentFocusable(true)
         supportFragmentManager.beginTransaction()
             .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
             .remove(supportFragmentManager.findFragmentById(R.id.playerContainer)!!)
@@ -1095,6 +1683,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun initNavigation() {
         navController = (supportFragmentManager.findFragmentById(R.id.navHostFragment) as NavHostFragment).navController
+        if (isTv) {
+            onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
+            onBackPressedDispatcher.addCallback(this, tvGridBackCallback)
+            navController.addOnDestinationChangedListener { _, _, _ ->
+                updateTvMenuBackCallback()
+                binding.root.post { tvMenuState.selected = binding.navBar.selectedItemId }
+            }
+        }
         val tabList = prefs.getString(C.UI_NAVIGATION_TAB_LIST, null).let { tabPref ->
             val defaultTabs = C.DEFAULT_NAVIGATION_TAB_LIST.split(',')
             if (tabPref != null) {
@@ -1115,6 +1711,7 @@ class MainActivity : AppCompatActivity() {
                     !TwitchApiHelper.getHelixHeaders(this)[C.HEADER_TOKEN].isNullOrBlank()
             val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
             when {
+                isTv -> it.setStartDestination(R.id.tvHomeFragment)
                 (isLoggedIn && startOnFollowed < 2) || (!isLoggedIn && startOnFollowed == 0) || defaultItem == "2" -> {
                     if (prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
                         it.setStartDestination(R.id.followPagerFragment)
@@ -1136,7 +1733,11 @@ class MainActivity : AppCompatActivity() {
             if (!prefs.getBoolean(C.UI_THEME_BOTTOM_NAV_COLOR, true) && prefs.getBoolean(C.UI_THEME_MATERIAL3, true)) {
                 setBackgroundColor(MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface))
             }
-            if (tabList.any { it.split(':')[2] != "0" }) {
+            if (isTv) {
+                menu.add(Menu.NONE, R.id.tvNavSearch, Menu.NONE, R.string.search).setIcon(R.drawable.baseline_search_black_24)
+                menu.add(Menu.NONE, R.id.tvHomeFragment, Menu.NONE, R.string.tv_home).setIcon(R.drawable.baseline_home_black_24)
+            }
+            if (isTv || tabList.any { it.split(':')[2] != "0" }) {
                 tabList.forEach {
                     val split = it.split(':')
                     val key = split[0]
@@ -1165,8 +1766,29 @@ class MainActivity : AppCompatActivity() {
             } else {
                 binding.navBarContainer.visibility = View.GONE
             }
+            if (isTv) {
+                menu.add(Menu.NONE, R.id.tvNavSettings, Menu.NONE, R.string.settings).setIcon(R.drawable.baseline_settings_black_24)
+                menu.add(Menu.NONE, R.id.tvNavAccount, Menu.NONE, R.string.tv_account).setIcon(R.drawable.baseline_person_black_24)
+            }
             setupWithNavController(navController)
+            if (isTv) {
+                setupTvSideMenu()
+            }
             setOnItemSelectedListener {
+                when (it.itemId) {
+                    R.id.tvNavSearch -> {
+                        navController.navigate(SearchPagerFragmentDirections.actionGlobalSearchPagerFragment())
+                        return@setOnItemSelectedListener false
+                    }
+                    R.id.tvNavSettings -> {
+                        openSettings()
+                        return@setOnItemSelectedListener false
+                    }
+                    R.id.tvNavAccount -> {
+                        onAccountClicked()
+                        return@setOnItemSelectedListener false
+                    }
+                }
                 NavigationUI.onNavDestinationSelected(it, navController)
                 return@setOnItemSelectedListener true
             }

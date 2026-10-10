@@ -12,6 +12,22 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_adblock"
+        android:summary="@string/adblock_summary"
+        android:title="@string/adblock"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_frame_rate_matching"
+        android:summary="@string/frame_rate_matching_summary"
+        android:title="@string/frame_rate_matching"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
         android:defaultValue="false"
         android:key="ui_draw_behind_cutouts"
         android:title="@string/draw_behind_cutouts"

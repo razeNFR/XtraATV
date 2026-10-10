@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- TV cards: focusable with a visible border and a slight zoom when selected with the D-pad -->
+    <style name="TvCard" parent="Widget.Material3.CardView.Elevated">
+        <item name="android:layout_margin">10dp</item>
+        <item name="android:focusable">true</item>
+        <item name="cardCornerRadius">10dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="android:stateListAnimator">@animator/tv_card_focus</item>
+        <item name="strokeColor">@color/tv_card_stroke</item>
+        <item name="strokeWidth">@dimen/tv_card_focus_stroke</item>
+    </style>
+
+    <style name="Card" parent="TvCard" />
+
+    <style name="CardAmoled" parent="TvCard">
+        <item name="materialThemeOverlay">@style/CardOverlayAmoled</item>
+    </style>
+
+    <style name="CompactCard" parent="TvCard">
+        <item name="android:layout_margin">5dp</item>
+    </style>
+
+    <style name="CompactCardAmoled" parent="TvCard">
+        <item name="materialThemeOverlay">@style/CardOverlayAmoled</item>
+        <item name="android:layout_margin">5dp</item>
+    </style>
+
+    <!-- TV card content -->
+    <style name="TvThumbnailBadge">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/tv_badge_background</item>
+        <item name="android:paddingStart">6dp</item>
+        <item name="android:paddingEnd">6dp</item>
+        <item name="android:paddingTop">2dp</item>
+        <item name="android:paddingBottom">2dp</item>
+        <item name="android:layout_margin">6dp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TvCardTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:focusable">false</item>
+        <item name="android:textAppearance">?attr/textAppearanceTitleSmall</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="TvCardSubtitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:focusable">false</item>
+        <item name="android:textAppearance">?attr/textAppearanceBodySmall</item>
+        <item name="android:textColor">?android:attr/textColorSecondary</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <!-- TV: menus and option sheets are compact centered panels with rounded corners, fully expanded -->
+    <style name="BottomSheet" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/BottomSheetModal</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+    </style>
+
+    <style name="BottomSheetModal" parent="Widget.Material3.BottomSheet.Modal">
+        <item name="android:elevation">0dp</item>
+        <item name="android:maxWidth">600dp</item>
+        <item name="behavior_skipCollapsed">true</item>
+        <item name="behavior_peekHeight">2000dp</item>
+        <item name="shapeAppearance">@style/TvSheetShape</item>
+    </style>
+
+    <style name="TvSheetShape" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">20dp</item>
+    </style>
+
+</resources>

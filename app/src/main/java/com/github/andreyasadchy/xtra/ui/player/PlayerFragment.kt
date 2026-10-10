@@ -21,6 +21,7 @@ import android.text.format.DateUtils
 import android.util.TypedValue
 import android.view.GestureDetector
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.RoundedCorner
@@ -32,12 +33,16 @@ import android.view.ViewPropertyAnimator
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.trackPipAnimationHintView
 import androidx.annotation.OptIn
 import androidx.core.content.edit
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -57,9 +62,11 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.TimeBar
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.RecyclerView
+import com.github.andreyasadchy.xtra.BuildConfig
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentPlayerBinding
 import com.github.andreyasadchy.xtra.model.VideoQuality
+import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.model.ui.Video
 import com.github.andreyasadchy.xtra.ui.channel.ChannelPagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.chat.ChatFragment
@@ -99,6 +106,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     protected var started = false
 
     private var isPortrait = false
+    private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
+    /** Controls stay longer on TV, moving between them with a remote takes more time than tapping. */
+    protected val controllerHideDelay by lazy { if (isTv) 6000L else 3000L }
     protected var isMaximized = true
     private var isChatOpen = true
     private var isKeyboardShown = false
@@ -128,7 +138,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private val backPressedCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-            minimize()
+            if (_binding != null && controllerAutoHide && controllerHideOnTouch && binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()) {
+                hideController()
+            } else if (_binding != null && binding.chatLayout.hasFocus()) {
+                binding.dragView.requestFocus()
+            } else if (isTv && !requireContext().prefs().getBoolean(C.TV_BACK_MINIMIZES_PLAYER, false)) {
+                // TV: back closes the player, a minimized player is hard to use with a remote
+                close()
+                (activity as? MainActivity)?.closePlayer()
+            } else {
+                minimize()
+            }
+        }
+    }
+
+    private val minimizedBackPressedCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            close()
+            (activity as? MainActivity)?.closePlayer()
         }
     }
 
@@ -242,6 +269,20 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             aspectRatioFrameLayout.setAspectRatio(16f / 9f)
             initLayout()
             changePlayerMode()
+            dragView.setOnKeyListener { _, keyCode, event ->
+                onPlayerKey(keyCode, event)
+            }
+            dragView.setOnFocusChangeListener { _, hasFocus ->
+                minimizedBackPressedCallback.isEnabled = hasFocus && !isMaximized
+            }
+            if (isMaximized) {
+                (activity as? MainActivity)?.setMainContentFocusable(false)
+                dragView.post {
+                    if (view != null && isMaximized) {
+                        binding.dragView.requestFocus()
+                    }
+                }
+            }
             val viewConfiguration = ViewConfiguration.get(requireContext())
             val touchSlop = viewConfiguration.scaledTouchSlop
             val touchSlopRange = -touchSlop.toFloat()..touchSlop.toFloat()
@@ -599,6 +640,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     showController(force = true)
                     fastForward()
                 }
+                if (isTv) {
+                    progressBar.setOnKeyListener { _, keyCode, event -> onTimeBarKey(keyCode, event) }
+                    // discreet timeline: the scrubber and the accent color only show while it has the focus
+                    val playedColor = MaterialColors.getColor(progressBar, androidx.appcompat.R.attr.colorPrimary)
+                    progressBar.hideScrubber(false)
+                    progressBar.setPlayedColor(0xE6FFFFFF.toInt())
+                    progressBar.setOnFocusChangeListener { _, hasFocus ->
+                        if (hasFocus) {
+                            progressBar.showScrubber()
+                            progressBar.setPlayedColor(playedColor)
+                        } else {
+                            progressBar.hideScrubber(false)
+                            progressBar.setPlayedColor(0xE6FFFFFF.toInt())
+                        }
+                    }
+                }
                 progressBar.addListener(
                     object : TimeBar.OnScrubListener {
                         override fun onScrubStart(timeBar: TimeBar, position: Long) {
@@ -615,7 +672,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 seek(position)
                             } else {
                                 if (controllerAutoHide && controllerHideOnTouch) {
-                                    binding.playerControls.root.postDelayed(controllerHideAction, 3000)
+                                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                                 }
                             }
                         }
@@ -630,6 +687,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun start() {
+        setupTvHud()
+        setupSeekPreview()
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -795,7 +854,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         (!TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
                                 !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank())
                     ) {
-                        if (requireContext().prefs().getBoolean(C.PLAYER_CHAT_BAR_TOGGLE, false) && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
+                        if (requireContext().prefs().getBoolean(C.PLAYER_CHAT_BAR_TOGGLE, false) && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && !isTv) {
                             toggleChatInput.visibility = View.VISIBLE
                             toggleChatInput.setOnClickListener {
                                 showController(force = true)
@@ -864,8 +923,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             viewModel.unlistedVideoQualities.collectLatest { qualities ->
                                 if (qualities != null) {
                                     if (qualities.isNotBlank()) {
-                                        (requireActivity() as MainActivity).startVideo(Video(), 0, qualities = qualities)
+                                        if (pendingDvr) {
+                                            // go back in the live: open the VOD of the stream being broadcast at the chosen position
+                                            pendingDvr = false
+                                            val offset = pendingDvrPosition.coerceAtLeast(0L)
+                                            (requireActivity() as MainActivity).startVideo(
+                                                Video(
+                                                    channelId = playbackService?.channelId,
+                                                    channelLogin = playbackService?.channelLogin,
+                                                    channelName = playbackService?.channelName,
+                                                    gameId = playbackService?.gameId,
+                                                    gameSlug = playbackService?.gameSlug,
+                                                    gameName = playbackService?.gameName,
+                                                    title = playbackService?.title,
+                                                ),
+                                                offset,
+                                                qualities = qualities
+                                            )
+                                        } else {
+                                            (requireActivity() as MainActivity).startVideo(Video(), 0, qualities = qualities)
+                                        }
                                     } else {
+                                        pendingDvr = false
+                                        (activity as? MainActivity)?.dvrStream = null
                                         Toast.makeText(requireContext(), R.string.video_not_found, Toast.LENGTH_SHORT).show()
                                     }
                                     viewModel.unlistedVideoQualities.value = null
@@ -900,11 +980,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             }
                         }
                     }
+                    if (isTv && ((activity as? MainActivity)?.streamQueue?.size ?: 0) > 1) {
+                        streamList?.visibility = View.VISIBLE
+                        streamList?.setOnClickListener {
+                            hideController()
+                            (activity as? MainActivity)?.showStreamSwitcher()
+                        }
+                    }
                     rewind.visibility = View.GONE
                     fastForward.visibility = View.GONE
-                    position.visibility = View.GONE
-                    progressBar.visibility = View.GONE
-                    duration.visibility = View.GONE
+                    if (isTv) {
+                        // TV: timeline of the whole broadcast, going back in it plays the VOD of the stream
+                        updateTvLiveTimeline()
+                    } else {
+                        position.visibility = View.GONE
+                        progressBar.visibility = View.GONE
+                        duration.visibility = View.GONE
+                    }
                     updateStreamInfo(
                         playbackService?.title,
                         playbackService?.gameId,
@@ -1167,7 +1259,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 playerLayout.isPortrait = true
                 chatLayout.isPortrait = true
                 with(playerControls) {
-                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true)) {
+                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true) && !isTv) {
                         fullscreen.visibility = View.VISIBLE
                         fullscreen.setImageResource(R.drawable.baseline_fullscreen_black_24)
                         fullscreen.setOnClickListener {
@@ -1207,6 +1299,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     } else {
                         chatLayout.visibility = View.GONE
                     }
+                    if (isTv) {
+                        // full screen video, chat as an overlay
+                        if (isChatOpen) {
+                            showChatLayout()
+                        } else {
+                            hideChatLayout()
+                        }
+                    }
                 } else {
                     showStatusBar()
                     playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
@@ -1242,7 +1342,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 playerLayout.isPortrait = false
                 chatLayout.isPortrait = false
                 with(playerControls) {
-                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true)) {
+                    if (requireContext().prefs().getBoolean(C.PLAYER_FULLSCREEN, true) && !isTv) {
                         fullscreen.visibility = View.VISIBLE
                         fullscreen.setImageResource(R.drawable.baseline_fullscreen_exit_black_24)
                         fullscreen.setOnClickListener {
@@ -1251,7 +1351,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             requireActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                         }
                     }
-                    if (requireContext().prefs().getBoolean(C.PLAYER_ASPECT, true)) {
+                    if (requireContext().prefs().getBoolean(C.PLAYER_ASPECT, true) && !isTv) {
                         aspectRatio.visibility = View.VISIBLE
                         aspectRatio.setOnClickListener {
                             showController(force = true)
@@ -1475,6 +1575,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private fun showChatLayout() {
         with(binding) {
+            if (isTv) {
+                applyTvChatLayout()
+                chatLayout.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                chatLayout.visibility = View.VISIBLE
+                return
+            }
             playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
                 width = ViewGroup.LayoutParams.MATCH_PARENT
                 height = ViewGroup.LayoutParams.MATCH_PARENT
@@ -1691,7 +1797,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         with(binding) {
             if (canEnterPictureInPicture()) {
                 if (!controllerHideOnTouch && !controllerIsAnimating && controllerAutoHide && !binding.playerControls.progressBar.isPressed) {
-                    playerControls.root.postDelayed(controllerHideAction, 3000)
+                    playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                 }
                 controllerHideOnTouch = true
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
@@ -1714,7 +1820,777 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    fun isMaximizedPlayer() = _binding != null && isMaximized
+
+    fun isPlayingStreamMaximized() = _binding != null && isMaximized && playbackService?.type == BasePlaybackService.STREAM
+
+    /** Gives the focus to the player when it is maximized, returns false if it is not. */
+    fun requestPlayerFocus(): Boolean {
+        if (_binding == null || !isMaximized) {
+            return false
+        }
+        return binding.dragView.requestFocus()
+    }
+
+    private var tvScrubPosition = -1L
+    private var pendingDvr = false
+    private var pendingDvrPosition = 0L
+
+    protected fun isTvLiveTimeline() = isTv && playbackService?.type == BasePlaybackService.STREAM
+
+    /** VOD of a live stream opened from its timeline, the end of its timeline goes back to the live. */
+    private fun getTvDvrStream(): Stream? {
+        return (activity as? MainActivity)?.dvrStream?.takeIf {
+            isTv && playbackService?.type == BasePlaybackService.VIDEO && playbackService?.videoId == null && it.channelLogin == playbackService?.channelLogin
+        }
+    }
+
+    private fun getStreamUptime(): Long? {
+        return playbackService?.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.let { System.currentTimeMillis() - it }?.takeIf { it > 0 }
+    }
+
+    protected fun updateTvLiveTimeline() {
+        if (_binding == null || tvScrubPosition >= 0) {
+            return
+        }
+        with(binding.playerControls) {
+            val uptime = getStreamUptime()
+            if (uptime == null) {
+                progressBar.visibility = View.GONE
+                position.visibility = View.GONE
+                duration.visibility = View.GONE
+                return
+            }
+            progressBar.visibility = View.VISIBLE
+            position.visibility = View.VISIBLE
+            duration.visibility = View.VISIBLE
+            progressBar.setDuration(uptime)
+            progressBar.setPosition(uptime)
+            progressBar.setBufferedPosition(uptime)
+            position.text = getString(R.string.tv_live)
+            duration.text = DateUtils.formatElapsedTime(uptime / 1000)
+        }
+    }
+
+    private fun startTvDvr(position: Long) {
+        pendingDvr = true
+        pendingDvrPosition = position
+        (activity as? MainActivity)?.dvrStream = Stream(
+            id = playbackService?.streamId,
+            channelId = playbackService?.channelId,
+            channelLogin = playbackService?.channelLogin,
+            channelName = playbackService?.channelName,
+            gameId = playbackService?.gameId,
+            gameSlug = playbackService?.gameSlug,
+            gameName = playbackService?.gameName,
+            title = playbackService?.title,
+            createdAt = playbackService?.createdAt,
+            viewerCount = playbackService?.viewerCount,
+        )
+        Toast.makeText(requireContext(), R.string.tv_looking_for_vod, Toast.LENGTH_SHORT).show()
+        findUnlistedVideo()
+    }
+
+    /**
+     * D-pad seeking on the time bar: a short press moves 10 seconds, holding the key moves faster and faster.
+     * The player seeks once, when the key is released.
+     */
+    private fun onTimeBarKey(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) {
+            return false
+        }
+        val isLive = isTvLiveTimeline()
+        val duration = (if (isLive) getStreamUptime() else getTotalDuration())?.takeIf { it > 0 } ?: return false
+        with(binding.playerControls) {
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> {
+                    if (tvScrubPosition < 0) {
+                        tvScrubPosition = if (isLive) duration else getCurrentPosition() ?: 0
+                        progressBar.isPressed = true
+                    }
+                    // the longer the key is held, the faster it goes, relative to the length of the video
+                    val step = when {
+                        event.repeatCount < 4 -> 10_000L
+                        event.repeatCount < 12 -> maxOf(30_000L, duration / 300)
+                        event.repeatCount < 24 -> maxOf(60_000L, duration / 120)
+                        else -> maxOf(120_000L, duration / 50)
+                    }
+                    tvScrubPosition = (tvScrubPosition + if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -step else step).coerceIn(0, duration)
+                    progressBar.setDuration(duration)
+                    progressBar.setPosition(tvScrubPosition)
+                    position.text = DateUtils.formatElapsedTime(tvScrubPosition / 1000)
+                    seekPreview?.show(tvScrubPosition, duration)
+                    root.removeCallbacks(controllerHideAction)
+                }
+                KeyEvent.ACTION_UP -> {
+                    if (tvScrubPosition >= 0) {
+                        val newPosition = tvScrubPosition
+                        tvScrubPosition = -1
+                        progressBar.isPressed = false
+                        seekPreview?.hide()
+                        val dvrStream = getTvDvrStream()
+                        when {
+                            isLive -> {
+                                if (newPosition < duration - LIVE_EDGE_MS) {
+                                    startTvDvr(newPosition)
+                                } else {
+                                    updateTvLiveTimeline()
+                                    showController()
+                                }
+                            }
+                            dvrStream != null && newPosition >= duration - LIVE_EDGE_MS -> (activity as? MainActivity)?.startStream(dvrStream)
+                            else -> {
+                                seek(newPosition)
+                                showController()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return true
+    }
+
+    private var tvStatsView: TextView? = null
+    private var seekPreview: TvSeekPreview? = null
+
+    /** Storyboard description of a video: the seekPreviewsURL of the video, else next to its animated preview. */
+    private suspend fun getStoryboardUrl(videoId: String, animatedPreviewUrl: String?): String? {
+        val seekPreviews = try {
+            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryVideo(
+                requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                TwitchApiHelper.getGQLHeaders(requireContext()),
+                videoId
+            ).data?.video?.let { it.seekPreviewsURL ?: it.animatedPreviewURL?.let { preview -> "${preview.substringBeforeLast("/")}/$videoId-info.json" } }
+        } catch (e: Exception) {
+            null
+        }
+        return seekPreviews ?: animatedPreviewUrl?.let { "${it.substringBeforeLast("/")}/$videoId-info.json" }
+    }
+
+    /** Live: thumbnails come from the storyboards of the VOD being recorded. */
+    private fun setupLiveSeekPreview() {
+        val login = playbackService?.channelLogin ?: return
+        val preview = TvSeekPreview(
+            viewLifecycleOwner.lifecycleScope,
+            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.okHttpClient.value,
+            binding.playerControls.root,
+            binding.playerControls.progressBar,
+        )
+        seekPreview = preview
+        viewLifecycleOwner.lifecycleScope.launch {
+            val video = try {
+                (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryUserVideos(
+                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    TwitchApiHelper.getGQLHeaders(requireContext()),
+                    null,
+                    login,
+                    com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME,
+                    listOf(com.github.andreyasadchy.xtra.graphql.type.BroadcastType.ARCHIVE),
+                    1,
+                    null
+                ).data?.user?.videos?.edges?.firstOrNull()?.node
+            } catch (e: Exception) {
+                null
+            }
+            val streamStart = playbackService?.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+            val videoStart = video?.createdAt?.toString()?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+            if (BuildConfig.DEBUG) {
+                android.util.Log.d("XtraTv", "seekPreview live video=${video?.id} videoStart=$videoStart streamStart=$streamStart")
+            }
+            // only the VOD of the current broadcast
+            if (video?.id != null && view != null && (streamStart == null || videoStart == null || kotlin.math.abs(videoStart - streamStart) < 15 * 60_000L)) {
+                val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.d("XtraTv", "seekPreview live storyboard=$url")
+                }
+                if (url != null && view != null) {
+                    preview.load(url, refresh = true)
+                }
+            }
+        }
+    }
+
+    /** TV: storyboard thumbnails above the timeline of VODs. */
+    private fun setupSeekPreview() {
+        if (isTv && playbackService?.type == BasePlaybackService.STREAM && seekPreview == null) {
+            setupLiveSeekPreview()
+            return
+        }
+        val videoId = playbackService?.videoId
+        if (!isTv || playbackService?.type != BasePlaybackService.VIDEO || videoId.isNullOrBlank() || seekPreview != null) {
+            return
+        }
+        val preview = TvSeekPreview(
+            viewLifecycleOwner.lifecycleScope,
+            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.okHttpClient.value,
+            binding.playerControls.root,
+            binding.playerControls.progressBar,
+        )
+        seekPreview = preview
+        viewLifecycleOwner.lifecycleScope.launch {
+            val url = getStoryboardUrl(videoId, playbackService?.videoAnimatedPreviewURL)
+            if (url != null && view != null) {
+                // a VOD of a stream still live keeps growing
+                preview.load(url, refresh = getTvDvrStream() != null)
+            }
+        }
+    }
+
+    /** TV chat overlay: size, corner and transparency from the chat layout panel, flush with the screen edges by default. */
+    private fun applyTvChatLayout() {
+        with(binding) {
+            val prefs = requireContext().prefs()
+            val metrics = resources.displayMetrics
+            val position = prefs.getInt(C.TV_CHAT_POSITION, 0)
+            val margin = (prefs.getInt(C.TV_CHAT_MARGIN, 0) * metrics.density).toInt()
+            playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+                height = ViewGroup.LayoutParams.MATCH_PARENT
+                marginEnd = 0
+            }
+            chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                width = (metrics.widthPixels * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
+                height = (metrics.heightPixels * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
+                gravity = when (position) {
+                    1 -> Gravity.END or Gravity.TOP
+                    2 -> Gravity.START or Gravity.BOTTOM
+                    3 -> Gravity.START or Gravity.TOP
+                    else -> Gravity.END or Gravity.BOTTOM
+                }
+                marginStart = margin
+                marginEnd = margin
+                topMargin = margin
+                bottomMargin = margin
+            }
+            chatLayout.translationY = if (playerControls.root.isVisible) getTvChatLift() else 0f
+            chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_background)
+            chatLayout.background?.mutate()?.alpha = (prefs.getInt(C.TV_CHAT_OPACITY, 55) * 255 / 100).coerceIn(0, 255)
+            chatLayout.clipToOutline = margin != 0
+        }
+    }
+
+    /** The chat goes up over the controls only when it is at the bottom of the screen. */
+    private fun getTvChatLift(): Float {
+        val position = requireContext().prefs().getInt(C.TV_CHAT_POSITION, 0)
+        return if (position == 0 || position == 2) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
+    }
+
+    /** Panel with sliders to place the chat, on the opposite side so the chat can be seen while it changes. */
+    private fun showChatLayoutPanel() {
+        val context = requireContext()
+        val prefs = context.prefs()
+        if (!binding.chatLayout.isVisible) {
+            showChatLayout()
+        }
+        val positions = listOf(
+            getString(R.string.tv_chat_bottom_right),
+            getString(R.string.tv_chat_top_right),
+            getString(R.string.tv_chat_bottom_left),
+            getString(R.string.tv_chat_top_left),
+        )
+        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(context) { dismiss ->
+            val position = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_POSITION, 0)) }
+            com.github.andreyasadchy.xtra.ui.tv.SidePanel(
+                title = getString(R.string.tv_chat_layout),
+                alignEnd = position.intValue == 2 || position.intValue == 3,
+            ) {
+                val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                val update: (String, Int) -> Unit = { key, value ->
+                    prefs.edit { putInt(key, value) }
+                    if (_binding != null) {
+                        applyTvChatLayout()
+                    }
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), positions, position.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) {
+                    position.intValue = it
+                    update(C.TV_CHAT_POSITION, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
+                    update(C.TV_CHAT_WIDTH, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
+                    update(C.TV_CHAT_HEIGHT, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_margin), prefs.getInt(C.TV_CHAT_MARGIN, 0), 0..64, step = 4, valueText = { "$it dp" }) {
+                    update(C.TV_CHAT_MARGIN, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_opacity), prefs.getInt(C.TV_CHAT_OPACITY, 55), 0..100, step = 5, valueText = { "$it %" }) {
+                    update(C.TV_CHAT_OPACITY, it)
+                }
+                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
+                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_reset)) {
+                    prefs.edit {
+                        remove(C.TV_CHAT_POSITION)
+                        remove(C.TV_CHAT_WIDTH)
+                        remove(C.TV_CHAT_HEIGHT)
+                        remove(C.TV_CHAT_MARGIN)
+                        remove(C.TV_CHAT_OPACITY)
+                    }
+                    if (_binding != null) {
+                        applyTvChatLayout()
+                    }
+                    dismiss()
+                }
+                androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
+            }
+        }
+    }
+
+    /** TV: write a chat message, with voice input in the field (no system popup). */
+    private fun showChatComposer() {
+        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
+            com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
+                title = getString(R.string.tv_write_message),
+                hint = getString(R.string.tv_message_hint),
+                sendLabel = getString(R.string.tv_send),
+            ) { text ->
+                if (text.isNotBlank()) {
+                    chatFragment?.sendExternalMessage(text)
+                }
+                dismiss()
+            }
+        }
+    }
+
+    private var tooltipAnchor: View? = null
+    private val tooltipShowAction = Runnable { showTooltipNow() }
+    private val tvStatsAction = object : Runnable {
+        override fun run() {
+            val stats = tvStatsView ?: return
+            if (view == null || !stats.isVisible) {
+                return
+            }
+            stats.text = getStatsForNerds() ?: ""
+            stats.postDelayed(this, 1000)
+        }
+    }
+
+    /** Label of the quality being played, shown in the TV HUD. */
+    open fun getCurrentQualityLabel(): String? {
+        return playbackService?.quality?.name?.let {
+            when (it) {
+                VideoQuality.AUTO_QUALITY -> getString(R.string.auto)
+                VideoQuality.SOURCE_QUALITY -> getString(R.string.source)
+                VideoQuality.AUDIO_ONLY_QUALITY -> getString(R.string.audio_only)
+                else -> it
+            }
+        }
+    }
+
+    open fun getStatsForNerds(): String? = null
+
+    private fun onTvControllerVisibility(visible: Boolean) {
+        if (!isTv || _binding == null) {
+            return
+        }
+        with(binding) {
+            if (chatLayout.isVisible) {
+                chatLayout.animate().translationY(if (visible) getTvChatLift() else 0f).setDuration(200L).start()
+            }
+            if (visible) {
+                playerControls.tvQualityInfo?.let { info ->
+                    val label = getCurrentQualityLabel()
+                    info.text = label
+                    info.visibility = if (label.isNullOrBlank()) View.GONE else View.VISIBLE
+                }
+            } else {
+                hideTooltip()
+                seekPreview?.hide()
+            }
+        }
+    }
+
+    /** TV HUD: labels and tooltips on the player buttons, stats for nerds. */
+    private fun setupTvHud() {
+        binding.root.removeCallbacks(tvHudTicker)
+        if (isTv || requireContext().prefs().getBoolean(C.PLAYER_FRAME_RATE_MATCHING, false)) {
+            binding.root.post(tvHudTicker)
+        }
+        if (!isTv) {
+            return
+        }
+        with(binding.playerControls) {
+            // seeking is done on the timeline on TV
+            rewind.visibility = View.GONE
+            fastForward.visibility = View.GONE
+            val labels = listOf(
+                playPause to R.string.pause,
+                restart to R.string.tv_reload,
+                seekLive to R.string.tv_go_to_live,
+                vodGames to R.string.games,
+                volume to R.string.volume,
+                audioCompressor to R.string.audio_compressor,
+                audioOnly to R.string.audio_only,
+                quality to R.string.quality,
+                speed to R.string.playback_speed,
+                subtitles to R.string.subtitles,
+                toggleChat to R.string.toggle_chat,
+                toggleChatInput to R.string.toggle_chat_bar,
+                follow to R.string.follow,
+                download to R.string.download,
+                sleepTimer to R.string.sleep_timer,
+                aspectRatio to R.string.tv_aspect_ratio,
+                menu to R.string.settings,
+                minimize to R.string.minimize,
+            )
+            val buttons = labels.map { (button, label) ->
+                if (button.contentDescription.isNullOrBlank()) {
+                    button.contentDescription = getString(label)
+                }
+                button
+            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream, chatLayoutSettings)
+            buttons.forEach { button ->
+                button.setOnFocusChangeListener { v, hasFocus ->
+                    if (hasFocus) {
+                        tooltipAnchor = v
+                        tvTooltip?.removeCallbacks(tooltipShowAction)
+                        tvTooltip?.visibility = View.INVISIBLE
+                        tvTooltip?.postDelayed(tooltipShowAction, 600L)
+                    } else if (tooltipAnchor == v) {
+                        hideTooltip()
+                    }
+                }
+            }
+            statsForNerds?.setOnClickListener {
+                showController(force = true)
+                toggleStatsForNerds()
+            }
+            if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
+                chatLayoutSettings?.visibility = View.VISIBLE
+                chatLayoutSettings?.setOnClickListener {
+                    hideController()
+                    showChatLayoutPanel()
+                }
+            }
+            if (playbackService?.type == BasePlaybackService.STREAM) {
+                multiStream?.visibility = View.VISIBLE
+                multiStream?.setOnClickListener {
+                    hideController()
+                    (activity as? MainActivity)?.let { activity ->
+                        TvMultiStreamPicker.show(activity, Stream(
+                            id = playbackService?.streamId,
+                            channelId = playbackService?.channelId,
+                            channelLogin = playbackService?.channelLogin,
+                            channelName = playbackService?.channelName,
+                            gameName = playbackService?.gameName,
+                            title = playbackService?.title,
+                        ))
+                    }
+                }
+            }
+            val isLoggedIn = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
+                    !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank()
+            if (playbackService?.type == BasePlaybackService.STREAM && isLoggedIn && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
+                chatMessage?.visibility = View.VISIBLE
+                chatMessage?.setOnClickListener {
+                    hideController()
+                    showChatComposer()
+                }
+            }
+        }
+    }
+
+    private fun showTooltipNow() {
+        val tooltip = _binding?.playerControls?.tvTooltip ?: return
+        val anchor = tooltipAnchor ?: return
+        if (!anchor.hasFocus() || anchor.contentDescription.isNullOrBlank()) {
+            return
+        }
+        val root = binding.playerControls.root
+        tooltip.text = anchor.contentDescription
+        tooltip.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        val rootLocation = IntArray(2)
+        val anchorLocation = IntArray(2)
+        root.getLocationInWindow(rootLocation)
+        anchor.getLocationInWindow(anchorLocation)
+        val margin = 8 * resources.displayMetrics.density
+        val x = anchorLocation[0] - rootLocation[0] + anchor.width / 2f - tooltip.measuredWidth / 2f
+        tooltip.translationX = x.coerceIn(margin, (root.width - tooltip.measuredWidth - margin).coerceAtLeast(margin))
+        tooltip.translationY = anchorLocation[1] - rootLocation[1] - tooltip.measuredHeight - margin
+        tooltip.alpha = 0f
+        tooltip.visibility = View.VISIBLE
+        tooltip.animate().alpha(1f).setDuration(150L).start()
+    }
+
+    private fun hideTooltip() {
+        val tooltip = _binding?.playerControls?.tvTooltip ?: return
+        tooltip.removeCallbacks(tooltipShowAction)
+        tooltip.animate().cancel()
+        tooltip.visibility = View.INVISIBLE
+        tooltipAnchor = null
+    }
+
+    private var tvTopRightStack: LinearLayout? = null
+    private var tvAdblockView: TextView? = null
+    private var frameRateModeCandidate = 0
+    private var frameRateModeApplied = 0
+    private var frameRateModeChecks = 0
+
+    /** Every second: ad blocker status, quality badge, frame rate of the display. */
+    private val tvHudTicker = object : Runnable {
+        override fun run() {
+            if (_binding == null || view == null) {
+                return
+            }
+            if (isTv) {
+                updateAdblockBadge()
+                if (binding.playerControls.root.isVisible) {
+                    binding.playerControls.tvQualityInfo?.let { info ->
+                        val label = getCurrentQualityLabel()
+                        if (info.text?.toString() != label) {
+                            info.text = label
+                        }
+                        info.visibility = if (label.isNullOrBlank()) View.GONE else View.VISIBLE
+                    }
+                }
+            }
+            updateFrameRateMatching()
+            binding.root.postDelayed(this, 1000)
+        }
+    }
+
+    open fun getAdblockStatus(): String? = null
+
+    open fun getVideoFrameRate(): Float? = null
+
+    open fun isPlayingOrLoading(): Boolean = false
+
+    open fun resumePlayback() {}
+
+    private fun getTopRightStack(): LinearLayout {
+        return tvTopRightStack ?: LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.END
+            binding.playerLayout.addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+                topMargin = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+                marginEnd = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+            })
+            tvTopRightStack = this
+        }
+    }
+
+    /** Small box at the top right while the ad blocker works, like the VAFT userscript. */
+    private fun updateAdblockBadge() {
+        val status = getAdblockStatus()
+        val badge = tvAdblockView ?: if (status == null) return else TextView(requireContext()).apply {
+            setBackgroundResource(R.drawable.tv_chat_overlay_background)
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 13f
+            val density = resources.displayMetrics.density
+            setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
+            getTopRightStack().addView(this, 0, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = (8 * density).toInt()
+            })
+            tvAdblockView = this
+        }
+        if (status != null) {
+            badge.text = status
+            badge.visibility = View.VISIBLE
+        } else {
+            badge.visibility = View.GONE
+        }
+    }
+
+    /**
+     * Frame rate matching: switches the display to a refresh rate that is a multiple of the frame rate of the stream,
+     * and keeps checking it while playing (the backup player of the ad blocker can have another frame rate).
+     */
+    private fun updateFrameRateMatching() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return
+        }
+        val activity = activity ?: return
+        if (!requireContext().prefs().getBoolean(C.PLAYER_FRAME_RATE_MATCHING, false)) {
+            resetFrameRateMatching()
+            return
+        }
+        val frameRate = getVideoFrameRate() ?: return
+        @Suppress("DEPRECATION")
+        val display = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) activity.display else activity.windowManager.defaultDisplay) ?: return
+        val current = display.mode
+        val best = display.supportedModes.filter {
+            it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight
+        }.mapNotNull { mode ->
+            val ratio = mode.refreshRate / frameRate
+            val multiple = kotlin.math.round(ratio)
+            val error = kotlin.math.abs(ratio - multiple) / multiple
+            if (multiple >= 1f && error < 0.0015f) Triple(mode, multiple, error) else null
+        }.minWithOrNull(compareBy<Triple<android.view.Display.Mode, Float, Float>> { it.second }.thenBy { it.third })?.first ?: return
+        if (best.modeId == current.modeId && frameRateModeApplied != 0) {
+            frameRateModeCandidate = 0
+            return
+        }
+        // the mode has to be wanted for 3 checks in a row, a short change of the picture does not switch the display
+        if (frameRateModeCandidate != best.modeId) {
+            frameRateModeCandidate = best.modeId
+            frameRateModeChecks = 1
+            return
+        }
+        if (++frameRateModeChecks < 3) {
+            return
+        }
+        frameRateModeCandidate = 0
+        if (frameRateModeApplied != best.modeId) {
+            frameRateModeApplied = best.modeId
+            val wasPlaying = isPlayingOrLoading()
+            activity.window.attributes = activity.window.attributes.also { it.preferredDisplayModeId = best.modeId }
+            // the TV resyncs HDMI: the audio output goes away for a moment and the player pauses, playback goes on by itself
+            if (wasPlaying) {
+                for (delay in longArrayOf(1500L, 3500L, 6000L)) {
+                    binding.root.postDelayed({
+                        if (_binding != null) {
+                            resumePlayback()
+                            if (activity.currentFocus == null || activity.currentFocus?.isShown != true) {
+                                requestPlayerFocus()
+                            }
+                        }
+                    }, delay)
+                }
+            }
+        }
+    }
+
+    private fun resetFrameRateMatching() {
+        if (frameRateModeApplied != 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            frameRateModeApplied = 0
+            frameRateModeCandidate = 0
+            activity?.window?.let { window ->
+                window.attributes = window.attributes.also { it.preferredDisplayModeId = 0 }
+            }
+        }
+    }
+
+    /** Debug builds only: panels of the player for the screenshots of the emulator test. */
+    fun runTvTest(action: String?) {
+        when (action) {
+            "stats" -> {
+                showController(force = true)
+                toggleStatsForNerds()
+            }
+            "chat_layout" -> showChatLayoutPanel()
+            "hud" -> showController(force = true)
+        }
+    }
+
+    private fun toggleStatsForNerds() {
+        val stats = tvStatsView ?: TextView(requireContext()).apply {
+            setBackgroundResource(R.drawable.tv_chat_overlay_background)
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 12f
+            val padding = (12 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+            visibility = View.GONE
+            getTopRightStack().addView(this, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            tvStatsView = this
+        }
+        if (stats.isVisible) {
+            stats.visibility = View.GONE
+            stats.removeCallbacks(tvStatsAction)
+        } else {
+            stats.visibility = View.VISIBLE
+            stats.removeCallbacks(tvStatsAction)
+            tvStatsAction.run()
+        }
+    }
+
+    /** Focus goes to play/pause, else to the timeline, else to the first button of the bottom row. */
+    private fun focusPrimaryControl() {
+        with(binding.playerControls) {
+            val candidates = mutableListOf<View>(playPause, progressBar)
+            for (layout in listOf(bottomLeftLayout, bottomRightLayout)) {
+                for (i in 0 until layout.childCount) {
+                    candidates.add(layout.getChildAt(i))
+                }
+            }
+            if (candidates.none { it.isShown && it.isFocusable && it.requestFocus() }) {
+                root.requestFocus()
+            }
+        }
+    }
+
+    /** Called by the activity for every key event, keeps the controls visible while they are used with a D-pad. */
+    fun onKeyEventDispatched(event: KeyEvent) {
+        if (_binding != null && isMaximized && event.action == KeyEvent.ACTION_DOWN &&
+            binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()
+        ) {
+            showController()
+        }
+    }
+
+    /** Handles D-pad keys while the player itself (and not one of its controls) has focus. */
+    private fun onPlayerKey(keyCode: Int, event: KeyEvent): Boolean {
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("XtraTv", "playerKey ${KeyEvent.keyCodeToString(keyCode)} action=${event.action} animating=$isAnimating maximized=$isMaximized useController=$useController controlsVisible=${_binding?.playerControls?.root?.isVisible} controllerAnimating=$controllerIsAnimating")
+        }
+        if (_binding == null || isAnimating) {
+            return false
+        }
+        val isSelect = keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+        if (!isMaximized) {
+            if (isSelect) {
+                if (event.action == KeyEvent.ACTION_UP) {
+                    maximize()
+                }
+                return true
+            }
+            return false
+        }
+        if (!useController) {
+            return false
+        }
+        return when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                val queueSize = (activity as? MainActivity)?.streamQueue?.size ?: 0
+                if (isTv && playbackService?.type == BasePlaybackService.STREAM && !binding.playerControls.root.isVisible &&
+                    requireContext().prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
+                ) {
+                    // option: HUD hidden, left / right go to the previous / next streamer of the list the stream comes from,
+                    // the timeline is only used once the D-pad is on it
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        if (queueSize > 1) {
+                            (activity as? MainActivity)?.switchStream(if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+                        } else {
+                            showController(force = true)
+                            binding.playerControls.root.post { if (view != null) focusPrimaryControl() }
+                        }
+                    }
+                    return true
+                }
+                if (binding.playerControls.progressBar.isVisible) {
+                    // seek with the timeline: the following key events go to the focused time bar
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        showController(force = true)
+                        binding.playerControls.progressBar.requestFocus()
+                    }
+                    onTimeBarKey(keyCode, event)
+                } else {
+                    false
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    showController(force = true)
+                    binding.playerControls.root.post {
+                        if (view != null && isMaximized && binding.playerControls.root.isVisible && !binding.playerControls.root.hasFocus()) {
+                            focusPrimaryControl()
+                        }
+                        if (BuildConfig.DEBUG && view != null) {
+                            android.util.Log.d("XtraTv", "controls visible=${binding.playerControls.root.isVisible} alpha=${binding.playerControls.root.alpha} hasFocus=${binding.playerControls.root.hasFocus()} playPause visible=${binding.playerControls.playPause.isShown} focusable=${binding.playerControls.playPause.isFocusable}")
+                        }
+                    }
+                }
+                true
+            }
+            else -> false
+        }
+    }
+
     protected fun showController(show: Boolean = true, force: Boolean = false) {
+        if (show) {
+            onTvControllerVisibility(true)
+        }
         if (!controllerIsAnimating) {
             if (!binding.playerControls.root.isVisible) {
                 binding.playerControls.root.removeCallbacks(controllerHideAction)
@@ -1735,7 +2611,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                     controllerIsAnimating = false
                                     setListener(null)
                                     if (view != null && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                                        binding.playerControls.root.postDelayed(controllerHideAction, 3000)
+                                        binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                                     }
                                 }
                             }
@@ -1746,7 +2622,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             } else {
                 binding.playerControls.root.removeCallbacks(controllerHideAction)
                 if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                    binding.playerControls.root.postDelayed(controllerHideAction, 3000)
+                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                 }
             }
         } else {
@@ -1756,13 +2632,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 binding.playerControls.root.alpha = 1f
                 binding.playerControls.root.visibility = View.VISIBLE
                 if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                    binding.playerControls.root.postDelayed(controllerHideAction, 3000)
+                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                 }
             }
         }
     }
 
     private fun hideController(force: Boolean = false) {
+        onTvControllerVisibility(false)
+        if (binding.playerControls.root.hasFocus() && (force || !controllerIsAnimating)) {
+            binding.dragView.requestFocus()
+        }
         if (!controllerIsAnimating && binding.playerControls.root.isVisible) {
             controllerAnimation = binding.playerControls.root.animate().apply {
                 alpha(0f)
@@ -1896,6 +2776,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 PendingIntent.FLAG_IMMUTABLE
                             )
                         ),
+                        RemoteAction(
+                            Icon.createWithResource(requireContext(), R.drawable.baseline_close_black_36),
+                            getString(R.string.close_player),
+                            getString(R.string.close_player),
+                            PendingIntent.getBroadcast(
+                                requireContext(),
+                                REQUEST_CODE_CLOSE,
+                                Intent(MainActivity.INTENT_CLOSE_PLAYER).setPackage(requireContext().packageName),
+                                PendingIntent.FLAG_IMMUTABLE
+                            )
+                        ),
                         if (playing) {
                             RemoteAction(
                                 Icon.createWithResource(requireContext(), R.drawable.baseline_pause_black_48),
@@ -2021,8 +2912,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatFragment?.toggleBackPressedCallback(false)
             }
             backPressedCallback.remove()
+            minimizedBackPressedCallback.remove()
+            requireActivity().onBackPressedDispatcher.addCallback(this@PlayerFragment, minimizedBackPressedCallback)
             useController = false
             hideController(true)
+            dragView.setBackgroundResource(R.drawable.player_minimized_focus)
+            (activity as? MainActivity)?.setMainContentFocusable(true)
+            minimizedBackPressedCallback.isEnabled = dragView.hasFocus()
             fun animate() {
                 val (minimizedScaleX, minimizedScaleY) = getScaleValues()
                 val windowInsets = ViewCompat.getRootWindowInsets(requireView())
@@ -2030,7 +2926,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 val keyboardInsets = windowInsets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { if (it > 0) it - (insets?.bottom ?: 0) else it } ?: 0
                 val scaledXDiff = (slidingLayout.width * (1f - minimizedScaleX)) / 2
                 val scaledYDiff = (slidingLayout.height * (1f - minimizedScaleY)) / 2
-                val navBarHeight = requireView().rootView.findViewById<LinearLayout>(R.id.navBarContainer)?.height?.takeIf { it > 0 }?.let { it - keyboardInsets } ?: (insets?.bottom ?: 0)
+                val navBarHeight = if (isTv) {
+                    resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+                } else {
+                    requireView().rootView.findViewById<LinearLayout>(R.id.navBarContainer)?.height?.takeIf { it > 0 }?.let { it - keyboardInsets } ?: (insets?.bottom ?: 0)
+                }
                 val playerWidth = if (isPortrait) {
                     playerLayout.width
                 } else {
@@ -2087,6 +2987,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         with(binding) {
             isMaximized = true
             requireActivity().onBackPressedDispatcher.addCallback(this@PlayerFragment, backPressedCallback)
+            minimizedBackPressedCallback.remove()
+            minimizedBackPressedCallback.isEnabled = false
+            dragView.background = null
+            (activity as? MainActivity)?.setMainContentFocusable(false)
+            dragView.requestFocus()
             if (playbackService?.type == BasePlaybackService.STREAM && chatFragment?.emoteMenuIsVisible() == true) {
                 chatFragment?.toggleBackPressedCallback(true)
             }
@@ -2366,6 +3271,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        _binding?.root?.removeCallbacks(tvHudTicker)
+        resetFrameRateMatching()
+        seekPreview = null
+        tvStatsView = null
+        tvTopRightStack = null
+        tvAdblockView = null
+        (activity as? MainActivity)?.let {
+            if (it.playerFragment == null || it.playerFragment === this) {
+                it.setMainContentFocusable(true)
+            }
+        }
         super.onDestroyView()
         _binding = null
     }
@@ -2375,6 +3291,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val REQUEST_CODE_SPEED = 1
         private const val REQUEST_CODE_AUDIO_ONLY = 2
         private const val REQUEST_CODE_PLAY_PAUSE = 3
+        private const val REQUEST_CODE_CLOSE = 4
+        private const val LIVE_EDGE_MS = 20_000L
         const val KEY_OFFLINE = "offline"
     }
 }

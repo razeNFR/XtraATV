@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v7
+    - name: Setup Java
+      uses: actions/setup-java@v6
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6
+    - name: Build the release APK
+      run: ./gradlew assembleRelease
+    - name: Name the APK
+      run: cp app/build/outputs/apk/release/app-release.apk XtraTV-${GITHUB_REF_NAME#v}.apk
+    - name: Publish the release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: Xtra TV ${{ github.ref_name }}
+        body_path: docs/release-notes.md
+        files: XtraTV-*.apk
+        make_latest: true

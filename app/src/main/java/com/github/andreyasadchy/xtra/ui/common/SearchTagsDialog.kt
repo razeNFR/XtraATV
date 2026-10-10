@@ -1,5 +1,6 @@
 package com.github.andreyasadchy.xtra.ui.common
 
+import com.github.andreyasadchy.xtra.R
 import android.app.Dialog
 import android.content.Context
 import android.os.Bundle
@@ -81,8 +82,15 @@ class SearchTagsDialog : DialogFragment() {
                 }
             })
             recyclerView.adapter = pagingAdapter
-            searchView.requestFocus()
-            WindowCompat.getInsetsController(requireActivity().window, searchView).show(WindowInsetsCompat.Type.ime())
+            if (resources.getBoolean(R.bool.isTv)) {
+                // TV: search bar with the mic in it
+                com.github.andreyasadchy.xtra.ui.tv.TvDialogs.replaceSearchView(searchView, getString(R.string.search))?.let { bar ->
+                    bar.post { bar.requestFocus() }
+                }
+            } else {
+                searchView.requestFocus()
+                WindowCompat.getInsetsController(requireActivity().window, searchView).show(WindowInsetsCompat.Type.ime())
+            }
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     viewModel.flow.collectLatest { pagingData ->

@@ -28,6 +28,7 @@ import com.github.andreyasadchy.xtra.databinding.DialogStreamProxyEditBinding
 import com.github.andreyasadchy.xtra.databinding.FragmentProxySettingsBinding
 import com.github.andreyasadchy.xtra.model.ui.StreamProxy
 import com.github.andreyasadchy.xtra.ui.settings.StreamProxySettingsViewModel.Companion.StreamProxySettingsViewModelFactory
+import com.github.andreyasadchy.xtra.ui.view.TvReorder
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.prefs
@@ -52,36 +53,35 @@ class StreamProxySettingsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         with(binding) {
             val adapter = StreamProxySettingsAdapter()
-            val itemTouchHelper = ItemTouchHelper(
-                object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
-                    override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
-                        val list = viewModel.list.value
-                        val fromPosition = viewHolder.bindingAdapterPosition
-                        val toPosition = target.bindingAdapterPosition
-                        if (fromPosition < toPosition) {
-                            for (from in fromPosition until toPosition) {
-                                val to = from + 1
-                                Collections.swap(list, from, to)
-                                adapter.notifyItemMoved(from, to)
-                            }
-                        } else {
-                            for (to in (toPosition until fromPosition).reversed()) {
-                                val from = to + 1
-                                Collections.swap(list, from, to)
-                                adapter.notifyItemMoved(from, to)
-                            }
+            val dragCallback = object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+                override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                    val list = viewModel.list.value
+                    val fromPosition = viewHolder.bindingAdapterPosition
+                    val toPosition = target.bindingAdapterPosition
+                    if (fromPosition < toPosition) {
+                        for (from in fromPosition until toPosition) {
+                            val to = from + 1
+                            Collections.swap(list, from, to)
+                            adapter.notifyItemMoved(from, to)
                         }
-                        viewModel.updateProxies()
-                        return true
+                    } else {
+                        for (to in (toPosition until fromPosition).reversed()) {
+                            val from = to + 1
+                            Collections.swap(list, from, to)
+                            adapter.notifyItemMoved(from, to)
+                        }
                     }
-
-                    override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
-
-                    override fun isLongPressDragEnabled(): Boolean {
-                        return false
-                    }
+                    viewModel.updateProxies()
+                    return true
                 }
-            )
+
+                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+                override fun isLongPressDragEnabled(): Boolean {
+                    return false
+                }
+            }
+            val itemTouchHelper = ItemTouchHelper(dragCallback)
             adapter.itemTouchHelper = itemTouchHelper
             recyclerView.adapter = adapter
             adapter.checkListener = { item ->
@@ -118,6 +118,7 @@ class StreamProxySettingsFragment : Fragment() {
                     .show()
             }
             itemTouchHelper.attachToRecyclerView(recyclerView)
+            TvReorder.install(recyclerView, dragCallback)
             viewModel.getProxies()
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {

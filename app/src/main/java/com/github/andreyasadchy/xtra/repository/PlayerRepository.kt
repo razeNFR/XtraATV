@@ -43,6 +43,7 @@ import com.github.andreyasadchy.xtra.model.ui.StreamProxy
 import com.github.andreyasadchy.xtra.model.ui.TranslatedChannel
 import com.github.andreyasadchy.xtra.model.ui.VideoSwap
 import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.NetworkUtils
 import com.github.andreyasadchy.xtra.util.NetworkUtils.executeAsync
 import kotlinx.coroutines.Dispatchers
@@ -107,8 +108,10 @@ class PlayerRepository(
             appendQueryParameter("allow_audio_only", "true")
             appendQueryParameter("fast_bread", "true") // low latency
             appendQueryParameter("include_unavailable", "true")
+            appendQueryParameter("multigroup_video", "false")
             appendQueryParameter("p", Random.nextInt(9999999).toString())
             appendQueryParameter("platform", platform)
+            appendQueryParameter("playlist_include_framerate", "true")
             signature?.let { appendQueryParameter("sig", it) }
             if (!supportedCodecs.isNullOrBlank()) {
                 appendQueryParameter("supported_codecs", supportedCodecs)
@@ -2057,6 +2060,18 @@ class PlayerRepository(
         videoSwapDao.getAll()
     }
 
+    /** The first time, the list gets all the player types the VAFT userscript uses, all enabled. */
+    suspend fun getVideoSwapItems(context: android.content.Context) = withContext(Dispatchers.IO) {
+        val prefs = context.prefs()
+        val items = videoSwapDao.getAll()
+        if (items.isEmpty() && !prefs.getBoolean(C.VIDEO_SWAP_DEFAULTS_ADDED, false)) {
+            val defaults = DEFAULT_VIDEO_SWAP.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, index) }
+            videoSwapDao.insertList(defaults)
+            prefs.edit().putBoolean(C.VIDEO_SWAP_DEFAULTS_ADDED, true).apply()
+            videoSwapDao.getAll()
+        } else items
+    }
+
     suspend fun saveVideoSwapItems(items: List<VideoSwap>) = withContext(Dispatchers.IO) {
         videoSwapDao.insertList(items)
     }
@@ -2101,5 +2116,13 @@ class PlayerRepository(
 
     suspend fun deletePlaybackStates() = withContext(Dispatchers.IO) {
         playbackStatesDao.deleteAll()
+    }
+
+    companion object {
+        val DEFAULT_VIDEO_SWAP = listOf(
+            "web" to "embed",
+            "web" to "popout",
+            "android" to "autoplay",
+        )
     }
 }

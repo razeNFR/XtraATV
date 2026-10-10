@@ -287,7 +287,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         }
                         replyView.visibility = View.GONE
                         send.setOnClickListener { sendMessage() }
-                        if ((view.parent?.parent?.parent?.parent as? View)?.id == R.id.slidingLayout && !requireContext().prefs().getBoolean(C.KEY_CHAT_BAR_VISIBLE, true)) {
+                        if ((view.parent?.parent?.parent?.parent as? View)?.id == R.id.slidingLayout && (!requireContext().prefs().getBoolean(C.KEY_CHAT_BAR_VISIBLE, true) || resources.getBoolean(R.bool.isTv))) {
                             messageView.visibility = View.GONE
                         } else {
                             messageView.visibility = View.VISIBLE
@@ -946,6 +946,15 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     fun appendEmote(emote: Emote) {
         binding.editText.text.append(emote.name).append(' ')
+    }
+
+    /** Sends a message written outside of the chat input (TV message dialog). */
+    fun sendExternalMessage(text: String): Boolean {
+        if (_binding == null || text.isBlank()) {
+            return false
+        }
+        binding.editText.setText(text)
+        return sendMessage()
     }
 
     private fun sendMessage(replyId: String? = null): Boolean {

@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -24,11 +25,12 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.github.andreyasadchy.xtra"
+        // own package: installs next to the original Xtra
+        applicationId = "com.github.razenfr.xtratv"
         minSdk = 24
         targetSdk = 37
         versionCode = 121
-        versionName = "2.60.7"
+        versionName = "1.0.0-tv"
     }
 
     buildTypes {
@@ -46,6 +48,7 @@ android {
     }
     buildFeatures {
         buildConfig = true
+        compose = true
         viewBinding = true
     }
     androidResources {
@@ -72,6 +75,13 @@ dependencies {
     implementation(libs.material)
     implementation(libs.markwon.core)
     implementation(libs.markwon.linkify)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui)
+    implementation(libs.activity.compose)
+    implementation(libs.tv.material)
 
     implementation(libs.activity)
     implementation(libs.appcompat)
@@ -107,6 +117,7 @@ dependencies {
     implementation(libs.media3.session)
 
     implementation(libs.coil)
+    implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     implementation(libs.coil.okhttp)
 

@@ -58,6 +58,9 @@ import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParserFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.ParsingLoadable
 import com.github.andreyasadchy.xtra.R
@@ -252,7 +255,7 @@ class ExoPlayerService : BasePlaybackService() {
                     if (type == STREAM) {
                         val useProxy = useStreamProxy && !stopProxy && streamProxyList?.getOrNull(currentStreamProxy)?.proxyMediaPlaylist == true
                         val useVideoSwap = useVideoSwap && !stopVideoSwap
-                        val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false)
+                        val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || prefs().getBoolean(C.PLAYER_ADBLOCK, true)
                         if (useProxy || useVideoSwap || hideAds) {
                             val playlist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
                             val ads = checkPlaylist(playlist)
@@ -286,25 +289,7 @@ class ExoPlayerService : BasePlaybackService() {
                                         }
                                         useVideoSwap -> {
                                             if (!videoSwapActive) {
-                                                videoSwapActive = true
-                                                serviceListener?.toast(R.string.starting_video_swap, Toast.LENGTH_SHORT)
-                                                player?.let { player ->
-                                                    if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
-                                                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                                            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
-                                                        }.build()
-                                                    }
-                                                    player.volume = 0f
-                                                }
-                                                secondaryPlayerTimerJob?.cancel()
-                                                secondaryPlayerTimerJob = lifecycleScope.launch {
-                                                    delay(3.minutes)
-                                                    videoSwapActive = false
-                                                    serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
-                                                    stopSecondaryPlayer2()
-                                                    secondaryPlayerTimerJob = null
-                                                }
-                                                startSecondaryPlayer(false)
+                                                startVideoSwap()
                                             }
                                         }
                                         else -> {
@@ -539,6 +524,28 @@ class ExoPlayerService : BasePlaybackService() {
                                             }
                                         }
                                     }
+                                    !skipAccessToken && responseCode != 0 && videoAnimatedPreviewURL == null && !videoId.isNullOrBlank() && !videoPreviewLookupDone -> {
+                                        // sub-only VODs play from the CDN through the preview URL: fetch it when the video was opened without it
+                                        videoPreviewLookupDone = true
+                                        val listener = this
+                                        lifecycleScope.launch {
+                                            val preview = try {
+                                                xtraModule.graphQLRepository.loadQueryVideo(
+                                                    networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                                                    headers = TwitchApiHelper.getGQLHeaders(this@ExoPlayerService),
+                                                    id = videoId
+                                                ).data?.video?.animatedPreviewURL
+                                            } catch (e: Exception) {
+                                                null
+                                            }
+                                            if (preview != null) {
+                                                videoAnimatedPreviewURL = preview
+                                                listener.onPlayerError(error)
+                                            } else {
+                                                serviceListener?.toast(R.string.video_subscribers_only, Toast.LENGTH_LONG)
+                                            }
+                                        }
+                                    }
                                     responseCode == 403 -> {
                                         serviceListener?.toast(R.string.video_subscribers_only, Toast.LENGTH_LONG)
                                     }
@@ -567,6 +574,7 @@ class ExoPlayerService : BasePlaybackService() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     updatePlaybackState()
                     updateNotification()
+                    onBufferingForAuto(playbackState)
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -699,6 +707,8 @@ class ExoPlayerService : BasePlaybackService() {
                 setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
+                setBandwidthMeter(getBandwidthMeter(this@ExoPlayerService))
+                setTrackSelector(createTrackSelector())
             }.build()
             this.player = player
             player.addListener(playerListener)
@@ -770,11 +780,16 @@ class ExoPlayerService : BasePlaybackService() {
                                     && (it.proxyPlaybackAccessToken || it.proxyMultivariantPlaylist || it.proxyMediaPlaylist)
                         }.sortedBy { it.position }
                     }
-                    useVideoSwap = !useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, false)
+                    val adblock = prefs().getBoolean(C.PLAYER_ADBLOCK, true)
+                    // the ad blocker also backs up the proxies: if an ad still comes through them, the playlist of another player type is used
+                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, false)) || adblock
                     if (useVideoSwap) {
-                        videoSwapList = xtraModule.playerRepository.getVideoSwapItems().filter {
+                        videoSwapList = xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
                             it.enabled && !it.platform.isNullOrBlank() && !it.playerType.isNullOrBlank()
-                        }.sortedBy { it.position }
+                        }.sortedBy { it.position }.ifEmpty {
+                            // ad blocker: like the VAFT userscript, switch to the playlist of another player type while ads play
+                            if (adblock) ADBLOCK_PLAYER_TYPES.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, index) } else emptyList()
+                        }
                     }
                     loadStream(restorePauseState)
                 }
@@ -1230,10 +1245,13 @@ class ExoPlayerService : BasePlaybackService() {
             xtraModule.playerRepository.loadStreamPlaylistUrl(
                 context = this,
                 networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                gqlHeaders = TwitchApiHelper.getGQLHeaders(this, prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)),
+                gqlHeaders = getStreamTokenHeaders(prefs().getString(C.TOKEN_PLATFORM, "web")),
                 channelLogin = channelLogin,
                 platform = prefs().getString(C.TOKEN_PLATFORM, "web"),
-                playerType = prefs().getString(C.TOKEN_PLAYER_TYPE, "site"),
+                playerType = prefs().getString(C.TOKEN_PLAYER_TYPE, "site").let {
+                    // like VAFT, the "popout" player type gets fewer ads than the default "site" one
+                    if (prefs().getBoolean(C.PLAYER_ADBLOCK, true) && (it.isNullOrBlank() || it == "site")) "popout" else it
+                },
                 supportedCodecs = prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                 proxyPlaybackAccessToken = streamProxy != null,
                 proxyHost = streamProxy?.host,
@@ -1250,6 +1268,8 @@ class ExoPlayerService : BasePlaybackService() {
             null
         }
     }
+
+    private var videoPreviewLookupDone = false
 
     private suspend fun loadVideo(restorePauseState: Boolean = false) {
         videoId?.let { videoId ->
@@ -1680,6 +1700,9 @@ class ExoPlayerService : BasePlaybackService() {
                                     stopProxy = true
                                     serviceListener?.toast(R.string.stopping_proxy, Toast.LENGTH_SHORT)
                                     stopSecondaryPlayer()
+                                    if (useVideoSwap && !stopVideoSwap) {
+                                        startVideoSwap()
+                                    }
                                 }
                             }
                             videoSwapActive -> {
@@ -1719,8 +1742,11 @@ class ExoPlayerService : BasePlaybackService() {
                 setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
+                setBandwidthMeter(getBandwidthMeter(this@ExoPlayerService))
+                setTrackSelector(createTrackSelector())
             }.build()
             player.addListener(playerListener)
+            matchSecondaryQuality(player)
             val url = if (streamProxy != null) {
                 quality?.url
             } else {
@@ -1730,7 +1756,7 @@ class ExoPlayerService : BasePlaybackService() {
                             xtraModule.playerRepository.loadStreamPlaylistUrl(
                                 context = this@ExoPlayerService,
                                 networkLibrary = networkLibrary,
-                                gqlHeaders = TwitchApiHelper.getGQLHeaders(this@ExoPlayerService, prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)),
+                                gqlHeaders = getStreamTokenHeaders(videoSwap.platform),
                                 channelLogin = channelLogin,
                                 platform = videoSwap.platform,
                                 playerType = videoSwap.playerType,
@@ -2062,6 +2088,111 @@ class ExoPlayerService : BasePlaybackService() {
             } else {
                 stopSecondaryPlayer()
             }
+        }
+    }
+
+    private fun startVideoSwap() {
+        videoSwapActive = true
+        serviceListener?.toast(R.string.starting_video_swap, Toast.LENGTH_SHORT)
+        player?.let { player ->
+            if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                }.build()
+            }
+            player.volume = 0f
+        }
+        secondaryPlayerTimerJob?.cancel()
+        secondaryPlayerTimerJob = lifecycleScope.launch {
+            delay(3.minutes)
+            videoSwapActive = false
+            serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
+            stopSecondaryPlayer2()
+            secondaryPlayerTimerJob = null
+        }
+        startSecondaryPlayer(false)
+    }
+
+    /** Player whose picture is on screen: the backup player while ads are blocked, else the main one. */
+    val visiblePlayer: ExoPlayer?
+        get() = secondaryPlayer?.takeIf { videoSwapActive || proxyMediaPlaylist } ?: player
+
+    /** Status of the ad blocker, shown on the player like the VAFT userscript does. */
+    fun getAdblockStatus(): String? {
+        return when {
+            videoSwapActive -> getString(R.string.tv_adblock_blocking, videoSwapList?.getOrNull(currentVideoSwapItem)?.playerType ?: "backup")
+            proxyMediaPlaylist -> getString(R.string.tv_adblock_blocking, "proxy")
+            hidden -> getString(R.string.tv_adblock_waiting)
+            else -> null
+        }
+    }
+
+    /** Keeps the quality of the backup player in line with the quality chosen for the main one. */
+    private fun matchSecondaryQuality(secondaryPlayer: ExoPlayer) {
+        val height = quality?.takeIf { it.name != VideoQuality.AUTO_QUALITY }?.resolution
+            ?: player?.videoFormat?.height?.takeIf { it > 0 && quality?.name != VideoQuality.AUTO_QUALITY }
+        if (height != null) {
+            secondaryPlayer.trackSelectionParameters = secondaryPlayer.trackSelectionParameters.buildUpon().apply {
+                setMaxVideoSize(Int.MAX_VALUE, height)
+                setForceHighestSupportedBitrate(true)
+            }.build()
+        }
+    }
+
+    private var autoHighest = false
+    private val rebufferTimes = ArrayDeque<Long>()
+    private var wasReady = false
+
+    /**
+     * Auto on Wi-Fi / Ethernet: the highest quality the device decodes. Twitch low latency sends the segments while they
+     * are made, so the measured bandwidth is the bitrate of the quality being played and the adaptive choice never goes up.
+     * The adaptive choice comes back when the stream stops to buffer twice in a minute.
+     */
+    private fun onBufferingForAuto(playbackState: Int) {
+        val player = player ?: return
+        if (playbackState == Player.STATE_READY) {
+            wasReady = true
+        } else if (playbackState == Player.STATE_BUFFERING && wasReady && player.playWhenReady && autoHighest) {
+            val now = System.currentTimeMillis()
+            rebufferTimes.addLast(now)
+            while (rebufferTimes.isNotEmpty() && now - rebufferTimes.first() > 60_000L) {
+                rebufferTimes.removeFirst()
+            }
+            if (rebufferTimes.size >= 2) {
+                autoHighest = false
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(false).build()
+            }
+        }
+    }
+
+    /** The website client for the web platform (1440p), the client of the app for the others. */
+    private fun getStreamTokenHeaders(platform: String?): Map<String, String> {
+        val includeToken = prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)
+        return if (platform.isNullOrBlank() || platform == "web") {
+            TwitchApiHelper.getGQLWebHeaders(this, includeToken)
+        } else {
+            TwitchApiHelper.getGQLHeaders(this, includeToken)
+        }
+    }
+
+    private fun isUnmeteredNetwork(): Boolean {
+        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    }
+
+    private fun createTrackSelector(): DefaultTrackSelector {
+        // Twitch segments are short: with the default settings the estimate stays low and Auto keeps a lower quality than the connection allows
+        return DefaultTrackSelector(this, AdaptiveTrackSelection.Factory(
+            4000,
+            AdaptiveTrackSelection.DEFAULT_MAX_DURATION_FOR_QUALITY_DECREASE_MS,
+            AdaptiveTrackSelection.DEFAULT_MIN_DURATION_TO_RETAIN_AFTER_DISCARD_MS,
+            0.85f
+        )).apply {
+            // no limit to the size of the screen: a 1440p stream (enhanced broadcasting) also looks better than 1080p on a 1080p TV
+            autoHighest = isUnmeteredNetwork()
+            rebufferTimes.clear()
+            parameters = buildUponParameters().clearViewportSizeConstraints().setForceHighestSupportedBitrate(autoHighest).build()
         }
     }
 
@@ -2798,6 +2929,25 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     companion object {
+        /** Player types whose playlists usually come without ads (same idea as the VAFT userscript). */
+        private var bandwidthMeter: DefaultBandwidthMeter? = null
+
+        /** Shared by all players so a backup player starts at the bandwidth already measured. */
+        fun getBandwidthMeter(context: android.content.Context): DefaultBandwidthMeter {
+            return bandwidthMeter ?: DefaultBandwidthMeter.Builder(context.applicationContext).apply {
+                val connectivityManager = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+                if (capabilities != null && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))) {
+                    setInitialBitrateEstimate(20_000_000L)
+                }
+            }.build().also { bandwidthMeter = it }
+        }
+
+        private val ADBLOCK_PLAYER_TYPES = listOf(
+            "web" to "embed",
+            "web" to "popout",
+            "android" to "autoplay",
+        )
         const val MULTIVARIANT_PLAYLIST_REGEX = "^usher\\.ttvnw\\.net$"
         const val MEDIA_PLAYLIST_REGEX = "^(?:[a-z0-9-]+\\.playlist\\.(?:live-video|ttvnw)\\.net|video-weaver\\.[a-z0-9-]+\\.hls\\.ttvnw\\.net)$"
 

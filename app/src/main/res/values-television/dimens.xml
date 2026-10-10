@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="player_button_size">44dp</dimen>
+    <dimen name="player_play_button_size">56dp</dimen>
+    <!-- Safe area recommended for TV screens (overscan) -->
+    <dimen name="tv_overscan_horizontal">48dp</dimen>
+    <dimen name="tv_overscan_vertical">27dp</dimen>
+    <dimen name="tv_card_focus_stroke">3dp</dimen>
+    <dimen name="tv_settings_side_padding">140dp</dimen>
+    <dimen name="tv_menu_width">120dp</dimen>
+    <dimen name="tv_chat_lift">124dp</dimen>
+</resources>

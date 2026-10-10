@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Xtra</string>
+    <string name="app_name" translatable="false">Xtra TV</string>
     <string name="notification_downloads_channel_id" translatable="false">xtra_downloads_channel</string>
     <string name="notification_live_channel_id" translatable="false">xtra_live_channel</string>
     <string name="notification_playback_channel_id" translatable="false">xtra_playback_channel</string>
@@ -596,4 +596,54 @@
     <string name="stopping_video_swap">Stopping video swap</string>
     <string name="starting_proxy">Starting proxy</string>
     <string name="stopping_proxy">Stopping proxy</string>
+    <string name="tv_open_channel">Channel: %1$s</string>
+    <string name="tv_open_category">Category: %1$s</string>
+    <string name="tv_more_options">More options</string>
+    <string name="tv_more_actions">More actions</string>
+    <string name="tv_account">Account</string>
+    <string name="tv_stream_preview">Live preview on the selected stream (TV)</string>
+    <string name="close_player">Close</string>
+    <string name="tv_back_minimizes_player">Back button minimizes the player instead of closing it</string>
+    <string name="tv_switch_stream">Other streams</string>
+    <string name="tv_looking_for_vod">Looking for the stream VOD…</string>
+    <string name="tv_live">LIVE</string>
+    <string name="tv_stats_for_nerds">Stats for nerds</string>
+    <string name="tv_reload">Reload</string>
+    <string name="tv_go_to_live">Go to live</string>
+    <string name="tv_more">More</string>
+    <string name="tv_aspect_ratio">Aspect ratio</string>
+    <string name="tv_write_message">Write in chat</string>
+    <string name="tv_voice_input">Voice input</string>
+    <string name="tv_send">Send</string>
+    <string name="tv_voice_search">Voice search</string>
+    <string name="tv_message_hint">Message</string>
+    <string name="adblock">Ad blocker</string>
+    <string name="adblock_summary">While an ad plays, switches to an ad-free stream of another player type (like the VAFT userscript), hides the ad if none is available. Also takes over when a proxy lets an ad through.</string>
+    <string name="tv_multistream">Multi-stream</string>
+    <string name="tv_multistream_pick">Choose up to 4 streams</string>
+    <string name="tv_multistream_max">%1$d streams at most</string>
+    <string name="tv_multistream_watch">Watch</string>
+    <string name="tv_adblock_blocking">Blocking ads (%1$s)</string>
+    <string name="tv_adblock_waiting">Waiting for the ad to end</string>
+    <string name="frame_rate_matching">Frame rate matching</string>
+    <string name="frame_rate_matching_summary">Switches the refresh rate of the TV to the frame rate of the video when playback starts, and keeps it matched while playing</string>
+    <string name="tv_speak_now">Speak now…</string>
+    <string name="tv_chat_layout">Chat layout</string>
+    <string name="tv_chat_position">Position</string>
+    <string name="tv_chat_width">Width</string>
+    <string name="tv_chat_height">Height</string>
+    <string name="tv_chat_margin">Distance from the edge</string>
+    <string name="tv_chat_opacity">Background opacity</string>
+    <string name="tv_chat_bottom_right">Bottom right</string>
+    <string name="tv_chat_top_right">Top right</string>
+    <string name="tv_chat_bottom_left">Bottom left</string>
+    <string name="tv_chat_top_left">Top left</string>
+    <string name="tv_reset">Reset</string>
+    <string name="tv_home">Home</string>
+    <string name="tv_followed_live">Followed channels live</string>
+    <string name="tv_see_all">See all</string>
+    <string name="tv_dpad_switch_stream">Left / right switch streamer</string>
+    <string name="tv_dpad_switch_stream_summary">When the controls are hidden, left and right go to the previous or next streamer of the list the stream was opened from</string>
+    <string name="tv_home_languages">Languages of the Popular row (home)</string>
+    <string name="tv_home_languages_summary">Streams of the Popular row of the home in these languages only, all languages when none is checked</string>
 </resources>

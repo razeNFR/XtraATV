@@ -356,6 +356,10 @@ class MediaPlayerFragment : PlayerFragment() {
     }
 
     override fun updateProgress() {
+        if (isTvLiveTimeline()) {
+            updateTvLiveTimeline()
+            return
+        }
         with(binding.playerControls) {
             if (root.isVisible && !progressBar.isPressed) {
                 val currentPosition = playbackService?.player?.currentPosition?.toLong() ?: 0

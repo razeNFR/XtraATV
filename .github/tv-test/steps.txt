@@ -1,0 +1,44 @@
+# Start: side menu focused on Home
+shot start_menu
+key RIGHT 3
+shot home
+keys RIGHT,RIGHT,RIGHT,RIGHT 2
+shot home_row_right
+key UP 1
+shot home_refresh
+# Games then a category
+key LEFT 2
+key DOWN 1
+key DPAD_CENTER 8
+shot games
+key DPAD_CENTER 10
+shot category
+keys DOWN,DOWN,DOWN,DOWN 2
+shot category_scroll
+key BACK 2
+key UP 1
+shot category_header_refresh
+keys RIGHT,RIGHT,RIGHT,RIGHT,RIGHT 1
+shot category_header_sort
+key DPAD_CENTER 3
+shot sort_panel
+key BACK 2
+key DOWN 1
+shot category_grid
+key LEFT 2
+shot category_left_menu
+key RIGHT 2
+shot category_back_from_menu
+# Back to the games and into the category again: the header must be right
+key BACK 3
+shot games_back
+key DPAD_CENTER 10
+shot category_again
+# Channel page from a card
+longkey DPAD_CENTER 3
+key DPAD_CENTER 8
+shot channel
+key UP 1
+shot channel_header
+key DOWN 1
+shot channel_list

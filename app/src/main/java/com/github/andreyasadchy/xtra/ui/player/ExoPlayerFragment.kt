@@ -342,6 +342,59 @@ class ExoPlayerFragment : PlayerFragment() {
         serviceConnection = connection
     }
 
+    override fun getCurrentQualityLabel(): String? {
+        // the backup player of the ad blocker can play another quality than the main one
+        val format = playbackService?.visiblePlayer?.videoFormat
+        val base = super.getCurrentQualityLabel()
+        if (format == null || format.height <= 0) {
+            return base
+        }
+        val frameRate = format.frameRate.takeIf { it > 0f }?.let { kotlin.math.round(it).toInt() }
+        val label = "${format.height}p${frameRate?.takeIf { it > 30 } ?: ""}"
+        return if (playbackService?.quality?.name == VideoQuality.AUTO_QUALITY) "${getString(R.string.auto)} · $label" else label
+    }
+
+    override fun getAdblockStatus() = playbackService?.getAdblockStatus()
+
+    // the main stream only: the backup player of the ad blocker is only there for a moment
+    override fun getVideoFrameRate() = playbackService?.player?.videoFormat?.let { format ->
+        format.frameRate.takeIf { format.height > 0 && it > 0f }
+    }
+
+    override fun isPlayingOrLoading() = playbackService?.player?.playWhenReady == true
+
+    override fun resumePlayback() {
+        playbackService?.player?.let { if (!it.playWhenReady) it.play() }
+    }
+
+    override fun getStatsForNerds(): String {
+        val player = playbackService?.visiblePlayer ?: return ""
+        val video = player.videoFormat
+        val audio = player.audioFormat
+        val lines = mutableListOf<String>()
+        if (video != null) {
+            val frameRate = video.frameRate.takeIf { it > 0f }?.let { " @ ${"%.0f".format(it)} fps" } ?: ""
+            lines.add("Video      ${video.width}x${video.height}$frameRate")
+            lines.add("Codec      ${video.codecs ?: video.sampleMimeType ?: "-"}")
+            (video.bitrate.takeIf { it > 0 } ?: video.peakBitrate.takeIf { it > 0 })?.let { lines.add("Bitrate    ${"%.2f".format(it / 1_000_000f)} Mbps") }
+        }
+        if (audio != null) {
+            lines.add("Audio      ${audio.codecs ?: audio.sampleMimeType ?: "-"} ${audio.sampleRate.takeIf { it > 0 }?.let { "${it / 1000} kHz" } ?: ""}")
+        }
+        lines.add("Quality    ${super.getCurrentQualityLabel() ?: "-"}")
+        val buffer = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0)
+        lines.add("Buffer     ${"%.1f".format(buffer / 1000f)} s")
+        if (player.isCurrentMediaItemLive) {
+            player.currentLiveOffset.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { lines.add("Latency    ${"%.1f".format(it / 1000f)} s") }
+        }
+        player.videoDecoderCounters?.let { counters ->
+            lines.add("Dropped    ${counters.droppedBufferCount} / ${counters.renderedOutputBufferCount} frames")
+        }
+        lines.add("Speed      ${player.playbackParameters.speed}x")
+        lines.add("Volume     ${(player.volume * 100).toInt()}%")
+        return lines.joinToString("\n")
+    }
+
     override fun getCurrentPosition() = playbackService?.player?.currentPosition
 
     override fun getCurrentSpeed() = playbackService?.player?.playbackParameters?.speed
@@ -381,24 +434,30 @@ class ExoPlayerFragment : PlayerFragment() {
     }
 
     override fun updateProgress() {
+        if (isTvLiveTimeline()) {
+            updateTvLiveTimeline()
+            return
+        }
         with(binding.playerControls) {
             if (root.isVisible && !progressBar.isPressed) {
                 val currentPosition = playbackService?.player?.currentPosition ?: 0
+                getTotalDuration()?.takeIf { it > 0 }?.let {
+                    progressBar.setDuration(it)
+                    duration.text = DateUtils.formatElapsedTime(it / 1000)
+                }
                 position.text = DateUtils.formatElapsedTime(currentPosition / 1000)
                 progressBar.setPosition(currentPosition)
                 progressBar.setBufferedPosition(playbackService?.player?.bufferedPosition ?: 0)
                 root.removeCallbacks(updateProgressAction)
-                playbackService?.player?.let { player ->
-                    if (player.isPlaying) {
-                        val speed = player.playbackParameters.speed
-                        val delay = if (speed > 0f) {
-                            (progressBar.preferredUpdateDelay / speed).toLong().coerceIn(200L..1000L)
-                        } else {
-                            1000
-                        }
-                        root.postDelayed(updateProgressAction, delay)
-                    }
+                val player = playbackService?.player
+                val delay = if (player != null && player.isPlaying) {
+                    val speed = player.playbackParameters.speed
+                    if (speed > 0f) (progressBar.preferredUpdateDelay / speed).toLong().coerceIn(200L..1000L) else 1000L
+                } else {
+                    // paused or still loading (a VOD opened at an offset is not ready yet): keep the timeline up to date anyway
+                    500L
                 }
+                root.postDelayed(updateProgressAction, delay)
             }
         }
     }

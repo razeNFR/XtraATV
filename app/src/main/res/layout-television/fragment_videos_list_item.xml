@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV video card: 16:9 thumbnail with badges and single line texts -->
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    style="?attr/cardStyle"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/topLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <ImageView
+            android:id="@+id/thumbnail"
+            style="@style/Thumbnail"
+            android:scaleType="centerCrop"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:src="@tools:sample/backgrounds/scenic" />
+
+        <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
+            android:id="@+id/type"
+            style="@style/TvThumbnailBadge"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="type" />
+
+        <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
+            android:id="@+id/views"
+            style="@style/TvThumbnailBadge"
+            app:layout_constraintBottom_toBottomOf="@id/thumbnail"
+            app:layout_constraintStart_toStartOf="parent"
+            tools:text="133769 views" />
+
+        <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
+            android:id="@+id/duration"
+            style="@style/TvThumbnailBadge"
+            app:layout_constraintBottom_toBottomOf="@id/thumbnail"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="13:37" />
+
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progressBar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layoutDirection="ltr"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@id/thumbnail"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            tools:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/userImage"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="10dp"
+            android:layout_marginTop="10dp"
+            android:focusable="false"
+            android:visibility="gone"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/thumbnail"
+            tools:src="@tools:sample/backgrounds/scenic"
+            tools:visibility="visible" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="8dp"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/options"
+            app:layout_constraintStart_toEndOf="@id/userImage"
+            app:layout_constraintTop_toBottomOf="@id/thumbnail"
+            app:layout_constraintVertical_bias="0.0">
+
+            <TextView
+                android:id="@+id/title"
+                style="@style/TvCardTitle"
+                android:visibility="gone"
+                tools:text="@sample/videos.json/vods/title"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/username"
+                style="@style/TvCardSubtitle"
+                android:visibility="gone"
+                tools:text="@sample/videos.json/vods/channel/name"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/gameName"
+                style="@style/TvCardSubtitle"
+                android:visibility="gone"
+                tools:text="@sample/videos.json/vods/game"
+                tools:visibility="visible" />
+
+            <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
+                android:id="@+id/date"
+                style="@style/TvCardSubtitle"
+                android:shadowRadius="0"
+                tools:text="April 20, 2017" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/options"
+            style="?android:attr/actionOverflowButtonStyle"
+            android:layout_width="24dp"
+            android:layout_height="32dp"
+            android:layout_marginTop="6dp"
+            android:alpha="0.6"
+            android:focusable="false"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/thumbnail" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</com.google.android.material.card.MaterialCardView>
