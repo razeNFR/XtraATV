@@ -4,6 +4,7 @@
 OUT=tv-out
 PKG=com.github.andreyasadchy.xtra.debug
 mkdir -p $OUT
+bash .github/tv-test/probe_2k.sh > $OUT/probe_2k.log 2>&1 &
 adb install -r app/build/outputs/apk/debug/*.apk > $OUT/install.log 2>&1
 adb shell settings put global window_animation_scale 0.5
 adb logcat -c
@@ -40,6 +41,9 @@ done 3< .github/tv-test/steps.txt
 adb logcat -d -b crash > $OUT/crash.log 2>&1
 echo "=== FOCUS ==="
 cat $OUT/focus.log
+echo "=== 2K PROBE ==="
+wait
+cat $OUT/probe_2k.log | head -60
 echo "=== SCRIPTS ==="
 cat $OUT/script.log 2>/dev/null
 echo "=== TV LOG ==="
