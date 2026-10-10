@@ -106,6 +106,14 @@ class MultiStreamFragment : Fragment() {
                         it.startStream(stream)
                     }
                     true
+                } else if (event.action == KeyEvent.ACTION_DOWN && keyCode in DIRECTIONS) {
+                    // the focus only moves between the streams, never out of them (2 streams side by side: up / down do nothing)
+                    val direction = DIRECTIONS.getValue(keyCode)
+                    val next = android.view.FocusFinder.getInstance().findNextFocus(root, tile, direction)
+                    if (next != null && tiles.any { it.view == next }) {
+                        next.requestFocus()
+                    }
+                    true
                 } else false
             }
             loadStream(stream, player)
@@ -193,6 +201,12 @@ class MultiStreamFragment : Fragment() {
     }
 
     companion object {
+        private val DIRECTIONS = mapOf(
+            KeyEvent.KEYCODE_DPAD_UP to View.FOCUS_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN to View.FOCUS_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT to View.FOCUS_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT to View.FOCUS_RIGHT,
+        )
         private const val KEY_STREAMS = "streams"
 
         fun newInstance(streams: List<Stream>) = MultiStreamFragment().apply {

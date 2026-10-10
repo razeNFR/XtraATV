@@ -72,6 +72,9 @@ object TvUi {
             is TabLayout -> adaptTabs(view)
             is ViewPager2 -> adaptPager(view)
         }
+        if (view.id == R.id.sortBar) {
+            view.post { addRefreshButton(view) }
+        }
         if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
                 adapt(view.getChildAt(i), hideToolbarActions)
@@ -248,6 +251,61 @@ object TvUi {
             }
         }
         return null
+    }
+
+    /**
+     * "Refresh" pill next to the sort pill, in the header of every list (games, popular, following...):
+     * reloads the list shown. It stays when the list has no sort.
+     */
+    private fun addRefreshButton(sortBar: View) {
+        val parent = sortBar.parent as? ViewGroup ?: return
+        if (parent.id == R.id.tvHeaderActions) {
+            return
+        }
+        val context = sortBar.context
+        val density = context.resources.displayMetrics.density
+        val index = parent.indexOfChild(sortBar)
+        val params = sortBar.layoutParams
+        val wrapper = android.widget.LinearLayout(context).apply {
+            id = R.id.tvHeaderActions
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        parent.removeViewAt(index)
+        parent.addView(wrapper, index, params)
+        val refresh = TextView(context).apply {
+            text = context.getString(R.string.refresh)
+            textSize = 15f
+            setTextColor(context.getColorStateList(R.color.tv_pill_text))
+            setBackgroundResource(R.drawable.tv_pill_background)
+            val icon = context.getDrawable(R.drawable.tv_ic_refresh)?.mutate()?.apply {
+                setTintList(context.getColorStateList(R.color.tv_pill_text))
+                setBounds(0, 0, (20 * density).toInt(), (20 * density).toInt())
+            }
+            setCompoundDrawablesRelative(icon, null, null, null)
+            compoundDrawablePadding = (10 * density).toInt()
+            setPadding((18 * density).toInt(), (9 * density).toInt(), (20 * density).toInt(), (9 * density).toInt())
+            isFocusable = true
+            isClickable = true
+            setOnClickListener { refreshVisibleList(wrapper) }
+        }
+        wrapper.addView(refresh, android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginEnd = (12 * density).toInt()
+        })
+        wrapper.addView(sortBar, android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+
+    private fun refreshVisibleList(from: View) {
+        // the screen the button is in: up to the root of the fragment
+        var root: View = from
+        while (true) {
+            val parent = root.parent as? View ?: break
+            if (parent.id == R.id.navHostFragment || parent is androidx.fragment.app.FragmentContainerView) break
+            root = parent
+        }
+        val grid = findVisibleGrid(root) ?: return
+        (grid.adapter as? androidx.paging.PagingDataAdapter<*, *>)?.refresh()
+        grid.scrollToPosition(0)
     }
 
     /** The list of the screen currently shown (the visible page of a pager), to give it the focus. */

@@ -11,8 +11,18 @@ def gql(cid, body):
 def get(url):
     return urllib.request.urlopen(url, timeout=15).read().decode()
 
-res = gql(WEB, {"query": "query{streams(first:50){edges{node{broadcaster{login}}}}}"})
-logins = [e["node"]["broadcaster"]["login"] for e in res["data"]["streams"]["edges"]]
+logins = []
+cursor = None
+for _ in range(3):
+    res = gql(WEB, {"query": "query($after: Cursor){streams(first:30, after:$after){edges{cursor node{broadcaster{login}}}}}", "variables": {"after": cursor}})
+    if not res.get("data") or not res["data"].get("streams"):
+        print("streams error", json.dumps(res)[:400])
+        break
+    edges = res["data"]["streams"]["edges"]
+    logins += [e["node"]["broadcaster"]["login"] for e in edges]
+    cursor = edges[-1]["cursor"] if edges else None
+    if not cursor:
+        break
 print("channels:", len(logins))
 q = "query PlaybackAccessToken($login: String!, $platform: String!, $playerType: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: $platform, playerBackend: \"mediaplayer\", playerType: $playerType}) { value signature } }"
 summary = {}
