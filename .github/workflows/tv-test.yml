@@ -28,7 +28,9 @@ jobs:
       with:
         cache-provider: 'basic'
     - name: Build with Gradle
-      run: ./gradlew assembleDebug assembleRelease
+      run: ./gradlew assembleDebug
+    - name: Build the release APK
+      run: ./gradlew assembleRelease
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v7
       with:
