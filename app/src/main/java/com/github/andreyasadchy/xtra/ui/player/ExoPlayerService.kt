@@ -574,6 +574,7 @@ class ExoPlayerService : BasePlaybackService() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     updatePlaybackState()
                     updateNotification()
+                    onBufferingForAuto(playbackState)
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -2138,6 +2139,38 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
+    private var autoHighest = false
+    private val rebufferTimes = ArrayDeque<Long>()
+    private var wasReady = false
+
+    /**
+     * Auto on Wi-Fi / Ethernet: the highest quality the device decodes. Twitch low latency sends the segments while they
+     * are made, so the measured bandwidth is the bitrate of the quality being played and the adaptive choice never goes up.
+     * The adaptive choice comes back when the stream stops to buffer twice in a minute.
+     */
+    private fun onBufferingForAuto(playbackState: Int) {
+        val player = player ?: return
+        if (playbackState == Player.STATE_READY) {
+            wasReady = true
+        } else if (playbackState == Player.STATE_BUFFERING && wasReady && player.playWhenReady && autoHighest) {
+            val now = System.currentTimeMillis()
+            rebufferTimes.addLast(now)
+            while (rebufferTimes.isNotEmpty() && now - rebufferTimes.first() > 60_000L) {
+                rebufferTimes.removeFirst()
+            }
+            if (rebufferTimes.size >= 2) {
+                autoHighest = false
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(false).build()
+            }
+        }
+    }
+
+    private fun isUnmeteredNetwork(): Boolean {
+        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    }
+
     private fun createTrackSelector(): DefaultTrackSelector {
         // Twitch segments are short: with the default settings the estimate stays low and Auto keeps a lower quality than the connection allows
         return DefaultTrackSelector(this, AdaptiveTrackSelection.Factory(
@@ -2147,7 +2180,9 @@ class ExoPlayerService : BasePlaybackService() {
             0.85f
         )).apply {
             // no limit to the size of the screen: a 1440p stream (enhanced broadcasting) also looks better than 1080p on a 1080p TV
-            parameters = buildUponParameters().clearViewportSizeConstraints().build()
+            autoHighest = isUnmeteredNetwork()
+            rebufferTimes.clear()
+            parameters = buildUponParameters().clearViewportSizeConstraints().setForceHighestSupportedBitrate(autoHighest).build()
         }
     }
 

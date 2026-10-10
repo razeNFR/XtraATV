@@ -2325,6 +2325,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var tvAdblockView: TextView? = null
     private var frameRateModeCandidate = 0
     private var frameRateModeApplied = 0
+    private var frameRateModeChecks = 0
 
     /** Every second: ad blocker status, quality badge, frame rate of the display. */
     private val tvHudTicker = object : Runnable {
@@ -2352,6 +2353,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun getAdblockStatus(): String? = null
 
     open fun getVideoFrameRate(): Float? = null
+
+    open fun isPlayingOrLoading(): Boolean = false
+
+    open fun resumePlayback() {}
 
     private fun getTopRightStack(): LinearLayout {
         return tvTopRightStack ?: LinearLayout(requireContext()).apply {
@@ -2416,15 +2421,33 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             frameRateModeCandidate = 0
             return
         }
-        // the mode has to be wanted for 2 checks in a row, a short change of the picture does not switch the display
+        // the mode has to be wanted for 3 checks in a row, a short change of the picture does not switch the display
         if (frameRateModeCandidate != best.modeId) {
             frameRateModeCandidate = best.modeId
+            frameRateModeChecks = 1
+            return
+        }
+        if (++frameRateModeChecks < 3) {
             return
         }
         frameRateModeCandidate = 0
         if (frameRateModeApplied != best.modeId) {
             frameRateModeApplied = best.modeId
+            val wasPlaying = isPlayingOrLoading()
             activity.window.attributes = activity.window.attributes.also { it.preferredDisplayModeId = best.modeId }
+            // the TV resyncs HDMI: the audio output goes away for a moment and the player pauses, playback goes on by itself
+            if (wasPlaying) {
+                for (delay in longArrayOf(1500L, 3500L, 6000L)) {
+                    binding.root.postDelayed({
+                        if (_binding != null) {
+                            resumePlayback()
+                            if (activity.currentFocus == null || activity.currentFocus?.isShown != true) {
+                                requestPlayerFocus()
+                            }
+                        }
+                    }, delay)
+                }
+            }
         }
     }
 
@@ -2507,6 +2530,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                val queueSize = (activity as? MainActivity)?.streamQueue?.size ?: 0
+                if (isTv && playbackService?.type == BasePlaybackService.STREAM && !binding.playerControls.root.isVisible &&
+                    requireContext().prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
+                ) {
+                    // option: HUD hidden, left / right go to the previous / next streamer of the list the stream comes from,
+                    // the timeline is only used once the D-pad is on it
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        if (queueSize > 1) {
+                            (activity as? MainActivity)?.switchStream(if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+                        } else {
+                            showController(force = true)
+                            binding.playerControls.root.post { if (view != null) focusPrimaryControl() }
+                        }
+                    }
+                    return true
+                }
                 if (binding.playerControls.progressBar.isVisible) {
                     // seek with the timeline: the following key events go to the focused time bar
                     if (event.action == KeyEvent.ACTION_DOWN) {

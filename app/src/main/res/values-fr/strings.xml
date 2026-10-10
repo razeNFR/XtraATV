@@ -623,4 +623,6 @@
     <string name="tv_home">Accueil</string>
     <string name="tv_followed_live">Chaînes suivies en direct</string>
     <string name="tv_see_all">Tout voir</string>
+    <string name="tv_dpad_switch_stream">Gauche / droite change de streamer</string>
+    <string name="tv_dpad_switch_stream_summary">Quand le HUD est caché, gauche et droite passent au streamer précédent ou suivant de la liste d\'où vient le stream</string>
 </resources>

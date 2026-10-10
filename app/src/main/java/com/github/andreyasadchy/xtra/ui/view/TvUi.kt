@@ -186,6 +186,17 @@ object TvUi {
                 sheet.translationX = 460 * density
                 sheet.animate().translationX(0f).setDuration(180L).start()
                 styleSheetViews(sheet)
+                // sort, filters and choices: drawn with Compose
+                val content = fragment.view
+                val isChoiceSheet = fragment.javaClass.simpleName.endsWith("SortDialog") || fragment is com.github.andreyasadchy.xtra.ui.common.RadioButtonDialogFragment
+                if (isChoiceSheet && content != null && sheet is ViewGroup && com.github.andreyasadchy.xtra.ui.tv.TvSheetCompose.canConvert(content)) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvSheetCompose.install(
+                        sheet,
+                        content,
+                        if (fragment.javaClass.simpleName.endsWith("SortDialog")) context.getString(R.string.sort) else null
+                    )
+                    return
+                }
             }
             focusInitial(sheet)
         } else {

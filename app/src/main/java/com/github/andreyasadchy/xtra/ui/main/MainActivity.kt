@@ -152,6 +152,15 @@ class MainActivity : AppCompatActivity() {
             // on TV leaving the app should stop the stream unless the user turns picture-in-picture on
             prefs.edit { putBoolean(C.PLAYER_PICTURE_IN_PICTURE, false) }
         }
+        if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_QUALITY, false)) {
+            // on TV the streams start in Auto (the saved quality of the app is 720p60 at first)
+            prefs.edit {
+                putBoolean(C.TV_DEFAULTS_QUALITY, true)
+                if (!prefs.contains(C.PLAYER_QUALITY)) {
+                    putString(C.PLAYER_QUALITY, "auto")
+                }
+            }
+        }
         if (tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) <= 0L) {
             tokenPrefs().edit {
                 putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())

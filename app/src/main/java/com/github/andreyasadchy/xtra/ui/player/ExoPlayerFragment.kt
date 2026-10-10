@@ -356,8 +356,15 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun getAdblockStatus() = playbackService?.getAdblockStatus()
 
-    override fun getVideoFrameRate() = playbackService?.visiblePlayer?.videoFormat?.let { format ->
+    // the main stream only: the backup player of the ad blocker is only there for a moment
+    override fun getVideoFrameRate() = playbackService?.player?.videoFormat?.let { format ->
         format.frameRate.takeIf { format.height > 0 && it > 0f }
+    }
+
+    override fun isPlayingOrLoading() = playbackService?.player?.playWhenReady == true
+
+    override fun resumePlayback() {
+        playbackService?.player?.let { if (!it.playWhenReady) it.play() }
     }
 
     override fun getStatsForNerds(): String {
@@ -434,24 +441,23 @@ class ExoPlayerFragment : PlayerFragment() {
         with(binding.playerControls) {
             if (root.isVisible && !progressBar.isPressed) {
                 val currentPosition = playbackService?.player?.currentPosition ?: 0
+                getTotalDuration()?.takeIf { it > 0 }?.let {
+                    progressBar.setDuration(it)
+                    duration.text = DateUtils.formatElapsedTime(it / 1000)
+                }
                 position.text = DateUtils.formatElapsedTime(currentPosition / 1000)
                 progressBar.setPosition(currentPosition)
                 progressBar.setBufferedPosition(playbackService?.player?.bufferedPosition ?: 0)
                 root.removeCallbacks(updateProgressAction)
-                playbackService?.player?.let { player ->
-                    if (player.isPlaying) {
-                        val speed = player.playbackParameters.speed
-                        val delay = if (speed > 0f) {
-                            (progressBar.preferredUpdateDelay / speed).toLong().coerceIn(200L..1000L)
-                        } else {
-                            1000
-                        }
-                        root.postDelayed(updateProgressAction, delay)
-                    } else if (player.playWhenReady && player.playbackState != Player.STATE_ENDED) {
-                        // still loading (a VOD opened at an offset reports 0 until it is ready): check again soon
-                        root.postDelayed(updateProgressAction, 500)
-                    }
+                val player = playbackService?.player
+                val delay = if (player != null && player.isPlaying) {
+                    val speed = player.playbackParameters.speed
+                    if (speed > 0f) (progressBar.preferredUpdateDelay / speed).toLong().coerceIn(200L..1000L) else 1000L
+                } else {
+                    // paused or still loading (a VOD opened at an offset is not ready yet): keep the timeline up to date anyway
+                    500L
                 }
+                root.postDelayed(updateProgressAction, delay)
             }
         }
     }

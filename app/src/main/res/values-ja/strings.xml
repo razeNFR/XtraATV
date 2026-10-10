@@ -623,4 +623,6 @@
     <string name="tv_home">ホーム</string>
     <string name="tv_followed_live">フォロー中のライブ配信</string>
     <string name="tv_see_all">すべて表示</string>
+    <string name="tv_dpad_switch_stream">左右キーで配信者を切り替え</string>
+    <string name="tv_dpad_switch_stream_summary">コントロールが非表示のとき、左右キーで配信を開いたリストの前または次の配信者に切り替えます</string>
 </resources>

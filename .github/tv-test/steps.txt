@@ -18,7 +18,7 @@ shot search
 key BACK 3
 # Games then a category
 key LEFT 2
-keys DOWN,DOWN 1
+key DOWN 1
 key DPAD_CENTER 8
 shot games
 key DPAD_CENTER 10

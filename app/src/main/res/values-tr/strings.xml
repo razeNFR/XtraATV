@@ -624,4 +624,6 @@
     <string name="tv_home">Ana sayfa</string>
     <string name="tv_followed_live">Takip edilen canlı kanallar</string>
     <string name="tv_see_all">Tümünü gör</string>
+    <string name="tv_dpad_switch_stream">Sol / sağ yayıncı değiştirir</string>
+    <string name="tv_dpad_switch_stream_summary">Kontroller gizliyken sol ve sağ, yayının açıldığı listedeki önceki veya sonraki yayıncıya geçer</string>
 </resources>

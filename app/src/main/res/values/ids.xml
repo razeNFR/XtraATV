@@ -9,4 +9,5 @@
     <item name="tvVoiceSearch" type="id" />
     <item name="tvSearchBar" type="id" />
     <item name="tvHome" type="id" />
+    <item name="tvSheetCompose" type="id" />
 </resources>
