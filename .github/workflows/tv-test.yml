@@ -57,7 +57,7 @@ jobs:
         profile: tv_1080p
         disable-animations: false
         emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-        script: STEPS=${{ contains(github.event.head_commit.message, '[readme]') && 'readme_steps.txt' || github.event.inputs.steps || 'steps.txt' }} APK=${{ contains(github.event.head_commit.message, '[readme]') && 'release' || github.event.inputs.apk || 'debug' }} bash .github/tv-test/run.sh
+        script: STEPS=${{ contains(github.event.head_commit.message, '[readme]') && 'readme_steps.txt' || github.event.inputs.steps || 'steps.txt' }} APK=${{ github.event.inputs.apk || 'debug' }} bash .github/tv-test/run.sh
     - name: Upload TV screenshots
       if: always()
       uses: actions/upload-artifact@v7

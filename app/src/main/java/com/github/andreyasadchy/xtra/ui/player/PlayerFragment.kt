@@ -2461,6 +2461,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    /** Debug builds only: panels of the player for the screenshots of the emulator test. */
+    fun runTvTest(action: String?) {
+        when (action) {
+            "stats" -> {
+                showController(force = true)
+                toggleStatsForNerds()
+            }
+            "chat_layout" -> showChatLayoutPanel()
+            "hud" -> showController(force = true)
+        }
+    }
+
     private fun toggleStatsForNerds() {
         val stats = tvStatsView ?: TextView(requireContext()).apply {
             setBackgroundResource(R.drawable.tv_chat_overlay_background)

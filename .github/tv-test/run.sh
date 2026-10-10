@@ -37,6 +37,7 @@ while read -r cmd arg rest <&3; do
       echo "tap $mode $arg -> $pos" >> $OUT/script.log
       [ -n "$pos" ] && adb shell input tap $pos
       sleep 2 ;;
+    test) adb shell am start -n $PKG/com.github.andreyasadchy.xtra.ui.main.MainActivity --es tv_test "$arg" > /dev/null; sleep "${rest:-3}" ;;
     script) bash ".github/tv-test/$arg" "$OUT" >> $OUT/script.log 2>&1 ;;
     shot)
       n=$((n+1))

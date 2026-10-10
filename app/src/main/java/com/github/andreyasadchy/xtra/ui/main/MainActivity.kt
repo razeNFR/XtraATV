@@ -67,6 +67,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.github.andreyasadchy.xtra.BuildConfig
+import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.ActivityMainBinding
 import com.github.andreyasadchy.xtra.databinding.DialogUpdateDownloadBinding
@@ -729,7 +730,38 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (BuildConfig.DEBUG && intent.hasExtra("tv_test")) {
+            runTvTest(intent.getStringExtra("tv_test"))
+            return
+        }
         handleIntent(intent)
+    }
+
+    /** Debug builds only: opens screens directly for the screenshots of the emulator test. */
+    private fun runTvTest(action: String?) {
+        when (action) {
+            "multistream" -> lifecycleScope.launch {
+                val streams = try {
+                    (com.github.andreyasadchy.xtra.repository.datasource.StreamsDataSource(
+                        gqlQueryLanguages = null,
+                        gqlQuerySort = com.github.andreyasadchy.xtra.graphql.type.StreamSort.VIEWER_COUNT,
+                        gqlLanguages = null,
+                        gqlSort = "VIEWER_COUNT",
+                        tags = null,
+                        gqlHeaders = TwitchApiHelper.getGQLHeaders(this@MainActivity),
+                        graphQLRepository = (application as XtraApp).xtraModule.graphQLRepository,
+                        helixHeaders = TwitchApiHelper.getHelixHeaders(this@MainActivity),
+                        helixRepository = (application as XtraApp).xtraModule.helixRepository,
+                        enableIntegrity = false,
+                        networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    ).load(androidx.paging.PagingSource.LoadParams.Refresh(null, 10, false)) as? androidx.paging.PagingSource.LoadResult.Page)?.data
+                } catch (e: Exception) {
+                    null
+                }
+                streams?.take(4)?.let { startMultiStream(it) }
+            }
+            else -> (playerFragment as? PlayerFragment)?.runTvTest(action)
+        }
     }
 
     private fun restartActivity() {
