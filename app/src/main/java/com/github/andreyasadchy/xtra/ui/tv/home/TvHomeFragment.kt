@@ -83,6 +83,10 @@ class TvHomeFragment : Fragment() {
             },
             onStreamFocused = { schedulePreview(it) },
             formatViewers = { count -> resources.getQuantityString(R.plurals.viewers, count, TwitchApiHelper.formatCount(count, truncate)) },
+            refresh = {
+                stopPreview()
+                viewModel.load(force = true)
+            },
         )
         val followedId = if (context.prefs().getBoolean(C.UI_FOLLOW_PAGER, true)) R.id.followPagerFragment else R.id.followMediaFragment
         return ComposeView(context).apply {

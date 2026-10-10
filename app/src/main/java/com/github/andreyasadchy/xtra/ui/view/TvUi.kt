@@ -34,6 +34,10 @@ object TvUi {
                 view.stateListAnimator = null
                 view.elevation = 0f
                 view.background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
+                if (hideToolbarActions) {
+                    // main screens: header drawn with Compose (refresh, sections, sort)
+                    TvHeader.install(view)
+                }
             }
             is MaterialToolbar -> {
                 if (hideToolbarActions) {
@@ -109,7 +113,7 @@ object TvUi {
         })
     }
 
-    /** Tabs are selected as soon as they get the focus, and show a clear focus frame. */
+    /** Tabs show a clear focus frame, they are only selected with OK. */
     private fun adaptTabs(tabLayout: TabLayout) {
         // TV look: left aligned pills
         tabLayout.tabMode = TabLayout.MODE_SCROLLABLE
@@ -127,11 +131,6 @@ object TvUi {
         fun adaptTab(tab: View) {
             if (tab.foreground == null) {
                 tab.foreground = tab.context.getDrawable(R.drawable.tv_row_focus)
-            }
-            tab.setOnFocusChangeListener { v, hasFocus ->
-                if (hasFocus && !v.isSelected) {
-                    v.performClick()
-                }
             }
         }
         for (i in 0 until strip.childCount) {
@@ -259,6 +258,14 @@ object TvUi {
      */
     private fun addRefreshButton(sortBar: View) {
         val parent = sortBar.parent as? ViewGroup ?: return
+        var ancestor: View? = parent
+        while (ancestor != null) {
+            if (ancestor is AppBarLayout && ancestor.findViewById<View>(R.id.tvHeaderCompose) != null) {
+                // the Compose header already has its refresh button
+                return
+            }
+            ancestor = ancestor.parent as? View
+        }
         if (parent.id == R.id.tvHeaderActions) {
             return
         }
@@ -295,7 +302,7 @@ object TvUi {
         wrapper.addView(sortBar, android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
-    private fun refreshVisibleList(from: View) {
+    fun refreshVisibleList(from: View) {
         // the screen the button is in: up to the root of the fragment
         var root: View = from
         while (true) {
@@ -323,6 +330,18 @@ object TvUi {
             }
         }
         return null
+    }
+
+    /** Focuses the first card fully on screen (the list is not moved). */
+    fun focusFirstVisibleItem(grid: GridRecyclerView): Boolean {
+        val rect = android.graphics.Rect()
+        for (i in 0 until grid.childCount) {
+            val child = grid.getChildAt(i)
+            if (child.isShown && child.getGlobalVisibleRect(rect) && rect.height() >= child.height * 0.9f && child.requestFocus()) {
+                return true
+            }
+        }
+        return focusFirstItem(grid)
     }
 
     /** Focuses the first visible item of the list, returns false when there is nothing to focus. */

@@ -945,6 +945,9 @@ class MainActivity : AppCompatActivity() {
             )
         }
         tvMenuState.selected = binding.navBar.selectedItemId
+        com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
+            tvMenuState.items.find { it.id == tvMenuState.selected }?.title
+        }
         val accent = MaterialColors.getColor(composeView, androidx.appcompat.R.attr.colorPrimary)
         composeView.setContent {
             com.github.andreyasadchy.xtra.ui.tv.TvTheme(accent) {

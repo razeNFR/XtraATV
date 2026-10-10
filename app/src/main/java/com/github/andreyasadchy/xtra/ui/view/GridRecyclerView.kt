@@ -57,7 +57,39 @@ class GridRecyclerView : RecyclerView {
 
     init {
         val columns = getColumnsForConfiguration(resources.configuration)
-        gridLayoutManager = GridLayoutManager(context, columns)
+        gridLayoutManager = object : GridLayoutManager(context, columns) {
+            /**
+             * Google TV alignment: the focused row stays a quarter down the list, so a part of the rows before
+             * and after it is always on screen and the focus never has to jump to a row it cannot see.
+             */
+            override fun requestChildRectangleOnScreen(parent: RecyclerView, child: View, rect: android.graphics.Rect, immediate: Boolean, focusedChildVisible: Boolean): Boolean {
+                if (!isTv) {
+                    return super.requestChildRectangleOnScreen(parent, child, rect, immediate, focusedChildVisible)
+                }
+                val pivot = paddingTop + ((parent.height - paddingTop - paddingBottom) * 0.22f).toInt()
+                val dy = getDecoratedTop(child) - pivot
+                if (dy == 0) {
+                    return false
+                }
+                if (immediate) {
+                    parent.scrollBy(0, dy)
+                } else {
+                    // smooth glide like Google TV, quicker while the key is held
+                    parent.smoothScrollBy(0, dy, scrollInterpolator, if (keyRepeating) 140 else 260)
+                }
+                return true
+            }
+
+            // the rows above and below the screen are laid out ahead, so moving to them never waits for a layout
+            override fun calculateExtraLayoutSpace(state: State, extraLayoutSpace: IntArray) {
+                if (isTv) {
+                    extraLayoutSpace[0] = height
+                    extraLayoutSpace[1] = height
+                } else {
+                    super.calculateExtraLayoutSpace(state, extraLayoutSpace)
+                }
+            }
+        }
         layoutManager = gridLayoutManager
         addItemDecoration(columns)
         if (isTv) {
@@ -136,6 +168,24 @@ class GridRecyclerView : RecyclerView {
             }
         }
         if (event != null && isTv && event.action == KeyEvent.ACTION_DOWN &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
+        ) {
+            val card = focusedChild
+            val position = card?.let { getChildAdapterPosition(it) } ?: NO_POSITION
+            if (card != null && card.hasFocus() && position != NO_POSITION) {
+                val span = gridLayoutManager.spanCount
+                val column = position % span
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && column == 0) {
+                    // first column: left opens the side menu (the header is only reached with up)
+                    TvHeader.findActivity(this)?.openTvMenu()
+                    return true
+                }
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && (column == span - 1 || position == (adapter?.itemCount ?: 0) - 1)) {
+                    return true
+                }
+            }
+        }
+        if (event != null && isTv && event.action == KeyEvent.ACTION_DOWN &&
             (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == KeyEvent.KEYCODE_DPAD_UP)
         ) {
             keyRepeating = event.repeatCount > 0
@@ -147,6 +197,7 @@ class GridRecyclerView : RecyclerView {
     }
 
     private var keyRepeating = false
+    private val scrollInterpolator = android.view.animation.DecelerateInterpolator(1.6f)
 
     /**
      * Up / down go to the card of the same column in the row above / below, even when that row is not on screen yet
@@ -163,7 +214,8 @@ class GridRecyclerView : RecyclerView {
         val span = gridLayoutManager.spanCount
         var target = if (down) position + span else position - span
         if (target < 0) {
-            return false
+            // up from the first row: the header of the screen, on its first action (refresh)
+            return TvHeader.focusHeaderOf(this)
         }
         if (target >= count) {
             val lastRowStart = (count - 1) / span * span
@@ -178,36 +230,10 @@ class GridRecyclerView : RecyclerView {
         if (holder != null && holder.itemView.isAttachedToWindow) {
             holder.itemView.requestFocus()
         } else {
-            val offset = (height * 0.25f).toInt()
-            gridLayoutManager.scrollToPositionWithOffset(target, if (down) height - paddingBottom - offset - card.height else offset)
+            gridLayoutManager.scrollToPositionWithOffset(target, paddingTop + ((height - paddingTop - paddingBottom) * 0.22f).toInt())
             post {
                 findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
             }
-        }
-        return true
-    }
-
-    /** Leanback alignment: the rows before and after the focused one stay partly visible. */
-    override fun requestChildRectangleOnScreen(child: View, rect: android.graphics.Rect, immediate: Boolean): Boolean {
-        if (!isTv) {
-            return super.requestChildRectangleOnScreen(child, rect, immediate)
-        }
-        val peek = (child.height * 0.4f).toInt()
-        val top = child.top + rect.top - peek
-        val bottom = child.top + rect.bottom + peek
-        val dy = when {
-            bottom - top > height - paddingTop - paddingBottom -> child.top - paddingTop
-            top < paddingTop -> top - paddingTop
-            bottom > height - paddingBottom -> bottom - (height - paddingBottom)
-            else -> 0
-        }
-        if (dy == 0) {
-            return false
-        }
-        if (immediate || keyRepeating) {
-            scrollBy(0, dy)
-        } else {
-            smoothScrollBy(0, dy)
         }
         return true
     }

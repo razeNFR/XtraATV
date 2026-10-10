@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +34,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +78,7 @@ class TvHomeActions(
     val openMenu: () -> Unit,
     val onStreamFocused: (Stream?) -> Unit,
     val formatViewers: (Int) -> String,
+    val refresh: () -> Unit,
 )
 
 class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int)
@@ -87,6 +92,12 @@ private val PivotSpec = object : BringIntoViewSpec {
     }
 }
 
+/** The column does not scroll by itself for the focus: each row is brought to the same place when it gets the focus. */
+@OptIn(ExperimentalFoundationApi::class)
+private val NoScrollSpec = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TvHomeScreen(
@@ -97,30 +108,73 @@ fun TvHomeScreen(
     previewPlayer: ExoPlayer?,
     actions: TvHomeActions,
 ) {
-    CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val firstCard = remember { FocusRequester() }
+    val peek = with(LocalDensity.current) { 56.dp.roundToPx() }
+    // a row with the focus glides to the top, with the end of the row above still in sight (Google TV)
+    val bringRow: (Int) -> Unit = { index ->
+        scope.launch {
+            listState.animateScrollToItem(index, if (index <= 1) 0 else -peek)
+        }
+    }
+    val rows = listOfNotNull(
+        followed?.takeIf { it.items.isNotEmpty() }?.let { "followed" to it },
+        popular?.takeIf { it.items.isNotEmpty() }?.let { "popular" to it },
+    )
+    CompositionLocalProvider(LocalBringIntoViewSpec provides NoScrollSpec) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .focusRestorer(),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp),
+                .focusRestorer(firstCard),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 240.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (followed != null && followed.items.isNotEmpty()) {
-                item(key = "followed") {
-                    StreamRow(followed, previewLogin, previewPlayer, actions)
+            item(key = "header") {
+                Row(Modifier.padding(start = 12.dp, top = 4.dp).onFocusChanged { if (it.hasFocus) bringRow(0) }) {
+                    RefreshPill(actions)
                 }
             }
-            if (popular != null && popular.items.isNotEmpty()) {
-                item(key = "popular") {
-                    StreamRow(popular, previewLogin, previewPlayer, actions)
+            rows.forEachIndexed { rowIndex, (key, row) ->
+                item(key = key) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(rowIndex + 1) }) {
+                        StreamRow(row, previewLogin, previewPlayer, actions, if (rowIndex == 0) firstCard else null)
+                    }
                 }
             }
             if (games != null && games.items.isNotEmpty()) {
                 item(key = "games") {
-                    GameRow(games, actions)
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(rows.size + 1) }) {
+                        GameRow(games, actions, if (rows.isEmpty()) firstCard else null)
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RefreshPill(actions: TvHomeActions) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Row(
+        Modifier
+            .leftEdge(0, actions.openMenu)
+            .clip(RoundedCornerShape(24.dp))
+            .background(if (focused) TvColors.focused else Color(0x26FFFFFF))
+            .clickable(interactionSource = interaction, indication = null, onClick = actions.refresh)
+            .padding(horizontal = 18.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(painterResource(R.drawable.tv_ic_refresh), contentDescription = null, tint = if (focused) TvColors.onFocused else Color.White, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            androidx.compose.ui.platform.LocalContext.current.getString(R.string.refresh),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (focused) TvColors.onFocused else Color.White
+        )
     }
 }
 
@@ -143,10 +197,12 @@ private fun Modifier.leftEdge(index: Int, openMenu: () -> Unit) = onPreviewKeyEv
     } else false
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: String?, previewPlayer: ExoPlayer?, actions: TvHomeActions) {
+private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: String?, previewPlayer: ExoPlayer?, actions: TvHomeActions, firstRequester: FocusRequester?) {
     Column {
         RowTitle(row.title)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
             modifier = Modifier.focusRestorer(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -158,7 +214,7 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: String?, previewPlay
                     previewing = previewLogin != null && previewLogin == stream.channelLogin,
                     previewPlayer = previewPlayer,
                     actions = actions,
-                    modifier = Modifier.leftEdge(index, actions.openMenu),
+                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier),
                     onClick = { actions.openStream(stream, row.items) },
                 )
             }
@@ -166,24 +222,28 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: String?, previewPlay
                 SeeAllCard(width = 220.dp, aspect = 16f / 9f) { actions.seeAll(row.seeAllId) }
             }
         }
+        }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GameRow(row: TvHomeRow<Game>, actions: TvHomeActions) {
+private fun GameRow(row: TvHomeRow<Game>, actions: TvHomeActions, firstRequester: FocusRequester?) {
     Column {
         RowTitle(row.title)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
             modifier = Modifier.focusRestorer(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(row.items, key = { index, item -> item.id ?: index }) { index, game ->
-                GameCard(game, actions, Modifier.leftEdge(index, actions.openMenu))
+                GameCard(game, actions, Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier))
             }
             item(key = "seeAll") {
                 SeeAllCard(width = 120.dp, aspect = 3f / 4f) { actions.seeAll(row.seeAllId) }
             }
+        }
         }
     }
 }

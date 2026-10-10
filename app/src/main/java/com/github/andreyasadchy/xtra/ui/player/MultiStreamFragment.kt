@@ -155,29 +155,38 @@ class MultiStreamFragment : Fragment() {
         val login = stream.channelLogin ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             val context = requireContext()
-            val url = try {
-                (context.applicationContext as XtraApp).xtraModule.playerRepository.loadStreamPlaylistUrl(
-                    context = context,
-                    networkLibrary = context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    gqlHeaders = TwitchApiHelper.getGQLHeaders(context, context.prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)),
-                    channelLogin = login,
-                    platform = context.prefs().getString(C.TOKEN_PLATFORM, "web"),
-                    playerType = context.prefs().getString(C.TOKEN_PLAYER_TYPE, "site"),
-                    supportedCodecs = "h264",
-                    proxyPlaybackAccessToken = false,
-                    proxyHost = null,
-                    proxyPort = null,
-                    proxyUser = null,
-                    proxyPassword = null,
-                    proxyTimeout = null,
-                    enableIntegrity = false,
-                )
-            } catch (e: Exception) {
-                null
-            }
+            // ad blocker on every stream, like VAFT: the player type without an ad playing
+            val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(context, login)
             if (url != null && view != null) {
                 player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
                 player.repeatMode = Player.REPEAT_MODE_OFF
+                player.prepare()
+                player.playWhenReady = true
+            }
+        }
+        if (requireContext().prefs().getBoolean(C.PLAYER_ADBLOCK, true)) {
+            var lastSwitch = 0L
+            player.addListener(object : Player.Listener {
+                override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                    val playlist = (player.currentManifest as? androidx.media3.exoplayer.hls.HlsManifest)?.mediaPlaylist ?: return
+                    val ads = playlist.tags.any { it.contains("stitched-ad", true) || it.contains("X-TV-TWITCH-AD", true) }
+                    val now = System.currentTimeMillis()
+                    if (ads && now - lastSwitch > 20_000L && view != null) {
+                        // an ad started: the stream of an other player type
+                        lastSwitch = now
+                        loadStream(stream, player, listen = false)
+                    }
+                }
+            })
+        }
+    }
+
+    private fun loadStream(stream: Stream, player: ExoPlayer, listen: Boolean) {
+        val login = stream.channelLogin ?: return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(requireContext(), login)
+            if (url != null && view != null) {
+                player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
                 player.prepare()
                 player.playWhenReady = true
             }
