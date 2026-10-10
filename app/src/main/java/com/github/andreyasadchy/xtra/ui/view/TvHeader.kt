@@ -180,7 +180,7 @@ object TvHeader {
     private fun read(appBar: AppBarLayout): Snapshot {
         val context = appBar.context
         val isChannel = appBar.findViewById<View>(R.id.userName) != null
-        val imageView = (appBar.findViewById<ImageView>(R.id.userImage) ?: appBar.findViewById(R.id.gameImage))?.takeIf { visible(it) }
+        val imageView: ImageView? = (appBar.findViewById<ImageView?>(R.id.userImage) ?: appBar.findViewById<ImageView?>(R.id.gameImage))?.takeIf { visible(it) }
         val image = imageView?.drawable?.takeIf { it.intrinsicWidth > 0 && it.intrinsicHeight > 0 }?.let {
             try {
                 (imageView.getTag(R.id.tvHeaderCompose) as? Pair<*, *>)?.takeIf { pair -> pair.first === it }?.second as? android.graphics.Bitmap
