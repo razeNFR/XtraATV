@@ -1,45 +1,38 @@
 # Start: leanback menu focused
 shot start_menu
-key RIGHT 2
-shot content
-keys DOWN,DOWN,DOWN 2
-shot content_down3
-keys UP,UP,UP,UP,UP 2
-shot content_up5
-keys LEFT,LEFT,LEFT,LEFT,LEFT 2
-shot menu_back
-keys UP,UP,UP,UP,UP,UP 1
-shot menu_top
 keys DOWN,DOWN 1
-shot menu_popular
 key DPAD_CENTER 8
-shot popular_loaded
+shot popular
 key RIGHT 3
 shot popular_content
-keys RIGHT,DOWN 3
-shot popular_moved
+# Card actions menu then channel page
 longkey DPAD_CENTER 3
 shot card_menu
-key BACK 2
-shot card_menu_closed
-# Open a stream
+key DPAD_CENTER 8
+shot channel_page
+keys DOWN 2
+shot channel_page_down
+key BACK 3
+shot back_from_channel
+# Player
 key DPAD_CENTER 25
 shot player
 key DPAD_CENTER 1
 shot player_controls
-keys RIGHT,RIGHT,RIGHT 0.5
-shot player_right3
-keys RIGHT,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT 0.5
-shot player_right9
-keys UP 0.5
-shot player_up_timeline
+key DOWN 1
+key RIGHT 2
+shot player_tooltip
+keys RIGHT,RIGHT,RIGHT,RIGHT 2
+shot player_tooltip2
+key UP 1
+key LEFT 1
+shot player_timeline_seek
 key BACK 1
 shot player_back1
 key BACK 3
 shot player_closed
-# Settings from the menu (back after closing the player already opened it)
+# Settings from the menu (back after closing the player opened it)
 keys DOWN,DOWN,DOWN,DOWN,DOWN,DOWN 1
-shot menu_bottom
 key UP 1
 key DPAD_CENTER 5
 shot settings
@@ -47,6 +40,3 @@ keys DOWN,DOWN,DOWN 1
 shot settings_down3
 key DPAD_CENTER 3
 shot settings_sub
-key BACK 2
-key BACK 3
-shot back_from_settings
