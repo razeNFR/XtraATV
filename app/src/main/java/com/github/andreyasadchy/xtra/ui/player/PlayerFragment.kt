@@ -40,6 +40,9 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.trackPipAnimationHintView
 import androidx.annotation.OptIn
 import androidx.core.content.edit
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -1573,23 +1576,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private fun showChatLayout() {
         with(binding) {
             if (isTv) {
-                // TV: chat is a read-only translucent overlay on the right, half the screen height, over the full screen video
-                val metrics = resources.displayMetrics
-                playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
-                    width = ViewGroup.LayoutParams.MATCH_PARENT
-                    height = ViewGroup.LayoutParams.MATCH_PARENT
-                    marginEnd = 0
-                }
-                chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
-                    width = (metrics.widthPixels * 0.3f).toInt()
-                    height = metrics.heightPixels / 2
-                    gravity = Gravity.END or Gravity.BOTTOM
-                    marginEnd = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
-                    bottomMargin = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
-                }
-                chatLayout.translationY = if (playerControls.root.isVisible) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
-                chatLayout.setBackgroundResource(R.drawable.tv_chat_overlay_background)
-                chatLayout.clipToOutline = true
+                applyTvChatLayout()
                 chatLayout.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 chatLayout.visibility = View.VISIBLE
                 return
@@ -1967,6 +1954,20 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var tvStatsView: TextView? = null
     private var seekPreview: TvSeekPreview? = null
 
+    /** Storyboard description of a video: the seekPreviewsURL of the video, else next to its animated preview. */
+    private suspend fun getStoryboardUrl(videoId: String, animatedPreviewUrl: String?): String? {
+        val seekPreviews = try {
+            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryVideo(
+                requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                TwitchApiHelper.getGQLHeaders(requireContext()),
+                videoId
+            ).data?.video?.let { it.seekPreviewsURL ?: it.animatedPreviewURL?.let { preview -> "${preview.substringBeforeLast("/")}/$videoId-info.json" } }
+        } catch (e: Exception) {
+            null
+        }
+        return seekPreviews ?: animatedPreviewUrl?.let { "${it.substringBeforeLast("/")}/$videoId-info.json" }
+    }
+
     /** Live: thumbnails come from the storyboards of the VOD being recorded. */
     private fun setupLiveSeekPreview() {
         val login = playbackService?.channelLogin ?: return
@@ -1994,9 +1995,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             val streamStart = playbackService?.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
             val videoStart = video?.createdAt?.toString()?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+            if (BuildConfig.DEBUG) {
+                android.util.Log.d("XtraTv", "seekPreview live video=${video?.id} videoStart=$videoStart streamStart=$streamStart")
+            }
             // only the VOD of the current broadcast
-            if (video?.id != null && video.animatedPreviewURL != null && streamStart != null && videoStart != null && kotlin.math.abs(videoStart - streamStart) < 10 * 60_000L && view != null) {
-                preview.load(video.animatedPreviewURL, video.id)
+            if (video?.id != null && view != null && (streamStart == null || videoStart == null || kotlin.math.abs(videoStart - streamStart) < 15 * 60_000L)) {
+                val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.d("XtraTv", "seekPreview live storyboard=$url")
+                }
+                if (url != null && view != null) {
+                    preview.load(url, refresh = true)
+                }
             }
         }
     }
@@ -2018,85 +2028,131 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             binding.playerControls.progressBar,
         )
         seekPreview = preview
-        val previewUrl = playbackService?.videoAnimatedPreviewURL
-        if (previewUrl != null) {
-            preview.load(previewUrl, videoId)
-        } else {
-            viewLifecycleOwner.lifecycleScope.launch {
-                val url = try {
-                    (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryVideo(
-                        requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                        TwitchApiHelper.getGQLHeaders(requireContext()),
-                        videoId
-                    ).data?.video?.animatedPreviewURL
-                } catch (e: Exception) {
-                    null
-                }
-                if (url != null && view != null) {
-                    preview.load(url, videoId)
-                }
-            }
-        }
-    }
-    private var chatComposerInput: android.widget.EditText? = null
-    private val chatVoiceLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
-        com.github.andreyasadchy.xtra.ui.view.TvVoice.getText(result)?.let { text ->
-            chatComposerInput?.let {
-                val current = it.text?.toString()?.trim().orEmpty()
-                it.setText(if (current.isEmpty()) text else "$current $text")
-                it.setSelection(it.text?.length ?: 0)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val url = getStoryboardUrl(videoId, playbackService?.videoAnimatedPreviewURL)
+            if (url != null && view != null) {
+                // a VOD of a stream still live keeps growing
+                preview.load(url, refresh = getTvDvrStream() != null)
             }
         }
     }
 
-    /** TV: dialog to write a chat message, with voice input. */
-    private fun showChatComposer() {
-        val context = requireContext()
-        val density = resources.displayMetrics.density
-        val input = com.google.android.material.textfield.TextInputEditText(context).apply {
-            hint = getString(R.string.tv_message_hint)
-            maxLines = 3
-            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        }
-        chatComposerInput = input
-        val row = android.widget.LinearLayout(context).apply {
-            orientation = android.widget.LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            val padding = (20 * density).toInt()
-            setPadding(padding, (8 * density).toInt(), padding, 0)
-            addView(input, android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            if (com.github.andreyasadchy.xtra.ui.view.TvVoice.isAvailable(context)) {
-                addView(android.widget.ImageButton(context).apply {
-                    setImageResource(R.drawable.tv_ic_mic)
-                    setBackgroundResource(R.drawable.tv_list_button_background)
-                    contentDescription = getString(R.string.tv_voice_input)
-                    setOnClickListener {
-                        try {
-                            chatVoiceLauncher.launch(com.github.andreyasadchy.xtra.ui.view.TvVoice.createIntent(getString(R.string.tv_write_message)))
-                        } catch (e: Exception) {
-                        }
-                    }
-                }, android.widget.LinearLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt()))
+    /** TV chat overlay: size, corner and transparency from the chat layout panel, flush with the screen edges by default. */
+    private fun applyTvChatLayout() {
+        with(binding) {
+            val prefs = requireContext().prefs()
+            val metrics = resources.displayMetrics
+            val position = prefs.getInt(C.TV_CHAT_POSITION, 0)
+            val margin = (prefs.getInt(C.TV_CHAT_MARGIN, 0) * metrics.density).toInt()
+            playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+                height = ViewGroup.LayoutParams.MATCH_PARENT
+                marginEnd = 0
             }
-        }
-        val dialog = context.getAlertDialogBuilder()
-            .setTitle(R.string.tv_write_message)
-            .setView(row)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.tv_send) { _, _ ->
-                chatFragment?.sendExternalMessage(input.text?.toString().orEmpty())
+            chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                width = (metrics.widthPixels * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
+                height = (metrics.heightPixels * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
+                gravity = when (position) {
+                    1 -> Gravity.END or Gravity.TOP
+                    2 -> Gravity.START or Gravity.BOTTOM
+                    3 -> Gravity.START or Gravity.TOP
+                    else -> Gravity.END or Gravity.BOTTOM
+                }
+                marginStart = margin
+                marginEnd = margin
+                topMargin = margin
+                bottomMargin = margin
             }
-            .setOnDismissListener { chatComposerInput = null }
-            .show()
-        input.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
-                chatFragment?.sendExternalMessage(input.text?.toString().orEmpty())
-                dialog.dismiss()
-                true
-            } else false
+            chatLayout.translationY = if (playerControls.root.isVisible) getTvChatLift() else 0f
+            chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_background)
+            chatLayout.background?.mutate()?.alpha = (prefs.getInt(C.TV_CHAT_OPACITY, 55) * 255 / 100).coerceIn(0, 255)
+            chatLayout.clipToOutline = margin != 0
         }
     }
+
+    /** The chat goes up over the controls only when it is at the bottom of the screen. */
+    private fun getTvChatLift(): Float {
+        val position = requireContext().prefs().getInt(C.TV_CHAT_POSITION, 0)
+        return if (position == 0 || position == 2) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
+    }
+
+    /** Panel with sliders to place the chat, on the opposite side so the chat can be seen while it changes. */
+    private fun showChatLayoutPanel() {
+        val context = requireContext()
+        val prefs = context.prefs()
+        if (!binding.chatLayout.isVisible) {
+            showChatLayout()
+        }
+        val positions = listOf(
+            getString(R.string.tv_chat_bottom_right),
+            getString(R.string.tv_chat_top_right),
+            getString(R.string.tv_chat_bottom_left),
+            getString(R.string.tv_chat_top_left),
+        )
+        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(context) { dismiss ->
+            val position = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_POSITION, 0)) }
+            com.github.andreyasadchy.xtra.ui.tv.SidePanel(
+                title = getString(R.string.tv_chat_layout),
+                alignEnd = position.intValue == 2 || position.intValue == 3,
+            ) {
+                val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                val update: (String, Int) -> Unit = { key, value ->
+                    prefs.edit { putInt(key, value) }
+                    if (_binding != null) {
+                        applyTvChatLayout()
+                    }
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), positions, position.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) {
+                    position.intValue = it
+                    update(C.TV_CHAT_POSITION, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
+                    update(C.TV_CHAT_WIDTH, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
+                    update(C.TV_CHAT_HEIGHT, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_margin), prefs.getInt(C.TV_CHAT_MARGIN, 0), 0..64, step = 4, valueText = { "$it dp" }) {
+                    update(C.TV_CHAT_MARGIN, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_opacity), prefs.getInt(C.TV_CHAT_OPACITY, 55), 0..100, step = 5, valueText = { "$it %" }) {
+                    update(C.TV_CHAT_OPACITY, it)
+                }
+                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
+                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_reset)) {
+                    prefs.edit {
+                        remove(C.TV_CHAT_POSITION)
+                        remove(C.TV_CHAT_WIDTH)
+                        remove(C.TV_CHAT_HEIGHT)
+                        remove(C.TV_CHAT_MARGIN)
+                        remove(C.TV_CHAT_OPACITY)
+                    }
+                    if (_binding != null) {
+                        applyTvChatLayout()
+                    }
+                    dismiss()
+                }
+                androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
+            }
+        }
+    }
+
+    /** TV: write a chat message, with voice input in the field (no system popup). */
+    private fun showChatComposer() {
+        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
+            com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
+                title = getString(R.string.tv_write_message),
+                hint = getString(R.string.tv_message_hint),
+                sendLabel = getString(R.string.tv_send),
+            ) { text ->
+                if (text.isNotBlank()) {
+                    chatFragment?.sendExternalMessage(text)
+                }
+                dismiss()
+            }
+        }
+    }
+
     private var tooltipAnchor: View? = null
     private val tooltipShowAction = Runnable { showTooltipNow() }
     private val tvStatsAction = object : Runnable {
@@ -2130,7 +2186,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         with(binding) {
             if (chatLayout.isVisible) {
-                chatLayout.animate().translationY(if (visible) -resources.getDimension(R.dimen.tv_chat_lift) else 0f).setDuration(200L).start()
+                chatLayout.animate().translationY(if (visible) getTvChatLift() else 0f).setDuration(200L).start()
             }
             if (visible) {
                 playerControls.tvQualityInfo?.let { info ->
@@ -2147,10 +2203,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** TV HUD: labels and tooltips on the player buttons, stats for nerds. */
     private fun setupTvHud() {
+        binding.root.removeCallbacks(tvHudTicker)
+        if (isTv || requireContext().prefs().getBoolean(C.PLAYER_FRAME_RATE_MATCHING, false)) {
+            binding.root.post(tvHudTicker)
+        }
         if (!isTv) {
             return
         }
         with(binding.playerControls) {
+            // seeking is done on the timeline on TV
+            rewind.visibility = View.GONE
+            fastForward.visibility = View.GONE
             val labels = listOf(
                 playPause to R.string.pause,
                 restart to R.string.tv_reload,
@@ -2176,7 +2239,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.contentDescription = getString(label)
                 }
                 button
-            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream)
+            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream, chatLayoutSettings)
             buttons.forEach { button ->
                 button.setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
@@ -2192,6 +2255,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             statsForNerds?.setOnClickListener {
                 showController(force = true)
                 toggleStatsForNerds()
+            }
+            if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
+                chatLayoutSettings?.visibility = View.VISIBLE
+                chatLayoutSettings?.setOnClickListener {
+                    hideController()
+                    showChatLayoutPanel()
+                }
             }
             if (playbackService?.type == BasePlaybackService.STREAM) {
                 multiStream?.visibility = View.VISIBLE
@@ -2251,6 +2321,123 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tooltipAnchor = null
     }
 
+    private var tvTopRightStack: LinearLayout? = null
+    private var tvAdblockView: TextView? = null
+    private var frameRateModeCandidate = 0
+    private var frameRateModeApplied = 0
+
+    /** Every second: ad blocker status, quality badge, frame rate of the display. */
+    private val tvHudTicker = object : Runnable {
+        override fun run() {
+            if (_binding == null || view == null) {
+                return
+            }
+            if (isTv) {
+                updateAdblockBadge()
+                if (binding.playerControls.root.isVisible) {
+                    binding.playerControls.tvQualityInfo?.let { info ->
+                        val label = getCurrentQualityLabel()
+                        if (info.text?.toString() != label) {
+                            info.text = label
+                        }
+                        info.visibility = if (label.isNullOrBlank()) View.GONE else View.VISIBLE
+                    }
+                }
+            }
+            updateFrameRateMatching()
+            binding.root.postDelayed(this, 1000)
+        }
+    }
+
+    open fun getAdblockStatus(): String? = null
+
+    open fun getVideoFrameRate(): Float? = null
+
+    private fun getTopRightStack(): LinearLayout {
+        return tvTopRightStack ?: LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.END
+            binding.playerLayout.addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+                topMargin = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+                marginEnd = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+            })
+            tvTopRightStack = this
+        }
+    }
+
+    /** Small box at the top right while the ad blocker works, like the VAFT userscript. */
+    private fun updateAdblockBadge() {
+        val status = getAdblockStatus()
+        val badge = tvAdblockView ?: if (status == null) return else TextView(requireContext()).apply {
+            setBackgroundResource(R.drawable.tv_chat_overlay_background)
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 13f
+            val density = resources.displayMetrics.density
+            setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
+            getTopRightStack().addView(this, 0, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = (8 * density).toInt()
+            })
+            tvAdblockView = this
+        }
+        if (status != null) {
+            badge.text = status
+            badge.visibility = View.VISIBLE
+        } else {
+            badge.visibility = View.GONE
+        }
+    }
+
+    /**
+     * Frame rate matching: switches the display to a refresh rate that is a multiple of the frame rate of the stream,
+     * and keeps checking it while playing (the backup player of the ad blocker can have another frame rate).
+     */
+    private fun updateFrameRateMatching() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return
+        }
+        val activity = activity ?: return
+        if (!requireContext().prefs().getBoolean(C.PLAYER_FRAME_RATE_MATCHING, false)) {
+            resetFrameRateMatching()
+            return
+        }
+        val frameRate = getVideoFrameRate() ?: return
+        @Suppress("DEPRECATION")
+        val display = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) activity.display else activity.windowManager.defaultDisplay) ?: return
+        val current = display.mode
+        val best = display.supportedModes.filter {
+            it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight
+        }.mapNotNull { mode ->
+            val ratio = mode.refreshRate / frameRate
+            val multiple = kotlin.math.round(ratio)
+            val error = kotlin.math.abs(ratio - multiple) / multiple
+            if (multiple >= 1f && error < 0.0015f) Triple(mode, multiple, error) else null
+        }.minWithOrNull(compareBy<Triple<android.view.Display.Mode, Float, Float>> { it.second }.thenBy { it.third })?.first ?: return
+        if (best.modeId == current.modeId && frameRateModeApplied != 0) {
+            frameRateModeCandidate = 0
+            return
+        }
+        // the mode has to be wanted for 2 checks in a row, a short change of the picture does not switch the display
+        if (frameRateModeCandidate != best.modeId) {
+            frameRateModeCandidate = best.modeId
+            return
+        }
+        frameRateModeCandidate = 0
+        if (frameRateModeApplied != best.modeId) {
+            frameRateModeApplied = best.modeId
+            activity.window.attributes = activity.window.attributes.also { it.preferredDisplayModeId = best.modeId }
+        }
+    }
+
+    private fun resetFrameRateMatching() {
+        if (frameRateModeApplied != 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            frameRateModeApplied = 0
+            frameRateModeCandidate = 0
+            activity?.window?.let { window ->
+                window.attributes = window.attributes.also { it.preferredDisplayModeId = 0 }
+            }
+        }
+    }
+
     private fun toggleStatsForNerds() {
         val stats = tvStatsView ?: TextView(requireContext()).apply {
             setBackgroundResource(R.drawable.tv_chat_overlay_background)
@@ -2260,10 +2447,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val padding = (12 * resources.displayMetrics.density).toInt()
             setPadding(padding, padding, padding, padding)
             visibility = View.GONE
-            binding.playerLayout.addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
-                topMargin = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
-                marginEnd = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
-            })
+            getTopRightStack().addView(this, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             tvStatsView = this
         }
         if (stats.isVisible) {
@@ -3036,8 +3220,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        _binding?.root?.removeCallbacks(tvHudTicker)
+        resetFrameRateMatching()
         seekPreview = null
         tvStatsView = null
+        tvTopRightStack = null
+        tvAdblockView = null
         (activity as? MainActivity)?.let {
             if (it.playerFragment == null || it.playerFragment === this) {
                 it.setMainContentFocusable(true)

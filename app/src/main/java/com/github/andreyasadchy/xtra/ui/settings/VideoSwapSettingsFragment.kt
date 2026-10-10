@@ -125,6 +125,7 @@ class VideoSwapSettingsFragment : Fragment() {
             itemTouchHelper.attachToRecyclerView(recyclerView)
             TvReorder.install(recyclerView, dragCallback)
             viewModel.getVideoSwapItems(
+                requireContext().applicationContext,
                 VideoSwap(
                     platform = requireContext().prefs().getString(C.TOKEN_PLATFORM, "web"),
                     playerType = requireContext().prefs().getString(C.TOKEN_PLAYER_TYPE, "site"),

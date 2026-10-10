@@ -449,6 +449,7 @@ type Video {
     moments(first: Int, after: Cursor, sort: SortOrder, types: [VideoMomentType], momentRequestType: VideoMomentRequestType): VideoMomentConnection
     owner: User
     previewThumbnailURL: String
+    seekPreviewsURL: String
     title: String
     viewCount: Int
 }

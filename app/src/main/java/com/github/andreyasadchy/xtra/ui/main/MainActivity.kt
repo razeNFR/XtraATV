@@ -56,6 +56,7 @@ import androidx.lifecycle.withStarted
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.recyclerview.widget.RecyclerView
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.NavigationUI
@@ -190,7 +191,17 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+                override fun onFragmentStarted(fm: FragmentManager, f: Fragment) {
+                    if (f is androidx.fragment.app.DialogFragment) {
+                        // sheets become side panels with the focus inside
+                        TvUi.adaptSheet(f)
+                    }
+                }
+
                 override fun onFragmentResumed(fm: FragmentManager, f: Fragment) {
+                    if (f is androidx.fragment.app.DialogFragment) {
+                        return
+                    }
                     binding.root.post {
                         if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment) {
                             // browsing starts in the side menu
@@ -721,6 +732,27 @@ class MainActivity : AppCompatActivity() {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
         }
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
+        if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
+            // back far down a list goes up to its top first, like YouTube
+            val focus = currentFocus
+            var view: View? = focus
+            while (view != null && view !is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView) {
+                view = view.parent as? View
+            }
+            val grid = view as? com.github.andreyasadchy.xtra.ui.view.GridRecyclerView
+            if (grid != null && focus != null && focus !== grid) {
+                val card = generateSequence(focus) { it.parent as? View }.firstOrNull { it.parent === grid }
+                val position = card?.let { grid.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION
+                val span = (grid.layoutManager as? androidx.recyclerview.widget.GridLayoutManager)?.spanCount ?: 1
+                if (position >= span * 2) {
+                    if (event.action == KeyEvent.ACTION_UP) {
+                        grid.scrollToPosition(0)
+                        grid.post { grid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus() }
+                    }
+                    return true
+                }
+            }
+        }
         if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot()) {
             // back on a main screen opens the menu, back again in the menu leaves the app
             if (event.action == KeyEvent.ACTION_UP) {
@@ -733,7 +765,8 @@ class MainActivity : AppCompatActivity() {
         ) {
             // the menu keeps the focus at its ends, only right leaves it
             val focus = currentFocus
-            if (focus != null && focus.isInside(binding.navBarContainer)) {
+            // the Compose menu handles its own ends
+            if (focus != null && focus.isInside(binding.navBarContainer) && binding.tvSideMenu?.let { focus.isInside(it) } != true) {
                 val direction = when (event.keyCode) {
                     KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP
                     KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN
@@ -822,6 +855,48 @@ class MainActivity : AppCompatActivity() {
         tvMenuBackCallback.isEnabled = isTv && !isTvMenuShown && ::navController.isInitialized && navController.previousBackStackEntry == null
     }
 
+    private val tvMenuState = com.github.andreyasadchy.xtra.ui.tv.TvMenuState()
+
+    /** The leanback menu, drawn with Compose from the entries of the navigation bar. */
+    private fun setupTvSideMenu() {
+        val composeView = binding.tvSideMenu ?: return
+        val icons = mapOf(
+            R.id.tvNavSearch to R.drawable.baseline_search_black_24,
+            R.id.rootGamesFragment to R.drawable.ic_games_black_24dp,
+            R.id.rootTopFragment to R.drawable.ic_trending_up_black_24dp,
+            R.id.followPagerFragment to R.drawable.ic_favorite_black_24dp,
+            R.id.followMediaFragment to R.drawable.ic_favorite_black_24dp,
+            R.id.savedPagerFragment to R.drawable.ic_file_download_black_24dp,
+            R.id.savedMediaFragment to R.drawable.ic_file_download_black_24dp,
+            R.id.tvNavSettings to R.drawable.baseline_settings_black_24,
+            R.id.tvNavAccount to R.drawable.baseline_person_black_24,
+        )
+        val menu = binding.navBar.menu
+        tvMenuState.items = (0 until menu.size()).map { index ->
+            val item = menu.getItem(index)
+            com.github.andreyasadchy.xtra.ui.tv.TvMenuItem(
+                id = item.itemId,
+                title = item.title.toString(),
+                icon = icons[item.itemId],
+                group = when (item.itemId) {
+                    R.id.tvNavSearch -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_TOP
+                    R.id.tvNavSettings, R.id.tvNavAccount -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_BOTTOM
+                    else -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_MAIN
+                }
+            )
+        }
+        tvMenuState.selected = binding.navBar.selectedItemId
+        val accent = MaterialColors.getColor(composeView, androidx.appcompat.R.attr.colorPrimary)
+        composeView.setContent {
+            com.github.andreyasadchy.xtra.ui.tv.TvTheme(accent) {
+                com.github.andreyasadchy.xtra.ui.tv.TvSideMenu(tvMenuState) { id ->
+                    binding.navBar.selectedItemId = id
+                    tvMenuState.selected = binding.navBar.selectedItemId
+                }
+            }
+        }
+    }
+
     private fun showTvMenu(focus: Boolean) {
         val menu = binding.navBarContainer
         if (!isTvMenuShown) {
@@ -832,9 +907,17 @@ class MainActivity : AppCompatActivity() {
             menu.animate().translationX(0f).alpha(1f).setDuration(180L).start()
         }
         if (focus) {
-            val selected = binding.navBar.findViewById<View>(binding.navBar.selectedItemId)
-            if (selected == null || !selected.requestFocus()) {
-                menu.requestFocus()
+            val sideMenu = binding.tvSideMenu
+            if (sideMenu != null) {
+                if (!tvMenuState.focusSelected()) {
+                    sideMenu.requestFocus()
+                    sideMenu.post { tvMenuState.focusSelected() }
+                }
+            } else {
+                val selected = binding.navBar.findViewById<View>(binding.navBar.selectedItemId)
+                if (selected == null || !selected.requestFocus()) {
+                    menu.requestFocus()
+                }
             }
         }
     }
@@ -1293,6 +1376,8 @@ class MainActivity : AppCompatActivity() {
 //Player methods
 
     private var lastContentFocus: View? = null
+    private var lastFocusGrid: RecyclerView? = null
+    private var lastFocusPosition = RecyclerView.NO_POSITION
 
     /**
      * Blocks D-pad focus from reaching the browsing UI hidden behind the maximized player,
@@ -1307,12 +1392,51 @@ class MainActivity : AppCompatActivity() {
             binding.navBarContainer.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             val lastFocus = lastContentFocus
             lastContentFocus = null
-            if (lastFocus == null || !lastFocus.isAttachedToWindow || !lastFocus.requestFocus()) {
-                binding.navHostFragment.requestFocus()
+            val grid = lastFocusGrid
+            val position = lastFocusPosition
+            lastFocusGrid = null
+            if (lastFocus != null && lastFocus.isAttachedToWindow && lastFocus.isShown && lastFocus.requestFocus()) {
+                return
+            }
+            // the card was recycled or the list was refreshed while playing: focus the card at the same position
+            if (grid != null && grid.isAttachedToWindow && position != RecyclerView.NO_POSITION) {
+                val count = grid.adapter?.itemCount ?: 0
+                if (count > 0) {
+                    val target = position.coerceAtMost(count - 1)
+                    val holder = grid.findViewHolderForAdapterPosition(target)
+                    if (holder != null && holder.itemView.requestFocus()) {
+                        return
+                    }
+                    grid.scrollToPosition(target)
+                    grid.post {
+                        if (grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() != true) {
+                            ensureFocus(force = true)
+                        }
+                    }
+                    return
+                }
+            }
+            if (!binding.navHostFragment.requestFocus()) {
+                ensureFocus(force = true)
             }
         } else {
             if (binding.navHostFragment.descendantFocusability == ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
                 return
+            }
+            // remember which card was focused, by its position, to come back to it when the player closes
+            lastFocusGrid = null
+            lastFocusPosition = RecyclerView.NO_POSITION
+            var view: View? = lastContentFocus
+            var child: View? = null
+            while (view != null && view !== binding.navHostFragment) {
+                val parent = view.parent as? View
+                if (parent is RecyclerView) {
+                    lastFocusGrid = parent
+                    lastFocusPosition = parent.getChildAdapterPosition(view)
+                    break
+                }
+                child = view
+                view = parent
             }
             binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             binding.navBarContainer.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
@@ -1435,7 +1559,10 @@ class MainActivity : AppCompatActivity() {
         navController = (supportFragmentManager.findFragmentById(R.id.navHostFragment) as NavHostFragment).navController
         if (isTv) {
             onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
-            navController.addOnDestinationChangedListener { _, _, _ -> updateTvMenuBackCallback() }
+            navController.addOnDestinationChangedListener { _, _, _ ->
+                updateTvMenuBackCallback()
+                binding.root.post { tvMenuState.selected = binding.navBar.selectedItemId }
+            }
         }
         val tabList = prefs.getString(C.UI_NAVIGATION_TAB_LIST, null).let { tabPref ->
             val defaultTabs = C.DEFAULT_NAVIGATION_TAB_LIST.split(',')
@@ -1515,6 +1642,9 @@ class MainActivity : AppCompatActivity() {
                 menu.add(Menu.NONE, R.id.tvNavAccount, Menu.NONE, R.string.tv_account).setIcon(R.drawable.baseline_person_black_24)
             }
             setupWithNavController(navController)
+            if (isTv) {
+                setupTvSideMenu()
+            }
             setOnItemSelectedListener {
                 when (it.itemId) {
                     R.id.tvNavSearch -> {

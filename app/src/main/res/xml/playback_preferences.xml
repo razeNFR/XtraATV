@@ -26,14 +26,6 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_adblock"
-        android:summary="@string/adblock_summary"
-        android:title="@string/adblock"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
         android:defaultValue="false"
         android:key="player_hide_ads"
         android:title="@string/hide_during_ads"

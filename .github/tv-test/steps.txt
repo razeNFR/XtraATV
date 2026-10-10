@@ -1,42 +1,42 @@
-# Start: leanback menu focused
+# Start: leanback menu (Compose) focused on Popular
 shot start_menu
-
-key DPAD_CENTER 8
-shot popular
-key RIGHT 3
-shot popular_content
-# Card actions menu then channel page
-longkey DPAD_CENTER 3
-shot card_menu
-key DPAD_CENTER 8
-shot channel_page
-keys DOWN 2
-shot channel_page_down
+# The menu scrolls down to its last entry
+keys DOWN,DOWN,DOWN,DOWN,DOWN,DOWN 1
+shot menu_bottom
+# Search at the top of the menu
+keys UP,UP,UP,UP,UP,UP,UP 1
+shot menu_top
+key DPAD_CENTER 6
+shot search
 key BACK 3
-shot back_from_channel
-# Player
+shot after_search
+# Games then a category
+key LEFT 2
+keys DOWN 1
+key DPAD_CENTER 8
+key RIGHT 2
+shot games
+key DPAD_CENTER 10
+shot category
+# Header: tabs and sort pill
+key UP 1
+shot category_tabs
+keys RIGHT,RIGHT,RIGHT,RIGHT 1
+shot category_sort_pill
+key DPAD_CENTER 3
+shot sort_panel
+key BACK 2
+# Fast scrolling in the grid
+key DOWN 1
+keys DOWN,DOWN,DOWN,DOWN,DOWN 1
+shot fast_scroll
+key BACK 2
+shot back_to_top
+# Player and back
 key DPAD_CENTER 25
 shot player
 key DPAD_CENTER 1
 shot player_controls
-key DOWN 1
-key RIGHT 2
-shot player_tooltip
-keys RIGHT,RIGHT,RIGHT,RIGHT 2
-shot player_tooltip2
-key UP 1
-key LEFT 1
-shot player_timeline_seek
 key BACK 1
-shot player_back1
 key BACK 3
 shot player_closed
-# Settings from the menu (back after closing the player opened it)
-keys DOWN,DOWN,DOWN,DOWN,DOWN,DOWN 1
-key UP 1
-key DPAD_CENTER 5
-shot settings
-keys DOWN,DOWN,DOWN 1
-shot settings_down3
-key DPAD_CENTER 3
-shot settings_sub

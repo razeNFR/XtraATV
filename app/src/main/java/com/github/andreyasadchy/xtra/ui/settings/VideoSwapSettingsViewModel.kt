@@ -17,11 +17,11 @@ class VideoSwapSettingsViewModel(
 
     val list = MutableStateFlow<MutableList<VideoSwap>>(mutableListOf())
 
-    fun getVideoSwapItems(defaultItem: VideoSwap) {
+    fun getVideoSwapItems(context: android.content.Context, defaultItem: VideoSwap) {
         viewModelScope.launch {
             list.value = mutableListOf<VideoSwap>().apply {
                 add(defaultItem)
-                addAll(playerRepository.getVideoSwapItems().sortedBy { it.position })
+                addAll(playerRepository.getVideoSwapItems(context).sortedBy { it.position })
             }
         }
     }

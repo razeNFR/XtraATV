@@ -135,7 +135,81 @@ class GridRecyclerView : RecyclerView {
                 return true
             }
         }
+        if (event != null && isTv && event.action == KeyEvent.ACTION_DOWN &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == KeyEvent.KEYCODE_DPAD_UP)
+        ) {
+            keyRepeating = event.repeatCount > 0
+            if (moveFocusVertically(event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
+                return true
+            }
+        }
         return super.dispatchKeyEvent(event)
+    }
+
+    private var keyRepeating = false
+
+    /**
+     * Up / down go to the card of the same column in the row above / below, even when that row is not on screen yet
+     * (holding the key or pressing it fast): the list scrolls to it instead of the focus jumping somewhere else.
+     * Returns false when the focus has to leave the list (up from the first row).
+     */
+    private fun moveFocusVertically(down: Boolean): Boolean {
+        val card = focusedChild ?: return false
+        val position = getChildAdapterPosition(card)
+        val count = adapter?.itemCount ?: 0
+        if (position == NO_POSITION || count == 0) {
+            return false
+        }
+        val span = gridLayoutManager.spanCount
+        var target = if (down) position + span else position - span
+        if (target < 0) {
+            return false
+        }
+        if (target >= count) {
+            val lastRowStart = (count - 1) / span * span
+            if (down && position < lastRowStart) {
+                target = count - 1
+            } else {
+                // end of the list: stay on the card
+                return true
+            }
+        }
+        val holder = findViewHolderForAdapterPosition(target)
+        if (holder != null && holder.itemView.isAttachedToWindow) {
+            holder.itemView.requestFocus()
+        } else {
+            val offset = (height * 0.25f).toInt()
+            gridLayoutManager.scrollToPositionWithOffset(target, if (down) height - paddingBottom - offset - card.height else offset)
+            post {
+                findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+            }
+        }
+        return true
+    }
+
+    /** Leanback alignment: the rows before and after the focused one stay partly visible. */
+    override fun requestChildRectangleOnScreen(child: View, rect: android.graphics.Rect, immediate: Boolean): Boolean {
+        if (!isTv) {
+            return super.requestChildRectangleOnScreen(child, rect, immediate)
+        }
+        val peek = (child.height * 0.4f).toInt()
+        val top = child.top + rect.top - peek
+        val bottom = child.top + rect.bottom + peek
+        val dy = when {
+            bottom - top > height - paddingTop - paddingBottom -> child.top - paddingTop
+            top < paddingTop -> top - paddingTop
+            bottom > height - paddingBottom -> bottom - (height - paddingBottom)
+            else -> 0
+        }
+        if (dy == 0) {
+            return false
+        }
+        if (immediate || keyRepeating) {
+            scrollBy(0, dy)
+        } else {
+            smoothScrollBy(0, dy)
+        }
+        return true
     }
 
     override fun requestChildFocus(child: View?, focused: View?) {

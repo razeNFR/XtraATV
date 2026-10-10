@@ -27,6 +27,11 @@ object TvUi {
                     (view.getChildAt(i).layoutParams as? AppBarLayout.LayoutParams)?.scrollFlags = 0
                 }
                 view.setExpanded(true, false)
+                // no colored band at the top of the screens, the header sits on the background like on Google TV
+                view.isLiftOnScroll = false
+                view.stateListAnimator = null
+                view.elevation = 0f
+                view.background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
             }
             is MaterialToolbar -> {
                 if (hideToolbarActions) {
@@ -42,14 +47,18 @@ object TvUi {
                     }
                 }
             }
+            is com.google.android.material.floatingactionbutton.FloatingActionButton -> {
+                if (view.id == R.id.scrollTop) {
+                    // no scroll to top arrow on TV: the list follows the focus and back goes up
+                    view.alpha = 0f
+                    view.isFocusable = false
+                    view.isClickable = false
+                }
+            }
             is GridRecyclerView -> {}
             is RecyclerView -> highlightRows(view)
             is TabLayout -> adaptTabs(view)
             is ViewPager2 -> adaptPager(view)
-        }
-        if (view.id == R.id.sortBar) {
-            // clickable bar without any focus feedback of its own
-            view.foreground = view.context.getDrawable(R.drawable.tv_row_focus)
         }
         if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
@@ -135,6 +144,65 @@ object TvUi {
                 adaptDialog(view.getChildAt(i))
             }
         }
+    }
+
+    /**
+     * Bottom sheets (sort, filters, options...) become a panel on the right of the screen, full height,
+     * like the menus of Google TV, and the focus goes inside on the checked choice.
+     */
+    fun adaptSheet(fragment: androidx.fragment.app.DialogFragment) {
+        val dialog = fragment.dialog ?: return
+        val context = dialog.context
+        val density = context.resources.displayMetrics.density
+        if (dialog is com.google.android.material.bottomsheet.BottomSheetDialog) {
+            val sheet = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet) ?: return
+            if (sheet.getTag(R.id.tvRowsHighlighted) == null) {
+                sheet.setTag(R.id.tvRowsHighlighted, true)
+                dialog.behavior.apply {
+                    skipCollapsed = true
+                    isDraggable = false
+                    state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+                }
+                (sheet.layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams)?.let { params ->
+                    params.width = (460 * density).toInt()
+                    params.height = ViewGroup.LayoutParams.MATCH_PARENT
+                    params.gravity = android.view.Gravity.END or android.view.Gravity.TOP
+                    sheet.layoutParams = params
+                }
+                sheet.background = android.graphics.drawable.ColorDrawable(0xF2141318.toInt())
+                sheet.setPadding((12 * density).toInt(), (24 * density).toInt(), (12 * density).toInt(), (24 * density).toInt())
+                sheet.translationX = 460 * density
+                sheet.animate().translationX(0f).setDuration(180L).start()
+            }
+            focusInitial(sheet)
+        } else {
+            dialog.window?.decorView?.let { focusInitial(it) }
+        }
+    }
+
+    /** Focus on the checked choice of a dialog, else on its first focusable view. */
+    private fun focusInitial(root: View) {
+        root.post {
+            if (root.findFocus() != null) {
+                return@post
+            }
+            val checked = findView(root) { it is android.widget.CompoundButton && it.isChecked && it.isShown && it.isFocusable }
+            val target = checked ?: findView(root) { it.isShown && it.isFocusable && it !is ViewGroup }
+                ?: findView(root) { it.isShown && it.isFocusable && it !== root }
+            target?.requestFocus()
+        }
+    }
+
+    private fun findView(view: View, predicate: (View) -> Boolean): View? {
+        if (predicate(view)) {
+            return view
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findView(view.getChildAt(i), predicate)?.let { return it }
+            }
+        }
+        return null
     }
 
     /** The list of the screen currently shown (the visible page of a pager), to give it the focus. */

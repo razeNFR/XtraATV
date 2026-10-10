@@ -343,7 +343,8 @@ class ExoPlayerFragment : PlayerFragment() {
     }
 
     override fun getCurrentQualityLabel(): String? {
-        val format = playbackService?.player?.videoFormat
+        // the backup player of the ad blocker can play another quality than the main one
+        val format = playbackService?.visiblePlayer?.videoFormat
         val base = super.getCurrentQualityLabel()
         if (format == null || format.height <= 0) {
             return base
@@ -353,8 +354,14 @@ class ExoPlayerFragment : PlayerFragment() {
         return if (playbackService?.quality?.name == VideoQuality.AUTO_QUALITY) "${getString(R.string.auto)} · $label" else label
     }
 
+    override fun getAdblockStatus() = playbackService?.getAdblockStatus()
+
+    override fun getVideoFrameRate() = playbackService?.visiblePlayer?.videoFormat?.let { format ->
+        format.frameRate.takeIf { format.height > 0 && it > 0f }
+    }
+
     override fun getStatsForNerds(): String {
-        val player = playbackService?.player ?: return ""
+        val player = playbackService?.visiblePlayer ?: return ""
         val video = player.videoFormat
         val audio = player.audioFormat
         val lines = mutableListOf<String>()
@@ -440,6 +447,9 @@ class ExoPlayerFragment : PlayerFragment() {
                             1000
                         }
                         root.postDelayed(updateProgressAction, delay)
+                    } else if (player.playWhenReady && player.playbackState != Player.STATE_ENDED) {
+                        // still loading (a VOD opened at an offset reports 0 until it is ready): check again soon
+                        root.postDelayed(updateProgressAction, 500)
                     }
                 }
             }

@@ -2,6 +2,7 @@
 activity = "1.13.0"
 android-gradle-plugin = "9.4.1"
 apollo = "5.2.0"
+compose-bom = "2026.08.00"
 appcompat = "1.8.0"
 coil = "3.6.3"
 conscrypt = "2.7.0"
@@ -27,11 +28,18 @@ recyclerview = "1.4.0"
 room = "2.8.5"
 serialization = "1.11.0"
 swiperefreshlayout = "1.2.0"
+tv-material = "1.1.0"
 viewpager2 = "1.1.0"
 webkit = "1.17.1"
 work = "2.12.0"
 
 [libraries]
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+tv-material = { module = "androidx.tv:tv-material", version.ref = "tv-material" }
 activity = { module = "androidx.activity:activity", version.ref = "activity" }
 apollo-api = { module = "com.apollographql.apollo:apollo-api", version.ref = "apollo" }
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
@@ -77,6 +85,7 @@ work-runtime = { module = "androidx.work:work-runtime", version.ref = "work" }
 [plugins]
 android-application = { id = "com.android.application", version.ref = "android-gradle-plugin" }
 apollo = { id = "com.apollographql.apollo", version.ref = "apollo" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

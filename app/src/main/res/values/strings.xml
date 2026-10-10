@@ -618,9 +618,25 @@
     <string name="tv_voice_search">Voice search</string>
     <string name="tv_message_hint">Message</string>
     <string name="adblock">Ad blocker</string>
-    <string name="adblock_summary">While an ad plays, switches to an ad-free stream of another player type (like the VAFT userscript), hides the ad if none is available. Works without proxy.</string>
+    <string name="adblock_summary">While an ad plays, switches to an ad-free stream of another player type (like the VAFT userscript), hides the ad if none is available. Also takes over when a proxy lets an ad through.</string>
     <string name="tv_multistream">Multi-stream</string>
     <string name="tv_multistream_pick">Choose up to 4 streams</string>
     <string name="tv_multistream_max">%1$d streams at most</string>
     <string name="tv_multistream_watch">Watch</string>
+    <string name="tv_adblock_blocking">Blocking ads (%1$s)</string>
+    <string name="tv_adblock_waiting">Waiting for the ad to end</string>
+    <string name="frame_rate_matching">Frame rate matching</string>
+    <string name="frame_rate_matching_summary">Switches the refresh rate of the TV to the frame rate of the video when playback starts, and keeps it matched while playing</string>
+    <string name="tv_speak_now">Speak now…</string>
+    <string name="tv_chat_layout">Chat layout</string>
+    <string name="tv_chat_position">Position</string>
+    <string name="tv_chat_width">Width</string>
+    <string name="tv_chat_height">Height</string>
+    <string name="tv_chat_margin">Distance from the edge</string>
+    <string name="tv_chat_opacity">Background opacity</string>
+    <string name="tv_chat_bottom_right">Bottom right</string>
+    <string name="tv_chat_top_right">Top right</string>
+    <string name="tv_chat_bottom_left">Bottom left</string>
+    <string name="tv_chat_top_left">Top left</string>
+    <string name="tv_reset">Reset</string>
 </resources>

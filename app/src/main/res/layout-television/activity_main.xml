@@ -32,18 +32,19 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
+        <!-- the rail keeps the navigation state, the menu shown on TV is drawn with Compose (tvSideMenu) -->
         <com.google.android.material.navigationrail.NavigationRailView
             android:id="@+id/navBar"
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:minWidth="@dimen/tv_menu_width"
-            android:paddingTop="@dimen/tv_overscan_vertical"
-            android:paddingBottom="@dimen/tv_overscan_vertical"
-            app:headerLayout="@layout/tv_nav_rail_header"
-            app:itemMinHeight="52dp"
+            android:visibility="gone"
             app:labelVisibilityMode="labeled"
-            app:menuGravity="center"
             tools:viewBindingType="com.google.android.material.navigation.NavigationBarView" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/tvSideMenu"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent" />
 
         <View
             android:layout_width="96dp"

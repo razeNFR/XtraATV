@@ -58,6 +58,9 @@ import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParserFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.ParsingLoadable
 import com.github.andreyasadchy.xtra.R
@@ -286,25 +289,7 @@ class ExoPlayerService : BasePlaybackService() {
                                         }
                                         useVideoSwap -> {
                                             if (!videoSwapActive) {
-                                                videoSwapActive = true
-                                                serviceListener?.toast(R.string.starting_video_swap, Toast.LENGTH_SHORT)
-                                                player?.let { player ->
-                                                    if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
-                                                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                                            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
-                                                        }.build()
-                                                    }
-                                                    player.volume = 0f
-                                                }
-                                                secondaryPlayerTimerJob?.cancel()
-                                                secondaryPlayerTimerJob = lifecycleScope.launch {
-                                                    delay(3.minutes)
-                                                    videoSwapActive = false
-                                                    serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
-                                                    stopSecondaryPlayer2()
-                                                    secondaryPlayerTimerJob = null
-                                                }
-                                                startSecondaryPlayer(false)
+                                                startVideoSwap()
                                             }
                                         }
                                         else -> {
@@ -721,6 +706,8 @@ class ExoPlayerService : BasePlaybackService() {
                 setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
+                setBandwidthMeter(getBandwidthMeter(this@ExoPlayerService))
+                setTrackSelector(createTrackSelector())
             }.build()
             this.player = player
             player.addListener(playerListener)
@@ -793,9 +780,10 @@ class ExoPlayerService : BasePlaybackService() {
                         }.sortedBy { it.position }
                     }
                     val adblock = prefs().getBoolean(C.PLAYER_ADBLOCK, true)
-                    useVideoSwap = !useCustomProxy && !useStreamProxy && (prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, false) || adblock)
+                    // the ad blocker also backs up the proxies: if an ad still comes through them, the playlist of another player type is used
+                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, false)) || adblock
                     if (useVideoSwap) {
-                        videoSwapList = xtraModule.playerRepository.getVideoSwapItems().filter {
+                        videoSwapList = xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
                             it.enabled && !it.platform.isNullOrBlank() && !it.playerType.isNullOrBlank()
                         }.sortedBy { it.position }.ifEmpty {
                             // ad blocker: like the VAFT userscript, switch to the playlist of another player type while ads play
@@ -1711,6 +1699,9 @@ class ExoPlayerService : BasePlaybackService() {
                                     stopProxy = true
                                     serviceListener?.toast(R.string.stopping_proxy, Toast.LENGTH_SHORT)
                                     stopSecondaryPlayer()
+                                    if (useVideoSwap && !stopVideoSwap) {
+                                        startVideoSwap()
+                                    }
                                 }
                             }
                             videoSwapActive -> {
@@ -1750,8 +1741,11 @@ class ExoPlayerService : BasePlaybackService() {
                 setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
+                setBandwidthMeter(getBandwidthMeter(this@ExoPlayerService))
+                setTrackSelector(createTrackSelector())
             }.build()
             player.addListener(playerListener)
+            matchSecondaryQuality(player)
             val url = if (streamProxy != null) {
                 quality?.url
             } else {
@@ -2093,6 +2087,66 @@ class ExoPlayerService : BasePlaybackService() {
             } else {
                 stopSecondaryPlayer()
             }
+        }
+    }
+
+    private fun startVideoSwap() {
+        videoSwapActive = true
+        serviceListener?.toast(R.string.starting_video_swap, Toast.LENGTH_SHORT)
+        player?.let { player ->
+            if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                }.build()
+            }
+            player.volume = 0f
+        }
+        secondaryPlayerTimerJob?.cancel()
+        secondaryPlayerTimerJob = lifecycleScope.launch {
+            delay(3.minutes)
+            videoSwapActive = false
+            serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
+            stopSecondaryPlayer2()
+            secondaryPlayerTimerJob = null
+        }
+        startSecondaryPlayer(false)
+    }
+
+    /** Player whose picture is on screen: the backup player while ads are blocked, else the main one. */
+    val visiblePlayer: ExoPlayer?
+        get() = secondaryPlayer?.takeIf { videoSwapActive || proxyMediaPlaylist } ?: player
+
+    /** Status of the ad blocker, shown on the player like the VAFT userscript does. */
+    fun getAdblockStatus(): String? {
+        return when {
+            videoSwapActive -> getString(R.string.tv_adblock_blocking, videoSwapList?.getOrNull(currentVideoSwapItem)?.playerType ?: "backup")
+            proxyMediaPlaylist -> getString(R.string.tv_adblock_blocking, "proxy")
+            hidden -> getString(R.string.tv_adblock_waiting)
+            else -> null
+        }
+    }
+
+    /** Keeps the quality of the backup player in line with the quality chosen for the main one. */
+    private fun matchSecondaryQuality(secondaryPlayer: ExoPlayer) {
+        val height = quality?.takeIf { it.name != VideoQuality.AUTO_QUALITY }?.resolution
+            ?: player?.videoFormat?.height?.takeIf { it > 0 && quality?.name != VideoQuality.AUTO_QUALITY }
+        if (height != null) {
+            secondaryPlayer.trackSelectionParameters = secondaryPlayer.trackSelectionParameters.buildUpon().apply {
+                setMaxVideoSize(Int.MAX_VALUE, height)
+                setForceHighestSupportedBitrate(true)
+            }.build()
+        }
+    }
+
+    private fun createTrackSelector(): DefaultTrackSelector {
+        // Twitch segments are short: with the default settings the estimate stays low and Auto keeps a lower quality than the connection allows
+        return DefaultTrackSelector(this, AdaptiveTrackSelection.Factory(
+            4000,
+            AdaptiveTrackSelection.DEFAULT_MAX_DURATION_FOR_QUALITY_DECREASE_MS,
+            AdaptiveTrackSelection.DEFAULT_MIN_DURATION_TO_RETAIN_AFTER_DISCARD_MS,
+            0.85f
+        )).apply {
+            parameters = buildUponParameters().setViewportSizeToPhysicalDisplaySize(this@ExoPlayerService, false).build()
         }
     }
 
@@ -2830,6 +2884,19 @@ class ExoPlayerService : BasePlaybackService() {
 
     companion object {
         /** Player types whose playlists usually come without ads (same idea as the VAFT userscript). */
+        private var bandwidthMeter: DefaultBandwidthMeter? = null
+
+        /** Shared by all players so a backup player starts at the bandwidth already measured. */
+        fun getBandwidthMeter(context: android.content.Context): DefaultBandwidthMeter {
+            return bandwidthMeter ?: DefaultBandwidthMeter.Builder(context.applicationContext).apply {
+                val connectivityManager = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+                if (capabilities != null && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))) {
+                    setInitialBitrateEstimate(20_000_000L)
+                }
+            }.build().also { bandwidthMeter = it }
+        }
+
         private val ADBLOCK_PLAYER_TYPES = listOf(
             "web" to "embed",
             "web" to "popout",

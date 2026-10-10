@@ -52,14 +52,34 @@ class TvSeekPreview(
         container.addView(imageView, ViewGroup.LayoutParams(previewWidth, previewHeight))
     }
 
-    /** [previewUrl] is the animated preview URL of the video, the storyboards are next to it. */
-    fun load(previewUrl: String, videoId: String) {
-        val base = previewUrl.substringBeforeLast("/")
+    private var infoUrl: String? = null
+    private var boardLoadedAt = 0L
+    private var boardLoading = false
+    private var refresh = false
+
+    /**
+     * [infoUrl] is the storyboard description of the video (seekPreviewsURL), the sprites are next to it.
+     * [refresh]: the video is still being recorded, its storyboards grow, they are loaded again from time to time.
+     */
+    fun load(infoUrl: String, refresh: Boolean = false) {
+        this.infoUrl = infoUrl
+        this.refresh = refresh
+        loadBoard()
+    }
+
+    private fun loadBoard() {
+        val infoUrl = infoUrl ?: return
+        if (boardLoading) {
+            return
+        }
+        boardLoading = true
+        val base = infoUrl.substringBeforeLast("/")
         scope.launch {
-            board = withContext(Dispatchers.IO) {
+            val loaded = withContext(Dispatchers.IO) {
                 try {
-                    client.newCall(Request.Builder().url("$base/$videoId-info.json").build()).execute().use { response ->
+                    client.newCall(Request.Builder().url(infoUrl).build()).execute().use { response ->
                         if (!response.isSuccessful) {
+                            log("storyboard info ${response.code} $infoUrl")
                             return@withContext null
                         }
                         val array = JSONArray(response.body.string())
@@ -69,13 +89,32 @@ class TvSeekPreview(
                         Board(entry.getInt("width"), entry.getInt("height"), entry.getInt("cols"), entry.getInt("rows"), entry.getDouble("interval"), images)
                     }
                 } catch (e: Exception) {
+                    log("storyboard info failed: $e")
                     null
+                }
+            }
+            boardLoading = false
+            if (loaded != null) {
+                board = loaded
+                boardLoadedAt = System.currentTimeMillis()
+                // the last sprite of a growing video changes, it is downloaded again
+                if (refresh) {
+                    loaded.images.lastOrNull()?.let { sprites.remove(it) }
                 }
             }
         }
     }
 
+    private fun log(message: String) {
+        if (com.github.andreyasadchy.xtra.BuildConfig.DEBUG) {
+            android.util.Log.d("XtraTv", "seekPreview $message")
+        }
+    }
+
     fun show(position: Long, duration: Long) {
+        if (infoUrl != null && (board == null || (refresh && System.currentTimeMillis() - boardLoadedAt > 60_000L))) {
+            loadBoard()
+        }
         val board = board ?: return
         if (duration <= 0 || board.interval <= 0) {
             return
@@ -83,7 +122,7 @@ class TvSeekPreview(
         lastPosition = position
         val perImage = board.cols * board.rows
         val index = (position / 1000.0 / board.interval).toInt()
-        val url = board.images.getOrNull(index / perImage) ?: board.images.lastOrNull() ?: return
+        val url = board.images.getOrNull(index / perImage) ?: return hide()
         val cell = index % perImage
         val sprite = sprites[url]
         if (sprite != null) {

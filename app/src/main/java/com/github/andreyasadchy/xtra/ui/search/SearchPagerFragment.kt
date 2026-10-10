@@ -160,10 +160,10 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
             val navController = findNavController()
             val appBarConfiguration = AppBarConfiguration(setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment))
             toolbar.setupWithNavController(navController, appBarConfiguration)
-            if (com.github.andreyasadchy.xtra.ui.view.TvVoice.isAvailable(requireContext()) && toolbar.menu.findItem(R.id.tvVoiceSearch) == null) {
-                toolbar.menu.add(android.view.Menu.NONE, R.id.tvVoiceSearch, 0, R.string.tv_voice_search)
-                    .setIcon(R.drawable.tv_ic_mic)
-                    .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+            val isTv = resources.getBoolean(R.bool.isTv)
+            if (isTv && toolbar.findViewById<View>(R.id.tvSearchBar) == null) {
+                // TV: search bar with the mic in it, the voice is listened in the app
+                com.github.andreyasadchy.xtra.ui.tv.TvDialogs.replaceSearchView(searchView, getString(R.string.search))
             }
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
@@ -226,8 +226,12 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                     else -> false
                 }
             }
-            searchView.requestFocus()
-            WindowCompat.getInsetsController(requireActivity().window, searchView).show(WindowInsetsCompat.Type.ime())
+            if (isTv) {
+                toolbar.findViewById<View>(R.id.tvSearchBar)?.requestFocus()
+            } else {
+                searchView.requestFocus()
+                WindowCompat.getInsetsController(requireActivity().window, searchView).show(WindowInsetsCompat.Type.ime())
+            }
             ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
                 val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
                 toolbar.updateLayoutParams<ViewGroup.MarginLayoutParams> {

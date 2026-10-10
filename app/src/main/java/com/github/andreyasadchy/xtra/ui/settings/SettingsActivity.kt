@@ -106,6 +106,15 @@ class SettingsActivity : AppCompatActivity() {
             supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
                     TvUi.adapt(v, hideToolbarActions = false)
+                    if (f is androidx.fragment.app.DialogFragment) {
+                        v.post { TvUi.adaptDialog(v) }
+                    }
+                }
+
+                override fun onFragmentStarted(fm: FragmentManager, f: Fragment) {
+                    if (f is androidx.fragment.app.DialogFragment) {
+                        TvUi.adaptSheet(f)
+                    }
                 }
             }, true)
         }
@@ -241,13 +250,23 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun showSearchView(showSearch: Boolean) {
         with(binding) {
+            val isTv = resources.getBoolean(R.bool.isTv)
             if (showSearch) {
                 toolbar.menu.findItem(R.id.search).isVisible = false
-                searchView.visibility = View.VISIBLE
+                if (isTv) {
+                    // TV: search bar with the mic in it
+                    toolbar.findViewById<View>(R.id.tvSearchBar)?.let { toolbar.removeView(it) }
+                    com.github.andreyasadchy.xtra.ui.tv.TvDialogs.replaceSearchView(searchView, getString(R.string.search))?.let { bar ->
+                        bar.post { bar.requestFocus() }
+                    }
+                } else {
+                    searchView.visibility = View.VISIBLE
+                }
             } else {
                 toolbar.menu.findItem(R.id.search).isVisible = true
                 searchView.setQuery(null, false)
                 searchView.visibility = View.GONE
+                toolbar.findViewById<View>(R.id.tvSearchBar)?.let { toolbar.removeView(it) }
             }
         }
     }
@@ -1652,8 +1671,10 @@ class SettingsActivity : AppCompatActivity() {
             }
             requireActivity().findViewById<SearchView>(R.id.searchView)?.let {
                 savedQuery?.let { query -> it.setQuery(query, true) }
-                it.requestFocus()
-                WindowCompat.getInsetsController(requireActivity().window, it).show(WindowInsetsCompat.Type.ime())
+                if (!resources.getBoolean(R.bool.isTv)) {
+                    it.requestFocus()
+                    WindowCompat.getInsetsController(requireActivity().window, it).show(WindowInsetsCompat.Type.ime())
+                }
             }
         }
 

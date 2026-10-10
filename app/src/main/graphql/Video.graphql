@@ -16,6 +16,7 @@ query Video($id: ID) {
             profileImageURL(width: 300)
         }
         previewThumbnailURL
+        seekPreviewsURL
         title
     }
 }

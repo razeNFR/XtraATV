@@ -599,9 +599,25 @@
     <string name="tv_voice_search">Recherche vocale</string>
     <string name="tv_message_hint">Message</string>
     <string name="adblock">Bloqueur de pub</string>
-    <string name="adblock_summary">Pendant une pub, bascule sur un flux sans pub d\'un autre type de lecteur (comme le script VAFT), masque la pub si aucun n\'est disponible. Fonctionne sans proxy.</string>
+    <string name="adblock_summary">Pendant une pub, bascule sur un flux sans pub d\'un autre type de lecteur (comme le script VAFT), masque la pub si aucun n\'est disponible. Prend aussi le relais quand un proxy laisse passer une pub.</string>
     <string name="tv_multistream">Multi-stream</string>
     <string name="tv_multistream_pick">Choisis jusqu\'à 4 streams</string>
     <string name="tv_multistream_max">%1$d streams maximum</string>
     <string name="tv_multistream_watch">Regarder</string>
+    <string name="tv_adblock_blocking">Blocage des pubs (%1$s)</string>
+    <string name="tv_adblock_waiting">En attente de la fin de la pub</string>
+    <string name="frame_rate_matching">Adaptation de la fréquence d\'images</string>
+    <string name="frame_rate_matching_summary">Règle la fréquence de rafraîchissement de la TV sur celle de la vidéo au lancement de la lecture, et la garde alignée pendant la lecture</string>
+    <string name="tv_speak_now">Parlez maintenant…</string>
+    <string name="tv_chat_layout">Disposition du chat</string>
+    <string name="tv_chat_position">Position</string>
+    <string name="tv_chat_width">Largeur</string>
+    <string name="tv_chat_height">Hauteur</string>
+    <string name="tv_chat_margin">Distance du bord</string>
+    <string name="tv_chat_opacity">Opacité du fond</string>
+    <string name="tv_chat_bottom_right">En bas à droite</string>
+    <string name="tv_chat_top_right">En haut à droite</string>
+    <string name="tv_chat_bottom_left">En bas à gauche</string>
+    <string name="tv_chat_top_left">En haut à gauche</string>
+    <string name="tv_reset">Réinitialiser</string>
 </resources>
