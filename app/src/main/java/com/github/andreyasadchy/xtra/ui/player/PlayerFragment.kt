@@ -1932,9 +1932,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     progressBar.setDuration(duration)
                     progressBar.setPosition(tvScrubPosition)
                     position.text = DateUtils.formatElapsedTime(tvScrubPosition / 1000)
-                    if (!isLive) {
-                        seekPreview?.show(tvScrubPosition, duration)
-                    }
+                    seekPreview?.show(tvScrubPosition, duration)
                     root.removeCallbacks(controllerHideAction)
                 }
                 KeyEvent.ACTION_UP -> {
@@ -1969,8 +1967,46 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var tvStatsView: TextView? = null
     private var seekPreview: TvSeekPreview? = null
 
+    /** Live: thumbnails come from the storyboards of the VOD being recorded. */
+    private fun setupLiveSeekPreview() {
+        val login = playbackService?.channelLogin ?: return
+        val preview = TvSeekPreview(
+            viewLifecycleOwner.lifecycleScope,
+            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.okHttpClient.value,
+            binding.playerControls.root,
+            binding.playerControls.progressBar,
+        )
+        seekPreview = preview
+        viewLifecycleOwner.lifecycleScope.launch {
+            val video = try {
+                (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryUserVideos(
+                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    TwitchApiHelper.getGQLHeaders(requireContext()),
+                    null,
+                    login,
+                    com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME,
+                    listOf(com.github.andreyasadchy.xtra.graphql.type.BroadcastType.ARCHIVE),
+                    1,
+                    null
+                ).data?.user?.videos?.edges?.firstOrNull()?.node
+            } catch (e: Exception) {
+                null
+            }
+            val streamStart = playbackService?.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+            val videoStart = video?.createdAt?.toString()?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+            // only the VOD of the current broadcast
+            if (video?.id != null && video.animatedPreviewURL != null && streamStart != null && videoStart != null && kotlin.math.abs(videoStart - streamStart) < 10 * 60_000L && view != null) {
+                preview.load(video.animatedPreviewURL, video.id)
+            }
+        }
+    }
+
     /** TV: storyboard thumbnails above the timeline of VODs. */
     private fun setupSeekPreview() {
+        if (isTv && playbackService?.type == BasePlaybackService.STREAM && seekPreview == null) {
+            setupLiveSeekPreview()
+            return
+        }
         val videoId = playbackService?.videoId
         if (!isTv || playbackService?.type != BasePlaybackService.VIDEO || videoId.isNullOrBlank() || seekPreview != null) {
             return

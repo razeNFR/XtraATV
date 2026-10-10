@@ -1,6 +1,6 @@
 # Start: leanback menu focused
 shot start_menu
-keys DOWN,DOWN 1
+
 key DPAD_CENTER 8
 shot popular
 key RIGHT 3

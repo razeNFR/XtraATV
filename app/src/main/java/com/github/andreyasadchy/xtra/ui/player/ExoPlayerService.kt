@@ -1259,7 +1259,10 @@ class ExoPlayerService : BasePlaybackService() {
                 gqlHeaders = TwitchApiHelper.getGQLHeaders(this, prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)),
                 channelLogin = channelLogin,
                 platform = prefs().getString(C.TOKEN_PLATFORM, "web"),
-                playerType = prefs().getString(C.TOKEN_PLAYER_TYPE, "site"),
+                playerType = prefs().getString(C.TOKEN_PLAYER_TYPE, "site").let {
+                    // like VAFT, the "popout" player type gets fewer ads than the default "site" one
+                    if (prefs().getBoolean(C.PLAYER_ADBLOCK, true) && (it.isNullOrBlank() || it == "site")) "popout" else it
+                },
                 supportedCodecs = prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                 proxyPlaybackAccessToken = streamProxy != null,
                 proxyHost = streamProxy?.host,
@@ -2829,9 +2832,8 @@ class ExoPlayerService : BasePlaybackService() {
         /** Player types whose playlists usually come without ads (same idea as the VAFT userscript). */
         private val ADBLOCK_PLAYER_TYPES = listOf(
             "web" to "embed",
-            "android" to "autoplay",
             "web" to "popout",
-            "web" to "picture-by-picture",
+            "android" to "autoplay",
         )
         const val MULTIVARIANT_PLAYLIST_REGEX = "^usher\\.ttvnw\\.net$"
         const val MEDIA_PLAYLIST_REGEX = "^(?:[a-z0-9-]+\\.playlist\\.(?:live-video|ttvnw)\\.net|video-weaver\\.[a-z0-9-]+\\.hls\\.ttvnw\\.net)$"
