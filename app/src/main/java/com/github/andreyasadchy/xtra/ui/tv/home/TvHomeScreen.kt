@@ -83,12 +83,20 @@ class TvHomeActions(
 
 class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int)
 
-/** Pivot like Leanback: the focused row or card stays at the same place, with the ones before and after in sight. */
+/**
+ * Rows: the focus moves over the cards on screen and the row only slides when the focused card gets near an edge,
+ * a part of the next card always stays in sight.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 private val PivotSpec = object : BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-        val pivot = containerSize * 0.12f
-        return if (size > containerSize - pivot) offset else offset - pivot
+        val peek = containerSize * 0.12f
+        val end = offset + size
+        return when {
+            offset < peek -> offset - peek
+            end > containerSize - peek -> end - (containerSize - peek)
+            else -> 0f
+        }
     }
 }
 

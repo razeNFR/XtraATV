@@ -2,16 +2,12 @@
 shot start_menu
 key RIGHT 3
 shot home
+keys RIGHT,RIGHT,RIGHT,RIGHT 2
+shot home_row_right
 key UP 1
 shot home_refresh
-key DOWN 1
-key DOWN 2
-shot home_row2
-keys RIGHT,RIGHT,RIGHT 2
-shot home_row2_right
-keys LEFT,LEFT,LEFT,LEFT 2
-shot home_left_menu
 # Games then a category
+key LEFT 2
 key DOWN 1
 key DPAD_CENTER 8
 shot games
@@ -20,28 +16,25 @@ shot category
 keys DOWN,DOWN,DOWN,DOWN 2
 shot category_scroll
 key BACK 2
-shot category_top
 key UP 1
 shot category_header_refresh
-key RIGHT 1
-shot category_header_tab
-keys RIGHT,RIGHT,RIGHT 1
+keys RIGHT,RIGHT,RIGHT,RIGHT,RIGHT 1
 shot category_header_sort
 key DPAD_CENTER 3
 shot sort_panel
 key BACK 2
 key DOWN 1
+shot category_grid
 key LEFT 2
 shot category_left_menu
 key RIGHT 2
+shot category_back_from_menu
+# Back to the games and into the category again: the header must be right
 key BACK 3
 shot games_back
-key LEFT 2
-key RIGHT 2
 key DPAD_CENTER 10
 shot category_again
 # Channel page from a card
-key DOWN 1
 longkey DPAD_CENTER 3
 key DPAD_CENTER 8
 shot channel
