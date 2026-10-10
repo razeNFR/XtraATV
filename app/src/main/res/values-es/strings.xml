@@ -630,4 +630,6 @@
     <string name="tv_see_all">Ver todo</string>
     <string name="tv_dpad_switch_stream">Izquierda / derecha cambia de streamer</string>
     <string name="tv_dpad_switch_stream_summary">Con los controles ocultos, izquierda y derecha pasan al streamer anterior o siguiente de la lista desde la que se abrió el stream</string>
+    <string name="tv_home_languages">Idiomas de la fila Popular (inicio)</string>
+    <string name="tv_home_languages_summary">Streams de la fila Popular del inicio solo en estos idiomas, todos los idiomas si no hay ninguno marcado</string>
 </resources>

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Prepares the app for the "Following with only the Live tab" case:
 # Following tabs = only Live, and a local follow of a channel that is live right now (no account on the emulator).
-PKG=com.github.andreyasadchy.xtra.debug
+PKG=com.github.razenfr.xtratv.debug
 OUT=${1:-tv-out}
 W=$(mktemp -d)
 adb shell am force-stop $PKG

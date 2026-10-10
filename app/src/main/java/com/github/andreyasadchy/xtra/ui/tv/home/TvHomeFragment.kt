@@ -101,8 +101,8 @@ class TvHomeFragment : Fragment() {
                         followed = followed?.let { TvHomeRow(getString(R.string.tv_followed_live), it, followedId) },
                         popular = popular?.let { TvHomeRow(getString(R.string.popular), it, R.id.rootTopFragment) },
                         games = games?.let { TvHomeRow(getString(R.string.games), it, R.id.rootGamesFragment) },
-                        previewLogin = previewLogin.value,
-                        previewPlayer = previewPlayer.value,
+                        previewLogin = { previewLogin.value },
+                        previewPlayer = { previewPlayer.value },
                         actions = actions,
                     )
                 }

@@ -309,7 +309,7 @@ class MainActivity : AppCompatActivity() {
                                 ) {
                                     viewModel.checkUpdates(
                                         prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                                        prefs.getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/crackededed/xtra/releases/tags/latest",
+                                        prefs.getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraATV/releases/latest",
                                         tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0)
                                     )
                                 }

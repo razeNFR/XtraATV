@@ -34,6 +34,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.launch
@@ -112,8 +113,8 @@ fun TvHomeScreen(
     followed: TvHomeRow<Stream>?,
     popular: TvHomeRow<Stream>?,
     games: TvHomeRow<Game>?,
-    previewLogin: String?,
-    previewPlayer: ExoPlayer?,
+    previewLogin: () -> String?,
+    previewPlayer: () -> ExoPlayer?,
     actions: TvHomeActions,
 ) {
     val listState = rememberLazyListState()
@@ -207,7 +208,7 @@ private fun Modifier.leftEdge(index: Int, openMenu: () -> Unit) = onPreviewKeyEv
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: String?, previewPlayer: ExoPlayer?, actions: TvHomeActions, firstRequester: FocusRequester?) {
+private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previewPlayer: () -> ExoPlayer?, actions: TvHomeActions, firstRequester: FocusRequester?) {
     Column {
         RowTitle(row.title)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
@@ -219,7 +220,7 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: String?, previewPlay
             itemsIndexed(row.items, key = { index, item -> item.channelId ?: index }) { index, stream ->
                 StreamCard(
                     stream = stream,
-                    previewing = previewLogin != null && previewLogin == stream.channelLogin,
+                    previewLogin = previewLogin,
                     previewPlayer = previewPlayer,
                     actions = actions,
                     modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier),
@@ -302,8 +303,8 @@ private fun FocusCard(
 @Composable
 private fun StreamCard(
     stream: Stream,
-    previewing: Boolean,
-    previewPlayer: ExoPlayer?,
+    previewLogin: () -> String?,
+    previewPlayer: () -> ExoPlayer?,
     actions: TvHomeActions,
     modifier: Modifier,
     onClick: () -> Unit,
@@ -324,16 +325,20 @@ private fun StreamCard(
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
         ) {
             AsyncImage(
-                model = stream.thumbnail,
+                // smaller thumbnails than the 1280x720 of the lists, the cards are small
+                model = stream.thumbnail?.replace("1280x720", "640x360"),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            if (previewing && previewPlayer != null && focused) {
+            // only the card that shows the preview recomposes when the preview changes
+            val previewing by remember(stream.channelLogin) { derivedStateOf { stream.channelLogin != null && previewLogin() == stream.channelLogin } }
+            val player = previewPlayer()
+            if (previewing && player != null && focused) {
                 AndroidView(
                     factory = { context -> TextureView(context) },
-                    update = { previewPlayer.setVideoTextureView(it) },
-                    onRelease = { previewPlayer.clearVideoTextureView(it) },
+                    update = { player.setVideoTextureView(it) },
+                    onRelease = { player.clearVideoTextureView(it) },
                     modifier = Modifier.fillMaxSize()
                 )
             }

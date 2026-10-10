@@ -61,12 +61,14 @@ class TvHomeViewModel(
                 )
             )
         }
+        // languages of the "Popular" row, chosen in the settings (all when none)
+        val languages = prefs.getStringSet(C.TV_HOME_LANGUAGES, null)?.filter { it.isNotBlank() }?.ifEmpty { null }
         viewModelScope.launch {
             popular.value = loadPage(
                 StreamsDataSource(
-                    gqlQueryLanguages = null,
+                    gqlQueryLanguages = languages?.mapNotNull { language -> com.github.andreyasadchy.xtra.graphql.type.Language.entries.find { it.rawValue == language } },
                     gqlQuerySort = StreamSort.VIEWER_COUNT,
-                    gqlLanguages = null,
+                    gqlLanguages = languages,
                     gqlSort = "VIEWER_COUNT",
                     tags = null,
                     gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),

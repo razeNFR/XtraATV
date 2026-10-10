@@ -125,6 +125,16 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <MultiSelectListPreference
+        android:entries="@array/gqlUserLanguageEntries"
+        android:entryValues="@array/gqlUserLanguageValues"
+        android:key="tv_home_languages"
+        android:summary="@string/tv_home_languages_summary"
+        android:title="@string/tv_home_languages"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
     <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="ui_tv_preview"

@@ -625,4 +625,6 @@
     <string name="tv_see_all">查看全部</string>
     <string name="tv_dpad_switch_stream">左右鍵切換實況主</string>
     <string name="tv_dpad_switch_stream_summary">控制列隱藏時，按左右鍵切換到開啟直播的清單中的上一個或下一個實況主</string>
+    <string name="tv_home_languages">熱門列的語言（首頁）</string>
+    <string name="tv_home_languages_summary">首頁熱門列只顯示這些語言的直播，未選擇時顯示所有語言</string>
 </resources>

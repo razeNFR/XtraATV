@@ -25,11 +25,12 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.github.andreyasadchy.xtra"
+        // own package: installs next to the original Xtra
+        applicationId = "com.github.razenfr.xtratv"
         minSdk = 24
         targetSdk = 37
         versionCode = 121
-        versionName = "2.60.7"
+        versionName = "1.0.0-tv"
     }
 
     buildTypes {

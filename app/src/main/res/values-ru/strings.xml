@@ -625,4 +625,6 @@
     <string name="tv_see_all">Показать все</string>
     <string name="tv_dpad_switch_stream">Влево / вправо — смена стримера</string>
     <string name="tv_dpad_switch_stream_summary">Когда элементы управления скрыты, влево и вправо переключают на предыдущего или следующего стримера из списка, откуда открыт стрим</string>
+    <string name="tv_home_languages">Языки строки «Популярное» (главная)</string>
+    <string name="tv_home_languages_summary">Стримы строки «Популярное» на главной только на этих языках, все языки, если ничего не выбрано</string>
 </resources>
