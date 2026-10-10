@@ -129,26 +129,7 @@ class TvHomeFragment : Fragment() {
         }
         previewJob = viewLifecycleOwner.lifecycleScope.launch {
             delay(500)
-            val url = try {
-                (context.applicationContext as XtraApp).xtraModule.playerRepository.loadStreamPlaylistUrl(
-                    context = context,
-                    networkLibrary = context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    gqlHeaders = TwitchApiHelper.getGQLHeaders(context, context.prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)),
-                    channelLogin = login,
-                    platform = context.prefs().getString(C.TOKEN_PLATFORM, "web"),
-                    playerType = context.prefs().getString(C.TOKEN_PLAYER_TYPE, "site"),
-                    supportedCodecs = "h264",
-                    proxyPlaybackAccessToken = false,
-                    proxyHost = null,
-                    proxyPort = null,
-                    proxyUser = null,
-                    proxyPassword = null,
-                    proxyTimeout = null,
-                    enableIntegrity = false,
-                )
-            } catch (e: Exception) {
-                null
-            } ?: return@launch
+            val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(context, login) ?: return@launch
             val player = previewPlayer.value ?: ExoPlayer.Builder(context).build().also {
                 it.volume = 0f
                 it.repeatMode = Player.REPEAT_MODE_OFF

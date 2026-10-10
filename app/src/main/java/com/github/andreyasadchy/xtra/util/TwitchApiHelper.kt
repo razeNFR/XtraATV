@@ -225,6 +225,24 @@ object TwitchApiHelper {
     fun addTokenPrefixGQL(token: String) = "OAuth $token"
     fun addTokenPrefixHelix(token: String) = "Bearer $token"
 
+    /**
+     * Headers of the Twitch website for the stream access token: 1440p (enhanced broadcasting) is only given to the
+     * website client, with the token of the website when the user is logged in.
+     */
+    fun getGQLWebHeaders(context: Context, includeToken: Boolean): Map<String, String> {
+        if (context.prefs().getBoolean(C.ENABLE_INTEGRITY, false)) {
+            return getGQLHeaders(context, includeToken)
+        }
+        return mutableMapOf<String, String>().apply {
+            put(C.HEADER_CLIENT_ID, context.prefs().getString(C.GQL_CLIENT_ID_WEB, "kimne78kx3ncx6brgo4mv6wki5h1ko")?.takeIf { it.isNotBlank() } ?: "kimne78kx3ncx6brgo4mv6wki5h1ko")
+            if (includeToken) {
+                context.tokenPrefs().getString(C.GQL_TOKEN_WEB, null)?.takeIf { it.isNotBlank() }?.let {
+                    put(C.HEADER_TOKEN, addTokenPrefixGQL(it))
+                }
+            }
+        }
+    }
+
     fun getGQLHeaders(context: Context, includeToken: Boolean = false): Map<String, String> {
         return mutableMapOf<String, String>().apply {
             if (context.prefs().getBoolean(C.ENABLE_INTEGRITY, false)) {

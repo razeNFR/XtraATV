@@ -4,7 +4,7 @@
 OUT=tv-out
 PKG=com.github.andreyasadchy.xtra.debug
 mkdir -p $OUT
-bash .github/tv-test/probe_2k.sh > $OUT/probe_2k.log 2>&1 &
+python3 .github/tv-test/probe_2k.py > $OUT/probe_2k.log 2>&1 &
 adb install -r app/build/outputs/apk/debug/*.apk > $OUT/install.log 2>&1
 adb shell settings put global window_animation_scale 0.5
 adb logcat -c

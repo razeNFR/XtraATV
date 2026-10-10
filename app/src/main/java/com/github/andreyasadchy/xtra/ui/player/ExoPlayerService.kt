@@ -1245,7 +1245,7 @@ class ExoPlayerService : BasePlaybackService() {
             xtraModule.playerRepository.loadStreamPlaylistUrl(
                 context = this,
                 networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                gqlHeaders = TwitchApiHelper.getGQLHeaders(this, prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)),
+                gqlHeaders = getStreamTokenHeaders(prefs().getString(C.TOKEN_PLATFORM, "web")),
                 channelLogin = channelLogin,
                 platform = prefs().getString(C.TOKEN_PLATFORM, "web"),
                 playerType = prefs().getString(C.TOKEN_PLAYER_TYPE, "site").let {
@@ -1756,7 +1756,7 @@ class ExoPlayerService : BasePlaybackService() {
                             xtraModule.playerRepository.loadStreamPlaylistUrl(
                                 context = this@ExoPlayerService,
                                 networkLibrary = networkLibrary,
-                                gqlHeaders = TwitchApiHelper.getGQLHeaders(this@ExoPlayerService, prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)),
+                                gqlHeaders = getStreamTokenHeaders(videoSwap.platform),
                                 channelLogin = channelLogin,
                                 platform = videoSwap.platform,
                                 playerType = videoSwap.playerType,
@@ -2162,6 +2162,16 @@ class ExoPlayerService : BasePlaybackService() {
                 autoHighest = false
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(false).build()
             }
+        }
+    }
+
+    /** The website client for the web platform (1440p), the client of the app for the others. */
+    private fun getStreamTokenHeaders(platform: String?): Map<String, String> {
+        val includeToken = prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)
+        return if (platform.isNullOrBlank() || platform == "web") {
+            TwitchApiHelper.getGQLWebHeaders(this, includeToken)
+        } else {
+            TwitchApiHelper.getGQLHeaders(this, includeToken)
         }
     }
 

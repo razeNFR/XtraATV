@@ -142,7 +142,16 @@ object TvSheetCompose {
 
     @Composable
     private fun SheetContent(content: View, title: String?, version: MutableIntState) {
-        val nodes = remember(version.intValue) { mutableListOf<Node>().also { collect(content, it) } }
+        // the content itself is hidden behind the panel, its children are read
+        val nodes = remember(version.intValue) {
+            mutableListOf<Node>().also { list ->
+                if (content is ViewGroup) {
+                    for (i in 0 until content.childCount) collect(content.getChildAt(i), list)
+                } else {
+                    collect(content, list)
+                }
+            }
+        }
         val requesters = remember(nodes.size) { List(nodes.size) { FocusRequester() } }
         val refresh = { content.post { version.intValue++ } }
         Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {

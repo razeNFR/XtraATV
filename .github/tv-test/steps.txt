@@ -27,6 +27,8 @@ key UP 1
 shot category_sort_pill
 key DPAD_CENTER 3
 shot sort_panel
+key DOWN 1
+shot sort_panel_down
 key BACK 2
 key DOWN 1
 keys DOWN,DOWN,DOWN,DOWN,DOWN 1

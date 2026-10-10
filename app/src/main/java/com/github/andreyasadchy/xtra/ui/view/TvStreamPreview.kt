@@ -54,26 +54,7 @@ class TvStreamPreview(private val recyclerView: GridRecyclerView) {
         this.card = card
         loadJob = owner.lifecycleScope.launch {
             val context = recyclerView.context
-            val url = try {
-                (context.applicationContext as XtraApp).xtraModule.playerRepository.loadStreamPlaylistUrl(
-                    context = context,
-                    networkLibrary = context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    gqlHeaders = TwitchApiHelper.getGQLHeaders(context, context.prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)),
-                    channelLogin = login,
-                    platform = context.prefs().getString(C.TOKEN_PLATFORM, "web"),
-                    playerType = context.prefs().getString(C.TOKEN_PLAYER_TYPE, "site"),
-                    supportedCodecs = "h264",
-                    proxyPlaybackAccessToken = false,
-                    proxyHost = null,
-                    proxyPort = null,
-                    proxyUser = null,
-                    proxyPassword = null,
-                    proxyTimeout = null,
-                    enableIntegrity = false,
-                )
-            } catch (e: Exception) {
-                null
-            }
+            val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(context, login)
             if (url == null || this@TvStreamPreview.card != card || !card.hasFocus()) {
                 return@launch
             }
