@@ -3,6 +3,8 @@ package com.github.andreyasadchy.xtra.ui.view
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
+import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
 import com.google.android.material.appbar.AppBarLayout
@@ -56,6 +58,16 @@ object TvUi {
                 }
             }
             is GridRecyclerView -> {}
+            is TextView -> {
+                if (view.id == R.id.sortText) {
+                    // the sort pill only says "Sort" while there is no sort text
+                    val update = {
+                        (view.parent as? View)?.findViewById<View>(R.id.sortByText)?.visibility = if (view.text.isNullOrBlank()) View.VISIBLE else View.GONE
+                    }
+                    update()
+                    view.doAfterTextChanged { update() }
+                }
+            }
             is RecyclerView -> highlightRows(view)
             is TabLayout -> adaptTabs(view)
             is ViewPager2 -> adaptPager(view)
@@ -173,10 +185,32 @@ object TvUi {
                 sheet.setPadding((12 * density).toInt(), (24 * density).toInt(), (12 * density).toInt(), (24 * density).toInt())
                 sheet.translationX = 460 * density
                 sheet.animate().translationX(0f).setDuration(180L).start()
+                styleSheetViews(sheet)
             }
             focusInitial(sheet)
         } else {
             dialog.window?.decorView?.let { focusInitial(it) }
+        }
+    }
+
+    /** Rows of the side panels: white text aligned on the left, like the other TV menus. */
+    private fun styleSheetViews(view: View) {
+        when (view) {
+            is android.widget.CompoundButton -> {
+                view.setTextColor(android.graphics.Color.WHITE)
+                view.textSize = 16f
+            }
+            is android.widget.Button -> {
+                view.setTextColor(android.graphics.Color.WHITE)
+                view.isAllCaps = false
+                view.textSize = 16f
+                view.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+            }
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                styleSheetViews(view.getChildAt(i))
+            }
         }
     }
 

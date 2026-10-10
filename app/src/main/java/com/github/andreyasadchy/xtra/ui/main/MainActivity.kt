@@ -173,6 +173,9 @@ class MainActivity : AppCompatActivity() {
             if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
                 lastContentFocus = newFocus
             }
+            if (isTv && newFocus != null && newFocus.isInside(binding.navHostFragment)) {
+                onTvContentFocus(newFocus)
+            }
             if (isTv && newFocus != null) {
                 // leanback menu: open while it has the focus, folded away as soon as the content gets it
                 if (newFocus.isInside(binding.navBarContainer)) {
@@ -203,6 +206,9 @@ class MainActivity : AppCompatActivity() {
                         return
                     }
                     binding.root.post {
+                        if (tvInitialFocusDone && f.parentFragment is NavHostFragment && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
+                            restoreTvScreenFocus()
+                        }
                         if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment) {
                             // browsing starts in the side menu
                             tvInitialFocusDone = true
@@ -732,27 +738,6 @@ class MainActivity : AppCompatActivity() {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
         }
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
-        if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
-            // back far down a list goes up to its top first, like YouTube
-            val focus = currentFocus
-            var view: View? = focus
-            while (view != null && view !is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView) {
-                view = view.parent as? View
-            }
-            val grid = view as? com.github.andreyasadchy.xtra.ui.view.GridRecyclerView
-            if (grid != null && focus != null && focus !== grid) {
-                val card = generateSequence(focus) { it.parent as? View }.firstOrNull { it.parent === grid }
-                val position = card?.let { grid.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION
-                val span = (grid.layoutManager as? androidx.recyclerview.widget.GridLayoutManager)?.spanCount ?: 1
-                if (position >= span * 2) {
-                    if (event.action == KeyEvent.ACTION_UP) {
-                        grid.scrollToPosition(0)
-                        grid.post { grid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus() }
-                    }
-                    return true
-                }
-            }
-        }
         if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot()) {
             // back on a main screen opens the menu, back again in the menu leaves the app
             if (event.action == KeyEvent.ACTION_UP) {
@@ -845,6 +830,68 @@ class MainActivity : AppCompatActivity() {
     private var tvInitialFocusDone = false
 
     /** Back on a main screen opens the side menu, back again in the menu leaves the app. */
+    /** Back far down a list goes up to its top first, like YouTube. */
+    private val tvGridBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            val grid = tvFocusedGrid ?: return
+            isEnabled = false
+            grid.scrollToPosition(0)
+            grid.post {
+                if (grid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus() != true) {
+                    TvUi.focusFirstItem(grid)
+                }
+            }
+        }
+    }
+    private var tvFocusedGrid: com.github.andreyasadchy.xtra.ui.view.GridRecyclerView? = null
+
+    /** Called when the focus moves: remembers the card of the list and enables back to the top. */
+    private fun onTvContentFocus(focus: View) {
+        var view: View? = focus
+        var child: View? = null
+        while (view != null && view !is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView) {
+            child = view
+            view = view.parent as? View
+        }
+        val grid = view as? com.github.andreyasadchy.xtra.ui.view.GridRecyclerView
+        val position = if (grid != null && child != null) grid.getChildAdapterPosition(child) else RecyclerView.NO_POSITION
+        tvFocusedGrid = grid
+        val span = (grid?.layoutManager as? androidx.recyclerview.widget.GridLayoutManager)?.spanCount ?: 1
+        tvGridBackCallback.isEnabled = grid != null && position >= span * 2
+        if (grid != null && position != RecyclerView.NO_POSITION && ::navController.isInitialized) {
+            navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] = position }
+        }
+    }
+
+    /** Position of the focused card of each screen, to give it back when coming back to the screen. */
+    private val tvFocusMemory = HashMap<String, Int>()
+
+    /** Coming back to a screen: focus the card that had the focus there (the views were recreated). */
+    private fun restoreTvScreenFocus(tries: Int = 0) {
+        if (!::navController.isInitialized) {
+            return
+        }
+        val position = navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] } ?: return
+        val focus = currentFocus
+        if (focus != null && focus.isShown && focus.parent is RecyclerView) {
+            return
+        }
+        val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+        val count = grid?.adapter?.itemCount ?: 0
+        if (grid == null || count == 0) {
+            if (tries < 15) {
+                binding.root.postDelayed({ restoreTvScreenFocus(tries + 1) }, 150)
+            }
+            return
+        }
+        val target = position.coerceAtMost(count - 1)
+        val holder = grid.findViewHolderForAdapterPosition(target)
+        if (holder == null || !holder.itemView.requestFocus()) {
+            grid.scrollToPosition(target)
+            grid.post { grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() }
+        }
+    }
+
     private val tvMenuBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             showTvMenu(true)
@@ -892,9 +939,28 @@ class MainActivity : AppCompatActivity() {
                 com.github.andreyasadchy.xtra.ui.tv.TvSideMenu(tvMenuState) { id ->
                     binding.navBar.selectedItemId = id
                     tvMenuState.selected = binding.navBar.selectedItemId
+                    if (id != R.id.tvNavSettings && id != R.id.tvNavAccount) {
+                        // the chosen screen gets the focus, the menu folds away
+                        focusContentAfterMenu(id == R.id.tvNavSearch)
+                    }
                 }
             }
         }
+    }
+
+    private fun focusContentAfterMenu(search: Boolean, tries: Int = 0) {
+        binding.root.postDelayed({
+            val target = if (search) {
+                binding.navHostFragment.findViewById<View>(R.id.tvSearchBar)
+            } else {
+                TvUi.findVisibleGrid(binding.navHostFragment)?.takeIf { (it.adapter?.itemCount ?: 0) > 0 && it.childCount > 0 }
+            }
+            when {
+                target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> TvUi.focusFirstItem(target)
+                target != null -> target.requestFocus()
+                tries < 15 -> focusContentAfterMenu(search, tries + 1)
+            }
+        }, if (tries == 0) 250L else 150L)
     }
 
     private fun showTvMenu(focus: Boolean) {
@@ -1559,6 +1625,7 @@ class MainActivity : AppCompatActivity() {
         navController = (supportFragmentManager.findFragmentById(R.id.navHostFragment) as NavHostFragment).navController
         if (isTv) {
             onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
+            onBackPressedDispatcher.addCallback(this, tvGridBackCallback)
             navController.addOnDestinationChangedListener { _, _, _ ->
                 updateTvMenuBackCallback()
                 binding.root.post { tvMenuState.selected = binding.navBar.selectedItemId }

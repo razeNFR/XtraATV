@@ -21,11 +21,12 @@ shot category
 # Header: tabs and sort pill
 key UP 1
 shot category_tabs
-keys RIGHT,RIGHT,RIGHT,RIGHT 1
-shot category_sort_pill
 key DPAD_CENTER 3
 shot sort_panel
+key DOWN 1
+shot sort_panel_down
 key BACK 2
+shot after_sort_panel
 # Fast scrolling in the grid
 key DOWN 1
 keys DOWN,DOWN,DOWN,DOWN,DOWN 1

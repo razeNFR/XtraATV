@@ -2146,7 +2146,8 @@ class ExoPlayerService : BasePlaybackService() {
             AdaptiveTrackSelection.DEFAULT_MIN_DURATION_TO_RETAIN_AFTER_DISCARD_MS,
             0.85f
         )).apply {
-            parameters = buildUponParameters().setViewportSizeToPhysicalDisplaySize(this@ExoPlayerService, false).build()
+            // no limit to the size of the screen: a 1440p stream (enhanced broadcasting) also looks better than 1080p on a 1080p TV
+            parameters = buildUponParameters().clearViewportSizeConstraints().build()
         }
     }
 

@@ -108,8 +108,10 @@ class PlayerRepository(
             appendQueryParameter("allow_audio_only", "true")
             appendQueryParameter("fast_bread", "true") // low latency
             appendQueryParameter("include_unavailable", "true")
+            appendQueryParameter("multigroup_video", "false")
             appendQueryParameter("p", Random.nextInt(9999999).toString())
             appendQueryParameter("platform", platform)
+            appendQueryParameter("playlist_include_framerate", "true")
             signature?.let { appendQueryParameter("sig", it) }
             if (!supportedCodecs.isNullOrBlank()) {
                 appendQueryParameter("supported_codecs", supportedCodecs)
