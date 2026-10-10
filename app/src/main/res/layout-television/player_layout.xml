@@ -165,6 +165,24 @@
 
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/tvQualityInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/tv_badge_background"
+            android:paddingStart="6dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="2dp"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:text="1080p60"
+            tools:visibility="visible" />
+
     </LinearLayout>
 
     <LinearLayout
@@ -201,10 +219,9 @@
                     android:id="@+id/progressBar"
                     android:layout_width="match_parent"
                     android:layout_height="32dp"
-                    android:background="@drawable/player_control_background"
                     android:focusable="true"
-                    app:bar_height="4dp"
-                    app:scrubber_enabled_size="14dp"
+                    app:bar_height="5dp"
+                    app:scrubber_enabled_size="16dp"
                     app:scrubber_dragged_size="18dp"
                     app:played_color="?attr/colorPrimary"
                     app:scrubber_color="@android:color/white"
@@ -356,7 +373,7 @@
                         android:layout_marginStart="2dp"
                         android:layout_marginEnd="2dp"
                         android:background="@drawable/player_control_background"
-                        android:src="@drawable/baseline_settings_black_24"
+                        android:src="@drawable/tv_ic_hd"
                         android:visibility="gone"
                         app:tint="@android:color/white"
                         tools:visibility="visible" />
@@ -481,6 +498,30 @@
                         android:visibility="gone"
                         app:tint="@android:color/white"
                         tools:visibility="visible" />
+                    <ImageButton
+                        android:id="@+id/chatMessage"
+                        android:layout_width="@dimen/player_button_size"
+                        android:layout_height="@dimen/player_button_size"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/player_control_background"
+                        android:contentDescription="@string/tv_write_message"
+                        android:src="@drawable/tv_ic_chat_message"
+                        android:visibility="gone"
+                        app:tint="@android:color/white"
+                        tools:visibility="visible" />
+
+                    <ImageButton
+                        android:id="@+id/statsForNerds"
+                        android:layout_width="@dimen/player_button_size"
+                        android:layout_height="@dimen/player_button_size"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/player_control_background"
+                        android:contentDescription="@string/tv_stats_for_nerds"
+                        android:src="@drawable/tv_ic_stats"
+                        app:tint="@android:color/white" />
+
                         <ImageButton
                         android:id="@+id/menu"
                         android:layout_width="@dimen/player_button_size"
@@ -488,7 +529,7 @@
                         android:layout_marginStart="2dp"
                         android:layout_marginEnd="2dp"
                         android:background="@drawable/player_control_background"
-                        android:src="@drawable/baseline_more_vert_black_24"
+                        android:src="@drawable/baseline_settings_black_24"
                         android:visibility="gone"
                         app:tint="@android:color/white"
                         tools:visibility="visible" />
@@ -525,5 +566,20 @@
             </HorizontalScrollView>
         </LinearLayout>
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvTooltip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/tv_tooltip_background"
+        android:elevation="4dp"
+        android:paddingStart="10dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="4dp"
+        android:textColor="@android:color/black"
+        android:textSize="13sp"
+        android:visibility="invisible"
+        tools:text="Quality" />
 
 </RelativeLayout>

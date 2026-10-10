@@ -40,6 +40,7 @@
             android:paddingTop="@dimen/tv_overscan_vertical"
             android:paddingBottom="@dimen/tv_overscan_vertical"
             app:headerLayout="@layout/tv_nav_rail_header"
+            app:itemMinHeight="52dp"
             app:labelVisibilityMode="labeled"
             app:menuGravity="center"
             tools:viewBindingType="com.google.android.material.navigation.NavigationBarView" />

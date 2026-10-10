@@ -539,6 +539,28 @@ class ExoPlayerService : BasePlaybackService() {
                                             }
                                         }
                                     }
+                                    !skipAccessToken && responseCode != 0 && videoAnimatedPreviewURL == null && !videoId.isNullOrBlank() && !videoPreviewLookupDone -> {
+                                        // sub-only VODs play from the CDN through the preview URL: fetch it when the video was opened without it
+                                        videoPreviewLookupDone = true
+                                        val listener = this
+                                        lifecycleScope.launch {
+                                            val preview = try {
+                                                xtraModule.graphQLRepository.loadQueryVideo(
+                                                    networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                                                    headers = TwitchApiHelper.getGQLHeaders(this@ExoPlayerService),
+                                                    id = videoId
+                                                ).data?.video?.animatedPreviewURL
+                                            } catch (e: Exception) {
+                                                null
+                                            }
+                                            if (preview != null) {
+                                                videoAnimatedPreviewURL = preview
+                                                listener.onPlayerError(error)
+                                            } else {
+                                                serviceListener?.toast(R.string.video_subscribers_only, Toast.LENGTH_LONG)
+                                            }
+                                        }
+                                    }
                                     responseCode == 403 -> {
                                         serviceListener?.toast(R.string.video_subscribers_only, Toast.LENGTH_LONG)
                                     }
@@ -1250,6 +1272,8 @@ class ExoPlayerService : BasePlaybackService() {
             null
         }
     }
+
+    private var videoPreviewLookupDone = false
 
     private suspend fun loadVideo(restorePauseState: Boolean = false) {
         videoId?.let { videoId ->

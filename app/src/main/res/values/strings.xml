@@ -607,4 +607,14 @@
     <string name="tv_switch_stream">Other streams</string>
     <string name="tv_looking_for_vod">Looking for the stream VOD…</string>
     <string name="tv_live">LIVE</string>
+    <string name="tv_stats_for_nerds">Stats for nerds</string>
+    <string name="tv_reload">Reload</string>
+    <string name="tv_go_to_live">Go to live</string>
+    <string name="tv_more">More</string>
+    <string name="tv_aspect_ratio">Aspect ratio</string>
+    <string name="tv_write_message">Write in chat</string>
+    <string name="tv_voice_input">Voice input</string>
+    <string name="tv_send">Send</string>
+    <string name="tv_voice_search">Voice search</string>
+    <string name="tv_message_hint">Message</string>
 </resources>

@@ -127,6 +127,6 @@ class TvStreamPreview(private val recyclerView: GridRecyclerView) {
     fun isPreviewing(view: View) = card == view || pendingCard == view
 
     companion object {
-        private const val START_DELAY = 1200L
+        private const val START_DELAY = 500L
     }
 }

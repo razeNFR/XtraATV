@@ -33,6 +33,7 @@ import android.view.ViewPropertyAnimator
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -638,6 +639,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
                 if (isTv) {
                     progressBar.setOnKeyListener { _, keyCode, event -> onTimeBarKey(keyCode, event) }
+                    // discreet timeline: the scrubber and the accent color only show while it has the focus
+                    val playedColor = MaterialColors.getColor(progressBar, androidx.appcompat.R.attr.colorPrimary)
+                    progressBar.hideScrubber(false)
+                    progressBar.setPlayedColor(0xE6FFFFFF.toInt())
+                    progressBar.setOnFocusChangeListener { _, hasFocus ->
+                        if (hasFocus) {
+                            progressBar.showScrubber()
+                            progressBar.setPlayedColor(playedColor)
+                        } else {
+                            progressBar.hideScrubber(false)
+                            progressBar.setPlayedColor(0xE6FFFFFF.toInt())
+                        }
+                    }
                 }
                 progressBar.addListener(
                     object : TimeBar.OnScrubListener {
@@ -670,6 +684,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun start() {
+        setupTvHud()
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -1332,7 +1347,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             requireActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                         }
                     }
-                    if (requireContext().prefs().getBoolean(C.PLAYER_ASPECT, true)) {
+                    if (requireContext().prefs().getBoolean(C.PLAYER_ASPECT, true) && !isTv) {
                         aspectRatio.visibility = View.VISIBLE
                         aspectRatio.setOnClickListener {
                             showController(force = true)
@@ -1567,9 +1582,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
                     width = (metrics.widthPixels * 0.3f).toInt()
                     height = metrics.heightPixels / 2
-                    gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                    gravity = Gravity.END or Gravity.BOTTOM
                     marginEnd = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+                    bottomMargin = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
                 }
+                chatLayout.translationY = if (playerControls.root.isVisible) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
                 chatLayout.setBackgroundResource(R.drawable.tv_chat_overlay_background)
                 chatLayout.clipToOutline = true
                 chatLayout.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
@@ -1903,11 +1920,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         tvScrubPosition = if (isLive) duration else getCurrentPosition() ?: 0
                         progressBar.isPressed = true
                     }
+                    // the longer the key is held, the faster it goes, relative to the length of the video
                     val step = when {
-                        event.repeatCount < 6 -> 10_000L
-                        event.repeatCount < 20 -> 30_000L
-                        event.repeatCount < 40 -> 60_000L
-                        else -> 180_000L
+                        event.repeatCount < 4 -> 10_000L
+                        event.repeatCount < 12 -> maxOf(30_000L, duration / 300)
+                        event.repeatCount < 24 -> maxOf(60_000L, duration / 120)
+                        else -> maxOf(120_000L, duration / 50)
                     }
                     tvScrubPosition = (tvScrubPosition + if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -step else step).coerceIn(0, duration)
                     progressBar.setDuration(duration)
@@ -1941,6 +1959,228 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
         }
         return true
+    }
+
+    private var tvStatsView: TextView? = null
+    private var chatComposerInput: android.widget.EditText? = null
+    private val chatVoiceLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+        com.github.andreyasadchy.xtra.ui.view.TvVoice.getText(result)?.let { text ->
+            chatComposerInput?.let {
+                val current = it.text?.toString()?.trim().orEmpty()
+                it.setText(if (current.isEmpty()) text else "$current $text")
+                it.setSelection(it.text?.length ?: 0)
+            }
+        }
+    }
+
+    /** TV: dialog to write a chat message, with voice input. */
+    private fun showChatComposer() {
+        val context = requireContext()
+        val density = resources.displayMetrics.density
+        val input = com.google.android.material.textfield.TextInputEditText(context).apply {
+            hint = getString(R.string.tv_message_hint)
+            maxLines = 3
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        chatComposerInput = input
+        val row = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val padding = (20 * density).toInt()
+            setPadding(padding, (8 * density).toInt(), padding, 0)
+            addView(input, android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (com.github.andreyasadchy.xtra.ui.view.TvVoice.isAvailable(context)) {
+                addView(android.widget.ImageButton(context).apply {
+                    setImageResource(R.drawable.tv_ic_mic)
+                    setBackgroundResource(R.drawable.tv_list_button_background)
+                    contentDescription = getString(R.string.tv_voice_input)
+                    setOnClickListener {
+                        try {
+                            chatVoiceLauncher.launch(com.github.andreyasadchy.xtra.ui.view.TvVoice.createIntent(getString(R.string.tv_write_message)))
+                        } catch (e: Exception) {
+                        }
+                    }
+                }, android.widget.LinearLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt()))
+            }
+        }
+        val dialog = context.getAlertDialogBuilder()
+            .setTitle(R.string.tv_write_message)
+            .setView(row)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.tv_send) { _, _ ->
+                chatFragment?.sendExternalMessage(input.text?.toString().orEmpty())
+            }
+            .setOnDismissListener { chatComposerInput = null }
+            .show()
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                chatFragment?.sendExternalMessage(input.text?.toString().orEmpty())
+                dialog.dismiss()
+                true
+            } else false
+        }
+    }
+    private var tooltipAnchor: View? = null
+    private val tooltipShowAction = Runnable { showTooltipNow() }
+    private val tvStatsAction = object : Runnable {
+        override fun run() {
+            val stats = tvStatsView ?: return
+            if (view == null || !stats.isVisible) {
+                return
+            }
+            stats.text = getStatsForNerds() ?: ""
+            stats.postDelayed(this, 1000)
+        }
+    }
+
+    /** Label of the quality being played, shown in the TV HUD. */
+    open fun getCurrentQualityLabel(): String? {
+        return playbackService?.quality?.name?.let {
+            when (it) {
+                VideoQuality.AUTO_QUALITY -> getString(R.string.auto)
+                VideoQuality.SOURCE_QUALITY -> getString(R.string.source)
+                VideoQuality.AUDIO_ONLY_QUALITY -> getString(R.string.audio_only)
+                else -> it
+            }
+        }
+    }
+
+    open fun getStatsForNerds(): String? = null
+
+    private fun onTvControllerVisibility(visible: Boolean) {
+        if (!isTv || _binding == null) {
+            return
+        }
+        with(binding) {
+            if (chatLayout.isVisible) {
+                chatLayout.animate().translationY(if (visible) -resources.getDimension(R.dimen.tv_chat_lift) else 0f).setDuration(200L).start()
+            }
+            if (visible) {
+                playerControls.tvQualityInfo?.let { info ->
+                    val label = getCurrentQualityLabel()
+                    info.text = label
+                    info.visibility = if (label.isNullOrBlank()) View.GONE else View.VISIBLE
+                }
+            } else {
+                hideTooltip()
+            }
+        }
+    }
+
+    /** TV HUD: labels and tooltips on the player buttons, stats for nerds. */
+    private fun setupTvHud() {
+        if (!isTv) {
+            return
+        }
+        with(binding.playerControls) {
+            val labels = listOf(
+                playPause to R.string.pause,
+                restart to R.string.tv_reload,
+                seekLive to R.string.tv_go_to_live,
+                vodGames to R.string.games,
+                volume to R.string.volume,
+                audioCompressor to R.string.audio_compressor,
+                audioOnly to R.string.audio_only,
+                quality to R.string.quality,
+                speed to R.string.playback_speed,
+                subtitles to R.string.subtitles,
+                toggleChat to R.string.toggle_chat,
+                toggleChatInput to R.string.toggle_chat_bar,
+                follow to R.string.follow,
+                download to R.string.download,
+                sleepTimer to R.string.sleep_timer,
+                aspectRatio to R.string.tv_aspect_ratio,
+                menu to R.string.settings,
+                minimize to R.string.minimize,
+            )
+            val buttons = labels.map { (button, label) ->
+                if (button.contentDescription.isNullOrBlank()) {
+                    button.contentDescription = getString(label)
+                }
+                button
+            } + listOfNotNull(streamList, statsForNerds, chatMessage)
+            buttons.forEach { button ->
+                button.setOnFocusChangeListener { v, hasFocus ->
+                    if (hasFocus) {
+                        tooltipAnchor = v
+                        tvTooltip?.removeCallbacks(tooltipShowAction)
+                        tvTooltip?.visibility = View.INVISIBLE
+                        tvTooltip?.postDelayed(tooltipShowAction, 600L)
+                    } else if (tooltipAnchor == v) {
+                        hideTooltip()
+                    }
+                }
+            }
+            statsForNerds?.setOnClickListener {
+                showController(force = true)
+                toggleStatsForNerds()
+            }
+            val isLoggedIn = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
+                    !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank()
+            if (playbackService?.type == BasePlaybackService.STREAM && isLoggedIn && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
+                chatMessage?.visibility = View.VISIBLE
+                chatMessage?.setOnClickListener {
+                    hideController()
+                    showChatComposer()
+                }
+            }
+        }
+    }
+
+    private fun showTooltipNow() {
+        val tooltip = _binding?.playerControls?.tvTooltip ?: return
+        val anchor = tooltipAnchor ?: return
+        if (!anchor.hasFocus() || anchor.contentDescription.isNullOrBlank()) {
+            return
+        }
+        val root = binding.playerControls.root
+        tooltip.text = anchor.contentDescription
+        tooltip.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        val rootLocation = IntArray(2)
+        val anchorLocation = IntArray(2)
+        root.getLocationInWindow(rootLocation)
+        anchor.getLocationInWindow(anchorLocation)
+        val margin = 8 * resources.displayMetrics.density
+        val x = anchorLocation[0] - rootLocation[0] + anchor.width / 2f - tooltip.measuredWidth / 2f
+        tooltip.translationX = x.coerceIn(margin, (root.width - tooltip.measuredWidth - margin).coerceAtLeast(margin))
+        tooltip.translationY = anchorLocation[1] - rootLocation[1] - tooltip.measuredHeight - margin
+        tooltip.alpha = 0f
+        tooltip.visibility = View.VISIBLE
+        tooltip.animate().alpha(1f).setDuration(150L).start()
+    }
+
+    private fun hideTooltip() {
+        val tooltip = _binding?.playerControls?.tvTooltip ?: return
+        tooltip.removeCallbacks(tooltipShowAction)
+        tooltip.animate().cancel()
+        tooltip.visibility = View.INVISIBLE
+        tooltipAnchor = null
+    }
+
+    private fun toggleStatsForNerds() {
+        val stats = tvStatsView ?: TextView(requireContext()).apply {
+            setBackgroundResource(R.drawable.tv_chat_overlay_background)
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 12f
+            val padding = (12 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+            visibility = View.GONE
+            binding.playerLayout.addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+                topMargin = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+                marginEnd = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+            })
+            tvStatsView = this
+        }
+        if (stats.isVisible) {
+            stats.visibility = View.GONE
+            stats.removeCallbacks(tvStatsAction)
+        } else {
+            stats.visibility = View.VISIBLE
+            stats.removeCallbacks(tvStatsAction)
+            tvStatsAction.run()
+        }
     }
 
     /** Focus goes to play/pause, else to the timeline, else to the first button of the bottom row. */
@@ -2020,6 +2260,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     protected fun showController(show: Boolean = true, force: Boolean = false) {
+        if (show) {
+            onTvControllerVisibility(true)
+        }
         if (!controllerIsAnimating) {
             if (!binding.playerControls.root.isVisible) {
                 binding.playerControls.root.removeCallbacks(controllerHideAction)
@@ -2068,6 +2311,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun hideController(force: Boolean = false) {
+        onTvControllerVisibility(false)
         if (binding.playerControls.root.hasFocus() && (force || !controllerIsAnimating)) {
             binding.dragView.requestFocus()
         }

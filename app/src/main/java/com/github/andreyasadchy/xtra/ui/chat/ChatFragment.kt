@@ -948,6 +948,15 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         binding.editText.text.append(emote.name).append(' ')
     }
 
+    /** Sends a message written outside of the chat input (TV message dialog). */
+    fun sendExternalMessage(text: String): Boolean {
+        if (_binding == null || text.isBlank()) {
+            return false
+        }
+        binding.editText.setText(text)
+        return sendMessage()
+    }
+
     private fun sendMessage(replyId: String? = null): Boolean {
         with(binding) {
             (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(editText.windowToken, 0)

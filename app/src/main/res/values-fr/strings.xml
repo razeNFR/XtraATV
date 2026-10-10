@@ -588,4 +588,14 @@
     <string name="tv_switch_stream">Autres streams</string>
     <string name="tv_looking_for_vod">Recherche de la VOD du stream…</string>
     <string name="tv_live">DIRECT</string>
+    <string name="tv_stats_for_nerds">Stats pour les geeks</string>
+    <string name="tv_reload">Recharger</string>
+    <string name="tv_go_to_live">Aller au direct</string>
+    <string name="tv_more">Plus</string>
+    <string name="tv_aspect_ratio">Format d\'image</string>
+    <string name="tv_write_message">Écrire dans le chat</string>
+    <string name="tv_voice_input">Dictée vocale</string>
+    <string name="tv_send">Envoyer</string>
+    <string name="tv_voice_search">Recherche vocale</string>
+    <string name="tv_message_hint">Message</string>
 </resources>

@@ -342,6 +342,45 @@ class ExoPlayerFragment : PlayerFragment() {
         serviceConnection = connection
     }
 
+    override fun getCurrentQualityLabel(): String? {
+        val format = playbackService?.player?.videoFormat
+        val base = super.getCurrentQualityLabel()
+        if (format == null || format.height <= 0) {
+            return base
+        }
+        val frameRate = format.frameRate.takeIf { it > 0f }?.let { kotlin.math.round(it).toInt() }
+        val label = "${format.height}p${frameRate?.takeIf { it > 30 } ?: ""}"
+        return if (playbackService?.quality?.name == VideoQuality.AUTO_QUALITY) "${getString(R.string.auto)} · $label" else label
+    }
+
+    override fun getStatsForNerds(): String {
+        val player = playbackService?.player ?: return ""
+        val video = player.videoFormat
+        val audio = player.audioFormat
+        val lines = mutableListOf<String>()
+        if (video != null) {
+            val frameRate = video.frameRate.takeIf { it > 0f }?.let { " @ ${"%.0f".format(it)} fps" } ?: ""
+            lines.add("Video      ${video.width}x${video.height}$frameRate")
+            lines.add("Codec      ${video.codecs ?: video.sampleMimeType ?: "-"}")
+            (video.bitrate.takeIf { it > 0 } ?: video.peakBitrate.takeIf { it > 0 })?.let { lines.add("Bitrate    ${"%.2f".format(it / 1_000_000f)} Mbps") }
+        }
+        if (audio != null) {
+            lines.add("Audio      ${audio.codecs ?: audio.sampleMimeType ?: "-"} ${audio.sampleRate.takeIf { it > 0 }?.let { "${it / 1000} kHz" } ?: ""}")
+        }
+        lines.add("Quality    ${super.getCurrentQualityLabel() ?: "-"}")
+        val buffer = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0)
+        lines.add("Buffer     ${"%.1f".format(buffer / 1000f)} s")
+        if (player.isCurrentMediaItemLive) {
+            player.currentLiveOffset.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { lines.add("Latency    ${"%.1f".format(it / 1000f)} s") }
+        }
+        player.videoDecoderCounters?.let { counters ->
+            lines.add("Dropped    ${counters.droppedBufferCount} / ${counters.renderedOutputBufferCount} frames")
+        }
+        lines.add("Speed      ${player.playbackParameters.speed}x")
+        lines.add("Volume     ${(player.volume * 100).toInt()}%")
+        return lines.joinToString("\n")
+    }
+
     override fun getCurrentPosition() = playbackService?.player?.currentPosition
 
     override fun getCurrentSpeed() = playbackService?.player?.playbackParameters?.speed

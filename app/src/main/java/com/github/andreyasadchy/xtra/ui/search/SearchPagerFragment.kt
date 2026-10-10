@@ -160,8 +160,20 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
             val navController = findNavController()
             val appBarConfiguration = AppBarConfiguration(setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment))
             toolbar.setupWithNavController(navController, appBarConfiguration)
+            if (com.github.andreyasadchy.xtra.ui.view.TvVoice.isAvailable(requireContext()) && toolbar.menu.findItem(R.id.tvVoiceSearch) == null) {
+                toolbar.menu.add(android.view.Menu.NONE, R.id.tvVoiceSearch, 0, R.string.tv_voice_search)
+                    .setIcon(R.drawable.tv_ic_mic)
+                    .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+            }
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
+                    R.id.tvVoiceSearch -> {
+                        try {
+                            voiceSearchLauncher.launch(com.github.andreyasadchy.xtra.ui.view.TvVoice.createIntent(getString(R.string.search)))
+                        } catch (e: Exception) {
+                        }
+                        true
+                    }
                     R.id.searchUser -> {
                         val binding = DialogUserResultBinding.inflate(layoutInflater)
                         requireContext().getAlertDialogBuilder().apply {
@@ -250,6 +262,10 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                 return false
             }
         })
+    }
+
+    private val voiceSearchLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+        com.github.andreyasadchy.xtra.ui.view.TvVoice.getText(result)?.let { setQuery(it) }
     }
 
     fun setQuery(query: String?) {

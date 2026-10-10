@@ -3,4 +3,5 @@
     <dimen name="divider_margin">5dp</dimen>
     <dimen name="player_button_size">40dp</dimen>
     <dimen name="player_play_button_size">60dp</dimen>
+    <dimen name="tv_chat_lift">0dp</dimen>
 </resources>

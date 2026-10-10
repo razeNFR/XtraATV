@@ -184,6 +184,9 @@ class MainActivity : AppCompatActivity() {
             supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
                     TvUi.adapt(v, hideToolbarActions = true)
+                    if (f is androidx.fragment.app.DialogFragment) {
+                        v.post { TvUi.adaptDialog(v) }
+                    }
                 }
 
                 override fun onFragmentResumed(fm: FragmentManager, f: Fragment) {
@@ -737,6 +740,33 @@ class MainActivity : AppCompatActivity() {
                 }
                 val next = FocusFinder.getInstance().findNextFocus(binding.root, focus, direction)
                 if (next == null || !next.isInside(binding.navBarContainer)) {
+                    return true
+                }
+            }
+        }
+        if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            val focus = currentFocus
+            if (focus != null && focus.isInside(binding.navBarContainer)) {
+                // from the menu, go back to the item last selected in the screen, else to its first item
+                val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(binding.navHostFragment) }
+                if (last != null && last.requestFocus()) {
+                    return true
+                }
+                val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+                if (grid != null && TvUi.focusFirstItem(grid)) {
+                    return true
+                }
+                if (binding.navHostFragment.requestFocus(View.FOCUS_RIGHT)) {
+                    return true
+                }
+            }
+        }
+        if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+            val focus = currentFocus
+            if (focus != null && focus.parent?.parent is com.google.android.material.tabs.TabLayout && focus.isInside(binding.navHostFragment)) {
+                // from the section tabs, go to the list of the selected section
+                val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+                if (grid != null && TvUi.focusFirstItem(grid)) {
                     return true
                 }
             }
