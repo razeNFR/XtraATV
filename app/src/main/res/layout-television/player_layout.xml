@@ -499,6 +499,19 @@
                         app:tint="@android:color/white"
                         tools:visibility="visible" />
                     <ImageButton
+                        android:id="@+id/multiStream"
+                        android:layout_width="@dimen/player_button_size"
+                        android:layout_height="@dimen/player_button_size"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/player_control_background"
+                        android:contentDescription="@string/tv_multistream"
+                        android:src="@drawable/tv_ic_multistream"
+                        android:visibility="gone"
+                        app:tint="@android:color/white"
+                        tools:visibility="visible" />
+
+                    <ImageButton
                         android:id="@+id/chatMessage"
                         android:layout_width="@dimen/player_button_size"
                         android:layout_height="@dimen/player_button_size"

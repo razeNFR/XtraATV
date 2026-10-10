@@ -2140,7 +2140,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.contentDescription = getString(label)
                 }
                 button
-            } + listOfNotNull(streamList, statsForNerds, chatMessage)
+            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream)
             buttons.forEach { button ->
                 button.setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
@@ -2156,6 +2156,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             statsForNerds?.setOnClickListener {
                 showController(force = true)
                 toggleStatsForNerds()
+            }
+            if (playbackService?.type == BasePlaybackService.STREAM) {
+                multiStream?.visibility = View.VISIBLE
+                multiStream?.setOnClickListener {
+                    hideController()
+                    (activity as? MainActivity)?.let { activity ->
+                        TvMultiStreamPicker.show(activity, Stream(
+                            id = playbackService?.streamId,
+                            channelId = playbackService?.channelId,
+                            channelLogin = playbackService?.channelLogin,
+                            channelName = playbackService?.channelName,
+                            gameName = playbackService?.gameName,
+                            title = playbackService?.title,
+                        ))
+                    }
+                }
             }
             val isLoggedIn = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
                     !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank()

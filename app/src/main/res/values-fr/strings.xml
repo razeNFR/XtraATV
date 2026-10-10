@@ -600,4 +600,8 @@
     <string name="tv_message_hint">Message</string>
     <string name="adblock">Bloqueur de pub</string>
     <string name="adblock_summary">Pendant une pub, bascule sur un flux sans pub d\'un autre type de lecteur (comme le script VAFT), masque la pub si aucun n\'est disponible. Fonctionne sans proxy.</string>
+    <string name="tv_multistream">Multi-stream</string>
+    <string name="tv_multistream_pick">Choisis jusqu\'à 4 streams</string>
+    <string name="tv_multistream_max">%1$d streams maximum</string>
+    <string name="tv_multistream_watch">Regarder</string>
 </resources>

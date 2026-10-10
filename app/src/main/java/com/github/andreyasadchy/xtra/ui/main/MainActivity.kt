@@ -124,6 +124,7 @@ class MainActivity : AppCompatActivity() {
         const val INTENT_START_AUDIO_ONLY = "com.github.andreyasadchy.xtra.START_AUDIO_ONLY"
         const val INTENT_PLAY_PAUSE_PLAYER = "com.github.andreyasadchy.xtra.PLAY_PAUSE_PLAYER"
         const val INTENT_CLOSE_PLAYER = "com.github.andreyasadchy.xtra.CLOSE_PLAYER"
+        private const val MULTI_STREAM_TAG = "multiStream"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -1144,6 +1145,25 @@ class MainActivity : AppCompatActivity() {
         val index = queue.indexOfFirst { it.channelLogin != null && it.channelLogin == currentStreamLogin }
         val next = queue.getOrNull(Math.floorMod(index + offset, queue.size)) ?: return
         startStream(next)
+    }
+
+    /** TV multi-stream: replaces the player with up to 4 streams shown together. */
+    fun startMultiStream(streams: List<Stream>) {
+        (playerFragment as? PlayerFragment)?.let {
+            it.close()
+            closePlayer()
+        }
+        setMainContentFocusable(false)
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.playerContainer, com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment.newInstance(streams), MULTI_STREAM_TAG)
+            .commit()
+    }
+
+    fun closeMultiStream() {
+        supportFragmentManager.findFragmentByTag(MULTI_STREAM_TAG)?.let {
+            supportFragmentManager.beginTransaction().remove(it).commitNow()
+        }
+        setMainContentFocusable(true)
     }
 
     fun showStreamSwitcher() {
