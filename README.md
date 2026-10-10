@@ -77,14 +77,12 @@ Twitch only gives the 1440p qualities to its website client with a logged in acc
 |:-:|:-:|
 | ![Side menu](docs/screenshots/menu.jpg) | ![Home](docs/screenshots/home.jpg) |
 | Leanback side menu | Home with rows and live preview |
-| ![Category](docs/screenshots/category.jpg) | ![Sort panel](docs/screenshots/sort.jpg) |
-| A category with the TV header | Sort and filters panel |
-| ![Player](docs/screenshots/player.jpg) | ![Multi-stream](docs/screenshots/multistream.jpg) |
-| Player with the chat overlay | Multi-stream of 4 streams |
-| ![Chat layout](docs/screenshots/chat_layout.jpg) | ![Stats for nerds](docs/screenshots/stats.jpg) |
-| Chat layout panel | Stats for nerds |
-| ![Channel](docs/screenshots/channel.jpg) | ![Search](docs/screenshots/search.jpg) |
-| Channel page | Search with the mic |
+| ![Games](docs/screenshots/games.jpg) | ![Category](docs/screenshots/category.jpg) |
+| Games | A category with the TV header |
+| ![Sort panel](docs/screenshots/sort.jpg) | ![Player](docs/screenshots/player.jpg) |
+| Sort and filters panel | Player with the controls and the chat overlay |
+| ![Search](docs/screenshots/search.jpg) | |
+| Search with the mic | |
 
 ## Building
 
