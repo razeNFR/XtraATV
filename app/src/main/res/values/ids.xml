@@ -8,4 +8,5 @@
     <item name="tvRowsHighlighted" type="id" />
     <item name="tvVoiceSearch" type="id" />
     <item name="tvSearchBar" type="id" />
+    <item name="tvHome" type="id" />
 </resources>

@@ -621,4 +621,7 @@
     <string name="tv_chat_bottom_left">Kiri bawah</string>
     <string name="tv_chat_top_left">Kiri atas</string>
     <string name="tv_reset">Atur ulang</string>
+    <string name="tv_home">Beranda</string>
+    <string name="tv_followed_live">Saluran yang diikuti sedang live</string>
+    <string name="tv_see_all">Lihat semua</string>
 </resources>

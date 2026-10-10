@@ -620,4 +620,7 @@
     <string name="tv_chat_bottom_left">左下</string>
     <string name="tv_chat_top_left">左上</string>
     <string name="tv_reset">重置</string>
+    <string name="tv_home">首页</string>
+    <string name="tv_followed_live">关注的频道正在直播</string>
+    <string name="tv_see_all">查看全部</string>
 </resources>

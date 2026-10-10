@@ -116,6 +116,7 @@ dependencies {
     implementation(libs.media3.session)
 
     implementation(libs.coil)
+    implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     implementation(libs.coil.okhttp)
 

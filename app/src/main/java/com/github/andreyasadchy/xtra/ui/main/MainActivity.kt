@@ -792,7 +792,9 @@ class MainActivity : AppCompatActivity() {
         }
         if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && !isTvMenuShown) {
             val focus = currentFocus
-            if (focus != null && focus.isInside(binding.navHostFragment) && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
+            if (focus != null && focus.isInside(binding.navHostFragment) && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true &&
+                focus.parent !is androidx.compose.ui.platform.ComposeView
+            ) {
                 val next = FocusFinder.getInstance().findNextFocus(binding.root, focus, View.FOCUS_LEFT)
                 if (next == null || !next.isInside(binding.navHostFragment)) {
                     showTvMenu(true)
@@ -909,6 +911,7 @@ class MainActivity : AppCompatActivity() {
         val composeView = binding.tvSideMenu ?: return
         val icons = mapOf(
             R.id.tvNavSearch to R.drawable.baseline_search_black_24,
+            R.id.tvHomeFragment to R.drawable.baseline_home_black_24,
             R.id.rootGamesFragment to R.drawable.ic_games_black_24dp,
             R.id.rootTopFragment to R.drawable.ic_trending_up_black_24dp,
             R.id.followPagerFragment to R.drawable.ic_favorite_black_24dp,
@@ -948,12 +951,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Opens the side menu from a Compose screen (left on its first card). */
+    fun openTvMenu() {
+        showTvMenu(true)
+    }
+
+    /** Goes to a section of the side menu ("see all" of the TV home). */
+    fun openTvSection(id: Int) {
+        binding.navBar.selectedItemId = id
+        tvMenuState.selected = binding.navBar.selectedItemId
+        focusContentAfterMenu(false)
+    }
+
     private fun focusContentAfterMenu(search: Boolean, tries: Int = 0) {
         binding.root.postDelayed({
             val target = if (search) {
                 binding.navHostFragment.findViewById<View>(R.id.tvSearchBar)
             } else {
                 TvUi.findVisibleGrid(binding.navHostFragment)?.takeIf { (it.adapter?.itemCount ?: 0) > 0 && it.childCount > 0 }
+                    ?: binding.navHostFragment.findViewById<View>(R.id.tvHome)
             }
             when {
                 target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> TvUi.focusFirstItem(target)
@@ -1651,6 +1667,7 @@ class MainActivity : AppCompatActivity() {
                     !TwitchApiHelper.getHelixHeaders(this)[C.HEADER_TOKEN].isNullOrBlank()
             val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
             when {
+                isTv -> it.setStartDestination(R.id.tvHomeFragment)
                 (isLoggedIn && startOnFollowed < 2) || (!isLoggedIn && startOnFollowed == 0) || defaultItem == "2" -> {
                     if (prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
                         it.setStartDestination(R.id.followPagerFragment)
@@ -1674,6 +1691,7 @@ class MainActivity : AppCompatActivity() {
             }
             if (isTv) {
                 menu.add(Menu.NONE, R.id.tvNavSearch, Menu.NONE, R.string.search).setIcon(R.drawable.baseline_search_black_24)
+                menu.add(Menu.NONE, R.id.tvHomeFragment, Menu.NONE, R.string.tv_home).setIcon(R.drawable.baseline_home_black_24)
             }
             if (isTv || tabList.any { it.split(':')[2] != "0" }) {
                 tabList.forEach {

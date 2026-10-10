@@ -620,4 +620,7 @@
     <string name="tv_chat_bottom_left">أسفل اليسار</string>
     <string name="tv_chat_top_left">أعلى اليسار</string>
     <string name="tv_reset">إعادة الضبط</string>
+    <string name="tv_home">الرئيسية</string>
+    <string name="tv_followed_live">القنوات المتابَعة في بث مباشر</string>
+    <string name="tv_see_all">عرض الكل</string>
 </resources>

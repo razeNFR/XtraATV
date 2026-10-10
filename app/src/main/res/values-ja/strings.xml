@@ -620,4 +620,7 @@
     <string name="tv_chat_bottom_left">左下</string>
     <string name="tv_chat_top_left">左上</string>
     <string name="tv_reset">リセット</string>
+    <string name="tv_home">ホーム</string>
+    <string name="tv_followed_live">フォロー中のライブ配信</string>
+    <string name="tv_see_all">すべて表示</string>
 </resources>

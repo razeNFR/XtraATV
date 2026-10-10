@@ -621,4 +621,7 @@
     <string name="tv_chat_bottom_left">Sol alt</string>
     <string name="tv_chat_top_left">Sol üst</string>
     <string name="tv_reset">Sıfırla</string>
+    <string name="tv_home">Ana sayfa</string>
+    <string name="tv_followed_live">Takip edilen canlı kanallar</string>
+    <string name="tv_see_all">Tümünü gör</string>
 </resources>

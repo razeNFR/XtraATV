@@ -620,4 +620,7 @@
     <string name="tv_chat_bottom_left">Слева внизу</string>
     <string name="tv_chat_top_left">Слева вверху</string>
     <string name="tv_reset">Сбросить</string>
+    <string name="tv_home">Главная</string>
+    <string name="tv_followed_live">Отслеживаемые каналы в эфире</string>
+    <string name="tv_see_all">Показать все</string>
 </resources>

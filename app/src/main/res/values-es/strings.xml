@@ -625,4 +625,7 @@
     <string name="tv_chat_bottom_left">Abajo a la izquierda</string>
     <string name="tv_chat_top_left">Arriba a la izquierda</string>
     <string name="tv_reset">Restablecer</string>
+    <string name="tv_home">Inicio</string>
+    <string name="tv_followed_live">Canales seguidos en directo</string>
+    <string name="tv_see_all">Ver todo</string>
 </resources>

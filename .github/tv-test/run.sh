@@ -28,6 +28,7 @@ while read -r cmd arg rest <&3; do
     longkey) adb shell input keyevent --longpress "$(code "$arg")"; sleep "${rest:-1}" ;;
     sleep) sleep "$arg" ;;
     text) adb shell input text "$arg"; sleep 1 ;;
+    script) bash ".github/tv-test/$arg" "$OUT" >> $OUT/script.log 2>&1 ;;
     shot)
       n=$((n+1))
       name=$(printf "%02d_%s" $n "$arg")
@@ -39,6 +40,8 @@ done 3< .github/tv-test/steps.txt
 adb logcat -d -b crash > $OUT/crash.log 2>&1
 echo "=== FOCUS ==="
 cat $OUT/focus.log
+echo "=== SCRIPTS ==="
+cat $OUT/script.log 2>/dev/null
 echo "=== TV LOG ==="
 adb logcat -d -s XtraTv:D | tail -120
 echo "=== CRASHES ==="

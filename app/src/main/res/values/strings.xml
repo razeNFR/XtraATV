@@ -639,4 +639,7 @@
     <string name="tv_chat_bottom_left">Bottom left</string>
     <string name="tv_chat_top_left">Top left</string>
     <string name="tv_reset">Reset</string>
+    <string name="tv_home">Home</string>
+    <string name="tv_followed_live">Followed channels live</string>
+    <string name="tv_see_all">See all</string>
 </resources>

@@ -1,39 +1,38 @@
-# Start: leanback menu (Compose) focused on Popular
+# Start: side menu focused on Home, the Compose home behind
 shot start_menu
-# The menu scrolls down to its last entry
-keys DOWN,DOWN,DOWN,DOWN,DOWN,DOWN 1
-shot menu_bottom
-# Search at the top of the menu
-keys UP,UP,UP,UP,UP,UP,UP 1
+key RIGHT 3
+shot home
+key DOWN 2
+shot home_row2
+keys RIGHT,RIGHT,RIGHT 2
+shot home_row2_right
+key DOWN 2
+shot home_games
+keys LEFT,LEFT,LEFT,LEFT,LEFT,LEFT 1
+shot home_left_menu
+# Menu: search at the top
+keys UP,UP,UP 1
 shot menu_top
 key DPAD_CENTER 6
 shot search
 key BACK 3
-shot after_search
 # Games then a category
 key LEFT 2
-keys DOWN 1
+keys DOWN,DOWN 1
 key DPAD_CENTER 8
-key RIGHT 2
 shot games
 key DPAD_CENTER 10
 shot category
-# Header: tabs and sort pill
 key UP 1
-shot category_tabs
+shot category_sort_pill
 key DPAD_CENTER 3
 shot sort_panel
-key DOWN 1
-shot sort_panel_down
 key BACK 2
-shot after_sort_panel
-# Fast scrolling in the grid
 key DOWN 1
 keys DOWN,DOWN,DOWN,DOWN,DOWN 1
 shot fast_scroll
 key BACK 2
 shot back_to_top
-# Player and back
 key DPAD_CENTER 25
 shot player
 key DPAD_CENTER 1
@@ -41,3 +40,11 @@ shot player_controls
 key BACK 1
 key BACK 3
 shot player_closed
+# Following with only the Live tab and a local follow of a live channel
+script following_only_live.sh
+shot following_restart
+keys DOWN,DOWN,DOWN 1
+key DPAD_CENTER 8
+shot following_only_live
+key RIGHT 2
+shot following_only_live_focus
