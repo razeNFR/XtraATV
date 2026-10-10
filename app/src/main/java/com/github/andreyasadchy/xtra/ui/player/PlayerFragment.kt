@@ -685,6 +685,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     fun start() {
         setupTvHud()
+        setupSeekPreview()
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -1931,6 +1932,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     progressBar.setDuration(duration)
                     progressBar.setPosition(tvScrubPosition)
                     position.text = DateUtils.formatElapsedTime(tvScrubPosition / 1000)
+                    if (!isLive) {
+                        seekPreview?.show(tvScrubPosition, duration)
+                    }
                     root.removeCallbacks(controllerHideAction)
                 }
                 KeyEvent.ACTION_UP -> {
@@ -1938,6 +1942,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         val newPosition = tvScrubPosition
                         tvScrubPosition = -1
                         progressBar.isPressed = false
+                        seekPreview?.hide()
                         val dvrStream = getTvDvrStream()
                         when {
                             isLive -> {
@@ -1962,6 +1967,41 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private var tvStatsView: TextView? = null
+    private var seekPreview: TvSeekPreview? = null
+
+    /** TV: storyboard thumbnails above the timeline of VODs. */
+    private fun setupSeekPreview() {
+        val videoId = playbackService?.videoId
+        if (!isTv || playbackService?.type != BasePlaybackService.VIDEO || videoId.isNullOrBlank() || seekPreview != null) {
+            return
+        }
+        val preview = TvSeekPreview(
+            viewLifecycleOwner.lifecycleScope,
+            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.okHttpClient.value,
+            binding.playerControls.root,
+            binding.playerControls.progressBar,
+        )
+        seekPreview = preview
+        val previewUrl = playbackService?.videoAnimatedPreviewURL
+        if (previewUrl != null) {
+            preview.load(previewUrl, videoId)
+        } else {
+            viewLifecycleOwner.lifecycleScope.launch {
+                val url = try {
+                    (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryVideo(
+                        requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                        TwitchApiHelper.getGQLHeaders(requireContext()),
+                        videoId
+                    ).data?.video?.animatedPreviewURL
+                } catch (e: Exception) {
+                    null
+                }
+                if (url != null && view != null) {
+                    preview.load(url, videoId)
+                }
+            }
+        }
+    }
     private var chatComposerInput: android.widget.EditText? = null
     private val chatVoiceLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         com.github.andreyasadchy.xtra.ui.view.TvVoice.getText(result)?.let { text ->
@@ -2064,6 +2104,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             } else {
                 hideTooltip()
+                seekPreview?.hide()
             }
         }
     }
@@ -2943,6 +2984,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        seekPreview = null
+        tvStatsView = null
         (activity as? MainActivity)?.let {
             if (it.playerFragment == null || it.playerFragment === this) {
                 it.setMainContentFocusable(true)
