@@ -623,6 +623,12 @@
     <string name="tv_chat_mode_side">配信の横</string>
     <string name="tv_chat_mode_below">配信の下</string>
     <string name="tv_chat_text_size">文字サイズ</string>
+    <string name="tv_chat_right">右</string>
+    <string name="tv_chat_left">左</string>
+    <string name="tv_chat_under">下</string>
+    <string name="tv_chat_above">上</string>
+    <string name="tv_chat_one_line">1 行 (スクロール)</string>
+    <string name="tv_chat_lines">%d 行</string>
     <string name="tv_chat_bottom_right">右下</string>
     <string name="tv_chat_top_right">右上</string>
     <string name="tv_chat_bottom_left">左下</string>

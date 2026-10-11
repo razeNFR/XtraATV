@@ -623,6 +623,12 @@
     <string name="tv_chat_mode_side">Рядом с трансляцией</string>
     <string name="tv_chat_mode_below">Под трансляцией</string>
     <string name="tv_chat_text_size">Размер текста</string>
+    <string name="tv_chat_right">Справа</string>
+    <string name="tv_chat_left">Слева</string>
+    <string name="tv_chat_under">Снизу</string>
+    <string name="tv_chat_above">Сверху</string>
+    <string name="tv_chat_one_line">1 строка (бегущая)</string>
+    <string name="tv_chat_lines">Строк: %d</string>
     <string name="tv_chat_bottom_right">Справа внизу</string>
     <string name="tv_chat_top_right">Справа вверху</string>
     <string name="tv_chat_bottom_left">Слева внизу</string>

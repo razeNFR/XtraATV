@@ -2092,7 +2092,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
                 // under (or above) the stream: the chat takes a band the whole width of the screen
                 2 -> {
-                    val bandHeight = chatHeight.coerceAtMost((screenHeight * 0.6f).toInt())
+                    // as many lines of chat as chosen: the height of a line follows the size of the text and of the emotes
+                    val sizeModifier = prefs.getInt(C.CHAT_SIZE_MODIFIER, 100) / 100f
+                    val textHeight = android.util.TypedValue.applyDimension(
+                        android.util.TypedValue.COMPLEX_UNIT_SP, (prefs.getString(C.CHAT_TEXT_SIZE, "14")?.toFloatOrNull() ?: 14f) * sizeModifier, metrics
+                    ) * 1.35f
+                    val emoteHeight = (prefs.getString(C.CHAT_EMOTE_SIZE, "29.5")?.toFloatOrNull() ?: 29.5f) * sizeModifier * metrics.density
+                    val lineHeight = maxOf(textHeight, emoteHeight) + 2 * metrics.density
+                    val lines = prefs.getInt(C.TV_CHAT_LINES, 3)
+                    val bandHeight = (lineHeight * lines + 8 * metrics.density).toInt().coerceAtMost((screenHeight * 0.6f).toInt())
                     playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
                         width = ViewGroup.LayoutParams.MATCH_PARENT
                         height = screenHeight - bandHeight
@@ -2131,6 +2139,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
             }
+            chatFragment?.setSingleLine(mode == 2 && prefs.getInt(C.TV_CHAT_LINES, 3) == 1)
             chatLayout.translationY = if (playerControls.root.isVisible) getTvChatLift() else 0f
             chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_background)
             chatLayout.background?.mutate()?.alpha = (prefs.getInt(C.TV_CHAT_OPACITY, 55) * 255 / 100).coerceIn(0, 255)
@@ -2148,19 +2157,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return if (position == 0 || position == 2) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
     }
 
-    /** Panel with sliders to place the chat, on the opposite side so the chat can be seen while it changes. */
+    /**
+     * Panel with sliders to place the chat, on the opposite side so the chat can be seen while it changes.
+     * Its rows follow the display: corners over the stream, sides next to it, above or under it.
+     */
     private fun showChatLayoutPanel() {
         val context = requireContext()
         val prefs = context.prefs()
         if (!binding.chatLayout.isVisible) {
             showChatLayout()
         }
-        val positions = listOf(
+        val corners = listOf(
             getString(R.string.tv_chat_bottom_right),
             getString(R.string.tv_chat_top_right),
             getString(R.string.tv_chat_bottom_left),
             getString(R.string.tv_chat_top_left),
         )
+        val sides = listOf(getString(R.string.tv_chat_right), getString(R.string.tv_chat_left))
+        val bands = listOf(getString(R.string.tv_chat_under), getString(R.string.tv_chat_above))
         val modes = listOf(
             getString(R.string.tv_chat_mode_overlay),
             getString(R.string.tv_chat_mode_side),
@@ -2169,9 +2183,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(context) { dismiss ->
             val position = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_POSITION, 0)) }
             val mode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_MODE, 0)) }
+            val left = position.intValue == 2 || position.intValue == 3
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_chat_layout),
-                alignEnd = position.intValue == 2 || position.intValue == 3,
+                alignEnd = left && mode.intValue != 2,
             ) {
                 val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
                 val update: (String, Int) -> Unit = { key, value ->
@@ -2184,22 +2199,51 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     mode.intValue = it
                     update(C.TV_CHAT_MODE, it)
                 }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), positions, position.intValue) {
-                    position.intValue = it
-                    update(C.TV_CHAT_POSITION, it)
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_text_size), prefs.getInt(C.CHAT_SIZE_MODIFIER, 100), 60..200, step = 10, valueText = { "$it %" }) {
-                    prefs.edit { putInt(C.CHAT_SIZE_MODIFIER, it) }
-                    chatFragment?.applySizeModifier()
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
-                    update(C.TV_CHAT_WIDTH, it)
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
-                    update(C.TV_CHAT_HEIGHT, it)
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_margin), prefs.getInt(C.TV_CHAT_MARGIN, 0), 0..64, step = 4, valueText = { "$it dp" }) {
-                    update(C.TV_CHAT_MARGIN, it)
+                androidx.compose.runtime.key(mode.intValue) {
+                    when (mode.intValue) {
+                        1 -> {
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), sides, if (left) 1 else 0) {
+                                position.intValue = if (it == 1) 2 else 0
+                                update(C.TV_CHAT_POSITION, position.intValue)
+                            }
+                            textSizeRow(prefs)
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
+                                update(C.TV_CHAT_WIDTH, it)
+                            }
+                        }
+                        2 -> {
+                            val top = position.intValue == 1 || position.intValue == 3
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), bands, if (top) 1 else 0) {
+                                position.intValue = if (it == 1) 1 else 0
+                                update(C.TV_CHAT_POSITION, position.intValue)
+                            }
+                            textSizeRow(prefs)
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                getString(R.string.tv_chat_height),
+                                prefs.getInt(C.TV_CHAT_LINES, 3),
+                                1..12,
+                                valueText = { if (it == 1) getString(R.string.tv_chat_one_line) else getString(R.string.tv_chat_lines, it) }
+                            ) {
+                                update(C.TV_CHAT_LINES, it)
+                            }
+                        }
+                        else -> {
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), corners, position.intValue) {
+                                position.intValue = it
+                                update(C.TV_CHAT_POSITION, it)
+                            }
+                            textSizeRow(prefs)
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
+                                update(C.TV_CHAT_WIDTH, it)
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
+                                update(C.TV_CHAT_HEIGHT, it)
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_margin), prefs.getInt(C.TV_CHAT_MARGIN, 0), 0..64, step = 4, valueText = { "$it dp" }) {
+                                update(C.TV_CHAT_MARGIN, it)
+                            }
+                        }
+                    }
                 }
                 com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_opacity), prefs.getInt(C.TV_CHAT_OPACITY, 55), 0..100, step = 5, valueText = { "$it %" }) {
                     update(C.TV_CHAT_OPACITY, it)
@@ -2213,15 +2257,28 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         remove(C.TV_CHAT_MARGIN)
                         remove(C.TV_CHAT_OPACITY)
                         remove(C.TV_CHAT_MODE)
+                        remove(C.TV_CHAT_LINES)
                         remove(C.CHAT_SIZE_MODIFIER)
                     }
+                    chatFragment?.applySizeModifier()
                     if (_binding != null) {
                         applyTvChatLayout()
                     }
-                    chatFragment?.applySizeModifier()
                     dismiss()
                 }
                 androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
+            }
+        }
+    }
+
+    @androidx.compose.runtime.Composable
+    private fun textSizeRow(prefs: android.content.SharedPreferences) {
+        com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_text_size), prefs.getInt(C.CHAT_SIZE_MODIFIER, 100), 60..200, step = 10, valueText = { "$it %" }) {
+            prefs.edit { putInt(C.CHAT_SIZE_MODIFIER, it) }
+            chatFragment?.applySizeModifier()
+            // the band under the stream is as high as its lines
+            if (_binding != null) {
+                applyTvChatLayout()
             }
         }
     }

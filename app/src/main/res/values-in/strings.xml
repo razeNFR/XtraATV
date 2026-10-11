@@ -624,6 +624,12 @@
     <string name="tv_chat_mode_side">Di samping stream</string>
     <string name="tv_chat_mode_below">Di bawah stream</string>
     <string name="tv_chat_text_size">Ukuran teks</string>
+    <string name="tv_chat_right">Kanan</string>
+    <string name="tv_chat_left">Kiri</string>
+    <string name="tv_chat_under">Di bawah</string>
+    <string name="tv_chat_above">Di atas</string>
+    <string name="tv_chat_one_line">1 baris (berjalan)</string>
+    <string name="tv_chat_lines">%d baris</string>
     <string name="tv_chat_bottom_right">Kanan bawah</string>
     <string name="tv_chat_top_right">Kanan atas</string>
     <string name="tv_chat_bottom_left">Kiri bawah</string>

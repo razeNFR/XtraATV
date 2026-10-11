@@ -7,6 +7,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentDialog
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -177,7 +178,14 @@ fun SidePanel(
                 Text(subtitle, fontSize = 14.sp, color = TvColors.secondaryText)
             }
             Spacer(Modifier.height(24.dp))
-            content()
+            // the rows scroll, the focused one is always brought into the screen
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+            ) {
+                content()
+            }
         }
     }
 }

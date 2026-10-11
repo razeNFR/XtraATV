@@ -43,18 +43,20 @@ object TvStreamSwitcher {
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.tv_player_scrim_bottom)
-            setPadding(horizontalPadding, (48 * density).toInt(), horizontalPadding, activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical))
+            // no side padding here: the row goes to the edges of the screen, the cards are not cut while it scrolls
+            setPadding(0, (48 * density).toInt(), 0, activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical))
         }
         root.addView(TextView(activity).apply {
             text = activity.getString(R.string.tv_switch_stream)
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 20f
-            setPadding((10 * density).toInt(), 0, 0, (4 * density).toInt())
+            setPadding(horizontalPadding + (10 * density).toInt(), 0, 0, (4 * density).toInt())
         })
         val recyclerView = RecyclerView(activity).apply {
             layoutManager = LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false)
             clipToPadding = false
-            setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
+            clipChildren = false
+            setPadding(horizontalPadding, (8 * density).toInt(), horizontalPadding, (8 * density).toInt())
         }
         // live previews like on the lists, the stream behind is silenced while a preview with sound plays
         val preview = if (activity.prefs().getBoolean(C.UI_TV_PREVIEW, true)) {

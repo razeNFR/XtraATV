@@ -624,6 +624,12 @@
     <string name="tv_chat_mode_side">Yayının yanında</string>
     <string name="tv_chat_mode_below">Yayının altında</string>
     <string name="tv_chat_text_size">Yazı boyutu</string>
+    <string name="tv_chat_right">Sağ</string>
+    <string name="tv_chat_left">Sol</string>
+    <string name="tv_chat_under">Altta</string>
+    <string name="tv_chat_above">Üstte</string>
+    <string name="tv_chat_one_line">1 satır (kayan)</string>
+    <string name="tv_chat_lines">%d satır</string>
     <string name="tv_chat_bottom_right">Sağ alt</string>
     <string name="tv_chat_top_right">Sağ üst</string>
     <string name="tv_chat_bottom_left">Sol alt</string>

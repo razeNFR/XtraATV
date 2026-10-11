@@ -623,6 +623,12 @@
     <string name="tv_chat_mode_side">À côté du stream</string>
     <string name="tv_chat_mode_below">Sous le stream</string>
     <string name="tv_chat_text_size">Taille du texte</string>
+    <string name="tv_chat_right">À droite</string>
+    <string name="tv_chat_left">À gauche</string>
+    <string name="tv_chat_under">En dessous</string>
+    <string name="tv_chat_above">Au-dessus</string>
+    <string name="tv_chat_one_line">1 ligne (défilante)</string>
+    <string name="tv_chat_lines">%d lignes</string>
     <string name="tv_chat_bottom_right">En bas à droite</string>
     <string name="tv_chat_top_right">En haut à droite</string>
     <string name="tv_chat_bottom_left">En bas à gauche</string>

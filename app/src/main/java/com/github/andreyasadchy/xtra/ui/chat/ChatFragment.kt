@@ -206,7 +206,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 super.onScrollStateChanged(recyclerView, newState)
                                 isChatTouched = newState == RecyclerView.SCROLL_STATE_DRAGGING
                                 val offset = recyclerView.computeVerticalScrollOffset()
-                                if (offset < 0) {
+                                if (offset < 0 || this@ChatFragment.adapter?.singleLine == true) {
                                     btnDown.isVisible = false
                                 } else {
                                     val extent = recyclerView.computeVerticalScrollExtent()
@@ -220,6 +220,12 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 }
                             }
                         })
+                    }
+                    // TV chat on one line under the stream
+                    if (resources.getBoolean(R.bool.isTv) && requireContext().prefs().getInt(C.TV_CHAT_MODE, 0) == 2 &&
+                        requireContext().prefs().getInt(C.TV_CHAT_LINES, 3) == 1
+                    ) {
+                        setSingleLine(true)
                     }
                     btnDown.setOnClickListener {
                         view.post {
@@ -722,7 +728,11 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                         adapter.notifyItemRangeRemoved(0, removeCount)
                                     }
                                     if (!isChatTouched && binding.btnDown.isGone) {
-                                        binding.recyclerView.scrollToPosition(lastIndex - removeCount)
+                                        if (adapter.singleLine) {
+                                            binding.recyclerView.smoothScrollToPosition(lastIndex - removeCount)
+                                        } else {
+                                            binding.recyclerView.scrollToPosition(lastIndex - removeCount)
+                                        }
                                     }
                                 }
                                 messageDialog?.newMessage(message)
@@ -886,6 +896,40 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             }
         }
         viewModel.autoReconnect = true
+    }
+
+    /**
+     * TV chat on one line under the stream: the list goes sideways and the new messages come in from the right,
+     * the whole line slides to the left.
+     */
+    fun setSingleLine(enabled: Boolean) {
+        val adapter = adapter ?: return
+        val binding = _binding ?: return
+        if (adapter.singleLine == enabled) {
+            return
+        }
+        adapter.singleLine = enabled
+        binding.btnDown.visibility = View.GONE
+        binding.recyclerView.layoutManager = if (enabled) {
+            object : LinearLayoutManager(requireContext(), HORIZONTAL, false) {
+                override fun smoothScrollToPosition(recyclerView: RecyclerView, state: RecyclerView.State, position: Int) {
+                    // slower than a normal scroll, the line can be read while it moves
+                    val scroller = object : androidx.recyclerview.widget.LinearSmoothScroller(recyclerView.context) {
+                        override fun calculateSpeedPerPixel(displayMetrics: android.util.DisplayMetrics) = 6f / displayMetrics.densityDpi
+                    }
+                    scroller.targetPosition = position
+                    startSmoothScroll(scroller)
+                }
+            }.apply { stackFromEnd = true }
+        } else {
+            LinearLayoutManager(requireContext()).apply { stackFromEnd = true }
+        }
+        @Suppress("NotifyDataSetChanged")
+        adapter.notifyDataSetChanged()
+        val lastIndex = synchronized(viewModel.chatMessages) { viewModel.chatMessages.lastIndex }
+        if (lastIndex >= 0) {
+            binding.recyclerView.scrollToPosition(lastIndex)
+        }
     }
 
     /** Size of the text and images of the chat, changed from the chat layout panel of the TV player. */

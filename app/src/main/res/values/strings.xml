@@ -642,6 +642,12 @@
     <string name="tv_chat_mode_side">Next to the stream</string>
     <string name="tv_chat_mode_below">Under the stream</string>
     <string name="tv_chat_text_size">Text size</string>
+    <string name="tv_chat_right">Right</string>
+    <string name="tv_chat_left">Left</string>
+    <string name="tv_chat_under">Under the stream</string>
+    <string name="tv_chat_above">Above the stream</string>
+    <string name="tv_chat_one_line">1 line (scrolling)</string>
+    <string name="tv_chat_lines">%d lines</string>
     <string name="tv_chat_bottom_right">Bottom right</string>
     <string name="tv_chat_top_right">Top right</string>
     <string name="tv_chat_bottom_left">Bottom left</string>
