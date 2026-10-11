@@ -305,8 +305,8 @@ class MainActivity : AppCompatActivity() {
                                     )
                                 }
                                 if (!TwitchApiHelper.checkedUpdates &&
-                                    prefs.getBoolean(C.UPDATE_CHECK_ENABLED, false) &&
-                                    (prefs.getString(C.UPDATE_CHECK_FREQUENCY, "7")?.toIntOrNull() ?: 7) * 86400000 + tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) < System.currentTimeMillis()
+                                    prefs.getBoolean(C.UPDATE_CHECK_ENABLED, true) &&
+                                    (prefs.getString(C.UPDATE_CHECK_FREQUENCY, "1")?.toIntOrNull() ?: 1) * 86400000 + tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) < System.currentTimeMillis()
                                 ) {
                                     viewModel.checkUpdates(
                                         prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
@@ -1352,8 +1352,15 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val index = queue.indexOfFirst { it.channelLogin != null && it.channelLogin == currentStreamLogin }
-        val next = queue.getOrNull(Math.floorMod(index + offset, queue.size)) ?: return
+        val nextIndex = Math.floorMod(index + offset, queue.size)
+        val next = queue.getOrNull(nextIndex) ?: return
         startStream(next)
+        // the streamers that left and right go to now
+        com.github.andreyasadchy.xtra.ui.player.TvSwitchOverlay.show(
+            this,
+            queue.getOrNull(Math.floorMod(nextIndex - 1, queue.size)),
+            queue.getOrNull(Math.floorMod(nextIndex + 1, queue.size)),
+        )
     }
 
     /** TV multi-stream: replaces the player with up to 4 streams shown together. */
@@ -1510,6 +1517,8 @@ class MainActivity : AppCompatActivity() {
      * and restores the previously focused item when the player is minimized or closed.
      */
     fun setMainContentFocusable(focusable: Boolean) {
+        // the previews of the lists behind a player stop, with their sound
+        com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended = !focusable
         if (focusable) {
             if (binding.navHostFragment.descendantFocusability != ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
                 return

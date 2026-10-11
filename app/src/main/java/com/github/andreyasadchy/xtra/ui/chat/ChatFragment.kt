@@ -206,7 +206,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 super.onScrollStateChanged(recyclerView, newState)
                                 isChatTouched = newState == RecyclerView.SCROLL_STATE_DRAGGING
                                 val offset = recyclerView.computeVerticalScrollOffset()
-                                if (offset < 0) {
+                                if (offset < 0 || this@ChatFragment.adapter?.singleLine == true) {
                                     btnDown.isVisible = false
                                 } else {
                                     val extent = recyclerView.computeVerticalScrollExtent()
@@ -214,12 +214,19 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                     val percentage = (100f * offset / (range - extent).toFloat())
                                     btnDown.isVisible = percentage < 100f
                                 }
-                                if (showChatStatus && chatStatus.isGone) {
+                                // not on the one line chat: it slides at every message, the box would never go away
+                                if (showChatStatus && chatStatus.isGone && this@ChatFragment.adapter?.singleLine != true) {
                                     chatStatus.visibility = View.VISIBLE
                                     chatStatus.postDelayed({ chatStatus.visibility = View.GONE }, 5000)
                                 }
                             }
                         })
+                    }
+                    // TV chat on one line under the stream
+                    if (resources.getBoolean(R.bool.isTv) && requireContext().prefs().getInt(C.TV_CHAT_MODE, 0) == 2 &&
+                        requireContext().prefs().getInt(C.TV_CHAT_LINES, 3) == 1
+                    ) {
+                        setSingleLine(true)
                     }
                     btnDown.setOnClickListener {
                         view.post {
@@ -370,8 +377,10 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                         chatStatus.visibility = View.GONE
                                     } else {
                                         showChatStatus = true
-                                        chatStatus.visibility = View.VISIBLE
-                                        chatStatus.postDelayed({ chatStatus.visibility = View.GONE }, 5000)
+                                        if (adapter?.singleLine != true) {
+                                            chatStatus.visibility = View.VISIBLE
+                                            chatStatus.postDelayed({ chatStatus.visibility = View.GONE }, 5000)
+                                        }
                                     }
                                     viewModel.roomState.value = null
                                 }
@@ -722,7 +731,11 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                         adapter.notifyItemRangeRemoved(0, removeCount)
                                     }
                                     if (!isChatTouched && binding.btnDown.isGone) {
-                                        binding.recyclerView.scrollToPosition(lastIndex - removeCount)
+                                        if (adapter.singleLine) {
+                                            binding.recyclerView.smoothScrollToPosition(lastIndex - removeCount)
+                                        } else {
+                                            binding.recyclerView.scrollToPosition(lastIndex - removeCount)
+                                        }
                                     }
                                 }
                                 messageDialog?.newMessage(message)
@@ -886,6 +899,55 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             }
         }
         viewModel.autoReconnect = true
+    }
+
+    /**
+     * TV chat on one line under the stream: the list goes sideways and the new messages come in from the right,
+     * the whole line slides to the left.
+     */
+    fun setSingleLine(enabled: Boolean) {
+        val adapter = adapter ?: return
+        val binding = _binding ?: return
+        if (adapter.singleLine == enabled) {
+            return
+        }
+        adapter.singleLine = enabled
+        binding.btnDown.visibility = View.GONE
+        binding.chatStatus.visibility = View.GONE
+        binding.recyclerView.layoutManager = if (enabled) {
+            object : LinearLayoutManager(requireContext(), HORIZONTAL, false) {
+                override fun smoothScrollToPosition(recyclerView: RecyclerView, state: RecyclerView.State, position: Int) {
+                    // slower than a normal scroll, the line can be read while it moves
+                    val scroller = object : androidx.recyclerview.widget.LinearSmoothScroller(recyclerView.context) {
+                        override fun calculateSpeedPerPixel(displayMetrics: android.util.DisplayMetrics) = 6f / displayMetrics.densityDpi
+                    }
+                    scroller.targetPosition = position
+                    startSmoothScroll(scroller)
+                }
+            }.apply { stackFromEnd = true }
+        } else {
+            LinearLayoutManager(requireContext()).apply { stackFromEnd = true }
+        }
+        @Suppress("NotifyDataSetChanged")
+        adapter.notifyDataSetChanged()
+        val lastIndex = synchronized(viewModel.chatMessages) { viewModel.chatMessages.lastIndex }
+        if (lastIndex >= 0) {
+            binding.recyclerView.scrollToPosition(lastIndex)
+        }
+    }
+
+    /** Size of the text and images of the chat, changed from the chat layout panel of the TV player. */
+    fun applySizeModifier() {
+        val adapter = adapter ?: return
+        val prefs = requireContext().prefs()
+        val sizeModifier = prefs.getInt(C.CHAT_SIZE_MODIFIER, 100).toFloat() / 100f
+        val metrics = resources.displayMetrics
+        adapter.messageTextSize = (prefs.getString(C.CHAT_TEXT_SIZE, "14")?.toFloatOrNull() ?: 14f) * sizeModifier
+        adapter.emoteSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (prefs.getString(C.CHAT_EMOTE_SIZE, "29.5")?.toFloatOrNull() ?: 29.5f) * sizeModifier, metrics).toInt()
+        adapter.badgeSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (prefs.getString(C.CHAT_BADGE_SIZE, "18.5")?.toFloatOrNull() ?: 18.5f) * sizeModifier, metrics).toInt()
+        adapter.gifSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (prefs.getString(C.CHAT_GIF_SIZE, "79.5")?.toFloatOrNull() ?: 79.5f) * sizeModifier, metrics).toInt()
+        @Suppress("NotifyDataSetChanged")
+        adapter.notifyDataSetChanged()
     }
 
     fun reloadEmotes() {

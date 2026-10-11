@@ -1,7 +1,10 @@
 name: Release
 
+# A merge on master with a new versionName publishes the release by itself: tag v<versionName>, release notes from
+# docs/release-notes.md and the release APK. A v* tag pushed by hand publishes it too.
 on:
   push:
+    branches: [ master ]
     tags: [ 'v*' ]
 
 permissions:
@@ -13,21 +16,46 @@ jobs:
     steps:
     - name: Checkout sources
       uses: actions/checkout@v7
+    - name: Version
+      id: version
+      run: |
+        if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          tag="$GITHUB_REF_NAME"
+        else
+          tag="v$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)"
+        fi
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        # on master: nothing to do when this version is already released
+        if [[ "$GITHUB_REF" != refs/tags/* ]] && git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+          echo "$tag is already released"
+        else
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+        fi
     - name: Setup Java
+      if: steps.version.outputs.publish == 'true'
       uses: actions/setup-java@v6
       with:
         java-version: '21'
         distribution: 'temurin'
     - name: Setup Gradle
+      if: steps.version.outputs.publish == 'true'
       uses: gradle/actions/setup-gradle@v6
     - name: Build the release APK
+      if: steps.version.outputs.publish == 'true'
       run: ./gradlew assembleRelease
     - name: Name the APK
-      run: cp app/build/outputs/apk/release/app-release.apk XtraTV-${GITHUB_REF_NAME#v}.apk
+      if: steps.version.outputs.publish == 'true'
+      run: |
+        tag="${{ steps.version.outputs.tag }}"
+        cp app/build/outputs/apk/release/app-release.apk "XtraTV-${tag#v}.apk"
     - name: Publish the release
+      if: steps.version.outputs.publish == 'true'
       uses: softprops/action-gh-release@v2
       with:
-        name: Xtra TV ${{ github.ref_name }}
+        tag_name: ${{ steps.version.outputs.tag }}
+        target_commitish: ${{ github.sha }}
+        name: Xtra TV ${{ steps.version.outputs.tag }}
         body_path: docs/release-notes.md
         files: XtraTV-*.apk
         make_latest: true

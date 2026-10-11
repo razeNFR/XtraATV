@@ -20,6 +20,8 @@ import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentStreamsListItemBinding
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource
+import com.github.andreyasadchy.xtra.ui.view.TvStreamPreview
 import com.github.andreyasadchy.xtra.ui.view.TvCards
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
@@ -41,22 +43,32 @@ object TvStreamSwitcher {
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.tv_player_scrim_bottom)
-            setPadding(horizontalPadding, (48 * density).toInt(), horizontalPadding, activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical))
+            // no side padding here: the row goes to the edges of the screen, the cards are not cut while it scrolls
+            setPadding(0, (48 * density).toInt(), 0, activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical))
         }
         root.addView(TextView(activity).apply {
             text = activity.getString(R.string.tv_switch_stream)
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 20f
-            setPadding((10 * density).toInt(), 0, 0, (4 * density).toInt())
+            setPadding(horizontalPadding + (10 * density).toInt(), 0, 0, (4 * density).toInt())
         })
         val recyclerView = RecyclerView(activity).apply {
             layoutManager = LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false)
             clipToPadding = false
-            setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
-            adapter = Adapter(streams, (250 * density).toInt()) { stream ->
-                dialog.dismiss()
-                activity.startStream(stream)
+            clipChildren = false
+            setPadding(horizontalPadding, (8 * density).toInt(), horizontalPadding, (8 * density).toInt())
+        }
+        // live previews like on the lists, the stream behind is silenced while a preview with sound plays
+        val preview = if (activity.prefs().getBoolean(C.UI_TV_PREVIEW, true)) {
+            TvStreamPreview(recyclerView, inPlayer = true) { playing ->
+                if (TvPreviewSource.hasSound(activity)) {
+                    (activity.playerFragment as? PlayerFragment)?.setDucked(playing)
+                }
             }
+        } else null
+        recyclerView.adapter = Adapter(streams, (250 * density).toInt(), preview) { stream ->
+            dialog.dismiss()
+            activity.startStream(stream)
         }
         root.addView(recyclerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dialog.setContentView(root)
@@ -76,12 +88,16 @@ object TvStreamSwitcher {
                 }
             }
         }
+        dialog.setOnDismissListener {
+            preview?.release()
+        }
         dialog.show()
     }
 
     private class Adapter(
         private val streams: List<Stream>,
         private val itemWidth: Int,
+        private val preview: TvStreamPreview?,
         private val onClick: (Stream) -> Unit,
     ) : RecyclerView.Adapter<Adapter.ViewHolder>() {
 
@@ -101,6 +117,13 @@ object TvStreamSwitcher {
             val context = holder.itemView.context
             with(holder.binding) {
                 root.setOnClickListener { onClick(stream) }
+                root.setOnFocusChangeListener { view, hasFocus ->
+                    if (hasFocus) {
+                        preview?.schedule(view, stream.channelLogin)
+                    } else if (preview?.isPreviewing(view) == true) {
+                        preview.stop()
+                    }
+                }
                 thumbnail.visibility = View.VISIBLE
                 context.imageLoader.enqueue(
                     ImageRequest.Builder(context).apply {

@@ -583,6 +583,9 @@
     <string name="tv_more_actions">更多動作</string>
     <string name="tv_account">帳號</string>
     <string name="tv_stream_preview">所選直播的即時預覽（電視）</string>
+    <string name="xtratv_settings">Xtra TV 設定</string>
+    <string name="xtratv_settings_summary">廣告封鎖、影格率匹配、預覽、首頁和遙控器快捷鍵</string>
+    <string name="tv_preview_sound">預覽聲音</string>
     <string name="close_player">關閉</string>
     <string name="tv_back_minimizes_player">返回鍵將播放器縮小而不是關閉</string>
     <string name="tv_switch_stream">其他直播</string>
@@ -615,6 +618,17 @@
     <string name="tv_chat_height">高度</string>
     <string name="tv_chat_margin">與邊緣的距離</string>
     <string name="tv_chat_opacity">背景不透明度</string>
+    <string name="tv_chat_mode">顯示方式</string>
+    <string name="tv_chat_mode_overlay">疊加</string>
+    <string name="tv_chat_mode_side">在直播旁邊</string>
+    <string name="tv_chat_mode_below">在直播下方</string>
+    <string name="tv_chat_text_size">文字大小</string>
+    <string name="tv_chat_right">右側</string>
+    <string name="tv_chat_left">左側</string>
+    <string name="tv_chat_under">下方</string>
+    <string name="tv_chat_above">上方</string>
+    <string name="tv_chat_one_line">1 行 (捲動)</string>
+    <string name="tv_chat_lines">%d 行</string>
     <string name="tv_chat_bottom_right">右下</string>
     <string name="tv_chat_top_right">右上</string>
     <string name="tv_chat_bottom_left">左下</string>

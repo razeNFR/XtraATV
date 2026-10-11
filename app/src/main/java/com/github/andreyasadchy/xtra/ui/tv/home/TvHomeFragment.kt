@@ -35,12 +35,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** TV home written with Compose: rows of cards like the YouTube app, the focus is handled by Compose. */
-class TvHomeFragment : Fragment() {
+class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.Previewer {
 
     private val viewModel: TvHomeViewModel by viewModels { TvHomeViewModelFactory }
     private val previewLogin = mutableStateOf<String?>(null)
     private val previewPlayer = mutableStateOf<ExoPlayer?>(null)
     private var previewJob: Job? = null
+
+    init {
+        com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.register(this)
+    }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val context = requireContext()
@@ -120,7 +124,7 @@ class TvHomeFragment : Fragment() {
         stopPreview()
     }
 
-    /** Muted live preview in the focused card after a short delay, like on the other lists. */
+    /** Live preview in the focused card after a short delay, like on the other lists. */
     private fun schedulePreview(stream: Stream?) {
         val login = stream?.channelLogin
         if (login == previewLogin.value && login != null) {
@@ -128,18 +132,19 @@ class TvHomeFragment : Fragment() {
         }
         stopPreview()
         val context = context ?: return
-        if (login.isNullOrBlank() || !context.prefs().getBoolean(C.UI_TV_PREVIEW, true)) {
+        if (login.isNullOrBlank() || !context.prefs().getBoolean(C.UI_TV_PREVIEW, true) || com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended) {
             return
         }
         previewJob = viewLifecycleOwner.lifecycleScope.launch {
-            delay(500)
+            delay(com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.START_DELAY)
             val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(context, login) ?: return@launch
-            val player = previewPlayer.value ?: ExoPlayer.Builder(context).build().also {
-                it.volume = 0f
-                it.repeatMode = Player.REPEAT_MODE_OFF
-                it.trackSelectionParameters = it.trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
+            if (com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended) {
+                return@launch
+            }
+            val player = previewPlayer.value ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.createPlayer(context).also {
                 previewPlayer.value = it
             }
+            player.volume = if (com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.hasSound(context)) 1f else 0f
             player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
             player.prepare()
             player.playWhenReady = true
@@ -147,7 +152,7 @@ class TvHomeFragment : Fragment() {
         }
     }
 
-    private fun stopPreview() {
+    override fun stopPreview() {
         previewJob?.cancel()
         previewJob = null
         previewLogin.value = null

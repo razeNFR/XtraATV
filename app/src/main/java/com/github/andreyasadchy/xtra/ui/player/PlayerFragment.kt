@@ -1565,6 +1565,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
                 width = ViewGroup.LayoutParams.MATCH_PARENT
                 height = ViewGroup.LayoutParams.MATCH_PARENT
+                gravity = Gravity.NO_GRAVITY
                 marginEnd = 0
             }
             (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(chatLayout.windowToken, 0)
@@ -1927,7 +1928,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         val newPosition = tvScrubPosition
                         tvScrubPosition = -1
                         progressBar.isPressed = false
-                        seekPreview?.hide()
+                        seekPreview?.hideLater()
                         val dvrStream = getTvDvrStream()
                         when {
                             isLive -> {
@@ -1971,68 +1972,88 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** Live: thumbnails come from the storyboards of the VOD being recorded. */
     private fun setupLiveSeekPreview() {
         val login = playbackService?.channelLogin ?: return
-        val preview = TvSeekPreview(
-            viewLifecycleOwner.lifecycleScope,
-            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.okHttpClient.value,
-            binding.playerControls.root,
-            binding.playerControls.progressBar,
-        )
-        seekPreview = preview
+        val preview = createSeekPreview()
         viewLifecycleOwner.lifecycleScope.launch {
-            val video = try {
-                (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryUserVideos(
-                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    TwitchApiHelper.getGQLHeaders(requireContext()),
-                    null,
-                    login,
-                    com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME,
-                    listOf(com.github.andreyasadchy.xtra.graphql.type.BroadcastType.ARCHIVE),
-                    1,
-                    null
-                ).data?.user?.videos?.edges?.firstOrNull()?.node
-            } catch (e: Exception) {
-                null
-            }
-            val streamStart = playbackService?.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
-            val videoStart = video?.createdAt?.toString()?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
-            if (BuildConfig.DEBUG) {
-                android.util.Log.d("XtraTv", "seekPreview live video=${video?.id} videoStart=$videoStart streamStart=$streamStart")
-            }
-            // only the VOD of the current broadcast
-            if (video?.id != null && view != null && (streamStart == null || videoStart == null || kotlin.math.abs(videoStart - streamStart) < 15 * 60_000L)) {
-                val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.d("XtraTv", "seekPreview live storyboard=$url")
-                }
-                if (url != null && view != null) {
-                    preview.load(url, refresh = true)
-                }
+            val url = getLiveStoryboardUrl(login, playbackService?.createdAt)
+            if (url != null && view != null) {
+                preview.load(url, refresh = true)
             }
         }
     }
 
-    /** TV: storyboard thumbnails above the timeline of VODs. */
-    private fun setupSeekPreview() {
-        if (isTv && playbackService?.type == BasePlaybackService.STREAM && seekPreview == null) {
-            setupLiveSeekPreview()
-            return
-        }
-        val videoId = playbackService?.videoId
-        if (!isTv || playbackService?.type != BasePlaybackService.VIDEO || videoId.isNullOrBlank() || seekPreview != null) {
-            return
-        }
-        val preview = TvSeekPreview(
+    private fun createSeekPreview(): TvSeekPreview {
+        return TvSeekPreview(
             viewLifecycleOwner.lifecycleScope,
             (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.okHttpClient.value,
             binding.playerControls.root,
             binding.playerControls.progressBar,
-        )
-        seekPreview = preview
+        ).also { seekPreview = it }
+    }
+
+    /** Storyboards of the VOD being recorded of a live stream: the last archive of the channel, started with the stream. */
+    private suspend fun getLiveStoryboardUrl(login: String, streamCreatedAt: String?): String? {
+        val video = try {
+            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryUserVideos(
+                requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                TwitchApiHelper.getGQLHeaders(requireContext(), true),
+                null,
+                login,
+                com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME,
+                listOf(com.github.andreyasadchy.xtra.graphql.type.BroadcastType.ARCHIVE),
+                1,
+                null
+            ).data?.user?.videos?.edges?.firstOrNull()?.node
+        } catch (e: Exception) {
+            null
+        }
+        val streamStart = streamCreatedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+        val videoStart = video?.createdAt?.toString()?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("XtraTv", "seekPreview live video=${video?.id} videoStart=$videoStart streamStart=$streamStart")
+        }
+        // only the VOD of the current broadcast
+        if (video?.id == null || view == null || (streamStart != null && videoStart != null && kotlin.math.abs(videoStart - streamStart) > 15 * 60_000L)) {
+            return null
+        }
+        val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("XtraTv", "seekPreview live storyboard=$url")
+        }
+        return url
+    }
+
+    /** TV: storyboard thumbnails above the timeline of VODs. */
+    private fun setupSeekPreview() {
+        if (!isTv || seekPreview != null) {
+            return
+        }
+        if (playbackService?.type == BasePlaybackService.STREAM) {
+            setupLiveSeekPreview()
+            return
+        }
+        if (playbackService?.type != BasePlaybackService.VIDEO) {
+            return
+        }
+        val videoId = playbackService?.videoId?.takeIf { it.isNotBlank() }
+        val dvrStream = getTvDvrStream()
+        // the VOD of a live opened from its timeline is found by its address, without its id: it is looked up like on the live
+        val login = dvrStream?.channelLogin ?: playbackService?.channelLogin
+        if (videoId == null && (dvrStream == null || login == null)) {
+            return
+        }
+        val preview = createSeekPreview()
         viewLifecycleOwner.lifecycleScope.launch {
-            val url = getStoryboardUrl(videoId, playbackService?.videoAnimatedPreviewURL)
-            if (url != null && view != null) {
+            val url = if (videoId != null) {
+                getStoryboardUrl(videoId, playbackService?.videoAnimatedPreviewURL)
+            } else {
+                getLiveStoryboardUrl(login!!, dvrStream?.createdAt)
+            }
+            // the lowest quality of the VOD being played, for its frames when there is no storyboard
+            val playlist = playbackService?.qualities?.filter { !it.url.isNullOrBlank() && it.name?.startsWith("audio", true) != true }
+                ?.minByOrNull { it.resolution ?: Int.MAX_VALUE }?.url
+            if ((url != null || playlist != null) && view != null) {
                 // a VOD of a stream still live keeps growing
-                preview.load(url, refresh = getTvDvrStream() != null)
+                preview.load(url, refresh = dvrStream != null || url == null, videoPlaylist = playlist)
             }
         }
     }
@@ -2043,26 +2064,82 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val prefs = requireContext().prefs()
             val metrics = resources.displayMetrics
             val position = prefs.getInt(C.TV_CHAT_POSITION, 0)
-            val margin = (prefs.getInt(C.TV_CHAT_MARGIN, 0) * metrics.density).toInt()
-            playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
-                width = ViewGroup.LayoutParams.MATCH_PARENT
-                height = ViewGroup.LayoutParams.MATCH_PARENT
-                marginEnd = 0
-            }
-            chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
-                width = (metrics.widthPixels * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
-                height = (metrics.heightPixels * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
-                gravity = when (position) {
-                    1 -> Gravity.END or Gravity.TOP
-                    2 -> Gravity.START or Gravity.BOTTOM
-                    3 -> Gravity.START or Gravity.TOP
-                    else -> Gravity.END or Gravity.BOTTOM
+            val mode = prefs.getInt(C.TV_CHAT_MODE, 0)
+            val margin = if (mode == 0) (prefs.getInt(C.TV_CHAT_MARGIN, 0) * metrics.density).toInt() else 0
+            val screenWidth = root.width.takeIf { it > 0 } ?: metrics.widthPixels
+            val screenHeight = root.height.takeIf { it > 0 } ?: metrics.heightPixels
+            val chatWidth = (screenWidth * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
+            val chatHeight = (screenHeight * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
+            val left = position == 2 || position == 3
+            val top = position == 1 || position == 3
+            when (mode) {
+                // next to the stream: the picture gets smaller and the chat takes a column
+                1 -> {
+                    playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = screenWidth - chatWidth
+                        height = ViewGroup.LayoutParams.MATCH_PARENT
+                        gravity = if (left) Gravity.END else Gravity.START
+                        marginEnd = 0
+                    }
+                    chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = chatWidth
+                        height = ViewGroup.LayoutParams.MATCH_PARENT
+                        gravity = if (left) Gravity.START else Gravity.END
+                        setMargins(0, 0, 0, 0)
+                        marginStart = 0
+                        marginEnd = 0
+                    }
                 }
-                marginStart = margin
-                marginEnd = margin
-                topMargin = margin
-                bottomMargin = margin
+                // under (or above) the stream: the chat takes a band the whole width of the screen
+                2 -> {
+                    // as many lines of chat as chosen: the height of a line follows the size of the text and of the emotes
+                    val sizeModifier = prefs.getInt(C.CHAT_SIZE_MODIFIER, 100) / 100f
+                    val textHeight = android.util.TypedValue.applyDimension(
+                        android.util.TypedValue.COMPLEX_UNIT_SP, (prefs.getString(C.CHAT_TEXT_SIZE, "14")?.toFloatOrNull() ?: 14f) * sizeModifier, metrics
+                    ) * 1.35f
+                    val emoteHeight = (prefs.getString(C.CHAT_EMOTE_SIZE, "29.5")?.toFloatOrNull() ?: 29.5f) * sizeModifier * metrics.density
+                    val lineHeight = maxOf(textHeight, emoteHeight) + 2 * metrics.density
+                    val lines = prefs.getInt(C.TV_CHAT_LINES, 3)
+                    val bandHeight = (lineHeight * lines + 8 * metrics.density).toInt().coerceAtMost((screenHeight * 0.6f).toInt())
+                    playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = ViewGroup.LayoutParams.MATCH_PARENT
+                        height = screenHeight - bandHeight
+                        gravity = if (top) Gravity.BOTTOM else Gravity.TOP
+                        marginEnd = 0
+                    }
+                    chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = ViewGroup.LayoutParams.MATCH_PARENT
+                        height = bandHeight
+                        gravity = if (top) Gravity.TOP else Gravity.BOTTOM
+                        setMargins(0, 0, 0, 0)
+                        marginStart = 0
+                        marginEnd = 0
+                    }
+                }
+                else -> {
+                    playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = ViewGroup.LayoutParams.MATCH_PARENT
+                        height = ViewGroup.LayoutParams.MATCH_PARENT
+                        gravity = Gravity.NO_GRAVITY
+                        marginEnd = 0
+                    }
+                    chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = chatWidth
+                        height = chatHeight
+                        gravity = when (position) {
+                            1 -> Gravity.END or Gravity.TOP
+                            2 -> Gravity.START or Gravity.BOTTOM
+                            3 -> Gravity.START or Gravity.TOP
+                            else -> Gravity.END or Gravity.BOTTOM
+                        }
+                        marginStart = margin
+                        marginEnd = margin
+                        topMargin = margin
+                        bottomMargin = margin
+                    }
+                }
             }
+            chatFragment?.setSingleLine(mode == 2 && prefs.getInt(C.TV_CHAT_LINES, 3) == 1)
             chatLayout.translationY = if (playerControls.root.isVisible) getTvChatLift() else 0f
             chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_background)
             chatLayout.background?.mutate()?.alpha = (prefs.getInt(C.TV_CHAT_OPACITY, 55) * 255 / 100).coerceIn(0, 255)
@@ -2073,27 +2150,43 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** The chat goes up over the controls only when it is at the bottom of the screen. */
     private fun getTvChatLift(): Float {
         val position = requireContext().prefs().getInt(C.TV_CHAT_POSITION, 0)
+        // next to or under the stream, the controls are on the picture and the chat stays where it is
+        if (requireContext().prefs().getInt(C.TV_CHAT_MODE, 0) != 0) {
+            return 0f
+        }
         return if (position == 0 || position == 2) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
     }
 
-    /** Panel with sliders to place the chat, on the opposite side so the chat can be seen while it changes. */
+    /**
+     * Panel with sliders to place the chat, on the opposite side so the chat can be seen while it changes.
+     * Its rows follow the display: corners over the stream, sides next to it, above or under it.
+     */
     private fun showChatLayoutPanel() {
         val context = requireContext()
         val prefs = context.prefs()
         if (!binding.chatLayout.isVisible) {
             showChatLayout()
         }
-        val positions = listOf(
+        val corners = listOf(
             getString(R.string.tv_chat_bottom_right),
             getString(R.string.tv_chat_top_right),
             getString(R.string.tv_chat_bottom_left),
             getString(R.string.tv_chat_top_left),
         )
+        val sides = listOf(getString(R.string.tv_chat_right), getString(R.string.tv_chat_left))
+        val bands = listOf(getString(R.string.tv_chat_under), getString(R.string.tv_chat_above))
+        val modes = listOf(
+            getString(R.string.tv_chat_mode_overlay),
+            getString(R.string.tv_chat_mode_side),
+            getString(R.string.tv_chat_mode_below),
+        )
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(context) { dismiss ->
             val position = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_POSITION, 0)) }
+            val mode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_MODE, 0)) }
+            val left = position.intValue == 2 || position.intValue == 3
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_chat_layout),
-                alignEnd = position.intValue == 2 || position.intValue == 3,
+                alignEnd = left && mode.intValue != 2,
             ) {
                 val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
                 val update: (String, Int) -> Unit = { key, value ->
@@ -2102,18 +2195,55 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         applyTvChatLayout()
                     }
                 }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), positions, position.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) {
-                    position.intValue = it
-                    update(C.TV_CHAT_POSITION, it)
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_mode), modes, mode.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) {
+                    mode.intValue = it
+                    update(C.TV_CHAT_MODE, it)
                 }
-                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
-                    update(C.TV_CHAT_WIDTH, it)
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
-                    update(C.TV_CHAT_HEIGHT, it)
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_margin), prefs.getInt(C.TV_CHAT_MARGIN, 0), 0..64, step = 4, valueText = { "$it dp" }) {
-                    update(C.TV_CHAT_MARGIN, it)
+                androidx.compose.runtime.key(mode.intValue) {
+                    when (mode.intValue) {
+                        1 -> {
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), sides, if (left) 1 else 0) {
+                                position.intValue = if (it == 1) 2 else 0
+                                update(C.TV_CHAT_POSITION, position.intValue)
+                            }
+                            textSizeRow(prefs)
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
+                                update(C.TV_CHAT_WIDTH, it)
+                            }
+                        }
+                        2 -> {
+                            val top = position.intValue == 1 || position.intValue == 3
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), bands, if (top) 1 else 0) {
+                                position.intValue = if (it == 1) 1 else 0
+                                update(C.TV_CHAT_POSITION, position.intValue)
+                            }
+                            textSizeRow(prefs)
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                getString(R.string.tv_chat_height),
+                                prefs.getInt(C.TV_CHAT_LINES, 3),
+                                1..12,
+                                valueText = { if (it == 1) getString(R.string.tv_chat_one_line) else getString(R.string.tv_chat_lines, it) }
+                            ) {
+                                update(C.TV_CHAT_LINES, it)
+                            }
+                        }
+                        else -> {
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), corners, position.intValue) {
+                                position.intValue = it
+                                update(C.TV_CHAT_POSITION, it)
+                            }
+                            textSizeRow(prefs)
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
+                                update(C.TV_CHAT_WIDTH, it)
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
+                                update(C.TV_CHAT_HEIGHT, it)
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_margin), prefs.getInt(C.TV_CHAT_MARGIN, 0), 0..64, step = 4, valueText = { "$it dp" }) {
+                                update(C.TV_CHAT_MARGIN, it)
+                            }
+                        }
+                    }
                 }
                 com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_opacity), prefs.getInt(C.TV_CHAT_OPACITY, 55), 0..100, step = 5, valueText = { "$it %" }) {
                     update(C.TV_CHAT_OPACITY, it)
@@ -2126,13 +2256,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         remove(C.TV_CHAT_HEIGHT)
                         remove(C.TV_CHAT_MARGIN)
                         remove(C.TV_CHAT_OPACITY)
+                        remove(C.TV_CHAT_MODE)
+                        remove(C.TV_CHAT_LINES)
+                        remove(C.CHAT_SIZE_MODIFIER)
                     }
+                    chatFragment?.applySizeModifier()
                     if (_binding != null) {
                         applyTvChatLayout()
                     }
                     dismiss()
                 }
                 androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
+            }
+        }
+    }
+
+    @androidx.compose.runtime.Composable
+    private fun textSizeRow(prefs: android.content.SharedPreferences) {
+        com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_text_size), prefs.getInt(C.CHAT_SIZE_MODIFIER, 100), 60..200, step = 10, valueText = { "$it %" }) {
+            prefs.edit { putInt(C.CHAT_SIZE_MODIFIER, it) }
+            chatFragment?.applySizeModifier()
+            // the band under the stream is as high as its lines
+            if (_binding != null) {
+                applyTvChatLayout()
             }
         }
     }
@@ -2358,6 +2504,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     open fun resumePlayback() {}
 
+    /** Silences the stream while a preview with sound plays over it. */
+    open fun setDucked(ducked: Boolean) {}
+
+    /** True while the ad blocker plays the backup stream: its frame rate is not the one of the stream. */
+    open fun isAdblockSwapping(): Boolean = false
+
     private fun getTopRightStack(): LinearLayout {
         return tvTopRightStack ?: LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
@@ -2405,6 +2557,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             resetFrameRateMatching()
             return
         }
+        // no switch while the ad blocker plays the backup stream, the display waits for the main stream to come back
+        if (isAdblockSwapping()) {
+            frameRateModeCandidate = 0
+            return
+        }
         val frameRate = getVideoFrameRate() ?: return
         @Suppress("DEPRECATION")
         val display = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) activity.display else activity.windowManager.defaultDisplay) ?: return
@@ -2436,19 +2593,32 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val wasPlaying = isPlayingOrLoading()
             activity.window.attributes = activity.window.attributes.also { it.preferredDisplayModeId = best.modeId }
             // the TV resyncs HDMI: the audio output goes away for a moment and the player pauses, playback goes on by itself
-            if (wasPlaying) {
-                for (delay in longArrayOf(1500L, 3500L, 6000L)) {
-                    binding.root.postDelayed({
-                        if (_binding != null) {
+            for (delay in longArrayOf(1500L, 3500L, 6000L, 9000L)) {
+                binding.root.postDelayed({
+                    if (_binding != null) {
+                        if (wasPlaying) {
                             resumePlayback()
-                            if (activity.currentFocus == null || activity.currentFocus?.isShown != true) {
-                                requestPlayerFocus()
-                            }
                         }
-                    }, delay)
-                }
+                        // the window is laid out again: the focus can be lost or go to the lists behind the player
+                        val focused = activity.currentFocus
+                        if (isMaximized && (focused == null || !focused.isShown || !isDescendant(binding.root, focused))) {
+                            requestPlayerFocus()
+                        }
+                    }
+                }, delay)
             }
         }
+    }
+
+    private fun isDescendant(parent: View, view: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current == parent) {
+                return true
+            }
+            current = current.parent as? View
+        }
+        return false
     }
 
     private fun resetFrameRateMatching() {
@@ -3273,6 +3443,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onDestroyView() {
         _binding?.root?.removeCallbacks(tvHudTicker)
         resetFrameRateMatching()
+        seekPreview?.release()
         seekPreview = null
         tvStatsView = null
         tvTopRightStack = null

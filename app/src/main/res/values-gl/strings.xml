@@ -583,6 +583,9 @@
     <string name="tv_more_actions">Máis accións</string>
     <string name="tv_account">Conta</string>
     <string name="tv_stream_preview">Vista previa en directo do stream seleccionado (TV)</string>
+    <string name="xtratv_settings">Axustes de Xtra TV</string>
+    <string name="xtratv_settings_summary">Bloqueador de anuncios, axuste de fotogramas, vistas previas, inicio e atallos do mando</string>
+    <string name="tv_preview_sound">Son das vistas previas</string>
     <string name="close_player">Pechar</string>
     <string name="tv_back_minimizes_player">O botón Atrás minimiza o reprodutor en vez de pechalo</string>
     <string name="tv_switch_stream">Outros streams</string>
@@ -615,6 +618,17 @@
     <string name="tv_chat_height">Altura</string>
     <string name="tv_chat_margin">Distancia ao bordo</string>
     <string name="tv_chat_opacity">Opacidade do fondo</string>
+    <string name="tv_chat_mode">Visualización</string>
+    <string name="tv_chat_mode_overlay">Superposto</string>
+    <string name="tv_chat_mode_side">Xunto ao stream</string>
+    <string name="tv_chat_mode_below">Debaixo do stream</string>
+    <string name="tv_chat_text_size">Tamaño do texto</string>
+    <string name="tv_chat_right">Dereita</string>
+    <string name="tv_chat_left">Esquerda</string>
+    <string name="tv_chat_under">Debaixo</string>
+    <string name="tv_chat_above">Enriba</string>
+    <string name="tv_chat_one_line">1 liña (desprazable)</string>
+    <string name="tv_chat_lines">%d liñas</string>
     <string name="tv_chat_bottom_right">Abaixo á dereita</string>
     <string name="tv_chat_top_right">Arriba á dereita</string>
     <string name="tv_chat_bottom_left">Abaixo á esquerda</string>

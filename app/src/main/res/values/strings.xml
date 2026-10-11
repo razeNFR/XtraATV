@@ -602,6 +602,9 @@
     <string name="tv_more_actions">More actions</string>
     <string name="tv_account">Account</string>
     <string name="tv_stream_preview">Live preview on the selected stream (TV)</string>
+    <string name="xtratv_settings">Xtra TV settings</string>
+    <string name="xtratv_settings_summary">Ad blocker, frame rate matching, previews, home and remote shortcuts</string>
+    <string name="tv_preview_sound">Sound of the previews</string>
     <string name="close_player">Close</string>
     <string name="tv_back_minimizes_player">Back button minimizes the player instead of closing it</string>
     <string name="tv_switch_stream">Other streams</string>
@@ -634,6 +637,17 @@
     <string name="tv_chat_height">Height</string>
     <string name="tv_chat_margin">Distance from the edge</string>
     <string name="tv_chat_opacity">Background opacity</string>
+    <string name="tv_chat_mode">Display</string>
+    <string name="tv_chat_mode_overlay">Overlay</string>
+    <string name="tv_chat_mode_side">Next to the stream</string>
+    <string name="tv_chat_mode_below">Under the stream</string>
+    <string name="tv_chat_text_size">Text size</string>
+    <string name="tv_chat_right">Right</string>
+    <string name="tv_chat_left">Left</string>
+    <string name="tv_chat_under">Under the stream</string>
+    <string name="tv_chat_above">Above the stream</string>
+    <string name="tv_chat_one_line">1 line (scrolling)</string>
+    <string name="tv_chat_lines">%d lines</string>
     <string name="tv_chat_bottom_right">Bottom right</string>
     <string name="tv_chat_top_right">Top right</string>
     <string name="tv_chat_bottom_left">Bottom left</string>

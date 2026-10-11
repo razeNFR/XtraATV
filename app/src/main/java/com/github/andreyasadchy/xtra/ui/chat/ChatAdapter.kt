@@ -63,10 +63,10 @@ class ChatAdapter(
     private val backgroundColor: Int,
     private val dialogBackgroundColor: Int,
     private val imageLibrary: String?,
-    private val messageTextSize: Float,
-    private val emoteSize: Int,
-    private val badgeSize: Int,
-    private val gifSize: Int,
+    var messageTextSize: Float,
+    var emoteSize: Int,
+    var badgeSize: Int,
+    var gifSize: Int,
     private val showGifMessages: Boolean,
     private val emoteQuality: String,
     private val animateGifs: Boolean,
@@ -81,6 +81,9 @@ class ChatAdapter(
 ) : RecyclerView.Adapter<ChatAdapter.ViewHolder>() {
 
     var translateAllMessages = false
+
+    /** TV chat on one line under the stream: the messages follow each other from right to left. */
+    var singleLine = false
     private var selectedMessage: ChatMessage? = null
     private val random = Random()
     private val userColors = HashMap<String, Int>()
@@ -106,6 +109,13 @@ class ChatAdapter(
             translateMessage, showLanguageDownloadDialog, true, localTwitchEmotes, thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes,
             savedLocalTwitchEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes
         )
+        holder.itemView.layoutParams?.let { params ->
+            val width = if (singleLine) ViewGroup.LayoutParams.WRAP_CONTENT else ViewGroup.LayoutParams.MATCH_PARENT
+            if (params.width != width) {
+                params.width = width
+                holder.itemView.layoutParams = params
+            }
+        }
         holder.bind(chatMessage, result.builder)
         ChatAdapterUtils.loadImages(
             fragment, holder.textView, { holder.bind(chatMessage, it) }, result.images, result.imagePaint, result.userName, result.userNameStartIndex,
@@ -237,6 +247,7 @@ class ChatAdapter(
             textView.apply {
                 text = formattedMessage
                 textSize = messageTextSize
+                setHorizontallyScrolling(singleLine)
                 if (chatMessage.type == ChatMessage.REPLY_MESSAGE) {
                     movementMethod = null
                     maxLines = 2
@@ -259,6 +270,10 @@ class ChatAdapter(
                             messageClickListener?.invoke(channelId)
                         }
                     }
+                }
+                if (singleLine) {
+                    maxLines = 1
+                    ellipsize = null
                 }
             }
         }

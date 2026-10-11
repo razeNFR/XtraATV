@@ -28,7 +28,7 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 - **Home** with rows: followed channels live, popular streams and categories, with "See all" tiles and a refresh button.
 - **Language filter** for the Popular row of the home.
 - **Leanback side menu**: Search, Home, Games, Popular, Following, Saved, Settings and Account.
-- **Live preview** of the focused stream, right inside its card.
+- **Live preview** of the focused stream, right inside its card: it starts right away in 360p, ad-free, with sound (option).
 - **Big TV cards** with viewers, uptime, channel avatar and category.
 - **Google TV like navigation**: the focused row stays in place with the rows before and after always in sight.
 - **Long press OK** on a card: open the channel, open the category, more options.
@@ -37,18 +37,19 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 - **Voice search**: a search bar with a mic built in, the words show up while you speak and the search starts right away.
 - **Channel page** made for TV.
 - **Settings** fully usable with the D-pad, with up / down buttons to reorder lists.
+- **Xtra TV settings**: every option added by Xtra TV in one screen.
 - **TV banner and icon**.
 
 ### Player
 - **TV controls** reachable with the D-pad, with tooltips and a badge with the quality being played.
 - **Go back in time in a live stream**: the timeline covers the whole broadcast, going back plays the VOD being recorded, going to the end comes back to live.
-- **Thumbnails on the timeline** while seeking, in VODs and in the past of a live stream.
+- **Thumbnails on the timeline** while seeking, in VODs and in the past of a live stream (taken from the video itself while the broadcast is still going, Twitch makes its thumbnails only at the end).
 - **Fast D-pad seeking** that speeds up while the key is held.
 - **Sub-only VODs** playback.
-- **Chat overlay** with a **chat layout panel**: position, width, height, distance from the edge and opacity.
+- **Chat** over the stream, next to it or under it (down to a single line that scrolls from right to left), with a **chat layout panel** whose settings follow the display: position, text size, width, height or number of lines, distance from the edge and opacity.
 - **Write in the chat** with the remote, with **voice dictation**.
-- **Stream switcher**: a banner in the player with the other streams of the category you came from.
-- **Streamer switch shortcut** (option): left / right change streamer while the controls are hidden, channel up / down too.
+- **Stream switcher**: a banner in the player with the other streams of the category you came from, with live previews.
+- **Streamer switch shortcut** (option): left / right change streamer while the controls are hidden, channel up / down too. The previous and next streamers show on the sides of the screen for a few seconds.
 - **Multi-stream**: up to 4 streams on screen at once.
 - **Stats for nerds**: resolution, frame rate, codec, bitrate, buffer, latency, dropped frames.
 - **Frame rate matching** (option): the TV switches to the refresh rate of the stream and keeps it matched while playing.
@@ -60,7 +61,7 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 - A **"Blocking ads" box** shows at the top right while it works.
 - It **works with the proxies**: when a proxy lets an ad through, the ad blocker takes over.
 - The **live previews** and every stream of the **multi-stream** are ad-free too.
-- On by default, in the main settings.
+- On by default.
 
 ### Languages
 Everything added is translated into the 13 languages of the app.

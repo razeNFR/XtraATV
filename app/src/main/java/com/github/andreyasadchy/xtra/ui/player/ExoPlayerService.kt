@@ -2113,6 +2113,36 @@ class ExoPlayerService : BasePlaybackService() {
         startSecondaryPlayer(false)
     }
 
+    /** True while the backup player of the ad blocker shows the picture. */
+    val isSwapping: Boolean
+        get() = secondaryPlayer != null && (videoSwapActive || proxyMediaPlaylist)
+
+    /**
+     * After the display switched its refresh rate: the HDMI resync paused the players, both have to play again
+     * and the picture has to go back on the surface of the player that shows it.
+     */
+    fun resumeAfterDisplayChange() {
+        player?.let { if (!it.playWhenReady) it.play() }
+        secondaryPlayer?.let { if (!it.playWhenReady) it.play() }
+        serviceListener?.setPlayerSurface(isSwapping)
+    }
+
+    private var duckedVolume: Float? = null
+
+    /** Silences the stream while a preview with sound plays over it (stream switcher of the player). */
+    fun setDucked(ducked: Boolean) {
+        val target = visiblePlayer ?: return
+        if (ducked) {
+            if (duckedVolume == null) {
+                duckedVolume = target.volume
+                target.volume = 0f
+            }
+        } else {
+            duckedVolume?.let { target.volume = it }
+            duckedVolume = null
+        }
+    }
+
     /** Player whose picture is on screen: the backup player while ads are blocked, else the main one. */
     val visiblePlayer: ExoPlayer?
         get() = secondaryPlayer?.takeIf { videoSwapActive || proxyMediaPlaylist } ?: player

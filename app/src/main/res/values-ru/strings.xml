@@ -583,6 +583,9 @@
     <string name="tv_more_actions">Другие действия</string>
     <string name="tv_account">Аккаунт</string>
     <string name="tv_stream_preview">Предпросмотр выбранного стрима (ТВ)</string>
+    <string name="xtratv_settings">Настройки Xtra TV</string>
+    <string name="xtratv_settings_summary">Блокировщик рекламы, подстройка частоты кадров, превью, главная и кнопки пульта</string>
+    <string name="tv_preview_sound">Звук превью</string>
     <string name="close_player">Закрыть</string>
     <string name="tv_back_minimizes_player">Кнопка «Назад» сворачивает плеер, а не закрывает его</string>
     <string name="tv_switch_stream">Другие стримы</string>
@@ -615,6 +618,17 @@
     <string name="tv_chat_height">Высота</string>
     <string name="tv_chat_margin">Отступ от края</string>
     <string name="tv_chat_opacity">Непрозрачность фона</string>
+    <string name="tv_chat_mode">Отображение</string>
+    <string name="tv_chat_mode_overlay">Поверх видео</string>
+    <string name="tv_chat_mode_side">Рядом с трансляцией</string>
+    <string name="tv_chat_mode_below">Под трансляцией</string>
+    <string name="tv_chat_text_size">Размер текста</string>
+    <string name="tv_chat_right">Справа</string>
+    <string name="tv_chat_left">Слева</string>
+    <string name="tv_chat_under">Снизу</string>
+    <string name="tv_chat_above">Сверху</string>
+    <string name="tv_chat_one_line">1 строка (бегущая)</string>
+    <string name="tv_chat_lines">Строк: %d</string>
     <string name="tv_chat_bottom_right">Справа внизу</string>
     <string name="tv_chat_top_right">Справа вверху</string>
     <string name="tv_chat_bottom_left">Слева внизу</string>

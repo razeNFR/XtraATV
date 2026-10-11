@@ -2,23 +2,6 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="tv_dpad_switch_stream"
-        android:summary="@string/tv_dpad_switch_stream_summary"
-        android:title="@string/tv_dpad_switch_stream"
-        app:iconSpaceReserved="false"
-        app:isPreferenceVisible="@bool/isTv"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="tv_back_minimizes_player"
-        android:title="@string/tv_back_minimizes_player"
-        app:iconSpaceReserved="false"
-        app:isPreferenceVisible="@bool/isTv"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="player_disable_background_video"
         android:title="@string/disable_background_video"

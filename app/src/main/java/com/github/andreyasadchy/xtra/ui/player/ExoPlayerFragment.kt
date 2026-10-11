@@ -361,10 +361,16 @@ class ExoPlayerFragment : PlayerFragment() {
         format.frameRate.takeIf { format.height > 0 && it > 0f }
     }
 
-    override fun isPlayingOrLoading() = playbackService?.player?.playWhenReady == true
+    override fun isPlayingOrLoading() = playbackService?.visiblePlayer?.playWhenReady == true
+
+    override fun isAdblockSwapping() = playbackService?.isSwapping == true
+
+    override fun setDucked(ducked: Boolean) {
+        playbackService?.setDucked(ducked)
+    }
 
     override fun resumePlayback() {
-        playbackService?.player?.let { if (!it.playWhenReady) it.play() }
+        playbackService?.resumeAfterDisplayChange()
     }
 
     override fun getStatsForNerds(): String {

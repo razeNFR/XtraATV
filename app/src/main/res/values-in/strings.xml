@@ -584,6 +584,9 @@
     <string name="tv_more_actions">Tindakan lainnya</string>
     <string name="tv_account">Akun</string>
     <string name="tv_stream_preview">Pratinjau langsung stream yang dipilih (TV)</string>
+    <string name="xtratv_settings">Pengaturan Xtra TV</string>
+    <string name="xtratv_settings_summary">Pemblokir iklan, penyesuaian frame rate, pratinjau, beranda dan pintasan remote</string>
+    <string name="tv_preview_sound">Suara pratinjau</string>
     <string name="close_player">Tutup</string>
     <string name="tv_back_minimizes_player">Tombol Kembali memperkecil pemutar, bukan menutupnya</string>
     <string name="tv_switch_stream">Stream lain</string>
@@ -616,6 +619,17 @@
     <string name="tv_chat_height">Tinggi</string>
     <string name="tv_chat_margin">Jarak dari tepi</string>
     <string name="tv_chat_opacity">Opasitas latar</string>
+    <string name="tv_chat_mode">Tampilan</string>
+    <string name="tv_chat_mode_overlay">Melapisi</string>
+    <string name="tv_chat_mode_side">Di samping stream</string>
+    <string name="tv_chat_mode_below">Di bawah stream</string>
+    <string name="tv_chat_text_size">Ukuran teks</string>
+    <string name="tv_chat_right">Kanan</string>
+    <string name="tv_chat_left">Kiri</string>
+    <string name="tv_chat_under">Di bawah</string>
+    <string name="tv_chat_above">Di atas</string>
+    <string name="tv_chat_one_line">1 baris (berjalan)</string>
+    <string name="tv_chat_lines">%d baris</string>
     <string name="tv_chat_bottom_right">Kanan bawah</string>
     <string name="tv_chat_top_right">Kanan atas</string>
     <string name="tv_chat_bottom_left">Kiri bawah</string>
