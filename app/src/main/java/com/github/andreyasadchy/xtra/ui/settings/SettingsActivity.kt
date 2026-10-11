@@ -1495,7 +1495,7 @@ class SettingsActivity : AppCompatActivity() {
             findPreference<SwitchPreferenceCompat>("update_use_browser")?.setOnPreferenceChangeListener { _, newValue ->
                 if (Build.VERSION.SDK_INT == Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
                     newValue == false &&
-                    requireContext().prefs().getBoolean(C.UPDATE_CHECK_ENABLED, false) &&
+                    requireContext().prefs().getBoolean(C.UPDATE_CHECK_ENABLED, true) &&
                     !requireContext().packageManager.canRequestPackageInstalls()
                 ) {
                     try {

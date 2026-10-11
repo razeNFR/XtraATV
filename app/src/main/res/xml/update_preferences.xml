@@ -10,14 +10,14 @@
         app:useSimpleSummaryProvider="true" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="false"
+        android:defaultValue="true"
         android:key="update_check_enabled"
         android:title="@string/auto_check_updates"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <EditTextPreference
-        android:defaultValue="7"
+        android:defaultValue="1"
         android:key="update_check_frequency"
         android:title="@string/update_check_frequency"
         app:iconSpaceReserved="false"

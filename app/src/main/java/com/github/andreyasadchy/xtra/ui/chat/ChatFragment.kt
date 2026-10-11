@@ -214,7 +214,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                     val percentage = (100f * offset / (range - extent).toFloat())
                                     btnDown.isVisible = percentage < 100f
                                 }
-                                if (showChatStatus && chatStatus.isGone) {
+                                // not on the one line chat: it slides at every message, the box would never go away
+                                if (showChatStatus && chatStatus.isGone && this@ChatFragment.adapter?.singleLine != true) {
                                     chatStatus.visibility = View.VISIBLE
                                     chatStatus.postDelayed({ chatStatus.visibility = View.GONE }, 5000)
                                 }
@@ -376,8 +377,10 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                         chatStatus.visibility = View.GONE
                                     } else {
                                         showChatStatus = true
-                                        chatStatus.visibility = View.VISIBLE
-                                        chatStatus.postDelayed({ chatStatus.visibility = View.GONE }, 5000)
+                                        if (adapter?.singleLine != true) {
+                                            chatStatus.visibility = View.VISIBLE
+                                            chatStatus.postDelayed({ chatStatus.visibility = View.GONE }, 5000)
+                                        }
                                     }
                                     viewModel.roomState.value = null
                                 }
@@ -910,6 +913,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         }
         adapter.singleLine = enabled
         binding.btnDown.visibility = View.GONE
+        binding.chatStatus.visibility = View.GONE
         binding.recyclerView.layoutManager = if (enabled) {
             object : LinearLayoutManager(requireContext(), HORIZONTAL, false) {
                 override fun smoothScrollToPosition(recyclerView: RecyclerView, state: RecyclerView.State, position: Int) {

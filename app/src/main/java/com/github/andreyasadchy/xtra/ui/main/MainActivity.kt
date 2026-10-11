@@ -305,8 +305,8 @@ class MainActivity : AppCompatActivity() {
                                     )
                                 }
                                 if (!TwitchApiHelper.checkedUpdates &&
-                                    prefs.getBoolean(C.UPDATE_CHECK_ENABLED, false) &&
-                                    (prefs.getString(C.UPDATE_CHECK_FREQUENCY, "7")?.toIntOrNull() ?: 7) * 86400000 + tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) < System.currentTimeMillis()
+                                    prefs.getBoolean(C.UPDATE_CHECK_ENABLED, true) &&
+                                    (prefs.getString(C.UPDATE_CHECK_FREQUENCY, "1")?.toIntOrNull() ?: 1) * 86400000 + tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) < System.currentTimeMillis()
                                 ) {
                                     viewModel.checkUpdates(
                                         prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
