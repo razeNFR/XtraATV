@@ -68,6 +68,13 @@
         android:id="@+id/action_global_playbackSettingsFragment"
         app:destination="@id/playbackSettingsFragment" />
     <fragment
+        android:id="@+id/xtraTvSettingsFragment"
+        android:name="com.github.andreyasadchy.xtra.ui.settings.SettingsActivity$XtraTvSettingsFragment"
+        android:label="@string/xtratv_settings" />
+    <action
+        android:id="@+id/action_global_xtraTvSettingsFragment"
+        app:destination="@id/xtraTvSettingsFragment" />
+    <fragment
         android:id="@+id/apiTokenSettingsFragment"
         android:name="com.github.andreyasadchy.xtra.ui.settings.SettingsActivity$ApiTokenSettingsFragment"
         android:label="@string/api_token_settings" />

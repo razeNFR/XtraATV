@@ -88,6 +88,7 @@ object C {
     const val UI_ACTIVATE_NOTIFICATIONS_WHEN_FOLLOWING = "ui_activate_notifications_when_following"
     const val UI_UPTIME = "ui_uptime"
     const val UI_TV_PREVIEW = "ui_tv_preview"
+    const val UI_TV_PREVIEW_SOUND = "ui_tv_preview_sound"
     const val TV_BACK_MINIMIZES_PLAYER = "tv_back_minimizes_player"
     const val UI_TAGS = "ui_tags"
     const val UI_SCROLL_TOP = "ui_scrolltop"

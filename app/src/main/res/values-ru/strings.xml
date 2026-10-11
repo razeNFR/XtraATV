@@ -583,6 +583,9 @@
     <string name="tv_more_actions">Другие действия</string>
     <string name="tv_account">Аккаунт</string>
     <string name="tv_stream_preview">Предпросмотр выбранного стрима (ТВ)</string>
+    <string name="xtratv_settings">Настройки Xtra TV</string>
+    <string name="xtratv_settings_summary">Блокировщик рекламы, подстройка частоты кадров, превью, главная и кнопки пульта</string>
+    <string name="tv_preview_sound">Звук превью</string>
     <string name="close_player">Закрыть</string>
     <string name="tv_back_minimizes_player">Кнопка «Назад» сворачивает плеер, а не закрывает его</string>
     <string name="tv_switch_stream">Другие стримы</string>

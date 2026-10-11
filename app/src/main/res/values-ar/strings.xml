@@ -583,6 +583,9 @@
     <string name="tv_more_actions">إجراءات أخرى</string>
     <string name="tv_account">الحساب</string>
     <string name="tv_stream_preview">معاينة مباشرة للبث المحدد (التلفاز)</string>
+    <string name="xtratv_settings">إعدادات Xtra TV</string>
+    <string name="xtratv_settings_summary">مانع الإعلانات، مطابقة معدل الإطارات، المعاينات، الصفحة الرئيسية واختصارات جهاز التحكم</string>
+    <string name="tv_preview_sound">صوت المعاينات</string>
     <string name="close_player">إغلاق</string>
     <string name="tv_back_minimizes_player">زر الرجوع يصغّر المشغل بدلاً من إغلاقه</string>
     <string name="tv_switch_stream">بثوث أخرى</string>

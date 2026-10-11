@@ -1352,8 +1352,15 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val index = queue.indexOfFirst { it.channelLogin != null && it.channelLogin == currentStreamLogin }
-        val next = queue.getOrNull(Math.floorMod(index + offset, queue.size)) ?: return
+        val nextIndex = Math.floorMod(index + offset, queue.size)
+        val next = queue.getOrNull(nextIndex) ?: return
         startStream(next)
+        // the streamers that left and right go to now
+        com.github.andreyasadchy.xtra.ui.player.TvSwitchOverlay.show(
+            this,
+            queue.getOrNull(Math.floorMod(nextIndex - 1, queue.size)),
+            queue.getOrNull(Math.floorMod(nextIndex + 1, queue.size)),
+        )
     }
 
     /** TV multi-stream: replaces the player with up to 4 streams shown together. */

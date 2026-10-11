@@ -11,19 +11,10 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_adblock"
-        android:summary="@string/adblock_summary"
-        android:title="@string/adblock"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_frame_rate_matching"
-        android:summary="@string/frame_rate_matching_summary"
-        android:title="@string/frame_rate_matching"
+    <Preference
+        android:key="xtratv_settings"
+        android:summary="@string/xtratv_settings_summary"
+        android:title="@string/xtratv_settings"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

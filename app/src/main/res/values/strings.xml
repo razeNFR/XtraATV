@@ -602,6 +602,9 @@
     <string name="tv_more_actions">More actions</string>
     <string name="tv_account">Account</string>
     <string name="tv_stream_preview">Live preview on the selected stream (TV)</string>
+    <string name="xtratv_settings">Xtra TV settings</string>
+    <string name="xtratv_settings_summary">Ad blocker, frame rate matching, previews, home and remote shortcuts</string>
+    <string name="tv_preview_sound">Sound of the previews</string>
     <string name="close_player">Close</string>
     <string name="tv_back_minimizes_player">Back button minimizes the player instead of closing it</string>
     <string name="tv_switch_stream">Other streams</string>

@@ -1971,68 +1971,85 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** Live: thumbnails come from the storyboards of the VOD being recorded. */
     private fun setupLiveSeekPreview() {
         val login = playbackService?.channelLogin ?: return
-        val preview = TvSeekPreview(
-            viewLifecycleOwner.lifecycleScope,
-            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.okHttpClient.value,
-            binding.playerControls.root,
-            binding.playerControls.progressBar,
-        )
-        seekPreview = preview
+        val preview = createSeekPreview()
         viewLifecycleOwner.lifecycleScope.launch {
-            val video = try {
-                (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryUserVideos(
-                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    TwitchApiHelper.getGQLHeaders(requireContext()),
-                    null,
-                    login,
-                    com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME,
-                    listOf(com.github.andreyasadchy.xtra.graphql.type.BroadcastType.ARCHIVE),
-                    1,
-                    null
-                ).data?.user?.videos?.edges?.firstOrNull()?.node
-            } catch (e: Exception) {
-                null
-            }
-            val streamStart = playbackService?.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
-            val videoStart = video?.createdAt?.toString()?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
-            if (BuildConfig.DEBUG) {
-                android.util.Log.d("XtraTv", "seekPreview live video=${video?.id} videoStart=$videoStart streamStart=$streamStart")
-            }
-            // only the VOD of the current broadcast
-            if (video?.id != null && view != null && (streamStart == null || videoStart == null || kotlin.math.abs(videoStart - streamStart) < 15 * 60_000L)) {
-                val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.d("XtraTv", "seekPreview live storyboard=$url")
-                }
-                if (url != null && view != null) {
-                    preview.load(url, refresh = true)
-                }
+            val url = getLiveStoryboardUrl(login, playbackService?.createdAt)
+            if (url != null && view != null) {
+                preview.load(url, refresh = true)
             }
         }
     }
 
-    /** TV: storyboard thumbnails above the timeline of VODs. */
-    private fun setupSeekPreview() {
-        if (isTv && playbackService?.type == BasePlaybackService.STREAM && seekPreview == null) {
-            setupLiveSeekPreview()
-            return
-        }
-        val videoId = playbackService?.videoId
-        if (!isTv || playbackService?.type != BasePlaybackService.VIDEO || videoId.isNullOrBlank() || seekPreview != null) {
-            return
-        }
-        val preview = TvSeekPreview(
+    private fun createSeekPreview(): TvSeekPreview {
+        return TvSeekPreview(
             viewLifecycleOwner.lifecycleScope,
             (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.okHttpClient.value,
             binding.playerControls.root,
             binding.playerControls.progressBar,
-        )
-        seekPreview = preview
+        ).also { seekPreview = it }
+    }
+
+    /** Storyboards of the VOD being recorded of a live stream: the last archive of the channel, started with the stream. */
+    private suspend fun getLiveStoryboardUrl(login: String, streamCreatedAt: String?): String? {
+        val video = try {
+            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryUserVideos(
+                requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                TwitchApiHelper.getGQLHeaders(requireContext(), true),
+                null,
+                login,
+                com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME,
+                listOf(com.github.andreyasadchy.xtra.graphql.type.BroadcastType.ARCHIVE),
+                1,
+                null
+            ).data?.user?.videos?.edges?.firstOrNull()?.node
+        } catch (e: Exception) {
+            null
+        }
+        val streamStart = streamCreatedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+        val videoStart = video?.createdAt?.toString()?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("XtraTv", "seekPreview live video=${video?.id} videoStart=$videoStart streamStart=$streamStart")
+        }
+        // only the VOD of the current broadcast
+        if (video?.id == null || view == null || (streamStart != null && videoStart != null && kotlin.math.abs(videoStart - streamStart) > 15 * 60_000L)) {
+            return null
+        }
+        val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("XtraTv", "seekPreview live storyboard=$url")
+        }
+        return url
+    }
+
+    /** TV: storyboard thumbnails above the timeline of VODs. */
+    private fun setupSeekPreview() {
+        if (!isTv || seekPreview != null) {
+            return
+        }
+        if (playbackService?.type == BasePlaybackService.STREAM) {
+            setupLiveSeekPreview()
+            return
+        }
+        if (playbackService?.type != BasePlaybackService.VIDEO) {
+            return
+        }
+        val videoId = playbackService?.videoId?.takeIf { it.isNotBlank() }
+        val dvrStream = getTvDvrStream()
+        // the VOD of a live opened from its timeline is found by its address, without its id: it is looked up like on the live
+        val login = dvrStream?.channelLogin ?: playbackService?.channelLogin
+        if (videoId == null && (dvrStream == null || login == null)) {
+            return
+        }
+        val preview = createSeekPreview()
         viewLifecycleOwner.lifecycleScope.launch {
-            val url = getStoryboardUrl(videoId, playbackService?.videoAnimatedPreviewURL)
+            val url = if (videoId != null) {
+                getStoryboardUrl(videoId, playbackService?.videoAnimatedPreviewURL)
+            } else {
+                getLiveStoryboardUrl(login!!, dvrStream?.createdAt)
+            }
             if (url != null && view != null) {
                 // a VOD of a stream still live keeps growing
-                preview.load(url, refresh = getTvDvrStream() != null)
+                preview.load(url, refresh = dvrStream != null)
             }
         }
     }
@@ -2358,6 +2375,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     open fun resumePlayback() {}
 
+    /** Silences the stream while a preview with sound plays over it. */
+    open fun setDucked(ducked: Boolean) {}
+
+    /** True while the ad blocker plays the backup stream: its frame rate is not the one of the stream. */
+    open fun isAdblockSwapping(): Boolean = false
+
     private fun getTopRightStack(): LinearLayout {
         return tvTopRightStack ?: LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
@@ -2405,6 +2428,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             resetFrameRateMatching()
             return
         }
+        // no switch while the ad blocker plays the backup stream, the display waits for the main stream to come back
+        if (isAdblockSwapping()) {
+            frameRateModeCandidate = 0
+            return
+        }
         val frameRate = getVideoFrameRate() ?: return
         @Suppress("DEPRECATION")
         val display = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) activity.display else activity.windowManager.defaultDisplay) ?: return
@@ -2436,19 +2464,32 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val wasPlaying = isPlayingOrLoading()
             activity.window.attributes = activity.window.attributes.also { it.preferredDisplayModeId = best.modeId }
             // the TV resyncs HDMI: the audio output goes away for a moment and the player pauses, playback goes on by itself
-            if (wasPlaying) {
-                for (delay in longArrayOf(1500L, 3500L, 6000L)) {
-                    binding.root.postDelayed({
-                        if (_binding != null) {
+            for (delay in longArrayOf(1500L, 3500L, 6000L, 9000L)) {
+                binding.root.postDelayed({
+                    if (_binding != null) {
+                        if (wasPlaying) {
                             resumePlayback()
-                            if (activity.currentFocus == null || activity.currentFocus?.isShown != true) {
-                                requestPlayerFocus()
-                            }
                         }
-                    }, delay)
-                }
+                        // the window is laid out again: the focus can be lost or go to the lists behind the player
+                        val focused = activity.currentFocus
+                        if (isMaximized && (focused == null || !focused.isShown || !isDescendant(binding.root, focused))) {
+                            requestPlayerFocus()
+                        }
+                    }
+                }, delay)
             }
         }
+    }
+
+    private fun isDescendant(parent: View, view: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current == parent) {
+                return true
+            }
+            current = current.parent as? View
+        }
+        return false
     }
 
     private fun resetFrameRateMatching() {

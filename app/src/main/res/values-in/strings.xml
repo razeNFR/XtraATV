@@ -584,6 +584,9 @@
     <string name="tv_more_actions">Tindakan lainnya</string>
     <string name="tv_account">Akun</string>
     <string name="tv_stream_preview">Pratinjau langsung stream yang dipilih (TV)</string>
+    <string name="xtratv_settings">Pengaturan Xtra TV</string>
+    <string name="xtratv_settings_summary">Pemblokir iklan, penyesuaian frame rate, pratinjau, beranda dan pintasan remote</string>
+    <string name="tv_preview_sound">Suara pratinjau</string>
     <string name="close_player">Tutup</string>
     <string name="tv_back_minimizes_player">Tombol Kembali memperkecil pemutar, bukan menutupnya</string>
     <string name="tv_switch_stream">Stream lain</string>

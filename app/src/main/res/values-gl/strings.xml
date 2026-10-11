@@ -583,6 +583,9 @@
     <string name="tv_more_actions">Máis accións</string>
     <string name="tv_account">Conta</string>
     <string name="tv_stream_preview">Vista previa en directo do stream seleccionado (TV)</string>
+    <string name="xtratv_settings">Axustes de Xtra TV</string>
+    <string name="xtratv_settings_summary">Bloqueador de anuncios, axuste de fotogramas, vistas previas, inicio e atallos do mando</string>
+    <string name="tv_preview_sound">Son das vistas previas</string>
     <string name="close_player">Pechar</string>
     <string name="tv_back_minimizes_player">O botón Atrás minimiza o reprodutor en vez de pechalo</string>
     <string name="tv_switch_stream">Outros streams</string>

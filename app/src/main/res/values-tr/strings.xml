@@ -584,6 +584,9 @@
     <string name="tv_more_actions">Diğer işlemler</string>
     <string name="tv_account">Hesap</string>
     <string name="tv_stream_preview">Seçili yayının canlı önizlemesi (TV)</string>
+    <string name="xtratv_settings">Xtra TV ayarları</string>
+    <string name="xtratv_settings_summary">Reklam engelleyici, kare hızı eşleme, önizlemeler, ana sayfa ve kumanda kısayolları</string>
+    <string name="tv_preview_sound">Önizleme sesi</string>
     <string name="close_player">Kapat</string>
     <string name="tv_back_minimizes_player">Geri tuşu oynatıcıyı kapatmak yerine küçültür</string>
     <string name="tv_switch_stream">Diğer yayınlar</string>

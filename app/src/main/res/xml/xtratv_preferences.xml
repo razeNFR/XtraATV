@@ -1,0 +1,59 @@
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_adblock"
+        android:summary="@string/adblock_summary"
+        android:title="@string/adblock"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_frame_rate_matching"
+        android:summary="@string/frame_rate_matching_summary"
+        android:title="@string/frame_rate_matching"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_dpad_switch_stream"
+        android:summary="@string/tv_dpad_switch_stream_summary"
+        android:title="@string/tv_dpad_switch_stream"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_back_minimizes_player"
+        android:title="@string/tv_back_minimizes_player"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="ui_tv_preview"
+        android:title="@string/tv_stream_preview"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:dependency="ui_tv_preview"
+        android:key="ui_tv_preview_sound"
+        android:title="@string/tv_preview_sound"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <MultiSelectListPreference
+        android:entries="@array/gqlUserLanguageEntries"
+        android:entryValues="@array/gqlUserLanguageValues"
+        android:key="tv_home_languages"
+        android:summary="@string/tv_home_languages_summary"
+        android:title="@string/tv_home_languages"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>

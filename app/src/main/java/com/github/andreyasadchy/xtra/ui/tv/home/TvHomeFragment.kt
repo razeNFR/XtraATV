@@ -120,7 +120,7 @@ class TvHomeFragment : Fragment() {
         stopPreview()
     }
 
-    /** Muted live preview in the focused card after a short delay, like on the other lists. */
+    /** Live preview in the focused card after a short delay, like on the other lists. */
     private fun schedulePreview(stream: Stream?) {
         val login = stream?.channelLogin
         if (login == previewLogin.value && login != null) {
@@ -132,14 +132,12 @@ class TvHomeFragment : Fragment() {
             return
         }
         previewJob = viewLifecycleOwner.lifecycleScope.launch {
-            delay(500)
+            delay(com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.START_DELAY)
             val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(context, login) ?: return@launch
-            val player = previewPlayer.value ?: ExoPlayer.Builder(context).build().also {
-                it.volume = 0f
-                it.repeatMode = Player.REPEAT_MODE_OFF
-                it.trackSelectionParameters = it.trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
+            val player = previewPlayer.value ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.createPlayer(context).also {
                 previewPlayer.value = it
             }
+            player.volume = if (com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.hasSound(context)) 1f else 0f
             player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
             player.prepare()
             player.playWhenReady = true

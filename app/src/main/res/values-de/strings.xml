@@ -583,6 +583,9 @@
     <string name="tv_more_actions">Weitere Aktionen</string>
     <string name="tv_account">Konto</string>
     <string name="tv_stream_preview">Live-Vorschau des ausgewählten Streams (TV)</string>
+    <string name="xtratv_settings">Xtra TV-Einstellungen</string>
+    <string name="xtratv_settings_summary">Werbeblocker, Bildratenanpassung, Vorschauen, Startseite und Fernbedienungs-Kürzel</string>
+    <string name="tv_preview_sound">Ton der Vorschauen</string>
     <string name="close_player">Schließen</string>
     <string name="tv_back_minimizes_player">Die Zurück-Taste minimiert den Player, statt ihn zu schließen</string>
     <string name="tv_switch_stream">Andere Streams</string>

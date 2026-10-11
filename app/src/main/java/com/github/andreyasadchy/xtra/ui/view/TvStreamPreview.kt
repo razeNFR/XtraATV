@@ -9,19 +9,20 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
-import com.github.andreyasadchy.xtra.XtraApp
+import com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource
 import com.github.andreyasadchy.xtra.util.C
-import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
 import com.google.android.material.card.MaterialCardView
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * TV: muted low quality live preview played inside the thumbnail of the focused stream card.
+ * TV: low quality live preview played inside the thumbnail of the focused stream card.
+ * [onPlaying] is told when a preview starts and stops, to lower the sound of the stream behind it.
  */
-class TvStreamPreview(private val recyclerView: GridRecyclerView) {
+class TvStreamPreview(private val recyclerView: RecyclerView, private val onPlaying: ((Boolean) -> Unit)? = null) {
 
     private var player: ExoPlayer? = null
     private var textureView: TextureView? = null
@@ -41,7 +42,7 @@ class TvStreamPreview(private val recyclerView: GridRecyclerView) {
         }
         pendingCard = card
         pendingLogin = channelLogin
-        recyclerView.postDelayed(startAction, START_DELAY)
+        recyclerView.postDelayed(startAction, TvPreviewSource.START_DELAY)
     }
 
     private fun start() {
@@ -54,7 +55,7 @@ class TvStreamPreview(private val recyclerView: GridRecyclerView) {
         this.card = card
         loadJob = owner.lifecycleScope.launch {
             val context = recyclerView.context
-            val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(context, login)
+            val url = TvPreviewSource.getPlaylistUrl(context, login)
             if (url == null || this@TvStreamPreview.card != card || !card.hasFocus()) {
                 return@launch
             }
@@ -64,20 +65,15 @@ class TvStreamPreview(private val recyclerView: GridRecyclerView) {
             }
             card.addView(textureView, FrameLayout.LayoutParams(thumbnail.width, thumbnail.height))
             this@TvStreamPreview.textureView = textureView
-            val player = player ?: ExoPlayer.Builder(context).build().also {
-                it.volume = 0f
-                it.repeatMode = Player.REPEAT_MODE_OFF
-                it.trackSelectionParameters = it.trackSelectionParameters.buildUpon()
-                    .setMaxVideoSize(854, 480)
-                    .build()
-                player = it
-            }
+            val player = player ?: TvPreviewSource.createPlayer(context).also { player = it }
+            player.volume = if (TvPreviewSource.hasSound(context)) 1f else 0f
             player.clearVideoSurface()
             player.setVideoTextureView(textureView)
             player.addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {
                     player.removeListener(this)
                     textureView.animate().alpha(1f).setDuration(300).start()
+                    onPlaying?.invoke(true)
                 }
             })
             player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
@@ -96,6 +92,9 @@ class TvStreamPreview(private val recyclerView: GridRecyclerView) {
         player?.clearVideoSurface()
         textureView?.let { (it.parent as? FrameLayout)?.removeView(it) }
         textureView = null
+        if (card != null) {
+            onPlaying?.invoke(false)
+        }
         card = null
     }
 
@@ -106,8 +105,4 @@ class TvStreamPreview(private val recyclerView: GridRecyclerView) {
     }
 
     fun isPreviewing(view: View) = card == view || pendingCard == view
-
-    companion object {
-        private const val START_DELAY = 500L
-    }
 }

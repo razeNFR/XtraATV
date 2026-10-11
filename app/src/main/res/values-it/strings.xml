@@ -583,6 +583,9 @@
     <string name="tv_more_actions">Altre azioni</string>
     <string name="tv_account">Account</string>
     <string name="tv_stream_preview">Anteprima dal vivo dello stream selezionato (TV)</string>
+    <string name="xtratv_settings">Impostazioni Xtra TV</string>
+    <string name="xtratv_settings_summary">Blocco pubblicità, adattamento frame rate, anteprime, home e scorciatoie del telecomando</string>
+    <string name="tv_preview_sound">Audio delle anteprime</string>
     <string name="close_player">Chiudi</string>
     <string name="tv_back_minimizes_player">Il tasto Indietro riduce il player invece di chiuderlo</string>
     <string name="tv_switch_stream">Altri stream</string>

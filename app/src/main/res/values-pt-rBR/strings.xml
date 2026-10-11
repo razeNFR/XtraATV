@@ -583,6 +583,9 @@
     <string name="tv_more_actions">Mais ações</string>
     <string name="tv_account">Conta</string>
     <string name="tv_stream_preview">Prévia ao vivo da stream selecionada (TV)</string>
+    <string name="xtratv_settings">Configurações do Xtra TV</string>
+    <string name="xtratv_settings_summary">Bloqueador de anúncios, ajuste de taxa de quadros, prévias, início e atalhos do controle</string>
+    <string name="tv_preview_sound">Som das prévias</string>
     <string name="close_player">Fechar</string>
     <string name="tv_back_minimizes_player">O botão Voltar minimiza o player em vez de fechá-lo</string>
     <string name="tv_switch_stream">Outras streams</string>

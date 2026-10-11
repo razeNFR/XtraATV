@@ -583,6 +583,9 @@
     <string name="tv_more_actions">更多動作</string>
     <string name="tv_account">帳號</string>
     <string name="tv_stream_preview">所選直播的即時預覽（電視）</string>
+    <string name="xtratv_settings">Xtra TV 設定</string>
+    <string name="xtratv_settings_summary">廣告封鎖、影格率匹配、預覽、首頁和遙控器快捷鍵</string>
+    <string name="tv_preview_sound">預覽聲音</string>
     <string name="close_player">關閉</string>
     <string name="tv_back_minimizes_player">返回鍵將播放器縮小而不是關閉</string>
     <string name="tv_switch_stream">其他直播</string>
