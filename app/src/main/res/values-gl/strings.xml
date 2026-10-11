@@ -618,6 +618,11 @@
     <string name="tv_chat_height">Altura</string>
     <string name="tv_chat_margin">Distancia ao bordo</string>
     <string name="tv_chat_opacity">Opacidade do fondo</string>
+    <string name="tv_chat_mode">Visualización</string>
+    <string name="tv_chat_mode_overlay">Superposto</string>
+    <string name="tv_chat_mode_side">Xunto ao stream</string>
+    <string name="tv_chat_mode_below">Debaixo do stream</string>
+    <string name="tv_chat_text_size">Tamaño do texto</string>
     <string name="tv_chat_bottom_right">Abaixo á dereita</string>
     <string name="tv_chat_top_right">Arriba á dereita</string>
     <string name="tv_chat_bottom_left">Abaixo á esquerda</string>

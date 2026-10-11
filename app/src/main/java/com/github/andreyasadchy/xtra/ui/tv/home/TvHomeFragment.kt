@@ -35,12 +35,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** TV home written with Compose: rows of cards like the YouTube app, the focus is handled by Compose. */
-class TvHomeFragment : Fragment() {
+class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.Previewer {
 
     private val viewModel: TvHomeViewModel by viewModels { TvHomeViewModelFactory }
     private val previewLogin = mutableStateOf<String?>(null)
     private val previewPlayer = mutableStateOf<ExoPlayer?>(null)
     private var previewJob: Job? = null
+
+    init {
+        com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.register(this)
+    }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val context = requireContext()
@@ -128,12 +132,15 @@ class TvHomeFragment : Fragment() {
         }
         stopPreview()
         val context = context ?: return
-        if (login.isNullOrBlank() || !context.prefs().getBoolean(C.UI_TV_PREVIEW, true)) {
+        if (login.isNullOrBlank() || !context.prefs().getBoolean(C.UI_TV_PREVIEW, true) || com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended) {
             return
         }
         previewJob = viewLifecycleOwner.lifecycleScope.launch {
             delay(com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.START_DELAY)
             val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(context, login) ?: return@launch
+            if (com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended) {
+                return@launch
+            }
             val player = previewPlayer.value ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.createPlayer(context).also {
                 previewPlayer.value = it
             }
@@ -145,7 +152,7 @@ class TvHomeFragment : Fragment() {
         }
     }
 
-    private fun stopPreview() {
+    override fun stopPreview() {
         previewJob?.cancel()
         previewJob = null
         previewLogin.value = null

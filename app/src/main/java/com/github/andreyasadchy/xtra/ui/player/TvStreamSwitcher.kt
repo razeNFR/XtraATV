@@ -58,7 +58,7 @@ object TvStreamSwitcher {
         }
         // live previews like on the lists, the stream behind is silenced while a preview with sound plays
         val preview = if (activity.prefs().getBoolean(C.UI_TV_PREVIEW, true)) {
-            TvStreamPreview(recyclerView) { playing ->
+            TvStreamPreview(recyclerView, inPlayer = true) { playing ->
                 if (TvPreviewSource.hasSound(activity)) {
                     (activity.playerFragment as? PlayerFragment)?.setDucked(playing)
                 }

@@ -888,6 +888,20 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         viewModel.autoReconnect = true
     }
 
+    /** Size of the text and images of the chat, changed from the chat layout panel of the TV player. */
+    fun applySizeModifier() {
+        val adapter = adapter ?: return
+        val prefs = requireContext().prefs()
+        val sizeModifier = prefs.getInt(C.CHAT_SIZE_MODIFIER, 100).toFloat() / 100f
+        val metrics = resources.displayMetrics
+        adapter.messageTextSize = (prefs.getString(C.CHAT_TEXT_SIZE, "14")?.toFloatOrNull() ?: 14f) * sizeModifier
+        adapter.emoteSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (prefs.getString(C.CHAT_EMOTE_SIZE, "29.5")?.toFloatOrNull() ?: 29.5f) * sizeModifier, metrics).toInt()
+        adapter.badgeSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (prefs.getString(C.CHAT_BADGE_SIZE, "18.5")?.toFloatOrNull() ?: 18.5f) * sizeModifier, metrics).toInt()
+        adapter.gifSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (prefs.getString(C.CHAT_GIF_SIZE, "79.5")?.toFloatOrNull() ?: 79.5f) * sizeModifier, metrics).toInt()
+        @Suppress("NotifyDataSetChanged")
+        adapter.notifyDataSetChanged()
+    }
+
     fun reloadEmotes() {
         viewModel.reloadEmotes(
             requireArguments().getString(KEY_CHANNEL_ID),

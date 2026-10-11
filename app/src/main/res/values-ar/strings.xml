@@ -618,6 +618,11 @@
     <string name="tv_chat_height">الارتفاع</string>
     <string name="tv_chat_margin">المسافة من الحافة</string>
     <string name="tv_chat_opacity">شفافية الخلفية</string>
+    <string name="tv_chat_mode">العرض</string>
+    <string name="tv_chat_mode_overlay">فوق البث</string>
+    <string name="tv_chat_mode_side">بجانب البث</string>
+    <string name="tv_chat_mode_below">أسفل البث</string>
+    <string name="tv_chat_text_size">حجم النص</string>
     <string name="tv_chat_bottom_right">أسفل اليمين</string>
     <string name="tv_chat_top_right">أعلى اليمين</string>
     <string name="tv_chat_bottom_left">أسفل اليسار</string>

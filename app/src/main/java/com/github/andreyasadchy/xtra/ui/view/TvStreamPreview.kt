@@ -22,7 +22,19 @@ import kotlinx.coroutines.launch
  * TV: low quality live preview played inside the thumbnail of the focused stream card.
  * [onPlaying] is told when a preview starts and stops, to lower the sound of the stream behind it.
  */
-class TvStreamPreview(private val recyclerView: RecyclerView, private val onPlaying: ((Boolean) -> Unit)? = null) {
+class TvStreamPreview(
+    private val recyclerView: RecyclerView,
+    private val inPlayer: Boolean = false,
+    private val onPlaying: ((Boolean) -> Unit)? = null,
+) : TvPreviewSource.Previewer {
+
+    init {
+        if (!inPlayer) {
+            TvPreviewSource.register(this)
+        }
+    }
+
+    override fun stopPreview() = stop()
 
     private var player: ExoPlayer? = null
     private var textureView: TextureView? = null
@@ -37,7 +49,7 @@ class TvStreamPreview(private val recyclerView: RecyclerView, private val onPlay
             return
         }
         stop()
-        if (channelLogin.isNullOrBlank() || !recyclerView.context.prefs().getBoolean(C.UI_TV_PREVIEW, true)) {
+        if (channelLogin.isNullOrBlank() || !recyclerView.context.prefs().getBoolean(C.UI_TV_PREVIEW, true) || (!inPlayer && TvPreviewSource.suspended)) {
             return
         }
         pendingCard = card
@@ -56,7 +68,7 @@ class TvStreamPreview(private val recyclerView: RecyclerView, private val onPlay
         loadJob = owner.lifecycleScope.launch {
             val context = recyclerView.context
             val url = TvPreviewSource.getPlaylistUrl(context, login)
-            if (url == null || this@TvStreamPreview.card != card || !card.hasFocus()) {
+            if (url == null || this@TvStreamPreview.card != card || !card.hasFocus() || (!inPlayer && TvPreviewSource.suspended)) {
                 return@launch
             }
             val textureView = TextureView(context).apply {

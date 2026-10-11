@@ -619,6 +619,11 @@
     <string name="tv_chat_height">Tinggi</string>
     <string name="tv_chat_margin">Jarak dari tepi</string>
     <string name="tv_chat_opacity">Opasitas latar</string>
+    <string name="tv_chat_mode">Tampilan</string>
+    <string name="tv_chat_mode_overlay">Melapisi</string>
+    <string name="tv_chat_mode_side">Di samping stream</string>
+    <string name="tv_chat_mode_below">Di bawah stream</string>
+    <string name="tv_chat_text_size">Ukuran teks</string>
     <string name="tv_chat_bottom_right">Kanan bawah</string>
     <string name="tv_chat_top_right">Kanan atas</string>
     <string name="tv_chat_bottom_left">Kiri bawah</string>

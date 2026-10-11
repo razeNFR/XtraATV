@@ -1565,6 +1565,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
                 width = ViewGroup.LayoutParams.MATCH_PARENT
                 height = ViewGroup.LayoutParams.MATCH_PARENT
+                gravity = Gravity.NO_GRAVITY
                 marginEnd = 0
             }
             (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(chatLayout.windowToken, 0)
@@ -1927,7 +1928,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         val newPosition = tvScrubPosition
                         tvScrubPosition = -1
                         progressBar.isPressed = false
-                        seekPreview?.hide()
+                        seekPreview?.hideLater()
                         val dvrStream = getTvDvrStream()
                         when {
                             isLive -> {
@@ -2047,9 +2048,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             } else {
                 getLiveStoryboardUrl(login!!, dvrStream?.createdAt)
             }
-            if (url != null && view != null) {
+            // the lowest quality of the VOD being played, for its frames when there is no storyboard
+            val playlist = playbackService?.qualities?.filter { !it.url.isNullOrBlank() && it.name?.startsWith("audio", true) != true }
+                ?.minByOrNull { it.resolution ?: Int.MAX_VALUE }?.url
+            if ((url != null || playlist != null) && view != null) {
                 // a VOD of a stream still live keeps growing
-                preview.load(url, refresh = dvrStream != null)
+                preview.load(url, refresh = dvrStream != null || url == null, videoPlaylist = playlist)
             }
         }
     }
@@ -2060,25 +2064,72 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val prefs = requireContext().prefs()
             val metrics = resources.displayMetrics
             val position = prefs.getInt(C.TV_CHAT_POSITION, 0)
-            val margin = (prefs.getInt(C.TV_CHAT_MARGIN, 0) * metrics.density).toInt()
-            playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
-                width = ViewGroup.LayoutParams.MATCH_PARENT
-                height = ViewGroup.LayoutParams.MATCH_PARENT
-                marginEnd = 0
-            }
-            chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
-                width = (metrics.widthPixels * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
-                height = (metrics.heightPixels * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
-                gravity = when (position) {
-                    1 -> Gravity.END or Gravity.TOP
-                    2 -> Gravity.START or Gravity.BOTTOM
-                    3 -> Gravity.START or Gravity.TOP
-                    else -> Gravity.END or Gravity.BOTTOM
+            val mode = prefs.getInt(C.TV_CHAT_MODE, 0)
+            val margin = if (mode == 0) (prefs.getInt(C.TV_CHAT_MARGIN, 0) * metrics.density).toInt() else 0
+            val screenWidth = root.width.takeIf { it > 0 } ?: metrics.widthPixels
+            val screenHeight = root.height.takeIf { it > 0 } ?: metrics.heightPixels
+            val chatWidth = (screenWidth * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
+            val chatHeight = (screenHeight * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
+            val left = position == 2 || position == 3
+            val top = position == 1 || position == 3
+            when (mode) {
+                // next to the stream: the picture gets smaller and the chat takes a column
+                1 -> {
+                    playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = screenWidth - chatWidth
+                        height = ViewGroup.LayoutParams.MATCH_PARENT
+                        gravity = if (left) Gravity.END else Gravity.START
+                        marginEnd = 0
+                    }
+                    chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = chatWidth
+                        height = ViewGroup.LayoutParams.MATCH_PARENT
+                        gravity = if (left) Gravity.START else Gravity.END
+                        setMargins(0, 0, 0, 0)
+                        marginStart = 0
+                        marginEnd = 0
+                    }
                 }
-                marginStart = margin
-                marginEnd = margin
-                topMargin = margin
-                bottomMargin = margin
+                // under (or above) the stream: the chat takes a band the whole width of the screen
+                2 -> {
+                    val bandHeight = chatHeight.coerceAtMost((screenHeight * 0.6f).toInt())
+                    playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = ViewGroup.LayoutParams.MATCH_PARENT
+                        height = screenHeight - bandHeight
+                        gravity = if (top) Gravity.BOTTOM else Gravity.TOP
+                        marginEnd = 0
+                    }
+                    chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = ViewGroup.LayoutParams.MATCH_PARENT
+                        height = bandHeight
+                        gravity = if (top) Gravity.TOP else Gravity.BOTTOM
+                        setMargins(0, 0, 0, 0)
+                        marginStart = 0
+                        marginEnd = 0
+                    }
+                }
+                else -> {
+                    playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = ViewGroup.LayoutParams.MATCH_PARENT
+                        height = ViewGroup.LayoutParams.MATCH_PARENT
+                        gravity = Gravity.NO_GRAVITY
+                        marginEnd = 0
+                    }
+                    chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = chatWidth
+                        height = chatHeight
+                        gravity = when (position) {
+                            1 -> Gravity.END or Gravity.TOP
+                            2 -> Gravity.START or Gravity.BOTTOM
+                            3 -> Gravity.START or Gravity.TOP
+                            else -> Gravity.END or Gravity.BOTTOM
+                        }
+                        marginStart = margin
+                        marginEnd = margin
+                        topMargin = margin
+                        bottomMargin = margin
+                    }
+                }
             }
             chatLayout.translationY = if (playerControls.root.isVisible) getTvChatLift() else 0f
             chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_background)
@@ -2090,6 +2141,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** The chat goes up over the controls only when it is at the bottom of the screen. */
     private fun getTvChatLift(): Float {
         val position = requireContext().prefs().getInt(C.TV_CHAT_POSITION, 0)
+        // next to or under the stream, the controls are on the picture and the chat stays where it is
+        if (requireContext().prefs().getInt(C.TV_CHAT_MODE, 0) != 0) {
+            return 0f
+        }
         return if (position == 0 || position == 2) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
     }
 
@@ -2106,8 +2161,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             getString(R.string.tv_chat_bottom_left),
             getString(R.string.tv_chat_top_left),
         )
+        val modes = listOf(
+            getString(R.string.tv_chat_mode_overlay),
+            getString(R.string.tv_chat_mode_side),
+            getString(R.string.tv_chat_mode_below),
+        )
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(context) { dismiss ->
             val position = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_POSITION, 0)) }
+            val mode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_MODE, 0)) }
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_chat_layout),
                 alignEnd = position.intValue == 2 || position.intValue == 3,
@@ -2119,9 +2180,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         applyTvChatLayout()
                     }
                 }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), positions, position.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) {
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_mode), modes, mode.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) {
+                    mode.intValue = it
+                    update(C.TV_CHAT_MODE, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), positions, position.intValue) {
                     position.intValue = it
                     update(C.TV_CHAT_POSITION, it)
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_text_size), prefs.getInt(C.CHAT_SIZE_MODIFIER, 100), 60..200, step = 10, valueText = { "$it %" }) {
+                    prefs.edit { putInt(C.CHAT_SIZE_MODIFIER, it) }
+                    chatFragment?.applySizeModifier()
                 }
                 com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
                     update(C.TV_CHAT_WIDTH, it)
@@ -2143,10 +2212,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         remove(C.TV_CHAT_HEIGHT)
                         remove(C.TV_CHAT_MARGIN)
                         remove(C.TV_CHAT_OPACITY)
+                        remove(C.TV_CHAT_MODE)
+                        remove(C.CHAT_SIZE_MODIFIER)
                     }
                     if (_binding != null) {
                         applyTvChatLayout()
                     }
+                    chatFragment?.applySizeModifier()
                     dismiss()
                 }
                 androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
@@ -3314,6 +3386,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onDestroyView() {
         _binding?.root?.removeCallbacks(tvHudTicker)
         resetFrameRateMatching()
+        seekPreview?.release()
         seekPreview = null
         tvStatsView = null
         tvTopRightStack = null

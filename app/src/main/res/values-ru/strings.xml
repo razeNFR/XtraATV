@@ -618,6 +618,11 @@
     <string name="tv_chat_height">Высота</string>
     <string name="tv_chat_margin">Отступ от края</string>
     <string name="tv_chat_opacity">Непрозрачность фона</string>
+    <string name="tv_chat_mode">Отображение</string>
+    <string name="tv_chat_mode_overlay">Поверх видео</string>
+    <string name="tv_chat_mode_side">Рядом с трансляцией</string>
+    <string name="tv_chat_mode_below">Под трансляцией</string>
+    <string name="tv_chat_text_size">Размер текста</string>
     <string name="tv_chat_bottom_right">Справа внизу</string>
     <string name="tv_chat_top_right">Справа вверху</string>
     <string name="tv_chat_bottom_left">Слева внизу</string>

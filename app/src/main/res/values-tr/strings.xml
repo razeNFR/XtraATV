@@ -619,6 +619,11 @@
     <string name="tv_chat_height">Yükseklik</string>
     <string name="tv_chat_margin">Kenara uzaklık</string>
     <string name="tv_chat_opacity">Arka plan opaklığı</string>
+    <string name="tv_chat_mode">Görünüm</string>
+    <string name="tv_chat_mode_overlay">Üstte</string>
+    <string name="tv_chat_mode_side">Yayının yanında</string>
+    <string name="tv_chat_mode_below">Yayının altında</string>
+    <string name="tv_chat_text_size">Yazı boyutu</string>
     <string name="tv_chat_bottom_right">Sağ alt</string>
     <string name="tv_chat_top_right">Sağ üst</string>
     <string name="tv_chat_bottom_left">Sol alt</string>

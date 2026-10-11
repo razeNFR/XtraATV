@@ -25,6 +25,26 @@ object TvPreviewSource {
         "web" to "site",
     )
 
+    /** A list that plays previews: they are all stopped when a player opens. */
+    fun interface Previewer {
+        fun stopPreview()
+    }
+
+    private val previewers = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Previewer, Boolean>())
+
+    fun register(previewer: Previewer) {
+        previewers.add(previewer)
+    }
+
+    /** True while a player or the multi-stream is on screen: the lists behind it play no preview. */
+    var suspended = false
+        set(value) {
+            field = value
+            if (value) {
+                previewers.toList().forEach { it.stopPreview() }
+            }
+        }
+
     /** Delay between the focus on a card and the start of its preview. */
     const val START_DELAY = 100L
 

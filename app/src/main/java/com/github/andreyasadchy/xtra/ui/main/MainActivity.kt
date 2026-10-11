@@ -1517,6 +1517,8 @@ class MainActivity : AppCompatActivity() {
      * and restores the previously focused item when the player is minimized or closed.
      */
     fun setMainContentFocusable(focusable: Boolean) {
+        // the previews of the lists behind a player stop, with their sound
+        com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended = !focusable
         if (focusable) {
             if (binding.navHostFragment.descendantFocusability != ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
                 return

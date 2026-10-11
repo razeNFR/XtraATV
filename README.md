@@ -43,10 +43,10 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 ### Player
 - **TV controls** reachable with the D-pad, with tooltips and a badge with the quality being played.
 - **Go back in time in a live stream**: the timeline covers the whole broadcast, going back plays the VOD being recorded, going to the end comes back to live.
-- **Thumbnails on the timeline** while seeking, in VODs and in the past of a live stream.
+- **Thumbnails on the timeline** while seeking, in VODs and in the past of a live stream (taken from the video itself while the broadcast is still going, Twitch makes its thumbnails only at the end).
 - **Fast D-pad seeking** that speeds up while the key is held.
 - **Sub-only VODs** playback.
-- **Chat overlay** with a **chat layout panel**: position, width, height, distance from the edge and opacity.
+- **Chat** over the stream, next to it or under it, with a **chat layout panel**: display, position, text size, width, height, distance from the edge and opacity.
 - **Write in the chat** with the remote, with **voice dictation**.
 - **Stream switcher**: a banner in the player with the other streams of the category you came from, with live previews.
 - **Streamer switch shortcut** (option): left / right change streamer while the controls are hidden, channel up / down too. The previous and next streamers show on the sides of the screen for a few seconds.
