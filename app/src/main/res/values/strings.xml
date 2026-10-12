@@ -660,4 +660,8 @@
     <string name="tv_dpad_switch_stream_summary">When the controls are hidden, left and right go to the previous or next streamer of the list the stream was opened from</string>
     <string name="tv_home_languages">Languages of the Popular row (home)</string>
     <string name="tv_home_languages_summary">Streams of the Popular row of the home in these languages only, all languages when none is checked</string>
+    <string name="tv_home_cards">Stream cards on the home</string>
+    <string name="tv_home_cards_summary">%s cards in the width of the screen</string>
+    <string name="tv_stream_columns">Stream columns in the lists</string>
+    <string name="tv_stream_columns_summary">%s columns: fewer columns, bigger cards</string>
 </resources>

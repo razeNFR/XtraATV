@@ -641,4 +641,8 @@
     <string name="tv_dpad_switch_stream_summary">Wenn die Steuerung ausgeblendet ist, wechseln links und rechts zum vorherigen oder nächsten Streamer der Liste, aus der der Stream geöffnet wurde</string>
     <string name="tv_home_languages">Sprachen der Zeile Beliebt (Startseite)</string>
     <string name="tv_home_languages_summary">Streams der Zeile Beliebt auf der Startseite nur in diesen Sprachen, alle Sprachen wenn keine ausgewählt ist</string>
+    <string name="tv_home_cards">Stream-Karten auf der Startseite</string>
+    <string name="tv_home_cards_summary">%s Karten über die Bildschirmbreite</string>
+    <string name="tv_stream_columns">Stream-Spalten in den Listen</string>
+    <string name="tv_stream_columns_summary">%s Spalten: weniger Spalten, größere Karten</string>
 </resources>

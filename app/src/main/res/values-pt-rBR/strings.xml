@@ -641,4 +641,8 @@
     <string name="tv_dpad_switch_stream_summary">Com os controles ocultos, esquerda e direita vão para o streamer anterior ou seguinte da lista de onde a stream foi aberta</string>
     <string name="tv_home_languages">Idiomas da linha Popular (início)</string>
     <string name="tv_home_languages_summary">Streams da linha Popular do início apenas nestes idiomas, todos os idiomas se nenhum estiver marcado</string>
+    <string name="tv_home_cards">Cartões de live no início</string>
+    <string name="tv_home_cards_summary">%s cartões na largura da tela</string>
+    <string name="tv_stream_columns">Colunas de lives nas listas</string>
+    <string name="tv_stream_columns_summary">%s colunas: menos colunas, cartões maiores</string>
 </resources>

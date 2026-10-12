@@ -641,4 +641,8 @@
     <string name="tv_dpad_switch_stream_summary">عند إخفاء عناصر التحكم، ينتقل اليسار واليمين إلى صاحب البث السابق أو التالي في القائمة التي فُتح منها البث</string>
     <string name="tv_home_languages">لغات صف الشائع (الرئيسية)</string>
     <string name="tv_home_languages_summary">بثوث صف الشائع في الرئيسية بهذه اللغات فقط، وكل اللغات إذا لم يتم اختيار أي لغة</string>
+    <string name="tv_home_cards">بطاقات البث في الصفحة الرئيسية</string>
+    <string name="tv_home_cards_summary">%s بطاقات بعرض الشاشة</string>
+    <string name="tv_stream_columns">أعمدة البث في القوائم</string>
+    <string name="tv_stream_columns_summary">%s أعمدة: أعمدة أقل وبطاقات أكبر</string>
 </resources>

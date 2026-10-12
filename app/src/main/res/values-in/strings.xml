@@ -642,4 +642,8 @@
     <string name="tv_dpad_switch_stream_summary">Saat kontrol tersembunyi, kiri dan kanan berpindah ke streamer sebelumnya atau berikutnya dari daftar asal stream</string>
     <string name="tv_home_languages">Bahasa baris Populer (beranda)</string>
     <string name="tv_home_languages_summary">Stream di baris Populer beranda hanya dalam bahasa ini, semua bahasa jika tidak ada yang dicentang</string>
+    <string name="tv_home_cards">Kartu stream di beranda</string>
+    <string name="tv_home_cards_summary">%s kartu selebar layar</string>
+    <string name="tv_stream_columns">Kolom stream di daftar</string>
+    <string name="tv_stream_columns_summary">%s kolom: lebih sedikit kolom, kartu lebih besar</string>
 </resources>

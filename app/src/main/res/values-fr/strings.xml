@@ -641,4 +641,8 @@
     <string name="tv_dpad_switch_stream_summary">Quand le HUD est caché, gauche et droite passent au streamer précédent ou suivant de la liste d\'où vient le stream</string>
     <string name="tv_home_languages">Langues de la ligne Populaires (accueil)</string>
     <string name="tv_home_languages_summary">Les streams de la ligne Populaires de l\'accueil uniquement dans ces langues, toutes les langues si aucune n\'est cochée</string>
+    <string name="tv_home_cards">Cartes de stream sur l’accueil</string>
+    <string name="tv_home_cards_summary">%s cartes dans la largeur de l’écran</string>
+    <string name="tv_stream_columns">Colonnes de streams dans les listes</string>
+    <string name="tv_stream_columns_summary">%s colonnes : moins de colonnes, cartes plus grandes</string>
 </resources>

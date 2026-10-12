@@ -641,4 +641,8 @@
     <string name="tv_dpad_switch_stream_summary">コントロールが非表示のとき、左右キーで配信を開いたリストの前または次の配信者に切り替えます</string>
     <string name="tv_home_languages">人気の行の言語（ホーム）</string>
     <string name="tv_home_languages_summary">ホームの人気の行にはこれらの言語の配信のみ表示します。何も選択しない場合はすべての言語</string>
+    <string name="tv_home_cards">ホームの配信カード</string>
+    <string name="tv_home_cards_summary">画面幅に %s 枚</string>
+    <string name="tv_stream_columns">リストの配信の列数</string>
+    <string name="tv_stream_columns_summary">%s 列: 列が少ないほどカードが大きい</string>
 </resources>

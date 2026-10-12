@@ -41,6 +41,9 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private val previewLogin = mutableStateOf<String?>(null)
     private val previewPlayer = mutableStateOf<ExoPlayer?>(null)
     private var previewJob: Job? = null
+    // snapshot states: the cards that read them follow their changes
+    private val homeStamp = androidx.compose.runtime.mutableLongStateOf(0L)
+    private val homeRefreshing = mutableStateOf(false)
 
     init {
         com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.register(this)
@@ -91,7 +94,16 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 stopPreview()
                 viewModel.load(force = true)
             },
+            cardsPerRow = context.prefs().getString(C.TV_HOME_CARDS, "3")?.toIntOrNull() ?: 3,
+            thumbnailStamp = { homeStamp.longValue },
+            refreshing = { homeRefreshing.value },
         )
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.stamp.collect { homeStamp.longValue = it }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.refreshing.collect { homeRefreshing.value = it }
+        }
         val followedId = if (context.prefs().getBoolean(C.UI_FOLLOW_PAGER, true)) R.id.followPagerFragment else R.id.followMediaFragment
         return ComposeView(context).apply {
             id = R.id.tvHome

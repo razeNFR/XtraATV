@@ -641,4 +641,8 @@
     <string name="tv_dpad_switch_stream_summary">Con i controlli nascosti, sinistra e destra passano allo streamer precedente o successivo della lista da cui è stato aperto lo stream</string>
     <string name="tv_home_languages">Lingue della riga Popolari (home)</string>
     <string name="tv_home_languages_summary">Stream della riga Popolari della home solo in queste lingue, tutte le lingue se nessuna è selezionata</string>
+    <string name="tv_home_cards">Schede delle dirette nella home</string>
+    <string name="tv_home_cards_summary">%s schede nella larghezza dello schermo</string>
+    <string name="tv_stream_columns">Colonne delle dirette negli elenchi</string>
+    <string name="tv_stream_columns_summary">%s colonne: meno colonne, schede più grandi</string>
 </resources>

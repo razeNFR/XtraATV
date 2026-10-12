@@ -41,7 +41,7 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
     }
 
     companion object {
-        private val TV_HIDDEN_KEYS = listOf(
+        val TV_HIDDEN_KEYS = listOf(
             "columnsPortrait", "columnsLandscape", "ui_scrolltop", "ui_theme_bottom_nav_color", "ui_theme_appbar_lift",
             "player_rounded_corner_padding", "player_move_freely", "player_minimize", "player_aspect", "player_fullscreen",
             "player_doubletap", "player_chatbartoggle", "chatWidth", "ui_draw_behind_cutouts",

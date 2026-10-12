@@ -216,6 +216,8 @@ class MainActivity : AppCompatActivity() {
                         return
                     }
                     binding.root.post {
+                        // a list of streams shown again after a while: the streamers that stopped go away
+                        f.view?.let { refreshStaleStreamLists(it) }
                         if (tvInitialFocusDone && f.parentFragment is NavHostFragment && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
                             restoreTvScreenFocus()
                         }
@@ -1001,6 +1003,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Goes to a section of the side menu ("see all" of the TV home). */
+    private fun refreshStaleStreamLists(view: View) {
+        when (view) {
+            is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> view.refreshIfStale()
+            is ViewGroup -> for (i in 0 until view.childCount) refreshStaleStreamLists(view.getChildAt(i))
+        }
+    }
+
     fun openTvSection(id: Int) {
         binding.navBar.selectedItemId = id
         tvMenuState.selected = binding.navBar.selectedItemId
@@ -1346,21 +1355,103 @@ class MainActivity : AppCompatActivity() {
     var dvrStream: Stream? = null
     private var currentStreamLogin: String? = null
 
+    private var switchJob: kotlinx.coroutines.Job? = null
+    private var queueCheckJob: kotlinx.coroutines.Job? = null
+
     fun switchStream(offset: Int) {
-        val queue = streamQueue
-        if (queue.size < 2) {
+        if (streamQueue.size < 2 || switchJob?.isActive == true) {
             return
         }
-        val index = queue.indexOfFirst { it.channelLogin != null && it.channelLogin == currentStreamLogin }
-        val nextIndex = Math.floorMod(index + offset, queue.size)
-        val next = queue.getOrNull(nextIndex) ?: return
-        startStream(next)
-        // the streamers that left and right go to now
-        com.github.andreyasadchy.xtra.ui.player.TvSwitchOverlay.show(
-            this,
-            queue.getOrNull(Math.floorMod(nextIndex - 1, queue.size)),
-            queue.getOrNull(Math.floorMod(nextIndex + 1, queue.size)),
-        )
+        switchJob = lifecycleScope.launch {
+            var tries = 0
+            while (tries++ < 5) {
+                val queue = streamQueue
+                if (queue.size < 2) {
+                    return@launch
+                }
+                val index = queue.indexOfFirst { it.channelLogin != null && it.channelLogin == currentStreamLogin }
+                val nextIndex = Math.floorMod(index + offset, queue.size)
+                val next = queue.getOrNull(nextIndex) ?: return@launch
+                // a streamer of the list that stopped since: out of the list, the next one in the same direction
+                if (isOffline(next)) {
+                    streamQueue = queue.filter { it !== next }
+                    if (index < 0) {
+                        return@launch
+                    }
+                    continue
+                }
+                startStream(next)
+                val updated = streamQueue
+                val newIndex = updated.indexOf(next)
+                // the streamers that left and right go to now
+                com.github.andreyasadchy.xtra.ui.player.TvSwitchOverlay.show(
+                    this@MainActivity,
+                    updated.getOrNull(Math.floorMod(newIndex - 1, updated.size)),
+                    updated.getOrNull(Math.floorMod(newIndex + 1, updated.size)),
+                )
+                return@launch
+            }
+        }
+    }
+
+    /** Live streams of these channels, null when the request fails. */
+    private suspend fun loadLiveStreams(ids: List<String>): Map<String, com.github.andreyasadchy.xtra.graphql.UsersStreamQuery.Stream>? {
+        return try {
+            val result = mutableMapOf<String, com.github.andreyasadchy.xtra.graphql.UsersStreamQuery.Stream>()
+            ids.chunked(100).forEach { chunk ->
+                (application as XtraApp).xtraModule.graphQLRepository.loadQueryUsersStream(
+                    prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    TwitchApiHelper.getGQLHeaders(this),
+                    ids = chunk
+                ).data!!.users?.forEach { user ->
+                    val id = user?.id
+                    val stream = user?.stream
+                    if (id != null && stream != null) {
+                        result[id] = stream
+                    }
+                }
+            }
+            result
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private suspend fun isOffline(stream: Stream): Boolean {
+        val id = stream.channelId ?: return false
+        return loadLiveStreams(listOf(id))?.let { !it.containsKey(id) } ?: false
+    }
+
+    /** The list used to switch streamer is checked from time to time: the streamers that stopped go away. */
+    private fun startQueueCheck() {
+        queueCheckJob?.cancel()
+        queueCheckJob = lifecycleScope.launch {
+            while (streamQueue.size > 1) {
+                kotlinx.coroutines.delay(90_000L)
+                val queue = streamQueue
+                val ids = queue.mapNotNull { it.channelId }
+                if (ids.isEmpty()) {
+                    return@launch
+                }
+                val live = loadLiveStreams(ids) ?: continue
+                if (streamQueue !== queue) {
+                    continue
+                }
+                streamQueue = queue.mapNotNull { stream ->
+                    val update = stream.channelId?.let { live[it] }
+                    when {
+                        // the stream being watched stays, the switch starts from it
+                        stream.channelLogin == currentStreamLogin && update == null -> stream
+                        update == null -> null
+                        else -> stream.apply {
+                            viewerCount = update.viewersCount ?: viewerCount
+                            title = update.broadcaster?.broadcastSettings?.title ?: title
+                            gameName = update.game?.displayName ?: gameName
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /** TV multi-stream: replaces the player with up to 4 streams shown together. */
@@ -1389,6 +1480,7 @@ class MainActivity : AppCompatActivity() {
     fun startStream(stream: Stream, queue: List<Stream>? = null) {
         if (queue != null) {
             streamQueue = queue
+            startQueueCheck()
         }
         currentStreamLogin = stream.channelLogin
         dvrStream = null

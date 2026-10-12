@@ -121,13 +121,15 @@ class GridRecyclerView : RecyclerView {
             adapter?.registerAdapterDataObserver(dataObserver)
         }
         super.setAdapter(adapter)
+        dataLoadedAt = System.currentTimeMillis()
         if (isTv) {
             scheduleFocusCheck()
             val columns = when (adapter) {
                 is GamesAdapter, is FollowedGamesAdapter -> TV_COLUMNS_GAMES
                 is FollowedChannelsAdapter, is ChannelSearchAdapter, is StreamsCompactAdapter, is TeamMembersAdapter -> TV_COLUMNS_CHANNELS
                 is RecentSearchAdapter, is FiltersAdapter -> TV_COLUMNS_TEXT
-                else -> TV_COLUMNS_MEDIA
+                // streams, videos and clips: from 2 big cards to 6 small ones a row, from the settings
+                else -> prefs.getString(C.TV_STREAM_COLUMNS, TV_COLUMNS_MEDIA.toString())?.toIntOrNull()?.coerceIn(2, 6) ?: TV_COLUMNS_MEDIA
             }
             if (columns != tvColumns) {
                 tvColumns = columns
@@ -137,6 +139,24 @@ class GridRecyclerView : RecyclerView {
                 gridLayoutManager.spanCount = columns
                 addItemDecoration(columns)
             }
+        }
+    }
+
+    private var dataLoadedAt = 0L
+
+    /**
+     * TV: lists of live streams load again when the screen comes back after a while, a streamer that stopped
+     * does not stay in the list.
+     */
+    fun refreshIfStale(maxAge: Long = 30_000L) {
+        val adapter = adapter
+        if (adapter !is StreamsAdapter && adapter !is StreamsCompactAdapter) {
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (now - dataLoadedAt > maxAge) {
+            dataLoadedAt = now
+            (adapter as? androidx.paging.PagingDataAdapter<*, *>)?.refresh()
         }
     }
 

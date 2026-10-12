@@ -642,4 +642,8 @@
     <string name="tv_dpad_switch_stream_summary">Kontroller gizliyken sol ve sağ, yayının açıldığı listedeki önceki veya sonraki yayıncıya geçer</string>
     <string name="tv_home_languages">Popüler satırının dilleri (ana sayfa)</string>
     <string name="tv_home_languages_summary">Ana sayfadaki Popüler satırında yalnızca bu dillerdeki yayınlar, hiçbiri seçili değilse tüm diller</string>
+    <string name="tv_home_cards">Ana sayfadaki yayın kartları</string>
+    <string name="tv_home_cards_summary">Ekran genişliğinde %s kart</string>
+    <string name="tv_stream_columns">Listelerdeki yayın sütunları</string>
+    <string name="tv_stream_columns_summary">%s sütun: daha az sütun, daha büyük kartlar</string>
 </resources>

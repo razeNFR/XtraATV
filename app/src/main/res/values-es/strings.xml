@@ -646,4 +646,8 @@
     <string name="tv_dpad_switch_stream_summary">Con los controles ocultos, izquierda y derecha pasan al streamer anterior o siguiente de la lista desde la que se abrió el stream</string>
     <string name="tv_home_languages">Idiomas de la fila Popular (inicio)</string>
     <string name="tv_home_languages_summary">Streams de la fila Popular del inicio solo en estos idiomas, todos los idiomas si no hay ninguno marcado</string>
+    <string name="tv_home_cards">Tarjetas de streams en el inicio</string>
+    <string name="tv_home_cards_summary">%s tarjetas en el ancho de la pantalla</string>
+    <string name="tv_stream_columns">Columnas de streams en las listas</string>
+    <string name="tv_stream_columns_summary">%s columnas: menos columnas, tarjetas más grandes</string>
 </resources>

@@ -89,6 +89,8 @@ object C {
     const val UI_UPTIME = "ui_uptime"
     const val UI_TV_PREVIEW = "ui_tv_preview"
     const val UI_TV_PREVIEW_SOUND = "ui_tv_preview_sound"
+    const val TV_HOME_CARDS = "tv_home_cards"
+    const val TV_STREAM_COLUMNS = "tv_stream_columns"
     const val TV_BACK_MINIMIZES_PLAYER = "tv_back_minimizes_player"
     const val UI_TAGS = "ui_tags"
     const val UI_SCROLL_TOP = "ui_scrolltop"
