@@ -54,37 +54,10 @@ class TvHomeViewModel(
         refreshing.value = true
         val jobs = mutableListOf<kotlinx.coroutines.Job>()
         jobs += viewModelScope.launch {
-            followed.value = loadPage(
-                FollowedStreamsDataSource(
-                    userId = applicationContext.tokenPrefs().getString(C.USER_ID, null),
-                    localChannelFollowsRepository = localChannelFollowsRepository,
-                    gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true),
-                    graphQLRepository = graphQLRepository,
-                    helixHeaders = helixHeaders,
-                    helixRepository = helixRepository,
-                    enableIntegrity = enableIntegrity,
-                    networkLibrary = networkLibrary,
-                )
-            )
+            followed.value = loadPage(createFollowedSource())
         }
-        // languages of the "Popular" row, chosen in the settings (all when none)
-        val languages = prefs.getStringSet(C.TV_HOME_LANGUAGES, null)?.filter { it.isNotBlank() }?.ifEmpty { null }
         jobs += viewModelScope.launch {
-            popular.value = loadPage(
-                StreamsDataSource(
-                    gqlQueryLanguages = languages?.mapNotNull { language -> com.github.andreyasadchy.xtra.graphql.type.Language.entries.find { it.rawValue == language } },
-                    gqlQuerySort = StreamSort.VIEWER_COUNT,
-                    gqlLanguages = languages,
-                    gqlSort = "VIEWER_COUNT",
-                    tags = null,
-                    gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),
-                    graphQLRepository = graphQLRepository,
-                    helixHeaders = helixHeaders,
-                    helixRepository = helixRepository,
-                    enableIntegrity = enableIntegrity,
-                    networkLibrary = networkLibrary,
-                )
-            )
+            popular.value = loadPage(createPopularSource())
         }
         jobs += viewModelScope.launch {
             games.value = loadPage(
@@ -104,6 +77,41 @@ class TvHomeViewModel(
             stamp.value = System.currentTimeMillis() / 1000
             refreshing.value = false
         }
+    }
+
+    /** Source of the "Followed live" row, also used by the player to load the list again (the other streams, left / right). */
+    fun createFollowedSource(): PagingSource<Int, Stream> {
+        val prefs = applicationContext.prefs()
+        return FollowedStreamsDataSource(
+            userId = applicationContext.tokenPrefs().getString(C.USER_ID, null),
+            localChannelFollowsRepository = localChannelFollowsRepository,
+            gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true),
+            graphQLRepository = graphQLRepository,
+            helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
+            helixRepository = helixRepository,
+            enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false),
+            networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+        )
+    }
+
+    /** Source of the "Popular" row, also used by the player to load the list again (the other streams, left / right). */
+    fun createPopularSource(): PagingSource<Int, Stream> {
+        val prefs = applicationContext.prefs()
+        // languages of the "Popular" row, chosen in the settings (all when none)
+        val languages = prefs.getStringSet(C.TV_HOME_LANGUAGES, null)?.filter { it.isNotBlank() }?.ifEmpty { null }
+        return StreamsDataSource(
+            gqlQueryLanguages = languages?.mapNotNull { language -> com.github.andreyasadchy.xtra.graphql.type.Language.entries.find { it.rawValue == language } },
+            gqlQuerySort = StreamSort.VIEWER_COUNT,
+            gqlLanguages = languages,
+            gqlSort = "VIEWER_COUNT",
+            tags = null,
+            gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),
+            graphQLRepository = graphQLRepository,
+            helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
+            helixRepository = helixRepository,
+            enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false),
+            networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+        )
     }
 
     private suspend fun <T : Any> loadPage(source: PagingSource<Int, T>): List<T> {

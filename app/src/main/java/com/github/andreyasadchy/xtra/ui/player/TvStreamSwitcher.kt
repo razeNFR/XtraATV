@@ -33,6 +33,14 @@ import com.github.andreyasadchy.xtra.util.prefs
  */
 object TvStreamSwitcher {
 
+    /** Puts a newer list in the row while it is shown, null when it is not shown. */
+    private var updater: ((List<Stream>) -> Unit)? = null
+
+    /** The list of the other streams was loaded again: the row shown follows it, the focus stays on the same streamer. */
+    fun update(streams: List<Stream>) {
+        updater?.invoke(streams)
+    }
+
     fun show(activity: MainActivity, streams: List<Stream>, currentChannelLogin: String?) {
         if (streams.isEmpty()) {
             return
@@ -66,10 +74,11 @@ object TvStreamSwitcher {
                 }
             }
         } else null
-        recyclerView.adapter = Adapter(streams, (250 * density).toInt(), preview) { stream ->
+        val adapter = Adapter(streams, (250 * density).toInt(), preview) { stream ->
             dialog.dismiss()
             activity.startStream(stream)
         }
+        recyclerView.adapter = adapter
         root.addView(recyclerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dialog.setContentView(root)
         dialog.window?.apply {
@@ -88,14 +97,33 @@ object TvStreamSwitcher {
                 }
             }
         }
+        val update: (List<Stream>) -> Unit = update@{ list ->
+            // only when streamers came or went or moved, not for new viewer counts: the row does not move for nothing
+            if (!dialog.isShowing || list.isEmpty() || list.map { it.channelLogin } == adapter.streams.map { it.channelLogin }) {
+                return@update
+            }
+            val focusedLogin = recyclerView.focusedChild?.let { recyclerView.getChildAdapterPosition(it) }
+                ?.let { adapter.streams.getOrNull(it)?.channelLogin }
+            adapter.streams = list
+            adapter.notifyDataSetChanged()
+            val index = list.indexOfFirst { it.channelLogin != null && it.channelLogin == focusedLogin }
+            if (index >= 0) {
+                recyclerView.scrollToPosition(index)
+                recyclerView.post { recyclerView.layoutManager?.findViewByPosition(index)?.requestFocus() }
+            }
+        }
+        updater = update
         dialog.setOnDismissListener {
+            if (updater === update) {
+                updater = null
+            }
             preview?.release()
         }
         dialog.show()
     }
 
     private class Adapter(
-        private val streams: List<Stream>,
+        var streams: List<Stream>,
         private val itemWidth: Int,
         private val preview: TvStreamPreview?,
         private val onClick: (Stream) -> Unit,

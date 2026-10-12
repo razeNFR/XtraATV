@@ -132,7 +132,7 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
         pagingAdapter = if (requireContext().prefs().getString(C.COMPACT_STREAMS, "disabled") == "all") {
             StreamsCompactAdapter(this, { addTag(it) })
         } else {
-            StreamsAdapter(this, { addTag(it) })
+            StreamsAdapter(this, { addTag(it) }, queueSource = { viewModel.createSource() })
         }
         setAdapter(binding.recyclerViewLayout.recyclerView, pagingAdapter)
     }

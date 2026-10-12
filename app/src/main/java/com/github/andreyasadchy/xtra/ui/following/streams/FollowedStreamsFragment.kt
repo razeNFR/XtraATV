@@ -59,7 +59,7 @@ class FollowedStreamsFragment : PagedListFragment(), Scrollable {
                         tags = arrayOf(it)
                     )
                 )
-            })
+            }, queueSource = { viewModel.createSource() })
         }
         setAdapter(binding.recyclerView, pagingAdapter)
         ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
