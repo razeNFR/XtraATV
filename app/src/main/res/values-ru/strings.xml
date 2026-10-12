@@ -565,6 +565,7 @@
     <string name="player_type_param">Тип плеера</string>
     <string name="use_video_swap">Использовать смену видео</string>
     <string name="use_video_swap_desc">Меняет плейлист во время рекламы</string>
+    <string name="use_video_swap_adblock_on">Всегда включено с блокировщиком рекламы</string>
     <string name="video_swap_settings">Настройки смены видео</string>
     <string name="default_values">Значения по умолчанию</string>
     <string name="add_item">Добавить элемент</string>

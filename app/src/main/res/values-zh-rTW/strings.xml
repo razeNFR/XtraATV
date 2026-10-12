@@ -565,6 +565,7 @@
     <string name="player_type_param">Player type</string>
     <string name="use_video_swap">Use video swap</string>
     <string name="use_video_swap_desc">Swaps playlist during ads</string>
+    <string name="use_video_swap_adblock_on">開啟廣告封鎖時一律啟用</string>
     <string name="video_swap_settings">Video swap settings</string>
     <string name="default_values">Default values</string>
     <string name="add_item">Add item</string>

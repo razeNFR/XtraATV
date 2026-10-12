@@ -1,7 +1,10 @@
-# Xtra TV 1.0.3
+# Xtra TV 1.0.4
 
 ### Fixes
-- **Trying to fix the login page problem**: for some people the Twitch login page reloaded by itself while typing the username or password. The login screen no longer restarts when a keyboard connects or changes (phone remote app, Bluetooth keyboard), and requests from captchas or other sites on the page can no longer make it reload. If it still happens, the login with a code on twitch.tv/activate works without the page.
+- **Fewer ads with the ad blocker**: the "android / autoplay" player type is now tried first when an ad starts, before embed and popout. Your video swap list is updated once with autoplay at the top, your own entries are kept under it.
+- **No more flickering header**: on Popular, Followed and Games, the header stays still while scrolling, like on a category page.
+- **Back to live by itself**: when a stream watched in the past (its VOD) catches up with the live, for example at x4, it now switches back to the live instead of waiting for the VOD to load.
+- **Clearer ad blocker settings**: "Use video swap" is greyed out while the ad blocker is on, since the ad blocker always uses it.
 
 ### Install
-Download `XtraTV-1.0.3-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.0.4-tv.apk` below and install it over the previous version, your settings and account are kept.

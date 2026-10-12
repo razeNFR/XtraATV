@@ -565,6 +565,7 @@
     <string name="player_type_param">Player-Typ</string>
     <string name="use_video_swap">Videoswap verwenden</string>
     <string name="use_video_swap_desc">Tauscht die Wiedergabeliste während Werbeclips aus</string>
+    <string name="use_video_swap_adblock_on">Mit dem Werbeblocker immer aktiv</string>
     <string name="video_swap_settings">Videoswap-Einstellungen</string>
     <string name="default_values">Standardwerte</string>
     <string name="add_item">Element hinzufügen</string>

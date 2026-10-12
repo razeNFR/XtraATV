@@ -98,7 +98,9 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                     else -> false
                 }
             }
-            if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+            if (requireContext().resources.getBoolean(R.bool.isTv)) {
+                // TV: the header stays still like on a category page, the lift state changed at each scroll of the list and made it flicker
+            } else if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
                 recyclerViewLayout.recyclerView.let {
                     appBar.setLiftOnScrollTargetView(it)
                     it.addOnScrollListener(object : RecyclerView.OnScrollListener() {

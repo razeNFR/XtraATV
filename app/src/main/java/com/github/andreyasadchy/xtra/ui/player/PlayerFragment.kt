@@ -202,6 +202,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        if (isTv) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    while (true) {
+                        kotlinx.coroutines.delay(1000L)
+                        checkTvDvrCaughtUp()
+                    }
+                }
+            }
+        }
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -1843,6 +1853,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private fun getTvDvrStream(): Stream? {
         return (activity as? MainActivity)?.dvrStream?.takeIf {
             isTv && playbackService?.type == BasePlaybackService.VIDEO && playbackService?.videoId == null && it.channelLogin == playbackService?.channelLogin
+        }
+    }
+
+    /**
+     * VOD of a live opened from its timeline: once it catches up with the live (played faster, x2 or x4), the live
+     * starts again instead of waiting for the next parts of the VOD being recorded.
+     */
+    private fun checkTvDvrCaughtUp() {
+        val dvrStream = getTvDvrStream() ?: return
+        if (_binding == null || tvScrubPosition >= 0 || !isPlayingOrLoading()) {
+            return
+        }
+        val duration = getTotalDuration()?.takeIf { it > LIVE_EDGE_MS * 2 } ?: return
+        val position = getCurrentPosition() ?: return
+        if (position >= duration - DVR_CAUGHT_UP_MS) {
+            (activity as? MainActivity)?.startStream(dvrStream)
         }
     }
 
@@ -3593,6 +3619,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val REQUEST_CODE_PLAY_PAUSE = 3
         private const val REQUEST_CODE_CLOSE = 4
         private const val LIVE_EDGE_MS = 20_000L
+        private const val DVR_CAUGHT_UP_MS = 10_000L
         const val KEY_OFFLINE = "offline"
     }
 }

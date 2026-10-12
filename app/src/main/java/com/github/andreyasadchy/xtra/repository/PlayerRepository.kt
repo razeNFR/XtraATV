@@ -2064,6 +2064,7 @@ class PlayerRepository(
     suspend fun getVideoSwapItems(context: android.content.Context) = withContext(Dispatchers.IO) {
         val prefs = context.prefs()
         val items = videoSwapDao.getAll()
+        var changed = false
         if (!prefs.getBoolean(C.VIDEO_SWAP_DEFAULTS_ENABLED, false)) {
             // once: the 3 player types of VAFT are in the list and checked, the ones added by the user stay as they are
             val missing = DEFAULT_VIDEO_SWAP.filter { (platform, playerType) -> items.none { it.platform == platform && it.playerType == playerType } }
@@ -2077,8 +2078,20 @@ class PlayerRepository(
                 videoSwapDao.insertList(missing.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, start + index) })
             }
             prefs.edit().putBoolean(C.VIDEO_SWAP_DEFAULTS_ADDED, true).putBoolean(C.VIDEO_SWAP_DEFAULTS_ENABLED, true).apply()
-            videoSwapDao.getAll()
-        } else items
+            changed = true
+        }
+        if (!prefs.getBoolean(C.VIDEO_SWAP_AUTOPLAY_FIRST, false)) {
+            // once: autoplay goes to the top of the list and is checked, the other entries keep their order under it
+            val list = videoSwapDao.getAll().sortedBy { it.position }
+            val autoplay = list.find { it.platform == "android" && it.playerType == "autoplay" }
+            if (autoplay != null) {
+                autoplay.enabled = true
+                videoSwapDao.updateList((listOf(autoplay) + list.filter { it !== autoplay }).onEachIndexed { index, item -> item.position = index })
+            }
+            prefs.edit().putBoolean(C.VIDEO_SWAP_AUTOPLAY_FIRST, true).apply()
+            changed = true
+        }
+        if (changed) videoSwapDao.getAll() else items
     }
 
     suspend fun saveVideoSwapItems(items: List<VideoSwap>) = withContext(Dispatchers.IO) {
@@ -2128,10 +2141,11 @@ class PlayerRepository(
     }
 
     companion object {
+        // autoplay first: with it last, the ads played while embed and popout were tried
         val DEFAULT_VIDEO_SWAP = listOf(
+            "android" to "autoplay",
             "web" to "embed",
             "web" to "popout",
-            "android" to "autoplay",
         )
     }
 }
