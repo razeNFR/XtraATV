@@ -1112,6 +1112,41 @@ class SettingsActivity : AppCompatActivity() {
     class PlayerButtonSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.player_button_preferences, rootKey)
+            if (resources.getBoolean(R.bool.isTv)) {
+                // TV: each setting shows the icon of its button in the player
+                val icons = mapOf(
+                    C.TV_BUTTON_STREAM_LIST to R.drawable.tv_ic_streamers,
+                    C.TV_BUTTON_MULTI_STREAM to R.drawable.tv_ic_multistream,
+                    C.TV_BUTTON_CHAT_MESSAGE to R.drawable.tv_ic_chat_send,
+                    C.TV_BUTTON_CHAT_LAYOUT to R.drawable.tv_ic_chat_layout,
+                    C.TV_BUTTON_STATS to R.drawable.tv_ic_stats,
+                    "player_download" to R.drawable.ic_file_download_black_24dp,
+                    "player_follow" to R.drawable.baseline_favorite_border_black_24,
+                    "player_sleep" to R.drawable.baseline_alarm_black_24,
+                    "player_speedbutton" to androidx.media3.ui.R.drawable.exo_ic_speed,
+                    "player_settings" to R.drawable.tv_ic_hd,
+                    "player_menu" to R.drawable.baseline_settings_black_24,
+                    "player_gamesbutton" to R.drawable.baseline_format_list_bulleted_black_24,
+                    "player_restart" to R.drawable.baseline_replay_black_24,
+                    "player_seeklive" to androidx.media3.ui.R.drawable.exo_icon_fastforward,
+                    "player_volumebutton" to R.drawable.baseline_volume_up_black_24,
+                    "player_audio_compressor_button" to R.drawable.baseline_audio_compressor_off_24dp,
+                    "player_mode" to R.drawable.baseline_audiotrack_black_24,
+                    "player_subtitles" to androidx.media3.ui.R.drawable.exo_ic_subtitle_off,
+                    "player_chattoggle" to R.drawable.baseline_speaker_notes_black_24,
+                    "player_viewericon" to R.drawable.baseline_person_black_24,
+                    "player_pause" to R.drawable.baseline_play_arrow_black_48,
+                )
+                val size = (24 * resources.displayMetrics.density).toInt()
+                val tint = com.google.android.material.color.MaterialColors.getColor(requireContext(), com.google.android.material.R.attr.colorOnSurface, android.graphics.Color.WHITE)
+                icons.forEach { (key, icon) ->
+                    val preference = findPreference<Preference>(key) ?: return@forEach
+                    val drawable = androidx.core.content.ContextCompat.getDrawable(requireContext(), icon)?.mutate() ?: return@forEach
+                    drawable.setTint(tint)
+                    // every icon at the same size, whatever the size of its picture
+                    preference.icon = android.graphics.drawable.LayerDrawable(arrayOf(drawable)).apply { setLayerSize(0, size, size) }
+                }
+            }
             findPreference<SwitchPreferenceCompat>("sleep_timer_lock")?.setOnPreferenceChangeListener { _, newValue ->
                 if (newValue == true) {
                     val devicePolicyManager = requireContext().getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager

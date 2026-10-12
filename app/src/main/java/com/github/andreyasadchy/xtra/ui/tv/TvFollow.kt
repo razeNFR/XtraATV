@@ -26,20 +26,39 @@ object TvFollow {
 
     suspend fun isFollowing(context: Context, channelId: String): Boolean? {
         val module = (context.applicationContext as XtraApp).xtraModule
-        return try {
-            if (useAccount(context, channelId)) {
-                module.graphQLRepository.loadQueryFollowingUser(
-                    networkLibrary = context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+        val networkLibrary = context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+        val helixHeaders = TwitchApiHelper.getHelixHeaders(context)
+        val userId = context.tokenPrefs().getString(C.USER_ID, null)
+        val setting = context.prefs().getString(C.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0
+        val accountFollows = setting == 0 && userId != channelId &&
+                (useAccount(context, channelId) || !helixHeaders[C.HEADER_TOKEN].isNullOrBlank())
+        if (!accountFollows) {
+            return try { module.localChannelFollowsRepository.getById(channelId) != null } catch (e: Exception) { null }
+        }
+        // the follows of the account: GQL first, the Helix follow list when GQL gives no answer
+        if (useAccount(context, channelId)) {
+            try {
+                val self = module.graphQLRepository.loadQueryFollowingUser(
+                    networkLibrary = networkLibrary,
                     headers = TwitchApiHelper.getGQLHeaders(context, true),
                     id = channelId,
                     login = null,
-                ).data?.user?.self?.follower?.followedAt != null
-            } else {
-                module.localChannelFollowsRepository.getById(channelId) != null
+                ).data?.user?.self
+                if (self != null) {
+                    return self.follower?.followedAt != null
+                }
+            } catch (e: Exception) {
+
             }
-        } catch (e: Exception) {
-            null
         }
+        if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && !userId.isNullOrBlank()) {
+            try {
+                return module.helixRepository.getUserFollows(networkLibrary, helixHeaders, userId, channelId).data.isNotEmpty()
+            } catch (e: Exception) {
+
+            }
+        }
+        return null
     }
 
     /** Follows or unfollows, returns false when it failed. */

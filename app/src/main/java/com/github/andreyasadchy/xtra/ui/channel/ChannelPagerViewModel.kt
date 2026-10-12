@@ -249,15 +249,35 @@ class ChannelPagerViewModel(
             viewModelScope.launch {
                 try {
                     if (!channelId.isNullOrBlank()) {
-                        if (setting == 0 && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && userId != channelId) {
-                            val follower = graphQLRepository.loadQueryFollowingUser(
-                                networkLibrary = networkLibrary,
-                                headers = gqlHeaders,
-                                id = channelId,
-                                login = channelLogin.takeIf { channelId.isBlank() },
-                            ).data?.user?.self?.follower
-                            _isFollowing.value = follower?.followedAt != null
-                            _notificationsEnabled.value = follower?.notificationSettings?.isEnabled == true
+                        val hasGqlToken = !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()
+                        val hasHelixToken = !helixHeaders[C.HEADER_TOKEN].isNullOrBlank()
+                        if (setting == 0 && (hasGqlToken || hasHelixToken) && userId != channelId) {
+                            // the follows of the account: GQL first, the Helix follow list when GQL gives no answer
+                            var following: Boolean? = null
+                            if (hasGqlToken) {
+                                try {
+                                    val self = graphQLRepository.loadQueryFollowingUser(
+                                        networkLibrary = networkLibrary,
+                                        headers = gqlHeaders,
+                                        id = channelId,
+                                        login = channelLogin.takeIf { channelId.isBlank() },
+                                    ).data?.user?.self
+                                    if (self != null) {
+                                        following = self.follower?.followedAt != null
+                                        _notificationsEnabled.value = self.follower?.notificationSettings?.isEnabled == true
+                                    }
+                                } catch (e: Exception) {
+
+                                }
+                            }
+                            if (following == null && hasHelixToken && !userId.isNullOrBlank()) {
+                                try {
+                                    following = helixRepository.getUserFollows(networkLibrary, helixHeaders, userId, channelId).data.isNotEmpty()
+                                } catch (e: Exception) {
+
+                                }
+                            }
+                            _isFollowing.value = following ?: (localChannelFollowsRepository.getById(channelId) != null)
                         } else {
                             _isFollowing.value = localChannelFollowsRepository.getById(channelId) != null
                             _notificationsEnabled.value = notificationsRepository.getUserById(channelId) != null
