@@ -1,0 +1,29 @@
+name: Clean artifacts
+
+# Run by hand from the Actions tab: deletes the test files of the builds (debug APK, test release APK, TV screenshots).
+# Only the artifacts with these exact names are deleted. Releases, their APK, tags, caches and code are not touched.
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Delete the test artifacts
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        # the list is read in full first, then deleted, so the pages do not move while deleting
+        ids=$(gh api --paginate "repos/$REPO/actions/artifacts?per_page=100" \
+          --jq '.artifacts[] | select(.name == "apk-debug" or .name == "apk-release" or .name == "tv-screens" or .name == "apk") | .id')
+        count=0
+        for id in $ids; do
+          gh api -X DELETE "repos/$REPO/actions/artifacts/$id"
+          count=$((count + 1))
+        done
+        echo "$count test artifacts deleted"
