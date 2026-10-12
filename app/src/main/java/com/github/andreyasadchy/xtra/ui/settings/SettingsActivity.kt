@@ -1382,6 +1382,19 @@ class SettingsActivity : AppCompatActivity() {
     class AdblockSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.adblock_preferences, rootKey)
+            // the ad blocker always uses video swap: its switch only counts when the ad blocker is off
+            val useVideoSwap = findPreference<SwitchPreferenceCompat>(C.PLAYER_USE_VIDEO_SWAP)
+            val updateUseVideoSwap = { adblock: Boolean ->
+                useVideoSwap?.isEnabled = !adblock
+                useVideoSwap?.summary = getString(if (adblock) R.string.use_video_swap_adblock_on else R.string.use_video_swap_desc)
+            }
+            findPreference<SwitchPreferenceCompat>(C.PLAYER_ADBLOCK)?.let { adblock ->
+                updateUseVideoSwap(adblock.isChecked)
+                adblock.setOnPreferenceChangeListener { _, newValue ->
+                    updateUseVideoSwap(newValue as Boolean)
+                    true
+                }
+            }
             findPreference<Preference>("video_swap_settings")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalVideoSwapSettingsFragment())

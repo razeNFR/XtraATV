@@ -2988,10 +2988,11 @@ class ExoPlayerService : BasePlaybackService() {
             }.build().also { bandwidthMeter = it }
         }
 
+        // autoplay first, like the default video swap list
         private val ADBLOCK_PLAYER_TYPES = listOf(
+            "android" to "autoplay",
             "web" to "embed",
             "web" to "popout",
-            "android" to "autoplay",
         )
         const val MULTIVARIANT_PLAYLIST_REGEX = "^usher\\.ttvnw\\.net$"
         const val MEDIA_PLAYLIST_REGEX = "^(?:[a-z0-9-]+\\.playlist\\.(?:live-video|ttvnw)\\.net|video-weaver\\.[a-z0-9-]+\\.hls\\.ttvnw\\.net)$"
