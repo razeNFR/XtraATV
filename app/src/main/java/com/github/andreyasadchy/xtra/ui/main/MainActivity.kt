@@ -127,6 +127,10 @@ class MainActivity : AppCompatActivity() {
         const val INTENT_PLAY_PAUSE_PLAYER = "com.github.andreyasadchy.xtra.PLAY_PAUSE_PLAYER"
         const val INTENT_CLOSE_PLAYER = "com.github.andreyasadchy.xtra.CLOSE_PLAYER"
         private const val MULTI_STREAM_TAG = "multiStream"
+        /** The list of the other streams is loaded again every minute while a stream plays. */
+        private const val QUEUE_REFRESH_MS = 60_000L
+        /** Opening the other streams or switching loads it again when it is older than this. */
+        private const val QUEUE_FRESH_MS = 30_000L
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -1411,6 +1415,11 @@ class MainActivity : AppCompatActivity() {
     private var switchJob: kotlinx.coroutines.Job? = null
     private var queueCheckJob: kotlinx.coroutines.Job? = null
 
+    /** Loads the list the current stream was opened from again (followed, a category, popular...), null when it can't be. */
+    private var streamQueueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null
+    private var queueRefreshedAt = 0L
+    private var queueRefreshJob: kotlinx.coroutines.Job? = null
+
     fun switchStream(offset: Int) {
         if (streamQueue.size < 2 || switchJob?.isActive == true) {
             return
@@ -1434,6 +1443,8 @@ class MainActivity : AppCompatActivity() {
                     continue
                 }
                 startStream(next)
+                // the list is loaded again in the background for the next switch, the switch itself does not wait for it
+                refreshQueueIfOld()
                 val updated = streamQueue
                 val newIndex = updated.indexOf(next)
                 // the streamers that left and right go to now
@@ -1475,33 +1486,88 @@ class MainActivity : AppCompatActivity() {
         return loadLiveStreams(listOf(id))?.let { !it.containsKey(id) } ?: false
     }
 
-    /** The list used to switch streamer is checked from time to time: the streamers that stopped go away. */
+    /**
+     * The list used to switch streamer is kept up to date while a stream plays: loaded again every minute from where it
+     * came from (new streamers, order of Twitch, the ones that stopped go away), else only checked for the ones that stopped.
+     */
     private fun startQueueCheck() {
         queueCheckJob?.cancel()
         queueCheckJob = lifecycleScope.launch {
-            while (streamQueue.size > 1) {
-                kotlinx.coroutines.delay(90_000L)
-                val queue = streamQueue
-                val ids = queue.mapNotNull { it.channelId }
-                if (ids.isEmpty()) {
-                    return@launch
-                }
-                val live = loadLiveStreams(ids) ?: continue
-                if (streamQueue !== queue) {
+            while (streamQueueSource != null || streamQueue.size > 1) {
+                kotlinx.coroutines.delay(QUEUE_REFRESH_MS)
+                // nothing to load while the app is in the background or no stream plays
+                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED) || playerFragment == null) {
                     continue
                 }
-                streamQueue = queue.mapNotNull { stream ->
-                    val update = stream.channelId?.let { live[it] }
-                    when {
-                        // the stream being watched stays, the switch starts from it
-                        stream.channelLogin == currentStreamLogin && update == null -> stream
-                        update == null -> null
-                        else -> stream.apply {
-                            viewerCount = update.viewersCount ?: viewerCount
-                            title = update.broadcaster?.broadcastSettings?.title ?: title
-                            gameName = update.game?.displayName ?: gameName
-                        }
+                if (streamQueueSource != null) {
+                    if (refreshQueue()) {
+                        TvStreamSwitcher.update(streamQueue)
                     }
+                } else {
+                    removeOfflineFromQueue()
+                }
+            }
+        }
+    }
+
+    /** Loads the list again in the background when the last load is older than 30 seconds: it is not waited for. */
+    private fun refreshQueueIfOld() {
+        if (streamQueueSource == null || System.currentTimeMillis() - queueRefreshedAt < QUEUE_FRESH_MS || queueRefreshJob?.isActive == true) {
+            return
+        }
+        queueRefreshJob = lifecycleScope.launch {
+            if (refreshQueue()) {
+                TvStreamSwitcher.update(streamQueue)
+            }
+        }
+    }
+
+    /** Loads the list again from its source, in the order of Twitch. True when the list was replaced. */
+    private suspend fun refreshQueue(): Boolean {
+        val factory = streamQueueSource ?: return false
+        val before = streamQueue
+        val loaded = try {
+            // as many streams as the list had (the ones scrolled to stay), within what one request gives
+            val params = androidx.paging.PagingSource.LoadParams.Refresh<Int>(null, before.size.coerceIn(30, 100), false)
+            (factory().load(params) as? androidx.paging.PagingSource.LoadResult.Page)?.data
+        } catch (e: Exception) {
+            null
+        }
+        // a failed request, or the list changed meanwhile (other list opened, streamer gone): kept as it is
+        if (loaded.isNullOrEmpty() || streamQueueSource !== factory || streamQueue !== before) {
+            return false
+        }
+        queueRefreshedAt = System.currentTimeMillis()
+        val fresh = loaded.filter { !it.channelLogin.isNullOrBlank() }.distinctBy { it.channelLogin }
+        val current = before.find { it.channelLogin != null && it.channelLogin == currentStreamLogin }
+        streamQueue = if (current != null && fresh.none { it.channelLogin == currentStreamLogin }) {
+            // the stream being watched stays at its place, left / right start from it
+            fresh.toMutableList().apply { add(before.indexOf(current).coerceAtMost(size), current) }
+        } else fresh
+        return true
+    }
+
+    /** List without a source: only the streamers that stopped go away, the others get their new title and viewers. */
+    private suspend fun removeOfflineFromQueue() {
+        val queue = streamQueue
+        val ids = queue.mapNotNull { it.channelId }
+        if (ids.isEmpty()) {
+            return
+        }
+        val live = loadLiveStreams(ids) ?: return
+        if (streamQueue !== queue) {
+            return
+        }
+        streamQueue = queue.mapNotNull { stream ->
+            val update = stream.channelId?.let { live[it] }
+            when {
+                // the stream being watched stays, the switch starts from it
+                stream.channelLogin == currentStreamLogin && update == null -> stream
+                update == null -> null
+                else -> stream.apply {
+                    viewerCount = update.viewersCount ?: viewerCount
+                    title = update.broadcaster?.broadcastSettings?.title ?: title
+                    gameName = update.game?.displayName ?: gameName
                 }
             }
         }
@@ -1527,12 +1593,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showStreamSwitcher() {
+        // shown at once with the list in memory, it fills in by itself if a newer list comes
         TvStreamSwitcher.show(this, streamQueue, currentStreamLogin)
+        refreshQueueIfOld()
     }
 
-    fun startStream(stream: Stream, queue: List<Stream>? = null) {
+    fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null) {
         if (queue != null) {
             streamQueue = queue
+            streamQueueSource = queueSource
+            queueRefreshedAt = System.currentTimeMillis()
+            queueRefreshJob?.cancel()
             startQueueCheck()
         }
         currentStreamLogin = stream.channelLogin

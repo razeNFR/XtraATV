@@ -59,7 +59,7 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
         pagingAdapter = if (requireContext().prefs().getString(C.COMPACT_STREAMS, "disabled") == "all") {
             StreamsCompactAdapter(this, { addTag(it) }, showGame = false)
         } else {
-            StreamsAdapter(this, { addTag(it) }, showGame = false)
+            StreamsAdapter(this, { addTag(it) }, showGame = false, queueSource = { viewModel.createSource() })
         }
         setAdapter(binding.recyclerView, pagingAdapter)
         ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->

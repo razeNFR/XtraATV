@@ -55,7 +55,13 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         val actions = TvHomeActions(
             openStream = { stream, list ->
                 stopPreview()
-                (activity as? MainActivity)?.startStream(stream, list)
+                // the player loads the row again from time to time: the other streams and left / right stay up to date
+                val source: (() -> androidx.paging.PagingSource<Int, Stream>)? = when {
+                    list === viewModel.followed.value -> viewModel::createFollowedSource
+                    list === viewModel.popular.value -> viewModel::createPopularSource
+                    else -> null
+                }
+                (activity as? MainActivity)?.startStream(stream, list, source)
             },
             showActions = { stream ->
                 stopPreview()

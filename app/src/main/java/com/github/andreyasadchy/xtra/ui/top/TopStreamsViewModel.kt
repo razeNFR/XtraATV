@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 
 class TopStreamsViewModel(
-    applicationContext: Context,
+    private val applicationContext: Context,
     private val gameSortRepository: GameSortRepository,
     private val savedFiltersRepository: SavedFiltersRepository,
     private val graphQLRepository: GraphQLRepository,
@@ -55,33 +55,36 @@ class TopStreamsViewModel(
                 PagingConfig(pageSize = 30, prefetchDistance = 3, initialLoadSize = 30)
             }
         ) {
-            StreamsDataSource(
-                gqlQueryLanguages = languages.ifEmpty { null }?.mapNotNull { language ->
-                    Language.entries.find { it.rawValue == language }
-                },
-                gqlQuerySort = when (sort) {
-                    StreamsSortDialog.SORT_VIEWERS -> StreamSort.VIEWER_COUNT
-                    StreamsSortDialog.SORT_VIEWERS_ASC -> StreamSort.VIEWER_COUNT_ASC
-                    StreamsSortDialog.RECENT -> StreamSort.RECENT
-                    else -> StreamSort.VIEWER_COUNT
-                },
-                gqlLanguages = languages.ifEmpty { null }?.toList(),
-                gqlSort = when (sort) {
-                    StreamsSortDialog.SORT_VIEWERS -> "VIEWER_COUNT"
-                    StreamsSortDialog.SORT_VIEWERS_ASC -> "VIEWER_COUNT_ASC"
-                    StreamsSortDialog.RECENT -> "RECENT"
-                    else -> "VIEWER_COUNT"
-                },
-                tags = tags.ifEmpty { null }?.toList(),
-                gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),
-                graphQLRepository = graphQLRepository,
-                helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
-                helixRepository = helixRepository,
-                enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
-                networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-            )
+            createSource()
         }.flow
     }.cachedIn(viewModelScope)
+
+    /** Source of the list with the current sort and filters, also used by the player to load the list again (the other streams, left / right). */
+    fun createSource() = StreamsDataSource(
+        gqlQueryLanguages = languages.ifEmpty { null }?.mapNotNull { language ->
+            Language.entries.find { it.rawValue == language }
+        },
+        gqlQuerySort = when (sort) {
+            StreamsSortDialog.SORT_VIEWERS -> StreamSort.VIEWER_COUNT
+            StreamsSortDialog.SORT_VIEWERS_ASC -> StreamSort.VIEWER_COUNT_ASC
+            StreamsSortDialog.RECENT -> StreamSort.RECENT
+            else -> StreamSort.VIEWER_COUNT
+        },
+        gqlLanguages = languages.ifEmpty { null }?.toList(),
+        gqlSort = when (sort) {
+            StreamsSortDialog.SORT_VIEWERS -> "VIEWER_COUNT"
+            StreamsSortDialog.SORT_VIEWERS_ASC -> "VIEWER_COUNT_ASC"
+            StreamsSortDialog.RECENT -> "RECENT"
+            else -> "VIEWER_COUNT"
+        },
+        tags = tags.ifEmpty { null }?.toList(),
+        gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),
+        graphQLRepository = graphQLRepository,
+        helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
+        helixRepository = helixRepository,
+        enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
+        networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+    )
 
     suspend fun getGameSort(id: String): GameSort? {
         return gameSortRepository.getById(id)

@@ -20,7 +20,7 @@ import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
 
 class FollowedStreamsViewModel(
-    applicationContext: Context,
+    private val applicationContext: Context,
     private val localChannelFollowsRepository: LocalChannelFollowsRepository,
     private val graphQLRepository: GraphQLRepository,
     private val helixRepository: HelixRepository,
@@ -33,17 +33,20 @@ class FollowedStreamsViewModel(
             PagingConfig(pageSize = 30, prefetchDistance = 3, initialLoadSize = 30)
         }
     ) {
-        FollowedStreamsDataSource(
-            userId = applicationContext.tokenPrefs().getString(C.USER_ID, null),
-            localChannelFollowsRepository = localChannelFollowsRepository,
-            gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true),
-            graphQLRepository = graphQLRepository,
-            helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
-            helixRepository = helixRepository,
-            enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
-            networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-        )
+        createSource()
     }.flow.cachedIn(viewModelScope)
+
+    /** Source of the list, also used by the player to load the list again (the other streams, left / right). */
+    fun createSource() = FollowedStreamsDataSource(
+        userId = applicationContext.tokenPrefs().getString(C.USER_ID, null),
+        localChannelFollowsRepository = localChannelFollowsRepository,
+        gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true),
+        graphQLRepository = graphQLRepository,
+        helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
+        helixRepository = helixRepository,
+        enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
+        networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+    )
 
     companion object {
         val FollowedStreamsViewModelFactory = viewModelFactory {

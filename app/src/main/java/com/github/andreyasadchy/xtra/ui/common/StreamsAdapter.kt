@@ -39,6 +39,8 @@ class StreamsAdapter(
     private val fragment: Fragment,
     private val selectTag: (String) -> Unit,
     private val showGame: Boolean = true,
+    /** Loads the list again: the player keeps the other streams and the left / right shortcuts up to date with it. */
+    private val queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null,
 ) : PagingDataAdapter<Stream, StreamsAdapter.PagingViewHolder>(
     object : DiffUtil.ItemCallback<Stream>() {
         override fun areItemsTheSame(oldItem: Stream, newItem: Stream): Boolean =
@@ -80,7 +82,7 @@ class StreamsAdapter(
                         )
                     }
                     root.setOnClickListener {
-                        (fragment.activity as MainActivity).startStream(item, snapshot().items)
+                        (fragment.activity as MainActivity).startStream(item, snapshot().items, queueSource)
                     }
                     if (item.channelImage != null) {
                         userImage.visibility = View.VISIBLE
