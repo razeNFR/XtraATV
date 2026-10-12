@@ -134,7 +134,7 @@ class LoginActivity : AppCompatActivity() {
                 }
             }
             val apiSetting = prefs().getString(C.API_LOGIN, "0")?.toInt() ?: 0
-            val helixRedirect = prefs().getString(C.HELIX_REDIRECT, "https://localhost")
+            val helixRedirect = prefs().getString(C.HELIX_REDIRECT, null)?.takeIf { it.isNotBlank() } ?: "https://localhost"
             val helixScopes = listOf(
                 "channel:edit:commercial", // channels/commercial
                 "channel:manage:broadcast", // streams/markers
@@ -209,7 +209,8 @@ class LoginActivity : AppCompatActivity() {
             webView.webViewClient = object : WebViewClientCompat() {
 
                 override fun shouldInterceptRequest(view: WebView, webViewRequest: WebResourceRequest): WebResourceResponse? {
-                    if (readHeaders) {
+                    // only the GQL requests of the Twitch page carry its token, the other requests (captcha, third parties) are ignored
+                    if (readHeaders && webViewRequest.url.host == "gql.twitch.tv") {
                         val token = webViewRequest.requestHeaders.entries.find {
                             it.key.equals(C.HEADER_TOKEN, true) && !it.value.equals("undefined", true)
                         }?.value?.removePrefix("OAuth ")
@@ -280,7 +281,7 @@ class LoginActivity : AppCompatActivity() {
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    if (checkUrl) {
+                    if (checkUrl && request.url.toString().startsWith(helixRedirect)) {
                         loginIfValidUrl(request.url.toString(), networkLibrary, helixClientId, helixAuthUrl, apiSetting)
                     }
                     return super.shouldOverrideUrlLoading(view, request)
@@ -289,7 +290,7 @@ class LoginActivity : AppCompatActivity() {
                 @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                     if (!WebViewFeature.isFeatureSupported(WebViewFeature.SHOULD_OVERRIDE_WITH_REDIRECTS)) {
-                        if (checkUrl && url != null) {
+                        if (checkUrl && url != null && url.startsWith(helixRedirect)) {
                             loginIfValidUrl(url, networkLibrary, helixClientId, helixAuthUrl, apiSetting)
                         }
                     }
