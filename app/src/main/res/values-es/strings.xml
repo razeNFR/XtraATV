@@ -650,4 +650,14 @@
     <string name="tv_home_cards_summary">%s tarjetas en el ancho de la pantalla</string>
     <string name="tv_stream_columns">Columnas de streams en las listas</string>
     <string name="tv_stream_columns_summary">%s columnas: menos columnas, tarjetas más grandes</string>
+    <string name="tv_channel_videos">Vídeos del canal</string>
+    <string name="tv_follow_failed">No se pudo cambiar el seguimiento</string>
+    <string name="tv_stop_playback">Detener la reproducción</string>
+    <string name="tv_now_playing">Reproduciendo</string>
+    <string name="tv_back_action">Botón atrás en un stream</string>
+    <string name="tv_back_stop">Detener el stream</string>
+    <string name="tv_back_mini">Minirreproductor</string>
+    <string name="tv_back_audio">Solo audio</string>
+    <string name="tv_dpad_up_down">Atajos arriba y abajo en un stream</string>
+    <string name="tv_dpad_up_down_summary">Con los controles ocultos: arriba muestra los otros streams, abajo muestra u oculta el chat</string>
 </resources>

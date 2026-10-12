@@ -645,4 +645,14 @@
     <string name="tv_home_cards_summary">%s cartes dans la largeur de l’écran</string>
     <string name="tv_stream_columns">Colonnes de streams dans les listes</string>
     <string name="tv_stream_columns_summary">%s colonnes : moins de colonnes, cartes plus grandes</string>
+    <string name="tv_channel_videos">Voir les VOD</string>
+    <string name="tv_follow_failed">Impossible de modifier le suivi</string>
+    <string name="tv_stop_playback">Arrêter la lecture</string>
+    <string name="tv_now_playing">En lecture</string>
+    <string name="tv_back_action">Bouton retour dans un stream</string>
+    <string name="tv_back_stop">Arrêter le stream</string>
+    <string name="tv_back_mini">Mini-lecteur</string>
+    <string name="tv_back_audio">Audio seul</string>
+    <string name="tv_dpad_up_down">Raccourcis haut et bas dans un stream</string>
+    <string name="tv_dpad_up_down_summary">Quand les commandes sont cachées : haut affiche les autres streams, bas affiche ou cache le chat</string>
 </resources>

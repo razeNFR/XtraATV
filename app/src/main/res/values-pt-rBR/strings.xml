@@ -645,4 +645,14 @@
     <string name="tv_home_cards_summary">%s cartões na largura da tela</string>
     <string name="tv_stream_columns">Colunas de lives nas listas</string>
     <string name="tv_stream_columns_summary">%s colunas: menos colunas, cartões maiores</string>
+    <string name="tv_channel_videos">Vídeos do canal</string>
+    <string name="tv_follow_failed">Não foi possível alterar o seguir</string>
+    <string name="tv_stop_playback">Parar a reprodução</string>
+    <string name="tv_now_playing">Tocando agora</string>
+    <string name="tv_back_action">Botão voltar em uma live</string>
+    <string name="tv_back_stop">Parar a live</string>
+    <string name="tv_back_mini">Mini player</string>
+    <string name="tv_back_audio">Somente áudio</string>
+    <string name="tv_dpad_up_down">Atalhos para cima e para baixo na live</string>
+    <string name="tv_dpad_up_down_summary">Com os controles ocultos: para cima mostra as outras lives, para baixo mostra ou oculta o chat</string>
 </resources>

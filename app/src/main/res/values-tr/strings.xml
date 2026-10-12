@@ -646,4 +646,14 @@
     <string name="tv_home_cards_summary">Ekran genişliğinde %s kart</string>
     <string name="tv_stream_columns">Listelerdeki yayın sütunları</string>
     <string name="tv_stream_columns_summary">%s sütun: daha az sütun, daha büyük kartlar</string>
+    <string name="tv_channel_videos">Kanalın videoları</string>
+    <string name="tv_follow_failed">Takip değiştirilemedi</string>
+    <string name="tv_stop_playback">Oynatmayı durdur</string>
+    <string name="tv_now_playing">Şimdi oynatılıyor</string>
+    <string name="tv_back_action">Yayında geri tuşu</string>
+    <string name="tv_back_stop">Yayını durdur</string>
+    <string name="tv_back_mini">Mini oynatıcı</string>
+    <string name="tv_back_audio">Yalnızca ses</string>
+    <string name="tv_dpad_up_down">Yayında yukarı ve aşağı kısayolları</string>
+    <string name="tv_dpad_up_down_summary">Kontroller gizliyken: yukarı diğer yayınları gösterir, aşağı sohbeti gösterir veya gizler</string>
 </resources>

@@ -664,4 +664,14 @@
     <string name="tv_home_cards_summary">%s cards in the width of the screen</string>
     <string name="tv_stream_columns">Stream columns in the lists</string>
     <string name="tv_stream_columns_summary">%s columns: fewer columns, bigger cards</string>
+    <string name="tv_channel_videos">Videos of the channel</string>
+    <string name="tv_follow_failed">Could not change the follow</string>
+    <string name="tv_stop_playback">Stop playback</string>
+    <string name="tv_now_playing">Now playing</string>
+    <string name="tv_back_action">Back button in a stream</string>
+    <string name="tv_back_stop">Stop the stream</string>
+    <string name="tv_back_mini">Mini player</string>
+    <string name="tv_back_audio">Audio only</string>
+    <string name="tv_dpad_up_down">Up and down shortcuts in a stream</string>
+    <string name="tv_dpad_up_down_summary">While the controls are hidden: up shows the other streams, down shows or hides the chat</string>
 </resources>

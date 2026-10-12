@@ -645,4 +645,14 @@
     <string name="tv_home_cards_summary">%s بطاقات بعرض الشاشة</string>
     <string name="tv_stream_columns">أعمدة البث في القوائم</string>
     <string name="tv_stream_columns_summary">%s أعمدة: أعمدة أقل وبطاقات أكبر</string>
+    <string name="tv_channel_videos">فيديوهات القناة</string>
+    <string name="tv_follow_failed">تعذر تغيير المتابعة</string>
+    <string name="tv_stop_playback">إيقاف التشغيل</string>
+    <string name="tv_now_playing">قيد التشغيل</string>
+    <string name="tv_back_action">زر الرجوع أثناء البث</string>
+    <string name="tv_back_stop">إيقاف البث</string>
+    <string name="tv_back_mini">مشغل مصغر</string>
+    <string name="tv_back_audio">الصوت فقط</string>
+    <string name="tv_dpad_up_down">اختصارات أعلى وأسفل أثناء البث</string>
+    <string name="tv_dpad_up_down_summary">عند إخفاء عناصر التحكم: أعلى يعرض البثوث الأخرى، وأسفل يعرض الدردشة أو يخفيها</string>
 </resources>

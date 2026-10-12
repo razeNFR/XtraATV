@@ -499,7 +499,8 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                 }
             })
             if (firstLaunch) {
-                val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
+                // TV: a shortcut of the card actions opens a given tab (the videos)
+                val defaultItem = pendingTab.also { pendingTab = null } ?: tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
                 viewPager.setCurrentItem(
                     tabs.indexOf(defaultItem).takeIf { it != -1 } ?: tabs.indexOf("1").takeIf { it != -1 } ?: 0,
                     false
@@ -876,5 +877,10 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    companion object {
+        /** Tab to open first ("1": the videos), set just before the channel page opens. */
+        var pendingTab: String? = null
     }
 }

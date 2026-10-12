@@ -45,6 +45,15 @@ object TvPreviewSource {
             }
         }
 
+    /** Told when a preview with sound starts and stops, the stream kept in the background is silenced meanwhile. */
+    var onPreviewSound: ((Boolean) -> Unit)? = null
+
+    fun notifyPreviewSound(context: Context, playing: Boolean) {
+        if (hasSound(context)) {
+            onPreviewSound?.invoke(playing)
+        }
+    }
+
     /** Delay between the focus on a card and the start of its preview. */
     const val START_DELAY = 100L
 

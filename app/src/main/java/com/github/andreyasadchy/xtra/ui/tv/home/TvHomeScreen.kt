@@ -74,7 +74,8 @@ import com.github.andreyasadchy.xtra.ui.tv.TvColors
 
 class TvHomeActions(
     val openStream: (Stream, List<Stream>) -> Unit,
-    val openChannel: (Stream) -> Unit,
+    /** OK held down on a stream card: its actions (channel, videos, category, follow). */
+    val showActions: (Stream) -> Unit,
     val openGame: (Game) -> Unit,
     val seeAll: (Int) -> Unit,
     val openMenu: () -> Unit,
@@ -339,7 +340,7 @@ private fun StreamCard(
         width = width,
         modifier = modifier,
         onClick = onClick,
-        onLongClick = { actions.openChannel(stream) },
+        onLongClick = { actions.showActions(stream) },
         onFocus = { if (it) actions.onStreamFocused(stream) },
     ) { focused ->
         Box(

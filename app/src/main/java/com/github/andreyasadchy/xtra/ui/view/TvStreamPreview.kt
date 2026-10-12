@@ -86,6 +86,9 @@ class TvStreamPreview(
                     player.removeListener(this)
                     textureView.animate().alpha(1f).setDuration(300).start()
                     onPlaying?.invoke(true)
+                    if (!inPlayer) {
+                        TvPreviewSource.notifyPreviewSound(context, true)
+                    }
                 }
             })
             player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
@@ -106,6 +109,9 @@ class TvStreamPreview(
         textureView = null
         if (card != null) {
             onPlaying?.invoke(false)
+            if (!inPlayer) {
+                TvPreviewSource.notifyPreviewSound(recyclerView.context, false)
+            }
         }
         card = null
     }

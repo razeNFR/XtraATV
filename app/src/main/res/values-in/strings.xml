@@ -646,4 +646,14 @@
     <string name="tv_home_cards_summary">%s kartu selebar layar</string>
     <string name="tv_stream_columns">Kolom stream di daftar</string>
     <string name="tv_stream_columns_summary">%s kolom: lebih sedikit kolom, kartu lebih besar</string>
+    <string name="tv_channel_videos">Video kanal</string>
+    <string name="tv_follow_failed">Tidak dapat mengubah status mengikuti</string>
+    <string name="tv_stop_playback">Hentikan pemutaran</string>
+    <string name="tv_now_playing">Sedang diputar</string>
+    <string name="tv_back_action">Tombol kembali di stream</string>
+    <string name="tv_back_stop">Hentikan stream</string>
+    <string name="tv_back_mini">Pemutar mini</string>
+    <string name="tv_back_audio">Hanya audio</string>
+    <string name="tv_dpad_up_down">Pintasan atas dan bawah di stream</string>
+    <string name="tv_dpad_up_down_summary">Saat kontrol tersembunyi: atas menampilkan stream lain, bawah menampilkan atau menyembunyikan chat</string>
 </resources>

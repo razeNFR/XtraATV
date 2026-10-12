@@ -645,4 +645,14 @@
     <string name="tv_home_cards_summary">Карточек по ширине экрана: %s</string>
     <string name="tv_stream_columns">Столбцы трансляций в списках</string>
     <string name="tv_stream_columns_summary">Столбцов: %s (меньше столбцов — крупнее карточки)</string>
+    <string name="tv_channel_videos">Видео канала</string>
+    <string name="tv_follow_failed">Не удалось изменить подписку</string>
+    <string name="tv_stop_playback">Остановить воспроизведение</string>
+    <string name="tv_now_playing">Сейчас играет</string>
+    <string name="tv_back_action">Кнопка «Назад» в трансляции</string>
+    <string name="tv_back_stop">Остановить трансляцию</string>
+    <string name="tv_back_mini">Мини-плеер</string>
+    <string name="tv_back_audio">Только звук</string>
+    <string name="tv_dpad_up_down">Кнопки вверх и вниз в трансляции</string>
+    <string name="tv_dpad_up_down_summary">Когда управление скрыто: вверх — другие трансляции, вниз — показать или скрыть чат</string>
 </resources>

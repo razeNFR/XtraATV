@@ -149,9 +149,17 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = prefs()
         migrateSettings()
-        if (resources.getBoolean(R.bool.isTv) && !prefs.contains(C.PLAYER_PICTURE_IN_PICTURE)) {
-            // on TV leaving the app should stop the stream unless the user turns picture-in-picture on
-            prefs.edit { putBoolean(C.PLAYER_PICTURE_IN_PICTURE, false) }
+        if (resources.getBoolean(R.bool.isTv)) {
+            prefs.edit {
+                // on TV leaving the app stops the stream: no picture-in-picture, no background audio (the phone settings are hidden)
+                putBoolean(C.PLAYER_PICTURE_IN_PICTURE, false)
+                putBoolean(C.PLAYER_BACKGROUND_AUDIO, false)
+                putBoolean(C.PLAYER_BACKGROUND_AUDIO_LOCKED, false)
+                // back of the player: the old "back minimizes the player" switch becomes the mini player choice
+                if (!prefs.contains(C.TV_BACK_ACTION)) {
+                    putString(C.TV_BACK_ACTION, if (prefs.getBoolean(C.TV_BACK_MINIMIZES_PLAYER, false)) "mini" else "stop")
+                }
+            }
         }
         if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_QUALITY, false)) {
             // on TV the streams start in Auto (the saved quality of the app is 720p60 at first)
@@ -595,7 +603,7 @@ class MainActivity : AppCompatActivity() {
                 viewModel.user.collectLatest { user ->
                     if (user != null) {
                         if (!user.id.isNullOrBlank() || !user.login.isNullOrBlank()) {
-                            (playerFragment as? PlayerFragment)?.minimize()
+                            leavePlayerForBrowsing()
                             navController.navigate(
                                 ChannelPagerFragmentDirections.actionGlobalChannelPagerFragment(
                                     channelId = user.id,
@@ -617,7 +625,7 @@ class MainActivity : AppCompatActivity() {
                         val game = pair.first
                         val tag = pair.second
                         if (game != null) {
-                            (playerFragment as? PlayerFragment)?.minimize()
+                            leavePlayerForBrowsing()
                             navController.navigate(
                                 if (prefs.getBoolean(C.UI_GAME_PAGER, true)) {
                                     GamePagerFragmentDirections.actionGlobalGamePagerFragment(
@@ -647,7 +655,7 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.tag.collectLatest { tag ->
                     if (tag != null) {
-                        (playerFragment as? PlayerFragment)?.minimize()
+                        leavePlayerForBrowsing()
                         navController.navigate(
                             GamesFragmentDirections.actionGlobalGamesFragment(
                                 tags = arrayOf(tag)
@@ -982,6 +990,24 @@ class MainActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
             tvMenuState.items.find { it.id == tvMenuState.selected }?.title
         }
+        // "Now playing": the stream kept in the mini player or as audio only
+        tvMenuState.onNowPlayingClick = {
+            hideTvMenu()
+            (playerFragment as? PlayerFragment)?.maximize()
+        }
+        tvMenuState.onNowPlayingLongClick = {
+            (playerFragment as? PlayerFragment)?.getPlayingStream()?.let { stream ->
+                com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.show(
+                    this,
+                    stream,
+                    first = com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(getString(R.string.tv_stop_playback)) { stopTvPlayback() }
+                )
+            }
+        }
+        // a preview with sound plays over the stream kept in the background: only the preview is heard
+        com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.onPreviewSound = { playing ->
+            (playerFragment as? PlayerFragment)?.takeIf { !it.isMaximizedPlayer() }?.setDucked(playing)
+        }
         val accent = MaterialColors.getColor(composeView, androidx.appcompat.R.attr.colorPrimary)
         composeView.setContent {
             com.github.andreyasadchy.xtra.ui.tv.TvTheme(accent) {
@@ -1002,7 +1028,6 @@ class MainActivity : AppCompatActivity() {
         showTvMenu(true)
     }
 
-    /** Goes to a section of the side menu ("see all" of the TV home). */
     private fun refreshStaleStreamLists(view: View) {
         when (view) {
             is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> view.refreshIfStale()
@@ -1010,6 +1035,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Goes to a section of the side menu ("see all" of the TV home). */
     fun openTvSection(id: Int) {
         binding.navBar.selectedItemId = id
         tvMenuState.selected = binding.navBar.selectedItemId
@@ -1129,6 +1155,37 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** True while one of the screens of the app opens over this one (settings, login): the streams go on. */
+    private var openingOwnScreen = false
+
+    override fun startActivity(intent: Intent?, options: Bundle?) {
+        openingOwnScreen = intent?.component?.packageName == packageName
+        super.startActivity(intent, options)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        openingOwnScreen = intent.component?.packageName == packageName
+        super.startActivityForResult(intent, requestCode, options)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        openingOwnScreen = false
+    }
+
+    override fun onStop() {
+        if (isTv && !openingOwnScreen && !isChangingConfigurations) {
+            // TV: leaving the app stops the streams, no sound left behind
+            (playerFragment as? PlayerFragment)?.let {
+                it.close()
+                closePlayer()
+            }
+            closeMultiStream()
+        }
+        super.onStop()
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
@@ -1220,7 +1277,7 @@ class MainActivity : AppCompatActivity() {
                         url.contains("twitch.tv/directory/all/tags/") -> {
                             val tag = url.substringAfter("twitch.tv/directory/all/tags/").takeIf { it.isNotBlank() }?.let { it.substringBefore("?", it.substringBefore("/")) }
                             if (!tag.isNullOrBlank()) {
-                                (playerFragment as? PlayerFragment)?.minimize()
+                                leavePlayerForBrowsing()
                                 navController.navigate(
                                     TopStreamsFragmentDirections.actionGlobalTopFragment(
                                         tags = arrayOf(Uri.decode(tag))
@@ -1229,7 +1286,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                         url.contains("twitch.tv/directory/all") -> {
-                            (playerFragment as? PlayerFragment)?.minimize()
+                            leavePlayerForBrowsing()
                             navController.navigate(
                                 TopStreamsFragmentDirections.actionGlobalTopFragment()
                             )
@@ -1246,7 +1303,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                         url.contains("twitch.tv/directory") -> {
-                            (playerFragment as? PlayerFragment)?.minimize()
+                            leavePlayerForBrowsing()
                             navController.navigate(
                                 GamesFragmentDirections.actionGlobalGamesFragment()
                             )
@@ -1254,7 +1311,7 @@ class MainActivity : AppCompatActivity() {
                         url.contains("twitch.tv/team/") -> {
                             val teamName = url.substringAfter("twitch.tv/team/").takeIf { it.isNotBlank() }?.let { it.substringBefore("?", it.substringBefore("/")) }
                             if (!teamName.isNullOrBlank()) {
-                                (playerFragment as? PlayerFragment)?.minimize()
+                                leavePlayerForBrowsing()
                                 navController.navigate(
                                     TeamFragmentDirections.actionGlobalTeamFragment(
                                         teamName = Uri.decode(teamName)
@@ -1694,6 +1751,56 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Leaves the player for another screen: on TV as the back setting says, else the player is minimized. */
+    private fun leavePlayerForBrowsing() {
+        (playerFragment as? PlayerFragment)?.let {
+            if (isTv) it.leaveForBrowsing() else it.minimize()
+        }
+    }
+
+    fun updateTvNowPlaying() {
+        if (isTv) {
+            tvMenuState.nowPlaying = (playerFragment as? PlayerFragment)?.takeIf { !it.isMaximizedPlayer() }?.getTvNowPlaying()
+        }
+    }
+
+    private fun stopTvPlayback() {
+        (playerFragment as? PlayerFragment)?.let {
+            it.close()
+            closePlayer()
+        }
+    }
+
+    /** The streamer page, on a given tab ("1": the videos). */
+    fun openTvChannel(stream: Stream, tab: String?) {
+        com.github.andreyasadchy.xtra.ui.channel.ChannelPagerFragment.pendingTab = tab
+        hideTvMenu()
+        navController.navigate(
+            ChannelPagerFragmentDirections.actionGlobalChannelPagerFragment(
+                channelId = stream.channelId,
+                channelLogin = stream.channelLogin,
+                channelName = stream.channelName,
+                channelImage = stream.channelImage,
+                streamId = stream.id,
+            )
+        )
+    }
+
+    fun openTvGame(gameId: String?, gameSlug: String?, gameName: String?) {
+        hideTvMenu()
+        navController.navigate(
+            if (prefs.getBoolean(C.UI_GAME_PAGER, true)) {
+                GamePagerFragmentDirections.actionGlobalGamePagerFragment(gameId = gameId, gameSlug = gameSlug, gameName = gameName)
+            } else {
+                GameMediaFragmentDirections.actionGlobalGameMediaFragment(gameId = gameId, gameSlug = gameSlug, gameName = gameName)
+            }
+        )
+    }
+
+    fun showTvStreamActions(stream: Stream, last: List<com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra> = emptyList()) {
+        com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.show(this, stream, last = last)
+    }
+
     fun closePlayer() {
         setMainContentFocusable(true)
         supportFragmentManager.beginTransaction()
@@ -1701,6 +1808,7 @@ class MainActivity : AppCompatActivity() {
             .remove(supportFragmentManager.findFragmentById(R.id.playerContainer)!!)
             .commit()
         playerFragment = null
+        updateTvNowPlaying()
         viewModel.isPlayerOpened = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             setPictureInPictureParams(PictureInPictureParams.Builder().setAutoEnterEnabled(false).build())

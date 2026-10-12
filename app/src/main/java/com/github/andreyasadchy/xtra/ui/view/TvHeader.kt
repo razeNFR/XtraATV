@@ -127,6 +127,23 @@ object TvHeader {
             }
         }
         appBar.viewTreeObserver.addOnGlobalLayoutListener { update() }
+        // the actions of the hidden toolbar change without a new layout (follow / unfollow): read again every second
+        val ticker = object : Runnable {
+            override fun run() {
+                if (appBar.isAttachedToWindow) {
+                    update()
+                    appBar.postDelayed(this, 1000L)
+                }
+            }
+        }
+        appBar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                appBar.removeCallbacks(ticker)
+                appBar.postDelayed(ticker, 1000L)
+            }
+            override fun onViewDetachedFromWindow(v: View) = appBar.removeCallbacks(ticker).let { }
+        })
+        appBar.postDelayed(ticker, 1000L)
         (appBar.findViewById<View>(R.id.tabLayout) as? TabLayout)?.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) = update()
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
@@ -206,7 +223,19 @@ object TvHeader {
         appBar.findViewById<View>(R.id.watchLive)?.takeIf { visible(it) }?.let { button ->
             left.add(Action("watch", (button as? TextView)?.text?.toString() ?: context.getString(R.string.watch_live), R.drawable.baseline_play_arrow_black_48) { button.performClick() })
         }
-        left.add(Action("refresh", context.getString(R.string.refresh), R.drawable.tv_ic_refresh) { TvUi.refreshVisibleList(appBar) })
+        if (isChannel) {
+            // channel page: follow the streamer, no refresh (its lists follow the channel)
+            toolbar?.menu?.findItem(R.id.followButton)?.takeIf { it.isVisible }?.let { item ->
+                val following = item.title?.toString() == context.getString(R.string.unfollow)
+                left.add(Action(
+                    "follow",
+                    item.title?.toString() ?: context.getString(R.string.follow),
+                    if (following) R.drawable.baseline_favorite_black_24 else R.drawable.baseline_favorite_border_black_24
+                ) { toolbar.menu.performIdentifierAction(R.id.followButton, 0) })
+            }
+        } else {
+            left.add(Action("refresh", context.getString(R.string.refresh), R.drawable.tv_ic_refresh) { TvUi.refreshVisibleList(appBar) })
+        }
         val tabs = (appBar.findViewById<View>(R.id.tabLayout) as? TabLayout)?.takeIf { visible(it) && it.tabCount > 1 }?.let { tabLayout ->
             (0 until tabLayout.tabCount).mapNotNull { index ->
                 tabLayout.getTabAt(index)?.let { tab ->
@@ -218,7 +247,7 @@ object TvHeader {
         toolbar?.menu?.let { menu ->
             for (i in 0 until menu.size()) {
                 val item = menu.getItem(i)
-                if (item.isVisible && !item.title.isNullOrBlank() && item.itemId != R.id.search && item.itemId != R.id.settings && item.itemId != R.id.login && right.size < 3) {
+                if (item.isVisible && !item.title.isNullOrBlank() && item.itemId != R.id.search && item.itemId != R.id.settings && item.itemId != R.id.login && item.itemId != R.id.followButton && right.size < 3) {
                     right.add(Action("menu${item.itemId}", item.title.toString(), null) { menu.performIdentifierAction(item.itemId, 0) })
                 }
             }

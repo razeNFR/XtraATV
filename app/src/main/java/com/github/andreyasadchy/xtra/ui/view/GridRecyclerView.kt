@@ -40,10 +40,25 @@ class GridRecyclerView : RecyclerView {
     private var pressedCard: View? = null
     private var longPressed = false
     private val longPressAction = Runnable {
-        pressedCard?.let {
+        pressedCard?.let { card ->
             longPressed = true
-            it.isPressed = false
-            TvCards.showMenu(it)
+            card.isPressed = false
+            // a stream card: the same actions as on the home (channel, videos, category, follow), and the options of the list
+            val stream = (adapter as? StreamsAdapter)?.let { streams ->
+                getChildAdapterPosition(card).takeIf { it != NO_POSITION && it < streams.itemCount }?.let { streams.peek(it) }
+            } ?: (adapter as? StreamsCompactAdapter)?.let { streams ->
+                getChildAdapterPosition(card).takeIf { it != NO_POSITION && it < streams.itemCount }?.let { streams.peek(it) }
+            }
+            val activity = context as? com.github.andreyasadchy.xtra.ui.main.MainActivity
+            if (stream != null && activity != null) {
+                val options = card.findViewById<View>(R.id.options)?.takeIf { it.visibility == View.VISIBLE && it.hasOnClickListeners() }
+                activity.showTvStreamActions(
+                    stream,
+                    listOfNotNull(options?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(context.getString(R.string.tv_more_options)) { it.performClick() } })
+                )
+            } else {
+                TvCards.showMenu(card)
+            }
         }
     }
     private val focusFirstItemAction = Runnable { focusFirstItemIfFocusLost() }

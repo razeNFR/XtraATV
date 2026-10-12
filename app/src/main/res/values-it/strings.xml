@@ -645,4 +645,14 @@
     <string name="tv_home_cards_summary">%s schede nella larghezza dello schermo</string>
     <string name="tv_stream_columns">Colonne delle dirette negli elenchi</string>
     <string name="tv_stream_columns_summary">%s colonne: meno colonne, schede più grandi</string>
+    <string name="tv_channel_videos">Video del canale</string>
+    <string name="tv_follow_failed">Impossibile modificare il follow</string>
+    <string name="tv_stop_playback">Interrompi la riproduzione</string>
+    <string name="tv_now_playing">In riproduzione</string>
+    <string name="tv_back_action">Tasto indietro in una diretta</string>
+    <string name="tv_back_stop">Interrompi la diretta</string>
+    <string name="tv_back_mini">Mini player</string>
+    <string name="tv_back_audio">Solo audio</string>
+    <string name="tv_dpad_up_down">Scorciatoie su e giù in una diretta</string>
+    <string name="tv_dpad_up_down_summary">Con i controlli nascosti: su mostra le altre dirette, giù mostra o nasconde la chat</string>
 </resources>

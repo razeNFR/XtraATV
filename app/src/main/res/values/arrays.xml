@@ -126,6 +126,18 @@
         <item>2</item>
     </string-array>
 
+    <string-array name="tvBackActionEntries">
+        <item>@string/tv_back_stop</item>
+        <item>@string/tv_back_mini</item>
+        <item>@string/tv_back_audio</item>
+    </string-array>
+
+    <string-array name="tvBackActionValues" translatable="false">
+        <item>stop</item>
+        <item>mini</item>
+        <item>audio</item>
+    </string-array>
+
     <string-array name="tvHomeCards" translatable="false">
         <item>3</item>
         <item>4</item>

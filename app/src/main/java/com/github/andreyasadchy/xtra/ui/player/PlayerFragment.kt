@@ -142,10 +142,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 hideController()
             } else if (_binding != null && binding.chatLayout.hasFocus()) {
                 binding.dragView.requestFocus()
-            } else if (isTv && !requireContext().prefs().getBoolean(C.TV_BACK_MINIMIZES_PLAYER, false)) {
-                // TV: back closes the player, a minimized player is hard to use with a remote
-                close()
-                (activity as? MainActivity)?.closePlayer()
+            } else if (isTv) {
+                // TV: back stops the stream, or keeps it in the mini player or as audio only (setting)
+                leaveForBrowsing()
             } else {
                 minimize()
             }
@@ -762,7 +761,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 channelName = playbackService?.channelName,
                             )
                         )
-                        minimize()
+                        leaveForBrowsing()
                     }
                 }
                 val titleText = playbackService?.title
@@ -790,10 +789,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 )
                             }
                         )
-                        minimize()
+                        leaveForBrowsing()
                     }
                 }
-                if (requireContext().prefs().getBoolean(C.PLAYER_MINIMIZE, true)) {
+                // no minimize button on TV: back does it, as the setting says
+                if (!isTv && requireContext().prefs().getBoolean(C.PLAYER_MINIMIZE, true)) {
                     minimize.visibility = View.VISIBLE
                     minimize.setOnClickListener { minimize() }
                 }
@@ -2356,6 +2356,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (!isTv) {
             return
         }
+        binding.root.viewTreeObserver.removeOnGlobalFocusChangeListener(hudFocusListener)
+        binding.root.viewTreeObserver.addOnGlobalFocusChangeListener(hudFocusListener)
         with(binding.playerControls) {
             // seeking is done on the timeline on TV
             rewind.visibility = View.GONE
@@ -2480,6 +2482,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 return
             }
             if (isTv) {
+                // the TV never goes to sleep while a stream plays, whichever player shows it
+                activity?.window?.let { window ->
+                    if (isPlayingOrLoading()) {
+                        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
                 updateAdblockBadge()
                 if (binding.playerControls.root.isVisible) {
                     binding.playerControls.tvQualityInfo?.let { info ->
@@ -2666,8 +2676,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     /** Focus goes to play/pause, else to the timeline, else to the first button of the bottom row. */
+    /** Last control used in the HUD, the focus goes back to it when the HUD shows again. */
+    private var lastHudControl: java.lang.ref.WeakReference<View>? = null
+    private val hudFocusListener = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
+        val controls = _binding?.playerControls ?: return@OnGlobalFocusChangeListener
+        if (newFocus != null && newFocus != controls.progressBar && (newFocus.parent == controls.bottomLeftLayout || newFocus.parent == controls.bottomRightLayout || newFocus == controls.playPause)) {
+            lastHudControl = java.lang.ref.WeakReference(newFocus)
+        }
+    }
+
     private fun focusPrimaryControl() {
         with(binding.playerControls) {
+            lastHudControl?.get()?.let { last ->
+                if (last.isShown && last.isFocusable && last.requestFocus()) {
+                    return
+                }
+            }
             val candidates = mutableListOf<View>(playPause, progressBar)
             for (layout in listOf(bottomLeftLayout, bottomRightLayout)) {
                 for (i in 0 until layout.childCount) {
@@ -2740,6 +2764,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (!isSelect && isTv && playbackService?.type == BasePlaybackService.STREAM && !binding.playerControls.root.isVisible &&
+                    requireContext().prefs().getBoolean(C.TV_DPAD_UP_DOWN, false)
+                ) {
+                    // option: HUD hidden, up shows the other streams, down shows or hides the chat
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                            (activity as? MainActivity)?.showStreamSwitcher()
+                        } else if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
+                            if (isChatOpen) hideChat() else showChat()
+                        }
+                    }
+                    return true
+                }
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                     showController(force = true)
                     binding.playerControls.root.post {
@@ -3075,9 +3112,77 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         binding.playerControls.root.removeCallbacks(controllerHideAction)
     }
 
+    /** TV: what back does with the stream: "stop", "mini" (mini player) or "audio" (sound only). */
+    private fun tvLeaveAction(): String {
+        val prefs = requireContext().prefs()
+        return prefs.getString(C.TV_BACK_ACTION, null) ?: if (prefs.getBoolean(C.TV_BACK_MINIMIZES_PLAYER, false)) "mini" else "stop"
+    }
+
+    /** Leaves the player to browse (back, channel or category opened from the player). */
+    fun leaveForBrowsing() {
+        if (!isTv) {
+            minimize()
+            return
+        }
+        when (tvLeaveAction()) {
+            "mini" -> minimize()
+            "audio" -> {
+                minimize()
+                setTvAudioOnly(true)
+            }
+            else -> {
+                close()
+                (activity as? MainActivity)?.closePlayer()
+            }
+        }
+    }
+
+    private var tvAudioOnly = false
+
+    /** TV audio only: the mini player is hidden and the picture is not decoded, the sound goes on. */
+    private fun setTvAudioOnly(enabled: Boolean) {
+        tvAudioOnly = enabled
+        _binding?.slidingLayout?.visibility = if (enabled) View.INVISIBLE else View.VISIBLE
+        setVideoHidden(enabled)
+        (activity as? MainActivity)?.updateTvNowPlaying()
+    }
+
+    open fun setVideoHidden(hidden: Boolean) {}
+
+    /** The stream of the player, for the "Now playing" entry of the side menu. */
+    fun getTvNowPlaying(): com.github.andreyasadchy.xtra.ui.tv.TvNowPlaying? {
+        val service = playbackService ?: return null
+        return com.github.andreyasadchy.xtra.ui.tv.TvNowPlaying(
+            channelName = service.channelName ?: service.channelLogin,
+            title = service.title,
+            image = service.thumbnail?.takeIf { it.isNotBlank() } ?: service.channelImage,
+            audioOnly = tvAudioOnly,
+        )
+    }
+
+    fun getPlayingStream(): Stream? {
+        val service = playbackService ?: return null
+        return Stream(
+            id = service.streamId,
+            channelId = service.channelId,
+            channelLogin = service.channelLogin,
+            channelName = service.channelName,
+            gameId = service.gameId,
+            gameSlug = service.gameSlug,
+            gameName = service.gameName,
+            title = service.title,
+            viewerCount = service.viewerCount,
+        )
+    }
+
     fun minimize() {
         with(binding) {
             isMaximized = false
+            if (isTv) {
+                // the mini player is not reached with the D-pad, "Now playing" in the side menu brings it back
+                dragView.isFocusable = false
+                (activity as? MainActivity)?.updateTvNowPlaying()
+            }
             if (playbackService?.type == BasePlaybackService.STREAM && chatFragment?.emoteMenuIsVisible() == true) {
                 chatFragment?.toggleBackPressedCallback(false)
             }
@@ -3156,6 +3261,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun maximize() {
         with(binding) {
             isMaximized = true
+            if (isTv) {
+                dragView.isFocusable = true
+                if (tvAudioOnly) {
+                    setTvAudioOnly(false)
+                }
+                (activity as? MainActivity)?.updateTvNowPlaying()
+            }
             requireActivity().onBackPressedDispatcher.addCallback(this@PlayerFragment, backPressedCallback)
             minimizedBackPressedCallback.remove()
             minimizedBackPressedCallback.isEnabled = false
@@ -3442,6 +3554,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     override fun onDestroyView() {
         _binding?.root?.removeCallbacks(tvHudTicker)
+        _binding?.root?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnGlobalFocusChangeListener(hudFocusListener)
+        if (isTv) {
+            activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         resetFrameRateMatching()
         seekPreview?.release()
         seekPreview = null

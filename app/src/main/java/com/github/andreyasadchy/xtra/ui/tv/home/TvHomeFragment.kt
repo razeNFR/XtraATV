@@ -20,7 +20,6 @@ import androidx.navigation.fragment.findNavController
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.model.ui.Stream
-import com.github.andreyasadchy.xtra.ui.channel.ChannelPagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
@@ -58,17 +57,9 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 stopPreview()
                 (activity as? MainActivity)?.startStream(stream, list)
             },
-            openChannel = { stream ->
+            showActions = { stream ->
                 stopPreview()
-                findNavController().navigate(
-                    ChannelPagerFragmentDirections.actionGlobalChannelPagerFragment(
-                        channelId = stream.channelId,
-                        channelLogin = stream.channelLogin,
-                        channelName = stream.channelName,
-                        channelImage = stream.channelImage,
-                        streamId = stream.id
-                    )
-                )
+                (activity as? MainActivity)?.showTvStreamActions(stream)
             },
             openGame = { game ->
                 stopPreview()
@@ -161,12 +152,16 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             player.prepare()
             player.playWhenReady = true
             previewLogin.value = login
+            com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.notifyPreviewSound(context, true)
         }
     }
 
     override fun stopPreview() {
         previewJob?.cancel()
         previewJob = null
+        if (previewLogin.value != null) {
+            context?.let { com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.notifyPreviewSound(it, false) }
+        }
         previewLogin.value = null
         previewPlayer.value?.stop()
     }

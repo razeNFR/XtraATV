@@ -365,6 +365,10 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun isAdblockSwapping() = playbackService?.isSwapping == true
 
+    override fun setVideoHidden(hidden: Boolean) {
+        playbackService?.setVideoHidden(hidden)
+    }
+
     override fun setDucked(ducked: Boolean) {
         playbackService?.setDucked(ducked)
     }

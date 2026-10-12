@@ -645,4 +645,14 @@
     <string name="tv_home_cards_summary">屏幕宽度显示 %s 张卡片</string>
     <string name="tv_stream_columns">列表中的直播列数</string>
     <string name="tv_stream_columns_summary">%s 列：列数越少，卡片越大</string>
+    <string name="tv_channel_videos">频道视频</string>
+    <string name="tv_follow_failed">无法更改关注</string>
+    <string name="tv_stop_playback">停止播放</string>
+    <string name="tv_now_playing">正在播放</string>
+    <string name="tv_back_action">直播中的返回键</string>
+    <string name="tv_back_stop">停止直播</string>
+    <string name="tv_back_mini">迷你播放器</string>
+    <string name="tv_back_audio">仅音频</string>
+    <string name="tv_dpad_up_down">直播中的上下快捷键</string>
+    <string name="tv_dpad_up_down_summary">控件隐藏时：上键显示其他直播，下键显示或隐藏聊天</string>
 </resources>

@@ -27,8 +27,19 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="false"
-        android:key="tv_back_minimizes_player"
-        android:title="@string/tv_back_minimizes_player"
+        android:key="tv_dpad_up_down"
+        android:summary="@string/tv_dpad_up_down_summary"
+        android:title="@string/tv_dpad_up_down"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="stop"
+        android:entries="@array/tvBackActionEntries"
+        android:entryValues="@array/tvBackActionValues"
+        android:key="tv_back_action"
+        android:summary="%s"
+        android:title="@string/tv_back_action"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

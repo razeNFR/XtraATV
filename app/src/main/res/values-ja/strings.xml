@@ -645,4 +645,14 @@
     <string name="tv_home_cards_summary">画面幅に %s 枚</string>
     <string name="tv_stream_columns">リストの配信の列数</string>
     <string name="tv_stream_columns_summary">%s 列: 列が少ないほどカードが大きい</string>
+    <string name="tv_channel_videos">チャンネルの動画</string>
+    <string name="tv_follow_failed">フォローを変更できませんでした</string>
+    <string name="tv_stop_playback">再生を停止</string>
+    <string name="tv_now_playing">再生中</string>
+    <string name="tv_back_action">配信中の戻るボタン</string>
+    <string name="tv_back_stop">配信を停止</string>
+    <string name="tv_back_mini">ミニプレーヤー</string>
+    <string name="tv_back_audio">音声のみ</string>
+    <string name="tv_dpad_up_down">配信中の上下ショートカット</string>
+    <string name="tv_dpad_up_down_summary">コントロール非表示時: 上で他の配信、下でチャットの表示/非表示</string>
 </resources>

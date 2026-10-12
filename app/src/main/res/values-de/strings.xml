@@ -645,4 +645,14 @@
     <string name="tv_home_cards_summary">%s Karten über die Bildschirmbreite</string>
     <string name="tv_stream_columns">Stream-Spalten in den Listen</string>
     <string name="tv_stream_columns_summary">%s Spalten: weniger Spalten, größere Karten</string>
+    <string name="tv_channel_videos">Videos des Kanals</string>
+    <string name="tv_follow_failed">Folgen konnte nicht geändert werden</string>
+    <string name="tv_stop_playback">Wiedergabe beenden</string>
+    <string name="tv_now_playing">Läuft gerade</string>
+    <string name="tv_back_action">Zurück-Taste im Stream</string>
+    <string name="tv_back_stop">Stream beenden</string>
+    <string name="tv_back_mini">Mini-Player</string>
+    <string name="tv_back_audio">Nur Audio</string>
+    <string name="tv_dpad_up_down">Hoch- und Runter-Kürzel im Stream</string>
+    <string name="tv_dpad_up_down_summary">Bei ausgeblendeter Steuerung: Hoch zeigt die anderen Streams, Runter blendet den Chat ein oder aus</string>
 </resources>
