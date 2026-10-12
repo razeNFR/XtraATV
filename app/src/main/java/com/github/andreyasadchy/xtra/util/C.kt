@@ -200,6 +200,7 @@ object C {
     const val PLAYER_ADBLOCK = "player_adblock"
     const val PLAYER_FRAME_RATE_MATCHING = "player_frame_rate_matching"
     const val VIDEO_SWAP_DEFAULTS_ADDED = "video_swap_defaults_added"
+    const val VIDEO_SWAP_DEFAULTS_ENABLED = "video_swap_defaults_enabled"
     const val TV_DEFAULTS_QUALITY = "tv_defaults_quality"
     const val TV_DPAD_SWITCH_STREAM = "tv_dpad_switch_stream"
     const val TV_DPAD_UP_DOWN = "tv_dpad_up_down"

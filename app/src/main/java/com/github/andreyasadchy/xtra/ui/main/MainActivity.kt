@@ -995,14 +995,9 @@ class MainActivity : AppCompatActivity() {
             hideTvMenu()
             (playerFragment as? PlayerFragment)?.maximize()
         }
-        tvMenuState.onNowPlayingLongClick = {
-            (playerFragment as? PlayerFragment)?.getPlayingStream()?.let { stream ->
-                com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.show(
-                    this,
-                    stream,
-                    first = com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(getString(R.string.tv_stop_playback)) { stopTvPlayback() }
-                )
-            }
+        tvMenuState.onNowPlayingClose = {
+            stopTvPlayback()
+            tvMenuState.focusSelected()
         }
         // a preview with sound plays over the stream kept in the background: only the preview is heard
         com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.onPreviewSound = { playing ->
@@ -1157,6 +1152,7 @@ class MainActivity : AppCompatActivity() {
 
     /** True while one of the screens of the app opens over this one (settings, login): the streams go on. */
     private var openingOwnScreen = false
+    val isOpeningOwnScreen get() = openingOwnScreen
 
     override fun startActivity(intent: Intent?, options: Bundle?) {
         openingOwnScreen = intent?.component?.packageName == packageName

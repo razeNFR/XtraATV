@@ -659,4 +659,5 @@
     <string name="tv_login_with_code">twitch.tv/activate でコードを入力</string>
     <string name="tv_login_with_page">Twitch のログインページ (1440p に必要)</string>
     <string name="tv_login_code_help">スマホやパソコンで twitch.tv/activate を開き、このコードを入力してください。ログインは自動で続きます。1440p には Twitch のページでのログインが必要です。</string>
+    <string name="tv_close_playback">閉じる</string>
 </resources>

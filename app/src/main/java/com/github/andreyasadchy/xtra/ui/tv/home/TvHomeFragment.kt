@@ -81,6 +81,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             },
             onStreamFocused = { schedulePreview(it) },
             formatViewers = { count -> resources.getQuantityString(R.plurals.viewers, count, TwitchApiHelper.formatCount(count, truncate)) },
+            formatCount = { count -> TwitchApiHelper.formatCount(count, true) },
             refresh = {
                 stopPreview()
                 viewModel.load(force = true)

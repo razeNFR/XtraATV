@@ -2064,10 +2064,19 @@ class PlayerRepository(
     suspend fun getVideoSwapItems(context: android.content.Context) = withContext(Dispatchers.IO) {
         val prefs = context.prefs()
         val items = videoSwapDao.getAll()
-        if (items.isEmpty() && !prefs.getBoolean(C.VIDEO_SWAP_DEFAULTS_ADDED, false)) {
-            val defaults = DEFAULT_VIDEO_SWAP.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, index) }
-            videoSwapDao.insertList(defaults)
-            prefs.edit().putBoolean(C.VIDEO_SWAP_DEFAULTS_ADDED, true).apply()
+        if (!prefs.getBoolean(C.VIDEO_SWAP_DEFAULTS_ENABLED, false)) {
+            // once: the 3 player types of VAFT are in the list and checked, the ones added by the user stay as they are
+            val missing = DEFAULT_VIDEO_SWAP.filter { (platform, playerType) -> items.none { it.platform == platform && it.playerType == playerType } }
+            items.filter { item -> DEFAULT_VIDEO_SWAP.any { it.first == item.platform && it.second == item.playerType } && !item.enabled }.let { disabled ->
+                if (disabled.isNotEmpty()) {
+                    videoSwapDao.updateList(disabled.onEach { it.enabled = true })
+                }
+            }
+            if (missing.isNotEmpty()) {
+                val start = (items.maxOfOrNull { it.position } ?: -1) + 1
+                videoSwapDao.insertList(missing.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, start + index) })
+            }
+            prefs.edit().putBoolean(C.VIDEO_SWAP_DEFAULTS_ADDED, true).putBoolean(C.VIDEO_SWAP_DEFAULTS_ENABLED, true).apply()
             videoSwapDao.getAll()
         } else items
     }

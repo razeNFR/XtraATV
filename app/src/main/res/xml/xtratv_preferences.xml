@@ -50,7 +50,7 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="true"
+        android:defaultValue="false"
         android:dependency="ui_tv_preview"
         android:key="ui_tv_preview_sound"
         android:title="@string/tv_preview_sound"

@@ -50,8 +50,17 @@ class ExoPlayerFragment : PlayerFragment() {
     private var playerListener: Player.Listener? = null
     private val updateProgressAction = Runnable { if (view != null) updateProgress() }
 
+    /** TV: the settings or the login were opened over the app, the stream went on and the service stayed bound. */
+    private var keptAcrossStop = false
+
     override fun onStart() {
         super.onStart()
+        if (keptAcrossStop && playbackService != null && serviceConnection != null) {
+            keptAcrossStop = false
+            updateProgress()
+            return
+        }
+        keptAcrossStop = false
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING
@@ -62,7 +71,12 @@ class ExoPlayerFragment : PlayerFragment() {
                 } else {
                     binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
                     if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
+                        val hadFocus = binding.playerControls.playPause.hasFocus()
                         binding.playerControls.playPause.visibility = View.GONE
+                        if (hadFocus) {
+                            // the play button goes away once the stream plays: the focus goes to the timeline, never lost
+                            focusAfterHiddenControl()
+                        }
                     }
                 }
                 setPipActions(!showPlayButton)
@@ -631,8 +645,28 @@ class ExoPlayerFragment : PlayerFragment() {
         playbackService?.retry(item)
     }
 
+    override fun onDestroyView() {
+        if (keptAcrossStop) {
+            // the screen is made again (a setting changed): the service is let go here, the new player binds it again
+            keptAcrossStop = false
+            playerListener?.let { (playbackService?.secondaryPlayer ?: playbackService?.player)?.removeListener(it) }
+            playerListener = null
+            playbackService?.serviceListener = null
+            serviceConnection?.let { requireContext().unbindService(it) }
+            serviceConnection = null
+            playbackService = null
+        }
+        super.onDestroyView()
+    }
+
     override fun onStop() {
         super.onStop()
+        if (isTv && (activity as? MainActivity)?.isOpeningOwnScreen == true && playbackService != null) {
+            // TV: a screen of the app opens over the player (settings), the mini player or the sound goes on
+            keptAcrossStop = true
+            binding.playerControls.root.removeCallbacks(updateProgressAction)
+            return
+        }
         if (playbackService != null) {
             val isInPIPMode = when {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requireActivity().isInPictureInPictureMode

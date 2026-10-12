@@ -782,7 +782,7 @@ class ExoPlayerService : BasePlaybackService() {
                     }
                     val adblock = prefs().getBoolean(C.PLAYER_ADBLOCK, true)
                     // the ad blocker also backs up the proxies: if an ad still comes through them, the playlist of another player type is used
-                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, false)) || adblock
+                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, true)) || adblock
                     if (useVideoSwap) {
                         videoSwapList = xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
                             it.enabled && !it.platform.isNullOrBlank() && !it.playerType.isNullOrBlank()

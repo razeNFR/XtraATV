@@ -146,6 +146,13 @@ class GridRecyclerView : RecyclerView {
                 // streams, videos and clips: from 2 big cards to 6 small ones a row, from the settings
                 else -> prefs.getString(C.TV_STREAM_COLUMNS, TV_COLUMNS_MEDIA.toString())?.toIntOrNull()?.coerceIn(2, 6) ?: TV_COLUMNS_MEDIA
             }
+            cardTextScale = when {
+                adapter !is StreamsAdapter -> 1f
+                columns >= 6 -> 0.72f
+                columns == 5 -> 0.82f
+                columns == 2 -> 1.15f
+                else -> 1f
+            }
             if (columns != tvColumns) {
                 tvColumns = columns
                 if (!material3) {
@@ -158,6 +165,38 @@ class GridRecyclerView : RecyclerView {
     }
 
     private var dataLoadedAt = 0L
+
+    /** TV stream cards: the texts get smaller with more columns, the badges do not cover the thumbnail. */
+    private var cardTextScale = 1f
+
+    init {
+        addOnChildAttachStateChangeListener(object : OnChildAttachStateChangeListener {
+            override fun onChildViewAttachedToWindow(view: View) {
+                if (isTv) {
+                    scaleCardTexts(view)
+                }
+            }
+
+            override fun onChildViewDetachedFromWindow(view: View) {}
+        })
+    }
+
+    private fun scaleCardTexts(card: View) {
+        for (id in intArrayOf(R.id.viewers, R.id.uptime, R.id.title, R.id.username, R.id.gameName)) {
+            val text = card.findViewById<android.widget.TextView>(id) ?: continue
+            // the size of the layout is kept once, the scale always starts from it
+            val base = (text.getTag(R.id.tvBaseTextSize) as? Float) ?: text.textSize.also { text.setTag(R.id.tvBaseTextSize, it) }
+            text.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, base * cardTextScale)
+            text.maxLines = 1
+        }
+        card.findViewById<View>(R.id.userImage)?.let { image ->
+            val base = (image.getTag(R.id.tvBaseTextSize) as? Int) ?: image.layoutParams.width.also { image.setTag(R.id.tvBaseTextSize, it) }
+            val size = (base * cardTextScale).toInt()
+            if (image.layoutParams.width != size) {
+                image.layoutParams = image.layoutParams.apply { width = size; height = size }
+            }
+        }
+    }
 
     /**
      * TV: lists of live streams load again when the screen comes back after a while, a streamer that stopped

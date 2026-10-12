@@ -10,7 +10,7 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="false"
+        android:defaultValue="true"
         android:key="player_use_video_swap"
         android:summary="@string/use_video_swap_desc"
         android:title="@string/use_video_swap"

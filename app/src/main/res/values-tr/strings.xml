@@ -660,4 +660,5 @@
     <string name="tv_login_with_code">twitch.tv/activate üzerinde kodla</string>
     <string name="tv_login_with_page">Twitch giriş sayfasıyla (1440p için gerekli)</string>
     <string name="tv_login_code_help">Telefonunuzda veya bilgisayarınızda twitch.tv/activate adresine gidip bu kodu yazın. Giriş kendiliğinden devam eder. 1440p için Twitch sayfasıyla giriş gerekir.</string>
+    <string name="tv_close_playback">Kapat</string>
 </resources>

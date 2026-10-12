@@ -158,6 +158,8 @@ fun SidePanel(
     subtitle: String? = null,
     alignEnd: Boolean = true,
     width: Dp = 440.dp,
+    // true for panels made of plain rows; lists that scroll by themselves (LazyColumn) must not be put in a scrolling panel
+    scrollable: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart) {
@@ -178,12 +180,16 @@ fun SidePanel(
                 Text(subtitle, fontSize = 14.sp, color = TvColors.secondaryText)
             }
             Spacer(Modifier.height(24.dp))
-            // the rows scroll, the focused one is always brought into the screen
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
-            ) {
+            if (scrollable) {
+                // the rows scroll, the focused one is always brought into the screen
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                ) {
+                    content()
+                }
+            } else {
                 content()
             }
         }

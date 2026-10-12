@@ -659,4 +659,5 @@
     <string name="tv_login_with_code">Mit einem Code auf twitch.tv/activate</string>
     <string name="tv_login_with_page">Mit der Twitch-Anmeldeseite (nötig für 1440p)</string>
     <string name="tv_login_code_help">Öffne auf Handy oder Computer twitch.tv/activate und gib diesen Code ein. Die Anmeldung läuft dann von selbst. 1440p braucht die Anmeldung über die Twitch-Seite.</string>
+    <string name="tv_close_playback">Schließen</string>
 </resources>

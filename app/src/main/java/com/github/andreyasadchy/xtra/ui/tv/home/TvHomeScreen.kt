@@ -81,6 +81,8 @@ class TvHomeActions(
     val openMenu: () -> Unit,
     val onStreamFocused: (Stream?) -> Unit,
     val formatViewers: (Int) -> String,
+    /** The count alone ("7.1K"), for the small cards. */
+    val formatCount: (Int) -> String = { it.toString() },
     val refresh: () -> Unit,
     /** Stream cards in the width of the screen, from the settings. */
     val cardsPerRow: Int = 3,
@@ -336,6 +338,8 @@ private fun StreamCard(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
+    // many cards a row: smaller texts, the count alone in the badge
+    val small = width < 230.dp
     FocusCard(
         width = width,
         modifier = modifier,
@@ -383,7 +387,13 @@ private fun StreamCard(
             ) {
                 Box(Modifier.size(6.dp).background(Color.White, CircleShape))
                 Spacer(Modifier.width(5.dp))
-                Text(stream.viewerCount?.let { actions.formatViewers(it) } ?: "LIVE", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(
+                    stream.viewerCount?.let { if (small) actions.formatCount(it) else actions.formatViewers(it) } ?: "LIVE",
+                    fontSize = if (small) 11.sp else 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 1,
+                )
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -393,16 +403,16 @@ private fun StreamCard(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(if (small) 26.dp else 32.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF26252C))
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(if (small) 8.dp else 10.dp))
             Column {
-                Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(stream.title?.trim() ?: "", fontSize = 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stream.title?.trim() ?: "", fontSize = if (small) 11.sp else 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (!stream.gameName.isNullOrBlank()) {
-                    Text(stream.gameName ?: "", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stream.gameName ?: "", fontSize = if (small) 11.sp else 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

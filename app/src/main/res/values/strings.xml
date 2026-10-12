@@ -678,4 +678,5 @@
     <string name="tv_login_with_code">With a code on twitch.tv/activate</string>
     <string name="tv_login_with_page">With the Twitch login page (needed for 1440p)</string>
     <string name="tv_login_code_help">On your phone or computer, go to twitch.tv/activate and type this code. The login goes on by itself. 1440p needs the login with the Twitch page.</string>
+    <string name="tv_close_playback">Close</string>
 </resources>

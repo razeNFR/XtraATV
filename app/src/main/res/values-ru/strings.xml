@@ -659,4 +659,5 @@
     <string name="tv_login_with_code">С кодом на twitch.tv/activate</string>
     <string name="tv_login_with_page">Через страницу входа Twitch (нужно для 1440p)</string>
     <string name="tv_login_code_help">На телефоне или компьютере откройте twitch.tv/activate и введите этот код. Вход продолжится сам. Для 1440p нужен вход через страницу Twitch.</string>
+    <string name="tv_close_playback">Закрыть</string>
 </resources>

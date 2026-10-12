@@ -55,7 +55,7 @@ class TvMenuState {
     var items by mutableStateOf<List<TvMenuItem>>(emptyList())
     var nowPlaying by mutableStateOf<TvNowPlaying?>(null)
     var onNowPlayingClick: () -> Unit = {}
-    var onNowPlayingLongClick: () -> Unit = {}
+    var onNowPlayingClose: () -> Unit = {}
     var selected by mutableIntStateOf(0)
     internal val requesters = mutableMapOf<Int, FocusRequester>()
 
@@ -93,7 +93,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
-                    Key.DirectionUp -> focusedIndex <= (if (state.nowPlaying != null) -1 else 0)
+                    Key.DirectionUp -> focusedIndex <= 0
                     Key.DirectionDown -> focusedIndex >= items.lastIndex
                     Key.DirectionLeft -> true
                     else -> false
@@ -102,17 +102,22 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 28.dp)
     ) {
-        state.nowPlaying?.let { playing ->
-            NowPlayingCard(playing, state, Modifier.onFocusChanged { if (it.isFocused) focusedIndex = -1 })
-            Box(
-                Modifier
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(Color(0x26FFFFFF))
-            )
-        }
+        // "Now playing" between search and the sections
+        val nowPlayingAt = items.indexOfFirst { it.group != TvMenuState.GROUP_TOP }.coerceAtLeast(0)
         items.forEachIndexed { index, item ->
+            val playing = state.nowPlaying
+            if (index == nowPlayingAt && playing != null) {
+                if (index > 0) {
+                    Box(
+                        Modifier
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Color(0x26FFFFFF))
+                    )
+                }
+                NowPlayingCard(playing, state, Modifier.onFocusChanged { if (it.hasFocus) focusedIndex = index })
+            }
             if (index > 0 && items[index - 1].group != item.group) {
                 Box(
                     Modifier
@@ -136,34 +141,43 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     }
 }
 
-/** "Now playing": OK goes back to the stream, OK held down opens its actions (stop it, channel...). */
+/** "Now playing": OK goes back to the stream, the button under it stops it. */
 @Composable
 private fun NowPlayingCard(playing: TvNowPlaying, state: TvMenuState, modifier: Modifier) {
+    Column(modifier.fillMaxWidth()) {
+        NowPlayingContent(playing, state)
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+        Row(
+            Modifier
+                .padding(top = 6.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+                .clickable(interactionSource = interaction, indication = null) { state.onNowPlayingClose() }
+                .padding(vertical = 8.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                androidx.compose.ui.platform.LocalContext.current.getString(com.github.andreyasadchy.xtra.R.string.tv_close_playback),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (focused) TvColors.onFocused else Color.White,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NowPlayingContent(playing: TvNowPlaying, state: TvMenuState) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    var longPressed by remember { mutableStateOf(false) }
     Column(
-        modifier
+        Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
-            .onPreviewKeyEvent { event ->
-                val isSelect = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
-                if (!isSelect) return@onPreviewKeyEvent false
-                when {
-                    event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 1 -> {
-                        longPressed = true
-                        state.onNowPlayingLongClick()
-                        true
-                    }
-                    event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount > 1 -> true
-                    event.type == KeyEventType.KeyUp && longPressed -> {
-                        longPressed = false
-                        true
-                    }
-                    else -> false
-                }
-            }
             .clickable(interactionSource = interaction, indication = null) { state.onNowPlayingClick() }
             .padding(10.dp)
     ) {

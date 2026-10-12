@@ -659,4 +659,5 @@
     <string name="tv_login_with_code">在 twitch.tv/activate 輸入代碼</string>
     <string name="tv_login_with_page">使用 Twitch 登入頁面 (1440p 需要)</string>
     <string name="tv_login_code_help">在手機或電腦上開啟 twitch.tv/activate 並輸入此代碼，登入會自動完成。1440p 需要使用 Twitch 頁面登入。</string>
+    <string name="tv_close_playback">關閉</string>
 </resources>

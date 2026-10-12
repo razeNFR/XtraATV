@@ -106,7 +106,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     protected var started = false
 
     private var isPortrait = false
-    private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
+    protected val isTv by lazy { resources.getBoolean(R.bool.isTv) }
     /** Controls stay longer on TV, moving between them with a remote takes more time than tapping. */
     protected val controllerHideDelay by lazy { if (isTv) 6000L else 3000L }
     protected var isMaximized = true
@@ -2186,6 +2186,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val left = position.intValue == 2 || position.intValue == 3
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_chat_layout),
+                scrollable = true,
                 alignEnd = left && mode.intValue != 2,
             ) {
                 val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
@@ -2685,6 +2686,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val controls = _binding?.playerControls ?: return@OnGlobalFocusChangeListener
         if (newFocus != null && newFocus != controls.progressBar && (newFocus.parent == controls.bottomLeftLayout || newFocus.parent == controls.bottomRightLayout || newFocus == controls.playPause)) {
             lastHudControl = java.lang.ref.WeakReference(newFocus)
+        }
+    }
+
+    /** A control with the focus went away: the timeline, else the first control on screen. */
+    protected fun focusAfterHiddenControl() {
+        val controls = _binding?.playerControls ?: return
+        if (!(controls.progressBar.isShown && controls.progressBar.requestFocus())) {
+            lastHudControl = null
+            focusPrimaryControl()
         }
     }
 

@@ -660,4 +660,5 @@
     <string name="tv_login_with_code">Dengan kode di twitch.tv/activate</string>
     <string name="tv_login_with_page">Dengan halaman masuk Twitch (diperlukan untuk 1440p)</string>
     <string name="tv_login_code_help">Di ponsel atau komputer, buka twitch.tv/activate dan ketik kode ini. Login berlanjut sendiri. 1440p memerlukan login dengan halaman Twitch.</string>
+    <string name="tv_close_playback">Tutup</string>
 </resources>
