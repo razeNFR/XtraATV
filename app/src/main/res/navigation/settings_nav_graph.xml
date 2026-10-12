@@ -68,6 +68,13 @@
         android:id="@+id/action_global_playbackSettingsFragment"
         app:destination="@id/playbackSettingsFragment" />
     <fragment
+        android:id="@+id/adblockSettingsFragment"
+        android:name="com.github.andreyasadchy.xtra.ui.settings.SettingsActivity$AdblockSettingsFragment"
+        android:label="@string/adblock" />
+    <action
+        android:id="@+id/action_global_adblockSettingsFragment"
+        app:destination="@id/adblockSettingsFragment" />
+    <fragment
         android:id="@+id/xtraTvSettingsFragment"
         android:name="com.github.andreyasadchy.xtra.ui.settings.SettingsActivity$XtraTvSettingsFragment"
         android:label="@string/xtratv_settings" />

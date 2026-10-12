@@ -641,4 +641,23 @@
     <string name="tv_dpad_switch_stream_summary">Com os controles ocultos, esquerda e direita vão para o streamer anterior ou seguinte da lista de onde a stream foi aberta</string>
     <string name="tv_home_languages">Idiomas da linha Popular (início)</string>
     <string name="tv_home_languages_summary">Streams da linha Popular do início apenas nestes idiomas, todos os idiomas se nenhum estiver marcado</string>
+    <string name="tv_home_cards">Cartões de live no início</string>
+    <string name="tv_home_cards_summary">%s cartões na largura da tela</string>
+    <string name="tv_stream_columns">Colunas de lives nas listas</string>
+    <string name="tv_stream_columns_summary">%s colunas: menos colunas, cartões maiores</string>
+    <string name="tv_channel_videos">Vídeos do canal</string>
+    <string name="tv_follow_failed">Não foi possível alterar o seguir</string>
+    <string name="tv_stop_playback">Parar a reprodução</string>
+    <string name="tv_now_playing">Tocando agora</string>
+    <string name="tv_back_action">Botão voltar em uma live</string>
+    <string name="tv_back_stop">Parar a live</string>
+    <string name="tv_back_mini">Mini player</string>
+    <string name="tv_back_audio">Somente áudio</string>
+    <string name="tv_dpad_up_down">Atalhos para cima e para baixo na live</string>
+    <string name="tv_dpad_up_down_summary">Com os controles ocultos: para cima mostra as outras lives, para baixo mostra ou oculta o chat</string>
+    <string name="tv_1440p_warning">⚠ O 1440p não funciona com proxies públicos (Luminous etc.), limitados a 1080p. Para 1440p desative o proxy personalizado e use o bloqueador de anúncios (configurações do Xtra TV), ou use seu próprio proxy compatível com 1440p.</string>
+    <string name="tv_login_with_code">Com um código em twitch.tv/activate</string>
+    <string name="tv_login_with_page">Com a página de login da Twitch (necessária para 1440p)</string>
+    <string name="tv_login_code_help">No celular ou computador, acesse twitch.tv/activate e digite este código. O login continua sozinho. O 1440p precisa do login pela página da Twitch.</string>
+    <string name="tv_close_playback">Fechar</string>
 </resources>

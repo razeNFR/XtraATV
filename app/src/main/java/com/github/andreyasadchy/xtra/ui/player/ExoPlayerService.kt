@@ -782,7 +782,7 @@ class ExoPlayerService : BasePlaybackService() {
                     }
                     val adblock = prefs().getBoolean(C.PLAYER_ADBLOCK, true)
                     // the ad blocker also backs up the proxies: if an ad still comes through them, the playlist of another player type is used
-                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, false)) || adblock
+                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, true)) || adblock
                     if (useVideoSwap) {
                         videoSwapList = xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
                             it.enabled && !it.platform.isNullOrBlank() && !it.playerType.isNullOrBlank()
@@ -2127,6 +2127,21 @@ class ExoPlayerService : BasePlaybackService() {
         serviceListener?.setPlayerSurface(isSwapping)
     }
 
+    private var videoHidden = false
+
+    /** TV audio only: the picture of the stream is not decoded while the player is hidden. */
+    fun setVideoHidden(hidden: Boolean) {
+        videoHidden = hidden
+        if (quality?.name == VideoQuality.AUDIO_ONLY_QUALITY) {
+            return
+        }
+        // the main player keeps its picture off while the backup player of the ad blocker shows it
+        val target = if (isSwapping) secondaryPlayer else player
+        target?.let {
+            it.trackSelectionParameters = it.trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, hidden).build()
+        }
+    }
+
     private var duckedVolume: Float? = null
 
     /** Silences the stream while a preview with sound plays over it (stream switcher of the player). */
@@ -2240,7 +2255,7 @@ class ExoPlayerService : BasePlaybackService() {
         player?.let { player ->
             if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
+                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
                 }.build()
             }
             player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f

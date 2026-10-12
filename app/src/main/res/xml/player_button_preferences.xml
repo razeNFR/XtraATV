@@ -3,6 +3,46 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:key="tv_button_stream_list"
+        android:title="@string/tv_switch_stream"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_button_multi_stream"
+        android:title="@string/tv_multistream"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_button_chat_message"
+        android:title="@string/tv_write_message"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_button_chat_layout"
+        android:title="@string/tv_chat_layout"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_button_stats"
+        android:title="@string/tv_stats_for_nerds"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
         android:key="player_minimize"
         android:title="@string/minimize"
         android:icon="@drawable/baseline_expand_more_black_24"

@@ -1,0 +1,33 @@
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_adblock"
+        android:summary="@string/adblock_summary"
+        android:title="@string/adblock"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_use_video_swap"
+        android:summary="@string/use_video_swap_desc"
+        android:title="@string/use_video_swap"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="video_swap_settings"
+        android:title="@string/video_swap_settings"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_hide_ads"
+        android:title="@string/hide_during_ads"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>

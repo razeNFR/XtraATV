@@ -68,7 +68,24 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 object TvDialogs {
 
     fun show(context: Context, content: @Composable (dismiss: () -> Unit) -> Unit): ComponentDialog {
-        val dialog = ComponentDialog(context, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen)
+        val dialog = object : ComponentDialog(context, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen) {
+            // opened with OK held down (long press on a card): that press is not for the panel,
+            // its repeats and its release are dropped until OK is pressed again
+            private var dropHeldSelect = true
+
+            override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+                val isSelect = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
+                        event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+                if (dropHeldSelect && isSelect) {
+                    if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        dropHeldSelect = false
+                    } else {
+                        return true
+                    }
+                }
+                return super.dispatchKeyEvent(event)
+            }
+        }
         val accent = MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, Color.rgb(145, 71, 255))
         dialog.setContentView(ComposeView(context).apply {
             setContent {
@@ -158,6 +175,8 @@ fun SidePanel(
     subtitle: String? = null,
     alignEnd: Boolean = true,
     width: Dp = 440.dp,
+    // true for panels made of plain rows; lists that scroll by themselves (LazyColumn) must not be put in a scrolling panel
+    scrollable: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart) {
@@ -178,12 +197,16 @@ fun SidePanel(
                 Text(subtitle, fontSize = 14.sp, color = TvColors.secondaryText)
             }
             Spacer(Modifier.height(24.dp))
-            // the rows scroll, the focused one is always brought into the screen
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
-            ) {
+            if (scrollable) {
+                // the rows scroll, the focused one is always brought into the screen
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                ) {
+                    content()
+                }
+            } else {
                 content()
             }
         }

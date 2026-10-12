@@ -642,4 +642,23 @@
     <string name="tv_dpad_switch_stream_summary">Saat kontrol tersembunyi, kiri dan kanan berpindah ke streamer sebelumnya atau berikutnya dari daftar asal stream</string>
     <string name="tv_home_languages">Bahasa baris Populer (beranda)</string>
     <string name="tv_home_languages_summary">Stream di baris Populer beranda hanya dalam bahasa ini, semua bahasa jika tidak ada yang dicentang</string>
+    <string name="tv_home_cards">Kartu stream di beranda</string>
+    <string name="tv_home_cards_summary">%s kartu selebar layar</string>
+    <string name="tv_stream_columns">Kolom stream di daftar</string>
+    <string name="tv_stream_columns_summary">%s kolom: lebih sedikit kolom, kartu lebih besar</string>
+    <string name="tv_channel_videos">Video kanal</string>
+    <string name="tv_follow_failed">Tidak dapat mengubah status mengikuti</string>
+    <string name="tv_stop_playback">Hentikan pemutaran</string>
+    <string name="tv_now_playing">Sedang diputar</string>
+    <string name="tv_back_action">Tombol kembali di stream</string>
+    <string name="tv_back_stop">Hentikan stream</string>
+    <string name="tv_back_mini">Pemutar mini</string>
+    <string name="tv_back_audio">Hanya audio</string>
+    <string name="tv_dpad_up_down">Pintasan atas dan bawah di stream</string>
+    <string name="tv_dpad_up_down_summary">Saat kontrol tersembunyi: atas menampilkan stream lain, bawah menampilkan atau menyembunyikan chat</string>
+    <string name="tv_1440p_warning">⚠ 1440p tidak berfungsi dengan proxy publik (Luminous, dll.) yang terbatas 1080p. Untuk 1440p matikan proxy kustom dan gunakan pemblokir iklan (pengaturan Xtra TV), atau gunakan proxy sendiri yang mendukung 1440p.</string>
+    <string name="tv_login_with_code">Dengan kode di twitch.tv/activate</string>
+    <string name="tv_login_with_page">Dengan halaman masuk Twitch (diperlukan untuk 1440p)</string>
+    <string name="tv_login_code_help">Di ponsel atau komputer, buka twitch.tv/activate dan ketik kode ini. Login berlanjut sendiri. 1440p memerlukan login dengan halaman Twitch.</string>
+    <string name="tv_close_playback">Tutup</string>
 </resources>

@@ -641,4 +641,23 @@
     <string name="tv_dpad_switch_stream_summary">Wenn die Steuerung ausgeblendet ist, wechseln links und rechts zum vorherigen oder nächsten Streamer der Liste, aus der der Stream geöffnet wurde</string>
     <string name="tv_home_languages">Sprachen der Zeile Beliebt (Startseite)</string>
     <string name="tv_home_languages_summary">Streams der Zeile Beliebt auf der Startseite nur in diesen Sprachen, alle Sprachen wenn keine ausgewählt ist</string>
+    <string name="tv_home_cards">Stream-Karten auf der Startseite</string>
+    <string name="tv_home_cards_summary">%s Karten über die Bildschirmbreite</string>
+    <string name="tv_stream_columns">Stream-Spalten in den Listen</string>
+    <string name="tv_stream_columns_summary">%s Spalten: weniger Spalten, größere Karten</string>
+    <string name="tv_channel_videos">Videos des Kanals</string>
+    <string name="tv_follow_failed">Folgen konnte nicht geändert werden</string>
+    <string name="tv_stop_playback">Wiedergabe beenden</string>
+    <string name="tv_now_playing">Läuft gerade</string>
+    <string name="tv_back_action">Zurück-Taste im Stream</string>
+    <string name="tv_back_stop">Stream beenden</string>
+    <string name="tv_back_mini">Mini-Player</string>
+    <string name="tv_back_audio">Nur Audio</string>
+    <string name="tv_dpad_up_down">Hoch- und Runter-Kürzel im Stream</string>
+    <string name="tv_dpad_up_down_summary">Bei ausgeblendeter Steuerung: Hoch zeigt die anderen Streams, Runter blendet den Chat ein oder aus</string>
+    <string name="tv_1440p_warning">⚠ 1440p funktioniert nicht mit öffentlichen Proxys (Luminous usw.), die bei 1080p enden. Für 1440p den eigenen Proxy ausschalten und den Werbeblocker nutzen (Xtra TV-Einstellungen) oder einen eigenen Proxy mit 1440p verwenden.</string>
+    <string name="tv_login_with_code">Mit einem Code auf twitch.tv/activate</string>
+    <string name="tv_login_with_page">Mit der Twitch-Anmeldeseite (nötig für 1440p)</string>
+    <string name="tv_login_code_help">Öffne auf Handy oder Computer twitch.tv/activate und gib diesen Code ein. Die Anmeldung läuft dann von selbst. 1440p braucht die Anmeldung über die Twitch-Seite.</string>
+    <string name="tv_close_playback">Schließen</string>
 </resources>

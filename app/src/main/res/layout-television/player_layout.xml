@@ -361,7 +361,7 @@
                         android:layout_marginEnd="2dp"
                         android:background="@drawable/player_control_background"
                         android:contentDescription="@string/tv_switch_stream"
-                        android:src="@drawable/baseline_format_list_bulleted_black_24"
+                        android:src="@drawable/tv_ic_streamers"
                         android:visibility="gone"
                         app:tint="@android:color/white"
                         tools:visibility="visible" />

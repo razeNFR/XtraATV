@@ -167,6 +167,25 @@ class LoginActivity : AppCompatActivity() {
             textZoom.visibility = View.VISIBLE
             havingTrouble.visibility = View.VISIBLE
             setupButtons(networkLibrary, helixClientId, helixAuthUrl)
+            if (resources.getBoolean(R.bool.isTv)) {
+                // TV: log in with a code typed on twitch.tv/activate, or with the Twitch page (the only one that gives 1440p)
+                var chosen = false
+                com.github.andreyasadchy.xtra.ui.tv.TvDialogs.showChoices(
+                    this@LoginActivity,
+                    getString(R.string.log_in),
+                    listOf(getString(R.string.tv_login_with_code), getString(R.string.tv_login_with_page)),
+                    -1
+                ) { which ->
+                    chosen = true
+                    if (which == 0) {
+                        setupExternalCodeLogin(networkLibrary, helixClientId, helixAuthUrl)
+                    }
+                }.setOnDismissListener {
+                    if (!chosen) {
+                        finish()
+                    }
+                }
+            }
             CookieManager.getInstance().removeAllCookies(null)
             val isLightTheme = obtainStyledAttributes(intArrayOf(androidx.appcompat.R.attr.isLightTheme)).use {
                 it.getBoolean(0, false)
@@ -586,8 +605,11 @@ class LoginActivity : AppCompatActivity() {
                 }
             }
             next.visibility = View.VISIBLE
-            next.setOnClickListener {
-                if (deviceCode != null) {
+            var checking = false
+            // manual: the "next" button, a message is shown; the automatic checks of the TV stay silent while the code waits
+            val check = { manual: Boolean ->
+                if (deviceCode != null && !checking) {
+                    checking = true
                     lifecycleScope.launch {
                         try {
                             val response = xtraModule.authRepository.getToken(networkLibrary, "client_id=${gqlClientId}&device_code=${deviceCode}&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code")
@@ -602,6 +624,7 @@ class LoginActivity : AppCompatActivity() {
                                     if (!helixToken.isNullOrBlank()) {
                                         done()
                                     } else {
+                                        deviceCode = null
                                         error()
                                         codeText.visibility = View.GONE
                                         codeText.text = getString(R.string.loading)
@@ -613,7 +636,7 @@ class LoginActivity : AppCompatActivity() {
                                         webView.loadUrl("https://www.twitch.tv/login")
                                     }
                                 }
-                            } else {
+                            } else if (manual) {
                                 response.message?.let {
                                     Toast.makeText(this@LoginActivity, it, Toast.LENGTH_SHORT).show()
                                 }
@@ -621,6 +644,25 @@ class LoginActivity : AppCompatActivity() {
                         } catch (e: Exception) {
 
                         }
+                        checking = false
+                    }
+                }
+            }
+            next.setOnClickListener { check(true) }
+            if (resources.getBoolean(R.bool.isTv)) {
+                // TV: the code is typed on twitch.tv/activate from a phone or a computer, the login goes on by itself
+                codeText.textSize = 44f
+                copyCode.visibility = View.GONE
+                openUrl.visibility = View.GONE
+                havingTrouble.visibility = View.VISIBLE
+                havingTrouble.isClickable = false
+                havingTrouble.isFocusable = false
+                havingTrouble.text = getString(R.string.tv_login_code_help)
+                next.requestFocus()
+                lifecycleScope.launch {
+                    while (true) {
+                        kotlinx.coroutines.delay(5000L)
+                        check(false)
                     }
                 }
             }

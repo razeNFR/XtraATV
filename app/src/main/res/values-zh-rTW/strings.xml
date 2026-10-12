@@ -641,4 +641,23 @@
     <string name="tv_dpad_switch_stream_summary">控制列隱藏時，按左右鍵切換到開啟直播的清單中的上一個或下一個實況主</string>
     <string name="tv_home_languages">熱門列的語言（首頁）</string>
     <string name="tv_home_languages_summary">首頁熱門列只顯示這些語言的直播，未選擇時顯示所有語言</string>
+    <string name="tv_home_cards">首頁直播卡片</string>
+    <string name="tv_home_cards_summary">螢幕寬度顯示 %s 張卡片</string>
+    <string name="tv_stream_columns">清單中的直播欄數</string>
+    <string name="tv_stream_columns_summary">%s 欄：欄數越少，卡片越大</string>
+    <string name="tv_channel_videos">頻道影片</string>
+    <string name="tv_follow_failed">無法變更追隨</string>
+    <string name="tv_stop_playback">停止播放</string>
+    <string name="tv_now_playing">正在播放</string>
+    <string name="tv_back_action">直播中的返回鍵</string>
+    <string name="tv_back_stop">停止直播</string>
+    <string name="tv_back_mini">迷你播放器</string>
+    <string name="tv_back_audio">僅音訊</string>
+    <string name="tv_dpad_up_down">直播中的上下快速鍵</string>
+    <string name="tv_dpad_up_down_summary">控制項隱藏時：上鍵顯示其他直播，下鍵顯示或隱藏聊天</string>
+    <string name="tv_1440p_warning">⚠ 1440p 無法透過公共代理 (Luminous 等，最高 1080p) 使用。要觀看 1440p，請關閉自訂代理並使用廣告封鎖 (Xtra TV 設定)，或使用支援 1440p 的自有代理。</string>
+    <string name="tv_login_with_code">在 twitch.tv/activate 輸入代碼</string>
+    <string name="tv_login_with_page">使用 Twitch 登入頁面 (1440p 需要)</string>
+    <string name="tv_login_code_help">在手機或電腦上開啟 twitch.tv/activate 並輸入此代碼，登入會自動完成。1440p 需要使用 Twitch 頁面登入。</string>
+    <string name="tv_close_playback">關閉</string>
 </resources>

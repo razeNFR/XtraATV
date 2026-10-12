@@ -642,4 +642,23 @@
     <string name="tv_dpad_switch_stream_summary">Kontroller gizliyken sol ve sağ, yayının açıldığı listedeki önceki veya sonraki yayıncıya geçer</string>
     <string name="tv_home_languages">Popüler satırının dilleri (ana sayfa)</string>
     <string name="tv_home_languages_summary">Ana sayfadaki Popüler satırında yalnızca bu dillerdeki yayınlar, hiçbiri seçili değilse tüm diller</string>
+    <string name="tv_home_cards">Ana sayfadaki yayın kartları</string>
+    <string name="tv_home_cards_summary">Ekran genişliğinde %s kart</string>
+    <string name="tv_stream_columns">Listelerdeki yayın sütunları</string>
+    <string name="tv_stream_columns_summary">%s sütun: daha az sütun, daha büyük kartlar</string>
+    <string name="tv_channel_videos">Kanalın videoları</string>
+    <string name="tv_follow_failed">Takip değiştirilemedi</string>
+    <string name="tv_stop_playback">Oynatmayı durdur</string>
+    <string name="tv_now_playing">Şimdi oynatılıyor</string>
+    <string name="tv_back_action">Yayında geri tuşu</string>
+    <string name="tv_back_stop">Yayını durdur</string>
+    <string name="tv_back_mini">Mini oynatıcı</string>
+    <string name="tv_back_audio">Yalnızca ses</string>
+    <string name="tv_dpad_up_down">Yayında yukarı ve aşağı kısayolları</string>
+    <string name="tv_dpad_up_down_summary">Kontroller gizliyken: yukarı diğer yayınları gösterir, aşağı sohbeti gösterir veya gizler</string>
+    <string name="tv_1440p_warning">⚠ 1440p, 1080p ile sınırlı genel proxylerle (Luminous vb.) çalışmaz. 1440p için özel proxyyi kapatıp reklam engelleyiciyi (Xtra TV ayarları) kullanın veya 1440p destekleyen kendi proxynizi kullanın.</string>
+    <string name="tv_login_with_code">twitch.tv/activate üzerinde kodla</string>
+    <string name="tv_login_with_page">Twitch giriş sayfasıyla (1440p için gerekli)</string>
+    <string name="tv_login_code_help">Telefonunuzda veya bilgisayarınızda twitch.tv/activate adresine gidip bu kodu yazın. Giriş kendiliğinden devam eder. 1440p için Twitch sayfasıyla giriş gerekir.</string>
+    <string name="tv_close_playback">Kapat</string>
 </resources>

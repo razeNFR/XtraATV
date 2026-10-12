@@ -10,6 +10,7 @@
     <item name="tvSearchBar" type="id" />
     <item name="tvHome" type="id" />
     <item name="tvSwitchOverlay" type="id" />
+    <item name="tvBaseTextSize" type="id" />
     <item name="tvSheetCompose" type="id" />
     <item name="tvHeaderActions" type="id" />
     <item name="tvHeaderCompose" type="id" />

@@ -20,7 +20,6 @@ import androidx.navigation.fragment.findNavController
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.model.ui.Stream
-import com.github.andreyasadchy.xtra.ui.channel.ChannelPagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
@@ -41,6 +40,9 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private val previewLogin = mutableStateOf<String?>(null)
     private val previewPlayer = mutableStateOf<ExoPlayer?>(null)
     private var previewJob: Job? = null
+    // snapshot states: the cards that read them follow their changes
+    private val homeStamp = androidx.compose.runtime.mutableLongStateOf(0L)
+    private val homeRefreshing = mutableStateOf(false)
 
     init {
         com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.register(this)
@@ -55,17 +57,9 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 stopPreview()
                 (activity as? MainActivity)?.startStream(stream, list)
             },
-            openChannel = { stream ->
+            showActions = { stream ->
                 stopPreview()
-                findNavController().navigate(
-                    ChannelPagerFragmentDirections.actionGlobalChannelPagerFragment(
-                        channelId = stream.channelId,
-                        channelLogin = stream.channelLogin,
-                        channelName = stream.channelName,
-                        channelImage = stream.channelImage,
-                        streamId = stream.id
-                    )
-                )
+                (activity as? MainActivity)?.showTvStreamActions(stream)
             },
             openGame = { game ->
                 stopPreview()
@@ -87,11 +81,21 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             },
             onStreamFocused = { schedulePreview(it) },
             formatViewers = { count -> resources.getQuantityString(R.plurals.viewers, count, TwitchApiHelper.formatCount(count, truncate)) },
+            formatCount = { count -> TwitchApiHelper.formatCount(count, true) },
             refresh = {
                 stopPreview()
                 viewModel.load(force = true)
             },
+            cardsPerRow = context.prefs().getString(C.TV_HOME_CARDS, "3")?.toIntOrNull() ?: 3,
+            thumbnailStamp = { homeStamp.longValue },
+            refreshing = { homeRefreshing.value },
         )
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.stamp.collect { homeStamp.longValue = it }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.refreshing.collect { homeRefreshing.value = it }
+        }
         val followedId = if (context.prefs().getBoolean(C.UI_FOLLOW_PAGER, true)) R.id.followPagerFragment else R.id.followMediaFragment
         return ComposeView(context).apply {
             id = R.id.tvHome
@@ -149,12 +153,16 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             player.prepare()
             player.playWhenReady = true
             previewLogin.value = login
+            com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.notifyPreviewSound(context, true)
         }
     }
 
     override fun stopPreview() {
         previewJob?.cancel()
         previewJob = null
+        if (previewLogin.value != null) {
+            context?.let { com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.notifyPreviewSound(it, false) }
+        }
         previewLogin.value = null
         previewPlayer.value?.stop()
     }

@@ -1112,6 +1112,41 @@ class SettingsActivity : AppCompatActivity() {
     class PlayerButtonSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.player_button_preferences, rootKey)
+            if (resources.getBoolean(R.bool.isTv)) {
+                // TV: each setting shows the icon of its button in the player
+                val icons = mapOf(
+                    C.TV_BUTTON_STREAM_LIST to R.drawable.tv_ic_streamers,
+                    C.TV_BUTTON_MULTI_STREAM to R.drawable.tv_ic_multistream,
+                    C.TV_BUTTON_CHAT_MESSAGE to R.drawable.tv_ic_chat_send,
+                    C.TV_BUTTON_CHAT_LAYOUT to R.drawable.tv_ic_chat_layout,
+                    C.TV_BUTTON_STATS to R.drawable.tv_ic_stats,
+                    "player_download" to R.drawable.ic_file_download_black_24dp,
+                    "player_follow" to R.drawable.baseline_favorite_border_black_24,
+                    "player_sleep" to R.drawable.baseline_alarm_black_24,
+                    "player_speedbutton" to androidx.media3.ui.R.drawable.exo_ic_speed,
+                    "player_settings" to R.drawable.tv_ic_hd,
+                    "player_menu" to R.drawable.baseline_settings_black_24,
+                    "player_gamesbutton" to R.drawable.baseline_format_list_bulleted_black_24,
+                    "player_restart" to R.drawable.baseline_replay_black_24,
+                    "player_seeklive" to androidx.media3.ui.R.drawable.exo_icon_fastforward,
+                    "player_volumebutton" to R.drawable.baseline_volume_up_black_24,
+                    "player_audio_compressor_button" to R.drawable.baseline_audio_compressor_off_24dp,
+                    "player_mode" to R.drawable.baseline_audiotrack_black_24,
+                    "player_subtitles" to androidx.media3.ui.R.drawable.exo_ic_subtitle_off,
+                    "player_chattoggle" to R.drawable.baseline_speaker_notes_black_24,
+                    "player_viewericon" to R.drawable.baseline_person_black_24,
+                    "player_pause" to R.drawable.baseline_play_arrow_black_48,
+                )
+                val size = (24 * resources.displayMetrics.density).toInt()
+                val tint = com.google.android.material.color.MaterialColors.getColor(requireContext(), com.google.android.material.R.attr.colorOnSurface, android.graphics.Color.WHITE)
+                icons.forEach { (key, icon) ->
+                    val preference = findPreference<Preference>(key) ?: return@forEach
+                    val drawable = androidx.core.content.ContextCompat.getDrawable(requireContext(), icon)?.mutate() ?: return@forEach
+                    drawable.setTint(tint)
+                    // every icon at the same size, whatever the size of its picture
+                    preference.icon = android.graphics.drawable.LayerDrawable(arrayOf(drawable)).apply { setLayerSize(0, size, size) }
+                }
+            }
             findPreference<SwitchPreferenceCompat>("sleep_timer_lock")?.setOnPreferenceChangeListener { _, newValue ->
                 if (newValue == true) {
                     val devicePolicyManager = requireContext().getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -1306,6 +1341,52 @@ class SettingsActivity : AppCompatActivity() {
     class XtraTvSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.xtratv_preferences, rootKey)
+            findPreference<Preference>("adblock_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalAdblockSettingsFragment())
+                true
+            }
+        }
+
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
+                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+                listView.updatePadding(bottom = insets.bottom)
+                WindowInsetsCompat.CONSUMED
+            }
+            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                    listView.let {
+                        appBar.setLiftOnScrollTargetView(it)
+                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                                super.onScrolled(recyclerView, dx, dy)
+                                appBar.isLifted = recyclerView.canScrollVertically(-1)
+                            }
+                        })
+                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                            appBar.isLifted = it.canScrollVertically(-1)
+                        }
+                    }
+                } else {
+                    appBar.setLiftable(false)
+                    appBar.background = null
+                }
+            }
+            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+        }
+    }
+
+    /** Ad blocker of Xtra TV: on / off, backup player types (video swap), hiding during ads. */
+    class AdblockSettingsFragment : MaterialPreferenceFragment() {
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            setPreferencesFromResource(R.xml.adblock_preferences, rootKey)
+            findPreference<Preference>("video_swap_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalVideoSwapSettingsFragment())
+                true
+            }
         }
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -1669,8 +1750,13 @@ class SettingsActivity : AppCompatActivity() {
                     Triple(R.xml.ui_preferences, SettingsNavGraphDirections.actionGlobalUiSettingsFragment(), getString(R.string.ui_settings)),
                     Triple(R.xml.update_preferences, SettingsNavGraphDirections.actionGlobalUpdateSettingsFragment(), getString(R.string.update_settings)),
                     Triple(R.xml.xtratv_preferences, SettingsNavGraphDirections.actionGlobalXtraTvSettingsFragment(), getString(R.string.xtratv_settings)),
+                    Triple(R.xml.adblock_preferences, SettingsNavGraphDirections.actionGlobalAdblockSettingsFragment(), getString(R.string.adblock)),
                 ).forEach { item ->
                     preferenceManager.inflateFromResource(requireContext(), item.first, null).forEach {
+                        // the settings hidden on this device are not found either
+                        if (!it.isVisible || (resources.getBoolean(R.bool.isTv) && it.key in MaterialPreferenceFragment.TV_HIDDEN_KEYS)) {
+                            return@forEach
+                        }
                         when (it) {
                             is SwitchPreferenceCompat -> {
                                 list.add(SettingsSearchItem(

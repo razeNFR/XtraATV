@@ -35,6 +35,10 @@ class TvHomeViewModel(
     val followed = MutableStateFlow<List<Stream>?>(null)
     val popular = MutableStateFlow<List<Stream>?>(null)
     val games = MutableStateFlow<List<Game>?>(null)
+    /** True while the rows load again, the refresh button turns. */
+    val refreshing = MutableStateFlow(false)
+    /** Time of the last load: added to the thumbnails, Twitch keeps the same address for a new picture. */
+    val stamp = MutableStateFlow(0L)
     private var loadedAt = 0L
 
     /** Loads the rows, again when they are older than a few minutes. */
@@ -47,7 +51,9 @@ class TvHomeViewModel(
         val networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP)
         val enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false)
         val helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext)
-        viewModelScope.launch {
+        refreshing.value = true
+        val jobs = mutableListOf<kotlinx.coroutines.Job>()
+        jobs += viewModelScope.launch {
             followed.value = loadPage(
                 FollowedStreamsDataSource(
                     userId = applicationContext.tokenPrefs().getString(C.USER_ID, null),
@@ -63,7 +69,7 @@ class TvHomeViewModel(
         }
         // languages of the "Popular" row, chosen in the settings (all when none)
         val languages = prefs.getStringSet(C.TV_HOME_LANGUAGES, null)?.filter { it.isNotBlank() }?.ifEmpty { null }
-        viewModelScope.launch {
+        jobs += viewModelScope.launch {
             popular.value = loadPage(
                 StreamsDataSource(
                     gqlQueryLanguages = languages?.mapNotNull { language -> com.github.andreyasadchy.xtra.graphql.type.Language.entries.find { it.rawValue == language } },
@@ -80,7 +86,7 @@ class TvHomeViewModel(
                 )
             )
         }
-        viewModelScope.launch {
+        jobs += viewModelScope.launch {
             games.value = loadPage(
                 GamesDataSource(
                     tags = null,
@@ -92,6 +98,11 @@ class TvHomeViewModel(
                     networkLibrary = networkLibrary,
                 )
             )
+        }
+        viewModelScope.launch {
+            jobs.forEach { it.join() }
+            stamp.value = System.currentTimeMillis() / 1000
+            refreshing.value = false
         }
     }
 

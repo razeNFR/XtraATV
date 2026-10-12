@@ -45,13 +45,22 @@ object TvPreviewSource {
             }
         }
 
+    /** Told when a preview with sound starts and stops, the stream kept in the background is silenced meanwhile. */
+    var onPreviewSound: ((Boolean) -> Unit)? = null
+
+    fun notifyPreviewSound(context: Context, playing: Boolean) {
+        if (hasSound(context)) {
+            onPreviewSound?.invoke(playing)
+        }
+    }
+
     /** Delay between the focus on a card and the start of its preview. */
     const val START_DELAY = 100L
 
     /** Player of the previews: 360p for a fast start, with the sound when the option is on. */
     fun createPlayer(context: Context): ExoPlayer {
         return ExoPlayer.Builder(context).build().also {
-            it.volume = if (context.prefs().getBoolean(C.UI_TV_PREVIEW_SOUND, true)) 1f else 0f
+            it.volume = if (context.prefs().getBoolean(C.UI_TV_PREVIEW_SOUND, false)) 1f else 0f
             it.repeatMode = Player.REPEAT_MODE_OFF
             it.trackSelectionParameters = it.trackSelectionParameters.buildUpon()
                 .setMaxVideoSize(640, 360)
@@ -59,7 +68,7 @@ object TvPreviewSource {
         }
     }
 
-    fun hasSound(context: Context) = context.prefs().getBoolean(C.UI_TV_PREVIEW_SOUND, true)
+    fun hasSound(context: Context) = context.prefs().getBoolean(C.UI_TV_PREVIEW_SOUND, false)
 
     suspend fun getPlaylistUrl(context: Context, channelLogin: String): String? {
         val xtraModule = (context.applicationContext as XtraApp).xtraModule

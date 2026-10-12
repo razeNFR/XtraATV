@@ -641,4 +641,23 @@
     <string name="tv_dpad_switch_stream_summary">Quand le HUD est caché, gauche et droite passent au streamer précédent ou suivant de la liste d\'où vient le stream</string>
     <string name="tv_home_languages">Langues de la ligne Populaires (accueil)</string>
     <string name="tv_home_languages_summary">Les streams de la ligne Populaires de l\'accueil uniquement dans ces langues, toutes les langues si aucune n\'est cochée</string>
+    <string name="tv_home_cards">Cartes de stream sur l’accueil</string>
+    <string name="tv_home_cards_summary">%s cartes dans la largeur de l’écran</string>
+    <string name="tv_stream_columns">Colonnes de streams dans les listes</string>
+    <string name="tv_stream_columns_summary">%s colonnes : moins de colonnes, cartes plus grandes</string>
+    <string name="tv_channel_videos">Voir les VOD</string>
+    <string name="tv_follow_failed">Impossible de modifier le suivi</string>
+    <string name="tv_stop_playback">Arrêter la lecture</string>
+    <string name="tv_now_playing">En lecture</string>
+    <string name="tv_back_action">Bouton retour dans un stream</string>
+    <string name="tv_back_stop">Arrêter le stream</string>
+    <string name="tv_back_mini">Mini-lecteur</string>
+    <string name="tv_back_audio">Audio seul</string>
+    <string name="tv_dpad_up_down">Raccourcis haut et bas dans un stream</string>
+    <string name="tv_dpad_up_down_summary">Quand les commandes sont cachées : haut affiche les autres streams, bas affiche ou cache le chat</string>
+    <string name="tv_1440p_warning">⚠ Le 1440p ne fonctionne pas avec les proxys publics (Luminous, etc.), limités à 1080p. Pour le 1440p, désactive le proxy custom et utilise le bloqueur de pub (Paramètres Xtra TV), ou utilise ton propre proxy compatible 1440p.</string>
+    <string name="tv_login_with_code">Avec un code sur twitch.tv/activate</string>
+    <string name="tv_login_with_page">Avec la page de connexion Twitch (nécessaire pour le 1440p)</string>
+    <string name="tv_login_code_help">Sur ton téléphone ou ordinateur, va sur twitch.tv/activate et tape ce code. La connexion se fait toute seule. Le 1440p demande la connexion avec la page Twitch.</string>
+    <string name="tv_close_playback">Fermer</string>
 </resources>

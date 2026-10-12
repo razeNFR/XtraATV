@@ -660,4 +660,23 @@
     <string name="tv_dpad_switch_stream_summary">When the controls are hidden, left and right go to the previous or next streamer of the list the stream was opened from</string>
     <string name="tv_home_languages">Languages of the Popular row (home)</string>
     <string name="tv_home_languages_summary">Streams of the Popular row of the home in these languages only, all languages when none is checked</string>
+    <string name="tv_home_cards">Stream cards on the home</string>
+    <string name="tv_home_cards_summary">%s cards in the width of the screen</string>
+    <string name="tv_stream_columns">Stream columns in the lists</string>
+    <string name="tv_stream_columns_summary">%s columns: fewer columns, bigger cards</string>
+    <string name="tv_channel_videos">Videos of the channel</string>
+    <string name="tv_follow_failed">Could not change the follow</string>
+    <string name="tv_stop_playback">Stop playback</string>
+    <string name="tv_now_playing">Now playing</string>
+    <string name="tv_back_action">Back button in a stream</string>
+    <string name="tv_back_stop">Stop the stream</string>
+    <string name="tv_back_mini">Mini player</string>
+    <string name="tv_back_audio">Audio only</string>
+    <string name="tv_dpad_up_down">Up and down shortcuts in a stream</string>
+    <string name="tv_dpad_up_down_summary">While the controls are hidden: up shows the other streams, down shows or hides the chat</string>
+    <string name="tv_1440p_warning">⚠ 1440p does not work with public proxies (Luminous and others), they stop at 1080p. For 1440p turn off the custom proxy and use the ad blocker (Xtra TV settings), or use your own proxy that supports 1440p.</string>
+    <string name="tv_login_with_code">With a code on twitch.tv/activate</string>
+    <string name="tv_login_with_page">With the Twitch login page (needed for 1440p)</string>
+    <string name="tv_login_code_help">On your phone or computer, go to twitch.tv/activate and type this code. The login goes on by itself. 1440p needs the login with the Twitch page.</string>
+    <string name="tv_close_playback">Close</string>
 </resources>

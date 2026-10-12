@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.tv.home
 
 import android.view.TextureView
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -73,13 +74,21 @@ import com.github.andreyasadchy.xtra.ui.tv.TvColors
 
 class TvHomeActions(
     val openStream: (Stream, List<Stream>) -> Unit,
-    val openChannel: (Stream) -> Unit,
+    /** OK held down on a stream card: its actions (channel, videos, category, follow). */
+    val showActions: (Stream) -> Unit,
     val openGame: (Game) -> Unit,
     val seeAll: (Int) -> Unit,
     val openMenu: () -> Unit,
     val onStreamFocused: (Stream?) -> Unit,
     val formatViewers: (Int) -> String,
+    /** The count alone ("7.1K"), for the small cards. */
+    val formatCount: (Int) -> String = { it.toString() },
     val refresh: () -> Unit,
+    /** Stream cards in the width of the screen, from the settings. */
+    val cardsPerRow: Int = 3,
+    /** Changes at each load: the thumbnails are downloaded again. */
+    val thumbnailStamp: () -> Long = { 0L },
+    val refreshing: () -> Boolean = { false },
 )
 
 class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int)
@@ -176,7 +185,21 @@ private fun RefreshPill(actions: TvHomeActions) {
             .padding(horizontal = 18.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(painterResource(R.drawable.tv_ic_refresh), contentDescription = null, tint = if (focused) TvColors.onFocused else Color.White, modifier = Modifier.size(20.dp))
+        // turns while the rows load again
+        val rotation = if (actions.refreshing()) {
+            val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "refresh")
+            transition.animateFloat(
+                0f, 360f,
+                androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(800, easing = androidx.compose.animation.core.LinearEasing)),
+                label = "rotation"
+            ).value
+        } else 0f
+        Icon(
+            painterResource(R.drawable.tv_ic_refresh),
+            contentDescription = null,
+            tint = if (focused) TvColors.onFocused else Color.White,
+            modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = rotation }
+        )
         Spacer(Modifier.width(10.dp))
         Text(
             androidx.compose.ui.platform.LocalContext.current.getString(R.string.refresh),
@@ -211,6 +234,10 @@ private fun Modifier.leftEdge(index: Int, openMenu: () -> Unit) = onPreviewKeyEv
 private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previewPlayer: () -> ExoPlayer?, actions: TvHomeActions, firstRequester: FocusRequester?) {
     Column {
         RowTitle(row.title)
+        // the cards fill the width of the screen, with a part of the next one in sight
+        val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+        val count = actions.cardsPerRow.coerceIn(2, 6)
+        val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
             modifier = Modifier.focusRestorer(),
@@ -219,6 +246,7 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
         ) {
             itemsIndexed(row.items, key = { index, item -> item.channelId ?: index }) { index, stream ->
                 StreamCard(
+                    width = cardWidth,
                     stream = stream,
                     previewLogin = previewLogin,
                     previewPlayer = previewPlayer,
@@ -302,6 +330,7 @@ private fun FocusCard(
 
 @Composable
 private fun StreamCard(
+    width: Dp,
     stream: Stream,
     previewLogin: () -> String?,
     previewPlayer: () -> ExoPlayer?,
@@ -309,11 +338,13 @@ private fun StreamCard(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
+    // many cards a row: smaller texts, the count alone in the badge
+    val small = width < 230.dp
     FocusCard(
-        width = 260.dp,
+        width = width,
         modifier = modifier,
         onClick = onClick,
-        onLongClick = { actions.openChannel(stream) },
+        onLongClick = { actions.showActions(stream) },
         onFocus = { if (it) actions.onStreamFocused(stream) },
     ) { focused ->
         Box(
@@ -326,7 +357,10 @@ private fun StreamCard(
         ) {
             AsyncImage(
                 // smaller thumbnails than the 1280x720 of the lists, the cards are small
-                model = stream.thumbnail?.replace("1280x720", "640x360"),
+                model = stream.thumbnail?.replace("1280x720", "640x360")?.let { url ->
+                    val stamp = actions.thumbnailStamp()
+                    if (stamp > 0) "$url?t=$stamp" else url
+                },
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -353,7 +387,13 @@ private fun StreamCard(
             ) {
                 Box(Modifier.size(6.dp).background(Color.White, CircleShape))
                 Spacer(Modifier.width(5.dp))
-                Text(stream.viewerCount?.let { actions.formatViewers(it) } ?: "LIVE", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(
+                    stream.viewerCount?.let { if (small) actions.formatCount(it) else actions.formatViewers(it) } ?: "LIVE",
+                    fontSize = if (small) 11.sp else 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 1,
+                )
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -363,16 +403,16 @@ private fun StreamCard(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(if (small) 26.dp else 32.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF26252C))
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(if (small) 8.dp else 10.dp))
             Column {
-                Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(stream.title?.trim() ?: "", fontSize = 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stream.title?.trim() ?: "", fontSize = if (small) 11.sp else 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (!stream.gameName.isNullOrBlank()) {
-                    Text(stream.gameName ?: "", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stream.gameName ?: "", fontSize = if (small) 11.sp else 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
