@@ -1,9 +1,8 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_adblock"
+    <Preference
+        android:key="adblock_settings"
         android:summary="@string/adblock_summary"
         android:title="@string/adblock"
         app:iconSpaceReserved="false"

@@ -656,4 +656,8 @@
     <string name="tv_back_audio">Hanya audio</string>
     <string name="tv_dpad_up_down">Pintasan atas dan bawah di stream</string>
     <string name="tv_dpad_up_down_summary">Saat kontrol tersembunyi: atas menampilkan stream lain, bawah menampilkan atau menyembunyikan chat</string>
+    <string name="tv_1440p_warning">⚠ 1440p tidak berfungsi dengan proxy publik (Luminous, dll.) yang terbatas 1080p. Untuk 1440p matikan proxy kustom dan gunakan pemblokir iklan (pengaturan Xtra TV), atau gunakan proxy sendiri yang mendukung 1440p.</string>
+    <string name="tv_login_with_code">Dengan kode di twitch.tv/activate</string>
+    <string name="tv_login_with_page">Dengan halaman masuk Twitch (diperlukan untuk 1440p)</string>
+    <string name="tv_login_code_help">Di ponsel atau komputer, buka twitch.tv/activate dan ketik kode ini. Login berlanjut sendiri. 1440p memerlukan login dengan halaman Twitch.</string>
 </resources>

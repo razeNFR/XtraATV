@@ -31,7 +31,10 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 - **Live preview** of the focused stream, right inside its card: it starts right away in 360p, ad-free, with sound (option).
 - **Big TV cards** with viewers, uptime, channel avatar and category.
 - **Google TV like navigation**: the focused row stays in place with the rows before and after always in sight.
-- **Long press OK** on a card: open the channel, open the category, more options.
+- **Long press OK** on a stream card (home and lists): open the channel, its videos, the category, follow / unfollow.
+- **Card size**: stream cards per row on the home, and 2 to 6 stream columns in the lists.
+- **Fresh lists**: the home refresh loads new thumbnails, the stream lists load again when you come back to them.
+- **Follow button** on the channel page.
 - **TV header** on every list with refresh, sections and sort.
 - **Sort and filter side panels**.
 - **Voice search**: a search bar with a mic built in, the words show up while you speak and the search starts right away.
@@ -45,11 +48,14 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 - **Go back in time in a live stream**: the timeline covers the whole broadcast, going back plays the VOD being recorded, going to the end comes back to live.
 - **Thumbnails on the timeline** while seeking, in VODs and in the past of a live stream (taken from the video itself while the broadcast is still going, Twitch makes its thumbnails only at the end).
 - **Fast D-pad seeking** that speeds up while the key is held.
+- **Back button** (option): stop the stream, keep it in a **mini player**, or keep **only the sound** while you browse, with a **Now playing** card at the top of the side menu to come back to it or stop it.
+- **Up / down shortcuts** (option): while the controls are hidden, up shows the other streams and down shows or hides the chat.
+- **Player buttons**: the TV buttons (other streams, multi-stream, write in the chat, chat layout, stats) can be hidden.
 - **Sub-only VODs** playback.
 - **Chat** over the stream, next to it or under it (down to a single line that scrolls from right to left), with a **chat layout panel** whose settings follow the display: position, text size, width, height or number of lines, distance from the edge and opacity.
 - **Write in the chat** with the remote, with **voice dictation**.
 - **Stream switcher**: a banner in the player with the other streams of the category you came from, with live previews.
-- **Streamer switch shortcut** (option): left / right change streamer while the controls are hidden, channel up / down too. The previous and next streamers show on the sides of the screen for a few seconds.
+- **Streamer switch shortcut** (option): left / right change streamer while the controls are hidden, channel up / down too. The previous and next streamers show on the sides of the screen for a few seconds, and the streamers that went offline leave the list.
 - **Multi-stream**: up to 4 streams on screen at once.
 - **Stats for nerds**: resolution, frame rate, codec, bitrate, buffer, latency, dropped frames.
 - **Frame rate matching** (option): the TV switches to the refresh rate of the stream and keeps it matched while playing.
@@ -61,15 +67,20 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 - A **"Blocking ads" box** shows at the top right while it works.
 - It **works with the proxies**: when a proxy lets an ad through, the ad blocker takes over.
 - The **live previews** and every stream of the **multi-stream** are ad-free too.
-- On by default.
+- On by default, with its own **Ad blocker** screen in the Xtra TV settings.
 
 ### Languages
 Everything added is translated into the 13 languages of the app.
 
+## Log in
+
+Two ways on TV: a **code to type on twitch.tv/activate** from a phone or a computer, or the **Twitch login page** in the app.
+
 ## 1440p (Enhanced Broadcasting)
 
 Twitch only gives the 1440p qualities to its website client with a logged in account. To get them:
-1. Log in with your Twitch account in the app (the twitch.tv login page).
+1. Log in with your Twitch account in the app with the **Twitch login page** (the code login does not give 1440p).
+1. Public proxies (Luminous and others) stop at 1080p: turn the custom proxy off and use the ad blocker, or use your own proxy.
 2. Keep **"Include token for streams"** on (default).
 3. Your TV must decode **H.265 (HEVC) or AV1** in hardware.
 

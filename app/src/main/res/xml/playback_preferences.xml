@@ -11,27 +11,6 @@
         app:singleLineTitle="false"
         app:useSimpleSummaryProvider="true" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_use_video_swap"
-        android:summary="@string/use_video_swap_desc"
-        android:title="@string/use_video_swap"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="video_swap_settings"
-        android:title="@string/video_swap_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_hide_ads"
-        android:title="@string/hide_during_ads"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
     <EditTextPreference
         android:defaultValue="av1,h265,h264"
         android:key="token_supported_codecs"

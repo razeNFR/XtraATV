@@ -655,4 +655,8 @@
     <string name="tv_back_audio">音声のみ</string>
     <string name="tv_dpad_up_down">配信中の上下ショートカット</string>
     <string name="tv_dpad_up_down_summary">コントロール非表示時: 上で他の配信、下でチャットの表示/非表示</string>
+    <string name="tv_1440p_warning">⚠ 1440p は公開プロキシ (Luminous など) では使えません (最大 1080p)。1440p にはカスタムプロキシをオフにして広告ブロック (Xtra TV の設定) を使うか、1440p 対応の自分のプロキシを使ってください。</string>
+    <string name="tv_login_with_code">twitch.tv/activate でコードを入力</string>
+    <string name="tv_login_with_page">Twitch のログインページ (1440p に必要)</string>
+    <string name="tv_login_code_help">スマホやパソコンで twitch.tv/activate を開き、このコードを入力してください。ログインは自動で続きます。1440p には Twitch のページでのログインが必要です。</string>
 </resources>

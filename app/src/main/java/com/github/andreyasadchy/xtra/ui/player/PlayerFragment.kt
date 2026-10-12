@@ -980,7 +980,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             }
                         }
                     }
-                    if (isTv && ((activity as? MainActivity)?.streamQueue?.size ?: 0) > 1) {
+                    if (isTv && ((activity as? MainActivity)?.streamQueue?.size ?: 0) > 1 && requireContext().prefs().getBoolean(C.TV_BUTTON_STREAM_LIST, true)) {
                         streamList?.visibility = View.VISIBLE
                         streamList?.setOnClickListener {
                             hideController()
@@ -2400,18 +2400,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
             }
+            // the TV buttons can be hidden in the settings (player buttons)
+            val prefs = requireContext().prefs()
+            statsForNerds?.visibility = if (prefs.getBoolean(C.TV_BUTTON_STATS, true)) View.VISIBLE else View.GONE
             statsForNerds?.setOnClickListener {
                 showController(force = true)
                 toggleStatsForNerds()
             }
-            if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
+            if (!prefs.getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO && prefs.getBoolean(C.TV_BUTTON_CHAT_LAYOUT, true)) {
                 chatLayoutSettings?.visibility = View.VISIBLE
                 chatLayoutSettings?.setOnClickListener {
                     hideController()
                     showChatLayoutPanel()
                 }
             }
-            if (playbackService?.type == BasePlaybackService.STREAM) {
+            if (playbackService?.type == BasePlaybackService.STREAM && prefs.getBoolean(C.TV_BUTTON_MULTI_STREAM, true)) {
                 multiStream?.visibility = View.VISIBLE
                 multiStream?.setOnClickListener {
                     hideController()
@@ -2429,7 +2432,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             val isLoggedIn = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
                     !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank()
-            if (playbackService?.type == BasePlaybackService.STREAM && isLoggedIn && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
+            if (playbackService?.type == BasePlaybackService.STREAM && isLoggedIn && !prefs.getBoolean(C.CHAT_DISABLE, false) && prefs.getBoolean(C.TV_BUTTON_CHAT_MESSAGE, true)) {
                 chatMessage?.visibility = View.VISIBLE
                 chatMessage?.setOnClickListener {
                     hideController()

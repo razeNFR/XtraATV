@@ -655,4 +655,8 @@
     <string name="tv_back_audio">Somente áudio</string>
     <string name="tv_dpad_up_down">Atalhos para cima e para baixo na live</string>
     <string name="tv_dpad_up_down_summary">Com os controles ocultos: para cima mostra as outras lives, para baixo mostra ou oculta o chat</string>
+    <string name="tv_1440p_warning">⚠ O 1440p não funciona com proxies públicos (Luminous etc.), limitados a 1080p. Para 1440p desative o proxy personalizado e use o bloqueador de anúncios (configurações do Xtra TV), ou use seu próprio proxy compatível com 1440p.</string>
+    <string name="tv_login_with_code">Com um código em twitch.tv/activate</string>
+    <string name="tv_login_with_page">Com a página de login da Twitch (necessária para 1440p)</string>
+    <string name="tv_login_code_help">No celular ou computador, acesse twitch.tv/activate e digite este código. O login continua sozinho. O 1440p precisa do login pela página da Twitch.</string>
 </resources>

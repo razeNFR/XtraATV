@@ -655,4 +655,8 @@
     <string name="tv_back_audio">仅音频</string>
     <string name="tv_dpad_up_down">直播中的上下快捷键</string>
     <string name="tv_dpad_up_down_summary">控件隐藏时：上键显示其他直播，下键显示或隐藏聊天</string>
+    <string name="tv_1440p_warning">⚠ 1440p 无法通过公共代理 (Luminous 等，最高 1080p) 使用。要观看 1440p，请关闭自定义代理并使用广告拦截 (Xtra TV 设置)，或使用支持 1440p 的自有代理。</string>
+    <string name="tv_login_with_code">在 twitch.tv/activate 输入代码</string>
+    <string name="tv_login_with_page">使用 Twitch 登录页面 (1440p 需要)</string>
+    <string name="tv_login_code_help">在手机或电脑上打开 twitch.tv/activate 并输入此代码，登录会自动完成。1440p 需要使用 Twitch 页面登录。</string>
 </resources>

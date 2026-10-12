@@ -655,4 +655,8 @@
     <string name="tv_back_audio">الصوت فقط</string>
     <string name="tv_dpad_up_down">اختصارات أعلى وأسفل أثناء البث</string>
     <string name="tv_dpad_up_down_summary">عند إخفاء عناصر التحكم: أعلى يعرض البثوث الأخرى، وأسفل يعرض الدردشة أو يخفيها</string>
+    <string name="tv_1440p_warning">⚠ دقة 1440p لا تعمل مع البروكسيات العامة (Luminous وغيرها) المحدودة بدقة 1080p. للحصول على 1440p، عطّل البروكسي المخصص واستخدم مانع الإعلانات (إعدادات Xtra TV) أو استخدم بروكسي خاصًا بك يدعم 1440p.</string>
+    <string name="tv_login_with_code">باستخدام رمز على twitch.tv/activate</string>
+    <string name="tv_login_with_page">بصفحة تسجيل الدخول إلى Twitch (مطلوبة لدقة 1440p)</string>
+    <string name="tv_login_code_help">على هاتفك أو حاسوبك، انتقل إلى twitch.tv/activate واكتب هذا الرمز. يكتمل تسجيل الدخول تلقائيًا. دقة 1440p تتطلب تسجيل الدخول بصفحة Twitch.</string>
 </resources>

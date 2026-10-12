@@ -656,4 +656,8 @@
     <string name="tv_back_audio">Yalnızca ses</string>
     <string name="tv_dpad_up_down">Yayında yukarı ve aşağı kısayolları</string>
     <string name="tv_dpad_up_down_summary">Kontroller gizliyken: yukarı diğer yayınları gösterir, aşağı sohbeti gösterir veya gizler</string>
+    <string name="tv_1440p_warning">⚠ 1440p, 1080p ile sınırlı genel proxylerle (Luminous vb.) çalışmaz. 1440p için özel proxyyi kapatıp reklam engelleyiciyi (Xtra TV ayarları) kullanın veya 1440p destekleyen kendi proxynizi kullanın.</string>
+    <string name="tv_login_with_code">twitch.tv/activate üzerinde kodla</string>
+    <string name="tv_login_with_page">Twitch giriş sayfasıyla (1440p için gerekli)</string>
+    <string name="tv_login_code_help">Telefonunuzda veya bilgisayarınızda twitch.tv/activate adresine gidip bu kodu yazın. Giriş kendiliğinden devam eder. 1440p için Twitch sayfasıyla giriş gerekir.</string>
 </resources>

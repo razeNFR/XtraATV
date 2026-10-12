@@ -655,4 +655,8 @@
     <string name="tv_back_audio">Только звук</string>
     <string name="tv_dpad_up_down">Кнопки вверх и вниз в трансляции</string>
     <string name="tv_dpad_up_down_summary">Когда управление скрыто: вверх — другие трансляции, вниз — показать или скрыть чат</string>
+    <string name="tv_1440p_warning">⚠ 1440p не работает с публичными прокси (Luminous и др.), они ограничены 1080p. Для 1440p отключите свой прокси и используйте блокировщик рекламы (настройки Xtra TV) или собственный прокси с поддержкой 1440p.</string>
+    <string name="tv_login_with_code">С кодом на twitch.tv/activate</string>
+    <string name="tv_login_with_page">Через страницу входа Twitch (нужно для 1440p)</string>
+    <string name="tv_login_code_help">На телефоне или компьютере откройте twitch.tv/activate и введите этот код. Вход продолжится сам. Для 1440p нужен вход через страницу Twitch.</string>
 </resources>
