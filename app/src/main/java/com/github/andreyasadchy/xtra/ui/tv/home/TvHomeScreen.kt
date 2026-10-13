@@ -55,6 +55,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -137,8 +138,6 @@ fun TvHomeScreen(
     actions: TvHomeActions,
     resume: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>? = null,
     stats: TvHomeStats? = null,
-    /** Picture of the focused stream, shown faded behind the rows (Google TV), null when turned off. */
-    backdrop: () -> String? = { null },
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -154,8 +153,6 @@ fun TvHomeScreen(
         followed?.takeIf { it.items.isNotEmpty() }?.let { "followed" to it },
         popular?.takeIf { it.items.isNotEmpty() }?.let { "popular" to it },
     )
-    Box(Modifier.fillMaxSize()) {
-    Backdrop(backdrop)
     CompositionLocalProvider(LocalBringIntoViewSpec provides NoScrollSpec) {
         LazyColumn(
             state = listState,
@@ -209,42 +206,6 @@ fun TvHomeScreen(
                         GameRow(games, actions, if (rows.isEmpty() && !hasResume) firstCard else null)
                     }
                 }
-            }
-        }
-    }
-    }
-}
-
-/** Faded picture of the focused stream at the top right, behind the rows. */
-@Composable
-private fun Backdrop(backdrop: () -> String?) {
-    val url = backdrop() ?: return
-    androidx.compose.animation.Crossfade(targetState = url, animationSpec = androidx.compose.animation.core.tween(400), label = "backdrop") { picture ->
-        Box(Modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .fillMaxWidth(0.62f)
-                    .aspectRatio(16f / 9f)
-                    .graphicsLayer { alpha = 0.32f }
-            ) {
-                AsyncImage(
-                    model = picture,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                // fades into the background on the left and at the bottom
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), endX = 500f))
-                )
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
-                )
             }
         }
     }
@@ -361,7 +322,8 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
             modifier = Modifier.focusRestorer(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            // room above and under the cards for the one that grows with its preview
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(row.items, key = { index, item -> item.channelId ?: index }) { index, stream ->
@@ -372,6 +334,7 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
                     previewPlayer = previewPlayer,
                     actions = actions,
                     modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier),
+                    first = index == 0,
                     onClick = { actions.openStream(stream, row.items) },
                 )
             }
@@ -413,6 +376,10 @@ private fun FocusCard(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     onFocus: (Boolean) -> Unit = {},
+    /** The preview of the card plays: it grows more, over its neighbours. */
+    grown: () -> Boolean = { false },
+    /** First card of a row: it grows to the right, the left edge of the screen would cut it. */
+    first: Boolean = false,
     content: @Composable (focused: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -420,12 +387,22 @@ private fun FocusCard(
     // the zoom of the focused card can be turned off in the Xtra TV settings
     val context = androidx.compose.ui.platform.LocalContext.current
     val zoom = remember { context.prefs().getBoolean(C.TV_CARD_ZOOM, true) }
-    val scale by animateFloatAsState(if (focused && zoom) 1.08f else 1f, label = "scale")
+    val target = when {
+        !zoom || !focused -> 1f
+        grown() -> 1.15f
+        else -> 1.05f
+    }
+    val scale by animateFloatAsState(target, animationSpec = androidx.compose.animation.core.tween(260), label = "scale")
     var longPressed by remember { mutableStateOf(false) }
     Column(
         modifier
+            .zIndex(if (focused) 1f else 0f)
             .width(width)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (first) 0f else 0.5f, 0.5f)
+            }
             .onFocusChanged { onFocus(it.isFocused) }
             .onPreviewKeyEvent { event ->
                 // OK held down: actions of the card
@@ -459,16 +436,21 @@ private fun StreamCard(
     previewPlayer: () -> ExoPlayer?,
     actions: TvHomeActions,
     modifier: Modifier,
+    first: Boolean = false,
     onClick: () -> Unit,
 ) {
     // many cards a row: smaller texts, the count alone in the badge
     val small = width < 230.dp
+    // only the card that shows the preview recomposes when the preview changes
+    val previewing by remember(stream.channelLogin) { derivedStateOf { stream.channelLogin != null && previewLogin() == stream.channelLogin } }
     FocusCard(
         width = width,
         modifier = modifier,
         onClick = onClick,
         onLongClick = { actions.showActions(stream) },
         onFocus = { if (it) actions.onStreamFocused(stream) },
+        grown = { previewing && previewPlayer() != null },
+        first = first,
     ) { focused ->
         Box(
             Modifier
@@ -489,8 +471,6 @@ private fun StreamCard(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            // only the card that shows the preview recomposes when the preview changes
-            val previewing by remember(stream.channelLogin) { derivedStateOf { stream.channelLogin != null && previewLogin() == stream.channelLogin } }
             val player = previewPlayer()
             if (previewing && player != null && focused) {
                 AndroidView(

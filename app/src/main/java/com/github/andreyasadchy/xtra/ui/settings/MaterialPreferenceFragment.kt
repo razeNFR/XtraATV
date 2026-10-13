@@ -40,35 +40,70 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
         }
     }
 
-    /** Google TV style rows: rounded, white with dark texts when focused. */
+    /**
+     * Google TV style rows: rounded, white with dark texts when focused. The preference list resets the background and the
+     * text colors of a row each time it is bound again (a value changed, a summary updated), so the style is checked again
+     * before every frame instead of only when a row comes on screen.
+     */
     private fun styleTvRows() {
-        val titleColors = requireContext().getColorStateList(com.github.andreyasadchy.xtra.R.color.tv_settings_title)
-        val summaryColors = requireContext().getColorStateList(com.github.andreyasadchy.xtra.R.color.tv_settings_summary)
+        val context = requireContext()
         val density = resources.displayMetrics.density
+        val focusedTitle = context.getColor(com.github.andreyasadchy.xtra.R.color.tv_settings_title_focused)
+        val focusedSummary = context.getColor(com.github.andreyasadchy.xtra.R.color.tv_settings_summary_focused)
+        val title = android.graphics.Color.WHITE
+        val summary = 0xB3FFFFFF.toInt()
         listView.clipToPadding = false
         // the rows draw their own focus, not the frame of the other lists
         listView.setTag(com.github.andreyasadchy.xtra.R.id.tvRowsHighlighted, true)
+        val styleRow = { view: android.view.View ->
+            if (view.isFocusable) {
+                val background = view.getTag(com.github.andreyasadchy.xtra.R.id.tvSettingsRowBackground) as? android.graphics.drawable.Drawable
+                if (background == null || view.background !== background) {
+                    val drawable = androidx.core.content.ContextCompat.getDrawable(context, com.github.andreyasadchy.xtra.R.drawable.tv_settings_row_background)
+                    view.background = drawable
+                    view.setTag(com.github.andreyasadchy.xtra.R.id.tvSettingsRowBackground, drawable)
+                    val padding = (20 * density).toInt()
+                    view.setPaddingRelative(padding, view.paddingTop.coerceAtLeast((14 * density).toInt()), padding, view.paddingBottom.coerceAtLeast((14 * density).toInt()))
+                }
+                // the texts are inside a layout of the row: they do not get its focused state, their color is set here
+                val focused = view.isFocused
+                view.findViewById<android.widget.TextView>(android.R.id.title)?.let {
+                    val color = if (focused) focusedTitle else title
+                    if (it.currentTextColor != color) it.setTextColor(color)
+                }
+                view.findViewById<android.widget.TextView>(android.R.id.summary)?.let {
+                    val color = if (focused) focusedSummary else summary
+                    if (it.currentTextColor != color) it.setTextColor(color)
+                }
+            }
+        }
         listView.addOnChildAttachStateChangeListener(object : androidx.recyclerview.widget.RecyclerView.OnChildAttachStateChangeListener {
             override fun onChildViewAttachedToWindow(view: android.view.View) {
-                if (!view.isFocusable) {
-                    // headers of the categories
-                    return
-                }
-                view.setBackgroundResource(com.github.andreyasadchy.xtra.R.drawable.tv_settings_row_background)
-                val padding = (20 * density).toInt()
-                view.setPaddingRelative(padding, view.paddingTop.coerceAtLeast((14 * density).toInt()), padding, view.paddingBottom.coerceAtLeast((14 * density).toInt()))
-                view.findViewById<android.widget.TextView>(android.R.id.title)?.apply {
-                    isDuplicateParentStateEnabled = true
-                    setTextColor(titleColors)
-                }
-                view.findViewById<android.widget.TextView>(android.R.id.summary)?.apply {
-                    isDuplicateParentStateEnabled = true
-                    setTextColor(summaryColors)
-                }
+                styleRow(view)
             }
 
             override fun onChildViewDetachedFromWindow(view: android.view.View) {}
         })
+        val list = listView
+        val listener = android.view.ViewTreeObserver.OnPreDrawListener {
+            for (i in 0 until list.childCount) {
+                styleRow(list.getChildAt(i))
+            }
+            true
+        }
+        // the observer of the window is shared by the settings screens: removed with the list
+        list.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: android.view.View) {
+                v.viewTreeObserver.addOnPreDrawListener(listener)
+            }
+
+            override fun onViewDetachedFromWindow(v: android.view.View) {
+                v.viewTreeObserver.removeOnPreDrawListener(listener)
+            }
+        })
+        if (list.isAttachedToWindow) {
+            list.viewTreeObserver.addOnPreDrawListener(listener)
+        }
     }
 
     override fun onPause() {

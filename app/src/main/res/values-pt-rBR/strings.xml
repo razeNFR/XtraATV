@@ -669,8 +669,7 @@
     <string name="tv_default_languages">Idiomas padrão das categorias</string>
     <string name="tv_default_languages_summary">Streams de cada categoria só nesses idiomas, salvo se a categoria tiver filtro próprio, todos se nenhum estiver marcado</string>
     <string name="tv_ambient_color">Cor de ambiente</string>
-    <string name="tv_ambient_backdrop">Imagem atrás do início</string>
-    <string name="tv_ambient_backdrop_summary">A imagem do stream selecionado aparece esmaecida atrás das linhas do início</string>
+    <string name="tv_ambient_restart">A cor de ambiente é aplicada quando o app reinicia. Reiniciar agora?</string>
     <string name="tv_color_violet">Roxo Twitch</string>
     <string name="tv_color_blue">Azul</string>
     <string name="tv_color_cyan">Ciano</string>
@@ -683,6 +682,8 @@
     <string name="tv_mini_player_keep_on_home_summary">Apertar Início com o mini player mantém o som em segundo plano</string>
     <string name="tv_audio_only_keep_on_home">Só som: som ao sair do app</string>
     <string name="tv_audio_only_keep_on_home_summary">Apertar Início no modo só som mantém o som em segundo plano</string>
+    <string name="tv_fullscreen_keep_on_home">Tela cheia: som ao sair do app</string>
+    <string name="tv_fullscreen_keep_on_home_summary">Apertar Início no player em tela cheia mantém o som em segundo plano (o mini player ou somente áudio precisa mantê-lo)</string>
     <string name="tv_player_clock">Hora no player</string>
     <string name="tv_player_clock_summary">A hora atual no canto superior direito dos controles</string>
     <string name="tv_continue_watching">Continuar assistindo</string>

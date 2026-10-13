@@ -669,8 +669,7 @@
     <string name="tv_default_languages">カテゴリのデフォルト言語</string>
     <string name="tv_default_languages_summary">各カテゴリの配信をこれらの言語のみに（カテゴリ独自の絞り込みがある場合を除く）、未選択ならすべての言語</string>
     <string name="tv_ambient_color">アンビエントカラー</string>
-    <string name="tv_ambient_backdrop">ホームの背景画像</string>
-    <string name="tv_ambient_backdrop_summary">選択中の配信の画像がホームの列の後ろに薄く表示されます</string>
+    <string name="tv_ambient_restart">アンビエントカラーはアプリの再起動時に適用されます。今すぐ再起動しますか？</string>
     <string name="tv_color_violet">Twitchパープル</string>
     <string name="tv_color_blue">ブルー</string>
     <string name="tv_color_cyan">シアン</string>
@@ -683,6 +682,8 @@
     <string name="tv_mini_player_keep_on_home_summary">ミニプレーヤー表示中にホームを押すと音声がバックグラウンドで続きます</string>
     <string name="tv_audio_only_keep_on_home">音声のみ：アプリを離れても音声</string>
     <string name="tv_audio_only_keep_on_home_summary">音声のみモードでホームを押すと音声がバックグラウンドで続きます</string>
+    <string name="tv_fullscreen_keep_on_home">全画面: アプリを離れたときの音声</string>
+    <string name="tv_fullscreen_keep_on_home_summary">全画面プレーヤーでホームを押しても音声がバックグラウンドで再生され続けます (ミニプレーヤーまたは音声のみで保持する設定が必要)</string>
     <string name="tv_player_clock">プレーヤーに時刻を表示</string>
     <string name="tv_player_clock_summary">プレーヤー操作の右上に現在時刻</string>
     <string name="tv_continue_watching">続きを見る</string>

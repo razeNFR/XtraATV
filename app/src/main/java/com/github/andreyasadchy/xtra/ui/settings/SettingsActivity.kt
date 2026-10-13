@@ -64,6 +64,7 @@ import com.github.andreyasadchy.xtra.databinding.DialogUpdateDownloadBinding
 import com.github.andreyasadchy.xtra.model.ui.SettingsDragListItem
 import com.github.andreyasadchy.xtra.model.ui.SettingsSearchItem
 import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
+import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.settings.SettingsViewModel.Companion.SettingsViewModelFactory
 import com.github.andreyasadchy.xtra.ui.view.TvReorder
 import com.github.andreyasadchy.xtra.ui.view.TvUi
@@ -531,7 +532,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -689,7 +690,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -947,7 +948,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1045,7 +1046,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1099,7 +1100,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1217,7 +1218,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1252,7 +1253,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1287,7 +1288,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1327,7 +1328,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1353,6 +1354,37 @@ class SettingsActivity : AppCompatActivity() {
     class XtraTvSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.xtratv_preferences, rootKey)
+            // full screen: the sound can only be kept when the mini player or the sound only mode keeps it
+            val fullscreenKeep = findPreference<SwitchPreferenceCompat>(C.TV_FULLSCREEN_KEEP_ON_HOME)
+            val miniKeep = findPreference<SwitchPreferenceCompat>(C.TV_MINI_PLAYER_KEEP_ON_HOME)
+            val audioKeep = findPreference<SwitchPreferenceCompat>(C.TV_AUDIO_ONLY_KEEP_ON_HOME)
+            fullscreenKeep?.isEnabled = miniKeep?.isChecked != false || audioKeep?.isChecked != false
+            miniKeep?.setOnPreferenceChangeListener { _, newValue ->
+                fullscreenKeep?.isEnabled = newValue == true || audioKeep?.isChecked != false
+                true
+            }
+            audioKeep?.setOnPreferenceChangeListener { _, newValue ->
+                fullscreenKeep?.isEnabled = newValue == true || miniKeep?.isChecked != false
+                true
+            }
+            // the ambiance color is drawn when the app starts: it offers to restart it
+            findPreference<ListPreference>(C.TV_AMBIENT_COLOR)?.setOnPreferenceChangeListener { _, newValue ->
+                if (newValue != requireContext().prefs().getString(C.TV_AMBIENT_COLOR, "violet")) {
+                    (requireActivity() as? SettingsActivity)?.changed = true
+                    requireContext().getAlertDialogBuilder()
+                        .setMessage(R.string.tv_ambient_restart)
+                        .setPositiveButton(R.string.yes) { _, _ ->
+                            val activity = requireActivity()
+                            activity.startActivity(
+                                Intent(activity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                            )
+                            activity.finish()
+                        }
+                        .setNegativeButton(R.string.no, null)
+                        .show()
+                }
+                true
+            }
             findPreference<Preference>("adblock_settings")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalAdblockSettingsFragment())
@@ -1368,7 +1400,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1422,7 +1454,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1507,7 +1539,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1548,7 +1580,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1626,7 +1658,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1675,7 +1707,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     listView.let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -1718,7 +1750,7 @@ class SettingsActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
             requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true) && !TvUi.isTv(requireContext())) {
                     (view as RecyclerView).let {
                         appBar.setLiftOnScrollTargetView(it)
                         it.addOnScrollListener(object : RecyclerView.OnScrollListener() {

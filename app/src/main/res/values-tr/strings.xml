@@ -670,8 +670,7 @@
     <string name="tv_default_languages">Kategorilerin varsayılan dilleri</string>
     <string name="tv_default_languages_summary">Her kategorinin yayınları yalnızca bu dillerde, kategorinin kendi filtresi yoksa; hiçbiri seçilmezse tüm diller</string>
     <string name="tv_ambient_color">Ortam rengi</string>
-    <string name="tv_ambient_backdrop">Ana sayfa arkasında görsel</string>
-    <string name="tv_ambient_backdrop_summary">Seçili yayının görseli ana sayfa satırlarının arkasında soluk görünür</string>
+    <string name="tv_ambient_restart">Ortam rengi uygulama yeniden başlatıldığında uygulanır. Şimdi yeniden başlatılsın mı?</string>
     <string name="tv_color_violet">Twitch moru</string>
     <string name="tv_color_blue">Mavi</string>
     <string name="tv_color_cyan">Camgöbeği</string>
@@ -684,6 +683,8 @@
     <string name="tv_mini_player_keep_on_home_summary">Mini oynatıcı açıkken Ana Sayfa\'ya basınca ses arka planda devam eder</string>
     <string name="tv_audio_only_keep_on_home">Yalnızca ses: uygulamadan çıkınca ses</string>
     <string name="tv_audio_only_keep_on_home_summary">Yalnızca ses modunda Ana Sayfa\'ya basınca ses arka planda devam eder</string>
+    <string name="tv_fullscreen_keep_on_home">Tam ekran: uygulamadan çıkınca ses</string>
+    <string name="tv_fullscreen_keep_on_home_summary">Tam ekran oynatıcıda Ana ekran tuşu sesi arka planda çalmaya devam ettirir (mini oynatıcı veya yalnızca ses modu bunu korumalı)</string>
     <string name="tv_player_clock">Oynatıcıda saat</string>
     <string name="tv_player_clock_summary">Oynatıcı kontrollerinin sağ üstünde günün saati</string>
     <string name="tv_continue_watching">İzlemeye devam et</string>

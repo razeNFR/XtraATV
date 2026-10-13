@@ -2295,6 +2295,11 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun stop() {
+        if (type == VIDEO && prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
+            player?.takeIf { !it.currentTracks.isEmpty }?.let { player ->
+                videoId?.toLongOrNull()?.let { saveTvResume(it, player.currentPosition) }
+            }
+        }
         if (secondaryPlayer != null) {
             secondaryPlayer?.stop()
         }
@@ -2889,25 +2894,7 @@ class ExoPlayerService : BasePlaybackService() {
                                 runBlocking {
                                     xtraModule.playerRepository.saveVideoPosition(VideoPosition(it, player.currentPosition))
                                 }
-                                // TV: the "Continue watching" row of the home
-                                com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.save(
-                                    this,
-                                    com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item(
-                                        id = it.toString(),
-                                        title = title,
-                                        channelId = channelId,
-                                        channelLogin = channelLogin,
-                                        channelName = channelName,
-                                        channelImage = channelImage,
-                                        gameId = gameId,
-                                        gameName = gameName,
-                                        thumbnail = thumbnail,
-                                        createdAt = createdAt,
-                                        durationSeconds = durationSeconds ?: player.duration.takeIf { duration -> duration > 0 }?.div(1000)?.toInt(),
-                                        positionMs = player.currentPosition,
-                                        type = videoType,
-                                    )
-                                )
+                                saveTvResume(it, player.currentPosition)
                             }
                         }
                         OFFLINE_VIDEO -> {
@@ -2926,6 +2913,28 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
+    /** TV: the "Continue watching" row of the home, kept up to date while the video plays and when it stops. */
+    private fun saveTvResume(id: Long, position: Long) {
+        com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.save(
+            this,
+            com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item(
+                id = id.toString(),
+                title = title,
+                channelId = channelId,
+                channelLogin = channelLogin,
+                channelName = channelName,
+                channelImage = channelImage,
+                gameId = gameId,
+                gameName = gameName,
+                thumbnail = thumbnail,
+                createdAt = createdAt,
+                durationSeconds = durationSeconds ?: player?.duration?.takeIf { duration -> duration > 0 }?.div(1000)?.toInt(),
+                positionMs = position,
+                type = videoType,
+            )
+        )
+    }
+
     private fun updateSavedPosition() {
         player?.let { player ->
             if (!player.currentTracks.isEmpty) {
@@ -2940,6 +2949,7 @@ class ExoPlayerService : BasePlaybackService() {
                                     runBlocking {
                                         xtraModule.playerRepository.saveVideoPosition(VideoPosition(it, currentPosition))
                                     }
+                                    saveTvResume(it, currentPosition)
                                 }
                             }
                             OFFLINE_VIDEO -> {

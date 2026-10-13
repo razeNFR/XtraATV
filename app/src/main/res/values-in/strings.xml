@@ -670,8 +670,7 @@
     <string name="tv_default_languages">Bahasa bawaan kategori</string>
     <string name="tv_default_languages_summary">Siaran setiap kategori hanya dalam bahasa ini kecuali kategori punya filter sendiri, semua bahasa jika tidak ada yang dicentang</string>
     <string name="tv_ambient_color">Warna suasana</string>
-    <string name="tv_ambient_backdrop">Gambar di belakang beranda</string>
-    <string name="tv_ambient_backdrop_summary">Gambar siaran yang dipilih tampil samar di belakang baris beranda</string>
+    <string name="tv_ambient_restart">Warna suasana diterapkan saat aplikasi dimulai ulang. Mulai ulang sekarang?</string>
     <string name="tv_color_violet">Ungu Twitch</string>
     <string name="tv_color_blue">Biru</string>
     <string name="tv_color_cyan">Sian</string>
@@ -684,6 +683,8 @@
     <string name="tv_mini_player_keep_on_home_summary">Menekan Beranda dengan pemutar mini membuat suara tetap berjalan di latar</string>
     <string name="tv_audio_only_keep_on_home">Hanya suara: suara saat keluar aplikasi</string>
     <string name="tv_audio_only_keep_on_home_summary">Menekan Beranda dalam mode hanya suara membuat suara tetap berjalan di latar</string>
+    <string name="tv_fullscreen_keep_on_home">Layar penuh: suara saat aplikasi ditinggalkan</string>
+    <string name="tv_fullscreen_keep_on_home_summary">Menekan Home di pemutar layar penuh membuat suara tetap diputar di latar belakang (pemutar mini atau mode suara saja harus mempertahankannya)</string>
     <string name="tv_player_clock">Jam di pemutar</string>
     <string name="tv_player_clock_summary">Waktu saat ini di kanan atas kontrol pemutar</string>
     <string name="tv_continue_watching">Lanjutkan menonton</string>

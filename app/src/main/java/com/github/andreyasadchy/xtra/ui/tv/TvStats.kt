@@ -118,6 +118,9 @@ object TvResumeHistory {
     private const val ITEMS = "items"
     private const val MAX = 20
 
+    /** Changes each time the list is written: the home shows it again even when it never left the screen (mini player). */
+    val changes = kotlinx.coroutines.flow.MutableStateFlow(0L)
+
     class Item(
         val id: String,
         val title: String?,
@@ -196,5 +199,6 @@ object TvResumeHistory {
             })
         }
         prefs(context).edit { putString(ITEMS, array.toString()) }
+        changes.value = System.nanoTime()
     }
 }

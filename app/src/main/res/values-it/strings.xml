@@ -669,8 +669,7 @@
     <string name="tv_default_languages">Lingue predefinite delle categorie</string>
     <string name="tv_default_languages_summary">Stream di ogni categoria solo in queste lingue, salvo se la categoria ha un suo filtro, tutte se nessuna è selezionata</string>
     <string name="tv_ambient_color">Colore d\'ambiente</string>
-    <string name="tv_ambient_backdrop">Immagine dietro la home</string>
-    <string name="tv_ambient_backdrop_summary">L\'immagine dello stream selezionato appare sfumata dietro le righe della home</string>
+    <string name="tv_ambient_restart">Il colore d\'ambiente si applica al riavvio dell\'app. Riavviare ora?</string>
     <string name="tv_color_violet">Viola Twitch</string>
     <string name="tv_color_blue">Blu</string>
     <string name="tv_color_cyan">Ciano</string>
@@ -683,6 +682,8 @@
     <string name="tv_mini_player_keep_on_home_summary">Premendo Home con il mini player l\'audio continua in sottofondo</string>
     <string name="tv_audio_only_keep_on_home">Solo audio: audio quando si esce dall\'app</string>
     <string name="tv_audio_only_keep_on_home_summary">Premendo Home in modalità solo audio l\'audio continua in sottofondo</string>
+    <string name="tv_fullscreen_keep_on_home">Schermo intero: audio quando si esce dall\'app</string>
+    <string name="tv_fullscreen_keep_on_home_summary">Premere Home nel lettore a schermo intero mantiene l\'audio in sottofondo (il mini lettore o solo audio deve mantenerlo)</string>
     <string name="tv_player_clock">Ora nel player</string>
     <string name="tv_player_clock_summary">L\'ora attuale in alto a destra dei controlli</string>
     <string name="tv_continue_watching">Continua a guardare</string>

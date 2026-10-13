@@ -688,8 +688,7 @@
     <string name="tv_default_languages">Default languages of the categories</string>
     <string name="tv_default_languages_summary">Streams of every category (Just Chatting, a game...) in these languages only, unless a category has its own filter, all languages when none is checked</string>
     <string name="tv_ambient_color">Ambiance color</string>
-    <string name="tv_ambient_backdrop">Picture behind the home</string>
-    <string name="tv_ambient_backdrop_summary">The picture of the selected stream shows faded behind the rows of the home</string>
+    <string name="tv_ambient_restart">The ambiance color is applied when the app restarts. Restart now?</string>
     <string name="tv_color_violet">Twitch purple</string>
     <string name="tv_color_blue">Blue</string>
     <string name="tv_color_cyan">Cyan</string>
@@ -702,6 +701,8 @@
     <string name="tv_mini_player_keep_on_home_summary">Pressing Home with the mini player keeps the sound playing in the background</string>
     <string name="tv_audio_only_keep_on_home">Sound only: sound when the app is left</string>
     <string name="tv_audio_only_keep_on_home_summary">Pressing Home in sound only mode keeps the sound playing in the background</string>
+    <string name="tv_fullscreen_keep_on_home">Full screen: sound when the app is left</string>
+    <string name="tv_fullscreen_keep_on_home_summary">Pressing Home in the full screen player keeps the sound playing in the background (needs the mini player or the sound only mode to keep it)</string>
     <string name="tv_player_clock">Clock in the player</string>
     <string name="tv_player_clock_summary">The time of day at the top right of the player controls</string>
     <string name="tv_continue_watching">Continue watching</string>

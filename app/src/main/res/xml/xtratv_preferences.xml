@@ -60,6 +60,14 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:key="tv_fullscreen_keep_on_home"
+        android:summary="@string/tv_fullscreen_keep_on_home_summary"
+        android:title="@string/tv_fullscreen_keep_on_home"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
         android:key="tv_player_clock"
         android:summary="@string/tv_player_clock_summary"
         android:title="@string/tv_player_clock"
@@ -91,13 +99,6 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="tv_ambient_backdrop"
-        android:summary="@string/tv_ambient_backdrop_summary"
-        android:title="@string/tv_ambient_backdrop"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"

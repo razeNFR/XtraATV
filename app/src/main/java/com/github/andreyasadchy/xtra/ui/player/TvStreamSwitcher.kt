@@ -75,13 +75,17 @@ object TvStreamSwitcher {
             text = selection?.title ?: activity.getString(R.string.tv_switch_stream)
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 20f
+            // readable over a bright video
+            setShadowLayer(8 * density, 0f, 2 * density, 0xE6000000.toInt())
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         // selection: "Validate (n)" over the row, up from the cards
         val validate = if (selection != null && checked != null) {
             TextView(activity).apply {
                 setTextColor(activity.getColorStateList(R.color.tv_pill_text))
-                setBackgroundResource(R.drawable.tv_pill_background)
-                textSize = 16f
+                setBackgroundResource(R.drawable.tv_validate_background)
+                textSize = 18f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                elevation = 6 * density
                 isFocusable = true
                 val padding = (10 * density).toInt()
                 setPadding(padding * 2, padding, padding * 2, padding)
@@ -111,6 +115,8 @@ object TvStreamSwitcher {
         lateinit var adapter: Adapter
         val updateValidate = {
             validate?.text = activity.getString(R.string.tv_multistream_validate, checked?.size ?: 0)
+            // nothing checked: the button is dimmed
+            validate?.alpha = if (checked.isNullOrEmpty()) 0.6f else 1f
         }
         updateValidate()
         adapter = Adapter(streams, (250 * density).toInt(), preview, checked) { stream ->

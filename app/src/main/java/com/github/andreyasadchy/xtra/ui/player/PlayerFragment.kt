@@ -1628,6 +1628,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 viewersText.text = null
                 viewersIcon.visibility = View.GONE
             }
+            if (isTv) {
+                // TV: the badge has a background, an empty one stays hidden (videos, clips)
+                viewersLayout.visibility = if (viewerCount != null) View.VISIBLE else View.GONE
+            }
         }
     }
 
@@ -1924,7 +1928,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     /**
-     * D-pad seeking on the time bar: a short press moves 10 seconds, holding the key moves faster and faster.
+     * D-pad seeking on the time bar: a short press moves 10 seconds (a minute back from the live), holding the key moves faster and faster.
      * The player seeks once, when the key is released.
      */
     private fun onTimeBarKey(keyCode: Int, event: KeyEvent): Boolean {
@@ -1946,6 +1950,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         event.repeatCount < 12 -> maxOf(30_000L, duration / 300)
                         event.repeatCount < 24 -> maxOf(60_000L, duration / 120)
                         else -> maxOf(120_000L, duration / 50)
+                    }.let {
+                        // on the live: the first step back goes a minute back, right into the VOD, small steps never get past its edge
+                        if (isLive && keyCode == KeyEvent.KEYCODE_DPAD_LEFT && tvScrubPosition >= duration - LIVE_EDGE_MS) maxOf(it, LIVE_FIRST_STEP_MS) else it
                     }
                     tvScrubPosition = (tvScrubPosition + if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -step else step).coerceIn(0, duration)
                     progressBar.setDuration(duration)
@@ -3256,14 +3263,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var tvAudioOnly = false
 
     /**
-     * TV: leaving the app (home) keeps the sound of the mini player or of the sound only mode,
+     * TV: leaving the app (home) keeps the sound of the mini player, of the sound only mode or of the full screen player,
      * each one can be turned off in the Xtra TV settings.
      */
     fun keepsPlayingWhenAppLeft(): Boolean {
-        if (!isTv || _binding == null || isMaximized || playbackService == null) {
+        if (!isTv || _binding == null || playbackService == null) {
             return false
         }
         val prefs = requireContext().prefs()
+        if (isMaximized) {
+            // full screen: the sound goes on too when the mini player or the sound only mode keeps it, unless turned off
+            return prefs.getBoolean(C.TV_FULLSCREEN_KEEP_ON_HOME, true) &&
+                    (prefs.getBoolean(C.TV_MINI_PLAYER_KEEP_ON_HOME, true) || prefs.getBoolean(C.TV_AUDIO_ONLY_KEEP_ON_HOME, true))
+        }
         return if (tvAudioOnly) prefs.getBoolean(C.TV_AUDIO_ONLY_KEEP_ON_HOME, true) else prefs.getBoolean(C.TV_MINI_PLAYER_KEEP_ON_HOME, true)
     }
 
@@ -3709,6 +3721,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val REQUEST_CODE_CLOSE = 4
         private const val LIVE_EDGE_MS = 20_000L
         private const val DVR_CAUGHT_UP_MS = 10_000L
+        private const val LIVE_FIRST_STEP_MS = 60_000L
         const val KEY_OFFLINE = "offline"
     }
 }

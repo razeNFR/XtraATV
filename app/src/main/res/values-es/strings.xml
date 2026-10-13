@@ -674,8 +674,7 @@
     <string name="tv_default_languages">Idiomas predeterminados de las categorías</string>
     <string name="tv_default_languages_summary">Streams de cada categoría solo en estos idiomas, salvo si la categoría tiene su propio filtro, todos si no hay ninguno marcado</string>
     <string name="tv_ambient_color">Color de ambiente</string>
-    <string name="tv_ambient_backdrop">Imagen detrás del inicio</string>
-    <string name="tv_ambient_backdrop_summary">La imagen del stream seleccionado aparece difuminada detrás de las filas del inicio</string>
+    <string name="tv_ambient_restart">El color de ambiente se aplica al reiniciar la app. ¿Reiniciar ahora?</string>
     <string name="tv_color_violet">Morado Twitch</string>
     <string name="tv_color_blue">Azul</string>
     <string name="tv_color_cyan">Cian</string>
@@ -688,6 +687,8 @@
     <string name="tv_mini_player_keep_on_home_summary">Pulsar Inicio con el mini reproductor mantiene el sonido en segundo plano</string>
     <string name="tv_audio_only_keep_on_home">Solo sonido: sonido al salir de la app</string>
     <string name="tv_audio_only_keep_on_home_summary">Pulsar Inicio en modo solo sonido mantiene el sonido en segundo plano</string>
+    <string name="tv_fullscreen_keep_on_home">Pantalla completa: sonido al salir de la app</string>
+    <string name="tv_fullscreen_keep_on_home_summary">Pulsar Inicio en el reproductor a pantalla completa mantiene el sonido en segundo plano (el minirreproductor o solo sonido debe mantenerlo)</string>
     <string name="tv_player_clock">Hora en el reproductor</string>
     <string name="tv_player_clock_summary">La hora actual arriba a la derecha de los controles</string>
     <string name="tv_continue_watching">Seguir viendo</string>

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- TV settings: pinned toolbar, the screen name on the left and its entries on the right (Google TV) -->
+<!-- TV settings: pinned see-through toolbar (the background of the screen shows behind it), the screen name on the left and its entries on the right (Google TV) -->
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/coordinatorLayout"
@@ -11,6 +11,7 @@
         android:id="@+id/appBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@android:color/transparent"
         android:paddingStart="@dimen/tv_overscan_horizontal"
         android:paddingTop="@dimen/tv_overscan_vertical"
         android:paddingEnd="@dimen/tv_overscan_horizontal">
@@ -19,6 +20,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@android:color/transparent"
             android:minHeight="?attr/actionBarSize"
             app:menu="@menu/settings_menu">
 

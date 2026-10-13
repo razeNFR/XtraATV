@@ -669,8 +669,7 @@
     <string name="tv_default_languages">Langues par défaut des catégories</string>
     <string name="tv_default_languages_summary">Les streams de chaque catégorie (Just Chatting, un jeu...) uniquement dans ces langues, sauf si la catégorie a son propre filtre, toutes les langues si aucune n\'est cochée</string>
     <string name="tv_ambient_color">Couleur d\'ambiance</string>
-    <string name="tv_ambient_backdrop">Image derrière l\'accueil</string>
-    <string name="tv_ambient_backdrop_summary">L\'image du stream sélectionné s\'affiche en fondu derrière les lignes de l\'accueil</string>
+    <string name="tv_ambient_restart">La couleur d\'ambiance s\'applique au redémarrage de l\'appli. Redémarrer maintenant ?</string>
     <string name="tv_color_violet">Violet Twitch</string>
     <string name="tv_color_blue">Bleu</string>
     <string name="tv_color_cyan">Cyan</string>
@@ -683,6 +682,8 @@
     <string name="tv_mini_player_keep_on_home_summary">Appuyer sur Accueil avec le mini lecteur garde le son en arrière-plan</string>
     <string name="tv_audio_only_keep_on_home">Son seul : son quand on quitte l\'appli</string>
     <string name="tv_audio_only_keep_on_home_summary">Appuyer sur Accueil en mode son seul garde le son en arrière-plan</string>
+    <string name="tv_fullscreen_keep_on_home">Plein écran : son quand on quitte l\'appli</string>
+    <string name="tv_fullscreen_keep_on_home_summary">Appuyer sur Accueil dans le lecteur en plein écran garde le son en arrière-plan (le mini lecteur ou le son seul doit le garder)</string>
     <string name="tv_player_clock">Heure dans le lecteur</string>
     <string name="tv_player_clock_summary">L\'heure actuelle en haut à droite des commandes du lecteur</string>
     <string name="tv_continue_watching">Reprendre la lecture</string>

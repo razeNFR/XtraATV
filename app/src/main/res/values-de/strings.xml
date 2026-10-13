@@ -669,8 +669,7 @@
     <string name="tv_default_languages">Standardsprachen der Kategorien</string>
     <string name="tv_default_languages_summary">Streams jeder Kategorie nur in diesen Sprachen, außer die Kategorie hat einen eigenen Filter, alle Sprachen wenn keine ausgewählt ist</string>
     <string name="tv_ambient_color">Ambientefarbe</string>
-    <string name="tv_ambient_backdrop">Bild hinter der Startseite</string>
-    <string name="tv_ambient_backdrop_summary">Das Bild des ausgewählten Streams erscheint verblasst hinter den Zeilen der Startseite</string>
+    <string name="tv_ambient_restart">Die Ambiente-Farbe wird beim Neustart der App übernommen. Jetzt neu starten?</string>
     <string name="tv_color_violet">Twitch-Lila</string>
     <string name="tv_color_blue">Blau</string>
     <string name="tv_color_cyan">Cyan</string>
@@ -683,6 +682,8 @@
     <string name="tv_mini_player_keep_on_home_summary">Mit Home beim Mini-Player läuft der Ton im Hintergrund weiter</string>
     <string name="tv_audio_only_keep_on_home">Nur Ton: Ton beim Verlassen der App</string>
     <string name="tv_audio_only_keep_on_home_summary">Mit Home im Nur-Ton-Modus läuft der Ton im Hintergrund weiter</string>
+    <string name="tv_fullscreen_keep_on_home">Vollbild: Ton beim Verlassen der App</string>
+    <string name="tv_fullscreen_keep_on_home_summary">Home im Vollbild-Player lässt den Ton im Hintergrund weiterlaufen (Mini-Player oder Nur-Ton muss ihn behalten)</string>
     <string name="tv_player_clock">Uhrzeit im Player</string>
     <string name="tv_player_clock_summary">Die aktuelle Uhrzeit oben rechts in der Player-Steuerung</string>
     <string name="tv_continue_watching">Weiterschauen</string>

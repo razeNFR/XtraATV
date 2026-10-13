@@ -669,8 +669,7 @@
     <string name="tv_default_languages">分类的默认语言</string>
     <string name="tv_default_languages_summary">每个分类的直播仅限这些语言（分类有自己的筛选时除外），未勾选时为所有语言</string>
     <string name="tv_ambient_color">氛围颜色</string>
-    <string name="tv_ambient_backdrop">首页背景图片</string>
-    <string name="tv_ambient_backdrop_summary">选中直播的图片会淡淡地显示在首页各行后面</string>
+    <string name="tv_ambient_restart">氛围颜色将在应用重启后生效。现在重启吗？</string>
     <string name="tv_color_violet">Twitch 紫</string>
     <string name="tv_color_blue">蓝色</string>
     <string name="tv_color_cyan">青色</string>
@@ -683,6 +682,8 @@
     <string name="tv_mini_player_keep_on_home_summary">迷你播放器时按主页键，声音会在后台继续</string>
     <string name="tv_audio_only_keep_on_home">仅声音：离开应用后继续播放</string>
     <string name="tv_audio_only_keep_on_home_summary">仅声音模式下按主页键，声音会在后台继续</string>
+    <string name="tv_fullscreen_keep_on_home">全屏：离开应用时保留声音</string>
+    <string name="tv_fullscreen_keep_on_home_summary">在全屏播放器中按主页键，声音会在后台继续播放（需要迷你播放器或仅声音模式保留声音）</string>
     <string name="tv_player_clock">播放器中显示时间</string>
     <string name="tv_player_clock_summary">在播放器控制栏右上角显示当前时间</string>
     <string name="tv_continue_watching">继续观看</string>

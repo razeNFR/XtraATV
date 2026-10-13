@@ -294,7 +294,10 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         }
                         replyView.visibility = View.GONE
                         send.setOnClickListener { sendMessage() }
-                        if ((view.parent?.parent?.parent?.parent as? View)?.id == R.id.slidingLayout && (!requireContext().prefs().getBoolean(C.KEY_CHAT_BAR_VISIBLE, true) || resources.getBoolean(R.bool.isTv))) {
+                        if (((view.parent?.parent?.parent?.parent as? View)?.id == R.id.slidingLayout && (!requireContext().prefs().getBoolean(C.KEY_CHAT_BAR_VISIBLE, true) || resources.getBoolean(R.bool.isTv))) ||
+                            // TV multi-stream: the chats are read only, no message bar under them
+                            (resources.getBoolean(R.bool.isTv) && parentFragment is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment)
+                        ) {
                             messageView.visibility = View.GONE
                         } else {
                             messageView.visibility = View.VISIBLE

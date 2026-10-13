@@ -669,8 +669,7 @@
     <string name="tv_default_languages">Языки категорий по умолчанию</string>
     <string name="tv_default_languages_summary">Трансляции каждой категории только на этих языках, если у категории нет своего фильтра, все языки если ничего не выбрано</string>
     <string name="tv_ambient_color">Цвет подсветки</string>
-    <string name="tv_ambient_backdrop">Изображение за главной</string>
-    <string name="tv_ambient_backdrop_summary">Изображение выбранной трансляции видно приглушённым за строками главной</string>
+    <string name="tv_ambient_restart">Цвет подсветки применяется после перезапуска приложения. Перезапустить сейчас?</string>
     <string name="tv_color_violet">Фиолетовый Twitch</string>
     <string name="tv_color_blue">Синий</string>
     <string name="tv_color_cyan">Бирюзовый</string>
@@ -683,6 +682,8 @@
     <string name="tv_mini_player_keep_on_home_summary">Нажатие «Домой» с мини-плеером оставляет звук в фоне</string>
     <string name="tv_audio_only_keep_on_home">Только звук: звук при выходе из приложения</string>
     <string name="tv_audio_only_keep_on_home_summary">Нажатие «Домой» в режиме «только звук» оставляет звук в фоне</string>
+    <string name="tv_fullscreen_keep_on_home">Полный экран: звук при выходе из приложения</string>
+    <string name="tv_fullscreen_keep_on_home_summary">Кнопка «Домой» в полноэкранном плеере оставляет звук в фоне (мини-плеер или режим только звука должен его сохранять)</string>
     <string name="tv_player_clock">Часы в плеере</string>
     <string name="tv_player_clock_summary">Текущее время в правом верхнем углу панели плеера</string>
     <string name="tv_continue_watching">Продолжить просмотр</string>

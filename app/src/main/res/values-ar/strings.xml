@@ -669,8 +669,7 @@
     <string name="tv_default_languages">اللغات الافتراضية للفئات</string>
     <string name="tv_default_languages_summary">بثوث كل فئة بهذه اللغات فقط ما لم يكن للفئة مرشح خاص، كل اللغات إذا لم تحدد أي لغة</string>
     <string name="tv_ambient_color">لون الأجواء</string>
-    <string name="tv_ambient_backdrop">صورة خلف الصفحة الرئيسية</string>
-    <string name="tv_ambient_backdrop_summary">تظهر صورة البث المحدد باهتة خلف صفوف الصفحة الرئيسية</string>
+    <string name="tv_ambient_restart">يتم تطبيق لون الأجواء عند إعادة تشغيل التطبيق. إعادة التشغيل الآن؟</string>
     <string name="tv_color_violet">بنفسجي Twitch</string>
     <string name="tv_color_blue">أزرق</string>
     <string name="tv_color_cyan">سماوي</string>
@@ -683,6 +682,8 @@
     <string name="tv_mini_player_keep_on_home_summary">الضغط على الرئيسية مع المشغل المصغر يُبقي الصوت في الخلفية</string>
     <string name="tv_audio_only_keep_on_home">الصوت فقط: الصوت عند مغادرة التطبيق</string>
     <string name="tv_audio_only_keep_on_home_summary">الضغط على الرئيسية في وضع الصوت فقط يُبقي الصوت في الخلفية</string>
+    <string name="tv_fullscreen_keep_on_home">ملء الشاشة: الصوت عند مغادرة التطبيق</string>
+    <string name="tv_fullscreen_keep_on_home_summary">الضغط على الرئيسية في المشغل بملء الشاشة يبقي الصوت في الخلفية (يجب أن يحتفظ به المشغل المصغر أو وضع الصوت فقط)</string>
     <string name="tv_player_clock">الساعة في المشغل</string>
     <string name="tv_player_clock_summary">الوقت الحالي أعلى يمين عناصر التحكم</string>
     <string name="tv_continue_watching">متابعة المشاهدة</string>

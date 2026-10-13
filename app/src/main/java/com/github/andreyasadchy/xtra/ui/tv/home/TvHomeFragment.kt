@@ -46,7 +46,6 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private val resumeItems = mutableStateOf<List<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>>(emptyList())
     private val statsState = mutableStateOf<TvHomeStats?>(null)
     /** Picture of the focused stream behind the rows. */
-    private val backdropState = mutableStateOf<String?>(null)
 
     init {
         com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.register(this)
@@ -91,9 +90,6 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             },
             onStreamFocused = {
                 schedulePreview(it)
-                if (it != null && context.prefs().getBoolean(C.TV_AMBIENT_BACKDROP, true)) {
-                    backdropState.value = it.thumbnail?.replace("1280x720", "640x360")
-                }
             },
             formatViewers = { count -> resources.getQuantityString(R.plurals.viewers, count, TwitchApiHelper.formatCount(count, truncate)) },
             formatCount = { count -> TwitchApiHelper.formatCount(count, true) },
@@ -117,6 +113,12 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.refreshing.collect { homeRefreshing.value = it }
         }
+        viewLifecycleOwner.lifecycleScope.launch {
+            // a video watched in the mini player over the home comes in "Continue watching" right away
+            com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.changes.collect {
+                context?.let { resumeItems.value = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.list(it) }
+            }
+        }
         val followedId = if (context.prefs().getBoolean(C.UI_FOLLOW_PAGER, true)) R.id.followPagerFragment else R.id.followMediaFragment
         return ComposeView(context).apply {
             id = R.id.tvHome
@@ -135,7 +137,6 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         actions = actions,
                         resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
                         stats = statsState.value,
-                        backdrop = { backdropState.value },
                     )
                 }
             }
