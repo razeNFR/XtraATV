@@ -1,6 +1,8 @@
 package com.github.andreyasadchy.xtra.ui.player
 
 import coil3.imageLoader
+import coil3.request.target
+import coil3.request.transformations
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.annotation.SuppressLint

@@ -171,8 +171,9 @@ fun TvHomeScreen(
                 }
             }
             // first load: grey cards in place of the rows, like YouTube
-            if (followed == null && popular == null && games == null) {
-                items(2, key = { "skeleton$it" }) {
+            val skeletons = if (followed == null && popular == null && games == null) 2 else 0
+            if (skeletons > 0) {
+                items(skeletons, key = { "skeleton$it" }) {
                     SkeletonRow(actions)
                 }
             }
@@ -184,7 +185,7 @@ fun TvHomeScreen(
                 }
             }
             // continue watching, then the statistics, over the categories
-            val resumeIndex = rows.size + 1
+            val resumeIndex = rows.size + 1 + skeletons
             val hasResume = resume != null && resume.items.isNotEmpty()
             if (hasResume) {
                 item(key = "resume") {
