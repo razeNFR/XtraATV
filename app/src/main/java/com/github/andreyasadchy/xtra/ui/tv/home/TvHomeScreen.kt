@@ -88,6 +88,8 @@ class TvHomeActions(
     val seeAll: (Int) -> Unit,
     val openMenu: () -> Unit,
     val onStreamFocused: (Stream?) -> Unit,
+    /** The card of a stream lost the focus: its preview stops (the focus may go to a card without preview). */
+    val onStreamUnfocused: (Stream) -> Unit = {},
     val formatViewers: (Int) -> String,
     /** The count alone ("7.1K"), for the small cards. */
     val formatCount: (Int) -> String = { it.toString() },
@@ -449,11 +451,11 @@ private fun StreamCard(
         modifier = modifier,
         onClick = onClick,
         onLongClick = { actions.showActions(stream) },
-        onFocus = { if (it) actions.onStreamFocused(stream) },
+        onFocus = { if (it) actions.onStreamFocused(stream) else actions.onStreamUnfocused(stream) },
         grown = { previewing && previewPlayer() != null },
-        // 2 cards a row: a little bigger, 3: half bigger, 4 and more: twice as big
+        // 2 cards a row: already big, they do not grow; 3: half bigger, 4 and more: twice as big
         growth = when (actions.cardsPerRow.coerceIn(2, 6)) {
-            2 -> 1.3f
+            2 -> 1f
             3 -> 1.5f
             else -> 2f
         },

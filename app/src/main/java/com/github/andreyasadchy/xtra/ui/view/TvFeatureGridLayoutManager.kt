@@ -19,7 +19,7 @@ import kotlin.math.roundToInt
  * the number of columns stays the same, nothing is covered or cut.
  *
  * - 4 to 6 columns: the card takes 2 columns and 2 rows, the next cards flow around it in their order.
- * - 3 columns: the card is half bigger, 2 columns: a little bigger. The other cards of its row get narrower
+ * - 3 columns: the card is half bigger (2 columns: the cards are already big, none grows). The other cards of its row get narrower
  *   and its row gets taller, the rows under it go down.
  *
  * All the rows have the height of a card of one column, so the place of any card is known without laying out
@@ -51,8 +51,6 @@ class TvFeatureGridLayoutManager(
     private var progress = 0f
     private var animator: ValueAnimator? = null
     private var animatorTarget = 0f
-    /** Rows of 2 and 3 columns: height of the row of the grown card, the card at its full size. */
-    private var featuredRowHeight = 0
 
     private var pendingPosition = RecyclerView.NO_POSITION
     private var pendingOffset = 0
@@ -95,9 +93,16 @@ class TvFeatureGridLayoutManager(
 
     // ---- the big card ----
 
+    /** The grown card (or the one growing / going back to its size), [RecyclerView.NO_POSITION] when none. */
+    val featuredPosition get() = featured
+
+    /** Told when the grown card is back to its size: the cards are at their places again. */
+    var onCollapsed: (() -> Unit)? = null
+
     /** The card at [position] grows (its preview plays), [RecyclerView.NO_POSITION]: no card is grown. */
     fun feature(position: Int) {
-        requested = position
+        // 2 columns: the cards are already big, they do not grow
+        requested = if (spanCount >= 3) position else RecyclerView.NO_POSITION
         step()
     }
 
@@ -114,12 +119,12 @@ class TvFeatureGridLayoutManager(
         when {
             featured != RecyclerView.NO_POSITION && featured != requested -> animateTo(0f) {
                 featured = RecyclerView.NO_POSITION
+                onCollapsed?.invoke()
                 step()
             }
             featured == RecyclerView.NO_POSITION && requested != RecyclerView.NO_POSITION && requested < itemCount -> {
                 featured = requested
                 progress = 0f
-                featuredRowHeight = 0
                 animateTo(1f) { bringFeaturedOnScreen() }
             }
             featured != RecyclerView.NO_POSITION -> animateTo(1f) { bringFeaturedOnScreen() }
@@ -187,7 +192,7 @@ class TvFeatureGridLayoutManager(
 
     private val isBlock get() = spanCount >= 4
 
-    private val rowGrowth get() = if (spanCount == 3) 1.5f else 1.3f
+    private val rowGrowth get() = 1.5f
 
     /** Place of a card in the normal grid, from the top left of the content. */
     private fun normalRect(position: Int, out: FloatArray) {
@@ -237,7 +242,9 @@ class TvFeatureGridLayoutManager(
         } else {
             val row = position / spanCount
             val featuredRow = f / spanCount
-            val grownHeight = max(featuredRowHeight, rowHeight)
+            // taller row: the card has the same texts, only its 16:9 thumbnail is taller (known without measuring it: in a
+            // layout pass the cards are detached and the grown one could not be measured, its row did not grow)
+            val grownHeight = rowHeight + ((cell * rowGrowth - cell) * 9f / 16f).roundToInt()
             out[1] = row.toFloat() * rowHeight + if (row > featuredRow) grownHeight - rowHeight else 0
             if (row == featuredRow) {
                 val big = cell * rowGrowth
@@ -284,7 +291,7 @@ class TvFeatureGridLayoutManager(
             val lastCell = max(blockCell(count - 2).takeIf { count > 1 } ?: 0, blockStart() + spanCount + 1)
             (lastCell / spanCount + 1) * rowHeight
         } else {
-            normalHeight + max(featuredRowHeight - rowHeight, 0)
+            normalHeight + ((cellWidth * rowGrowth - cellWidth) * 9f / 16f).roundToInt()
         }
         return (normalHeight + (grownHeight - normalHeight) * progress).roundToInt()
     }
@@ -328,15 +335,11 @@ class TvFeatureGridLayoutManager(
         val left = paddingLeft + rect[0].roundToInt() + params.leftMargin
         val top = paddingTop + rect[1].roundToInt() - scrollY + params.topMargin
         layoutDecorated(view, left, top, left + getDecoratedMeasuredWidth(view), top + getDecoratedMeasuredHeight(view))
-        // the slight zoom of the focused card stays inside the grid: it grows from the edge it touches
-        val position = getPosition(view)
-        view.pivotX = when {
-            position != featured || progress == 0f -> view.measuredWidth / 2f
-            isAtStart(position) -> 0f
-            isAtEnd(position) -> view.measuredWidth.toFloat()
-            else -> view.measuredWidth / 2f
+        // the grown card has no focus zoom on top of its growth: it would eat the space around it (or go past the edges)
+        if (getPosition(view) == featured && progress > 0f) {
+            view.scaleX = 1f
+            view.scaleY = 1f
         }
-        view.pivotY = view.measuredHeight / 2f
     }
 
     override fun onLayoutChildren(recycler: RecyclerView.Recycler, state: RecyclerView.State) {
@@ -394,14 +397,6 @@ class TvFeatureGridLayoutManager(
         // the cards move by 3 cells at most (2 x 2 card) or one row (taller row): some more are looked at
         val first = max(((windowTop / rowHeight) - 2) * spanCount - 4, 0)
         val last = min(((windowBottom / rowHeight) + 2) * spanCount + 4, count - 1)
-        val featuredRow = if (featured != RecyclerView.NO_POSITION && !isBlock) featured / spanCount else -1
-        if (featuredRow >= 0) {
-            // taller row: the height of the grown card at its full width
-            findViewByPosition(featured)?.let { view ->
-                measure(view, (cellWidth * rowGrowth).roundToInt())
-                featuredRowHeight = fullHeight(view)
-            }
-        }
         // cards out of the window go back to the pool
         for (index in childCount - 1 downTo 0) {
             val child = getChildAt(index) ?: continue

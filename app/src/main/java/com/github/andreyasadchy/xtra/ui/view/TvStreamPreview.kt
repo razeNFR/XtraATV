@@ -65,6 +65,8 @@ class TvStreamPreview(
         val login = pendingLogin ?: return
         pendingCard = null
         pendingLogin = null
+        // the focus already left the card
+        if (!card.hasFocus()) return
         val thumbnail = card.findViewById<View>(R.id.thumbnail)?.takeIf { it.isShown && it.width > 0 } ?: return
         val owner = recyclerView.findViewTreeLifecycleOwner() ?: return
         this.card = card
@@ -98,6 +100,15 @@ class TvStreamPreview(
             player.addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {
                     player.removeListener(this)
+                    if (this@TvStreamPreview.card != card) {
+                        // another preview took the player meanwhile
+                        return
+                    }
+                    if (!card.hasFocus()) {
+                        // the focus moved away while the preview was loading
+                        stop()
+                        return
+                    }
                     textureView.animate().alpha(1f).setDuration(300).start()
                     onCard?.invoke(card)
                     onPlaying?.invoke(true)

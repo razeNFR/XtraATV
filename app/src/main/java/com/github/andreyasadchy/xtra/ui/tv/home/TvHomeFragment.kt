@@ -88,6 +88,12 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 stopPreview()
                 (activity as? MainActivity)?.openTvMenu()
             },
+            onStreamUnfocused = { stream ->
+                // only the preview of this card: the focus may already be on the next stream card
+                if (scheduledLogin == stream.channelLogin) {
+                    stopPreview()
+                }
+            },
             onStreamFocused = {
                 schedulePreview(it)
             },
@@ -250,6 +256,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             return
         }
         stopPreview()
+        scheduledLogin = login
         val context = context ?: return
         if (login.isNullOrBlank() || !context.prefs().getBoolean(C.UI_TV_PREVIEW, true) || com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended) {
             return
@@ -272,7 +279,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         }
     }
 
+    /** Stream whose preview is loading or playing. */
+    private var scheduledLogin: String? = null
+
     override fun stopPreview() {
+        scheduledLogin = null
         previewJob?.cancel()
         previewJob = null
         if (previewLogin.value != null) {
