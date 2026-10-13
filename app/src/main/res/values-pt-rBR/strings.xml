@@ -608,6 +608,9 @@
     <string name="tv_multistream_pick">Escolha até 4 streams</string>
     <string name="tv_multistream_max">No máximo %1$d streams</string>
     <string name="tv_multistream_min">Marque pelo menos %1$d streams</string>
+    <string name="tv_multistream_remove">Remover este stream</string>
+    <string name="tv_multistream_chat_top">Chat acima do stream</string>
+    <string name="tv_multistream_chat_bottom">Chat abaixo do stream</string>
     <string name="tv_multistream_watch">Assistir</string>
     <string name="tv_adblock_blocking">Bloqueando anúncios (%1$s)</string>
     <string name="tv_adblock_waiting">Aguardando o fim do anúncio</string>

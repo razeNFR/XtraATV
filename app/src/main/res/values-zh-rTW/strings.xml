@@ -608,6 +608,9 @@
     <string name="tv_multistream_pick">最多選擇 4 個直播</string>
     <string name="tv_multistream_max">最多 %1$d 個直播</string>
     <string name="tv_multistream_min">請至少選擇 %1$d 個直播</string>
+    <string name="tv_multistream_remove">移除此直播</string>
+    <string name="tv_multistream_chat_top">聊天在直播上方</string>
+    <string name="tv_multistream_chat_bottom">聊天在直播下方</string>
     <string name="tv_multistream_watch">觀看</string>
     <string name="tv_adblock_blocking">正在封鎖廣告（%1$s）</string>
     <string name="tv_adblock_waiting">正在等待廣告結束</string>

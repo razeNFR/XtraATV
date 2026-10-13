@@ -608,6 +608,9 @@
     <string name="tv_multistream_pick">Выберите до 4 стримов</string>
     <string name="tv_multistream_max">Не более %1$d стримов</string>
     <string name="tv_multistream_min">Отметьте не менее %1$d трансляций</string>
+    <string name="tv_multistream_remove">Убрать эту трансляцию</string>
+    <string name="tv_multistream_chat_top">Чат над трансляцией</string>
+    <string name="tv_multistream_chat_bottom">Чат под трансляцией</string>
     <string name="tv_multistream_watch">Смотреть</string>
     <string name="tv_adblock_blocking">Блокировка рекламы (%1$s)</string>
     <string name="tv_adblock_waiting">Ожидание окончания рекламы</string>

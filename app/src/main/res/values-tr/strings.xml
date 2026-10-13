@@ -609,6 +609,9 @@
     <string name="tv_multistream_pick">En fazla 4 yayın seçin</string>
     <string name="tv_multistream_max">En fazla %1$d yayın</string>
     <string name="tv_multistream_min">En az %1$d yayın seçin</string>
+    <string name="tv_multistream_remove">Bu yayını kaldır</string>
+    <string name="tv_multistream_chat_top">Sohbet yayının üstünde</string>
+    <string name="tv_multistream_chat_bottom">Sohbet yayının altında</string>
     <string name="tv_multistream_watch">İzle</string>
     <string name="tv_adblock_blocking">Reklamlar engelleniyor (%1$s)</string>
     <string name="tv_adblock_waiting">Reklamın bitmesi bekleniyor</string>

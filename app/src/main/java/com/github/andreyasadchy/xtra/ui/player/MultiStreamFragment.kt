@@ -34,8 +34,9 @@ import kotlinx.coroutines.launch
  * OK opens the panel of that stream (open it in the player, its chat, change it, add a stream, its size) and back
  * leaves the multi-stream view.
  *
- * Chats: with 2 streams, the chat of a stream can be shown under it (both at once). With 3 streams, the empty cell at
- * the bottom right shows the chat of the selected stream, or the one pinned.
+ * Chats: with 2 streams, the chats of both streams are shown with them, under or above each stream (each one can be
+ * hidden or moved). With 3 streams, the empty cell at the bottom right shows the chat of the selected stream, or the one
+ * pinned. With 3 or 4 streams, a stream can be removed.
  */
 class MultiStreamFragment : Fragment() {
 
@@ -48,8 +49,11 @@ class MultiStreamFragment : Fragment() {
     private val tiles = mutableListOf<Tile>()
     private lateinit var root: FrameLayout
 
-    /** 2 streams: logins whose chat is shown under their stream. */
+    /** 2 streams: logins whose chat is shown with their stream. */
     private val chatsShown = mutableSetOf<String>()
+
+    /** 2 streams: logins whose chat is above their stream instead of under it. */
+    private val chatsOnTop = mutableSetOf<String>()
 
     /** 3 streams: chat of the empty cell, pinned to a stream (else it follows the selected stream). */
     private var pinnedChat: String? = null
@@ -84,6 +88,8 @@ class MultiStreamFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val streams = BundleCompat.getParcelableArrayList(requireArguments(), KEY_STREAMS, Stream::class.java).orEmpty().take(MAX)
         streams.forEach { addTile(it) }
+        // 2 streams: both chats at once, once the screen is laid out
+        root.post { if (view != null) showBothChats() }
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutTiles() }
         root.post {
             layoutTiles()
@@ -177,6 +183,14 @@ class MultiStreamFragment : Fragment() {
                         if (shown) chatsShown.remove(login) else chatsShown.add(login)
                         updateChats()
                     }
+                    if (shown) {
+                        // this stream only: its chat above or under it
+                        val onTop = login in chatsOnTop
+                        actions += TvActionPanel.Action(getString(if (onTop) R.string.tv_multistream_chat_bottom else R.string.tv_multistream_chat_top), R.drawable.tv_ic_forum) {
+                            if (onTop) chatsOnTop.remove(login) else chatsOnTop.add(login)
+                            layoutTiles()
+                        }
+                    }
                 }
                 3 -> {
                     val pinned = pinnedChat == login
@@ -207,6 +221,13 @@ class MultiStreamFragment : Fragment() {
                 }
             }
         }
+        if (tiles.size > 2) {
+            actions += TvActionPanel.Action(getString(R.string.tv_multistream_remove), R.drawable.tv_ic_delete) {
+                if (view != null && tiles.size > 2) {
+                    removeTile(tile)
+                }
+            }
+        }
         // 2 streams side by side: the share of the screen of this stream
         val slider = if (tiles.size == 2) {
             val index = tiles.indexOf(tile)
@@ -224,6 +245,39 @@ class MultiStreamFragment : Fragment() {
         TvActionPanel.show(requireContext(), name, actions, slider)
     }
 
+    /** 3 or 4 streams: a stream leaves, the others take the screen (back to 2: both chats with their streams). */
+    private fun removeTile(tile: Tile) {
+        val login = tile.stream.channelLogin
+        tile.adListener?.let { tile.player.removeListener(it) }
+        tile.player.release()
+        tile.chatContainer?.let { removeChat(it) }
+        tile.chatContainer = null
+        root.removeView(tile.view)
+        tiles.remove(tile)
+        if (pinnedChat == login) {
+            pinnedChat = null
+        }
+        login?.let {
+            chatsShown.remove(it)
+            chatsOnTop.remove(it)
+        }
+        updateVideoSizes()
+        if (tiles.size == 2) {
+            showBothChats()
+        }
+        updateChats()
+        updateCellChat()
+        tiles.firstOrNull()?.view?.requestFocus()
+    }
+
+    /** 2 streams: the chats of both streams are shown with them. */
+    private fun showBothChats() {
+        if (tiles.size == 2 && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
+            tiles.mapNotNullTo(chatsShown) { it.stream.channelLogin }
+            updateChats()
+        }
+    }
+
     private fun replaceStream(tile: Tile, stream: Stream) {
         val oldLogin = tile.stream.channelLogin
         tile.stream = stream
@@ -236,6 +290,9 @@ class MultiStreamFragment : Fragment() {
         val newLogin = stream.channelLogin
         if (oldLogin != null && chatsShown.remove(oldLogin) && newLogin != null) {
             chatsShown.add(newLogin)
+        }
+        if (oldLogin != null && chatsOnTop.remove(oldLogin) && newLogin != null) {
+            chatsOnTop.add(newLogin)
         }
         if (pinnedChat == oldLogin) {
             pinnedChat = newLogin
@@ -256,14 +313,18 @@ class MultiStreamFragment : Fragment() {
             val params = when (count) {
                 1 -> FrameLayout.LayoutParams(width, height)
                 2 -> {
-                    // side by side, each in 16:9 with its share of the width; chats under them when shown
+                    // side by side, each in 16:9 with its share of the width; its chat under it, or above it
                     val first = width * split / 100
                     val tileWidth = if (index == 0) first else width - first
                     val tileHeight = minOf(tileWidth * 9 / 16, height)
-                    val anyChat = chatsShown.isNotEmpty()
+                    val login = tile.stream.channelLogin
                     FrameLayout.LayoutParams(tileWidth, tileHeight).apply {
                         leftMargin = if (index == 0) 0 else first
-                        topMargin = if (anyChat) 0 else (height - tileHeight) / 2
+                        topMargin = when {
+                            tile.chatContainer == null -> (height - tileHeight) / 2
+                            login in chatsOnTop -> height - tileHeight
+                            else -> 0
+                        }
                     }
                 }
                 else -> FrameLayout.LayoutParams(width / 2, height / 2).apply {
@@ -301,6 +362,7 @@ class MultiStreamFragment : Fragment() {
         }
         if (tiles.size != 2) {
             chatsShown.clear()
+            chatsOnTop.clear()
         }
         layoutTiles()
     }
@@ -336,9 +398,10 @@ class MultiStreamFragment : Fragment() {
         tiles.forEach { tile ->
             val container = tile.chatContainer ?: return@forEach
             val tileParams = tile.view.layoutParams as? FrameLayout.LayoutParams ?: return@forEach
+            val onTop = tile.stream.channelLogin in chatsOnTop
             applyParams(container, FrameLayout.LayoutParams(tileParams.width, height - tileParams.height).apply {
                 leftMargin = tileParams.leftMargin
-                topMargin = tileParams.height
+                topMargin = if (onTop) 0 else tileParams.height
             })
         }
         cellChat?.let {

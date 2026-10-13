@@ -725,7 +725,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             viewModel.loadStreamInfo(
                                 channelId = playbackService?.channelId,
                                 channelLogin = it,
-                                viewerCount = playbackService?.viewerCount,
+                                // TV: a stream opened without its start (multi-stream...) loads its details for the timeline
+                                viewerCount = playbackService?.viewerCount?.takeUnless { isTv && playbackService?.createdAt.isNullOrBlank() },
                                 loop = requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) || !requireContext().prefs().getBoolean(C.CHAT_PUB_SUB_ENABLED, true),
                                 networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                                 helixHeaders = TwitchApiHelper.getHelixHeaders(requireContext()),
@@ -918,6 +919,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         category.text.isNullOrBlank()
                                     ) {
                                         updateStreamInfo(stream.title, stream.gameId, stream.gameSlug, stream.gameName)
+                                    }
+                                    if (playbackService?.createdAt.isNullOrBlank() && !stream.createdAt.isNullOrBlank()) {
+                                        // a stream opened without its start (from the multi-stream, a link...): the
+                                        // timeline to go back into its VOD needs it
+                                        playbackService?.createdAt = stream.createdAt
+                                        if (isTvLiveTimeline()) {
+                                            updateTvLiveTimeline()
+                                        }
                                     }
                                     if (requireContext().prefs().getBoolean(C.PLAYER_SHOW_UPTIME, true) &&
                                         !uptimeLayout.isVisible

@@ -608,6 +608,9 @@
     <string name="tv_multistream_pick">اختر حتى 4 بثوث</string>
     <string name="tv_multistream_max">%1$d بثوث كحد أقصى</string>
     <string name="tv_multistream_min">اختر %1$d بثوث على الأقل</string>
+    <string name="tv_multistream_remove">إزالة هذا البث</string>
+    <string name="tv_multistream_chat_top">الدردشة فوق البث</string>
+    <string name="tv_multistream_chat_bottom">الدردشة تحت البث</string>
     <string name="tv_multistream_watch">مشاهدة</string>
     <string name="tv_adblock_blocking">جارٍ حظر الإعلانات (%1$s)</string>
     <string name="tv_adblock_waiting">في انتظار انتهاء الإعلان</string>
