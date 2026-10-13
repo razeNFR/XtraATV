@@ -41,7 +41,7 @@ class GridRecyclerView : RecyclerView {
      * TV lists of streams: the card whose preview plays grows and the others move to make room
      * (turned off with the growth of the cards in the Xtra TV settings).
      */
-    private val featureLayoutManager: TvFeatureGridLayoutManager? = if (isTv && prefs.getBoolean(C.TV_CARD_ZOOM, true)) {
+    private val featureLayoutManager: TvFeatureGridLayoutManager? = if (isTv && prefs.getBoolean(C.TV_CARD_ZOOM, false)) {
         TvFeatureGridLayoutManager { parent, child, immediate -> scrollToPivot(parent, child, immediate) }
     } else null
 

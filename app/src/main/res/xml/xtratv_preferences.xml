@@ -106,7 +106,7 @@
             app:singleLineTitle="false" />
 
         <SwitchPreferenceCompat
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:key="tv_card_zoom"
             android:title="@string/tv_card_zoom"
             android:summary="@string/tv_card_zoom_summary"

@@ -385,7 +385,7 @@ private fun FocusCard(
     val focused by interaction.collectIsFocusedAsState()
     // the growth of the card can be turned off in the Xtra TV settings
     val context = androidx.compose.ui.platform.LocalContext.current
-    val zoom = remember { context.prefs().getBoolean(C.TV_CARD_ZOOM, true) }
+    val zoom = remember { context.prefs().getBoolean(C.TV_CARD_ZOOM, false) }
     val big = zoom && focused && growth > 1f && grown()
     val animatedWidth by androidx.compose.animation.core.animateDpAsState(
         if (big) width * growth else width,
