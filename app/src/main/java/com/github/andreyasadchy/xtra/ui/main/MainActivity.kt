@@ -208,6 +208,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
         if (isTv) {
+            // soft glow of the ambiance color behind the screens (Xtra TV settings)
+            (binding.root.background as? android.graphics.drawable.ColorDrawable)?.color?.let { base ->
+                binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
+            }
             supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
                     TvUi.adapt(v, hideToolbarActions = true)
@@ -1172,14 +1176,25 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         openingOwnScreen = false
+        keepPlayerInBackground = false
     }
 
+    /** TV: the app was left with the mini player or the sound only mode, the sound goes on behind. */
+    private var keepPlayerInBackground = false
+    val isKeepingPlayerInBackground get() = keepPlayerInBackground
+
     override fun onStop() {
+        keepPlayerInBackground = false
         if (isTv && !openingOwnScreen && !isChangingConfigurations) {
-            // TV: leaving the app stops the streams, no sound left behind
-            (playerFragment as? PlayerFragment)?.let {
-                it.close()
-                closePlayer()
+            val player = playerFragment as? PlayerFragment
+            if (player?.keepsPlayingWhenAppLeft() == true) {
+                keepPlayerInBackground = true
+            } else {
+                // TV: leaving the app stops the streams, no sound left behind
+                player?.let {
+                    it.close()
+                    closePlayer()
+                }
             }
             closeMultiStream()
         }
@@ -1599,6 +1614,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null) {
+        com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
         if (queue != null) {
             streamQueue = queue
             streamQueueSource = queueSource

@@ -41,10 +41,22 @@ object TvStreamSwitcher {
         updater?.invoke(streams)
     }
 
-    fun show(activity: MainActivity, streams: List<Stream>, currentChannelLogin: String?) {
+    /**
+     * Selection mode of the row (multi-stream): OK checks or unchecks a stream (green badge) up to [max],
+     * the "Validate" button gives the checked ones.
+     */
+    class Selection(
+        val title: String,
+        val preselected: Set<String>,
+        val max: Int,
+        val onValidate: (List<Stream>) -> Unit,
+    )
+
+    fun show(activity: MainActivity, streams: List<Stream>, currentChannelLogin: String?, selection: Selection? = null) {
         if (streams.isEmpty()) {
             return
         }
+        val checked = selection?.preselected?.toMutableSet()
         val dialog = AppCompatDialog(activity)
         val density = activity.resources.displayMetrics.density
         val horizontalPadding = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
@@ -54,12 +66,34 @@ object TvStreamSwitcher {
             // no side padding here: the row goes to the edges of the screen, the cards are not cut while it scrolls
             setPadding(0, (48 * density).toInt(), 0, activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical))
         }
-        root.addView(TextView(activity).apply {
-            text = activity.getString(R.string.tv_switch_stream)
+        val header = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (4 * density).toInt())
+        }
+        header.addView(TextView(activity).apply {
+            text = selection?.title ?: activity.getString(R.string.tv_switch_stream)
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 20f
-            setPadding(horizontalPadding + (10 * density).toInt(), 0, 0, (4 * density).toInt())
-        })
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        // selection: "Validate (n)" over the row, up from the cards
+        val validate = if (selection != null && checked != null) {
+            TextView(activity).apply {
+                setTextColor(activity.getColorStateList(R.color.tv_pill_text))
+                setBackgroundResource(R.drawable.tv_pill_background)
+                textSize = 16f
+                isFocusable = true
+                val padding = (10 * density).toInt()
+                setPadding(padding * 2, padding, padding * 2, padding)
+                val icon = activity.getDrawable(R.drawable.tv_ic_check)?.mutate()?.apply {
+                    setTintList(activity.getColorStateList(R.color.tv_pill_text))
+                    setBounds(0, 0, (20 * density).toInt(), (20 * density).toInt())
+                }
+                setCompoundDrawablesRelative(icon, null, null, null)
+                compoundDrawablePadding = (8 * density).toInt()
+            }.also { header.addView(it) }
+        } else null
+        root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val recyclerView = RecyclerView(activity).apply {
             layoutManager = LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false)
             clipToPadding = false
@@ -74,11 +108,46 @@ object TvStreamSwitcher {
                 }
             }
         } else null
-        val adapter = Adapter(streams, (250 * density).toInt(), preview) { stream ->
-            dialog.dismiss()
-            activity.startStream(stream)
+        lateinit var adapter: Adapter
+        val updateValidate = {
+            validate?.text = activity.getString(R.string.tv_multistream_validate, checked?.size ?: 0)
+        }
+        updateValidate()
+        adapter = Adapter(streams, (250 * density).toInt(), preview, checked) { stream ->
+            if (selection != null && checked != null) {
+                val login = stream.channelLogin ?: return@Adapter
+                when {
+                    login in checked -> checked.remove(login)
+                    selection.max == 1 -> {
+                        // one stream to pick (change or add a stream): picked at once
+                        dialog.dismiss()
+                        selection.onValidate(listOf(stream))
+                        return@Adapter
+                    }
+                    checked.size >= selection.max -> {
+                        android.widget.Toast.makeText(activity, activity.getString(R.string.tv_multistream_max, selection.max), android.widget.Toast.LENGTH_SHORT).show()
+                        return@Adapter
+                    }
+                    else -> checked.add(login)
+                }
+                adapter.streams.indexOf(stream).takeIf { it >= 0 }?.let { adapter.notifyItemChanged(it) }
+                updateValidate()
+            } else {
+                dialog.dismiss()
+                activity.startStream(stream)
+            }
         }
         recyclerView.adapter = adapter
+        validate?.setOnClickListener {
+            val logins = checked ?: return@setOnClickListener
+            if (logins.isEmpty()) {
+                return@setOnClickListener
+            }
+            dialog.dismiss()
+            // in the order of the row, the current stream first
+            val all = (adapter.streams + streams).distinctBy { it.channelLogin }
+            selection?.onValidate(all.filter { it.channelLogin in logins }.sortedBy { if (it.channelLogin == currentChannelLogin) 0 else 1 })
+        }
         root.addView(recyclerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dialog.setContentView(root)
         dialog.window?.apply {
@@ -126,10 +195,12 @@ object TvStreamSwitcher {
         var streams: List<Stream>,
         private val itemWidth: Int,
         private val preview: TvStreamPreview?,
+        /** Selection mode: the logins checked, they get a green badge. */
+        private val checked: Set<String>?,
         private val onClick: (Stream) -> Unit,
     ) : RecyclerView.Adapter<Adapter.ViewHolder>() {
 
-        class ViewHolder(val binding: FragmentStreamsListItemBinding) : RecyclerView.ViewHolder(binding.root)
+        class ViewHolder(val binding: FragmentStreamsListItemBinding, val badge: android.widget.ImageView) : RecyclerView.ViewHolder(binding.root)
 
         override fun getItemCount() = streams.size
 
@@ -137,12 +208,32 @@ object TvStreamSwitcher {
             val binding = FragmentStreamsListItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
             binding.root.layoutParams = binding.root.layoutParams.apply { width = itemWidth }
             TvCards.prepare(binding.root)
-            return ViewHolder(binding)
+            val density = parent.resources.displayMetrics.density
+            // green check of a selected stream, at the top right of the card
+            val badge = android.widget.ImageView(parent.context).apply {
+                setImageResource(R.drawable.tv_ic_check)
+                setColorFilter(android.graphics.Color.WHITE)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(0xFF22C55E.toInt())
+                    setStroke((2 * density).toInt(), android.graphics.Color.WHITE)
+                }
+                val padding = (5 * density).toInt()
+                setPadding(padding, padding, padding, padding)
+                visibility = View.GONE
+                elevation = 8 * density
+            }
+            (binding.root as? android.widget.FrameLayout)?.addView(badge, android.widget.FrameLayout.LayoutParams((32 * density).toInt(), (32 * density).toInt(), Gravity.TOP or Gravity.END).apply {
+                val margin = (8 * density).toInt()
+                setMargins(margin, margin, margin, margin)
+            })
+            return ViewHolder(binding, badge)
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val stream = streams[position]
             val context = holder.itemView.context
+            holder.badge.visibility = if (checked != null && stream.channelLogin in checked) View.VISIBLE else View.GONE
             with(holder.binding) {
                 root.setOnClickListener { onClick(stream) }
                 root.setOnFocusChangeListener { view, hasFocus ->
@@ -155,7 +246,7 @@ object TvStreamSwitcher {
                 thumbnail.visibility = View.VISIBLE
                 context.imageLoader.enqueue(
                     ImageRequest.Builder(context).apply {
-                        data(stream.thumbnail)
+                        data(com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail))
                         crossfade(true)
                         target(thumbnail)
                     }.build()

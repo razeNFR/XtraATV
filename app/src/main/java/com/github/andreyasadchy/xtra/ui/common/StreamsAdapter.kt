@@ -154,7 +154,8 @@ class StreamsAdapter(
                         val key = if (lastMinute < 5) minutes - lastMinute else minutes - (lastMinute - 5)
                         fragment.requireContext().imageLoader.enqueue(
                             ImageRequest.Builder(fragment.requireContext()).apply {
-                                data(item.thumbnail)
+                                // a stream that just started has no thumbnail yet on Twitch: the picture of the channel
+                                data(com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(item, item.thumbnail))
                                 memoryCacheKeyExtra("minutes", key.toString())
                                 diskCachePolicy(CachePolicy.DISABLED)
                                 crossfade(true)

@@ -44,6 +44,30 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:key="tv_mini_player_keep_on_home"
+        android:summary="@string/tv_mini_player_keep_on_home_summary"
+        android:title="@string/tv_mini_player_keep_on_home"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_audio_only_keep_on_home"
+        android:summary="@string/tv_audio_only_keep_on_home_summary"
+        android:title="@string/tv_audio_only_keep_on_home"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_player_clock"
+        android:summary="@string/tv_player_clock_summary"
+        android:title="@string/tv_player_clock"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
         android:key="ui_tv_preview"
         android:title="@string/tv_stream_preview"
         app:iconSpaceReserved="false"
@@ -54,6 +78,32 @@
         android:dependency="ui_tv_preview"
         android:key="ui_tv_preview_sound"
         android:title="@string/tv_preview_sound"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="violet"
+        android:entries="@array/tvAmbientColorEntries"
+        android:entryValues="@array/tvAmbientColorValues"
+        android:key="tv_ambient_color"
+        android:summary="%s"
+        android:title="@string/tv_ambient_color"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_ambient_backdrop"
+        android:summary="@string/tv_ambient_backdrop_summary"
+        android:title="@string/tv_ambient_backdrop"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_card_zoom"
+        android:title="@string/tv_card_zoom"
+        android:summary="@string/tv_card_zoom_summary"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
@@ -83,6 +133,15 @@
         android:key="tv_home_languages"
         android:summary="@string/tv_home_languages_summary"
         android:title="@string/tv_home_languages"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <MultiSelectListPreference
+        android:entries="@array/gqlUserLanguageEntries"
+        android:entryValues="@array/gqlUserLanguageValues"
+        android:key="tv_default_languages"
+        android:summary="@string/tv_default_languages_summary"
+        android:title="@string/tv_default_languages"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

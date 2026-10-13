@@ -14,7 +14,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 object TvStreamActions {
 
-    class Extra(val label: String, val run: () -> Unit)
+    class Extra(val label: String, val icon: Int? = null, val run: () -> Unit)
 
     fun show(activity: MainActivity, stream: Stream, first: Extra? = null, last: List<Extra> = emptyList()) {
         val channelId = stream.channelId
@@ -26,13 +26,13 @@ object TvStreamActions {
             val entries = mutableListOf<Extra>()
             first?.let { entries += it }
             val name = stream.channelName ?: stream.channelLogin ?: ""
-            entries += Extra(activity.getString(R.string.tv_open_channel, name)) { activity.openTvChannel(stream, null) }
-            entries += Extra(activity.getString(R.string.tv_channel_videos)) { activity.openTvChannel(stream, "1") }
+            entries += Extra(activity.getString(R.string.tv_open_channel, name), R.drawable.tv_ic_person) { activity.openTvChannel(stream, null) }
+            entries += Extra(activity.getString(R.string.tv_channel_videos), R.drawable.tv_ic_video_library) { activity.openTvChannel(stream, "1") }
             if (!stream.gameName.isNullOrBlank()) {
-                entries += Extra(activity.getString(R.string.tv_open_category, stream.gameName)) { activity.openTvGame(stream.gameId, stream.gameSlug, stream.gameName) }
+                entries += Extra(activity.getString(R.string.tv_open_category, stream.gameName), R.drawable.tv_ic_gamepad) { activity.openTvGame(stream.gameId, stream.gameSlug, stream.gameName) }
             }
             if (channelId != null && following != null) {
-                entries += Extra(activity.getString(if (following) R.string.unfollow else R.string.follow)) {
+                entries += Extra(activity.getString(if (following) R.string.unfollow else R.string.follow), if (following) R.drawable.tv_ic_heart else R.drawable.tv_ic_heart_outline) {
                     activity.lifecycleScope.launch {
                         val done = TvFollow.setFollowing(activity, channelId, stream.channelLogin, stream.channelName, !following)
                         Toast.makeText(
@@ -48,7 +48,7 @@ object TvStreamActions {
                 }
             }
             entries += last
-            TvDialogs.showChoices(activity, stream.title?.trim()?.takeIf { it.isNotEmpty() } ?: name, entries.map { it.label }, -1) {
+            TvDialogs.showChoices(activity, stream.title?.trim()?.takeIf { it.isNotEmpty() } ?: name, entries.map { it.label }, -1, entries.map { it.icon }) {
                 entries[it].run()
             }
         }

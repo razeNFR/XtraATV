@@ -43,6 +43,10 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     // snapshot states: the cards that read them follow their changes
     private val homeStamp = androidx.compose.runtime.mutableLongStateOf(0L)
     private val homeRefreshing = mutableStateOf(false)
+    private val resumeItems = mutableStateOf<List<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>>(emptyList())
+    private val statsState = mutableStateOf<TvHomeStats?>(null)
+    /** Picture of the focused stream behind the rows. */
+    private val backdropState = mutableStateOf<String?>(null)
 
     init {
         com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.register(this)
@@ -85,7 +89,12 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 stopPreview()
                 (activity as? MainActivity)?.openTvMenu()
             },
-            onStreamFocused = { schedulePreview(it) },
+            onStreamFocused = {
+                schedulePreview(it)
+                if (it != null && context.prefs().getBoolean(C.TV_AMBIENT_BACKDROP, true)) {
+                    backdropState.value = it.thumbnail?.replace("1280x720", "640x360")
+                }
+            },
             formatViewers = { count -> resources.getQuantityString(R.plurals.viewers, count, TwitchApiHelper.formatCount(count, truncate)) },
             formatCount = { count -> TwitchApiHelper.formatCount(count, true) },
             refresh = {
@@ -95,6 +104,12 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             cardsPerRow = context.prefs().getString(C.TV_HOME_CARDS, "3")?.toIntOrNull() ?: 3,
             thumbnailStamp = { homeStamp.longValue },
             refreshing = { homeRefreshing.value },
+            openVideo = { item ->
+                stopPreview()
+                (activity as? MainActivity)?.startVideo(item.toVideo(), item.positionMs)
+            },
+            showVideoActions = { item -> showVideoActions(item) },
+            formatDuration = { ms -> getString(R.string.tv_time_left, android.text.format.DateUtils.formatElapsedTime(ms / 1000)) },
         )
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.stamp.collect { homeStamp.longValue = it }
@@ -112,12 +127,15 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val games by viewModel.games.collectAsState()
                 TvTheme(accent) {
                     TvHomeScreen(
-                        followed = followed?.let { TvHomeRow(getString(R.string.tv_followed_live), it, followedId) },
-                        popular = popular?.let { TvHomeRow(getString(R.string.popular), it, R.id.rootTopFragment) },
-                        games = games?.let { TvHomeRow(getString(R.string.games), it, R.id.rootGamesFragment) },
+                        followed = followed?.let { TvHomeRow(getString(R.string.tv_followed_live), it, followedId, R.drawable.tv_ic_heart) },
+                        popular = popular?.let { TvHomeRow(getString(R.string.popular), it, R.id.rootTopFragment, R.drawable.tv_ic_trending) },
+                        games = games?.let { TvHomeRow(getString(R.string.games), it, R.id.rootGamesFragment, R.drawable.tv_ic_gamepad) },
                         previewLogin = { previewLogin.value },
                         previewPlayer = { previewPlayer.value },
                         actions = actions,
+                        resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
+                        stats = statsState.value,
+                        backdrop = { backdropState.value },
                     )
                 }
             }
@@ -127,6 +145,83 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     override fun onResume() {
         super.onResume()
         viewModel.load()
+        loadLocalRows()
+    }
+
+    /** "Continue watching" and the statistics, read on this device. */
+    private fun loadLocalRows() {
+        val context = context ?: return
+        resumeItems.value = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.list(context)
+        val stats = com.github.andreyasadchy.xtra.ui.tv.TvStats.read(context)
+        val hours = stats.watchMs / 3_600_000L
+        val minutes = (stats.watchMs / 60_000L) % 60
+        val formatTime = { ms: Long -> getString(R.string.tv_stats_hours, ms / 3_600_000L, (ms / 60_000L) % 60) }
+        statsState.value = TvHomeStats(
+            title = getString(R.string.tv_stats),
+            subtitle = stats.since.takeIf { it > 0 }?.let {
+                getString(R.string.tv_stats_since, java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(it)))
+            },
+            items = listOf(
+                TvHomeStat(R.drawable.tv_ic_schedule, getString(R.string.tv_stats_hours, hours, minutes), getString(R.string.tv_stats_watched)),
+                TvHomeStat(
+                    R.drawable.tv_ic_star,
+                    stats.topStreamer ?: "—",
+                    if (stats.topStreamer != null) getString(R.string.tv_stats_top_streamer_time, formatTime(stats.topStreamerMs)) else getString(R.string.tv_stats_top_streamer)
+                ),
+                TvHomeStat(R.drawable.tv_ic_shield, stats.ads.toString(), getString(R.string.tv_stats_ads)),
+                TvHomeStat(R.drawable.tv_ic_globe, stats.topProxy ?: "—", getString(R.string.tv_stats_proxy)),
+                TvHomeStat(R.drawable.tv_ic_forum, stats.messages.toString(), getString(R.string.tv_stats_messages)),
+                TvHomeStat(R.drawable.tv_ic_live, stats.streams.toString(), getString(R.string.tv_stats_streams)),
+            )
+        )
+    }
+
+    private fun com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item.toVideo() = com.github.andreyasadchy.xtra.model.ui.Video(
+        id = id,
+        channelId = channelId,
+        channelLogin = channelLogin,
+        channelName = channelName,
+        channelImageURL = channelImage,
+        gameId = gameId,
+        gameName = gameName,
+        title = title,
+        thumbnailURL = thumbnail,
+        createdAt = createdAt,
+        durationSeconds = durationSeconds,
+        type = type,
+    )
+
+    /** OK held down on a video of "Continue watching": resume, watch from the start, remove from the history. */
+    private fun showVideoActions(item: com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item) {
+        stopPreview()
+        val activity = activity as? MainActivity ?: return
+        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+            activity,
+            item.title?.trim()?.takeIf { it.isNotEmpty() } ?: item.channelName ?: "",
+            listOf(
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_resume), R.drawable.tv_ic_play) {
+                    activity.startVideo(item.toVideo(), item.positionMs)
+                },
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_watch_from_start), R.drawable.tv_ic_replay) {
+                    activity.startVideo(item.toVideo(), 0, ignoreSavedPosition = true)
+                },
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_remove_from_history), R.drawable.tv_ic_delete) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.remove(activity, item.id)
+                    item.id.toLongOrNull()?.let { id ->
+                        activity.lifecycleScope.launch {
+                            try {
+                                (activity.application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository.saveVideoPosition(
+                                    com.github.andreyasadchy.xtra.model.VideoPosition(id, 0)
+                                )
+                            } catch (e: Exception) {
+
+                            }
+                        }
+                    }
+                    loadLocalRows()
+                },
+            )
+        )
     }
 
     override fun onPause() {

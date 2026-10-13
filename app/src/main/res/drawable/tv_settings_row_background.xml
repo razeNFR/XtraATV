@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV settings rows, like the settings of Google TV: a rounded white row when focused -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:enterFadeDuration="120"
+    android:exitFadeDuration="120">
+    <item android:state_focused="true">
+        <inset android:insetTop="3dp" android:insetBottom="3dp">
+            <shape>
+                <solid android:color="#FFF2F2F7" />
+                <corners android:radius="14dp" />
+            </shape>
+        </inset>
+    </item>
+    <item>
+        <inset android:insetTop="3dp" android:insetBottom="3dp">
+            <shape>
+                <solid android:color="#14FFFFFF" />
+                <corners android:radius="14dp" />
+            </shape>
+        </inset>
+    </item>
+</selector>

@@ -41,6 +41,8 @@ class GameStreamsViewModel(
 
     private val args = GamePagerFragmentArgs.fromSavedStateHandle(savedStateHandle)
     val filter = MutableStateFlow<Filter?>(null)
+    /** TV: the focus went to the first streamer once the list loaded. */
+    var initialFocusDone = false
     val sortText = MutableStateFlow<CharSequence?>(null)
     val filtersText = MutableStateFlow<CharSequence?>(null)
 

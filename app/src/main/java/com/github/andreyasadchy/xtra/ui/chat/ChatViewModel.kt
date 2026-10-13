@@ -1931,6 +1931,10 @@ class ChatViewModel(
     }
 
     fun send(message: CharSequence, replyId: String?, networkLibrary: String?, gqlHeaders: Map<String, String>, helixHeaders: Map<String, String>, accountId: String?, channelId: String?, channelLogin: String?, useApiCommands: Boolean, useApiChatMessages: Boolean, enableIntegrity: Boolean) {
+        if (!message.startsWith("/")) {
+            // statistics of the TV home
+            com.github.andreyasadchy.xtra.ui.tv.TvStats.addMessage(applicationContext)
+        }
         if (useApiCommands) {
             viewModelScope.launch {
                 try {

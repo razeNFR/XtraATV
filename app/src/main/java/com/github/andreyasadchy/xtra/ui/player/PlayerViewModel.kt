@@ -568,13 +568,29 @@ class PlayerViewModel(
             viewModelScope.launch {
                 try {
                     if (!channelId.isNullOrBlank()) {
-                        _isFollowing.value = if (setting == 0 && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && userId != channelId) {
-                            graphQLRepository.loadQueryFollowingUser(
-                                networkLibrary = networkLibrary,
-                                headers = gqlHeaders,
-                                id = channelId,
-                                login = channelLogin.takeIf { channelId.isBlank() },
-                            ).data?.user?.self?.follower?.followedAt != null
+                        val accountFollows = setting == 0 && userId != channelId &&
+                                (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() || !helixHeaders[C.HEADER_TOKEN].isNullOrBlank())
+                        _isFollowing.value = if (accountFollows) {
+                            // the follows of the account: GQL first, the Helix follow list when GQL gives no answer
+                            val self = if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+                                try {
+                                    graphQLRepository.loadQueryFollowingUser(
+                                        networkLibrary = networkLibrary,
+                                        headers = gqlHeaders,
+                                        id = channelId,
+                                        login = null,
+                                    ).data?.user?.self
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            } else null
+                            when {
+                                self != null -> self.follower?.followedAt != null
+                                !helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && !userId.isNullOrBlank() -> {
+                                    helixRepository.getUserFollows(networkLibrary, helixHeaders, userId, channelId).data.isNotEmpty()
+                                }
+                                else -> false
+                            }
                         } else {
                             localChannelFollowsRepository.getById(channelId) != null
                         }

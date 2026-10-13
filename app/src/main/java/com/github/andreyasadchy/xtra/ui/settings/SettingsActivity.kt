@@ -102,6 +102,9 @@ class SettingsActivity : AppCompatActivity() {
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
         if (TvUi.isTv(this)) {
+            (binding.root.background as? android.graphics.drawable.ColorDrawable)?.color?.let { base ->
+                binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
+            }
             TvUi.adapt(binding.root, hideToolbarActions = false)
             supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
@@ -145,6 +148,15 @@ class SettingsActivity : AppCompatActivity() {
             true
         })
         binding.toolbar.setupWithNavController(navController, appBarConfiguration)
+        if (TvUi.isTv(this)) {
+            // Google TV style: the name of the screen in big on the left, the toolbar keeps the back and search buttons
+            navController.addOnDestinationChangedListener { _, _, _ ->
+                binding.toolbar.post {
+                    binding.tvSettingsTitle?.text = binding.toolbar.title
+                    binding.toolbar.title = null
+                }
+            }
+        }
         binding.toolbar.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.search -> {

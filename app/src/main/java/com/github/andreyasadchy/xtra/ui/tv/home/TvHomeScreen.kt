@@ -1,5 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.tv.home
 
+import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.prefs
 import android.view.TextureView
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -20,6 +22,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,6 +32,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -43,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -89,9 +95,13 @@ class TvHomeActions(
     /** Changes at each load: the thumbnails are downloaded again. */
     val thumbnailStamp: () -> Long = { 0L },
     val refreshing: () -> Boolean = { false },
+    /** "Continue watching": OK resumes the video, OK held down opens its actions. */
+    val openVideo: (com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item) -> Unit = {},
+    val showVideoActions: (com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item) -> Unit = {},
+    val formatDuration: (Long) -> String = { "" },
 )
 
-class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int)
+class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int, val icon: Int? = null)
 
 /**
  * Rows: the focus moves over the cards on screen and the row only slides when the focused card gets near an edge,
@@ -125,6 +135,10 @@ fun TvHomeScreen(
     previewLogin: () -> String?,
     previewPlayer: () -> ExoPlayer?,
     actions: TvHomeActions,
+    resume: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>? = null,
+    stats: TvHomeStats? = null,
+    /** Picture of the focused stream, shown faded behind the rows (Google TV), null when turned off. */
+    backdrop: () -> String? = { null },
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -140,6 +154,8 @@ fun TvHomeScreen(
         followed?.takeIf { it.items.isNotEmpty() }?.let { "followed" to it },
         popular?.takeIf { it.items.isNotEmpty() }?.let { "popular" to it },
     )
+    Box(Modifier.fillMaxSize()) {
+    Backdrop(backdrop)
     CompositionLocalProvider(LocalBringIntoViewSpec provides NoScrollSpec) {
         LazyColumn(
             state = listState,
@@ -154,6 +170,12 @@ fun TvHomeScreen(
                     RefreshPill(actions)
                 }
             }
+            // first load: grey cards in place of the rows, like YouTube
+            if (followed == null && popular == null && games == null) {
+                items(2, key = { "skeleton$it" }) {
+                    SkeletonRow(actions)
+                }
+            }
             rows.forEachIndexed { rowIndex, (key, row) ->
                 item(key = key) {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(rowIndex + 1) }) {
@@ -161,11 +183,95 @@ fun TvHomeScreen(
                     }
                 }
             }
+            // continue watching, then the statistics, over the categories
+            val resumeIndex = rows.size + 1
+            val hasResume = resume != null && resume.items.isNotEmpty()
+            if (hasResume) {
+                item(key = "resume") {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(resumeIndex) }) {
+                        ResumeRow(resume!!, actions, if (rows.isEmpty()) firstCard else null)
+                    }
+                }
+            }
+            val statsIndex = resumeIndex + if (hasResume) 1 else 0
+            if (stats != null) {
+                item(key = "stats") {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(statsIndex) }) {
+                        StatsCard(stats, actions)
+                    }
+                }
+            }
+            val gamesIndex = statsIndex + if (stats != null) 1 else 0
             if (games != null && games.items.isNotEmpty()) {
                 item(key = "games") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(rows.size + 1) }) {
-                        GameRow(games, actions, if (rows.isEmpty()) firstCard else null)
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(gamesIndex) }) {
+                        GameRow(games, actions, if (rows.isEmpty() && !hasResume) firstCard else null)
                     }
+                }
+            }
+        }
+    }
+    }
+}
+
+/** Faded picture of the focused stream at the top right, behind the rows. */
+@Composable
+private fun Backdrop(backdrop: () -> String?) {
+    val url = backdrop() ?: return
+    androidx.compose.animation.Crossfade(targetState = url, animationSpec = androidx.compose.animation.core.tween(400), label = "backdrop") { picture ->
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .fillMaxWidth(0.62f)
+                    .aspectRatio(16f / 9f)
+                    .graphicsLayer { alpha = 0.32f }
+            ) {
+                AsyncImage(
+                    model = picture,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // fades into the background on the left and at the bottom
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), endX = 500f))
+                )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
+                )
+            }
+        }
+    }
+}
+
+/** Grey cards shown while the home loads. */
+@Composable
+private fun SkeletonRow(actions: TvHomeActions) {
+    val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+    val count = actions.cardsPerRow.coerceIn(2, 6)
+    val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton")
+    val alpha by transition.animateFloat(
+        0.06f, 0.14f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "alpha"
+    )
+    Column(Modifier.padding(start = 12.dp, top = 14.dp, bottom = 8.dp)) {
+        Box(Modifier.width(220.dp).height(22.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = alpha)))
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            repeat(count) {
+                Column(Modifier.width(cardWidth)) {
+                    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = alpha)))
+                    Spacer(Modifier.height(10.dp))
+                    Box(Modifier.fillMaxWidth(0.7f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = alpha)))
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.fillMaxWidth(0.45f).height(12.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = alpha)))
                 }
             }
         }
@@ -211,14 +317,27 @@ private fun RefreshPill(actions: TvHomeActions) {
 }
 
 @Composable
-private fun RowTitle(title: String) {
-    Text(
-        title,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = Color.White,
-        modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 8.dp)
-    )
+private fun RowTitle(title: String, icon: Int? = null) {
+    Row(
+        modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(
+                painterResource(icon),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+        }
+        Text(
+            title,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+        )
+    }
 }
 
 /** Left on the first card opens the side menu. */
@@ -233,7 +352,7 @@ private fun Modifier.leftEdge(index: Int, openMenu: () -> Unit) = onPreviewKeyEv
 @Composable
 private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previewPlayer: () -> ExoPlayer?, actions: TvHomeActions, firstRequester: FocusRequester?) {
     Column {
-        RowTitle(row.title)
+        RowTitle(row.title, row.icon)
         // the cards fill the width of the screen, with a part of the next one in sight
         val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
         val count = actions.cardsPerRow.coerceIn(2, 6)
@@ -267,7 +386,7 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
 @Composable
 private fun GameRow(row: TvHomeRow<Game>, actions: TvHomeActions, firstRequester: FocusRequester?) {
     Column {
-        RowTitle(row.title)
+        RowTitle(row.title, row.icon)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
             modifier = Modifier.focusRestorer(),
@@ -297,7 +416,10 @@ private fun FocusCard(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val scale by animateFloatAsState(if (focused) 1.08f else 1f, label = "scale")
+    // the zoom of the focused card can be turned off in the Xtra TV settings
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val zoom = remember { context.prefs().getBoolean(C.TV_CARD_ZOOM, true) }
+    val scale by animateFloatAsState(if (focused && zoom) 1.08f else 1f, label = "scale")
     var longPressed by remember { mutableStateOf(false) }
     Column(
         modifier
@@ -351,16 +473,17 @@ private fun StreamCard(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
+                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
         ) {
             AsyncImage(
                 // smaller thumbnails than the 1280x720 of the lists, the cards are small
-                model = stream.thumbnail?.replace("1280x720", "640x360")?.let { url ->
+                model = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail?.replace("1280x720", "640x360")?.let { url ->
                     val stamp = actions.thumbnailStamp()
                     if (stamp > 0) "$url?t=$stamp" else url
-                },
+                }),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -376,25 +499,47 @@ private fun StreamCard(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            // badges like the player: red "LIVE", then the viewers with the eye
             Row(
                 Modifier
                     .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFFE91916))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.size(6.dp).background(Color.White, CircleShape))
-                Spacer(Modifier.width(5.dp))
-                Text(
-                    stream.viewerCount?.let { if (small) actions.formatCount(it) else actions.formatViewers(it) } ?: "LIVE",
-                    fontSize = if (small) 11.sp else 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 1,
-                )
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(Color(0xFFE91916))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(Modifier.size(6.dp).background(Color.White, CircleShape))
+                    Spacer(Modifier.width(4.dp))
+                    Text("LIVE", fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                }
+                stream.viewerCount?.let { count ->
+                    Spacer(Modifier.width(5.dp))
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(Color(0xB3000000))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(painterResource(R.drawable.tv_ic_eye), contentDescription = null, tint = Color.White, modifier = Modifier.size(if (small) 11.dp else 12.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(actions.formatCount(count), fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+                    }
+                }
             }
+            // dark gradient at the bottom of the picture
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0x80000000))))
+            )
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -419,6 +564,161 @@ private fun StreamCard(
     }
 }
 
+/** One statistic of the card: icon, value, label. */
+class TvHomeStat(val icon: Int, val value: String, val label: String)
+
+class TvHomeStats(val title: String, val subtitle: String?, val items: List<TvHomeStat>)
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ResumeRow(row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>, actions: TvHomeActions, firstRequester: FocusRequester?) {
+    Column {
+        RowTitle(row.title, row.icon)
+        val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+        val count = actions.cardsPerRow.coerceIn(2, 6)
+        val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
+            LazyRow(
+                modifier = Modifier.focusRestorer(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(row.items, key = { _, item -> item.id }) { index, item ->
+                    ResumeCard(
+                        width = cardWidth,
+                        item = item,
+                        actions = actions,
+                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResumeCard(width: Dp, item: com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item, actions: TvHomeActions, modifier: Modifier) {
+    val small = width < 230.dp
+    FocusCard(
+        width = width,
+        modifier = modifier,
+        onClick = { actions.openVideo(item) },
+        onLongClick = { actions.showVideoActions(item) },
+    ) { focused ->
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF26252C))
+                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
+        ) {
+            AsyncImage(
+                model = item.thumbnail,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            // time left, like the cards of Google TV
+            val durationMs = (item.durationSeconds ?: 0) * 1000L
+            if (durationMs > 0) {
+                Text(
+                    actions.formatDuration((durationMs - item.positionMs).coerceAtLeast(0)),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color(0xB3000000))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(Color(0x66FFFFFF))
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth((item.positionMs.toFloat() / durationMs).coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AsyncImage(
+                model = item.channelImage,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(if (small) 26.dp else 32.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF26252C))
+            )
+            Spacer(Modifier.width(if (small) 8.dp else 10.dp))
+            Column {
+                Text(item.title?.trim() ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.channelName ?: item.channelLogin ?: "", fontSize = if (small) 11.sp else 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!item.gameName.isNullOrBlank()) {
+                    Text(item.gameName, fontSize = if (small) 11.sp else 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+/** Card of statistics: the D-pad stops on it as a whole, it has no action. */
+@Composable
+private fun StatsCard(stats: TvHomeStats, actions: TvHomeActions) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        RowTitle(stats.title, R.drawable.tv_ic_bar_chart)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .leftEdge(0, actions.openMenu)
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    androidx.compose.ui.graphics.Brush.linearGradient(
+                        listOf(MaterialTheme.colorScheme.primary.copy(alpha = if (focused) 0.38f else 0.24f), Color(0x14FFFFFF))
+                    )
+                )
+                .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(16.dp)) else Modifier)
+                .focusable(interactionSource = interaction)
+                .padding(horizontal = 20.dp, vertical = 18.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                stats.items.forEach { stat ->
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x26000000))
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Icon(painterResource(stat.icon), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Text(stat.value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(stat.label, fontSize = 12.sp, color = TvColors.secondaryText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            if (stats.subtitle != null) {
+                Spacer(Modifier.height(10.dp))
+                Text(stats.subtitle, fontSize = 12.sp, color = TvColors.secondaryText)
+            }
+        }
+    }
+}
+
 @Composable
 private fun GameCard(game: Game, actions: TvHomeActions, modifier: Modifier) {
     FocusCard(width = 120.dp, modifier = modifier, onClick = { actions.openGame(game) }) { focused ->
@@ -426,6 +726,7 @@ private fun GameCard(game: Game, actions: TvHomeActions, modifier: Modifier) {
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(3f / 4f)
+                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)

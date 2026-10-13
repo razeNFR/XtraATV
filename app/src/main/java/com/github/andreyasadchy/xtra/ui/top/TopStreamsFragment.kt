@@ -144,7 +144,8 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                 viewModel.setFilter(
                     sort = sortValues?.streamSort,
                     tags = args.tags ?: sortValues?.streamTags?.split(',')?.toTypedArray(),
-                    languages = args.languages ?: sortValues?.streamLanguages?.split(',')?.toTypedArray(),
+                    // the language of "Popular" chosen in the Xtra TV settings, the same as the row of the home
+                    languages = args.languages ?: popularLanguages() ?: sortValues?.streamLanguages?.split(',')?.toTypedArray(),
                 )
                 viewModel.sortText.value = getString(
                     R.string.sort_by,
@@ -259,9 +260,21 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
         }
     }
 
+    /** TV: languages of "Popular" from the Xtra TV settings, null when none is chosen. */
+    private fun popularLanguages(): Array<String>? {
+        if (!resources.getBoolean(R.bool.isTv)) {
+            return null
+        }
+        return requireContext().prefs().getStringSet(C.TV_HOME_LANGUAGES, null)?.filter { it.isNotBlank() }?.ifEmpty { null }?.toTypedArray()
+    }
+
     override fun onChange(sort: String, sortText: CharSequence, tags: Array<String>, languages: Array<String>, changed: Boolean, saveFilters: Boolean, saveSort: Boolean, saveDefault: Boolean) {
         viewLifecycleOwner.lifecycleScope.launch {
             if (changed) {
+                if (resources.getBoolean(R.bool.isTv) && args.languages == null) {
+                    // the languages chosen here are the ones of "Popular" everywhere, the row of the home too
+                    requireContext().prefs().edit().putStringSet(C.TV_HOME_LANGUAGES, languages.toSet()).apply()
+                }
                 pagingAdapter.submitData(PagingData.empty())
                 viewModel.setFilter(sort, tags, languages)
                 viewModel.sortText.value = getString(R.string.sort_by, sortText)

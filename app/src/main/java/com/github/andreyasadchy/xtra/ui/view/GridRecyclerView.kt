@@ -54,7 +54,7 @@ class GridRecyclerView : RecyclerView {
                 val options = card.findViewById<View>(R.id.options)?.takeIf { it.visibility == View.VISIBLE && it.hasOnClickListeners() }
                 activity.showTvStreamActions(
                     stream,
-                    listOfNotNull(options?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(context.getString(R.string.tv_more_options)) { it.performClick() } })
+                    listOfNotNull(options?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(context.getString(R.string.tv_more_options), R.drawable.baseline_more_vert_black_24) { it.performClick() } })
                 )
             } else {
                 TvCards.showMenu(card)

@@ -661,7 +661,7 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun onStop() {
         super.onStop()
-        if (isTv && (activity as? MainActivity)?.isOpeningOwnScreen == true && playbackService != null) {
+        if (isTv && ((activity as? MainActivity)?.isOpeningOwnScreen == true || (activity as? MainActivity)?.isKeepingPlayerInBackground == true) && playbackService != null) {
             // TV: a screen of the app opens over the player (settings), the mini player or the sound goes on
             keptAcrossStop = true
             binding.playerControls.root.removeCallbacks(updateProgressAction)

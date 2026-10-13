@@ -8,72 +8,82 @@ import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
-import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.launch
 
-/** TV: choice of up to 4 streams (followed channels live and streams of the current category) for the multi-stream view. */
+/** TV: choice of up to 4 streams (followed channels live and streams of the list) for the multi-stream view, in the row of the other streams. */
 object TvMultiStreamPicker {
 
     private const val MAX = 4
 
     fun show(activity: MainActivity, current: Stream?) {
         activity.lifecycleScope.launch {
-            val followed = try {
-                val headers = TwitchApiHelper.getGQLHeaders(activity, true)
-                if (headers[C.HEADER_TOKEN].isNullOrBlank()) {
-                    emptyList()
-                } else {
-                    (activity.applicationContext as XtraApp).xtraModule.graphQLRepository.loadQueryUserFollowedStreams(
-                        activity.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), headers, 100, null
-                    ).data?.user?.followedLiveUsers?.edges?.mapNotNull { edge ->
-                        edge?.node?.let {
-                            Stream(
-                                id = it.stream?.id,
-                                channelId = it.id,
-                                channelLogin = it.login,
-                                channelName = it.displayName,
-                                channelImageURL = it.profileImageURL,
-                                gameName = it.stream?.game?.displayName,
-                                title = it.stream?.broadcaster?.broadcastSettings?.title,
-                                thumbnailURL = it.stream?.previewImageURL,
-                                viewerCount = it.stream?.viewersCount,
-                            )
-                        }
-                    }.orEmpty()
-                }
-            } catch (e: Exception) {
-                emptyList()
-            }
-            val candidates = (listOfNotNull(current) + followed + activity.streamQueue)
+            val candidates = (listOfNotNull(current) + loadFollowed(activity) + activity.streamQueue)
                 .filter { !it.channelLogin.isNullOrBlank() }
                 .distinctBy { it.channelLogin }
             if (candidates.isEmpty()) {
                 return@launch
             }
-            val checked = BooleanArray(candidates.size) { it == 0 && current != null }
-            val labels = candidates.map { stream ->
-                listOfNotNull(stream.channelName ?: stream.channelLogin, stream.gameName).joinToString(" · ")
-            }.toTypedArray()
-            activity.getAlertDialogBuilder()
-                .setTitle(R.string.tv_multistream_pick)
-                .setMultiChoiceItems(labels, checked) { dialog, which, isChecked ->
-                    if (isChecked && checked.count { it } > MAX) {
-                        checked[which] = false
-                        (dialog as? androidx.appcompat.app.AlertDialog)?.listView?.setItemChecked(which, false)
-                        Toast.makeText(activity, activity.getString(R.string.tv_multistream_max, MAX), Toast.LENGTH_SHORT).show()
-                    } else {
-                        checked[which] = isChecked
+            // the row of the other streams, in selection mode: OK checks a stream (green badge), "Validate" starts the multi-stream
+            TvStreamSwitcher.show(
+                activity,
+                candidates,
+                current?.channelLogin,
+                TvStreamSwitcher.Selection(
+                    title = activity.getString(R.string.tv_multistream_select_title, MAX),
+                    preselected = setOfNotNull(current?.channelLogin),
+                    max = MAX,
+                    onValidate = { selected -> activity.startMultiStream(selected) },
+                )
+            )
+        }
+    }
+
+    /** One stream to pick (change a stream of the multi-stream or add one), the ones already shown are left out. */
+    fun pickOne(activity: MainActivity, exclude: Set<String>, title: String, onPicked: (Stream) -> Unit) {
+        activity.lifecycleScope.launch {
+            val candidates = (loadFollowed(activity) + activity.streamQueue)
+                .filter { !it.channelLogin.isNullOrBlank() && it.channelLogin !in exclude }
+                .distinctBy { it.channelLogin }
+            if (candidates.isEmpty()) {
+                Toast.makeText(activity, R.string.tv_multistream_none, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            TvStreamSwitcher.show(
+                activity,
+                candidates,
+                null,
+                TvStreamSwitcher.Selection(title = title, preselected = emptySet(), max = 1, onValidate = { it.firstOrNull()?.let(onPicked) })
+            )
+        }
+    }
+
+    private suspend fun loadFollowed(activity: MainActivity): List<Stream> {
+        return try {
+            val headers = TwitchApiHelper.getGQLHeaders(activity, true)
+            if (headers[C.HEADER_TOKEN].isNullOrBlank()) {
+                emptyList()
+            } else {
+                (activity.applicationContext as XtraApp).xtraModule.graphQLRepository.loadQueryUserFollowedStreams(
+                    activity.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), headers, 100, null
+                ).data?.user?.followedLiveUsers?.edges?.mapNotNull { edge ->
+                    edge?.node?.let {
+                        Stream(
+                            id = it.stream?.id,
+                            channelId = it.id,
+                            channelLogin = it.login,
+                            channelName = it.displayName,
+                            channelImageURL = it.profileImageURL,
+                            gameName = it.stream?.game?.displayName,
+                            title = it.stream?.broadcaster?.broadcastSettings?.title,
+                            thumbnailURL = it.stream?.previewImageURL,
+                            viewerCount = it.stream?.viewersCount,
+                        )
                     }
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(R.string.tv_multistream_watch) { _, _ ->
-                    val selected = candidates.filterIndexed { index, _ -> checked[index] }
-                    if (selected.isNotEmpty()) {
-                        activity.startMultiStream(selected)
-                    }
-                }
-                .show()
+                }.orEmpty()
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 }

@@ -129,7 +129,7 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
     override fun initialize() {
         viewLifecycleOwner.lifecycleScope.launch {
             if (viewModel.filter.value == null) {
-                viewModel.setFilter(viewModel.tags.ifEmpty { args.tags })
+                viewModel.setFilter(viewModel.tags.ifEmpty { args.tags }, requireContext().prefs().getBoolean(C.GAMES_SORT_ASCENDING, false))
                 viewModel.filtersText.value = if (viewModel.tags.isNotEmpty()) {
                     buildString {
                         append(
@@ -158,7 +158,7 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
         }
         with(binding) {
             sortBar.root.visibility = View.VISIBLE
-            sortBar.root.setOnClickListener {
+            val openTagsDialog = {
                 val tags = viewModel.tags.mapNotNull { tag ->
                     if (tag.id != null && tag.name != null) {
                         tag.id to tag.name
@@ -169,7 +169,36 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
                     tagNames = tags.values.toTypedArray(),
                 ).show(childFragmentManager, null)
             }
-            sortBar.sortText.visibility = View.GONE
+            val updateSortText = {
+                sortBar.sortText.text = getString(R.string.sort_by, getString(if (viewModel.ascending) R.string.viewers_low else R.string.viewers_high))
+            }
+            if (resources.getBoolean(R.bool.isTv)) {
+                // TV: sort by viewers (most or fewest), and the tags
+                updateSortText()
+                sortBar.sortText.visibility = View.VISIBLE
+                sortBar.root.setOnClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvDialogs.showChoices(
+                        requireContext(),
+                        getString(R.string.sort_and_filter),
+                        listOf(getString(R.string.viewers_high), getString(R.string.viewers_low_top), getString(R.string.tags_filter)),
+                        if (viewModel.ascending) 1 else 0,
+                    ) { which ->
+                        if (which == 2) {
+                            openTagsDialog()
+                        } else if ((which == 1) != viewModel.ascending) {
+                            requireContext().prefs().edit().putBoolean(C.GAMES_SORT_ASCENDING, which == 1).apply()
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                pagingAdapter.submitData(PagingData.empty())
+                                viewModel.setFilter(viewModel.tags, which == 1)
+                                updateSortText()
+                            }
+                        }
+                    }
+                }
+            } else {
+                sortBar.root.setOnClickListener { openTagsDialog() }
+                sortBar.sortText.visibility = View.GONE
+            }
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     viewModel.filtersText.collectLatest {

@@ -162,6 +162,15 @@ class ExoPlayerService : BasePlaybackService() {
     override fun onCreate() {
         super.onCreate()
         xtraModule = (application as XtraApp).xtraModule
+        // statistics of the home: time watched, by streamer
+        lifecycleScope.launch {
+            while (true) {
+                delay(30_000L)
+                if (player?.isPlaying == true && (type == STREAM || type == VIDEO)) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvStats.addWatchTime(this@ExoPlayerService, channelLogin, channelName, 30_000L)
+                }
+            }
+        }
     }
 
     private fun create(restorePauseState: Boolean) {
@@ -263,6 +272,8 @@ class ExoPlayerService : BasePlaybackService() {
                             playingAds = ads
                             if (ads) {
                                 if (!oldValue) {
+                                    // statistics of the home: an ad break handled by the ad blocker (or a proxy)
+                                    com.github.andreyasadchy.xtra.ui.tv.TvStats.addAdBlocked(this@ExoPlayerService)
                                     when {
                                         useProxy -> {
                                             if (!proxyMediaPlaylist) {
@@ -1241,6 +1252,7 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     private suspend fun getStreamPlaylistUrl(channelLogin: String, streamProxy: StreamProxy? = null): String? {
+        com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this, streamProxy?.host)
         return try {
             xtraModule.playerRepository.loadStreamPlaylistUrl(
                 context = this,
@@ -1678,6 +1690,8 @@ class ExoPlayerService : BasePlaybackService() {
             val videoSwap = if (!proxy) {
                 videoSwapList?.getOrNull(currentVideoSwapItem)
             } else null
+            // statistics of the home: proxy or backup player type used
+            com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this@ExoPlayerService, streamProxy?.host ?: videoSwap?.playerType)
             val playerListener = object : Player.Listener {
                 override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                     val playlist = (secondaryPlayer?.currentManifest as? HlsManifest)?.mediaPlaylist
@@ -2875,6 +2889,25 @@ class ExoPlayerService : BasePlaybackService() {
                                 runBlocking {
                                     xtraModule.playerRepository.saveVideoPosition(VideoPosition(it, player.currentPosition))
                                 }
+                                // TV: the "Continue watching" row of the home
+                                com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.save(
+                                    this,
+                                    com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item(
+                                        id = it.toString(),
+                                        title = title,
+                                        channelId = channelId,
+                                        channelLogin = channelLogin,
+                                        channelName = channelName,
+                                        channelImage = channelImage,
+                                        gameId = gameId,
+                                        gameName = gameName,
+                                        thumbnail = thumbnail,
+                                        createdAt = createdAt,
+                                        durationSeconds = durationSeconds ?: player.duration.takeIf { duration -> duration > 0 }?.div(1000)?.toInt(),
+                                        positionMs = player.currentPosition,
+                                        type = videoType,
+                                    )
+                                )
                             }
                         }
                         OFFLINE_VIDEO -> {
