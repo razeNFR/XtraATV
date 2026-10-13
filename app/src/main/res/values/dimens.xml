@@ -10,4 +10,5 @@
     <dimen name="tv_settings_side_padding">0dp</dimen>
     <dimen name="tv_menu_width">0dp</dimen>
     <dimen name="tv_player_button_padding">14dp</dimen>
+    <dimen name="tv_settings_side_width">0dp</dimen>
 </resources>
