@@ -135,6 +135,8 @@ class ExoPlayerService : BasePlaybackService() {
     private var adDelayJob: Job? = null
     private var playingAds = false
     private var proxyMediaPlaylist = false
+    /** Proxy of the stream being loaded, counted in the statistics of the home when the stream plays. */
+    private var pendingProxyStat: String? = null
     private var stopProxy = false
     private var useVideoSwap = false
     private var currentVideoSwapItem = 0
@@ -591,6 +593,10 @@ class ExoPlayerService : BasePlaybackService() {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     updatePlaybackState()
                     if (isPlaying) {
+                        pendingProxyStat?.let {
+                            pendingProxyStat = null
+                            com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this@ExoPlayerService, it)
+                        }
                         if (savePositionTimer == null && type != STREAM) {
                             savePositionTimer = Timer().apply {
                                 scheduleAtFixedRate(30000, 30000) {
@@ -1011,6 +1017,12 @@ class ExoPlayerService : BasePlaybackService() {
             }
             val url = playlistUrl
             if (url != null) {
+                // statistics of the home: the proxy the stream goes through (the list of the app or added ones),
+                // counted once the stream plays so a proxy that fails is not counted
+                pendingProxyStat = when {
+                    useCustomProxy -> url.toUri().host?.removePrefix("www.")
+                    else -> streamProxy?.takeIf { it.proxyPlaybackAccessToken || it.proxyMultivariantPlaylist }?.host
+                }
                 player?.let { player ->
                     val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
                     val customProxyUrl = if (useCustomProxy) {
@@ -1252,7 +1264,6 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     private suspend fun getStreamPlaylistUrl(channelLogin: String, streamProxy: StreamProxy? = null): String? {
-        com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this, streamProxy?.host)
         return try {
             xtraModule.playerRepository.loadStreamPlaylistUrl(
                 context = this,

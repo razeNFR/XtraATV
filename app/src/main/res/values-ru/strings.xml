@@ -704,6 +704,7 @@
     <string name="tv_stats_top_streamer_time">Чаще всего · %1$s</string>
     <string name="tv_stats_ads">Заблокировано реклам</string>
     <string name="tv_stats_proxy">Самый используемый прокси / плеер</string>
+    <string name="tv_stats_proxy_uses">Самый используемый прокси / плеер · ×%1$d</string>
     <string name="tv_stats_messages">Отправлено сообщений</string>
     <string name="tv_stats_streams">Открыто трансляций</string>
     <string name="tv_multistream_select_title">Выберите до %1$d стримеров и подтвердите</string>

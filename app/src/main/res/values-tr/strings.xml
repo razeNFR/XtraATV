@@ -705,6 +705,7 @@
     <string name="tv_stats_top_streamer_time">En çok izlenen · %1$s</string>
     <string name="tv_stats_ads">Engellenen reklam</string>
     <string name="tv_stats_proxy">En çok kullanılan proxy / oynatıcı</string>
+    <string name="tv_stats_proxy_uses">En çok kullanılan proxy / oynatıcı · ×%1$d</string>
     <string name="tv_stats_messages">Gönderilen mesaj</string>
     <string name="tv_stats_streams">Açılan yayın</string>
     <string name="tv_multistream_select_title">En fazla %1$d yayıncı seç, sonra onayla</string>

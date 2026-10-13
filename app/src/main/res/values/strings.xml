@@ -723,6 +723,7 @@
     <string name="tv_stats_top_streamer_time">Most watched · %1$s</string>
     <string name="tv_stats_ads">Ads blocked</string>
     <string name="tv_stats_proxy">Proxy / player most used</string>
+    <string name="tv_stats_proxy_uses">Proxy / player most used · ×%1$d</string>
     <string name="tv_stats_messages">Messages sent</string>
     <string name="tv_stats_streams">Streams opened</string>
     <string name="tv_multistream_select_title">Select up to %1$d streamers, then validate</string>

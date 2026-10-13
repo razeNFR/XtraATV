@@ -704,6 +704,7 @@
     <string name="tv_stats_top_streamer_time">الأكثر مشاهدة · %1$s</string>
     <string name="tv_stats_ads">إعلانات محظورة</string>
     <string name="tv_stats_proxy">الوكيل / المشغل الأكثر استخدامًا</string>
+    <string name="tv_stats_proxy_uses">الوكيل / المشغل الأكثر استخدامًا · ×%1$d</string>
     <string name="tv_stats_messages">رسائل مرسلة</string>
     <string name="tv_stats_streams">بثوث مفتوحة</string>
     <string name="tv_multistream_select_title">اختر حتى %1$d من صانعي المحتوى ثم أكّد</string>

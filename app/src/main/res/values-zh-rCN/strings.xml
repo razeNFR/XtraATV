@@ -704,6 +704,7 @@
     <string name="tv_stats_top_streamer_time">观看最多 · %1$s</string>
     <string name="tv_stats_ads">已拦截广告</string>
     <string name="tv_stats_proxy">最常用的代理 / 播放器</string>
+    <string name="tv_stats_proxy_uses">最常用的代理 / 播放器 · ×%1$d</string>
     <string name="tv_stats_messages">已发送消息</string>
     <string name="tv_stats_streams">打开的直播</string>
     <string name="tv_multistream_select_title">最多选择 %1$d 位主播，然后确认</string>

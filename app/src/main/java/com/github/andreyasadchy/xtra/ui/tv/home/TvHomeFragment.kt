@@ -119,6 +119,10 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 context?.let { resumeItems.value = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.list(it) }
             }
         }
+        viewLifecycleOwner.lifecycleScope.launch {
+            // the statistics follow what is watched in the mini player over the home
+            com.github.andreyasadchy.xtra.ui.tv.TvStats.changes.collect { loadStats() }
+        }
         val followedId = if (context.prefs().getBoolean(C.UI_FOLLOW_PAGER, true)) R.id.followPagerFragment else R.id.followMediaFragment
         return ComposeView(context).apply {
             id = R.id.tvHome
@@ -153,6 +157,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private fun loadLocalRows() {
         val context = context ?: return
         resumeItems.value = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.list(context)
+        loadStats()
+    }
+
+    private fun loadStats() {
+        val context = context ?: return
         val stats = com.github.andreyasadchy.xtra.ui.tv.TvStats.read(context)
         val hours = stats.watchMs / 3_600_000L
         val minutes = (stats.watchMs / 60_000L) % 60
@@ -170,7 +179,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     if (stats.topStreamer != null) getString(R.string.tv_stats_top_streamer_time, formatTime(stats.topStreamerMs)) else getString(R.string.tv_stats_top_streamer)
                 ),
                 TvHomeStat(R.drawable.tv_ic_shield, stats.ads.toString(), getString(R.string.tv_stats_ads)),
-                TvHomeStat(R.drawable.tv_ic_globe, stats.topProxy ?: "—", getString(R.string.tv_stats_proxy)),
+                TvHomeStat(
+                    R.drawable.tv_ic_globe,
+                    stats.topProxy ?: "—",
+                    if (stats.topProxy != null) getString(R.string.tv_stats_proxy_uses, stats.topProxyUses) else getString(R.string.tv_stats_proxy)
+                ),
                 TvHomeStat(R.drawable.tv_ic_forum, stats.messages.toString(), getString(R.string.tv_stats_messages)),
                 TvHomeStat(R.drawable.tv_ic_live, stats.streams.toString(), getString(R.string.tv_stats_streams)),
             )

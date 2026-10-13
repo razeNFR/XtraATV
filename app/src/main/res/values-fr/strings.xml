@@ -704,6 +704,7 @@
     <string name="tv_stats_top_streamer_time">Le plus regardé · %1$s</string>
     <string name="tv_stats_ads">Pubs bloquées</string>
     <string name="tv_stats_proxy">Proxy / lecteur le plus utilisé</string>
+    <string name="tv_stats_proxy_uses">Proxy / lecteur le plus utilisé · ×%1$d</string>
     <string name="tv_stats_messages">Messages envoyés</string>
     <string name="tv_stats_streams">Streams lancés</string>
     <string name="tv_multistream_select_title">Sélectionne jusqu\'à %1$d streamers, puis valide</string>

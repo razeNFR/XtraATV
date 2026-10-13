@@ -704,6 +704,7 @@
     <string name="tv_stats_top_streamer_time">最も視聴 · %1$s</string>
     <string name="tv_stats_ads">ブロックした広告</string>
     <string name="tv_stats_proxy">最も使ったプロキシ / プレーヤー</string>
+    <string name="tv_stats_proxy_uses">最も使ったプロキシ / プレーヤー · ×%1$d</string>
     <string name="tv_stats_messages">送信したメッセージ</string>
     <string name="tv_stats_streams">開いた配信</string>
     <string name="tv_multistream_select_title">最大 %1$d 人の配信者を選んで確定</string>

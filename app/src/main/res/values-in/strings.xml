@@ -705,6 +705,7 @@
     <string name="tv_stats_top_streamer_time">Paling ditonton · %1$s</string>
     <string name="tv_stats_ads">Iklan diblokir</string>
     <string name="tv_stats_proxy">Proxy / pemutar paling sering</string>
+    <string name="tv_stats_proxy_uses">Proxy / pemutar paling sering · ×%1$d</string>
     <string name="tv_stats_messages">Pesan terkirim</string>
     <string name="tv_stats_streams">Siaran dibuka</string>
     <string name="tv_multistream_select_title">Pilih hingga %1$d streamer, lalu konfirmasi</string>

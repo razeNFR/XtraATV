@@ -27,12 +27,16 @@ object TvStats {
         val topStreamerMs: Long,
         val ads: Int,
         val topProxy: String?,
+        val topProxyUses: Int,
         val messages: Int,
         val streams: Int,
         val since: Long,
     )
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+
+    /** Changes each time a statistic is counted: the home shows them again even when it never left the screen. */
+    val changes = kotlinx.coroutines.flow.MutableStateFlow(0L)
 
     private fun ensureSince(context: Context) {
         val prefs = prefs(context)
@@ -58,6 +62,7 @@ object TvStats {
                 }
             }
         }
+        changes.value = System.nanoTime()
     }
 
     @Synchronized
@@ -80,12 +85,14 @@ object TvStats {
         val proxies = JSONObject(prefs.getString(PROXIES, null) ?: "{}")
         proxies.put(name, proxies.optInt(name, 0) + 1)
         prefs.edit { putString(PROXIES, proxies.toString()) }
+        changes.value = System.nanoTime()
     }
 
     private fun increment(context: Context, key: String) {
         ensureSince(context)
         val prefs = prefs(context)
         prefs.edit { putInt(key, prefs.getInt(key, 0) + 1) }
+        changes.value = System.nanoTime()
     }
 
     fun read(context: Context): Snapshot {
@@ -101,6 +108,7 @@ object TvStats {
             topStreamerMs = top?.let { streamers.optLong(it, 0) } ?: 0,
             ads = prefs.getInt(ADS, 0),
             topProxy = topProxy,
+            topProxyUses = topProxy?.let { proxies.optInt(it, 0) } ?: 0,
             messages = prefs.getInt(MESSAGES, 0),
             streams = prefs.getInt(STREAMS, 0),
             since = prefs.getLong(SINCE, 0),
