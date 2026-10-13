@@ -89,7 +89,8 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         Modifier
             .width(260.dp)
             .fillMaxHeight()
-            .background(Color(0xFF141318))
+            // slightly see-through, the ambiance glow of the screen shows behind it
+            .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xF7141318), Color(0xEB141318))))
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
@@ -221,9 +222,11 @@ private fun NowPlayingContent(playing: TvNowPlaying, state: TvMenuState) {
 private fun MenuEntry(item: TvMenuItem, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    // the section shown: a pill of the accent color, its icon in the accent color
+    val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
     val background = when {
         focused -> TvColors.focused
-        selected -> Color(0x2EFFFFFF)
+        selected -> accent.copy(alpha = 0.26f)
         else -> Color.Transparent
     }
     val content = when {
@@ -231,6 +234,7 @@ private fun MenuEntry(item: TvMenuItem, selected: Boolean, modifier: Modifier, o
         selected -> Color.White
         else -> Color(0xB3FFFFFF)
     }
+    val iconTint = if (selected && !focused) accent else content
     Row(
         modifier
             .fillMaxWidth()
@@ -242,7 +246,7 @@ private fun MenuEntry(item: TvMenuItem, selected: Boolean, modifier: Modifier, o
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (item.icon != null) {
-            Icon(painterResource(item.icon), contentDescription = null, tint = content, modifier = Modifier.size(24.dp))
+            Icon(painterResource(item.icon), contentDescription = null, tint = iconTint, modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(16.dp))
         }
         Text(

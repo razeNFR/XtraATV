@@ -10,6 +10,8 @@ import com.github.andreyasadchy.xtra.util.C
 
 class GamesDataSource(
     private val tags: List<String>?,
+    /** Fewest viewers first: Twitch only gives the most viewed first, the first 100 categories are loaded at once and sorted here. */
+    private val ascending: Boolean = false,
     private val gqlHeaders: Map<String, String>,
     private val graphQLRepository: GraphQLRepository,
     private val helixHeaders: Map<String, String>,
@@ -48,6 +50,16 @@ class GamesDataSource(
     }
 
     private suspend fun loadFromApi(params: LoadParams<Int>): LoadResult<Int, Game> {
+        if (ascending) {
+            val page = loadFromApiBySource(LoadParams.Refresh(null, 100, false))
+            return if (page is LoadResult.Page) {
+                LoadResult.Page(page.data.sortedBy { it.viewerCount ?: 0 }, prevKey = null, nextKey = null)
+            } else page
+        }
+        return loadFromApiBySource(params)
+    }
+
+    private suspend fun loadFromApiBySource(params: LoadParams<Int>): LoadResult<Int, Game> {
         return when (api) {
             C.GQL -> gqlQueryLoad(params)
             C.GQL_PERSISTED_QUERY -> gqlLoad(params)

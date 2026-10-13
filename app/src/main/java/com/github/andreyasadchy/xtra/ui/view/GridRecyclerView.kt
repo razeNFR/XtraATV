@@ -37,6 +37,54 @@ class GridRecyclerView : RecyclerView {
 
     private val gridLayoutManager: GridLayoutManager
 
+    /**
+     * TV lists of streams: the card whose preview plays grows and the others move to make room
+     * (turned off with the growth of the cards in the Xtra TV settings).
+     */
+    private val featureLayoutManager: TvFeatureGridLayoutManager? = if (isTv && prefs.getBoolean(C.TV_CARD_ZOOM, false)) {
+        TvFeatureGridLayoutManager { parent, child, immediate -> scrollToPivot(parent, child, immediate) }
+    } else null
+
+    private val usesFeatureLayout get() = featureLayoutManager != null && layoutManager === featureLayoutManager
+
+    /** Cards a row. */
+    val columnCount get() = if (usesFeatureLayout) featureLayoutManager!!.spanCount else gridLayoutManager.spanCount
+
+    /**
+     * Google TV alignment: the focused row stays a quarter down the list, so a part of the rows before
+     * and after it is always on screen and the focus never has to jump to a row it cannot see.
+     */
+    private fun scrollToPivot(parent: RecyclerView, child: View, immediate: Boolean): Boolean {
+        val manager = parent.layoutManager ?: return false
+        val pivot = paddingTop + ((parent.height - paddingTop - paddingBottom) * 0.22f).toInt()
+        var dy = manager.getDecoratedTop(child) - pivot
+        // a grown card is shown whole
+        val overflow = manager.getDecoratedBottom(child) - dy - (parent.height - paddingBottom)
+        if (overflow > 0) {
+            dy += minOf(overflow, manager.getDecoratedTop(child) - dy - paddingTop)
+        }
+        if (dy == 0) {
+            return false
+        }
+        if (immediate) {
+            parent.scrollBy(0, dy)
+        } else {
+            // smooth glide like Google TV, quicker while the key is held
+            parent.smoothScrollBy(0, dy, scrollInterpolator, if (keyRepeating) 140 else 260)
+        }
+        return true
+    }
+
+    private fun scrollToPositionWithOffset(position: Int, offset: Int) {
+        if (usesFeatureLayout) {
+            featureLayoutManager!!.scrollToPositionWithOffset(position, offset)
+        } else {
+            gridLayoutManager.scrollToPositionWithOffset(position, offset)
+        }
+    }
+
+    private fun findFirstVisibleItemPosition() = if (usesFeatureLayout) featureLayoutManager!!.findFirstVisibleItemPosition() else gridLayoutManager.findFirstVisibleItemPosition()
+
     private var pressedCard: View? = null
     private var longPressed = false
     private val longPressAction = Runnable {
@@ -54,7 +102,7 @@ class GridRecyclerView : RecyclerView {
                 val options = card.findViewById<View>(R.id.options)?.takeIf { it.visibility == View.VISIBLE && it.hasOnClickListeners() }
                 activity.showTvStreamActions(
                     stream,
-                    listOfNotNull(options?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(context.getString(R.string.tv_more_options)) { it.performClick() } })
+                    listOfNotNull(options?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(context.getString(R.string.tv_more_options), R.drawable.baseline_more_vert_black_24) { it.performClick() } })
                 )
             } else {
                 TvCards.showMenu(card)
@@ -81,18 +129,7 @@ class GridRecyclerView : RecyclerView {
                 if (!isTv) {
                     return super.requestChildRectangleOnScreen(parent, child, rect, immediate, focusedChildVisible)
                 }
-                val pivot = paddingTop + ((parent.height - paddingTop - paddingBottom) * 0.22f).toInt()
-                val dy = getDecoratedTop(child) - pivot
-                if (dy == 0) {
-                    return false
-                }
-                if (immediate) {
-                    parent.scrollBy(0, dy)
-                } else {
-                    // smooth glide like Google TV, quicker while the key is held
-                    parent.smoothScrollBy(0, dy, scrollInterpolator, if (keyRepeating) 140 else 260)
-                }
-                return true
+                return scrollToPivot(parent, child, immediate)
             }
 
             // the rows above and below the screen are laid out ahead, so moving to them never waits for a layout
@@ -160,6 +197,16 @@ class GridRecyclerView : RecyclerView {
                 }
                 gridLayoutManager.spanCount = columns
                 addItemDecoration(columns)
+            }
+            // streams: the grid where the card of the preview grows
+            val feature = featureLayoutManager
+            if (feature != null && adapter is StreamsAdapter) {
+                feature.spanCount = columns
+                if (layoutManager !== feature) {
+                    layoutManager = feature
+                }
+            } else if (layoutManager !== gridLayoutManager) {
+                layoutManager = gridLayoutManager
             }
         }
     }
@@ -249,12 +296,15 @@ class GridRecyclerView : RecyclerView {
             if (card != null && card.hasFocus() && position != NO_POSITION) {
                 val span = gridLayoutManager.spanCount
                 val column = position % span
-                if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && column == 0) {
+                val feature = featureLayoutManager?.takeIf { usesFeatureLayout }
+                val atStart = feature?.isAtStart(position) ?: (column == 0)
+                val atEnd = feature?.isAtEnd(position) ?: (column == span - 1)
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && atStart) {
                     // first column: left opens the side menu (the header is only reached with up)
                     TvHeader.findActivity(this)?.openTvMenu()
                     return true
                 }
-                if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && (column == span - 1 || position == (adapter?.itemCount ?: 0) - 1)) {
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && (atEnd || position == (adapter?.itemCount ?: 0) - 1)) {
                     return true
                 }
             }
@@ -285,7 +335,14 @@ class GridRecyclerView : RecyclerView {
         if (position == NO_POSITION || count == 0) {
             return false
         }
-        val span = gridLayoutManager.spanCount
+        val span = columnCount
+        if (usesFeatureLayout) {
+            // cards of different sizes: the card right above / below, by their places on screen
+            nearestCardVertically(card, down)?.let {
+                it.requestFocus()
+                return true
+            }
+        }
         var target = if (down) position + span else position - span
         if (target < 0) {
             // up from the first row: the header of the screen, on its first action (refresh)
@@ -304,12 +361,41 @@ class GridRecyclerView : RecyclerView {
         if (holder != null && holder.itemView.isAttachedToWindow) {
             holder.itemView.requestFocus()
         } else {
-            gridLayoutManager.scrollToPositionWithOffset(target, paddingTop + ((height - paddingTop - paddingBottom) * 0.22f).toInt())
+            scrollToPositionWithOffset(target, paddingTop + ((height - paddingTop - paddingBottom) * 0.22f).toInt())
             post {
                 findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
             }
         }
         return true
+    }
+
+    /** The laid out card above / below [card] whose columns cover its middle, the closest one. */
+    private fun nearestCardVertically(card: View, down: Boolean): View? {
+        val manager = layoutManager ?: return null
+        val centerX = (manager.getDecoratedLeft(card) + manager.getDecoratedRight(card)) / 2
+        val top = manager.getDecoratedTop(card)
+        val bottom = manager.getDecoratedBottom(card)
+        var best: View? = null
+        var bestDistance = Int.MAX_VALUE
+        var bestDx = Int.MAX_VALUE
+        for (index in 0 until childCount) {
+            val child = getChildAt(index) ?: continue
+            if (child === card) continue
+            val childTop = manager.getDecoratedTop(child)
+            val childBottom = manager.getDecoratedBottom(child)
+            val distance = if (down) childTop - bottom else top - childBottom
+            if (distance < -4) continue
+            val left = manager.getDecoratedLeft(child)
+            val right = manager.getDecoratedRight(child)
+            // the card under the middle, else the closest one of that row
+            val dx = if (centerX in left..right) 0 else minOf(kotlin.math.abs(left - centerX), kotlin.math.abs(right - centerX))
+            if (distance < bestDistance - 4 || (kotlin.math.abs(distance - bestDistance) <= 4 && dx < bestDx)) {
+                best = child
+                bestDistance = distance
+                bestDx = dx
+            }
+        }
+        return best
     }
 
     override fun requestChildFocus(child: View?, focused: View?) {
@@ -321,7 +407,10 @@ class GridRecyclerView : RecyclerView {
                 val channelLogin = if (position != NO_POSITION && position < streamsAdapter.itemCount) {
                     streamsAdapter.peek(position)?.channelLogin
                 } else null
-                (preview ?: TvStreamPreview(this).also { preview = it }).schedule(child, channelLogin)
+                (preview ?: TvStreamPreview(this, onCard = { card ->
+                    // the card of the preview grows, the others move
+                    featureLayoutManager?.takeIf { usesFeatureLayout }?.feature(card?.let { getChildAdapterPosition(it) } ?: NO_POSITION)
+                }).also { preview = it }).schedule(child, channelLogin)
             }
         }
     }
@@ -357,7 +446,7 @@ class GridRecyclerView : RecyclerView {
         }
         val currentFocus = rootView.findFocus()
         if (currentFocus == null || !currentFocus.isShown) {
-            val first = layoutManager?.findViewByPosition(gridLayoutManager.findFirstVisibleItemPosition())
+            val first = layoutManager?.findViewByPosition(findFirstVisibleItemPosition())
             if (first == null || !first.requestFocus()) {
                 requestFocus()
             }

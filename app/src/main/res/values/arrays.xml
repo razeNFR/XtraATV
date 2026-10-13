@@ -139,6 +139,7 @@
     </string-array>
 
     <string-array name="tvHomeCards" translatable="false">
+        <item>2</item>
         <item>3</item>
         <item>4</item>
         <item>5</item>
@@ -367,5 +368,26 @@
         <item>all</item>
         <item>followed</item>
         <item>disabled</item>
+    </string-array>
+    <string-array name="tvAmbientColorEntries">
+        <item>@string/tv_color_violet</item>
+        <item>@string/tv_color_blue</item>
+        <item>@string/tv_color_cyan</item>
+        <item>@string/tv_color_green</item>
+        <item>@string/tv_color_orange</item>
+        <item>@string/tv_color_red</item>
+        <item>@string/tv_color_pink</item>
+        <item>@string/tv_color_none</item>
+    </string-array>
+
+    <string-array name="tvAmbientColorValues" translatable="false">
+        <item>violet</item>
+        <item>blue</item>
+        <item>cyan</item>
+        <item>green</item>
+        <item>orange</item>
+        <item>red</item>
+        <item>pink</item>
+        <item>none</item>
     </string-array>
 </resources>

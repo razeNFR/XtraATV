@@ -8,82 +8,171 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_frame_rate_matching"
-        android:summary="@string/frame_rate_matching_summary"
-        android:title="@string/frame_rate_matching"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+    <PreferenceCategory
+        android:title="@string/player_settings"
+        app:iconSpaceReserved="false">
 
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="tv_dpad_switch_stream"
-        android:summary="@string/tv_dpad_switch_stream_summary"
-        android:title="@string/tv_dpad_switch_stream"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="player_frame_rate_matching"
+            android:summary="@string/frame_rate_matching_summary"
+            android:title="@string/frame_rate_matching"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="tv_dpad_up_down"
-        android:summary="@string/tv_dpad_up_down_summary"
-        android:title="@string/tv_dpad_up_down"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_player_clock"
+            android:summary="@string/tv_player_clock_summary"
+            android:title="@string/tv_player_clock"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
-    <ListPreference
-        android:defaultValue="stop"
-        android:entries="@array/tvBackActionEntries"
-        android:entryValues="@array/tvBackActionValues"
-        android:key="tv_back_action"
-        android:summary="%s"
-        android:title="@string/tv_back_action"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <ListPreference
+            android:defaultValue="stop"
+            android:entries="@array/tvBackActionEntries"
+            android:entryValues="@array/tvBackActionValues"
+            android:key="tv_back_action"
+            android:summary="%s"
+            android:title="@string/tv_back_action"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="ui_tv_preview"
-        android:title="@string/tv_stream_preview"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_mini_player_keep_on_home"
+            android:summary="@string/tv_mini_player_keep_on_home_summary"
+            android:title="@string/tv_mini_player_keep_on_home"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:dependency="ui_tv_preview"
-        android:key="ui_tv_preview_sound"
-        android:title="@string/tv_preview_sound"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_audio_only_keep_on_home"
+            android:summary="@string/tv_audio_only_keep_on_home_summary"
+            android:title="@string/tv_audio_only_keep_on_home"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
-    <ListPreference
-        android:defaultValue="3"
-        android:entries="@array/tvHomeCards"
-        android:entryValues="@array/tvHomeCards"
-        android:key="tv_home_cards"
-        android:summary="@string/tv_home_cards_summary"
-        android:title="@string/tv_home_cards"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_fullscreen_keep_on_home"
+            android:summary="@string/tv_fullscreen_keep_on_home_summary"
+            android:title="@string/tv_fullscreen_keep_on_home"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
-    <ListPreference
-        android:defaultValue="4"
-        android:entries="@array/tvStreamColumns"
-        android:entryValues="@array/tvStreamColumns"
-        android:key="tv_stream_columns"
-        android:summary="@string/tv_stream_columns_summary"
-        android:title="@string/tv_stream_columns"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+    </PreferenceCategory>
 
-    <MultiSelectListPreference
-        android:entries="@array/gqlUserLanguageEntries"
-        android:entryValues="@array/gqlUserLanguageValues"
-        android:key="tv_home_languages"
-        android:summary="@string/tv_home_languages_summary"
-        android:title="@string/tv_home_languages"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+    <PreferenceCategory
+        android:title="@string/tv_settings_remote"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_dpad_switch_stream"
+            android:summary="@string/tv_dpad_switch_stream_summary"
+            android:title="@string/tv_dpad_switch_stream"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_dpad_up_down"
+            android:summary="@string/tv_dpad_up_down_summary"
+            android:title="@string/tv_dpad_up_down"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/tv_settings_previews"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="ui_tv_preview"
+            android:title="@string/tv_stream_preview"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:dependency="ui_tv_preview"
+            android:key="ui_tv_preview_sound"
+            android:title="@string/tv_preview_sound"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_card_zoom"
+            android:title="@string/tv_card_zoom"
+            android:summary="@string/tv_card_zoom_summary"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/tv_settings_home"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            android:defaultValue="violet"
+            android:entries="@array/tvAmbientColorEntries"
+            android:entryValues="@array/tvAmbientColorValues"
+            android:key="tv_ambient_color"
+            android:summary="%s"
+            android:title="@string/tv_ambient_color"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <ListPreference
+            android:defaultValue="3"
+            android:entries="@array/tvHomeCards"
+            android:entryValues="@array/tvHomeCards"
+            android:key="tv_home_cards"
+            android:summary="@string/tv_home_cards_summary"
+            android:title="@string/tv_home_cards"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <ListPreference
+            android:defaultValue="4"
+            android:entries="@array/tvStreamColumns"
+            android:entryValues="@array/tvStreamColumns"
+            android:key="tv_stream_columns"
+            android:summary="@string/tv_stream_columns_summary"
+            android:title="@string/tv_stream_columns"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/tv_settings_languages"
+        app:iconSpaceReserved="false">
+
+        <MultiSelectListPreference
+            android:entries="@array/gqlUserLanguageEntries"
+            android:entryValues="@array/gqlUserLanguageValues"
+            android:key="tv_home_languages"
+            android:summary="@string/tv_home_languages_summary"
+            android:title="@string/tv_home_languages"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <MultiSelectListPreference
+            android:entries="@array/gqlUserLanguageEntries"
+            android:entryValues="@array/gqlUserLanguageValues"
+            android:key="tv_default_languages"
+            android:summary="@string/tv_default_languages_summary"
+            android:title="@string/tv_default_languages"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>

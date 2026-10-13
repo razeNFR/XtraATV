@@ -136,10 +136,10 @@ object TvDialogs {
     }
 
     /** One choice among a list (sort, filters...), the focus starts on the current choice. */
-    fun showChoices(context: Context, title: String, options: List<String>, selected: Int, onSelected: (Int) -> Unit): ComponentDialog {
+    fun showChoices(context: Context, title: String, options: List<String>, selected: Int, icons: List<Int?>? = null, onSelected: (Int) -> Unit): ComponentDialog {
         return show(context) { dismiss ->
             SidePanel(title = title) {
-                ChoiceList(options, selected) {
+                ChoiceList(options, selected, icons) {
                     dismiss()
                     onSelected(it)
                 }
@@ -241,7 +241,7 @@ fun FocusRow(
 }
 
 @Composable
-fun ChoiceList(options: List<String>, selected: Int, onSelected: (Int) -> Unit) {
+fun ChoiceList(options: List<String>, selected: Int, icons: List<Int?>? = null, onSelected: (Int) -> Unit) {
     val requester = remember { FocusRequester() }
     val state = rememberLazyListState(initialFirstVisibleItemIndex = (selected - 2).coerceAtLeast(0))
     LazyColumn(state = state) {
@@ -251,7 +251,20 @@ fun ChoiceList(options: List<String>, selected: Int, onSelected: (Int) -> Unit) 
                 onClick = { onSelected(index) }
             ) { focused ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioDot(index == selected, focused)
+                    // actions (icons given): an icon in front of each one, choices: a radio dot
+                    val icon = icons?.getOrNull(index)
+                    if (icon != null) {
+                        androidx.tv.material3.Icon(
+                            androidx.compose.ui.res.painterResource(icon),
+                            contentDescription = null,
+                            tint = if (focused) TvColors.onFocused else ComposeColor.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    } else if (icons == null) {
+                        RadioDot(index == selected, focused)
+                    } else {
+                        Spacer(Modifier.width(22.dp))
+                    }
                     Spacer(Modifier.width(16.dp))
                     Text(option, fontSize = 17.sp, color = if (focused) TvColors.onFocused else ComposeColor.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }

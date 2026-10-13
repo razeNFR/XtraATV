@@ -39,6 +39,7 @@ import com.github.andreyasadchy.xtra.ui.game.streams.GameStreamsViewModel.Compan
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSortDialog.OnFilter {
@@ -78,7 +79,8 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
                 viewModel.setFilter(
                     sort = sortValues?.streamSort,
                     tags = args.tags ?: sortValues?.streamTags?.split(',')?.toTypedArray(),
-                    languages = args.languages ?: sortValues?.streamLanguages?.split(',')?.toTypedArray(),
+                    // TV: the default language of the Xtra TV settings when the category has none of its own
+                    languages = args.languages ?: sortValues?.streamLanguages?.split(',')?.toTypedArray() ?: defaultLanguages(),
                 )
                 viewModel.sortText.value = getString(
                     R.string.sort_by,
@@ -124,6 +126,26 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
             }
         }
         initializeAdapter(binding, pagingAdapter, enableScrollTopButton = args.gameId != null || args.gameName != null || !args.tags.isNullOrEmpty())
+        if (resources.getBoolean(R.bool.isTv) && !viewModel.initialFocusDone) {
+            // TV: opening a category puts the focus on its first streamer, once (not when coming back from a stream)
+            viewLifecycleOwner.lifecycleScope.launch {
+                pagingAdapter.loadStateFlow.first { it.refresh is androidx.paging.LoadState.NotLoading && pagingAdapter.itemCount > 0 }
+                viewModel.initialFocusDone = true
+                binding.recyclerView.postDelayed({
+                    val grid = _binding?.recyclerView ?: return@postDelayed
+                    if (grid.isShown && grid.focusedChild == null) {
+                        com.github.andreyasadchy.xtra.ui.view.TvUi.focusFirstItem(grid)
+                    }
+                }, 150L)
+            }
+        }
+    }
+
+    private fun defaultLanguages(): Array<String>? {
+        if (!resources.getBoolean(R.bool.isTv)) {
+            return null
+        }
+        return requireContext().prefs().getStringSet(C.TV_DEFAULT_LANGUAGES, null)?.filter { it.isNotBlank() }?.ifEmpty { null }?.toTypedArray()
     }
 
     override fun setupSortBar(sortBar: SortBarBinding) {

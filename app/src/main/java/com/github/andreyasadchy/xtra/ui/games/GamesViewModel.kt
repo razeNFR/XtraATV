@@ -40,6 +40,7 @@ class GamesViewModel(
         ) {
             GamesDataSource(
                 tags = tags.ifEmpty { null }?.mapNotNull { it.id },
+                ascending = ascending,
                 gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),
                 graphQLRepository = graphQLRepository,
                 helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
@@ -50,12 +51,17 @@ class GamesViewModel(
         }.flow
     }.cachedIn(viewModelScope)
 
-    fun setFilter(tags: Array<Tag>?) {
-        filter.value = Filter(tags)
+    /** Fewest viewers first: Twitch only sorts by most viewers, the first categories are sorted in the app. */
+    val ascending: Boolean
+        get() = filter.value?.ascending == true
+
+    fun setFilter(tags: Array<Tag>?, ascending: Boolean = this.ascending) {
+        filter.value = Filter(tags, ascending)
     }
 
     class Filter(
         val tags: Array<Tag>?,
+        val ascending: Boolean = false,
     )
 
     companion object {

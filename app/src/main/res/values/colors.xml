@@ -32,4 +32,7 @@
     <color name="liveStreamRed">#DD0000</color>
     <color name="online">#08EB00</color>
     <color name="offline">#EB0000</color>
+    <!-- TV settings: texts of the focused row, dark on its white background -->
+    <color name="tv_settings_title_focused">#FF111014</color>
+    <color name="tv_settings_summary_focused">#B3111014</color>
 </resources>

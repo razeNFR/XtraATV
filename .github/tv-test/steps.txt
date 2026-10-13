@@ -25,6 +25,15 @@ shot sort_panel
 key BACK 2
 key DOWN 1
 shot category_grid
+# The card of the preview grows, the others move (then back to the first card)
+sleep 6
+shot category_card_grown
+key RIGHT 6
+shot category_card_grown_right
+key DOWN 6
+shot category_card_grown_down
+key UP 2
+key LEFT 2
 key LEFT 2
 shot category_left_menu
 key RIGHT 2

@@ -1,5 +1,8 @@
 package com.github.andreyasadchy.xtra.ui.player
 
+import coil3.imageLoader
+import coil3.request.target
+import coil3.request.transformations
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.annotation.SuppressLint
@@ -802,6 +805,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         leaveForBrowsing()
                     }
                 }
+                updateTvAvatars()
                 // no minimize button on TV: back does it, as the setting says
                 if (!isTv && requireContext().prefs().getBoolean(C.PLAYER_MINIMIZE, true)) {
                     minimize.visibility = View.VISIBLE
@@ -1624,6 +1628,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 viewersText.text = null
                 viewersIcon.visibility = View.GONE
             }
+            if (isTv) {
+                // TV: the badge has a background, an empty one stays hidden (videos, clips)
+                viewersLayout.visibility = if (viewerCount != null) View.VISIBLE else View.GONE
+            }
         }
     }
 
@@ -1695,6 +1703,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 visibility = View.GONE
             }
         }
+        updateTvAvatars()
     }
 
     fun openViewerList() {
@@ -1919,7 +1928,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     /**
-     * D-pad seeking on the time bar: a short press moves 10 seconds, holding the key moves faster and faster.
+     * D-pad seeking on the time bar: a short press moves 10 seconds (a minute back from the live), holding the key moves faster and faster.
      * The player seeks once, when the key is released.
      */
     private fun onTimeBarKey(keyCode: Int, event: KeyEvent): Boolean {
@@ -1941,6 +1950,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         event.repeatCount < 12 -> maxOf(30_000L, duration / 300)
                         event.repeatCount < 24 -> maxOf(60_000L, duration / 120)
                         else -> maxOf(120_000L, duration / 50)
+                    }.let {
+                        // on the live: the first step back goes a minute back, right into the VOD, small steps never get past its edge
+                        if (isLive && keyCode == KeyEvent.KEYCODE_DPAD_LEFT && tvScrubPosition >= duration - LIVE_EDGE_MS) maxOf(it, LIVE_FIRST_STEP_MS) else it
                     }
                     tvScrubPosition = (tvScrubPosition + if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -step else step).coerceIn(0, duration)
                     progressBar.setDuration(duration)
@@ -2234,7 +2246,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 update(C.TV_CHAT_POSITION, position.intValue)
                             }
                             textSizeRow(prefs)
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 5..60, valueText = { "$it %" }) {
                                 update(C.TV_CHAT_WIDTH, it)
                             }
                         }
@@ -2260,7 +2272,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 update(C.TV_CHAT_POSITION, it)
                             }
                             textSizeRow(prefs)
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 15..60, valueText = { "$it %" }) {
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 5..60, valueText = { "$it %" }) {
                                 update(C.TV_CHAT_WIDTH, it)
                             }
                             com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
@@ -2466,6 +2478,78 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     showChatComposer()
                 }
             }
+            // the time of day at the top right, it can be turned off in the Xtra TV settings
+            tvClock?.visibility = if (prefs.getBoolean(C.TV_PLAYER_CLOCK, true)) View.VISIBLE else View.GONE
+            // "position / duration": the slash only when both are shown
+            tvTimeSeparator?.let { separator ->
+                val updateSeparator = {
+                    separator.visibility = if (position.isVisible && duration.isVisible) View.VISIBLE else View.GONE
+                }
+                updateSeparator()
+                duration.viewTreeObserver.addOnGlobalLayoutListener { updateSeparator() }
+            }
+            // Nuvio style: the focused button is a white disc, its icon turns dark
+            buttons.forEach { button ->
+                val previous = button.onFocusChangeListener
+                button.setOnFocusChangeListener { v, hasFocus ->
+                    previous?.onFocusChange(v, hasFocus)
+                    when (v) {
+                        is android.widget.ImageView -> v.setColorFilter(
+                            when {
+                                hasFocus -> Color.BLACK
+                                v.isEnabled -> Color.WHITE
+                                else -> Color.GRAY
+                            }
+                        )
+                        is android.widget.Button -> {
+                            v.foregroundTintList = android.content.res.ColorStateList.valueOf(if (hasFocus) Color.BLACK else Color.WHITE)
+                            v.setTextColor(if (hasFocus) Color.BLACK else Color.WHITE)
+                        }
+                    }
+                }
+            }
+            updateTvAvatars()
+        }
+    }
+
+    /** TV: picture of the channel next to its name, box art of the category next to it. */
+    private fun updateTvAvatars() {
+        if (!isTv || _binding == null) {
+            return
+        }
+        with(binding.playerControls) {
+            val context = requireContext()
+            tvChannelAvatar?.let { avatar ->
+                val image = playbackService?.channelImage
+                if (!image.isNullOrBlank() && channel.isVisible) {
+                    avatar.visibility = View.VISIBLE
+                    context.imageLoader.enqueue(
+                        coil3.request.ImageRequest.Builder(context).apply {
+                            data(image)
+                            transformations(coil3.transform.CircleCropTransformation())
+                            target(avatar)
+                        }.build()
+                    )
+                } else {
+                    avatar.visibility = View.GONE
+                }
+            }
+            val gameId = playbackService?.gameId
+            tvCategoryAvatar?.let { avatar ->
+                if (!gameId.isNullOrBlank() && category.isVisible) {
+                    avatar.visibility = View.VISIBLE
+                    context.imageLoader.enqueue(
+                        coil3.request.ImageRequest.Builder(context).apply {
+                            data("https://static-cdn.jtvnw.net/ttv-boxart/$gameId-52x72.jpg")
+                            transformations(coil3.transform.RoundedCornersTransformation(6f))
+                            target(avatar)
+                        }.build()
+                    )
+                } else {
+                    avatar.visibility = View.GONE
+                }
+            }
+            tvCategorySeparator?.visibility = if (channel.isVisible && category.isVisible) View.VISIBLE else View.GONE
         }
     }
 
@@ -3178,6 +3262,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private var tvAudioOnly = false
 
+    /**
+     * TV: leaving the app (home) keeps the sound of the mini player, of the sound only mode or of the full screen player,
+     * each one can be turned off in the Xtra TV settings.
+     */
+    fun keepsPlayingWhenAppLeft(): Boolean {
+        if (!isTv || _binding == null || playbackService == null) {
+            return false
+        }
+        val prefs = requireContext().prefs()
+        if (isMaximized) {
+            // full screen: the sound goes on too when the mini player or the sound only mode keeps it, unless turned off
+            return prefs.getBoolean(C.TV_FULLSCREEN_KEEP_ON_HOME, true) &&
+                    (prefs.getBoolean(C.TV_MINI_PLAYER_KEEP_ON_HOME, true) || prefs.getBoolean(C.TV_AUDIO_ONLY_KEEP_ON_HOME, true))
+        }
+        return if (tvAudioOnly) prefs.getBoolean(C.TV_AUDIO_ONLY_KEEP_ON_HOME, true) else prefs.getBoolean(C.TV_MINI_PLAYER_KEEP_ON_HOME, true)
+    }
+
     /** TV audio only: the mini player is hidden and the picture is not decoded, the sound goes on. */
     private fun setTvAudioOnly(enabled: Boolean) {
         tvAudioOnly = enabled
@@ -3620,6 +3721,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val REQUEST_CODE_CLOSE = 4
         private const val LIVE_EDGE_MS = 20_000L
         private const val DVR_CAUGHT_UP_MS = 10_000L
+        private const val LIVE_FIRST_STEP_MS = 60_000L
         const val KEY_OFFLINE = "offline"
     }
 }
