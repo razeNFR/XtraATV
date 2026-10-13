@@ -1,21 +1,17 @@
-# Xtra TV 1.1.0
+# Xtra TV 1.1.1
 
 ### New
-- **New player look**: round buttons with a white focus, the stream title, channel and category with their pictures, viewers / quality / uptime badges above the timeline, and an optional clock.
-- **Multi-stream from the player**: pick 2 to 4 streamers right in the other streams row, then confirm. Each stream has its own panel to open it in full screen, show its chat, swap it, add another stream or change its size. With 2 streams the chats can sit under them; with 3, the free cell shows the chat of the selected stream, or a pinned one.
-- **Sound when leaving the app**: pressing Home keeps the sound playing in the background, with the mini player, in sound-only mode or in full screen. Each one can be turned off in the settings.
-- **New home**: a "Continue watching" row with the videos you started, a statistics card (time watched, most watched streamer, ads blocked…), icons on the rows, and grey cards while it loads.
-- **Bigger card during the preview** (off by default): the selected card grows while its preview plays, and the other cards move to make room. Works on the home and in every stream list.
-- **Ambiance color**: choose the color of the glow behind the screens. The app offers to restart to apply it.
-- **Languages of Popular**: show Popular (home row and page) only in the languages you pick, plus default languages for the lists.
-- **2 cards per row** is now available for the home and the lists.
+- **Remove a stream from the multi-stream**: with 3 or 4 streams, the panel of a streamer can now remove it, and the others take its place.
+- **Both chats in split screen**: with 2 streams, the chats of both streamers now show up by themselves under their streams. From the panel of a streamer, its chat can be hidden or put above its stream instead.
 
-### Changes
-- **Google TV style settings**: the screen name on the left, rounded rows on the right, and the Xtra TV settings sorted into categories (Player, Remote, Previews, Home and look, Languages).
-- **Quicker jump into the past of a live**: the first press to go back on the timeline of a live now goes back a minute, straight into its VOD.
-- **Games sorted by viewers**, and the focus lands on the first streamer when you open a category.
-- **Chat can be made smaller**, down to 5 % of the screen.
-- **Streams without a thumbnail yet** show the channel picture instead.
+### Fixes
+- **Previews stop when you move away**: a preview no longer keeps playing after the focus leaves its card, for example when going to the header, the side menu or another row of the home.
+- **Bigger card during the preview**:
+  - with 2 columns or 2 cards per row, the cards no longer grow, they are already big;
+  - with 3 columns, the rows under a grown card in the first row now move down instead of being covered;
+  - a grown card on the side of the grid keeps the same space around it as the others;
+  - the D-pad goes from a grown card to the cards that were around it before it grew, and the list stays well framed when it goes back to its size.
+- **Timeline back in a stream opened from the multi-stream**: the bar to go back into the VOD of the live shows again.
 
 ### Install
-Download `XtraTV-1.1.0-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.1.1-tv.apk` below and install it over the previous version, your settings and account are kept.

@@ -29,8 +29,8 @@ android {
         applicationId = "com.github.razenfr.xtratv"
         minSdk = 24
         targetSdk = 37
-        versionCode = 127
-        versionName = "1.1.0-tv"
+        versionCode = 128
+        versionName = "1.1.1-tv"
     }
 
     buildTypes {
