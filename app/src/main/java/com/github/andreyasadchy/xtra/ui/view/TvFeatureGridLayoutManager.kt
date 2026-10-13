@@ -297,9 +297,24 @@ class TvFeatureGridLayoutManager(
         calculateItemDecorationsForChild(view, insets)
         val params = view.layoutParams as RecyclerView.LayoutParams
         val horizontal = insets.left + insets.right + params.leftMargin + params.rightMargin
-        val widthSpec = View.MeasureSpec.makeMeasureSpec(max(width - horizontal, 0), View.MeasureSpec.EXACTLY)
+        val cardWidth = max(width - horizontal, 0)
+        if (view.measuredWidth != cardWidth) {
+            // the card changes width: its layouts are measured again from scratch, the 16:9 thumbnail (ratio of a
+            // ConstraintLayout) follows the new width instead of keeping the height measured before
+            forceLayoutTree(view)
+        }
+        val widthSpec = View.MeasureSpec.makeMeasureSpec(cardWidth, View.MeasureSpec.EXACTLY)
         val heightSpec = getChildMeasureSpec(0, View.MeasureSpec.UNSPECIFIED, insets.top + insets.bottom + params.topMargin + params.bottomMargin, params.height, true)
         view.measure(widthSpec, heightSpec)
+    }
+
+    private fun forceLayoutTree(view: View) {
+        view.forceLayout()
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                forceLayoutTree(view.getChildAt(index))
+            }
+        }
     }
 
     private fun fullHeight(view: View): Int {
@@ -313,6 +328,15 @@ class TvFeatureGridLayoutManager(
         val left = paddingLeft + rect[0].roundToInt() + params.leftMargin
         val top = paddingTop + rect[1].roundToInt() - scrollY + params.topMargin
         layoutDecorated(view, left, top, left + getDecoratedMeasuredWidth(view), top + getDecoratedMeasuredHeight(view))
+        // the slight zoom of the focused card stays inside the grid: it grows from the edge it touches
+        val position = getPosition(view)
+        view.pivotX = when {
+            position != featured || progress == 0f -> view.measuredWidth / 2f
+            isAtStart(position) -> 0f
+            isAtEnd(position) -> view.measuredWidth.toFloat()
+            else -> view.measuredWidth / 2f
+        }
+        view.pivotY = view.measuredHeight / 2f
     }
 
     override fun onLayoutChildren(recycler: RecyclerView.Recycler, state: RecyclerView.State) {
