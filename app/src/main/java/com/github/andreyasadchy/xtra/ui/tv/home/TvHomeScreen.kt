@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,7 +56,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.zIndex
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -322,8 +323,7 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
             modifier = Modifier.focusRestorer(),
-            // room above and under the cards for the one that grows with its preview
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(row.items, key = { index, item -> item.channelId ?: index }) { index, stream ->
@@ -334,7 +334,6 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
                     previewPlayer = previewPlayer,
                     actions = actions,
                     modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier),
-                    first = index == 0,
                     onClick = { actions.openStream(stream, row.items) },
                 )
             }
@@ -368,7 +367,7 @@ private fun GameRow(row: TvHomeRow<Game>, actions: TvHomeActions, firstRequester
     }
 }
 
-/** Card zoom and frame of the focused card. */
+/** Focused card: the frame, and a real growth while its preview plays (the other cards move to make room). */
 @Composable
 private fun FocusCard(
     width: Dp,
@@ -376,33 +375,36 @@ private fun FocusCard(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     onFocus: (Boolean) -> Unit = {},
-    /** The preview of the card plays: it grows more, over its neighbours. */
+    /** The preview of the card plays: it grows, its row gets taller and the next cards slide away. */
     grown: () -> Boolean = { false },
-    /** First card of a row: it grows to the right, the left edge of the screen would cut it. */
-    first: Boolean = false,
+    /** Growth of a card with its preview: less with few big cards a row. */
+    growth: Float = 1f,
     content: @Composable (focused: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    // the zoom of the focused card can be turned off in the Xtra TV settings
+    // the growth of the card can be turned off in the Xtra TV settings
     val context = androidx.compose.ui.platform.LocalContext.current
     val zoom = remember { context.prefs().getBoolean(C.TV_CARD_ZOOM, true) }
-    val target = when {
-        !zoom || !focused -> 1f
-        grown() -> 1.15f
-        else -> 1.05f
+    val big = zoom && focused && growth > 1f && grown()
+    val animatedWidth by androidx.compose.animation.core.animateDpAsState(
+        if (big) width * growth else width,
+        animationSpec = androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "width"
+    )
+    // once grown, the whole card is brought on screen (it may go past the right edge)
+    val bringIntoView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    LaunchedEffect(big) {
+        if (big) {
+            kotlinx.coroutines.delay(340)
+            bringIntoView.bringIntoView()
+        }
     }
-    val scale by animateFloatAsState(target, animationSpec = androidx.compose.animation.core.tween(260), label = "scale")
     var longPressed by remember { mutableStateOf(false) }
     Column(
         modifier
-            .zIndex(if (focused) 1f else 0f)
-            .width(width)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (first) 0f else 0.5f, 0.5f)
-            }
+            .width(animatedWidth)
+            .bringIntoViewRequester(bringIntoView)
             .onFocusChanged { onFocus(it.isFocused) }
             .onPreviewKeyEvent { event ->
                 // OK held down: actions of the card
@@ -436,7 +438,6 @@ private fun StreamCard(
     previewPlayer: () -> ExoPlayer?,
     actions: TvHomeActions,
     modifier: Modifier,
-    first: Boolean = false,
     onClick: () -> Unit,
 ) {
     // many cards a row: smaller texts, the count alone in the badge
@@ -450,7 +451,12 @@ private fun StreamCard(
         onLongClick = { actions.showActions(stream) },
         onFocus = { if (it) actions.onStreamFocused(stream) },
         grown = { previewing && previewPlayer() != null },
-        first = first,
+        // 2 cards a row: a little bigger, 3: half bigger, 4 and more: twice as big
+        growth = when (actions.cardsPerRow.coerceIn(2, 6)) {
+            2 -> 1.3f
+            3 -> 1.5f
+            else -> 2f
+        },
     ) { focused ->
         Box(
             Modifier

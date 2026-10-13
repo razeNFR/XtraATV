@@ -917,7 +917,7 @@ class MainActivity : AppCompatActivity() {
         val grid = view as? com.github.andreyasadchy.xtra.ui.view.GridRecyclerView
         val position = if (grid != null && child != null) grid.getChildAdapterPosition(child) else RecyclerView.NO_POSITION
         tvFocusedGrid = grid
-        val span = (grid?.layoutManager as? androidx.recyclerview.widget.GridLayoutManager)?.spanCount ?: 1
+        val span = grid?.columnCount ?: 1
         tvGridBackCallback.isEnabled = grid != null && position >= span * 2
         if (grid != null && position != RecyclerView.NO_POSITION && ::navController.isInitialized) {
             navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] = position }

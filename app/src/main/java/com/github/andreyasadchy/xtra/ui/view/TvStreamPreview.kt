@@ -21,10 +21,12 @@ import kotlinx.coroutines.launch
 /**
  * TV: low quality live preview played inside the thumbnail of the focused stream card.
  * [onPlaying] is told when a preview starts and stops, to lower the sound of the stream behind it.
+ * [onCard] gets the card whose preview shows its first picture, then null when it stops (the card grows meanwhile).
  */
 class TvStreamPreview(
     private val recyclerView: RecyclerView,
     private val inPlayer: Boolean = false,
+    private val onCard: ((View?) -> Unit)? = null,
     private val onPlaying: ((Boolean) -> Unit)? = null,
 ) : TvPreviewSource.Previewer {
 
@@ -38,6 +40,7 @@ class TvStreamPreview(
 
     private var player: ExoPlayer? = null
     private var textureView: TextureView? = null
+    private var thumbnailResize: Pair<View, View.OnLayoutChangeListener>? = null
     private var card: View? = null
     private var loadJob: Job? = null
     private var pendingCard: View? = null
@@ -77,6 +80,17 @@ class TvStreamPreview(
             }
             card.addView(textureView, FrameLayout.LayoutParams(thumbnail.width, thumbnail.height))
             this@TvStreamPreview.textureView = textureView
+            // the card grows: the picture follows the thumbnail
+            val resize = View.OnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+                val params = textureView.layoutParams
+                if (params.width != view.width || params.height != view.height) {
+                    params.width = view.width
+                    params.height = view.height
+                    textureView.layoutParams = params
+                }
+            }
+            thumbnail.addOnLayoutChangeListener(resize)
+            thumbnailResize = thumbnail to resize
             val player = player ?: TvPreviewSource.createPlayer(context).also { player = it }
             player.volume = if (TvPreviewSource.hasSound(context)) 1f else 0f
             player.clearVideoSurface()
@@ -85,6 +99,7 @@ class TvStreamPreview(
                 override fun onRenderedFirstFrame() {
                     player.removeListener(this)
                     textureView.animate().alpha(1f).setDuration(300).start()
+                    onCard?.invoke(card)
                     onPlaying?.invoke(true)
                     if (!inPlayer) {
                         TvPreviewSource.notifyPreviewSound(context, true)
@@ -107,7 +122,10 @@ class TvStreamPreview(
         player?.clearVideoSurface()
         textureView?.let { (it.parent as? FrameLayout)?.removeView(it) }
         textureView = null
+        thumbnailResize?.let { (view, listener) -> view.removeOnLayoutChangeListener(listener) }
+        thumbnailResize = null
         if (card != null) {
+            onCard?.invoke(null)
             onPlaying?.invoke(false)
             if (!inPlayer) {
                 TvPreviewSource.notifyPreviewSound(recyclerView.context, false)
