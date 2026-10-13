@@ -113,10 +113,12 @@ object TvStreamSwitcher {
             }
         } else null
         lateinit var adapter: Adapter
+        // a multi-stream needs 2 streams at least
+        val minChecked = if ((selection?.max ?: 0) > 1) 2 else 1
         val updateValidate = {
             validate?.text = activity.getString(R.string.tv_multistream_validate, checked?.size ?: 0)
-            // nothing checked: the button is dimmed
-            validate?.alpha = if (checked.isNullOrEmpty()) 0.6f else 1f
+            // not enough streams checked: the button is dimmed and does nothing
+            validate?.alpha = if ((checked?.size ?: 0) < minChecked) 0.45f else 1f
         }
         updateValidate()
         adapter = Adapter(streams, (250 * density).toInt(), preview, checked) { stream ->
@@ -146,7 +148,8 @@ object TvStreamSwitcher {
         recyclerView.adapter = adapter
         validate?.setOnClickListener {
             val logins = checked ?: return@setOnClickListener
-            if (logins.isEmpty()) {
+            if (logins.size < minChecked) {
+                android.widget.Toast.makeText(activity, activity.getString(R.string.tv_multistream_min, minChecked), android.widget.Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             dialog.dismiss()

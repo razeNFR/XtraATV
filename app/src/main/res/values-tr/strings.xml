@@ -608,6 +608,7 @@
     <string name="tv_multistream">Çoklu yayın</string>
     <string name="tv_multistream_pick">En fazla 4 yayın seçin</string>
     <string name="tv_multistream_max">En fazla %1$d yayın</string>
+    <string name="tv_multistream_min">En az %1$d yayın seçin</string>
     <string name="tv_multistream_watch">İzle</string>
     <string name="tv_adblock_blocking">Reklamlar engelleniyor (%1$s)</string>
     <string name="tv_adblock_waiting">Reklamın bitmesi bekleniyor</string>
@@ -662,8 +663,12 @@
     <string name="tv_login_with_page">Twitch giriş sayfasıyla (1440p için gerekli)</string>
     <string name="tv_login_code_help">Telefonunuzda veya bilgisayarınızda twitch.tv/activate adresine gidip bu kodu yazın. Giriş kendiliğinden devam eder. 1440p için Twitch sayfasıyla giriş gerekir.</string>
     <string name="tv_close_playback">Kapat</string>
-    <string name="tv_card_zoom">Seçili kartı büyüt</string>
-    <string name="tv_card_zoom_summary">Ana sayfadaki kart seçildiğinde ve önizleme oynarken biraz büyür</string>
+    <string name="tv_card_zoom">Önizleme sırasında büyük kart</string>
+    <string name="tv_card_zoom_summary">Seçilen kart önizlemesi oynarken büyür, diğer kartlar yer açmak için kayar</string>
+    <string name="tv_settings_remote">Kumanda</string>
+    <string name="tv_settings_previews">Önizlemeler</string>
+    <string name="tv_settings_home">Ana sayfa ve görünüm</string>
+    <string name="tv_settings_languages">Diller</string>
     <string name="sort_and_filter">Sırala ve filtrele</string>
     <string name="viewers_low_top">İzleyiciler (artan, ilk 100 içinde)</string>
     <string name="tags_filter">Etiketlere göre filtrele</string>

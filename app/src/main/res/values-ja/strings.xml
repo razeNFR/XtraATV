@@ -607,6 +607,7 @@
     <string name="tv_multistream">マルチ配信</string>
     <string name="tv_multistream_pick">最大 4 つの配信を選択</string>
     <string name="tv_multistream_max">最大 %1$d 配信</string>
+    <string name="tv_multistream_min">%1$d 件以上の配信を選択してください</string>
     <string name="tv_multistream_watch">視聴</string>
     <string name="tv_adblock_blocking">広告をブロック中 (%1$s)</string>
     <string name="tv_adblock_waiting">広告の終了を待っています</string>
@@ -661,8 +662,12 @@
     <string name="tv_login_with_page">Twitch のログインページ (1440p に必要)</string>
     <string name="tv_login_code_help">スマホやパソコンで twitch.tv/activate を開き、このコードを入力してください。ログインは自動で続きます。1440p には Twitch のページでのログインが必要です。</string>
     <string name="tv_close_playback">閉じる</string>
-    <string name="tv_card_zoom">選択中のカードを拡大</string>
-    <string name="tv_card_zoom_summary">ホームのカードが選択時とプレビュー再生中に少し大きくなります</string>
+    <string name="tv_card_zoom">プレビュー中にカードを拡大</string>
+    <string name="tv_card_zoom_summary">選択したカードがプレビュー中に大きくなり、他のカードが場所を空けます</string>
+    <string name="tv_settings_remote">リモコン</string>
+    <string name="tv_settings_previews">プレビュー</string>
+    <string name="tv_settings_home">ホームと外観</string>
+    <string name="tv_settings_languages">言語</string>
     <string name="sort_and_filter">並べ替えと絞り込み</string>
     <string name="viewers_low_top">視聴者数（昇順、上位100件から）</string>
     <string name="tags_filter">タグで絞り込み</string>

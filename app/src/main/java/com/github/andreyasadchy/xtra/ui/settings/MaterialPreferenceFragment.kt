@@ -61,6 +61,8 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
                 if (background == null || view.background !== background) {
                     val drawable = androidx.core.content.ContextCompat.getDrawable(context, com.github.andreyasadchy.xtra.R.drawable.tv_settings_row_background)
                     view.background = drawable
+                    // drawn at once in its state, without waiting for a state change
+                    drawable?.jumpToCurrentState()
                     view.setTag(com.github.andreyasadchy.xtra.R.id.tvSettingsRowBackground, drawable)
                     val padding = (20 * density).toInt()
                     view.setPaddingRelative(padding, view.paddingTop.coerceAtLeast((14 * density).toInt()), padding, view.paddingBottom.coerceAtLeast((14 * density).toInt()))

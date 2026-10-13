@@ -626,6 +626,7 @@
     <string name="tv_multistream">Multi-stream</string>
     <string name="tv_multistream_pick">Choose up to 4 streams</string>
     <string name="tv_multistream_max">%1$d streams at most</string>
+    <string name="tv_multistream_min">Check %1$d streams at least</string>
     <string name="tv_multistream_watch">Watch</string>
     <string name="tv_adblock_blocking">Blocking ads (%1$s)</string>
     <string name="tv_adblock_waiting">Waiting for the ad to end</string>
@@ -680,8 +681,12 @@
     <string name="tv_login_with_page">With the Twitch login page (needed for 1440p)</string>
     <string name="tv_login_code_help">On your phone or computer, go to twitch.tv/activate and type this code. The login goes on by itself. 1440p needs the login with the Twitch page.</string>
     <string name="tv_close_playback">Close</string>
-    <string name="tv_card_zoom">Zoom on the focused card</string>
-    <string name="tv_card_zoom_summary">The card of the home grows a little while it is selected and its preview plays</string>
+    <string name="tv_card_zoom">Bigger card during the preview</string>
+    <string name="tv_card_zoom_summary">The selected card grows while its preview plays, the other cards move to make room</string>
+    <string name="tv_settings_remote">Remote</string>
+    <string name="tv_settings_previews">Previews</string>
+    <string name="tv_settings_home">Home and look</string>
+    <string name="tv_settings_languages">Languages</string>
     <string name="sort_and_filter">Sort and filter</string>
     <string name="viewers_low_top">Viewers (ascending, among the top 100)</string>
     <string name="tags_filter">Filter by tags</string>

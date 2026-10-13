@@ -607,6 +607,7 @@
     <string name="tv_multistream">Мультистрим</string>
     <string name="tv_multistream_pick">Выберите до 4 стримов</string>
     <string name="tv_multistream_max">Не более %1$d стримов</string>
+    <string name="tv_multistream_min">Отметьте не менее %1$d трансляций</string>
     <string name="tv_multistream_watch">Смотреть</string>
     <string name="tv_adblock_blocking">Блокировка рекламы (%1$s)</string>
     <string name="tv_adblock_waiting">Ожидание окончания рекламы</string>
@@ -661,8 +662,12 @@
     <string name="tv_login_with_page">Через страницу входа Twitch (нужно для 1440p)</string>
     <string name="tv_login_code_help">На телефоне или компьютере откройте twitch.tv/activate и введите этот код. Вход продолжится сам. Для 1440p нужен вход через страницу Twitch.</string>
     <string name="tv_close_playback">Закрыть</string>
-    <string name="tv_card_zoom">Увеличение выбранной карточки</string>
-    <string name="tv_card_zoom_summary">Карточка на главной немного увеличивается при выборе и во время превью</string>
+    <string name="tv_card_zoom">Крупная карточка во время превью</string>
+    <string name="tv_card_zoom_summary">Выбранная карточка увеличивается во время превью, остальные сдвигаются, освобождая место</string>
+    <string name="tv_settings_remote">Пульт</string>
+    <string name="tv_settings_previews">Превью</string>
+    <string name="tv_settings_home">Главная и внешний вид</string>
+    <string name="tv_settings_languages">Языки</string>
     <string name="sort_and_filter">Сортировка и фильтр</string>
     <string name="viewers_low_top">Зрители (по возрастанию, среди первых 100)</string>
     <string name="tags_filter">Фильтр по тегам</string>

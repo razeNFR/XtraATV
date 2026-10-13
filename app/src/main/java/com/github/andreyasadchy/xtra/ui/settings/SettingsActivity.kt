@@ -1809,7 +1809,11 @@ class SettingsActivity : AppCompatActivity() {
                     Triple(R.xml.xtratv_preferences, SettingsNavGraphDirections.actionGlobalXtraTvSettingsFragment(), getString(R.string.xtratv_settings)),
                     Triple(R.xml.adblock_preferences, SettingsNavGraphDirections.actionGlobalAdblockSettingsFragment(), getString(R.string.adblock)),
                 ).forEach { item ->
-                    preferenceManager.inflateFromResource(requireContext(), item.first, null).forEach {
+                    // the settings inside the categories are found too
+                    fun androidx.preference.PreferenceGroup.flatten(): List<Preference> = (0 until preferenceCount).flatMap { index ->
+                        getPreference(index).let { if (it is PreferenceCategory) it.flatten() else listOf(it) }
+                    }
+                    preferenceManager.inflateFromResource(requireContext(), item.first, null).flatten().forEach {
                         // the settings hidden on this device are not found either
                         if (!it.isVisible || (resources.getBoolean(R.bool.isTv) && it.key in MaterialPreferenceFragment.TV_HIDDEN_KEYS)) {
                             return@forEach

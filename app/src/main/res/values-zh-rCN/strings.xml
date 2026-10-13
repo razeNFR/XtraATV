@@ -607,6 +607,7 @@
     <string name="tv_multistream">多路直播</string>
     <string name="tv_multistream_pick">最多选择 4 个直播</string>
     <string name="tv_multistream_max">最多 %1$d 个直播</string>
+    <string name="tv_multistream_min">请至少选择 %1$d 个直播</string>
     <string name="tv_multistream_watch">观看</string>
     <string name="tv_adblock_blocking">正在拦截广告（%1$s）</string>
     <string name="tv_adblock_waiting">正在等待广告结束</string>
@@ -661,8 +662,12 @@
     <string name="tv_login_with_page">使用 Twitch 登录页面 (1440p 需要)</string>
     <string name="tv_login_code_help">在手机或电脑上打开 twitch.tv/activate 并输入此代码，登录会自动完成。1440p 需要使用 Twitch 页面登录。</string>
     <string name="tv_close_playback">关闭</string>
-    <string name="tv_card_zoom">放大选中的卡片</string>
-    <string name="tv_card_zoom_summary">首页卡片在选中并播放预览时会稍微放大</string>
+    <string name="tv_card_zoom">预览时放大卡片</string>
+    <string name="tv_card_zoom_summary">选中的卡片在预览时变大，其他卡片移开让出位置</string>
+    <string name="tv_settings_remote">遥控器</string>
+    <string name="tv_settings_previews">预览</string>
+    <string name="tv_settings_home">首页和外观</string>
+    <string name="tv_settings_languages">语言</string>
     <string name="sort_and_filter">排序和筛选</string>
     <string name="viewers_low_top">观众（升序，前 100 个中）</string>
     <string name="tags_filter">按标签筛选</string>

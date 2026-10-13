@@ -607,6 +607,7 @@
     <string name="tv_multistream">بث متعدد</string>
     <string name="tv_multistream_pick">اختر حتى 4 بثوث</string>
     <string name="tv_multistream_max">%1$d بثوث كحد أقصى</string>
+    <string name="tv_multistream_min">اختر %1$d بثوث على الأقل</string>
     <string name="tv_multistream_watch">مشاهدة</string>
     <string name="tv_adblock_blocking">جارٍ حظر الإعلانات (%1$s)</string>
     <string name="tv_adblock_waiting">في انتظار انتهاء الإعلان</string>
@@ -661,8 +662,12 @@
     <string name="tv_login_with_page">بصفحة تسجيل الدخول إلى Twitch (مطلوبة لدقة 1440p)</string>
     <string name="tv_login_code_help">على هاتفك أو حاسوبك، انتقل إلى twitch.tv/activate واكتب هذا الرمز. يكتمل تسجيل الدخول تلقائيًا. دقة 1440p تتطلب تسجيل الدخول بصفحة Twitch.</string>
     <string name="tv_close_playback">إغلاق</string>
-    <string name="tv_card_zoom">تكبير البطاقة المحددة</string>
-    <string name="tv_card_zoom_summary">تكبر بطاقة الصفحة الرئيسية قليلاً عند تحديدها وتشغيل المعاينة</string>
+    <string name="tv_card_zoom">بطاقة أكبر أثناء المعاينة</string>
+    <string name="tv_card_zoom_summary">تكبر البطاقة المحددة أثناء معاينتها وتتحرك البطاقات الأخرى لإفساح المجال</string>
+    <string name="tv_settings_remote">جهاز التحكم</string>
+    <string name="tv_settings_previews">المعاينات</string>
+    <string name="tv_settings_home">الصفحة الرئيسية والمظهر</string>
+    <string name="tv_settings_languages">اللغات</string>
     <string name="sort_and_filter">الترتيب والتصفية</string>
     <string name="viewers_low_top">المشاهدون (تصاعدي، ضمن أول 100)</string>
     <string name="tags_filter">التصفية حسب الوسوم</string>

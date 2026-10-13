@@ -1283,6 +1283,10 @@ class ExoPlayerService : BasePlaybackService() {
 
     private var videoPreviewLookupDone = false
 
+    /** Position the video starts at while its playlist is still loaded: the timeline shows it instead of 00:00. */
+    var videoStartPosition: Long? = null
+        private set
+
     private suspend fun loadVideo(restorePauseState: Boolean = false) {
         videoId?.let { videoId ->
             val playbackPosition = if (prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
@@ -1290,6 +1294,7 @@ class ExoPlayerService : BasePlaybackService() {
             } else {
                 null
             } ?: savedPosition ?: 0
+            videoStartPosition = playbackPosition
             if (qualities.isNullOrEmpty()) {
                 val result = try {
                     xtraModule.playerRepository.loadVideoPlaylistUrl(
@@ -1347,6 +1352,7 @@ class ExoPlayerService : BasePlaybackService() {
                     player.seekTo(playbackPosition)
                 }
             }
+            videoStartPosition = null
         }
     }
 

@@ -41,6 +41,7 @@ import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.prefs
 import org.json.JSONArray
 import org.json.JSONException
+import kotlin.time.Instant
 
 @OptIn(UnstableApi::class)
 class ExoPlayerFragment : PlayerFragment() {
@@ -464,8 +465,21 @@ class ExoPlayerFragment : PlayerFragment() {
         }
         with(binding.playerControls) {
             if (root.isVisible && !progressBar.isPressed) {
-                val currentPosition = playbackService?.player?.currentPosition ?: 0
-                getTotalDuration()?.takeIf { it > 0 }?.let {
+                val service = playbackService
+                val isVideo = service?.type == BasePlaybackService.VIDEO
+                // a video still loading (its playlist, or its first segments): the position it starts at, not 00:00
+                val startPosition = if (isVideo && service.player?.currentMediaItem == null) {
+                    service.videoStartPosition ?: service.savedPosition
+                } else {
+                    service?.videoStartPosition
+                }
+                val currentPosition = startPosition ?: service?.player?.currentPosition ?: 0
+                val totalDuration = getTotalDuration()?.takeIf { it > 0 } ?: if (isVideo) {
+                    // length of the video known before its playlist: from its details, else (VOD of a live found by its address) since the stream started
+                    service.durationSeconds?.takeIf { it > 0 }?.let { it * 1000L }
+                        ?: service.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.takeIf { service.videoId == null }?.let { System.currentTimeMillis() - it }?.takeIf { it > 0 }
+                } else null
+                totalDuration?.let { maxOf(it, currentPosition) }?.let {
                     progressBar.setDuration(it)
                     duration.text = DateUtils.formatElapsedTime(it / 1000)
                 }

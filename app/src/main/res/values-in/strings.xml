@@ -608,6 +608,7 @@
     <string name="tv_multistream">Multi-stream</string>
     <string name="tv_multistream_pick">Pilih hingga 4 stream</string>
     <string name="tv_multistream_max">Paling banyak %1$d stream</string>
+    <string name="tv_multistream_min">Pilih setidaknya %1$d stream</string>
     <string name="tv_multistream_watch">Tonton</string>
     <string name="tv_adblock_blocking">Memblokir iklan (%1$s)</string>
     <string name="tv_adblock_waiting">Menunggu iklan selesai</string>
@@ -662,8 +663,12 @@
     <string name="tv_login_with_page">Dengan halaman masuk Twitch (diperlukan untuk 1440p)</string>
     <string name="tv_login_code_help">Di ponsel atau komputer, buka twitch.tv/activate dan ketik kode ini. Login berlanjut sendiri. 1440p memerlukan login dengan halaman Twitch.</string>
     <string name="tv_close_playback">Tutup</string>
-    <string name="tv_card_zoom">Perbesar kartu yang dipilih</string>
-    <string name="tv_card_zoom_summary">Kartu beranda sedikit membesar saat dipilih dan pratinjau diputar</string>
+    <string name="tv_card_zoom">Kartu lebih besar saat pratinjau</string>
+    <string name="tv_card_zoom_summary">Kartu yang dipilih membesar saat pratinjaunya diputar, kartu lain bergeser memberi ruang</string>
+    <string name="tv_settings_remote">Remote</string>
+    <string name="tv_settings_previews">Pratinjau</string>
+    <string name="tv_settings_home">Beranda dan tampilan</string>
+    <string name="tv_settings_languages">Bahasa</string>
     <string name="sort_and_filter">Urutkan dan filter</string>
     <string name="viewers_low_top">Penonton (naik, di antara 100 teratas)</string>
     <string name="tags_filter">Filter menurut tag</string>

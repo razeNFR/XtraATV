@@ -612,6 +612,7 @@
     <string name="tv_multistream">Multistream</string>
     <string name="tv_multistream_pick">Elige hasta 4 streams</string>
     <string name="tv_multistream_max">%1$d streams como máximo</string>
+    <string name="tv_multistream_min">Marca al menos %1$d streams</string>
     <string name="tv_multistream_watch">Ver</string>
     <string name="tv_adblock_blocking">Bloqueando anuncios (%1$s)</string>
     <string name="tv_adblock_waiting">Esperando a que termine el anuncio</string>
@@ -666,8 +667,12 @@
     <string name="tv_login_with_page">Con la página de inicio de sesión de Twitch (necesaria para 1440p)</string>
     <string name="tv_login_code_help">En tu móvil u ordenador, ve a twitch.tv/activate y escribe este código. El inicio de sesión sigue solo. El 1440p necesita iniciar sesión con la página de Twitch.</string>
     <string name="tv_close_playback">Cerrar</string>
-    <string name="tv_card_zoom">Zoom en la tarjeta seleccionada</string>
-    <string name="tv_card_zoom_summary">La tarjeta del inicio crece un poco cuando está seleccionada y se reproduce su vista previa</string>
+    <string name="tv_card_zoom">Tarjeta más grande durante la vista previa</string>
+    <string name="tv_card_zoom_summary">La tarjeta seleccionada crece durante su vista previa, las demás se desplazan para dejarle sitio</string>
+    <string name="tv_settings_remote">Mando</string>
+    <string name="tv_settings_previews">Vistas previas</string>
+    <string name="tv_settings_home">Inicio y aspecto</string>
+    <string name="tv_settings_languages">Idiomas</string>
     <string name="sort_and_filter">Ordenar y filtrar</string>
     <string name="viewers_low_top">Espectadores (ascendente, entre los 100 primeros)</string>
     <string name="tags_filter">Filtrar por etiquetas</string>
