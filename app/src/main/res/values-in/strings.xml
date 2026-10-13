@@ -609,6 +609,9 @@
     <string name="tv_multistream_pick">Pilih hingga 4 stream</string>
     <string name="tv_multistream_max">Paling banyak %1$d stream</string>
     <string name="tv_multistream_min">Pilih setidaknya %1$d stream</string>
+    <string name="tv_multistream_remove">Hapus stream ini</string>
+    <string name="tv_multistream_chat_top">Chat di atas stream</string>
+    <string name="tv_multistream_chat_bottom">Chat di bawah stream</string>
     <string name="tv_multistream_watch">Tonton</string>
     <string name="tv_adblock_blocking">Memblokir iklan (%1$s)</string>
     <string name="tv_adblock_waiting">Menunggu iklan selesai</string>

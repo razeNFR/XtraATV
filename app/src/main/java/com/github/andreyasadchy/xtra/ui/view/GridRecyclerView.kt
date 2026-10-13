@@ -42,7 +42,12 @@ class GridRecyclerView : RecyclerView {
      * (turned off with the growth of the cards in the Xtra TV settings).
      */
     private val featureLayoutManager: TvFeatureGridLayoutManager? = if (isTv && prefs.getBoolean(C.TV_CARD_ZOOM, false)) {
-        TvFeatureGridLayoutManager { parent, child, immediate -> scrollToPivot(parent, child, immediate) }
+        TvFeatureGridLayoutManager { parent, child, immediate -> scrollToPivot(parent, child, immediate) }.apply {
+            // the grown card went back to its size: the focused card moved with the others, it is brought to its place again
+            onCollapsed = {
+                focusedChild?.let { scrollToPivot(this@GridRecyclerView, it, false) }
+            }
+        }
     } else null
 
     private val usesFeatureLayout get() = featureLayoutManager != null && layoutManager === featureLayoutManager
@@ -288,6 +293,9 @@ class GridRecyclerView : RecyclerView {
                 return true
             }
         }
+        if (event != null && isTv && event.action == KeyEvent.ACTION_DOWN && moveFromGrownCard(event.keyCode)) {
+            return true
+        }
         if (event != null && isTv && event.action == KeyEvent.ACTION_DOWN &&
             (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
         ) {
@@ -365,6 +373,56 @@ class GridRecyclerView : RecyclerView {
             post {
                 findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
             }
+        }
+        return true
+    }
+
+    /**
+     * From the grown card, the D-pad goes to the cards that were around it before it grew (its neighbours in the grid of
+     * cards of the same size), not to the cards that moved around it.
+     */
+    private fun moveFromGrownCard(keyCode: Int): Boolean {
+        val feature = featureLayoutManager?.takeIf { usesFeatureLayout } ?: return false
+        val card = focusedChild ?: return false
+        val position = getChildAdapterPosition(card)
+        if (position == NO_POSITION || position != feature.featuredPosition) {
+            return false
+        }
+        val span = feature.spanCount
+        val count = adapter?.itemCount ?: 0
+        val column = position % span
+        val target = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                if (column == 0) {
+                    TvHeader.findActivity(this)?.openTvMenu()
+                    return true
+                }
+                position - 1
+            }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (column == span - 1 || position + 1 >= count) return true
+                position + 1
+            }
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                if (position < span) return TvHeader.focusHeaderOf(this)
+                position - span
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                when {
+                    position + span < count -> position + span
+                    // the last row is shorter: the last card
+                    position / span < (count - 1) / span -> count - 1
+                    else -> return true
+                }
+            }
+            else -> return false
+        }
+        val holder = findViewHolderForAdapterPosition(target)
+        if (holder != null && holder.itemView.isAttachedToWindow) {
+            holder.itemView.requestFocus()
+        } else {
+            scrollToPositionWithOffset(target, paddingTop + ((height - paddingTop - paddingBottom) * 0.22f).toInt())
+            post { findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() }
         }
         return true
     }
@@ -453,7 +511,30 @@ class GridRecyclerView : RecyclerView {
         }
     }
 
+    /**
+     * The focus left the list (header, side menu, player...): the preview stops and its card goes back to its size.
+     * Moving the focus elsewhere does not clear the focus of the list, [clearChildFocus] is not called then.
+     */
+    private val focusWatcher = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
+        val preview = preview ?: return@OnGlobalFocusChangeListener
+        var view: View? = newFocus
+        while (view != null && view !== this) {
+            view = view.parent as? View
+        }
+        if (view == null) {
+            preview.stop()
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (isTv) {
+            viewTreeObserver.addOnGlobalFocusChangeListener(focusWatcher)
+        }
+    }
+
     override fun onDetachedFromWindow() {
+        viewTreeObserver.removeOnGlobalFocusChangeListener(focusWatcher)
         cancelPress()
         preview?.release()
         preview = null

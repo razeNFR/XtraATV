@@ -608,6 +608,9 @@
     <string name="tv_multistream_pick">最大 4 つの配信を選択</string>
     <string name="tv_multistream_max">最大 %1$d 配信</string>
     <string name="tv_multistream_min">%1$d 件以上の配信を選択してください</string>
+    <string name="tv_multistream_remove">この配信を削除</string>
+    <string name="tv_multistream_chat_top">チャットを配信の上に</string>
+    <string name="tv_multistream_chat_bottom">チャットを配信の下に</string>
     <string name="tv_multistream_watch">視聴</string>
     <string name="tv_adblock_blocking">広告をブロック中 (%1$s)</string>
     <string name="tv_adblock_waiting">広告の終了を待っています</string>
