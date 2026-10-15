@@ -87,7 +87,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
     private var firstLaunch = true
 
     override val currentFragment: Fragment?
-        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(binding.viewPager.currentItem) ?: binding.viewPager.currentItem}")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -476,7 +476,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                         AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL
                     }
                     viewPager.doOnLayout {
-                        childFragmentManager.findFragmentByTag("f${position}").let { fragment ->
+                        childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}").let { fragment ->
                             if (fragment is Sortable) {
                                 fragment.setupSortBar(sortBar)
                                 sortBar.root.doOnLayout {

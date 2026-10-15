@@ -22,4 +22,10 @@ class GamePagerAdapter(
     }
 
     override fun getItemCount(): Int = max(tabs.size, 1)
+
+    // each page is kept by its tab, not by its place: when a tab is hidden in the settings, the next tab does not get the
+    // page of the hidden one back (the videos shown in the channels tab)
+    override fun getItemId(position: Int): Long = tabs.getOrNull(position)?.toLongOrNull() ?: position.toLong()
+
+    override fun containsItem(itemId: Long): Boolean = if (tabs.isEmpty()) itemId == 0L else tabs.any { it.toLongOrNull() == itemId }
 }
