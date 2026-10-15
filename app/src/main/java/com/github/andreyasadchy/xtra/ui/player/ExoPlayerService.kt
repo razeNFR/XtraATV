@@ -957,6 +957,8 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     private suspend fun loadStream(restorePauseState: Boolean = false, restart: Boolean = false) {
+        // the stream loads (again): its first seconds are not counted as stops for the quality of Auto
+        playingSince = 0L
         if (!restart) {
             TvLoadTimer.mark("Ouverture du lecteur")
         } else {
@@ -2230,27 +2232,87 @@ class ExoPlayerService : BasePlaybackService() {
 
     private var autoHighest = false
     private val rebufferTimes = ArrayDeque<Long>()
-    private var wasReady = false
+    /** Time the stream started to play (0: not yet): the stops of its first seconds (start, switch) are not counted. */
+    private var playingSince = 0L
+    /** Auto on Wi-Fi / Ethernet after real stops: the highest quality allowed, one step under the one that stopped. */
+    private var autoCapHeight: Int? = null
+    private var autoRaiseJob: Job? = null
 
     /**
      * Auto on Wi-Fi / Ethernet: the highest quality the device decodes. Twitch low latency sends the segments while they
-     * are made, so the measured bandwidth is the bitrate of the quality being played and the adaptive choice never goes up.
-     * The adaptive choice comes back when the stream stops to buffer twice in a minute.
+     * are made, so the measured bandwidth is the bitrate of the quality being played: the adaptive choice of the player
+     * only goes down and never comes back up, it is not used. When the stream stops to buffer twice in a minute (after
+     * playing for 10 s, a start or a switch of stream does not count), the quality goes down one step, and back up one
+     * step after 2 min 30 without a stop, up to the highest again.
      */
     private fun onBufferingForAuto(playbackState: Int) {
         val player = player ?: return
+        val now = android.os.SystemClock.elapsedRealtime()
         if (playbackState == Player.STATE_READY) {
-            wasReady = true
-        } else if (playbackState == Player.STATE_BUFFERING && wasReady && player.playWhenReady && autoHighest) {
-            val now = System.currentTimeMillis()
+            if (playingSince == 0L) {
+                playingSince = now
+            }
+        } else if (playbackState == Player.STATE_BUFFERING && autoHighest && player.playWhenReady && playingSince != 0L &&
+            now - playingSince >= 10_000L && (quality == null || quality?.name == VideoQuality.AUTO_QUALITY)) {
             rebufferTimes.addLast(now)
             while (rebufferTimes.isNotEmpty() && now - rebufferTimes.first() > 60_000L) {
                 rebufferTimes.removeFirst()
             }
             if (rebufferTimes.size >= 2) {
-                autoHighest = false
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(false).build()
+                rebufferTimes.clear()
+                stepAutoQuality(down = true)
             }
+        }
+    }
+
+    /** Heights of the qualities of the stream, highest first. */
+    private fun autoHeights(player: ExoPlayer): List<Int> {
+        val group = player.currentTracks.groups.find { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO } ?: return emptyList()
+        return (0 until group.mediaTrackGroup.length).map { group.mediaTrackGroup.getFormat(it).height }.filter { it > 0 }.distinct().sortedDescending()
+    }
+
+    private fun stepAutoQuality(down: Boolean) {
+        val player = player ?: return
+        val heights = autoHeights(player)
+        if (heights.isEmpty()) {
+            return
+        }
+        val current = autoCapHeight ?: player.videoFormat?.height?.takeIf { it > 0 } ?: heights.first()
+        val next = if (down) {
+            heights.firstOrNull { it < current } ?: return
+        } else {
+            heights.lastOrNull { it > current }
+        }
+        // back to the highest: no limit
+        autoCapHeight = next?.takeIf { it != heights.first() }
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setMaxVideoSize(Int.MAX_VALUE, autoCapHeight ?: Int.MAX_VALUE)
+            .setForceHighestSupportedBitrate(true)
+            .build()
+        autoRaiseJob?.cancel()
+        if (autoCapHeight != null) {
+            autoRaiseJob = lifecycleScope.launch {
+                delay(150_000L)
+                // no step down since (a new one restarts this wait): one step up
+                rebufferTimes.clear()
+                stepAutoQuality(down = false)
+            }
+        }
+    }
+
+    /** A new stream in the same player: the quality of Auto starts again at the highest, nothing of the last one counts. */
+    private fun resetAutoQuality() {
+        autoRaiseJob?.cancel()
+        autoRaiseJob = null
+        autoCapHeight = null
+        rebufferTimes.clear()
+        playingSince = 0L
+        autoHighest = isUnmeteredNetwork()
+        player?.let { player ->
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
+                .setForceHighestSupportedBitrate(autoHighest)
+                .build()
         }
     }
 
@@ -2273,6 +2335,7 @@ class ExoPlayerService : BasePlaybackService() {
             // no limit to the size of the screen: a 1440p stream (enhanced broadcasting) also looks better than 1080p on a 1080p TV
             autoHighest = isUnmeteredNetwork()
             rebufferTimes.clear()
+            playingSince = 0L
             parameters = buildUponParameters().clearViewportSizeConstraints().setForceHighestSupportedBitrate(autoHighest).build()
         }
     }
@@ -2294,6 +2357,7 @@ class ExoPlayerService : BasePlaybackService() {
         adDelayJob = null
         player?.stop()
         player?.clearMediaItems()
+        resetAutoQuality()
         return true
     }
 
