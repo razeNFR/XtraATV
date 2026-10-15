@@ -799,4 +799,5 @@
     <string name="tv_hello_name">Hello, %s</string>
     <string name="tv_good_evening">Good evening</string>
     <string name="tv_good_evening_name">Good evening, %s</string>
+    <string name="tv_multistream_stream_ended">%s ended</string>
 </resources>

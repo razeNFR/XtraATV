@@ -781,4 +781,5 @@
     <string name="tv_hello_name">Halo, %s</string>
     <string name="tv_good_evening">Selamat malam</string>
     <string name="tv_good_evening_name">Selamat malam, %s</string>
+    <string name="tv_multistream_stream_ended">%s telah mengakhiri siaran</string>
 </resources>

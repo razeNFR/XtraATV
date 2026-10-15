@@ -780,4 +780,5 @@
     <string name="tv_hello_name">你好，%s</string>
     <string name="tv_good_evening">晚安</string>
     <string name="tv_good_evening_name">晚安，%s</string>
+    <string name="tv_multistream_stream_ended">%s 的直播已結束</string>
 </resources>

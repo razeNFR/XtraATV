@@ -2639,6 +2639,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     open fun isPlayingOrLoading(): Boolean = false
 
+    /** The picture moves (not loading, not stopped). */
+    open fun isPlayingNow(): Boolean = false
+
     open fun resumePlayback() {}
 
     /** Silences the stream while a preview with sound plays over it. */
@@ -3252,6 +3255,33 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private fun tvLeaveAction(): String {
         val prefs = requireContext().prefs()
         return prefs.getString(C.TV_BACK_ACTION, null) ?: if (prefs.getBoolean(C.TV_BACK_MINIMIZES_PLAYER, false)) "mini" else "stop"
+    }
+
+    private var streamEndJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * TV: the stream stopped (Twitch ended it). After a few seconds, unless a raid opens its stream or the stream came
+     * back, the player closes and the screen it was opened from is shown again.
+     */
+    protected fun onTvStreamEnded() {
+        if (!isTv || streamEndJob?.isActive == true || view == null) {
+            return
+        }
+        val activity = activity as? MainActivity ?: return
+        val login = activity.currentPlayingStream()?.channelLogin
+        streamEndJob = viewLifecycleOwner.lifecycleScope.launch {
+            kotlinx.coroutines.delay(6000L)
+            // a raid announced in the chat: its stream comes, the player waits for it (30 s at most)
+            var waited = 0
+            while (chatFragment?.isRaidPending() == true && waited++ < 30) {
+                kotlinx.coroutines.delay(1000L)
+            }
+            if (view == null || activity.currentPlayingStream()?.channelLogin != login || isPlayingNow()) {
+                return@launch
+            }
+            close()
+            activity.closePlayer()
+        }
     }
 
     /** Leaves the player to browse (back, channel or category opened from the player). */

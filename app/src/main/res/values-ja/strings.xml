@@ -780,4 +780,5 @@
     <string name="tv_hello_name">こんにちは、%s さん</string>
     <string name="tv_good_evening">こんばんは</string>
     <string name="tv_good_evening_name">こんばんは、%s さん</string>
+    <string name="tv_multistream_stream_ended">%s の配信が終了しました</string>
 </resources>

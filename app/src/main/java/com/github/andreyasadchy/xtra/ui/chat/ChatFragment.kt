@@ -74,6 +74,11 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     private var _binding: FragmentChatBinding? = null
     private val binding get() = _binding!!
     private val viewModel: ChatViewModel by viewModels { ChatViewModelFactory }
+
+    /** A raid was announced and its stream will be opened (switch to raids on): the player waits for it. */
+    fun isRaidPending(): Boolean {
+        return context?.prefs()?.getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) == true && viewModel.raid.value != null && !viewModel.raidClosed
+    }
     private var adapter: ChatAdapter? = null
 
     private var isChatTouched = false

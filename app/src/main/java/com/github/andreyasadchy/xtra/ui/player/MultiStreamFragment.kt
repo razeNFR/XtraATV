@@ -87,6 +87,9 @@ class MultiStreamFragment : Fragment() {
         root = FrameLayout(requireContext()).apply {
             setBackgroundColor(Color.BLACK)
             isClickable = true
+            // the TV never goes to sleep (screensaver) while the streams of the multi-stream play: kept on while it is
+            // shown, the flag of the window set by the single player is cleared when that player closes
+            keepScreenOn = true
         }
         return root
     }
@@ -525,6 +528,20 @@ class MultiStreamFragment : Fragment() {
         val login = tile.stream.channelLogin ?: return
         val player = tile.player
         playStream(login, player, tile)
+        // the stream ended (no more playlist, or the end of it): it leaves the multi-stream after a few seconds
+        player.addListener(object : Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                if ((error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode == 404) {
+                    onStreamEnded(tile, login)
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) {
+                    onStreamEnded(tile, login)
+                }
+            }
+        })
         if (requireContext().prefs().getBoolean(C.PLAYER_ADBLOCK, true)) {
             var lastSwitch = 0L
             val listener = object : Player.Listener {
@@ -541,6 +558,33 @@ class MultiStreamFragment : Fragment() {
             }
             tile.adListener = listener
             player.addListener(listener)
+        }
+    }
+
+    private val endingLogins = mutableSetOf<String>()
+
+    private fun onStreamEnded(tile: Tile, login: String) {
+        if (!endingLogins.add(login)) {
+            return
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            kotlinx.coroutines.delay(6000L)
+            endingLogins.remove(login)
+            if (view == null || tile !in tiles || tile.stream.channelLogin != login || tile.player.isPlaying) {
+                return@launch
+            }
+            android.widget.Toast.makeText(requireContext(), getString(R.string.tv_multistream_stream_ended, tile.stream.channelName ?: login), android.widget.Toast.LENGTH_LONG).show()
+            if (tiles.size > 2) {
+                removeTile(tile)
+            } else {
+                // one stream left: it goes on alone in the player
+                val other = tiles.firstOrNull { it !== tile }?.stream
+                val activity = activity as? MainActivity ?: return@launch
+                activity.closeMultiStream()
+                if (other != null) {
+                    activity.startStream(other)
+                }
+            }
         }
     }
 

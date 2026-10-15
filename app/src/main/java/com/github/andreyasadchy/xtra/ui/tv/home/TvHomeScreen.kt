@@ -52,7 +52,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
@@ -155,33 +157,51 @@ fun TvHomeScreen(
     // a row with the focus glides to the top, with the end of the row above still in sight (Google TV)
     val bringRow: (Int) -> Unit = { index ->
         scope.launch {
-            listState.animateScrollToItem(index, if (index <= 1) 0 else -peek)
+            listState.animateScrollToItem(index, if (index <= 0) 0 else -peek)
         }
     }
     val rows = listOfNotNull(
         followed?.takeIf { it.items.isNotEmpty() }?.let { "followed" to it },
         popular?.takeIf { it.items.isNotEmpty() }?.let { "popular" to it },
     ) + languageRows.filter { it.items.isNotEmpty() }.map { "language_" + it.title to it }
+    val listRequester = remember { FocusRequester() }
+    val hasCards = rows.isNotEmpty() || resume?.items?.isNotEmpty() == true || games?.items?.isNotEmpty() == true
+    Column(
+        Modifier
+            .fillMaxSize()
+            // coming into the home (side menu, back from a screen): the rows get the focus (the last card, else the
+            // first stream), never "refresh" above them
+            .focusProperties {
+                onEnter = {
+                    // nothing loaded yet: "refresh" keeps the focus until the rows come
+                    if (requestedFocusDirection != FocusDirection.Down && hasCards) {
+                        cancelFocusChange()
+                        listRequester.requestFocus()
+                    }
+                }
+            }
+    ) {
+        // always on screen above the rows: refresh, then the greeting, the picture of the account and the time (only
+        // to read, the focus never stops there)
+        Row(
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RefreshPill(actions)
+            Spacer(Modifier.weight(1f))
+            Greeting(account)
+        }
     CompositionLocalProvider(LocalBringIntoViewSpec provides NoScrollSpec) {
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .weight(1f)
+                .focusRequester(listRequester)
                 .focusRestorer(firstCard),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 240.dp),
+            contentPadding = PaddingValues(top = 0.dp, bottom = 240.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            item(key = "header") {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp).onFocusChanged { if (it.hasFocus) bringRow(0) },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RefreshPill(actions)
-                    Spacer(Modifier.weight(1f))
-                    // greeting, picture of the account and time: only to read, the focus never stops there
-                    Greeting(account)
-                }
-            }
             // first load: grey cards in place of the rows, like YouTube
             val skeletons = if (followed == null && popular == null && games == null) 2 else 0
             if (skeletons > 0) {
@@ -191,13 +211,13 @@ fun TvHomeScreen(
             }
             rows.forEachIndexed { rowIndex, (key, row) ->
                 item(key = key) {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(rowIndex + 1) }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(rowIndex) }) {
                         StreamRow(row, previewLogin, previewPlayer, actions, if (rowIndex == 0) firstCard else null)
                     }
                 }
             }
             // continue watching, then the statistics, over the categories
-            val resumeIndex = rows.size + 1 + skeletons
+            val resumeIndex = rows.size + skeletons
             val hasResume = resume != null && resume.items.isNotEmpty()
             if (hasResume) {
                 item(key = "resume") {
@@ -223,6 +243,7 @@ fun TvHomeScreen(
                 }
             }
         }
+    }
     }
 }
 

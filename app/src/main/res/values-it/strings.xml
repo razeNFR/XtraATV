@@ -780,4 +780,5 @@
     <string name="tv_hello_name">Ciao, %s</string>
     <string name="tv_good_evening">Buonasera</string>
     <string name="tv_good_evening_name">Buonasera, %s</string>
+    <string name="tv_multistream_stream_ended">%s ha terminato la diretta</string>
 </resources>
