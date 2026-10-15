@@ -83,7 +83,7 @@ object TvMultiStreamPicker {
                             viewerCount = it.stream?.viewersCount,
                         )
                     }
-                }.orEmpty()
+                }.orEmpty().sortedByDescending { it.viewerCount }.let { com.github.andreyasadchy.xtra.ui.tv.TvFavorites.sort(it) }
             }
         } catch (e: Exception) {
             emptyList()

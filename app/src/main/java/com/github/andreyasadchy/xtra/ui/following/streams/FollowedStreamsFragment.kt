@@ -80,6 +80,17 @@ class FollowedStreamsFragment : PagedListFragment(), Scrollable {
             }
         }
         initializeAdapter(binding, pagingAdapter, enableScrollTopButton = false)
+        viewLifecycleOwner.lifecycleScope.launch {
+            // a channel added to the favorites or removed: the list is sorted again (favorites first) with their star
+            var first = true
+            com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collect {
+                if (first) {
+                    first = false
+                } else {
+                    pagingAdapter.refresh()
+                }
+            }
+        }
     }
 
     override fun scrollToTop() {
