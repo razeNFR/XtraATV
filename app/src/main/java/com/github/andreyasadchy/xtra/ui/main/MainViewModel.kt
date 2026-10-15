@@ -109,9 +109,10 @@ class MainViewModel(
     val updateProgress = MutableSharedFlow<Int>()
     val closeUpdateDialog = MutableSharedFlow<Boolean>()
 
-    fun savePlaybackState(item: PlaybackState) {
+    fun savePlaybackState(item: PlaybackState, then: (() -> Unit)? = null) {
         viewModelScope.launch {
             playerRepository.savePlaybackStates(listOf(item))
+            then?.invoke()
         }
     }
 

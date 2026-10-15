@@ -27,18 +27,47 @@ object TvStreamPrefetch {
         if (channelLogin.isNullOrBlank() || !context.resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)) {
             return
         }
-        // the integrity check has its own flow: left to the player
-        if (context.prefs().getBoolean(C.ENABLE_INTEGRITY, false)) {
+        val prefs = context.prefs()
+        // the integrity check has its own flow, the stream proxies their own access: left to the player
+        if (prefs.getBoolean(C.ENABLE_INTEGRITY, false) || prefs.getBoolean(C.PLAYER_USE_STREAM_PROXY, false)) {
             return
         }
         val app = context.applicationContext as XtraApp
+        val useCustomProxy = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+        val warmUp = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP) == C.OKHTTP
         login = channelLogin
         startedAt = SystemClock.elapsedRealtime()
         request = scope.async {
-            try {
+            // a custom proxy in use: the player goes through it, nothing is asked here
+            if (useCustomProxy && app.xtraModule.playerRepository.getCustomProxies().any { it.enabled && !it.url.isNullOrBlank() }) {
+                return@async null
+            }
+            val url = try {
                 ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, channelLogin)
             } catch (e: Exception) {
                 null
+            }
+            if (url != null && warmUp) {
+                warmUpConnections(app, url)
+            }
+            url
+        }
+    }
+
+    /**
+     * The connections to the servers of Twitch (list of the qualities, then the server of the video) are opened while the
+     * player opens, the player uses the same network client and finds them ready. Nothing is kept from the answers.
+     */
+    private fun warmUpConnections(app: XtraApp, url: String) {
+        scope.async {
+            try {
+                val client = app.xtraModule.okHttpClient.value
+                val master = client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { response ->
+                    if (response.isSuccessful) response.body.string() else null
+                } ?: return@async
+                val variant = master.lineSequence().firstOrNull { it.startsWith("http") } ?: return@async
+                client.newCall(okhttp3.Request.Builder().url(variant).head().build()).execute().close()
+            } catch (e: Exception) {
             }
         }
     }

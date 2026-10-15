@@ -1793,6 +1793,9 @@ class MainActivity : AppCompatActivity() {
         }
         currentStreamLogin = stream.channelLogin
         dvrStream = null
+        // TV, no player open: the playback service starts as soon as the stream is saved, while the screen of the
+        // player is made (it binds to it once ready, the service starts only once)
+        val startServiceEarly = isTv && playerFragment == null && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.STREAM,
@@ -1808,7 +1811,13 @@ class MainActivity : AppCompatActivity() {
             thumbnail = stream.thumbnail,
             createdAt = stream.createdAt,
             viewerCount = stream.viewerCount,
-        ))
+        )) {
+            if (startServiceEarly && playerFragment != null && currentStreamLogin == stream.channelLogin) {
+                startService(Intent(this, com.github.andreyasadchy.xtra.ui.player.ExoPlayerService::class.java).apply {
+                    action = com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.INTENT_START
+                })
+            }
+        }
         val fragment = when (prefs.getString(C.PLAYER, C.EXOPLAYER)) {
             C.MEDIA_PLAYER -> MediaPlayerFragment()
             else -> ExoPlayerFragment()
