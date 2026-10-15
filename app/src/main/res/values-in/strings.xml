@@ -736,4 +736,9 @@
     <string name="tv_home_language_rows">Baris per bahasa di beranda</string>
     <string name="tv_home_language_rows_summary">Satu baris stream populer untuk tiap bahasa yang dipilih, di bawah Populer</string>
     <string name="tv_popular_in">Populer · %1$s</string>
+    <string name="tv_menu_followed_videos">Video yang diikuti</string>
+    <string name="tv_menu_followed_channels">Channel yang diikuti</string>
+    <string name="tv_menu_followed_games">Kategori yang diikuti</string>
+    <string name="tv_menu_extras">Entri tambahan di menu samping</string>
+    <string name="tv_menu_extras_summary">Pintasan ke video, channel, atau kategori yang diikuti</string>
 </resources>

@@ -35,9 +35,25 @@ import com.google.android.material.tabs.TabLayoutMediator
 
 class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
 
+    companion object {
+        /** TV side menu: tab to show when the screen opens ("0" categories, "2" videos, "3" channels). */
+        var requestedTab: String? = null
+    }
+
     private var _binding: FragmentMediaPagerBinding? = null
     private val binding get() = _binding!!
     private var firstLaunch = true
+
+    /** Keys of the tabs shown ("0" categories, "1" live, "2" videos, "3" channels). */
+    private var shownTabs: List<String> = emptyList()
+
+    /** TV side menu: goes to a tab of the screen already open. */
+    fun showTab(key: String) {
+        val index = shownTabs.indexOf(key)
+        if (index >= 0 && _binding != null) {
+            binding.viewPager.setCurrentItem(index, false)
+        }
+    }
 
     override val currentFragment: Fragment?
         get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
@@ -155,6 +171,13 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
                     }
                 }
             })
+            // TV: opened from an entry of the side menu (videos, channels, categories of the followed channels)
+            val requested = requestedTab?.also { requestedTab = null }?.takeIf { it in tabs }
+            if (requested != null) {
+                viewPager.setCurrentItem(tabs.indexOf(requested), false)
+                firstLaunch = false
+            }
+            shownTabs = tabs
             if (firstLaunch) {
                 val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
                 viewPager.setCurrentItem(

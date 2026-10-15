@@ -1385,6 +1385,11 @@ class SettingsActivity : AppCompatActivity() {
                 fullscreenKeep?.isEnabled = newValue == true || miniKeep?.isChecked != false
                 true
             }
+            // entries of the side menu: the main screen is made again with them when the settings close
+            findPreference<androidx.preference.MultiSelectListPreference>(C.TV_MENU_EXTRAS)?.setOnPreferenceChangeListener { _, _ ->
+                (requireActivity() as? SettingsActivity)?.setResult()
+                true
+            }
             // favorite channels: their order (first in the followed streams), unchecked ones leave the favorites
             findPreference<Preference>("tv_favorites")?.let { preference ->
                 val context = requireContext()
@@ -1415,7 +1420,7 @@ class SettingsActivity : AppCompatActivity() {
             // the ambiance color is drawn when the app starts: it offers to restart it
             findPreference<ListPreference>(C.TV_AMBIENT_COLOR)?.setOnPreferenceChangeListener { _, newValue ->
                 if (newValue != requireContext().prefs().getString(C.TV_AMBIENT_COLOR, "violet")) {
-                    (requireActivity() as? SettingsActivity)?.changed = true
+                    (requireActivity() as? SettingsActivity)?.setResult()
                     requireContext().getAlertDialogBuilder()
                         .setMessage(R.string.tv_ambient_restart)
                         .setPositiveButton(R.string.yes) { _, _ ->

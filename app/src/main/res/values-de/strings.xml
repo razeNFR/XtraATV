@@ -735,4 +735,9 @@
     <string name="tv_home_language_rows">Reihen nach Sprache auf der Startseite</string>
     <string name="tv_home_language_rows_summary">Eine Reihe beliebter Streams für jede gewählte Sprache, unter Beliebt</string>
     <string name="tv_popular_in">Beliebt · %1$s</string>
+    <string name="tv_menu_followed_videos">Videos gefolgter Kanäle</string>
+    <string name="tv_menu_followed_channels">Gefolgte Kanäle</string>
+    <string name="tv_menu_followed_games">Gefolgte Kategorien</string>
+    <string name="tv_menu_extras">Weitere Einträge im Seitenmenü</string>
+    <string name="tv_menu_extras_summary">Verknüpfungen zu Videos, Kanälen oder Kategorien, denen du folgst</string>
 </resources>

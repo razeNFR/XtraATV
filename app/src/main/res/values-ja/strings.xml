@@ -735,4 +735,9 @@
     <string name="tv_home_language_rows">ホームの言語別の行</string>
     <string name="tv_home_language_rows_summary">選択した言語ごとに人気配信の行を「人気」の下に表示</string>
     <string name="tv_popular_in">人気 · %1$s</string>
+    <string name="tv_menu_followed_videos">フォロー中の動画</string>
+    <string name="tv_menu_followed_channels">フォロー中のチャンネル</string>
+    <string name="tv_menu_followed_games">フォロー中のカテゴリ</string>
+    <string name="tv_menu_extras">サイドメニューの追加項目</string>
+    <string name="tv_menu_extras_summary">フォロー中の動画、チャンネル、カテゴリへのショートカット</string>
 </resources>

@@ -981,6 +981,9 @@ class MainActivity : AppCompatActivity() {
             R.id.savedMediaFragment to R.drawable.ic_file_download_black_24dp,
             R.id.tvNavSettings to R.drawable.baseline_settings_black_24,
             R.id.tvNavAccount to R.drawable.baseline_person_black_24,
+            R.id.tvNavFollowedVideos to R.drawable.tv_ic_video_library,
+            R.id.tvNavFollowedChannels to R.drawable.tv_ic_person,
+            R.id.tvNavFollowedGames to R.drawable.tv_ic_gamepad,
         )
         val menu = binding.navBar.menu
         tvMenuState.items = (0 until menu.size()).map { index ->
@@ -1025,6 +1028,18 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /** TV side menu: a tab of the followed channels (videos, channels, categories), its screen opened if needed. */
+    private fun openFollowedTab(key: String) {
+        val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.getOrNull(0)
+        if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment) {
+            current.showTab(key)
+        } else {
+            com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.requestedTab = key
+            binding.navBar.menu.findItem(R.id.followPagerFragment)?.let { NavigationUI.onNavDestinationSelected(it, navController) }
+                ?: navController.navigate(R.id.followPagerFragment)
         }
     }
 
@@ -2060,6 +2075,13 @@ class MainActivity : AppCompatActivity() {
             } else {
                 binding.navBarContainer.visibility = View.GONE
             }
+            if (isTv && prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
+                // shortcuts to the tabs of the followed channels, chosen in the Xtra TV settings
+                val extras = prefs.getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
+                if ("videos" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedVideos, Menu.NONE, R.string.tv_menu_followed_videos).setIcon(R.drawable.tv_ic_video_library)
+                if ("channels" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedChannels, Menu.NONE, R.string.tv_menu_followed_channels).setIcon(R.drawable.tv_ic_person)
+                if ("games" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedGames, Menu.NONE, R.string.tv_menu_followed_games).setIcon(R.drawable.tv_ic_gamepad)
+            }
             if (isTv) {
                 menu.add(Menu.NONE, R.id.tvNavSettings, Menu.NONE, R.string.settings).setIcon(R.drawable.baseline_settings_black_24)
                 menu.add(Menu.NONE, R.id.tvNavAccount, Menu.NONE, R.string.tv_account).setIcon(R.drawable.baseline_person_black_24)
@@ -2080,6 +2102,16 @@ class MainActivity : AppCompatActivity() {
                     }
                     R.id.tvNavAccount -> {
                         onAccountClicked()
+                        return@setOnItemSelectedListener false
+                    }
+                    R.id.tvNavFollowedVideos, R.id.tvNavFollowedChannels, R.id.tvNavFollowedGames -> {
+                        openFollowedTab(
+                            when (it.itemId) {
+                                R.id.tvNavFollowedVideos -> "2"
+                                R.id.tvNavFollowedChannels -> "3"
+                                else -> "0"
+                            }
+                        )
                         return@setOnItemSelectedListener false
                     }
                 }

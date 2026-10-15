@@ -96,6 +96,7 @@ object C {
     const val TV_AUDIO_ONLY_KEEP_ON_HOME = "tv_audio_only_keep_on_home"
     const val TV_FULLSCREEN_KEEP_ON_HOME = "tv_fullscreen_keep_on_home"
     const val TV_HOME_LANGUAGE_ROWS = "tv_home_language_rows"
+    const val TV_MENU_EXTRAS = "tv_menu_extras"
     const val TV_PLAYER_CLOCK = "tv_player_clock"
     const val TV_AMBIENT_COLOR = "tv_ambient_color"
     const val TV_STREAM_COLUMNS = "tv_stream_columns"

@@ -735,4 +735,9 @@
     <string name="tv_home_language_rows">首页按语言分行</string>
     <string name="tv_home_language_rows_summary">在“热门”下方为每种选中的语言显示一行热门直播</string>
     <string name="tv_popular_in">热门 · %1$s</string>
+    <string name="tv_menu_followed_videos">关注的视频</string>
+    <string name="tv_menu_followed_channels">关注的频道</string>
+    <string name="tv_menu_followed_games">关注的分类</string>
+    <string name="tv_menu_extras">侧边菜单的更多项目</string>
+    <string name="tv_menu_extras_summary">关注的视频、频道或分类的快捷方式</string>
 </resources>

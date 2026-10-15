@@ -735,4 +735,9 @@
     <string name="tv_home_language_rows">Righe per lingua nella home</string>
     <string name="tv_home_language_rows_summary">Una riga di stream popolari per ogni lingua selezionata, sotto Popolari</string>
     <string name="tv_popular_in">Popolari · %1$s</string>
+    <string name="tv_menu_followed_videos">Video dei seguiti</string>
+    <string name="tv_menu_followed_channels">Canali seguiti</string>
+    <string name="tv_menu_followed_games">Categorie seguite</string>
+    <string name="tv_menu_extras">Altre voci nel menu laterale</string>
+    <string name="tv_menu_extras_summary">Scorciatoie ai video, canali o categorie seguiti</string>
 </resources>

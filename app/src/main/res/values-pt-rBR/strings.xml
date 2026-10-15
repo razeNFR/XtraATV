@@ -735,4 +735,9 @@
     <string name="tv_home_language_rows">Linhas por idioma no início</string>
     <string name="tv_home_language_rows_summary">Uma linha de streams populares para cada idioma marcado, abaixo de Popular</string>
     <string name="tv_popular_in">Popular · %1$s</string>
+    <string name="tv_menu_followed_videos">Vídeos dos seguidos</string>
+    <string name="tv_menu_followed_channels">Canais seguidos</string>
+    <string name="tv_menu_followed_games">Categorias seguidas</string>
+    <string name="tv_menu_extras">Mais itens no menu lateral</string>
+    <string name="tv_menu_extras_summary">Atalhos para os vídeos, canais ou categorias seguidos</string>
 </resources>

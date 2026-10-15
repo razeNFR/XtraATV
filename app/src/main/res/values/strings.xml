@@ -754,4 +754,9 @@
     <string name="tv_home_language_rows">Rows by language on the home</string>
     <string name="tv_home_language_rows_summary">A row of the popular streams for each language checked, under Popular</string>
     <string name="tv_popular_in">Popular · %1$s</string>
+    <string name="tv_menu_followed_videos">Followed videos</string>
+    <string name="tv_menu_followed_channels">Followed channels</string>
+    <string name="tv_menu_followed_games">Followed categories</string>
+    <string name="tv_menu_extras">More entries in the side menu</string>
+    <string name="tv_menu_extras_summary">Shortcuts to the videos, channels or categories of the followed channels</string>
 </resources>

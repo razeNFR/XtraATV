@@ -736,4 +736,9 @@
     <string name="tv_home_language_rows">Ana sayfada dile göre satırlar</string>
     <string name="tv_home_language_rows_summary">Seçilen her dil için Popüler altında bir popüler yayın satırı</string>
     <string name="tv_popular_in">Popüler · %1$s</string>
+    <string name="tv_menu_followed_videos">Takip edilen videolar</string>
+    <string name="tv_menu_followed_channels">Takip edilen kanallar</string>
+    <string name="tv_menu_followed_games">Takip edilen kategoriler</string>
+    <string name="tv_menu_extras">Yan menüde ek girişler</string>
+    <string name="tv_menu_extras_summary">Takip edilen videolara, kanallara veya kategorilere kısayollar</string>
 </resources>

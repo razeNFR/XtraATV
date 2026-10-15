@@ -735,4 +735,9 @@
     <string name="tv_home_language_rows">Ряды по языкам на главной</string>
     <string name="tv_home_language_rows_summary">Ряд популярных трансляций для каждого отмеченного языка, под «Популярное»</string>
     <string name="tv_popular_in">Популярное · %1$s</string>
+    <string name="tv_menu_followed_videos">Видео отслеживаемых</string>
+    <string name="tv_menu_followed_channels">Отслеживаемые каналы</string>
+    <string name="tv_menu_followed_games">Отслеживаемые категории</string>
+    <string name="tv_menu_extras">Дополнительные пункты бокового меню</string>
+    <string name="tv_menu_extras_summary">Ярлыки к видео, каналам или категориям, которые вы отслеживаете</string>
 </resources>

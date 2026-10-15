@@ -735,4 +735,9 @@
     <string name="tv_home_language_rows">صفوف حسب اللغة في الرئيسية</string>
     <string name="tv_home_language_rows_summary">صف للبثوث الشائعة لكل لغة محددة، تحت الشائع</string>
     <string name="tv_popular_in">الشائع · %1$s</string>
+    <string name="tv_menu_followed_videos">فيديوهات المتابَعين</string>
+    <string name="tv_menu_followed_channels">القنوات المتابَعة</string>
+    <string name="tv_menu_followed_games">الفئات المتابَعة</string>
+    <string name="tv_menu_extras">عناصر إضافية في القائمة الجانبية</string>
+    <string name="tv_menu_extras_summary">اختصارات إلى فيديوهات أو قنوات أو فئات المتابَعين</string>
 </resources>

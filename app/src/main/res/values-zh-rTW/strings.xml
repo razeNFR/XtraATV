@@ -735,4 +735,9 @@
     <string name="tv_home_language_rows">首頁依語言分列</string>
     <string name="tv_home_language_rows_summary">在「熱門」下方為每種勾選的語言顯示一列熱門直播</string>
     <string name="tv_popular_in">熱門 · %1$s</string>
+    <string name="tv_menu_followed_videos">追隨的影片</string>
+    <string name="tv_menu_followed_channels">追隨的頻道</string>
+    <string name="tv_menu_followed_games">追隨的分類</string>
+    <string name="tv_menu_extras">側邊選單的更多項目</string>
+    <string name="tv_menu_extras_summary">追隨的影片、頻道或分類的捷徑</string>
 </resources>

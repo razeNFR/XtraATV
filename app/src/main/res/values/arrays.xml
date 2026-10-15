@@ -146,6 +146,19 @@
         <item>6</item>
     </string-array>
 
+    <!-- shortcuts of the TV side menu to the tabs of the followed channels -->
+    <string-array name="tvMenuExtrasEntries">
+        <item>@string/tv_menu_followed_videos</item>
+        <item>@string/tv_menu_followed_channels</item>
+        <item>@string/tv_menu_followed_games</item>
+    </string-array>
+
+    <string-array name="tvMenuExtrasValues" translatable="false">
+        <item>videos</item>
+        <item>channels</item>
+        <item>games</item>
+    </string-array>
+
     <!-- names of the card sizes, for 2 to 6 cards a row -->
     <string-array name="tvCardSizeEntries">
         <item>@string/tv_card_size_2</item>

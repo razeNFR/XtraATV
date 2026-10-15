@@ -15,4 +15,7 @@
     <item name="tvHeaderActions" type="id" />
     <item name="tvHeaderCompose" type="id" />
     <item name="tvSettingsRowBackground" type="id" />
+    <item name="tvNavFollowedVideos" type="id" />
+    <item name="tvNavFollowedChannels" type="id" />
+    <item name="tvNavFollowedGames" type="id" />
 </resources>
