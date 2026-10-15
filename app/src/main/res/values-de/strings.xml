@@ -747,4 +747,6 @@
     <string name="tv_multistream_focus">Fokusmodus: dieser Stream groß</string>
     <string name="tv_multistream_grid">Zurück zum Raster</string>
     <string name="tv_followed_videos_need_code">Die Videos gefolgter Kanäle brauchen die Anmeldung mit Code: melde dich über twitch.tv/activate an (Konto)</string>
+    <string name="tv_switch_loading">%1$s…</string>
+    <string name="tv_switch_error">Die Liste konnte nicht geladen werden, versuche es erneut</string>
 </resources>

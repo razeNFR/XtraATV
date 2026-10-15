@@ -231,25 +231,37 @@ object TvStreamSwitcher {
             recyclerView.scrollToPosition(0)
         }
         tabViews.forEachIndexed { index, view ->
-            view.setOnFocusChangeListener { _, hasFocus ->
+            // OK on a tab shows its list (loaded once); moving over the tabs changes nothing
+            view.setOnClickListener {
+                if (index == currentTab) {
+                    recyclerView.getChildAt(0)?.requestFocus()
+                    return@setOnClickListener
+                }
                 tabJob?.cancel()
-                if (hasFocus && index != currentTab) {
-                    tabJob = activity.lifecycleScope.launch {
-                        kotlinx.coroutines.delay(250L)
-                        val list = loadedTabs[index] ?: rows.getOrNull(index - 1)?.let { row ->
+                tabViews.forEachIndexed { i, tab -> tab.text = tabTitles[i] }
+                tabJob = activity.lifecycleScope.launch {
+                    val cached = loadedTabs[index]
+                    val list = cached ?: run {
+                        // loading: the tab says so until the list comes
+                        view.text = activity.getString(R.string.tv_switch_loading, tabTitles[index])
+                        rows.getOrNull(index - 1)?.let { row ->
                             com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.load(row.source())
                         }?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }?.also { loadedTabs[index] = it }
-                        if (list.isNullOrEmpty()) {
-                            if (list != null) {
-                                android.widget.Toast.makeText(activity, R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        } else if (dialog.isShowing) {
-                            showTab(index, list)
-                        }
+                    }
+                    view.text = tabTitles[index]
+                    if (!dialog.isShowing) {
+                        return@launch
+                    }
+                    if (list.isNullOrEmpty()) {
+                        android.widget.Toast.makeText(activity, if (list == null) R.string.tv_switch_error else R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        showTab(index, list)
+                        // the list is there: the focus goes to its first stream
+                        recyclerView.post { recyclerView.layoutManager?.findViewByPosition(0)?.requestFocus() }
                     }
                 }
             }
-            // down from a tab: the first card of its list
+            // down from a tab: the cards of the list shown
             view.setOnKeyListener { _, keyCode, event ->
                 if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN) {
                     (recyclerView.layoutManager?.findViewByPosition((recyclerView.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition())
@@ -302,8 +314,8 @@ object TvStreamSwitcher {
         }
         dialog.show()
         if (streams.isEmpty()) {
-            // nothing in the list of the stream: the first other row
-            tabViews.getOrNull(1)?.post { tabViews[1].requestFocus() }
+            // nothing in the list of the stream: the first other row is shown
+            tabViews.getOrNull(1)?.post { tabViews[1].requestFocus(); tabViews[1].performClick() }
         }
     }
 

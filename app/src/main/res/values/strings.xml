@@ -766,4 +766,6 @@
     <string name="tv_multistream_focus">Focus mode: this stream big</string>
     <string name="tv_multistream_grid">Back to the grid</string>
     <string name="tv_followed_videos_need_code">The videos of the followed channels need the login with the code: log in with twitch.tv/activate (Account)</string>
+    <string name="tv_switch_loading">%1$s…</string>
+    <string name="tv_switch_error">The list could not be loaded, try again</string>
 </resources>

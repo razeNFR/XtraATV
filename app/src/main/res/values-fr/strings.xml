@@ -747,4 +747,6 @@
     <string name="tv_multistream_focus">Mode focus : ce stream en grand</string>
     <string name="tv_multistream_grid">Revenir à la grille</string>
     <string name="tv_followed_videos_need_code">Les vidéos des suivis demandent la connexion avec le code : connecte-toi avec twitch.tv/activate (Compte)</string>
+    <string name="tv_switch_loading">%1$s…</string>
+    <string name="tv_switch_error">La liste n\'a pas pu être chargée, réessaie</string>
 </resources>

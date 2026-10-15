@@ -747,4 +747,6 @@
     <string name="tv_multistream_focus">Режим фокуса: эта трансляция крупно</string>
     <string name="tv_multistream_grid">Вернуться к сетке</string>
     <string name="tv_followed_videos_need_code">Для видео отслеживаемых нужен вход по коду: войдите через twitch.tv/activate (Аккаунт)</string>
+    <string name="tv_switch_loading">%1$s…</string>
+    <string name="tv_switch_error">Не удалось загрузить список, попробуйте ещё раз</string>
 </resources>

@@ -748,4 +748,6 @@
     <string name="tv_multistream_focus">Mode fokus: stream ini besar</string>
     <string name="tv_multistream_grid">Kembali ke grid</string>
     <string name="tv_followed_videos_need_code">Video yang diikuti memerlukan login dengan kode: login lewat twitch.tv/activate (Akun)</string>
+    <string name="tv_switch_loading">%1$s…</string>
+    <string name="tv_switch_error">Daftar tidak dapat dimuat, coba lagi</string>
 </resources>

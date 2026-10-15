@@ -747,4 +747,6 @@
     <string name="tv_multistream_focus">وضع التركيز: هذا البث كبيرًا</string>
     <string name="tv_multistream_grid">العودة إلى الشبكة</string>
     <string name="tv_followed_videos_need_code">فيديوهات المتابَعين تتطلب تسجيل الدخول بالرمز: سجّل الدخول عبر twitch.tv/activate (الحساب)</string>
+    <string name="tv_switch_loading">%1$s…</string>
+    <string name="tv_switch_error">تعذر تحميل القائمة، حاول مرة أخرى</string>
 </resources>

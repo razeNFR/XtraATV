@@ -747,4 +747,6 @@
     <string name="tv_multistream_focus">焦点模式：放大此直播</string>
     <string name="tv_multistream_grid">返回网格</string>
     <string name="tv_followed_videos_need_code">关注的视频需要使用代码登录：通过 twitch.tv/activate 登录（账户）</string>
+    <string name="tv_switch_loading">%1$s…</string>
+    <string name="tv_switch_error">无法加载列表，请重试</string>
 </resources>
