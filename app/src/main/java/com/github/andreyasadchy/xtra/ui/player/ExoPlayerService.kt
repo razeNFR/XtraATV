@@ -961,7 +961,7 @@ class ExoPlayerService : BasePlaybackService() {
             TvLoadTimer.mark("Ouverture du lecteur")
         } else {
             // a restart (ad blocker, error): the player asks the access itself
-            TvStreamPrefetch.clear()
+            channelLogin?.let { TvStreamPrefetch.forget(it) }
         }
         channelLogin?.let { channelLogin ->
             var streamProxy = if (useStreamProxy) {
@@ -2275,6 +2275,63 @@ class ExoPlayerService : BasePlaybackService() {
             rebufferTimes.clear()
             parameters = buildUponParameters().clearViewportSizeConstraints().setForceHighestSupportedBitrate(autoHighest).build()
         }
+    }
+
+    /**
+     * TV, left / right or another stream from the player: the service and its player are kept for the next stream
+     * (no new player to make). Called before the next stream is saved: what belongs to this stream stops here.
+     */
+    fun prepareStreamSwitch(): Boolean {
+        if (!created || type != STREAM || useStreamProxy || !customProxyList.isNullOrEmpty() || quality?.name == VideoQuality.AUDIO_ONLY_QUALITY) {
+            return false
+        }
+        started = false
+        loaded = false
+        if (secondaryPlayer != null) {
+            stopSecondaryPlayer()
+        }
+        adDelayJob?.cancel()
+        adDelayJob = null
+        player?.stop()
+        player?.clearMediaItems()
+        return true
+    }
+
+    /** The next stream is saved: everything of the previous one is reset, as in a new service, and the stream loads. */
+    fun startSwitchedStream() {
+        if (!created) {
+            return
+        }
+        playingAds = false
+        stopProxy = false
+        stopVideoSwap = false
+        videoSwapActive = false
+        currentVideoSwapItem = 0
+        pendingProxyStat = null
+        backupQualities = null
+        updateQualities = false
+        ignorePlaylistUpdate = false
+        qualities = null
+        quality = null
+        previousQuality = null
+        restoreQuality = false
+        playlistUrl = null
+        restorePlaylist = false
+        currentCustomProxy = 0
+        currentStreamProxy = 0
+        skipAccessToken = false
+        chatUrl = null
+        savedPosition = null
+        videoStartPosition = null
+        videoPreviewLookupDone = false
+        paused = false
+        player?.let { player ->
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                clearOverrides()
+                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
+            }.build()
+        }
+        start(restorePauseState = false)
     }
 
     private fun stopSecondaryPlayer() {

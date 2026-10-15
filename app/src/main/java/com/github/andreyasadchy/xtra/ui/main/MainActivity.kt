@@ -1796,7 +1796,11 @@ class MainActivity : AppCompatActivity() {
         // TV, no player open: the playback service starts as soon as the stream is saved, while the screen of the
         // player is made (it binds to it once ready, the service starts only once)
         val startServiceEarly = isTv && playerFragment == null && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER
-        (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
+        // TV, a stream already playing full screen: the next one plays in the same service, only the screen is made again
+        val keptService = if (isTv) (playerFragment as? ExoPlayerFragment)?.handOverForStreamSwitch() else null
+        if (keptService == null) {
+            (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
+        }
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.STREAM,
             streamId = stream.id,
@@ -1812,7 +1816,9 @@ class MainActivity : AppCompatActivity() {
             createdAt = stream.createdAt,
             viewerCount = stream.viewerCount,
         )) {
-            if (startServiceEarly && playerFragment != null && currentStreamLogin == stream.channelLogin) {
+            if (keptService != null) {
+                keptService.startSwitchedStream()
+            } else if (startServiceEarly && playerFragment != null && currentStreamLogin == stream.channelLogin) {
                 startService(Intent(this, com.github.andreyasadchy.xtra.ui.player.ExoPlayerService::class.java).apply {
                     action = com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.INTENT_START
                 })
@@ -1823,6 +1829,38 @@ class MainActivity : AppCompatActivity() {
             else -> ExoPlayerFragment()
         }
         startPlayer(fragment)
+        prepareNeighborStreams()
+    }
+
+    private var neighborJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * TV: while a stream plays, the access of Twitch to the streams of left / right is asked in the background (a few
+     * seconds after the start, again every 90 s), switching to them does not wait for it.
+     */
+    private fun prepareNeighborStreams() {
+        neighborJob?.cancel()
+        if (!isTv) {
+            return
+        }
+        val login = currentStreamLogin ?: return
+        neighborJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(4000L)
+            while (currentStreamLogin == login && playerFragment != null) {
+                val queue = streamQueue
+                val index = queue.indexOfFirst { it.channelLogin == login }
+                if (index >= 0 && queue.size > 1) {
+                    com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.prepareNeighbors(
+                        this@MainActivity,
+                        listOf(
+                            queue[Math.floorMod(index - 1, queue.size)].channelLogin,
+                            queue[Math.floorMod(index + 1, queue.size)].channelLogin,
+                        ).filter { it != login }
+                    )
+                }
+                kotlinx.coroutines.delay(90_000L)
+            }
+        }
     }
 
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false, qualities: String? = null) {
@@ -2069,6 +2107,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closePlayer() {
+        neighborJob?.cancel()
+        com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.clear()
         closeTvPip()
         setMainContentFocusable(true)
         // back on the home: the card of the stream that was watched, else the first stream

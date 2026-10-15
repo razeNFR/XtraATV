@@ -648,6 +648,24 @@ class ExoPlayerFragment : PlayerFragment() {
         playbackService = null
     }
 
+    /**
+     * TV: the next stream plays in the same service (left / right, another stream from the player), this screen lets it
+     * go without stopping it. Null when it can't be kept (proxy, sound only...): the player is closed as before.
+     */
+    fun handOverForStreamSwitch(): ExoPlayerService? {
+        val service = playbackService ?: return null
+        if (!isTv || !isMaximizedPlayer() || !service.prepareStreamSwitch()) {
+            return null
+        }
+        playerListener?.let { (service.secondaryPlayer ?: service.player)?.removeListener(it) }
+        playerListener = null
+        service.serviceListener = null
+        serviceConnection?.let { requireContext().unbindService(it) }
+        serviceConnection = null
+        playbackService = null
+        return service
+    }
+
     override fun close(deleteStates: Boolean) {
         playbackService?.pause()
         playbackService?.stop()
