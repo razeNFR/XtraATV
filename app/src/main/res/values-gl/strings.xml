@@ -744,4 +744,6 @@
     <string name="tv_switch_suggested">Suxestións</string>
     <string name="tv_switch_empty">Ningún stream en directo nesta lista</string>
     <string name="tv_pip_hint">Xanela pequena: mantén OK para intercambiar, Atrás para pechala</string>
+    <string name="tv_multistream_focus">Modo foco: este stream en grande</string>
+    <string name="tv_multistream_grid">Volver á grade</string>
 </resources>	

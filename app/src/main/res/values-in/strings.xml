@@ -745,4 +745,6 @@
     <string name="tv_switch_suggested">Saran</string>
     <string name="tv_switch_empty">Tidak ada siaran langsung di daftar ini</string>
     <string name="tv_pip_hint">Jendela kecil: tahan OK untuk menukar, Kembali untuk menutup</string>
+    <string name="tv_multistream_focus">Mode fokus: stream ini besar</string>
+    <string name="tv_multistream_grid">Kembali ke grid</string>
 </resources>

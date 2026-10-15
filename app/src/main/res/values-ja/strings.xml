@@ -744,4 +744,6 @@
     <string name="tv_switch_suggested">おすすめ</string>
     <string name="tv_switch_empty">このリストに配信中のものはありません</string>
     <string name="tv_pip_hint">小窓: OK長押しで入れ替え、戻るで閉じる</string>
+    <string name="tv_multistream_focus">フォーカスモード: この配信を大きく</string>
+    <string name="tv_multistream_grid">グリッドに戻る</string>
 </resources>

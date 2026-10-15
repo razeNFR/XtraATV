@@ -744,4 +744,6 @@
     <string name="tv_switch_suggested">Vorschläge</string>
     <string name="tv_switch_empty">Kein Livestream in dieser Liste</string>
     <string name="tv_pip_hint">Kleines Fenster: OK gedrückt halten zum Tauschen, Zurück zum Schließen</string>
+    <string name="tv_multistream_focus">Fokusmodus: dieser Stream groß</string>
+    <string name="tv_multistream_grid">Zurück zum Raster</string>
 </resources>

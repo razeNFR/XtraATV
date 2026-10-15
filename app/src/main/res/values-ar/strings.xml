@@ -744,4 +744,6 @@
     <string name="tv_switch_suggested">مقترحات</string>
     <string name="tv_switch_empty">لا يوجد بث مباشر في هذه القائمة</string>
     <string name="tv_pip_hint">نافذة صغيرة: اضغط مطولًا على OK للتبديل، ورجوع للإغلاق</string>
+    <string name="tv_multistream_focus">وضع التركيز: هذا البث كبيرًا</string>
+    <string name="tv_multistream_grid">العودة إلى الشبكة</string>
 </resources>

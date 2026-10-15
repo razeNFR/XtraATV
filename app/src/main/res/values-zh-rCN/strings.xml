@@ -744,4 +744,6 @@
     <string name="tv_switch_suggested">推荐</string>
     <string name="tv_switch_empty">此列表中没有正在直播的频道</string>
     <string name="tv_pip_hint">小窗口：长按 OK 交换直播，按返回关闭</string>
+    <string name="tv_multistream_focus">焦点模式：放大此直播</string>
+    <string name="tv_multistream_grid">返回网格</string>
 </resources>

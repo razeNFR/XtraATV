@@ -744,4 +744,6 @@
     <string name="tv_switch_suggested">Предложения</string>
     <string name="tv_switch_empty">В этом списке нет трансляций в эфире</string>
     <string name="tv_pip_hint">Маленькое окно: удерживайте OK, чтобы поменять, «Назад» — закрыть</string>
+    <string name="tv_multistream_focus">Режим фокуса: эта трансляция крупно</string>
+    <string name="tv_multistream_grid">Вернуться к сетке</string>
 </resources>

@@ -60,6 +60,13 @@ class MultiStreamFragment : Fragment() {
     private var cellChatLogin: String? = null
     private var cellChat: FrameLayout? = null
 
+    /**
+     * Focus mode (3 or 4 streams): one stream big at the top left with its chat at the right, the others small under it.
+     * OK on a small stream puts it big.
+     */
+    private var focusMode = false
+    private var bigLogin: String? = null
+
     /** 2 streams: width of the first stream, in percent of the screen. */
     private var split = 50
 
@@ -138,9 +145,27 @@ class MultiStreamFragment : Fragment() {
         }
         tileView.setOnKeyListener { _, keyCode, event ->
             if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) && event.action == KeyEvent.ACTION_UP) {
-                showPanel(tile)
+                if (panelOpenedByHold) {
+                    panelOpenedByHold = false
+                } else if (isFocusLayout() && tile.stream.channelLogin != bigTile()?.stream?.channelLogin) {
+                    // focus mode: OK on a small stream puts it big
+                    bigLogin = tile.stream.channelLogin
+                    layoutTiles()
+                    updateCellChat()
+                } else {
+                    showPanel(tile)
+                }
                 true
             } else if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) && event.action == KeyEvent.ACTION_DOWN) {
+                // OK held: the panel of the stream, also for a small stream of the focus mode (the release of the key
+                // goes to the panel then, the flag is cleared at the next press)
+                if (event.repeatCount == 0) {
+                    panelOpenedByHold = false
+                }
+                if (event.repeatCount == 1 && isFocusLayout()) {
+                    panelOpenedByHold = true
+                    showPanel(tile)
+                }
                 true
             } else if (event.action == KeyEvent.ACTION_DOWN && keyCode in DIRECTIONS) {
                 // the focus only moves between the streams, never out of them
@@ -164,6 +189,13 @@ class MultiStreamFragment : Fragment() {
             }.build()
         }
     }
+
+    private var panelOpenedByHold = false
+
+    private fun isFocusLayout() = focusMode && tiles.size >= 3
+
+    /** Focus mode: the big stream (the first one when none was chosen). */
+    private fun bigTile() = tiles.find { it.stream.channelLogin != null && it.stream.channelLogin == bigLogin } ?: tiles.firstOrNull()
 
     /** Panel of a stream: open it, its chat, change it, add a stream, its size. */
     private fun showPanel(tile: Tile) {
@@ -192,7 +224,7 @@ class MultiStreamFragment : Fragment() {
                         }
                     }
                 }
-                3 -> {
+                3 -> if (!isFocusLayout()) {
                     val pinned = pinnedChat == login
                     actions += TvActionPanel.Action(getString(if (pinned) R.string.tv_multistream_unpin_chat else R.string.tv_multistream_pin_chat), R.drawable.tv_ic_pin) {
                         pinnedChat = if (pinned) null else login
@@ -218,6 +250,22 @@ class MultiStreamFragment : Fragment() {
                         updateCellChat()
                         added.view.requestFocus()
                     }
+                }
+            }
+        }
+        if (tiles.size >= 3) {
+            if (isFocusLayout()) {
+                actions += TvActionPanel.Action(getString(R.string.tv_multistream_grid), R.drawable.tv_ic_fullscreen) {
+                    focusMode = false
+                    layoutTiles()
+                    updateCellChat()
+                }
+            } else {
+                actions += TvActionPanel.Action(getString(R.string.tv_multistream_focus), R.drawable.tv_ic_fullscreen) {
+                    focusMode = true
+                    bigLogin = login
+                    layoutTiles()
+                    updateCellChat()
                 }
             }
         }
@@ -256,6 +304,9 @@ class MultiStreamFragment : Fragment() {
         tiles.remove(tile)
         if (pinnedChat == login) {
             pinnedChat = null
+        }
+        if (bigLogin == login) {
+            bigLogin = null
         }
         login?.let {
             chatsShown.remove(it)
@@ -297,6 +348,9 @@ class MultiStreamFragment : Fragment() {
         if (pinnedChat == oldLogin) {
             pinnedChat = newLogin
         }
+        if (bigLogin == oldLogin) {
+            bigLogin = newLogin
+        }
         updateChats()
         updateCellChat()
         tile.view.requestFocus()
@@ -309,6 +363,25 @@ class MultiStreamFragment : Fragment() {
             return
         }
         val count = tiles.size
+        if (isFocusLayout()) {
+            // the big stream at the top left (2/3 of the width, 16:9), its chat at its right, the others in a row under it
+            val big = bigTile()
+            val bigWidth = width * 2 / 3
+            val bigHeight = minOf(bigWidth * 9 / 16, height * 2 / 3)
+            val smalls = tiles.filter { it !== big }
+            val smallHeight = height - bigHeight
+            val smallWidth = minOf(width / smalls.size.coerceAtLeast(1), smallHeight * 16 / 9)
+            val start = (width - smallWidth * smalls.size) / 2
+            big?.let { applyParams(it.view, FrameLayout.LayoutParams(bigWidth, bigHeight)) }
+            smalls.forEachIndexed { index, tile ->
+                applyParams(tile.view, FrameLayout.LayoutParams(smallWidth, smallHeight).apply {
+                    leftMargin = start + index * smallWidth
+                    topMargin = bigHeight
+                })
+            }
+            layoutChats()
+            return
+        }
         tiles.forEachIndexed { index, tile ->
             val params = when (count) {
                 1 -> FrameLayout.LayoutParams(width, height)
@@ -373,9 +446,14 @@ class MultiStreamFragment : Fragment() {
             return
         }
         val focused = tiles.find { it.view.hasFocus() }?.stream
-        val stream = if (tiles.size == 3 && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
-            tiles.find { it.stream.channelLogin == pinnedChat }?.stream ?: focused
-        } else null
+        val chatDisabled = requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)
+        val stream = when {
+            chatDisabled -> null
+            // focus mode: the chat of the big stream, at its right
+            isFocusLayout() -> bigTile()?.stream
+            tiles.size == 3 -> tiles.find { it.stream.channelLogin == pinnedChat }?.stream ?: focused
+            else -> null
+        }
         val login = stream?.channelLogin
         if (login == cellChatLogin) {
             return
@@ -405,10 +483,19 @@ class MultiStreamFragment : Fragment() {
             })
         }
         cellChat?.let {
-            applyParams(it, FrameLayout.LayoutParams(width / 2, height / 2).apply {
-                leftMargin = width / 2
-                topMargin = height / 2
-            })
+            if (isFocusLayout()) {
+                val bigWidth = width * 2 / 3
+                val bigHeight = minOf(bigWidth * 9 / 16, height * 2 / 3)
+                applyParams(it, FrameLayout.LayoutParams(width - bigWidth, bigHeight).apply {
+                    leftMargin = bigWidth
+                    topMargin = 0
+                })
+            } else {
+                applyParams(it, FrameLayout.LayoutParams(width / 2, height / 2).apply {
+                    leftMargin = width / 2
+                    topMargin = height / 2
+                })
+            }
         }
     }
 

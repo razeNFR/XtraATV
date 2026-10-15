@@ -744,4 +744,6 @@
     <string name="tv_switch_suggested">Sugestões</string>
     <string name="tv_switch_empty">Nenhum stream ao vivo nesta lista</string>
     <string name="tv_pip_hint">Janela pequena: segure OK para trocar, Voltar para fechar</string>
+    <string name="tv_multistream_focus">Modo foco: este stream em tamanho grande</string>
+    <string name="tv_multistream_grid">Voltar à grade</string>
 </resources>

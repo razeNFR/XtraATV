@@ -744,4 +744,6 @@
     <string name="tv_switch_suggested">Suggestions</string>
     <string name="tv_switch_empty">Aucun stream en direct dans cette liste</string>
     <string name="tv_pip_hint">Petite fenêtre : maintiens OK pour inverser les streams, Retour pour la fermer</string>
+    <string name="tv_multistream_focus">Mode focus : ce stream en grand</string>
+    <string name="tv_multistream_grid">Revenir à la grille</string>
 </resources>

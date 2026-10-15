@@ -763,4 +763,6 @@
     <string name="tv_switch_suggested">Suggested</string>
     <string name="tv_switch_empty">No live stream in this list</string>
     <string name="tv_pip_hint">Small window: hold OK to swap the streams, back to close it</string>
+    <string name="tv_multistream_focus">Focus mode: this stream big</string>
+    <string name="tv_multistream_grid">Back to the grid</string>
 </resources>
