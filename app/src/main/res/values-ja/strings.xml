@@ -646,10 +646,13 @@
     <string name="tv_dpad_switch_stream_summary">コントロールが非表示のとき、左右キーで配信を開いたリストの前または次の配信者に切り替えます</string>
     <string name="tv_home_languages">人気の言語</string>
     <string name="tv_home_languages_summary">人気（ホームの列と人気ページ）の配信をこれらの言語のみに、未選択ならすべての言語</string>
-    <string name="tv_home_cards">ホームの配信カード</string>
-    <string name="tv_home_cards_summary">画面幅に %s 枚</string>
-    <string name="tv_stream_columns">リストの配信の列数</string>
-    <string name="tv_stream_columns_summary">%s 列: 列が少ないほどカードが大きい</string>
+    <string name="tv_home_cards">ホームのカードサイズ</string>
+    <string name="tv_stream_columns">リストのカードサイズ</string>
+    <string name="tv_card_size_2">特大 · 1行に2枚</string>
+    <string name="tv_card_size_3">大 · 1行に3枚</string>
+    <string name="tv_card_size_4">中 · 1行に4枚</string>
+    <string name="tv_card_size_5">小 · 1行に5枚</string>
+    <string name="tv_card_size_6">極小 · 1行に6枚</string>
     <string name="tv_channel_videos">チャンネルの動画</string>
     <string name="tv_follow_failed">フォローを変更できませんでした</string>
     <string name="tv_stop_playback">再生を停止</string>
@@ -721,4 +724,15 @@
     <string name="tv_multistream_change">配信者を変更</string>
     <string name="tv_multistream_add">配信者を追加</string>
     <string name="tv_multistream_size">この配信のサイズ</string>
+    <string name="tv_favorite_add">お気に入りに追加</string>
+    <string name="tv_favorite_remove">お気に入りから削除</string>
+    <string name="tv_favorite_added">%1$s をお気に入りに追加しました</string>
+    <string name="tv_favorite_removed">%1$s をお気に入りから削除しました</string>
+    <string name="tv_favorites">お気に入りチャンネル</string>
+    <string name="tv_favorites_empty">なし: 配信でOKを長押しして「お気に入りに追加」</string>
+    <string name="tv_favorites_count">%1$d チャンネル、配信中のフォローの先頭に表示。並べ替えと削除</string>
+    <string name="tv_favorites_how">配信カードでOKを長押しして「お気に入りに追加」を選択</string>
+    <string name="tv_home_language_rows">ホームの言語別の行</string>
+    <string name="tv_home_language_rows_summary">選択した言語ごとに人気配信の行を「人気」の下に表示</string>
+    <string name="tv_popular_in">人気 · %1$s</string>
 </resources>

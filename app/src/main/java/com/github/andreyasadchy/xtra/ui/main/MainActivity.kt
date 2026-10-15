@@ -154,6 +154,8 @@ class MainActivity : AppCompatActivity() {
         prefs = prefs()
         migrateSettings()
         if (resources.getBoolean(R.bool.isTv)) {
+            // favorite channels, read before the followed streams are loaded
+            com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
             prefs.edit {
                 // on TV leaving the app stops the stream: no picture-in-picture, no background audio (the phone settings are hidden)
                 putBoolean(C.PLAYER_PICTURE_IN_PICTURE, false)

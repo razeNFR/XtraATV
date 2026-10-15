@@ -647,10 +647,13 @@
     <string name="tv_dpad_switch_stream_summary">Saat kontrol tersembunyi, kiri dan kanan berpindah ke streamer sebelumnya atau berikutnya dari daftar asal stream</string>
     <string name="tv_home_languages">Bahasa Populer</string>
     <string name="tv_home_languages_summary">Siaran Populer (baris beranda dan halaman Populer) hanya dalam bahasa ini, semua bahasa jika tidak ada yang dicentang</string>
-    <string name="tv_home_cards">Kartu stream di beranda</string>
-    <string name="tv_home_cards_summary">%s kartu selebar layar</string>
-    <string name="tv_stream_columns">Kolom stream di daftar</string>
-    <string name="tv_stream_columns_summary">%s kolom: lebih sedikit kolom, kartu lebih besar</string>
+    <string name="tv_home_cards">Ukuran kartu di beranda</string>
+    <string name="tv_stream_columns">Ukuran kartu di daftar</string>
+    <string name="tv_card_size_2">Sangat besar · 2 per baris</string>
+    <string name="tv_card_size_3">Besar · 3 per baris</string>
+    <string name="tv_card_size_4">Sedang · 4 per baris</string>
+    <string name="tv_card_size_5">Kecil · 5 per baris</string>
+    <string name="tv_card_size_6">Sangat kecil · 6 per baris</string>
     <string name="tv_channel_videos">Video kanal</string>
     <string name="tv_follow_failed">Tidak dapat mengubah status mengikuti</string>
     <string name="tv_stop_playback">Hentikan pemutaran</string>
@@ -722,4 +725,15 @@
     <string name="tv_multistream_change">Ganti streamer</string>
     <string name="tv_multistream_add">Tambah streamer</string>
     <string name="tv_multistream_size">Ukuran siaran ini</string>
+    <string name="tv_favorite_add">Tambah ke favorit</string>
+    <string name="tv_favorite_remove">Hapus dari favorit</string>
+    <string name="tv_favorite_added">%1$s ditambahkan ke favorit</string>
+    <string name="tv_favorite_removed">%1$s dihapus dari favorit</string>
+    <string name="tv_favorites">Channel favorit</string>
+    <string name="tv_favorites_empty">Tidak ada: tekan lama OK pada stream, lalu “Tambah ke favorit”</string>
+    <string name="tv_favorites_count">%1$d channel, pertama di siaran yang diikuti. Urutan dan penghapusan</string>
+    <string name="tv_favorites_how">Tekan lama OK pada kartu stream, lalu pilih “Tambah ke favorit”</string>
+    <string name="tv_home_language_rows">Baris per bahasa di beranda</string>
+    <string name="tv_home_language_rows_summary">Satu baris stream populer untuk tiap bahasa yang dipilih, di bawah Populer</string>
+    <string name="tv_popular_in">Populer · %1$s</string>
 </resources>

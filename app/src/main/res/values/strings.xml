@@ -665,10 +665,13 @@
     <string name="tv_dpad_switch_stream_summary">When the controls are hidden, left and right go to the previous or next streamer of the list the stream was opened from</string>
     <string name="tv_home_languages">Languages of Popular</string>
     <string name="tv_home_languages_summary">Streams of Popular (row of the home and Popular page) in these languages only, all languages when none is checked</string>
-    <string name="tv_home_cards">Stream cards on the home</string>
-    <string name="tv_home_cards_summary">%s cards in the width of the screen</string>
-    <string name="tv_stream_columns">Stream columns in the lists</string>
-    <string name="tv_stream_columns_summary">%s columns: fewer columns, bigger cards</string>
+    <string name="tv_home_cards">Card size on the home</string>
+    <string name="tv_stream_columns">Card size in the lists</string>
+    <string name="tv_card_size_2">Very big · 2 a row</string>
+    <string name="tv_card_size_3">Big · 3 a row</string>
+    <string name="tv_card_size_4">Medium · 4 a row</string>
+    <string name="tv_card_size_5">Small · 5 a row</string>
+    <string name="tv_card_size_6">Very small · 6 a row</string>
     <string name="tv_channel_videos">Videos of the channel</string>
     <string name="tv_follow_failed">Could not change the follow</string>
     <string name="tv_stop_playback">Stop playback</string>
@@ -740,4 +743,15 @@
     <string name="tv_multistream_change">Change streamer</string>
     <string name="tv_multistream_add">Add a streamer</string>
     <string name="tv_multistream_size">Size of this stream</string>
+    <string name="tv_favorite_add">Add to favorites</string>
+    <string name="tv_favorite_remove">Remove from favorites</string>
+    <string name="tv_favorite_added">%1$s added to the favorites</string>
+    <string name="tv_favorite_removed">%1$s removed from the favorites</string>
+    <string name="tv_favorites">Favorite channels</string>
+    <string name="tv_favorites_empty">None: long press OK on a stream, then “Add to favorites”</string>
+    <string name="tv_favorites_count">%1$d channels, first in the followed streams when live. Order and removal</string>
+    <string name="tv_favorites_how">Long press OK on a stream card, then choose “Add to favorites”</string>
+    <string name="tv_home_language_rows">Rows by language on the home</string>
+    <string name="tv_home_language_rows_summary">A row of the popular streams for each language checked, under Popular</string>
+    <string name="tv_popular_in">Popular · %1$s</string>
 </resources>

@@ -646,10 +646,13 @@
     <string name="tv_dpad_switch_stream_summary">控制列隱藏時，按左右鍵切換到開啟直播的清單中的上一個或下一個實況主</string>
     <string name="tv_home_languages">熱門的語言</string>
     <string name="tv_home_languages_summary">熱門（首頁列和熱門頁面）的直播僅限這些語言，未勾選時為所有語言</string>
-    <string name="tv_home_cards">首頁直播卡片</string>
-    <string name="tv_home_cards_summary">螢幕寬度顯示 %s 張卡片</string>
-    <string name="tv_stream_columns">清單中的直播欄數</string>
-    <string name="tv_stream_columns_summary">%s 欄：欄數越少，卡片越大</string>
+    <string name="tv_home_cards">首頁卡片大小</string>
+    <string name="tv_stream_columns">列表卡片大小</string>
+    <string name="tv_card_size_2">特大 · 每列 2 個</string>
+    <string name="tv_card_size_3">大 · 每列 3 個</string>
+    <string name="tv_card_size_4">中 · 每列 4 個</string>
+    <string name="tv_card_size_5">小 · 每列 5 個</string>
+    <string name="tv_card_size_6">特小 · 每列 6 個</string>
     <string name="tv_channel_videos">頻道影片</string>
     <string name="tv_follow_failed">無法變更追隨</string>
     <string name="tv_stop_playback">停止播放</string>
@@ -721,4 +724,15 @@
     <string name="tv_multistream_change">更換實況主</string>
     <string name="tv_multistream_add">新增實況主</string>
     <string name="tv_multistream_size">此直播的大小</string>
+    <string name="tv_favorite_add">加入收藏</string>
+    <string name="tv_favorite_remove">從收藏中移除</string>
+    <string name="tv_favorite_added">已將 %1$s 加入收藏</string>
+    <string name="tv_favorite_removed">已將 %1$s 從收藏中移除</string>
+    <string name="tv_favorites">收藏的頻道</string>
+    <string name="tv_favorites_empty">無：在直播上長按 OK，然後選擇「加入收藏」</string>
+    <string name="tv_favorites_count">%1$d 個頻道，直播時排在追隨的最前面。排序和移除</string>
+    <string name="tv_favorites_how">在直播卡片上長按 OK，然後選擇「加入收藏」</string>
+    <string name="tv_home_language_rows">首頁依語言分列</string>
+    <string name="tv_home_language_rows_summary">在「熱門」下方為每種勾選的語言顯示一列熱門直播</string>
+    <string name="tv_popular_in">熱門 · %1$s</string>
 </resources>

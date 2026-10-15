@@ -646,10 +646,13 @@
     <string name="tv_dpad_switch_stream_summary">عند إخفاء عناصر التحكم، ينتقل اليسار واليمين إلى صاحب البث السابق أو التالي في القائمة التي فُتح منها البث</string>
     <string name="tv_home_languages">لغات الشائع</string>
     <string name="tv_home_languages_summary">بثوث الشائع (صف الصفحة الرئيسية وصفحة الشائع) بهذه اللغات فقط، كل اللغات إذا لم تحدد أي لغة</string>
-    <string name="tv_home_cards">بطاقات البث في الصفحة الرئيسية</string>
-    <string name="tv_home_cards_summary">%s بطاقات بعرض الشاشة</string>
-    <string name="tv_stream_columns">أعمدة البث في القوائم</string>
-    <string name="tv_stream_columns_summary">%s أعمدة: أعمدة أقل وبطاقات أكبر</string>
+    <string name="tv_home_cards">حجم البطاقات في الصفحة الرئيسية</string>
+    <string name="tv_stream_columns">حجم البطاقات في القوائم</string>
+    <string name="tv_card_size_2">كبيرة جدًا · 2 في الصف</string>
+    <string name="tv_card_size_3">كبيرة · 3 في الصف</string>
+    <string name="tv_card_size_4">متوسطة · 4 في الصف</string>
+    <string name="tv_card_size_5">صغيرة · 5 في الصف</string>
+    <string name="tv_card_size_6">صغيرة جدًا · 6 في الصف</string>
     <string name="tv_channel_videos">فيديوهات القناة</string>
     <string name="tv_follow_failed">تعذر تغيير المتابعة</string>
     <string name="tv_stop_playback">إيقاف التشغيل</string>
@@ -721,4 +724,15 @@
     <string name="tv_multistream_change">تغيير صانع المحتوى</string>
     <string name="tv_multistream_add">إضافة صانع محتوى</string>
     <string name="tv_multistream_size">حجم هذا البث</string>
+    <string name="tv_favorite_add">إضافة إلى المفضلة</string>
+    <string name="tv_favorite_remove">إزالة من المفضلة</string>
+    <string name="tv_favorite_added">تمت إضافة %1$s إلى المفضلة</string>
+    <string name="tv_favorite_removed">تمت إزالة %1$s من المفضلة</string>
+    <string name="tv_favorites">القنوات المفضلة</string>
+    <string name="tv_favorites_empty">لا شيء: اضغط مطولًا على OK في بث ثم «إضافة إلى المفضلة»</string>
+    <string name="tv_favorites_count">%1$d قنوات، أولًا في المتابَعة المباشرة. الترتيب والإزالة</string>
+    <string name="tv_favorites_how">اضغط مطولًا على OK في بطاقة بث ثم اختر «إضافة إلى المفضلة»</string>
+    <string name="tv_home_language_rows">صفوف حسب اللغة في الرئيسية</string>
+    <string name="tv_home_language_rows_summary">صف للبثوث الشائعة لكل لغة محددة، تحت الشائع</string>
+    <string name="tv_popular_in">الشائع · %1$s</string>
 </resources>

@@ -36,6 +36,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -141,6 +142,8 @@ fun TvHomeScreen(
     actions: TvHomeActions,
     resume: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>? = null,
     stats: TvHomeStats? = null,
+    /** Popular streams of one language each (Xtra TV settings), under Popular. */
+    languageRows: List<TvHomeRow<Stream>> = emptyList(),
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -155,7 +158,7 @@ fun TvHomeScreen(
     val rows = listOfNotNull(
         followed?.takeIf { it.items.isNotEmpty() }?.let { "followed" to it },
         popular?.takeIf { it.items.isNotEmpty() }?.let { "popular" to it },
-    )
+    ) + languageRows.filter { it.items.isNotEmpty() }.map { "language_" + it.title to it }
     CompositionLocalProvider(LocalBringIntoViewSpec provides NoScrollSpec) {
         LazyColumn(
             state = listState,
@@ -339,8 +342,10 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
                     onClick = { actions.openStream(stream, row.items) },
                 )
             }
-            item(key = "seeAll") {
-                SeeAllCard(width = 220.dp, aspect = 16f / 9f) { actions.seeAll(row.seeAllId) }
+            if (row.seeAllId != 0) {
+                item(key = "seeAll") {
+                    SeeAllCard(width = 220.dp, aspect = 16f / 9f) { actions.seeAll(row.seeAllId) }
+                }
             }
         }
         }
@@ -543,7 +548,20 @@ private fun StreamCard(
             )
             Spacer(Modifier.width(if (small) 8.dp else 10.dp))
             Column {
-                Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // a star before the name of a favorite channel
+                val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (favorites.any { it.login == stream.channelLogin }) {
+                        Icon(
+                            painterResource(R.drawable.tv_ic_star),
+                            contentDescription = null,
+                            tint = Color(0xFFFACC15),
+                            modifier = Modifier.size(if (small) 13.dp else 16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 Text(stream.title?.trim() ?: "", fontSize = if (small) 11.sp else 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (!stream.gameName.isNullOrBlank()) {
                     Text(stream.gameName ?: "", fontSize = if (small) 11.sp else 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)

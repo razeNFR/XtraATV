@@ -47,6 +47,19 @@ object TvStreamActions {
                     }
                 }
             }
+            // favorite: first in the followed streams when live
+            stream.channelLogin?.let { login ->
+                val favorite = TvFavorites.isFavorite(login)
+                entries += Extra(activity.getString(if (favorite) R.string.tv_favorite_remove else R.string.tv_favorite_add), R.drawable.tv_ic_star) {
+                    if (favorite) {
+                        TvFavorites.remove(activity, login)
+                        Toast.makeText(activity, activity.getString(R.string.tv_favorite_removed, name), Toast.LENGTH_SHORT).show()
+                    } else {
+                        TvFavorites.add(activity, login, stream.channelName)
+                        Toast.makeText(activity, activity.getString(R.string.tv_favorite_added, name), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
             entries += last
             TvDialogs.showChoices(activity, stream.title?.trim()?.takeIf { it.isNotEmpty() } ?: name, entries.map { it.label }, -1, entries.map { it.icon }) {
                 entries[it].run()

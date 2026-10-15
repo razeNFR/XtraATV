@@ -146,6 +146,15 @@
         <item>6</item>
     </string-array>
 
+    <!-- names of the card sizes, for 2 to 6 cards a row -->
+    <string-array name="tvCardSizeEntries">
+        <item>@string/tv_card_size_2</item>
+        <item>@string/tv_card_size_3</item>
+        <item>@string/tv_card_size_4</item>
+        <item>@string/tv_card_size_5</item>
+        <item>@string/tv_card_size_6</item>
+    </string-array>
+
     <string-array name="tvStreamColumns" translatable="false">
         <item>2</item>
         <item>3</item>

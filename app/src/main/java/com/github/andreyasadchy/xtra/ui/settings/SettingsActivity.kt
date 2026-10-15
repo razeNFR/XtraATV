@@ -57,6 +57,7 @@ import androidx.preference.forEach
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.github.andreyasadchy.xtra.BuildConfig
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.SettingsNavGraphDirections
 import com.github.andreyasadchy.xtra.databinding.ActivitySettingsBinding
@@ -150,6 +151,9 @@ class SettingsActivity : AppCompatActivity() {
         })
         binding.toolbar.setupWithNavController(navController, appBarConfiguration)
         if (TvUi.isTv(this)) {
+            // under the name of the screen: the app and its version ("Xtra TV 1.2.0", "(debug)" on the test builds)
+            val version = BuildConfig.VERSION_NAME.removeSuffix("-DEBUG").removeSuffix("-tv")
+            binding.tvSettingsSubtitle?.text = getString(R.string.app_name) + " " + version + if (BuildConfig.DEBUG) " (debug)" else ""
             // Google TV style: the name of the screen in big on the left, the toolbar keeps the back and search buttons
             navController.addOnDestinationChangedListener { _, _, _ ->
                 binding.toolbar.post {
@@ -192,7 +196,17 @@ class SettingsActivity : AppCompatActivity() {
         })
     }
 
-    fun showDragListDialog(list: List<SettingsDragListItem>, prefKey: String, title: CharSequence?) {
+    /**
+     * Reorder dialog. [onSave] replaces the saving in [prefKey] (the favorites of the TV), without [showDefault]
+     * the items have no "default" button.
+     */
+    fun showDragListDialog(
+        list: List<SettingsDragListItem>,
+        prefKey: String,
+        title: CharSequence?,
+        showDefault: Boolean = true,
+        onSave: ((List<SettingsDragListItem>) -> Unit)? = null,
+    ) {
         val listAdapter = SettingsDragListAdapter()
         val dragCallback = object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
             override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
@@ -228,7 +242,7 @@ class SettingsActivity : AppCompatActivity() {
             val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10F, resources.displayMetrics).toInt()
             setPadding(0, padding, 0, 0)
         }
-        listAdapter.setDefault = { item ->
+        listAdapter.setDefault = if (!showDefault) null else { item ->
             list.find { it.default }?.let { previous ->
                 previous.default = false
                 recyclerView.findViewHolderForAdapterPosition(
@@ -250,6 +264,10 @@ class SettingsActivity : AppCompatActivity() {
             .setTitle(title)
             .setView(recyclerView)
             .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
+                if (onSave != null) {
+                    onSave(listAdapter.currentList)
+                    return@setPositiveButton
+                }
                 prefs().edit {
                     putString(prefKey, listAdapter.currentList.joinToString(",") {
                         "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
@@ -1366,6 +1384,33 @@ class SettingsActivity : AppCompatActivity() {
             audioKeep?.setOnPreferenceChangeListener { _, newValue ->
                 fullscreenKeep?.isEnabled = newValue == true || miniKeep?.isChecked != false
                 true
+            }
+            // favorite channels: their order (first in the followed streams), unchecked ones leave the favorites
+            findPreference<Preference>("tv_favorites")?.let { preference ->
+                val context = requireContext()
+                com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(context)
+                val updateSummary = {
+                    val count = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.value.size
+                    preference.summary = if (count == 0) getString(R.string.tv_favorites_empty) else getString(R.string.tv_favorites_count, count)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    val favorites = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.value
+                    if (favorites.isEmpty()) {
+                        android.widget.Toast.makeText(context, R.string.tv_favorites_how, android.widget.Toast.LENGTH_LONG).show()
+                    } else {
+                        val items = favorites.map { SettingsDragListItem(key = it.login, text = it.name ?: it.login, default = false, enabled = true) }.toMutableList()
+                        (requireActivity() as? SettingsActivity)?.showDragListDialog(items, "", preference.title, showDefault = false) { list ->
+                            val names = favorites.associate { it.login to it.name }
+                            com.github.andreyasadchy.xtra.ui.tv.TvFavorites.reorder(
+                                context,
+                                list.filter { it.enabled }.map { com.github.andreyasadchy.xtra.ui.tv.TvFavorites.Favorite(it.key, names[it.key]) }
+                            )
+                            updateSummary()
+                        }
+                    }
+                    true
+                }
             }
             // the ambiance color is drawn when the app starts: it offers to restart it
             findPreference<ListPreference>(C.TV_AMBIENT_COLOR)?.setOnPreferenceChangeListener { _, newValue ->

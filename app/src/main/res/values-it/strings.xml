@@ -646,10 +646,13 @@
     <string name="tv_dpad_switch_stream_summary">Con i controlli nascosti, sinistra e destra passano allo streamer precedente o successivo della lista da cui è stato aperto lo stream</string>
     <string name="tv_home_languages">Lingue di Popolari</string>
     <string name="tv_home_languages_summary">Stream di Popolari (riga della home e pagina Popolari) solo in queste lingue, tutte se nessuna è selezionata</string>
-    <string name="tv_home_cards">Schede delle dirette nella home</string>
-    <string name="tv_home_cards_summary">%s schede nella larghezza dello schermo</string>
-    <string name="tv_stream_columns">Colonne delle dirette negli elenchi</string>
-    <string name="tv_stream_columns_summary">%s colonne: meno colonne, schede più grandi</string>
+    <string name="tv_home_cards">Dimensione delle schede nella home</string>
+    <string name="tv_stream_columns">Dimensione delle schede negli elenchi</string>
+    <string name="tv_card_size_2">Molto grandi · 2 per riga</string>
+    <string name="tv_card_size_3">Grandi · 3 per riga</string>
+    <string name="tv_card_size_4">Medie · 4 per riga</string>
+    <string name="tv_card_size_5">Piccole · 5 per riga</string>
+    <string name="tv_card_size_6">Molto piccole · 6 per riga</string>
     <string name="tv_channel_videos">Video del canale</string>
     <string name="tv_follow_failed">Impossibile modificare il follow</string>
     <string name="tv_stop_playback">Interrompi la riproduzione</string>
@@ -721,4 +724,15 @@
     <string name="tv_multistream_change">Cambia streamer</string>
     <string name="tv_multistream_add">Aggiungi uno streamer</string>
     <string name="tv_multistream_size">Dimensione di questo stream</string>
+    <string name="tv_favorite_add">Aggiungi ai preferiti</string>
+    <string name="tv_favorite_remove">Rimuovi dai preferiti</string>
+    <string name="tv_favorite_added">%1$s aggiunto ai preferiti</string>
+    <string name="tv_favorite_removed">%1$s rimosso dai preferiti</string>
+    <string name="tv_favorites">Canali preferiti</string>
+    <string name="tv_favorites_empty">Nessuno: tieni premuto OK su uno stream, poi «Aggiungi ai preferiti»</string>
+    <string name="tv_favorites_count">%1$d canali, primi tra i seguiti in diretta. Ordine e rimozione</string>
+    <string name="tv_favorites_how">Tieni premuto OK sulla scheda di uno stream, poi «Aggiungi ai preferiti»</string>
+    <string name="tv_home_language_rows">Righe per lingua nella home</string>
+    <string name="tv_home_language_rows_summary">Una riga di stream popolari per ogni lingua selezionata, sotto Popolari</string>
+    <string name="tv_popular_in">Popolari · %1$s</string>
 </resources>

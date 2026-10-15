@@ -89,8 +89,8 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         Modifier
             .width(260.dp)
             .fillMaxHeight()
-            // slightly see-through, the ambiance glow of the screen shows behind it
-            .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xF7141318), Color(0xEB141318))))
+            // opaque: the texts of the screen behind no longer show through the entries
+            .background(Color(0xFF141318))
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {

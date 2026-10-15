@@ -119,6 +119,12 @@
         android:title="@string/tv_settings_home"
         app:iconSpaceReserved="false">
 
+        <Preference
+            android:key="tv_favorites"
+            android:title="@string/tv_favorites"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
         <ListPreference
             android:defaultValue="violet"
             android:entries="@array/tvAmbientColorEntries"
@@ -131,20 +137,20 @@
 
         <ListPreference
             android:defaultValue="3"
-            android:entries="@array/tvHomeCards"
+            android:entries="@array/tvCardSizeEntries"
             android:entryValues="@array/tvHomeCards"
             android:key="tv_home_cards"
-            android:summary="@string/tv_home_cards_summary"
+            android:summary="%s"
             android:title="@string/tv_home_cards"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
         <ListPreference
             android:defaultValue="4"
-            android:entries="@array/tvStreamColumns"
+            android:entries="@array/tvCardSizeEntries"
             android:entryValues="@array/tvStreamColumns"
             android:key="tv_stream_columns"
-            android:summary="@string/tv_stream_columns_summary"
+            android:summary="%s"
             android:title="@string/tv_stream_columns"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
@@ -154,6 +160,15 @@
     <PreferenceCategory
         android:title="@string/tv_settings_languages"
         app:iconSpaceReserved="false">
+
+        <MultiSelectListPreference
+            android:entries="@array/gqlUserLanguageEntries"
+            android:entryValues="@array/gqlUserLanguageValues"
+            android:key="tv_home_language_rows"
+            android:summary="@string/tv_home_language_rows_summary"
+            android:title="@string/tv_home_language_rows"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
         <MultiSelectListPreference
             android:entries="@array/gqlUserLanguageEntries"
