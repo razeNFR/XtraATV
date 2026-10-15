@@ -843,7 +843,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closeTvPip() {
-        tvPip.close()
+        if (isTv) {
+            tvPip.close()
+        }
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

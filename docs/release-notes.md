@@ -1,17 +1,17 @@
-# Xtra TV 1.1.1
+# Xtra TV 1.2.0
 
 ### New
-- **Remove a stream from the multi-stream**: with 3 or 4 streams, the panel of a streamer can now remove it, and the others take its place.
-- **Both chats in split screen**: with 2 streams, the chats of both streamers now show up by themselves under their streams. From the panel of a streamer, its chat can be hidden or put above its stream instead.
+- **Favorite channels**: hold OK on a stream and choose "Add to favorites". When they are live, your favorites come first in the followed streams (home row, Followed page, other streams of the player), in your own order, then the others by viewers. A star shows them on the home, and their order can be changed in the Xtra TV settings.
+- **Rows by language on the home**: pick one or more languages in the Xtra TV settings to get a row of the popular streams for each of them, under Popular.
+- **Switch lists in the other streams row**: while watching, press up from the cards of the other streams to reach tabs: this list, followed, popular, your language rows and the category of the stream. Picking a stream from another tab makes it the list of left / right. The tabs are also there when picking the streams of a multi-stream.
+- **Small window**: hold OK on a stream of the other streams row to watch it in a small window at the top right, while the sound of the main stream goes on. Hold OK again to swap the two streams, press back to close it.
+- **Focus mode in the multi-stream**: with 3 or 4 streams, one stream big with its chat at its right and the others small under it. Press OK on a small stream to put it big, hold OK to open its panel. Turn it on or off from the panel of a stream.
+- **More entries in the side menu**: shortcuts to the videos, the channels or the categories of the followed channels can be added in the Xtra TV settings.
+- **Version number in the settings**, under the name of the screen.
 
-### Fixes
-- **Previews stop when you move away**: a preview no longer keeps playing after the focus leaves its card, for example when going to the header, the side menu or another row of the home.
-- **Bigger card during the preview**:
-  - with 2 columns or 2 cards per row, the cards no longer grow, they are already big;
-  - with 3 columns, the rows under a grown card in the first row now move down instead of being covered;
-  - a grown card on the side of the grid keeps the same space around it as the others;
-  - the D-pad goes from a grown card to the cards that were around it before it grew, and the list stays well framed when it goes back to its size.
-- **Timeline back in a stream opened from the multi-stream**: the bar to go back into the VOD of the live shows again.
+### Changes
+- **Card sizes by name**: the size of the cards on the home and in the lists now reads very big, big, medium, small or very small.
+- **Opaque side menu**: the texts of the screen behind no longer show through it.
 
 ### Install
-Download `XtraTV-1.1.1-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.2.0-tv.apk` below and install it over the previous version, your settings and account are kept.
