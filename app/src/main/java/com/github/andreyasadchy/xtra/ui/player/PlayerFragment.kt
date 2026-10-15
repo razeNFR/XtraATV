@@ -656,7 +656,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     fastForward()
                 }
                 if (isTv) {
-                    progressBar.setOnKeyListener { _, keyCode, event -> onTimeBarKey(keyCode, event) }
+                    progressBar.setOnKeyListener { _, keyCode, event ->
+                        // down from the timeline: back to the button the focus was on, not the nearest one
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN && _binding != null) {
+                            val last = findLastControl()
+                            if (last != null && last.isShown && last.isFocusable && last.requestFocus()) {
+                                return@setOnKeyListener true
+                            }
+                        }
+                        onTimeBarKey(keyCode, event)
+                    }
                     // discreet timeline: the scrubber and the accent color only show while it has the focus
                     val playedColor = MaterialColors.getColor(progressBar, androidx.appcompat.R.attr.colorPrimary)
                     progressBar.hideScrubber(false)

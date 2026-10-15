@@ -44,6 +44,11 @@ class MultiStreamFragment : Fragment() {
         /** Container of the chat under this stream (2 streams). */
         var chatContainer: FrameLayout? = null
         var adListener: Player.Listener? = null
+        /** Steps under the quality of its place, after real stops of this stream (0: the full quality). */
+        var qualityStepsDown = 0
+        var playingSince = 0L
+        val stops = ArrayDeque<Long>()
+        var raiseJob: kotlinx.coroutines.Job? = null
     }
 
     private val tiles = mutableListOf<Tile>()
@@ -184,12 +189,58 @@ class MultiStreamFragment : Fragment() {
         return tile
     }
 
-    /** Lower quality when more streams share the screen. */
+    /**
+     * Quality of each stream by its size on the screen, the highest one up to it (the choice of the player would stay
+     * low with the low latency of Twitch): 2 streams 1080p, focus mode the big one at full quality and the small ones
+     * 480p, grid of 3 or 4 720p. A stream that stops for real goes one step down, and back up later.
+     */
     private fun updateVideoSizes() {
-        tiles.forEach {
-            it.player.trackSelectionParameters = it.player.trackSelectionParameters.buildUpon().apply {
-                if (tiles.size > 2) setMaxVideoSize(854, 480) else setMaxVideoSize(1280, 720)
-            }.build()
+        val focus = isFocusLayout()
+        val big = if (focus) bigTile() else null
+        tiles.forEach { tile ->
+            val steps = listOf(Int.MAX_VALUE, 1080, 720, 480, 360)
+            val base = when {
+                focus && tile === big -> Int.MAX_VALUE
+                focus -> 480
+                tiles.size <= 2 -> 1080
+                else -> 720
+            }
+            val height = steps.filter { it <= base }.getOrElse(tile.qualityStepsDown) { 360 }
+            tile.player.trackSelectionParameters = tile.player.trackSelectionParameters.buildUpon()
+                .setMaxVideoSize(Int.MAX_VALUE, height)
+                .setForceHighestSupportedBitrate(true)
+                .build()
+        }
+    }
+
+    /** A stream that stops twice in a minute (after 10 s of play) goes one quality down, up again after 2 min 30. */
+    private fun onTileState(tile: Tile, state: Int) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (state == Player.STATE_READY) {
+            if (tile.playingSince == 0L) {
+                tile.playingSince = now
+            }
+        } else if (state == Player.STATE_BUFFERING && tile.playingSince != 0L && now - tile.playingSince >= 10_000L) {
+            tile.stops.addLast(now)
+            while (tile.stops.isNotEmpty() && now - tile.stops.first() > 60_000L) {
+                tile.stops.removeFirst()
+            }
+            if (tile.stops.size >= 2 && tile.qualityStepsDown < 3) {
+                tile.stops.clear()
+                tile.qualityStepsDown++
+                updateVideoSizes()
+                tile.raiseJob?.cancel()
+                tile.raiseJob = viewLifecycleOwner.lifecycleScope.launch {
+                    while (tile.qualityStepsDown > 0) {
+                        kotlinx.coroutines.delay(150_000L)
+                        if (view == null || tile !in tiles) {
+                            return@launch
+                        }
+                        tile.qualityStepsDown--
+                        updateVideoSizes()
+                    }
+                }
+            }
         }
     }
 
@@ -360,6 +411,8 @@ class MultiStreamFragment : Fragment() {
     }
 
     private fun layoutTiles() {
+        // the quality follows the place of each stream (big or small in focus mode)
+        updateVideoSizes()
         val width = root.width
         val height = root.height
         if (width == 0 || height == 0) {
@@ -527,6 +580,10 @@ class MultiStreamFragment : Fragment() {
     private fun loadStream(tile: Tile) {
         val login = tile.stream.channelLogin ?: return
         val player = tile.player
+        tile.playingSince = 0L
+        tile.qualityStepsDown = 0
+        tile.stops.clear()
+        tile.raiseJob?.cancel()
         playStream(login, player, tile)
         // the stream ended (no more playlist, or the end of it): it leaves the multi-stream after a few seconds
         player.addListener(object : Player.Listener {
@@ -537,6 +594,9 @@ class MultiStreamFragment : Fragment() {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (view != null && tile in tiles) {
+                    onTileState(tile, playbackState)
+                }
                 if (playbackState == Player.STATE_ENDED) {
                     onStreamEnded(tile, login)
                 }
@@ -590,6 +650,8 @@ class MultiStreamFragment : Fragment() {
 
     /** Ad blocker on every stream, like VAFT: the player type without an ad playing. */
     private fun playStream(login: String, player: ExoPlayer, tile: Tile) {
+        // a new playlist (start, ad blocker): its first seconds do not count as stops
+        tile.playingSince = 0L
         viewLifecycleOwner.lifecycleScope.launch {
             val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(requireContext(), login)
             if (url != null && view != null && tile.stream.channelLogin == login) {
