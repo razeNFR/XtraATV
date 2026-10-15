@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.player
 
 import coil3.imageLoader
+import coil3.asDrawable
 import coil3.request.target
 import coil3.request.transformations
 import android.animation.Animator
@@ -94,6 +95,7 @@ import com.google.android.material.timepicker.TimeFormat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
@@ -206,6 +208,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         if (isTv) {
+            showLoadingPicture()
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     while (true) {
@@ -950,19 +953,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                             // go back in the live: open the VOD of the stream being broadcast at the chosen position
                                             pendingDvr = false
                                             val offset = pendingDvrPosition.coerceAtLeast(0L)
-                                            (requireActivity() as MainActivity).startVideo(
-                                                Video(
-                                                    channelId = playbackService?.channelId,
-                                                    channelLogin = playbackService?.channelLogin,
-                                                    channelName = playbackService?.channelName,
-                                                    gameId = playbackService?.gameId,
-                                                    gameSlug = playbackService?.gameSlug,
-                                                    gameName = playbackService?.gameName,
-                                                    title = playbackService?.title,
-                                                ),
-                                                offset,
-                                                qualities = qualities
+                                            val video = Video(
+                                                channelId = playbackService?.channelId,
+                                                channelLogin = playbackService?.channelLogin,
+                                                channelName = playbackService?.channelName,
+                                                gameId = playbackService?.gameId,
+                                                gameSlug = playbackService?.gameSlug,
+                                                gameName = playbackService?.gameName,
+                                                title = playbackService?.title,
+                                                createdAt = playbackService?.createdAt,
                                             )
+                                            // the VOD being recorded gives the chat of the broadcast (its replay), found
+                                            // while the video opens; none when the channel keeps no VOD
+                                            val activity = requireActivity() as MainActivity
+                                            activity.dvrChatVideoId = withTimeoutOrNull(2500L) {
+                                                viewModel.findArchiveVideoId(
+                                                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                                                    TwitchApiHelper.getGQLHeaders(requireContext()),
+                                                    playbackService?.channelId,
+                                                    playbackService?.channelLogin,
+                                                    playbackService?.createdAt,
+                                                )
+                                            }
+                                            activity.startVideo(video, offset, qualities = qualities)
                                         } else {
                                             (requireActivity() as MainActivity).startVideo(Video(), 0, qualities = qualities)
                                         }
@@ -1215,7 +1228,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     BasePlaybackService.VIDEO -> ChatFragment.newInstance(
                         playbackService?.channelId,
                         playbackService?.channelLogin,
-                        playbackService?.videoId,
+                        // a live watched back in time: the chat of the VOD being recorded
+                        playbackService?.videoId ?: (activity as? MainActivity)?.takeIf { it.dvrStream != null }?.dvrChatVideoId,
                         playbackService?.createdAt,
                         0,
                     )
@@ -2826,6 +2840,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private fun focusPrimaryControl() {
         with(binding.playerControls) {
+            // the button pressed last, kept from one stream to the next (left / right, other streams)
+            findLastClickedControl()?.let { last ->
+                if (last.isShown && last.isFocusable && last.requestFocus()) {
+                    return
+                }
+            }
             lastHudControl?.get()?.let { last ->
                 if (last.isShown && last.isFocusable && last.requestFocus()) {
                     return
@@ -2843,8 +2863,70 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var loadingPicture: android.widget.ImageView? = null
+
+    private fun showLoadingPicture() {
+        val (fresh, card) = pendingLoadingPicture ?: return
+        pendingLoadingPicture = null
+        val context = requireContext()
+        val image = android.widget.ImageView(context).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(android.graphics.Color.BLACK)
+        }
+        // over the video, under the loading circle and the controls
+        val index = binding.playerLayout.indexOfChild(binding.aspectRatioFrameLayout) + 1
+        binding.playerLayout.addView(image, index, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        loadingPicture = image
+        // the picture of the card at once (already loaded), then the latest picture Twitch has of the stream
+        if (card != null) {
+            context.imageLoader.enqueue(coil3.request.ImageRequest.Builder(context).data(card).target(image).build())
+        }
+        context.imageLoader.enqueue(
+            coil3.request.ImageRequest.Builder(context)
+                .data(fresh)
+                .memoryCachePolicy(coil3.request.CachePolicy.WRITE_ONLY)
+                .diskCachePolicy(coil3.request.CachePolicy.WRITE_ONLY)
+                .target(onSuccess = { result -> if (loadingPicture === image) image.setImageDrawable(result.asDrawable(context.resources)) })
+                .build()
+        )
+        // never kept for long: an error or the sound only mode has no first picture
+        image.postDelayed({ hideLoadingPicture() }, 20_000L)
+    }
+
+    /** The first picture of the video is on screen: the picture of the stream fades away. */
+    protected fun hideLoadingPicture() {
+        val image = loadingPicture ?: return
+        loadingPicture = null
+        image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
+    }
+
+    /** A button of the controls pressed with OK: the focus goes back to it when the controls show again. */
+    private fun rememberClickedControl(event: KeyEvent) {
+        val isSelect = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+        if (!isTv || !isSelect || event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0 || _binding == null) {
+            return
+        }
+        val controls = binding.playerControls
+        val focused = activity?.currentFocus ?: return
+        if (focused == controls.playPause || focused.parent == controls.bottomLeftLayout || focused.parent == controls.bottomRightLayout) {
+            lastClickedControlId = focused.id
+            lastClickedControlLabel = focused.contentDescription?.toString()
+        }
+    }
+
+    private fun findLastClickedControl(): View? {
+        val controls = _binding?.playerControls ?: return null
+        if (lastClickedControlId != View.NO_ID) {
+            controls.root.findViewById<View>(lastClickedControlId)?.let { return it }
+        }
+        val label = lastClickedControlLabel ?: return null
+        return listOf(controls.bottomLeftLayout, controls.bottomRightLayout).flatMap { layout -> (0 until layout.childCount).map { layout.getChildAt(it) } }
+            .firstOrNull { it.contentDescription?.toString() == label }
+    }
+
     /** Called by the activity for every key event, keeps the controls visible while they are used with a D-pad. */
     fun onKeyEventDispatched(event: KeyEvent) {
+        rememberClickedControl(event)
         if (_binding != null && isMaximized && event.action == KeyEvent.ACTION_DOWN &&
             binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()
         ) {
@@ -3766,5 +3848,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val DVR_CAUGHT_UP_MS = 10_000L
         private const val LIVE_FIRST_STEP_MS = 60_000L
         const val KEY_OFFLINE = "offline"
+
+        /**
+         * TV: picture of the stream that is opening (the picture of its card, then the latest one of Twitch), shown in place
+         * of a black screen until the first picture of the video.
+         */
+        var pendingLoadingPicture: Pair<String, String?>? = null
+
+        /** Button of the controls pressed last (its id, else its description), for the whole time the player is used. */
+        private var lastClickedControlId = View.NO_ID
+        private var lastClickedControlLabel: String? = null
     }
 }

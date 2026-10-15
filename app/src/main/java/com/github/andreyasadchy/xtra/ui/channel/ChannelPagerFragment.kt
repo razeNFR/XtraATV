@@ -101,6 +101,34 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        if (savedInstanceState == null && resources.getBoolean(R.bool.isTv)) {
+            // TV: the focus goes to the first video of the tab shown once it is loaded, else (nothing in the tab) to the
+            // first button of the header, it is never left nowhere
+            viewLifecycleOwner.lifecycleScope.launch {
+                var tries = 0
+                while (tries++ < 40) {
+                    kotlinx.coroutines.delay(150L)
+                    val root = this@ChannelPagerFragment.view ?: return@launch
+                    // already on a video (moved there with the remote): left as it is
+                    var focused = root.findFocus()
+                    while (focused != null && focused !is androidx.recyclerview.widget.RecyclerView) {
+                        focused = focused.parent as? View
+                    }
+                    if (focused != null) {
+                        return@launch
+                    }
+                    val grid = com.github.andreyasadchy.xtra.ui.view.TvUi.findVisibleGrid(root)
+                    if (grid != null && (grid.adapter?.itemCount ?: 0) > 0 && grid.childCount > 0 &&
+                        com.github.andreyasadchy.xtra.ui.view.TvUi.focusFirstItem(grid)) {
+                        return@launch
+                    }
+                }
+                val root = this@ChannelPagerFragment.view ?: return@launch
+                if (!root.hasFocus()) {
+                    com.github.andreyasadchy.xtra.ui.view.TvHeader.focusHeaderOf(root)
+                }
+            }
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.integrity.collect {

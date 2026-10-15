@@ -63,6 +63,10 @@ class ExoPlayerFragment : PlayerFragment() {
         }
         keptAcrossStop = false
         val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                hideLoadingPicture()
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED && playbackService?.type == BasePlaybackService.STREAM) {
                     onTvStreamEnded()
@@ -304,6 +308,10 @@ class ExoPlayerFragment : PlayerFragment() {
                     (playbackService?.secondaryPlayer ?: playbackService?.player)?.setVideoSurfaceView(binding.playerSurface)
                     (playbackService?.secondaryPlayer ?: playbackService?.player)?.addListener(listener)
                     playerListener = listener
+                    // the video already plays (it started before this screen was ready): no picture over it
+                    if ((playbackService?.secondaryPlayer ?: playbackService?.player)?.playbackState == Player.STATE_READY) {
+                        hideLoadingPicture()
+                    }
                     val endTime = playbackService?.setSleepTimer(-1)
                     if (endTime != null && endTime > 0L) {
                         val duration = endTime - System.currentTimeMillis()

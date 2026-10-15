@@ -1548,6 +1548,9 @@ class MainActivity : AppCompatActivity() {
 
     /** Live stream whose in-progress VOD is being watched, to go back to the live from the VOD. */
     var dvrStream: Stream? = null
+
+    /** Id of the VOD being recorded of [dvrStream], for the chat of the broadcast. */
+    var dvrChatVideoId: String? = null
     private var currentStreamLogin: String? = null
 
     private var switchJob: kotlinx.coroutines.Job? = null
@@ -1655,14 +1658,34 @@ class MainActivity : AppCompatActivity() {
 
     /** Loads the list again in the background when the last load is older than 30 seconds: it is not waited for. */
     private fun refreshQueueIfOld() {
-        if (streamQueueSource == null || System.currentTimeMillis() - queueRefreshedAt < QUEUE_FRESH_MS || queueRefreshJob?.isActive == true) {
+        if (System.currentTimeMillis() - queueRefreshedAt < QUEUE_FRESH_MS || queueRefreshJob?.isActive == true) {
             return
         }
         queueRefreshJob = lifecycleScope.launch {
-            if (refreshQueue()) {
-                TvStreamSwitcher.update(streamQueue)
+            if (streamQueueSource != null) {
+                if (refreshQueue()) {
+                    TvStreamSwitcher.update(streamQueue)
+                }
+            } else if (streamQueue.size > 1) {
+                // a list without a source: the streamers that stopped leave it
+                val before = streamQueue
+                removeOfflineFromQueue()
+                queueRefreshedAt = System.currentTimeMillis()
+                if (streamQueue !== before) {
+                    TvStreamSwitcher.update(streamQueue)
+                }
             }
         }
+    }
+
+    /** Only the streams of [list] that are still live (the ones whose channel is unknown are kept). */
+    suspend fun liveStreamsOnly(list: List<Stream>): List<Stream> {
+        val ids = list.mapNotNull { it.channelId }
+        if (ids.isEmpty()) {
+            return list
+        }
+        val live = loadLiveStreams(ids) ?: return list
+        return list.filter { stream -> stream.channelId == null || live.containsKey(stream.channelId) }
     }
 
     private var queueExtendJob: kotlinx.coroutines.Job? = null
@@ -1784,6 +1807,13 @@ class MainActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.player.TvLoadTimer.start()
         com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.start(this, stream.channelLogin)
         com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
+        if (isTv && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
+            // the picture of the stream instead of a black screen while it loads: the one of its card, then the latest
+            val card = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail)
+            val fresh = stream.thumbnail?.takeUnless { com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream) }
+                ?.let { "$it?t=${System.currentTimeMillis() / 1000}" } ?: card
+            com.github.andreyasadchy.xtra.ui.player.PlayerFragment.pendingLoadingPicture = fresh?.let { it to card }
+        }
         if (queue != null) {
             streamQueue = queue
             streamQueueSource = queueSource
@@ -1793,6 +1823,7 @@ class MainActivity : AppCompatActivity() {
         }
         currentStreamLogin = stream.channelLogin
         dvrStream = null
+        dvrChatVideoId = null
         // TV, no player open: the playback service starts as soon as the stream is saved, while the screen of the
         // player is made (it binds to it once ready, the service starts only once)
         val startServiceEarly = isTv && playerFragment == null && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER

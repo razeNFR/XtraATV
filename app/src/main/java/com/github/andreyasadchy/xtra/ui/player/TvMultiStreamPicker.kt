@@ -18,7 +18,8 @@ object TvMultiStreamPicker {
 
     fun show(activity: MainActivity, current: Stream?) {
         activity.lifecycleScope.launch {
-            val candidates = (listOfNotNull(current) + loadFollowed(activity) + activity.streamQueue)
+            // the list of the stream may be old: only the streamers still live
+            val candidates = (listOfNotNull(current) + loadFollowed(activity) + activity.liveStreamsOnly(activity.streamQueue))
                 .filter { !it.channelLogin.isNullOrBlank() }
                 .distinctBy { it.channelLogin }
             if (candidates.isEmpty()) {
@@ -44,7 +45,8 @@ object TvMultiStreamPicker {
     /** One stream to pick (change a stream of the multi-stream or add one), the ones already shown are left out. */
     fun pickOne(activity: MainActivity, exclude: Set<String>, title: String, onPicked: (Stream) -> Unit) {
         activity.lifecycleScope.launch {
-            val candidates = (loadFollowed(activity) + activity.streamQueue)
+            // the list of the stream may be old (not loaded again during a multi-stream): only the streamers still live
+            val candidates = (loadFollowed(activity) + activity.liveStreamsOnly(activity.streamQueue))
                 .filter { !it.channelLogin.isNullOrBlank() && it.channelLogin !in exclude }
                 .distinctBy { it.channelLogin }
             if (candidates.isEmpty()) {
