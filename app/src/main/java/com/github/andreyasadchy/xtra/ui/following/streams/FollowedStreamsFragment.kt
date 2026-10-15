@@ -28,6 +28,7 @@ import com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class FollowedStreamsFragment : PagedListFragment(), Scrollable {
@@ -87,7 +88,18 @@ class FollowedStreamsFragment : PagedListFragment(), Scrollable {
                 if (first) {
                     first = false
                 } else {
+                    // the cards are compared by viewers and title only: the ones moved by the new order are drawn
+                    // again once the list is there, else a star stays on the card it was on (or is missing)
+                    pagingAdapter.notifyItemRangeChanged(0, pagingAdapter.itemCount)
                     pagingAdapter.refresh()
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+                            pagingAdapter.onPagesUpdatedFlow.first()
+                            binding.recyclerView.post {
+                                pagingAdapter.notifyItemRangeChanged(0, pagingAdapter.itemCount)
+                            }
+                        }
+                    }
                 }
             }
         }

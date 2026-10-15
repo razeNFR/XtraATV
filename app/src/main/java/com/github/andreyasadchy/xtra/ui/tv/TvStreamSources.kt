@@ -57,31 +57,53 @@ object TvStreamSources {
         )
     }
 
+    /**
+     * Streams of a category, in the languages chosen on the page of that category (else the ones of the "default"
+     * category, else the default languages of the Xtra TV settings), like its page.
+     */
     fun game(context: Context, gameId: String?, gameSlug: String?, gameName: String?): PagingSource<Int, Stream> {
         val app = context.applicationContext as XtraApp
         val prefs = context.prefs()
-        return GameStreamsDataSource(
-            gameId = gameId,
-            gameSlug = gameSlug,
-            gameName = gameName,
-            gqlQueryLanguages = null,
-            gqlQuerySort = StreamSort.VIEWER_COUNT,
-            gqlLanguages = null,
-            gqlSort = "VIEWER_COUNT",
-            tags = null,
-            gqlHeaders = TwitchApiHelper.getGQLHeaders(context),
-            graphQLRepository = app.xtraModule.graphQLRepository,
-            helixHeaders = TwitchApiHelper.getHelixHeaders(context),
-            helixRepository = app.xtraModule.helixRepository,
-            enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false),
-            networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
-        )
+        return LazySource {
+            val sort = gameId?.let { runCatching { app.xtraModule.gameSortRepository.getById(it) }.getOrNull() }
+                ?: runCatching { app.xtraModule.gameSortRepository.getById("default") }.getOrNull()
+            val languages = sort?.streamLanguages?.split(',')?.filter { it.isNotBlank() }?.ifEmpty { null }
+                ?: prefs.getStringSet(C.TV_DEFAULT_LANGUAGES, null)?.filter { it.isNotBlank() }?.ifEmpty { null }
+            GameStreamsDataSource(
+                gameId = gameId,
+                gameSlug = gameSlug,
+                gameName = gameName,
+                gqlQueryLanguages = languages?.mapNotNull { language -> Language.entries.find { it.rawValue == language } },
+                gqlQuerySort = StreamSort.VIEWER_COUNT,
+                gqlLanguages = languages,
+                gqlSort = "VIEWER_COUNT",
+                tags = null,
+                gqlHeaders = TwitchApiHelper.getGQLHeaders(context),
+                graphQLRepository = app.xtraModule.graphQLRepository,
+                helixHeaders = TwitchApiHelper.getHelixHeaders(context),
+                helixRepository = app.xtraModule.helixRepository,
+                enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false),
+                networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+            )
+        }
+    }
+
+    /** A source made at its first load (it needs to read the database first), then used for the next pages. */
+    private class LazySource(private val create: suspend () -> PagingSource<Int, Stream>) : PagingSource<Int, Stream>() {
+        private var source: PagingSource<Int, Stream>? = null
+
+        override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Stream> {
+            val source = source ?: create().also { source = it }
+            return source.load(params)
+        }
+
+        override fun getRefreshKey(state: androidx.paging.PagingState<Int, Stream>): Int? = null
     }
 
     /** First page of a source, null when it fails. */
     suspend fun load(source: PagingSource<Int, Stream>): List<Stream>? {
         return try {
-            (source.load(PagingSource.LoadParams.Refresh(null, 40, false)) as? PagingSource.LoadResult.Page)?.data
+            (source.load(PagingSource.LoadParams.Refresh(null, 30, false)) as? PagingSource.LoadResult.Page)?.data
                 ?.filter { !it.channelLogin.isNullOrBlank() }?.distinctBy { it.channelLogin }
         } catch (e: Exception) {
             null

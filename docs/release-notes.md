@@ -6,7 +6,7 @@
 - **Switch lists in the other streams row**: while watching, press up from the cards of the other streams to reach tabs: this list, followed, popular, your language rows and the category of the stream. Picking a stream from another tab makes it the list of left / right. The tabs are also there when picking the streams of a multi-stream.
 - **Small window**: hold OK on a stream of the other streams row to watch it in a small window at the top right, while the sound of the main stream goes on. Hold OK again to swap the two streams, press back to close it.
 - **Focus mode in the multi-stream**: with 3 or 4 streams, one stream big with its chat at its right and the others small under it. Press OK on a small stream to put it big, hold OK to open its panel. Turn it on or off from the panel of a stream.
-- **More entries in the side menu**: shortcuts to the videos, the channels or the categories of the followed channels can be added in the Xtra TV settings.
+- **More entries in the side menu**: shortcuts to the videos, the channels or the categories of the followed channels can be added in the Xtra TV settings. They show under Following, smaller.
 - **New account page**: the two ways of logging in side by side (code on twitch.tv/activate, Twitch login page) with what each one gives and lacks and whether it is done. Each one can be done or done again at any time without losing the other, and a log out button removes everything.
 - **Version number in the settings**, under the name of the screen.
 
@@ -19,6 +19,9 @@
 ### Fixes
 - A tab hidden in the settings no longer leaves its page in the next tab (videos shown in the channels tab).
 - The side menu shortcuts open their own tab (even when it is hidden in the settings) and stay selected.
+- Popular and the language rows load in the other streams row, and the category there uses the languages chosen for that category.
+- Left / right pressed fast in the other streams row no longer jump to the tabs above.
+- The star of a favorite shows at once on the Followed page, on the right channel.
 
 ### Install
 Download `XtraTV-1.2.0-tv.apk` below and install it over the previous version, your settings and account are kept.

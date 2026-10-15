@@ -1043,8 +1043,11 @@ class MainActivity : AppCompatActivity() {
             R.id.tvNavFollowedGames to R.drawable.tv_ic_gamepad,
         )
         val menu = binding.navBar.menu
-        tvMenuState.items = (0 until menu.size()).map { index ->
+        val followedTabs = listOf(R.id.tvNavFollowedVideos, R.id.tvNavFollowedChannels, R.id.tvNavFollowedGames)
+        val hasFollowing = menu.findItem(R.id.followPagerFragment) != null
+        val entries = (0 until menu.size()).map { index ->
             val item = menu.getItem(index)
+            val sub = hasFollowing && item.itemId in followedTabs
             com.github.andreyasadchy.xtra.ui.tv.TvMenuItem(
                 id = item.itemId,
                 title = item.title.toString(),
@@ -1053,9 +1056,25 @@ class MainActivity : AppCompatActivity() {
                     R.id.tvNavSearch -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_TOP
                     R.id.tvNavSettings, R.id.tvNavAccount -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_BOTTOM
                     else -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_MAIN
-                }
+                },
+                sub = sub,
+                // under "Following" the short name is enough
+                label = if (sub) {
+                    getString(
+                        when (item.itemId) {
+                            R.id.tvNavFollowedVideos -> R.string.videos
+                            R.id.tvNavFollowedChannels -> R.string.channels
+                            else -> R.string.games
+                        }
+                    )
+                } else item.title.toString()
             )
         }
+        // the shortcuts to the tabs of the followed channels go right under "Following"
+        tvMenuState.items = if (hasFollowing) {
+            val subs = entries.filter { it.sub }
+            entries.filter { !it.sub }.flatMap { if (it.id == R.id.followPagerFragment) listOf(it) + subs else listOf(it) }
+        } else entries
         tvMenuState.selected = binding.navBar.selectedItemId
         com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
             tvMenuState.items.find { it.id == tvMenuState.selected }?.title
@@ -1643,6 +1662,11 @@ class MainActivity : AppCompatActivity() {
             // as many streams as the list had (the ones scrolled to stay), within what one request gives
             val params = androidx.paging.PagingSource.LoadParams.Refresh<Int>(null, before.size.coerceIn(30, 100), false)
             (factory().load(params) as? androidx.paging.PagingSource.LoadResult.Page)?.data
+        } catch (e: Exception) {
+            null
+        }.takeUnless { it.isNullOrEmpty() } ?: try {
+            // the requests of Twitch with a language take at most 30 streams
+            (factory().load(androidx.paging.PagingSource.LoadParams.Refresh<Int>(null, 30, false)) as? androidx.paging.PagingSource.LoadResult.Page)?.data
         } catch (e: Exception) {
             null
         }

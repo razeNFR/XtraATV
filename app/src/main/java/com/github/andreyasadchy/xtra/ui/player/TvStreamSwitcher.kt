@@ -148,7 +148,24 @@ object TvStreamSwitcher {
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         val recyclerView = RecyclerView(activity).apply {
-            layoutManager = LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false)
+            layoutManager = object : LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false) {
+                // left / right stay in the row: pressed fast, the next card was not there yet and the focus went to the
+                // tabs above; it now waits for the card, and stays on the last one at the end of the list
+                override fun onInterceptFocusSearch(focused: View, direction: Int): View? {
+                    if (direction != View.FOCUS_RIGHT && direction != View.FOCUS_LEFT) {
+                        return null
+                    }
+                    val item = findContainingItemView(focused) ?: return null
+                    val target = getPosition(item) + if (direction == View.FOCUS_RIGHT) 1 else -1
+                    if (target !in 0 until itemCount) {
+                        return item
+                    }
+                    findViewByPosition(target)?.let { return it }
+                    scrollToPosition(target)
+                    item.post { findViewByPosition(target)?.requestFocus() }
+                    return item
+                }
+            }
             clipToPadding = false
             clipChildren = false
             setPadding(horizontalPadding, (8 * density).toInt(), horizontalPadding, (8 * density).toInt())

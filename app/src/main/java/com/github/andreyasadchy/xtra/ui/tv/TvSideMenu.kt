@@ -45,7 +45,8 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 
-class TvMenuItem(val id: Int, val title: String, val icon: Int?, val group: Int)
+/** [sub]: an entry of the section above it (the tabs of the followed channels under "Following"), smaller and moved in, named [label]. */
+class TvMenuItem(val id: Int, val title: String, val icon: Int?, val group: Int, val sub: Boolean = false, val label: String = title)
 
 /** State of the side menu, the activity fills it from the menu of the navigation bar. */
 /** Stream playing in the mini player or as audio only, shown at the top of the side menu. */
@@ -238,20 +239,20 @@ private fun MenuEntry(item: TvMenuItem, selected: Boolean, modifier: Modifier, o
     Row(
         modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp)
+            .padding(start = if (item.sub) 28.dp else 0.dp, top = if (item.sub) 1.dp else 3.dp, bottom = if (item.sub) 1.dp else 3.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(background)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = if (item.sub) 12.dp else 16.dp, vertical = if (item.sub) 8.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (item.icon != null) {
-            Icon(painterResource(item.icon), contentDescription = null, tint = iconTint, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(16.dp))
+            Icon(painterResource(item.icon), contentDescription = null, tint = iconTint, modifier = Modifier.size(if (item.sub) 18.dp else 24.dp))
+            Spacer(Modifier.width(if (item.sub) 12.dp else 16.dp))
         }
         Text(
-            item.title,
-            fontSize = 18.sp,
+            item.label,
+            fontSize = if (item.sub) 15.sp else 18.sp,
             fontWeight = if (selected || focused) FontWeight.SemiBold else FontWeight.Normal,
             color = content,
             maxLines = 1,
