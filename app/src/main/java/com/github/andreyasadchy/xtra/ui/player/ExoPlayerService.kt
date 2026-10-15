@@ -213,7 +213,14 @@ class ExoPlayerService : BasePlaybackService() {
                     }
                 }
 
+                override fun onRenderedFirstFrame() {
+                    TvLoadTimer.finish(isSwapping)?.let { serviceListener?.toast(it, Toast.LENGTH_LONG) }
+                }
+
                 override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                    if (!timeline.isEmpty) {
+                        TvLoadTimer.mark("Listes de lecture")
+                    }
                     updatePlaybackState()
                     updateMetadata()
                     updateNotification()
@@ -934,6 +941,9 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     private suspend fun loadStream(restorePauseState: Boolean = false, restart: Boolean = false) {
+        if (!restart) {
+            TvLoadTimer.start()
+        }
         channelLogin?.let { channelLogin ->
             var streamProxy = if (useStreamProxy) {
                 streamProxyList?.getOrNull(currentStreamProxy).also {
@@ -1016,6 +1026,7 @@ class ExoPlayerService : BasePlaybackService() {
                 }
             }
             val url = playlistUrl
+            TvLoadTimer.mark("Accès Twitch (jeton)")
             if (url != null) {
                 // statistics of the home: the proxy the stream goes through (the list of the app or added ones),
                 // counted once the stream plays so a proxy that fails is not counted

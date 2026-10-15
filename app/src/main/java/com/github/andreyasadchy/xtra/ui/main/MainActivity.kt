@@ -1164,6 +1164,11 @@ class MainActivity : AppCompatActivity() {
             }
             when {
                 target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> TvUi.focusFirstItem(target)
+                target != null && target.id == R.id.tvHome -> {
+                    // the home: the first stream of the first row, never "refresh"
+                    target.requestFocus()
+                    currentTvHome()?.focusFirstCard()
+                }
                 target != null -> target.requestFocus()
                 tries < 15 -> focusContentAfterMenu(search, tries + 1)
             }
@@ -2044,9 +2049,17 @@ class MainActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.show(this, stream, last = last)
     }
 
+    /** The home, when it is the screen shown. */
+    private fun currentTvHome(): com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment? {
+        return supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments
+            ?.firstOrNull { it.isVisible } as? com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment
+    }
+
     fun closePlayer() {
         closeTvPip()
         setMainContentFocusable(true)
+        // back on the home: the card of the stream that was watched, else the first stream
+        currentTvHome()?.focusLastCard()
         supportFragmentManager.beginTransaction()
             .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
             .remove(supportFragmentManager.findFragmentById(R.id.playerContainer)!!)

@@ -149,6 +149,8 @@ fun TvHomeScreen(
     languageRows: List<TvHomeRow<Stream>> = emptyList(),
     /** Account for the greeting at the top right (no name: not logged in). */
     account: TvHomeAccount? = null,
+    /** Where the focus goes when it comes into the home (side menu, player closed). */
+    focus: TvHomeFocus = remember { TvHomeFocus() },
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -164,30 +166,76 @@ fun TvHomeScreen(
         followed?.takeIf { it.items.isNotEmpty() }?.let { "followed" to it },
         popular?.takeIf { it.items.isNotEmpty() }?.let { "popular" to it },
     ) + languageRows.filter { it.items.isNotEmpty() }.map { "language_" + it.title to it }
-    val listRequester = remember { FocusRequester() }
     val hasCards = rows.isNotEmpty() || resume?.items?.isNotEmpty() == true || games?.items?.isNotEmpty() == true
-    Column(
-        Modifier
-            .fillMaxSize()
-            // coming into the home (side menu, back from a screen): the rows get the focus (the last card, else the
-            // first stream), never "refresh" above them
-            .focusProperties {
-                onEnter = {
-                    // nothing loaded yet: "refresh" keeps the focus until the rows come
-                    if (requestedFocusDirection != FocusDirection.Down && hasCards) {
-                        cancelFocusChange()
-                        listRequester.requestFocus()
-                    }
-                }
+    // "refresh" only takes the focus with up from the first row (or while nothing is loaded): coming into the home,
+    // the focus never lands on it
+    val refreshRequester = remember { FocusRequester() }
+    var refreshAllowed by remember { mutableStateOf(false) }
+    // item of the list that has the focus (0: the first row)
+    var focusedItem by remember { androidx.compose.runtime.mutableIntStateOf(-1) }
+    // state of each row of streams and its cards, to put the focus back on a card
+    val rowStates = remember { mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
+    val cardRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    var refreshFocused by remember { mutableStateOf(false) }
+    // the rows came while "refresh" had the focus (first load): the focus goes to the first stream
+    LaunchedEffect(hasCards) {
+        if (hasCards && refreshFocused && !refreshAllowed) {
+            focus.focusFirst()
+        }
+    }
+    val request = focus.request
+    LaunchedEffect(request, hasCards) {
+        if (request == null || !hasCards) {
+            return@LaunchedEffect
+        }
+        focus.request = null
+        // the card of the stream watched last (same row first, else any row), else the first stream
+        val login = if (request.toLast) focus.lastLogin else null
+        val target = login?.let {
+            val preferred = rows.indexOfFirst { (key, row) -> key == focus.lastRow && row.items.any { s -> s.channelLogin == it } }
+            val rowIndex = if (preferred >= 0) preferred else rows.indexOfFirst { (_, row) -> row.items.any { s -> s.channelLogin == it } }
+            rows.getOrNull(rowIndex)?.let { (key, row) -> Triple(rowIndex, key, row.items.indexOfFirst { s -> s.channelLogin == it }) }
+        }
+        if (target != null) {
+            val (rowIndex, key, cardIndex) = target
+            listState.scrollToItem(rowIndex, if (rowIndex <= 0) 0 else -peek)
+            rowStates[key]?.scrollToItem(cardIndex)
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
+            if (runCatching { cardRequesters["$key/$login"]?.requestFocus() }.getOrNull() == true) {
+                return@LaunchedEffect
             }
-    ) {
+        }
+        listState.scrollToItem(0)
+        rows.firstOrNull()?.let { (key, _) -> rowStates[key]?.scrollToItem(0) }
+        androidx.compose.runtime.withFrameNanos { }
+        androidx.compose.runtime.withFrameNanos { }
+        runCatching { firstCard.requestFocus() }
+    }
+    Column(Modifier.fillMaxSize()) {
         // always on screen above the rows: refresh, then the greeting, the picture of the account and the time (only
         // to read, the focus never stops there)
         Row(
             Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RefreshPill(actions)
+            RefreshPill(
+                actions,
+                Modifier
+                    .focusRequester(refreshRequester)
+                    .focusProperties { canFocus = refreshAllowed || !hasCards }
+                    .onFocusChanged {
+                        refreshFocused = it.hasFocus
+                        if (!it.hasFocus) refreshAllowed = false
+                    }
+                    .onPreviewKeyEvent { event ->
+                        // down from "refresh": back to the first row
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && hasCards) {
+                            focus.focusFirst()
+                            true
+                        } else false
+                    }
+            )
             Spacer(Modifier.weight(1f))
             Greeting(account)
         }
@@ -197,8 +245,15 @@ fun TvHomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .focusRequester(listRequester)
-                .focusRestorer(firstCard),
+                .focusRestorer(firstCard)
+                .onPreviewKeyEvent { event ->
+                    // up from the first row: "refresh"
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && focusedItem == 0) {
+                        refreshAllowed = true
+                        runCatching { refreshRequester.requestFocus() }
+                        true
+                    } else false
+                },
             contentPadding = PaddingValues(top = 0.dp, bottom = 240.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -211,8 +266,24 @@ fun TvHomeScreen(
             }
             rows.forEachIndexed { rowIndex, (key, row) ->
                 item(key = key) {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(rowIndex) }) {
-                        StreamRow(row, previewLogin, previewPlayer, actions, if (rowIndex == 0) firstCard else null)
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = rowIndex; bringRow(rowIndex) } }) {
+                        StreamRow(
+                            row, previewLogin, previewPlayer, actions, if (rowIndex == 0) firstCard else null,
+                            state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
+                            cardModifier = { stream ->
+                                val login = stream.channelLogin
+                                if (login != null) {
+                                    Modifier
+                                        .focusRequester(cardRequesters.getOrPut("$key/$login") { FocusRequester() })
+                                        .onFocusChanged {
+                                            if (it.hasFocus) {
+                                                focus.lastLogin = login
+                                                focus.lastRow = key
+                                            }
+                                        }
+                                } else Modifier
+                            },
+                        )
                     }
                 }
             }
@@ -221,7 +292,7 @@ fun TvHomeScreen(
             val hasResume = resume != null && resume.items.isNotEmpty()
             if (hasResume) {
                 item(key = "resume") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(resumeIndex) }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = resumeIndex; bringRow(resumeIndex) } }) {
                         ResumeRow(resume!!, actions, if (rows.isEmpty()) firstCard else null)
                     }
                 }
@@ -229,7 +300,7 @@ fun TvHomeScreen(
             val statsIndex = resumeIndex + if (hasResume) 1 else 0
             if (stats != null) {
                 item(key = "stats") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(statsIndex) }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = statsIndex; bringRow(statsIndex) } }) {
                         StatsCard(stats, actions)
                     }
                 }
@@ -237,13 +308,33 @@ fun TvHomeScreen(
             val gamesIndex = statsIndex + if (stats != null) 1 else 0
             if (games != null && games.items.isNotEmpty()) {
                 item(key = "games") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(gamesIndex) }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = gamesIndex; bringRow(gamesIndex) } }) {
                         GameRow(games, actions, if (rows.isEmpty() && !hasResume) firstCard else null)
                     }
                 }
             }
         }
     }
+    }
+}
+
+/**
+ * Where the focus goes in the home: [focusFirst] the first stream of the first row (coming from the side menu),
+ * [focusLast] the card of the stream watched last, else the first stream (the player closed).
+ */
+class TvHomeFocus {
+    class Request(val toLast: Boolean)
+
+    var request by mutableStateOf<Request?>(null)
+    var lastLogin: String? = null
+    var lastRow: String? = null
+
+    fun focusFirst() {
+        request = Request(false)
+    }
+
+    fun focusLast() {
+        request = Request(true)
     }
 }
 
@@ -328,11 +419,11 @@ private fun SkeletonRow(actions: TvHomeActions) {
 }
 
 @Composable
-private fun RefreshPill(actions: TvHomeActions) {
+private fun RefreshPill(actions: TvHomeActions, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     Row(
-        Modifier
+        modifier
             .leftEdge(0, actions.openMenu)
             .clip(RoundedCornerShape(24.dp))
             .background(if (focused) TvColors.focused else Color(0x26FFFFFF))
@@ -399,7 +490,15 @@ private fun Modifier.leftEdge(index: Int, openMenu: () -> Unit) = onPreviewKeyEv
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previewPlayer: () -> ExoPlayer?, actions: TvHomeActions, firstRequester: FocusRequester?) {
+private fun StreamRow(
+    row: TvHomeRow<Stream>,
+    previewLogin: () -> String?,
+    previewPlayer: () -> ExoPlayer?,
+    actions: TvHomeActions,
+    firstRequester: FocusRequester?,
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    cardModifier: (Stream) -> Modifier = { Modifier },
+) {
     Column {
         RowTitle(row.title, row.icon)
         // the cards fill the width of the screen, with a part of the next one in sight
@@ -408,6 +507,7 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
         val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
+            state = state,
             modifier = Modifier.focusRestorer(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -419,7 +519,7 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
                     previewLogin = previewLogin,
                     previewPlayer = previewPlayer,
                     actions = actions,
-                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier),
+                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(stream)),
                     onClick = { actions.openStream(stream, row.items) },
                 )
             }

@@ -781,4 +781,6 @@
     <string name="tv_good_evening">こんばんは</string>
     <string name="tv_good_evening_name">こんばんは、%s さん</string>
     <string name="tv_multistream_stream_ended">%s の配信が終了しました</string>
+    <string name="tv_switch_pip_hint">配信で OK を長押しすると小さいウィンドウで視聴できます</string>
+    <string name="tv_pip_already_shown">この配信はすでに画面に表示されています</string>
 </resources>

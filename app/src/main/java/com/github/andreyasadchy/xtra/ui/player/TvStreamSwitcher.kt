@@ -120,6 +120,16 @@ object TvStreamSwitcher {
             }.also { header.addView(it) }
         } else null
         root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        // what OK held does, over the row (not when picking the streams of a multi-stream)
+        if (selection == null && onPip != null) {
+            root.addView(TextView(activity).apply {
+                text = activity.getString(R.string.tv_switch_pip_hint)
+                setTextColor(0xCCFFFFFF.toInt())
+                textSize = 14f
+                setShadowLayer(6 * density, 0f, 1 * density, 0xE6000000.toInt())
+                setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (2 * density).toInt())
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
         // tabs of the lists: the list of the stream first, then the other rows
         val tabTitles = if (rows.isNotEmpty()) {
             listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)) + rows.map { it.title }
@@ -254,8 +264,13 @@ object TvStreamSwitcher {
         }
         if (selection == null && onPip != null) {
             adapter.onLongClick = { stream ->
-                dialog.dismiss()
-                onPip(stream)
+                if (stream.channelLogin != null && stream.channelLogin == currentChannelLogin) {
+                    // the stream watched is already on the screen: no small window of it
+                    android.widget.Toast.makeText(activity, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    dialog.dismiss()
+                    onPip(stream)
+                }
             }
         }
         recyclerView.adapter = adapter

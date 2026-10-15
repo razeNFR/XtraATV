@@ -781,4 +781,6 @@
     <string name="tv_good_evening">晚安</string>
     <string name="tv_good_evening_name">晚安，%s</string>
     <string name="tv_multistream_stream_ended">%s 的直播已結束</string>
+    <string name="tv_switch_pip_hint">在直播上長按 OK 可在小視窗中觀看</string>
+    <string name="tv_pip_already_shown">此直播已在畫面上</string>
 </resources>
