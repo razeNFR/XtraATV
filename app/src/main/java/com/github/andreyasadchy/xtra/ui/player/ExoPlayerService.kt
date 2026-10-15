@@ -63,6 +63,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.ParsingLoadable
+import com.github.andreyasadchy.xtra.BuildConfig
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.model.VideoPosition
@@ -218,9 +219,6 @@ class ExoPlayerService : BasePlaybackService() {
                 }
 
                 override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-                    if (!timeline.isEmpty) {
-                        TvLoadTimer.mark("Listes de lecture")
-                    }
                     updatePlaybackState()
                     updateMetadata()
                     updateNotification()
@@ -722,7 +720,10 @@ class ExoPlayerService : BasePlaybackService() {
                         setBufferDurationsMs(
                             prefs().getString(C.PLAYER_BUFFER_MIN, "15000")?.toIntOrNull() ?: 15000,
                             prefs().getString(C.PLAYER_BUFFER_MAX, "50000")?.toIntOrNull() ?: 50000,
-                            prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull() ?: 2000,
+                            // TV: 1 s of video to start instead of 2 when the setting was not changed (after a stall it
+                            // still waits for its own setting, 2 s)
+                            prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull()
+                                ?.let { if (it == 2000 && resources.getBoolean(R.bool.isTv)) 1000 else it } ?: 2000,
                             prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000
                         )
                     }.build()
@@ -736,6 +737,21 @@ class ExoPlayerService : BasePlaybackService() {
             }.build()
             this.player = player
             player.addListener(playerListener)
+            if (BuildConfig.DEBUG) {
+                // debug: time of the playlists and of the first piece of video of a stream that starts
+                player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                    override fun onLoadCompleted(
+                        eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                        loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo,
+                        mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData
+                    ) {
+                        when (mediaLoadData.dataType) {
+                            androidx.media3.common.C.DATA_TYPE_MANIFEST -> TvLoadTimer.markPlaylist()
+                            androidx.media3.common.C.DATA_TYPE_MEDIA -> TvLoadTimer.mark("Premier morceau de vidéo")
+                        }
+                    }
+                })
+            }
             val session = MediaSession(this, "ExoPlayerService")
             this.session = session
             session.setCallback(sessionCallback)
@@ -942,7 +958,10 @@ class ExoPlayerService : BasePlaybackService() {
 
     private suspend fun loadStream(restorePauseState: Boolean = false, restart: Boolean = false) {
         if (!restart) {
-            TvLoadTimer.start()
+            TvLoadTimer.mark("Ouverture du lecteur")
+        } else {
+            // a restart (ad blocker, error): the player asks the access itself
+            TvStreamPrefetch.clear()
         }
         channelLogin?.let { channelLogin ->
             var streamProxy = if (useStreamProxy) {
@@ -1020,7 +1039,8 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                         url
                     } else {
-                        getStreamPlaylistUrl(channelLogin)
+                        // asked as soon as OK was pressed (same request, no proxy): not asked a second time
+                        (if (!restart) TvStreamPrefetch.take(channelLogin) else null) ?: getStreamPlaylistUrl(channelLogin)
                     }
                     playlistUrl = url
                 }
@@ -1276,25 +1296,7 @@ class ExoPlayerService : BasePlaybackService() {
 
     private suspend fun getStreamPlaylistUrl(channelLogin: String, streamProxy: StreamProxy? = null): String? {
         return try {
-            xtraModule.playerRepository.loadStreamPlaylistUrl(
-                context = this,
-                networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                gqlHeaders = getStreamTokenHeaders(prefs().getString(C.TOKEN_PLATFORM, "web")),
-                channelLogin = channelLogin,
-                platform = prefs().getString(C.TOKEN_PLATFORM, "web"),
-                playerType = prefs().getString(C.TOKEN_PLAYER_TYPE, "site").let {
-                    // like VAFT, the "popout" player type gets fewer ads than the default "site" one
-                    if (prefs().getBoolean(C.PLAYER_ADBLOCK, true) && (it.isNullOrBlank() || it == "site")) "popout" else it
-                },
-                supportedCodecs = prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
-                proxyPlaybackAccessToken = streamProxy != null,
-                proxyHost = streamProxy?.host,
-                proxyPort = streamProxy?.port,
-                proxyUser = streamProxy?.username,
-                proxyPassword = streamProxy?.password,
-                proxyTimeout = prefs().getString(C.PROXY_TIMEOUT, "3000")?.toIntOrNull() ?: 3000,
-                enableIntegrity = prefs().getBoolean(C.ENABLE_INTEGRITY, false) && streamProxy == null
-            )
+            loadStreamPlaylistUrl(this, xtraModule, channelLogin, streamProxy)
         } catch (e: Exception) {
             if (e.message == C.FAILED_INTEGRITY_CHECK) {
                 integrity.emit("refreshStream")
@@ -1798,7 +1800,7 @@ class ExoPlayerService : BasePlaybackService() {
                             xtraModule.playerRepository.loadStreamPlaylistUrl(
                                 context = this@ExoPlayerService,
                                 networkLibrary = networkLibrary,
-                                gqlHeaders = getStreamTokenHeaders(videoSwap.platform),
+                                gqlHeaders = getStreamTokenHeaders(this@ExoPlayerService, videoSwap.platform),
                                 channelLogin = channelLogin,
                                 platform = videoSwap.platform,
                                 playerType = videoSwap.playerType,
@@ -2253,14 +2255,6 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     /** The website client for the web platform (1440p), the client of the app for the others. */
-    private fun getStreamTokenHeaders(platform: String?): Map<String, String> {
-        val includeToken = prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)
-        return if (platform.isNullOrBlank() || platform == "web") {
-            TwitchApiHelper.getGQLWebHeaders(this, includeToken)
-        } else {
-            TwitchApiHelper.getGQLHeaders(this, includeToken)
-        }
-    }
 
     private fun isUnmeteredNetwork(): Boolean {
         val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -3045,6 +3039,39 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     companion object {
+        private fun getStreamTokenHeaders(context: android.content.Context, platform: String?): Map<String, String> {
+            val includeToken = context.prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)
+            return if (platform.isNullOrBlank() || platform == "web") {
+                TwitchApiHelper.getGQLWebHeaders(context, includeToken)
+            } else {
+                TwitchApiHelper.getGQLHeaders(context, includeToken)
+            }
+        }
+
+        /** Address of the playlist of a stream (access of Twitch included), with the settings of the player. Throws on failure. */
+        suspend fun loadStreamPlaylistUrl(context: android.content.Context, xtraModule: com.github.andreyasadchy.xtra.XtraModule, channelLogin: String, streamProxy: StreamProxy? = null): String {
+            val prefs = context.prefs()
+            return xtraModule.playerRepository.loadStreamPlaylistUrl(
+                context = context,
+                networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                gqlHeaders = getStreamTokenHeaders(context, prefs.getString(C.TOKEN_PLATFORM, "web")),
+                channelLogin = channelLogin,
+                platform = prefs.getString(C.TOKEN_PLATFORM, "web"),
+                playerType = prefs.getString(C.TOKEN_PLAYER_TYPE, "site").let {
+                    // like VAFT, the "popout" player type gets fewer ads than the default "site" one
+                    if (prefs.getBoolean(C.PLAYER_ADBLOCK, true) && (it.isNullOrBlank() || it == "site")) "popout" else it
+                },
+                supportedCodecs = prefs.getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
+                proxyPlaybackAccessToken = streamProxy != null,
+                proxyHost = streamProxy?.host,
+                proxyPort = streamProxy?.port,
+                proxyUser = streamProxy?.username,
+                proxyPassword = streamProxy?.password,
+                proxyTimeout = prefs.getString(C.PROXY_TIMEOUT, "3000")?.toIntOrNull() ?: 3000,
+                enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false) && streamProxy == null
+            )
+        }
+
         /** Player types whose playlists usually come without ads (same idea as the VAFT userscript). */
         private var bandwidthMeter: DefaultBandwidthMeter? = null
 

@@ -1779,6 +1779,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null) {
+        // the time of the start of the stream counts from here (debug builds), and its access of Twitch is asked
+        // at once, while the player opens
+        com.github.andreyasadchy.xtra.ui.player.TvLoadTimer.start()
+        com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.start(this, stream.channelLogin)
         com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
         if (queue != null) {
             streamQueue = queue

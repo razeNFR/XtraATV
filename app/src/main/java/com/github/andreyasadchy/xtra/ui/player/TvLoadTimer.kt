@@ -29,6 +29,13 @@ object TvLoadTimer {
         }
     }
 
+    /** A playlist loaded: the list of the qualities first, then the list of the pieces of video. */
+    fun markPlaylist() {
+        if (active) {
+            mark(if (steps.none { it.first == "Liste des qualités" }) "Liste des qualités" else "Liste des morceaux")
+        }
+    }
+
     /** The first picture is shown: the times of the steps, null when no start was measured. */
     fun finish(swapped: Boolean): String? {
         if (!active) {
