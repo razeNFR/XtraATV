@@ -2826,6 +2826,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val controls = _binding?.playerControls ?: return@OnGlobalFocusChangeListener
         if (newFocus != null && newFocus != controls.progressBar && (newFocus.parent == controls.bottomLeftLayout || newFocus.parent == controls.bottomRightLayout || newFocus == controls.playPause)) {
             lastHudControl = java.lang.ref.WeakReference(newFocus)
+            // kept by the app (id, else description), not by this screen: the next player finds it again
+            lastControlId = newFocus.id
+            lastControlLabel = newFocus.contentDescription?.toString()
         }
     }
 
@@ -2841,7 +2844,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private fun focusPrimaryControl() {
         with(binding.playerControls) {
             // the button pressed last, kept from one stream to the next (left / right, other streams)
-            findLastClickedControl()?.let { last ->
+            findLastControl()?.let { last ->
                 if (last.isShown && last.isFocusable && last.requestFocus()) {
                     return
                 }
@@ -2900,33 +2903,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
     }
 
-    /** A button of the controls pressed with OK: the focus goes back to it when the controls show again. */
-    private fun rememberClickedControl(event: KeyEvent) {
-        val isSelect = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
-        if (!isTv || !isSelect || event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0 || _binding == null) {
-            return
-        }
-        val controls = binding.playerControls
-        val focused = activity?.currentFocus ?: return
-        if (focused == controls.playPause || focused.parent == controls.bottomLeftLayout || focused.parent == controls.bottomRightLayout) {
-            lastClickedControlId = focused.id
-            lastClickedControlLabel = focused.contentDescription?.toString()
-        }
-    }
-
-    private fun findLastClickedControl(): View? {
+    /** The button of the controls focused last, in this player or a previous one; null when this one has none like it. */
+    private fun findLastControl(): View? {
         val controls = _binding?.playerControls ?: return null
-        if (lastClickedControlId != View.NO_ID) {
-            controls.root.findViewById<View>(lastClickedControlId)?.let { return it }
+        if (lastControlId != View.NO_ID) {
+            controls.root.findViewById<View>(lastControlId)?.let { return it }
         }
-        val label = lastClickedControlLabel ?: return null
+        val label = lastControlLabel ?: return null
         return listOf(controls.bottomLeftLayout, controls.bottomRightLayout).flatMap { layout -> (0 until layout.childCount).map { layout.getChildAt(it) } }
             .firstOrNull { it.contentDescription?.toString() == label }
     }
 
     /** Called by the activity for every key event, keeps the controls visible while they are used with a D-pad. */
     fun onKeyEventDispatched(event: KeyEvent) {
-        rememberClickedControl(event)
         if (_binding != null && isMaximized && event.action == KeyEvent.ACTION_DOWN &&
             binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()
         ) {
@@ -3346,7 +3335,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
      * back, the player closes and the screen it was opened from is shown again.
      */
     protected fun onTvStreamEnded() {
-        if (!isTv || streamEndJob?.isActive == true || view == null) {
+        if (view == null || !isAdded || !isTv || streamEndJob?.isActive == true) {
             return
         }
         val activity = activity as? MainActivity ?: return
@@ -3855,8 +3844,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
          */
         var pendingLoadingPicture: Pair<String, String?>? = null
 
-        /** Button of the controls pressed last (its id, else its description), for the whole time the player is used. */
-        private var lastClickedControlId = View.NO_ID
-        private var lastClickedControlLabel: String? = null
+        /** Button of the controls focused last (its id, else its description), kept from one player to the next. */
+        private var lastControlId = View.NO_ID
+        private var lastControlLabel: String? = null
     }
 }

@@ -1772,7 +1772,7 @@ class MainActivity : AppCompatActivity() {
         closeTvPip()
         (playerFragment as? PlayerFragment)?.let {
             it.close()
-            closePlayer()
+            closePlayer(focusHome = false)
         }
         setMainContentFocusable(false)
         supportFragmentManager.beginTransaction()
@@ -2137,13 +2137,16 @@ class MainActivity : AppCompatActivity() {
             ?.firstOrNull { it.isVisible } as? com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment
     }
 
-    fun closePlayer() {
+    fun closePlayer(focusHome: Boolean = true) {
         neighborJob?.cancel()
         com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.clear()
         closeTvPip()
         setMainContentFocusable(true)
-        // back on the home: the card of the stream that was watched, else the first stream
-        currentTvHome()?.focusLastCard()
+        // back on the home: the card of the stream that was watched, else the first stream (not when a multi-stream
+        // takes the place of the player: its streams keep the focus)
+        if (focusHome) {
+            currentTvHome()?.focusLastCard()
+        }
         supportFragmentManager.beginTransaction()
             .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
             .remove(supportFragmentManager.findFragmentById(R.id.playerContainer)!!)

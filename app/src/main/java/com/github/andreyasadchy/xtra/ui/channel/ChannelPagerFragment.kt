@@ -109,12 +109,13 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                 while (tries++ < 40) {
                     kotlinx.coroutines.delay(150L)
                     val root = this@ChannelPagerFragment.view ?: return@launch
-                    // already on a video (moved there with the remote): left as it is
+                    // already on a video (moved there with the remote): left as it is; the pages of the tabs are a list
+                    // too, only the lists of videos count
                     var focused = root.findFocus()
-                    while (focused != null && focused !is androidx.recyclerview.widget.RecyclerView) {
+                    while (focused != null && focused !is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView) {
                         focused = focused.parent as? View
                     }
-                    if (focused != null) {
+                    if (focused != null && root.findFocus() !== focused) {
                         return@launch
                     }
                     val grid = com.github.andreyasadchy.xtra.ui.view.TvUi.findVisibleGrid(root)
