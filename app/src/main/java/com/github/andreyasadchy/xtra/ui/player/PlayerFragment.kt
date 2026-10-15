@@ -1003,7 +1003,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             }
                         }
                     }
-                    if (isTv && ((activity as? MainActivity)?.streamQueue?.size ?: 0) > 1 && requireContext().prefs().getBoolean(C.TV_BUTTON_STREAM_LIST, true)) {
+                    // TV: always there for a stream, the row has tabs (followed, popular...) even when the stream came alone
+                    if (isTv && requireContext().prefs().getBoolean(C.TV_BUTTON_STREAM_LIST, true)) {
                         streamList?.visibility = View.VISIBLE
                         streamList?.setOnClickListener {
                             hideController()
