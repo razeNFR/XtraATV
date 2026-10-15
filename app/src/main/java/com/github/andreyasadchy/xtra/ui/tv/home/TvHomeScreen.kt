@@ -188,7 +188,9 @@ fun TvHomeScreen(
         if (request == null || !hasCards) {
             return@LaunchedEffect
         }
-        focus.request = null
+        // the request is cleared once the focus is placed: clearing it first restarted this effect and stopped it
+        // before the focus moved (stuck on "refresh")
+        val done = { if (focus.request === request) focus.request = null }
         // the card of the stream watched last (same row first, else any row), else the first stream
         val login = if (request.toLast) focus.lastLogin else null
         val target = login?.let {
@@ -203,6 +205,7 @@ fun TvHomeScreen(
             androidx.compose.runtime.withFrameNanos { }
             androidx.compose.runtime.withFrameNanos { }
             if (runCatching { cardRequesters["$key/$login"]?.requestFocus() }.getOrNull() == true) {
+                done()
                 return@LaunchedEffect
             }
         }
@@ -211,6 +214,7 @@ fun TvHomeScreen(
         androidx.compose.runtime.withFrameNanos { }
         androidx.compose.runtime.withFrameNanos { }
         runCatching { firstCard.requestFocus() }
+        done()
     }
     Column(Modifier.fillMaxSize()) {
         // always on screen above the rows: refresh, then the greeting, the picture of the account and the time (only
@@ -229,9 +233,9 @@ fun TvHomeScreen(
                         if (!it.hasFocus) refreshAllowed = false
                     }
                     .onPreviewKeyEvent { event ->
-                        // down from "refresh": back to the first row
+                        // down from "refresh": back to the card of the first row it came from
                         if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && hasCards) {
-                            focus.focusFirst()
+                            focus.focusLast()
                             true
                         } else false
                     }
