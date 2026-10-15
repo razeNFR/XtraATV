@@ -153,6 +153,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = prefs()
         migrateSettings()
+        forceDisplaySettings()
         if (resources.getBoolean(R.bool.isTv)) {
             // favorite channels, read before the followed streams are loaded
             com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
@@ -1577,6 +1578,11 @@ class MainActivity : AppCompatActivity() {
                 startStream(next)
                 // the list is loaded again in the background for the next switch, the switch itself does not wait for it
                 refreshQueueIfOld()
+                // near the end of the list: its next page comes after it
+                val at = streamQueue.indexOf(next)
+                if (at >= 0 && (if (offset > 0) at >= streamQueue.size - 3 else at <= 2)) {
+                    extendQueue()
+                }
                 val updated = streamQueue
                 val newIndex = updated.indexOf(next)
                 // the streamers that left and right go to now
@@ -1654,22 +1660,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var queueExtendJob: kotlinx.coroutines.Job? = null
+
+    /** The next page of the list of left / right (30 more streams), added after it. */
+    private fun extendQueue() {
+        val factory = streamQueueSource ?: return
+        if (queueExtendJob?.isActive == true || queueRefreshJob?.isActive == true) {
+            return
+        }
+        val before = streamQueue
+        queueExtendJob = lifecycleScope.launch {
+            val loaded = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.loadPages(factory, before.size + 30)
+            if (loaded.isNullOrEmpty() || streamQueueSource !== factory || streamQueue !== before) {
+                return@launch
+            }
+            val known = before.mapNotNull { it.channelLogin }.toSet()
+            val added = loaded.filter { it.channelLogin !in known }
+            if (added.isNotEmpty()) {
+                streamQueue = before + added
+                TvStreamSwitcher.update(streamQueue)
+            }
+        }
+    }
+
+    /** Source of the list of left / right, null when it has none (for the row of the other streams to load more of it). */
+    val queueSource get() = streamQueueSource
+
+    /** The row of the other streams loaded more of the list of left / right: left / right go through it too. */
+    fun onQueueExtended(list: List<Stream>, source: (() -> androidx.paging.PagingSource<Int, Stream>)?) {
+        if (source != null && source === streamQueueSource && list.size > streamQueue.size) {
+            streamQueue = list
+        }
+    }
+
     /** Loads the list again from its source, in the order of Twitch. True when the list was replaced. */
     private suspend fun refreshQueue(): Boolean {
         val factory = streamQueueSource ?: return false
         val before = streamQueue
-        val loaded = try {
-            // as many streams as the list had (the ones scrolled to stay), within what one request gives
-            val params = androidx.paging.PagingSource.LoadParams.Refresh<Int>(null, before.size.coerceIn(30, 100), false)
-            (factory().load(params) as? androidx.paging.PagingSource.LoadResult.Page)?.data
-        } catch (e: Exception) {
-            null
-        }.takeUnless { it.isNullOrEmpty() } ?: try {
-            // the requests of Twitch with a language take at most 30 streams
-            (factory().load(androidx.paging.PagingSource.LoadParams.Refresh<Int>(null, 30, false)) as? androidx.paging.PagingSource.LoadResult.Page)?.data
-        } catch (e: Exception) {
-            null
-        }
+        // as many streams as the list had (the pages scrolled to stay), 30 by request
+        val loaded = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.loadPages(factory, before.size.coerceIn(30, 150))
         // a failed request, or the list changed meanwhile (other list opened, streamer gone): kept as it is
         if (loaded.isNullOrEmpty() || streamQueueSource !== factory || streamQueue !== before) {
             return false
@@ -1739,6 +1768,7 @@ class MainActivity : AppCompatActivity() {
             currentStreamLogin,
             rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(this, currentPlayingStream()),
             onPip = { openTvPip(it) },
+            source = streamQueueSource,
         )
         refreshQueueIfOld()
     }
@@ -2256,6 +2286,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     @OptIn(UnstableApi::class)
+    /**
+     * Display settings removed from the UI settings: the same for everyone (previews of the streams shown, round
+     * pictures, compact numbers, uptime, tags, numbers of streams, tabs pages, scroll to top, time left, recent searches).
+     */
+    private fun forceDisplaySettings() {
+        val on = listOf(
+            C.UI_ROUND_USER_IMAGE, C.UI_TRUNCATE_VIEW_COUNT, C.UI_UPTIME, C.UI_TAGS, C.UI_BROADCASTERS_COUNT,
+            C.UI_FOLLOW_PAGER, C.UI_SAVED_PAGER, C.UI_GAME_PAGER, C.UI_SCROLL_TOP, C.UI_BOOKMARK_TIME_LEFT, C.UI_STORE_RECENT_SEARCHES,
+        )
+        if (on.any { !prefs.getBoolean(it, true) } || prefs.getString(C.COMPACT_STREAMS, "disabled") != "disabled") {
+            prefs.edit {
+                on.forEach { putBoolean(it, true) }
+                putString(C.COMPACT_STREAMS, "disabled")
+            }
+        }
+    }
+
     private fun migrateSettings() {
         val version = prefs.getInt(C.SETTINGS_VERSION, 0).let {
             if (it == 0 && !prefs.getBoolean(C.FIRST_LAUNCH2, true)) {

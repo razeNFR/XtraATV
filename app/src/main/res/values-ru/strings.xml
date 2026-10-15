@@ -770,4 +770,14 @@
     <string name="tv_login_page_ok">Вход через страницу Twitch выполнен ✓</string>
     <string name="tv_login_other_account">Другой аккаунт, чем при другом входе: другой вход удалён</string>
     <string name="tv_login_logged_out">Вы вышли</string>
+    <string name="channel_button_download">Кнопка «Скачать»</string>
+    <string name="channel_button_share">Кнопка «Поделиться»</string>
+    <string name="channel_button_notifications">Кнопка «Уведомления»</string>
+    <string name="setting_disabled_dependency">Сначала включите «%s»</string>
+    <string name="setting_disabled_either">Сначала включите «%1$s» или «%2$s»</string>
+    <string name="setting_disabled_generic">Недоступно при выбранных настройках</string>
+    <string name="tv_hello">Здравствуйте</string>
+    <string name="tv_hello_name">Здравствуйте, %s</string>
+    <string name="tv_good_evening">Добрый вечер</string>
+    <string name="tv_good_evening_name">Добрый вечер, %s</string>
 </resources>

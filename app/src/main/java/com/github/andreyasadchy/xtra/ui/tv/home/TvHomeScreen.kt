@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -144,6 +145,8 @@ fun TvHomeScreen(
     stats: TvHomeStats? = null,
     /** Popular streams of one language each (Xtra TV settings), under Popular. */
     languageRows: List<TvHomeRow<Stream>> = emptyList(),
+    /** Account for the greeting at the top right (no name: not logged in). */
+    account: TvHomeAccount? = null,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -169,8 +172,14 @@ fun TvHomeScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             item(key = "header") {
-                Row(Modifier.padding(start = 12.dp, top = 4.dp).onFocusChanged { if (it.hasFocus) bringRow(0) }) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp).onFocusChanged { if (it.hasFocus) bringRow(0) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     RefreshPill(actions)
+                    Spacer(Modifier.weight(1f))
+                    // greeting, picture of the account and time: only to read, the focus never stops there
+                    Greeting(account)
                 }
             }
             // first load: grey cards in place of the rows, like YouTube
@@ -214,6 +223,57 @@ fun TvHomeScreen(
                 }
             }
         }
+    }
+}
+
+/** Account shown at the top right of the home. */
+class TvHomeAccount(val name: String?, val image: String?)
+
+@Composable
+private fun Greeting(account: TvHomeAccount?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // the time, again at each new minute
+    var now by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L)
+            now = System.currentTimeMillis()
+        }
+    }
+    val hour = java.util.Calendar.getInstance().apply { timeInMillis = now }.get(java.util.Calendar.HOUR_OF_DAY)
+    val name = account?.name
+    val greeting = context.getString(
+        if (hour >= 18 || hour < 5) {
+            if (name != null) R.string.tv_good_evening_name else R.string.tv_good_evening
+        } else {
+            if (name != null) R.string.tv_hello_name else R.string.tv_hello
+        },
+        name ?: ""
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(greeting, fontSize = 15.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 320.dp))
+        Spacer(Modifier.width(12.dp))
+        val image = account?.image
+        if (name != null && image != null) {
+            AsyncImage(
+                model = image,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(34.dp).clip(CircleShape)
+            )
+        } else {
+            Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0x26FFFFFF)), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.tv_ic_person), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(
+            android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(now)),
+            fontSize = 20.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1
+        )
     }
 }
 

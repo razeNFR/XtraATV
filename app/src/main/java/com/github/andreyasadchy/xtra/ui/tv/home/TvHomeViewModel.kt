@@ -45,6 +45,35 @@ class TvHomeViewModel(
     private var loadedAt = 0L
     private var loadedLanguages: Set<String>? = null
 
+    /** Picture of the account logged in, for the greeting at the top of the home. */
+    val accountImage = MutableStateFlow<String?>(null)
+    private var accountImageOf: String? = null
+
+    private fun loadAccountImage() {
+        val userId = applicationContext.tokenPrefs().getString(C.USER_ID, null)?.takeIf { it.isNotBlank() }
+        if (userId == null) {
+            accountImage.value = null
+            accountImageOf = null
+            return
+        }
+        if (userId == accountImageOf && accountImage.value != null) {
+            return
+        }
+        accountImageOf = userId
+        viewModelScope.launch {
+            try {
+                val prefs = applicationContext.prefs()
+                accountImage.value = graphQLRepository.loadQueryUser(
+                    prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    TwitchApiHelper.getGQLHeaders(applicationContext),
+                    id = userId
+                ).data?.user?.profileImageURL
+            } catch (e: Exception) {
+
+            }
+        }
+    }
+
     init {
         // a channel added to the favorites or removed: the followed row is sorted again at once
         viewModelScope.launch {
@@ -58,6 +87,7 @@ class TvHomeViewModel(
 
     /** Loads the rows, again when they are older than a few minutes. */
     fun load(force: Boolean = false) {
+        loadAccountImage()
         // languages of the rows changed in the settings: loaded again at once
         val rowLanguages = applicationContext.prefs().getStringSet(C.TV_HOME_LANGUAGE_ROWS, null).orEmpty().toSet()
         if (!force && loadedAt != 0L && System.currentTimeMillis() - loadedAt < 3 * 60_000L && rowLanguages == loadedLanguages) {

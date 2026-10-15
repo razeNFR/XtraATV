@@ -775,4 +775,14 @@
     <string name="tv_login_page_ok">Conectado con la página de Twitch ✓</string>
     <string name="tv_login_other_account">Otra cuenta que la del otro inicio de sesión: el otro se ha quitado</string>
     <string name="tv_login_logged_out">Sesión cerrada</string>
+    <string name="channel_button_download">Botón «Descargar»</string>
+    <string name="channel_button_share">Botón «Compartir»</string>
+    <string name="channel_button_notifications">Botón «Notificaciones»</string>
+    <string name="setting_disabled_dependency">Activa primero «%s»</string>
+    <string name="setting_disabled_either">Activa primero «%1$s» o «%2$s»</string>
+    <string name="setting_disabled_generic">No disponible con los otros ajustes elegidos</string>
+    <string name="tv_hello">Hola</string>
+    <string name="tv_hello_name">Hola, %s</string>
+    <string name="tv_good_evening">Buenas noches</string>
+    <string name="tv_good_evening_name">Buenas noches, %s</string>
 </resources>

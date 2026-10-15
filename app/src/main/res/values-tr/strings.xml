@@ -771,4 +771,14 @@
     <string name="tv_login_page_ok">Twitch sayfası ile giriş yapıldı ✓</string>
     <string name="tv_login_other_account">Diğer girişten farklı bir hesap: diğer giriş kaldırıldı</string>
     <string name="tv_login_logged_out">Çıkış yapıldı</string>
+    <string name="channel_button_download">“İndir” düğmesi</string>
+    <string name="channel_button_share">“Paylaş” düğmesi</string>
+    <string name="channel_button_notifications">“Bildirimler” düğmesi</string>
+    <string name="setting_disabled_dependency">Önce “%s” seçeneğini açın</string>
+    <string name="setting_disabled_either">Önce “%1$s” veya “%2$s” seçeneğini açın</string>
+    <string name="setting_disabled_generic">Seçilen diğer ayarlarla kullanılamaz</string>
+    <string name="tv_hello">Merhaba</string>
+    <string name="tv_hello_name">Merhaba, %s</string>
+    <string name="tv_good_evening">İyi akşamlar</string>
+    <string name="tv_good_evening_name">İyi akşamlar, %s</string>
 </resources>

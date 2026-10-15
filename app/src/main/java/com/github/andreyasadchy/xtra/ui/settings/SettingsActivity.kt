@@ -209,9 +209,28 @@ class SettingsActivity : AppCompatActivity() {
     ) {
         val listAdapter = SettingsDragListAdapter()
         val dragCallback = object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+            override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
+                // the rows under another one follow it, they are not moved by themselves
+                return if (list.getOrNull(viewHolder.bindingAdapterPosition)?.parent != null) 0 else super.getMovementFlags(recyclerView, viewHolder)
+            }
+
             override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
                 val fromPosition = viewHolder.bindingAdapterPosition
-                val toPosition = target.bindingAdapterPosition
+                var toPosition = target.bindingAdapterPosition
+                if (fromPosition == RecyclerView.NO_POSITION || toPosition == RecyclerView.NO_POSITION || list.getOrNull(fromPosition)?.parent != null) {
+                    return false
+                }
+                // over the rows under another one: the move goes past that whole group
+                list.getOrNull(toPosition)?.parent?.let { parentKey ->
+                    toPosition = if (toPosition < fromPosition) {
+                        list.indexOfFirst { it.key == parentKey }
+                    } else {
+                        (list.indexOfLast { it.parent == parentKey } + 1).takeIf { it < list.size } ?: return false
+                    }
+                    if (toPosition < 0 || toPosition == fromPosition) {
+                        return false
+                    }
+                }
                 if (fromPosition < toPosition) {
                     for (from in fromPosition until toPosition) {
                         val to = from + 1
@@ -223,6 +242,22 @@ class SettingsActivity : AppCompatActivity() {
                         val from = to + 1
                         Collections.swap(list, from, to)
                         listAdapter.notifyItemMoved(from, to)
+                    }
+                }
+                // the rows under another one go back right under it
+                val rows = list as? MutableList<SettingsDragListItem>
+                if (rows != null) {
+                    rows.filter { it.parent != null }.groupBy { it.parent }.forEach { (parentKey, children) ->
+                        children.forEachIndexed { index, child ->
+                            val at = rows.indexOf(child)
+                            rows.removeAt(at)
+                            val parentIndex = rows.indexOfFirst { it.key == parentKey }
+                            val wanted = if (parentIndex >= 0) (parentIndex + 1 + index).coerceAtMost(rows.size) else at
+                            rows.add(wanted, child)
+                            if (at != wanted) {
+                                listAdapter.notifyItemMoved(at, wanted)
+                            }
+                        }
                     }
                 }
                 return true
@@ -779,7 +814,31 @@ class SettingsActivity : AppCompatActivity() {
                         enabled = split[2] != "0",
                     )
                 }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, C.UI_NAVIGATION_TAB_LIST, preference.title)
+                // TV: the shortcuts of the side menu to the tabs of the followed channels, checked under "Following"
+                val isTv = requireContext().resources.getBoolean(R.bool.isTv)
+                val extras = requireContext().prefs().getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
+                val rows = if (isTv) {
+                    tabs.flatMap { tab ->
+                        if (tab.key == "2") {
+                            listOf(tab) + listOf(
+                                "videos" to R.string.tv_menu_followed_videos,
+                                "channels" to R.string.tv_menu_followed_channels,
+                                "games" to R.string.tv_menu_followed_games,
+                            ).map { (key, text) -> SettingsDragListItem(key = key, text = getString(text), default = false, enabled = key in extras, parent = "2") }
+                        } else listOf(tab)
+                    }.toMutableList()
+                } else tabs
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(rows, C.UI_NAVIGATION_TAB_LIST, preference.title) { saved ->
+                    requireContext().prefs().edit {
+                        putString(C.UI_NAVIGATION_TAB_LIST, saved.filter { it.parent == null }.joinToString(",") {
+                            "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
+                        })
+                        if (isTv) {
+                            putStringSet(C.TV_MENU_EXTRAS, saved.filter { it.parent != null && it.enabled }.map { it.key }.toSet())
+                        }
+                    }
+                    (requireActivity() as? SettingsActivity)?.setResult()
+                }
                 true
             }
             findPreference<Preference>("ui_following_tabs_dialog")?.setOnPreferenceClickListener { preference ->
@@ -878,7 +937,24 @@ class SettingsActivity : AppCompatActivity() {
                         enabled = split[2] != "0",
                     )
                 }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, C.UI_CHANNEL_TABS, preference.title)
+                // the buttons of the channel page, each one can be hidden, after the tabs
+                val hidden = requireContext().prefs().getStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, null).orEmpty()
+                val rows = (tabs + listOf(
+                    "download" to R.string.channel_button_download,
+                    "share" to R.string.channel_button_share,
+                    "notifications" to R.string.channel_button_notifications,
+                ).map { (key, text) ->
+                    SettingsDragListItem(key = key, text = getString(text), default = false, enabled = key !in hidden, parent = "buttons")
+                }).toMutableList()
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(rows, C.UI_CHANNEL_TABS, preference.title) { saved ->
+                    requireContext().prefs().edit {
+                        putString(C.UI_CHANNEL_TABS, saved.filter { it.parent == null }.joinToString(",") {
+                            "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
+                        })
+                        putStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, saved.filter { it.parent != null && !it.enabled }.map { it.key }.toSet())
+                    }
+                    (requireActivity() as? SettingsActivity)?.setResult()
+                }
                 true
             }
             findPreference<Preference>("ui_game_tabs_dialog")?.setOnPreferenceClickListener { preference ->
@@ -1377,17 +1453,15 @@ class SettingsActivity : AppCompatActivity() {
             val miniKeep = findPreference<SwitchPreferenceCompat>(C.TV_MINI_PLAYER_KEEP_ON_HOME)
             val audioKeep = findPreference<SwitchPreferenceCompat>(C.TV_AUDIO_ONLY_KEEP_ON_HOME)
             fullscreenKeep?.isEnabled = miniKeep?.isChecked != false || audioKeep?.isChecked != false
+            disabledHints[C.TV_FULLSCREEN_KEEP_ON_HOME] = {
+                getString(R.string.setting_disabled_either, miniKeep?.title ?: "", audioKeep?.title ?: "")
+            }
             miniKeep?.setOnPreferenceChangeListener { _, newValue ->
                 fullscreenKeep?.isEnabled = newValue == true || audioKeep?.isChecked != false
                 true
             }
             audioKeep?.setOnPreferenceChangeListener { _, newValue ->
                 fullscreenKeep?.isEnabled = newValue == true || miniKeep?.isChecked != false
-                true
-            }
-            // entries of the side menu: the main screen is made again with them when the settings close
-            findPreference<androidx.preference.MultiSelectListPreference>(C.TV_MENU_EXTRAS)?.setOnPreferenceChangeListener { _, _ ->
-                (requireActivity() as? SettingsActivity)?.setResult()
                 true
             }
             // favorite channels: their order (first in the followed streams), unchecked ones leave the favorites

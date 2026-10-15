@@ -770,4 +770,14 @@
     <string name="tv_login_page_ok">Mit der Twitch-Seite angemeldet ✓</string>
     <string name="tv_login_other_account">Anderes Konto als bei der anderen Anmeldung: die andere Anmeldung wurde entfernt</string>
     <string name="tv_login_logged_out">Abgemeldet</string>
+    <string name="channel_button_download">Schaltfläche „Herunterladen“</string>
+    <string name="channel_button_share">Schaltfläche „Teilen“</string>
+    <string name="channel_button_notifications">Schaltfläche „Benachrichtigungen“</string>
+    <string name="setting_disabled_dependency">Aktiviere zuerst „%s“</string>
+    <string name="setting_disabled_either">Aktiviere zuerst „%1$s“ oder „%2$s“</string>
+    <string name="setting_disabled_generic">Mit den anderen gewählten Einstellungen nicht verfügbar</string>
+    <string name="tv_hello">Hallo</string>
+    <string name="tv_hello_name">Hallo, %s</string>
+    <string name="tv_good_evening">Guten Abend</string>
+    <string name="tv_good_evening_name">Guten Abend, %s</string>
 </resources>

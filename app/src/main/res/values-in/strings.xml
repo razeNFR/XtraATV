@@ -771,4 +771,14 @@
     <string name="tv_login_page_ok">Masuk dengan halaman Twitch ✓</string>
     <string name="tv_login_other_account">Akun berbeda dari login lainnya: login lainnya dihapus</string>
     <string name="tv_login_logged_out">Telah keluar</string>
+    <string name="channel_button_download">Tombol “Unduh”</string>
+    <string name="channel_button_share">Tombol “Bagikan”</string>
+    <string name="channel_button_notifications">Tombol “Notifikasi”</string>
+    <string name="setting_disabled_dependency">Aktifkan “%s” terlebih dahulu</string>
+    <string name="setting_disabled_either">Aktifkan “%1$s” atau “%2$s” terlebih dahulu</string>
+    <string name="setting_disabled_generic">Tidak tersedia dengan pengaturan lain yang dipilih</string>
+    <string name="tv_hello">Halo</string>
+    <string name="tv_hello_name">Halo, %s</string>
+    <string name="tv_good_evening">Selamat malam</string>
+    <string name="tv_good_evening_name">Selamat malam, %s</string>
 </resources>

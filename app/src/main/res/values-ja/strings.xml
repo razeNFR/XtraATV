@@ -770,4 +770,14 @@
     <string name="tv_login_page_ok">Twitch ページでログインしました ✓</string>
     <string name="tv_login_other_account">もう一方のログインと別のアカウントです：もう一方のログインは削除されました</string>
     <string name="tv_login_logged_out">ログアウトしました</string>
+    <string name="channel_button_download">「ダウンロード」ボタン</string>
+    <string name="channel_button_share">「共有」ボタン</string>
+    <string name="channel_button_notifications">「通知」ボタン</string>
+    <string name="setting_disabled_dependency">先に「%s」をオンにしてください</string>
+    <string name="setting_disabled_either">先に「%1$s」または「%2$s」をオンにしてください</string>
+    <string name="setting_disabled_generic">ほかの設定では利用できません</string>
+    <string name="tv_hello">こんにちは</string>
+    <string name="tv_hello_name">こんにちは、%s さん</string>
+    <string name="tv_good_evening">こんばんは</string>
+    <string name="tv_good_evening_name">こんばんは、%s さん</string>
 </resources>

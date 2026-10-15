@@ -789,4 +789,14 @@
     <string name="tv_login_page_ok">Logged in with the Twitch page ✓</string>
     <string name="tv_login_other_account">Another account than the one of the other login: the other login was removed</string>
     <string name="tv_login_logged_out">Logged out</string>
+    <string name="channel_button_download">“Download” button</string>
+    <string name="channel_button_share">“Share” button</string>
+    <string name="channel_button_notifications">“Notifications” button</string>
+    <string name="setting_disabled_dependency">Turn on “%s” first</string>
+    <string name="setting_disabled_either">Turn on “%1$s” or “%2$s” first</string>
+    <string name="setting_disabled_generic">Not available with the other settings chosen</string>
+    <string name="tv_hello">Hello</string>
+    <string name="tv_hello_name">Hello, %s</string>
+    <string name="tv_good_evening">Good evening</string>
+    <string name="tv_good_evening_name">Good evening, %s</string>
 </resources>

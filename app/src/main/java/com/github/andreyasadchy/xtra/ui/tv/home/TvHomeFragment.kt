@@ -28,6 +28,7 @@ import com.github.andreyasadchy.xtra.ui.tv.home.TvHomeViewModel.Companion.TvHome
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
+import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -138,6 +139,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val popular by viewModel.popular.collectAsState()
                 val games by viewModel.games.collectAsState()
                 val languageRows by viewModel.languageRows.collectAsState()
+                val accountImage by viewModel.accountImage.collectAsState()
                 TvTheme(accent) {
                     TvHomeScreen(
                         followed = followed?.let { TvHomeRow(getString(R.string.tv_followed_live), it, followedId, R.drawable.tv_ic_heart) },
@@ -151,6 +153,10 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         languageRows = languageRows.map { (language, streams) ->
                             TvHomeRow(getString(R.string.tv_popular_in, languageName(language)), streams, 0, R.drawable.tv_ic_globe)
                         },
+                        account = TvHomeAccount(
+                            name = context.tokenPrefs().getString(C.USERNAME, null)?.takeIf { it.isNotBlank() },
+                            image = accountImage,
+                        ),
                     )
                 }
             }

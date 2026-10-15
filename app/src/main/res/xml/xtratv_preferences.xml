@@ -119,14 +119,6 @@
         android:title="@string/tv_settings_home"
         app:iconSpaceReserved="false">
 
-        <MultiSelectListPreference
-            android:entries="@array/tvMenuExtrasEntries"
-            android:entryValues="@array/tvMenuExtrasValues"
-            android:key="tv_menu_extras"
-            android:summary="@string/tv_menu_extras_summary"
-            android:title="@string/tv_menu_extras"
-            app:iconSpaceReserved="false"
-            app:singleLineTitle="false" />
 
         <Preference
             android:key="tv_favorites"

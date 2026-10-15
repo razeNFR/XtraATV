@@ -100,10 +100,63 @@ object TvStreamSources {
         override fun getRefreshKey(state: androidx.paging.PagingState<Int, Stream>): Int? = null
     }
 
+    /**
+     * The pages of a list one after the other (30 streams each, the most Twitch gives with a language), from the same
+     * source: it keeps where the last page ended.
+     */
+    class Pages(private val factory: () -> PagingSource<Int, Stream>) {
+        private var source: PagingSource<Int, Stream>? = null
+        private var nextKey: Int? = null
+        private var started = false
+        var hasMore = true
+            private set
+        var loading = false
+            private set
+
+        /** Next page, null when it fails (it can be asked again). */
+        suspend fun next(): List<Stream>? {
+            if (!hasMore || loading) {
+                return null
+            }
+            loading = true
+            return try {
+                val source = source ?: factory().also { source = it }
+                val params: PagingSource.LoadParams<Int> = if (!started) {
+                    PagingSource.LoadParams.Refresh<Int>(null, PAGE_SIZE, false)
+                } else {
+                    PagingSource.LoadParams.Append<Int>(nextKey ?: 2, PAGE_SIZE, false)
+                }
+                (source.load(params) as? PagingSource.LoadResult.Page)?.let { page ->
+                    started = true
+                    nextKey = page.nextKey
+                    hasMore = page.nextKey != null && page.data.isNotEmpty()
+                    page.data.filter { !it.channelLogin.isNullOrBlank() }
+                }
+            } catch (e: Exception) {
+                null
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    const val PAGE_SIZE = 30
+
+    /** The first pages of a list, until [count] streams (or its end), null when the first page fails. */
+    suspend fun loadPages(factory: () -> PagingSource<Int, Stream>, count: Int): List<Stream>? {
+        val pages = Pages(factory)
+        val list = pages.next()?.toMutableList() ?: return null
+        var tries = 0
+        while (list.size < count && pages.hasMore && tries++ < 10) {
+            list += pages.next() ?: break
+        }
+        return list.distinctBy { it.channelLogin }
+    }
+
     /** First page of a source, null when it fails. */
     suspend fun load(source: PagingSource<Int, Stream>): List<Stream>? {
         return try {
-            (source.load(PagingSource.LoadParams.Refresh(null, 30, false)) as? PagingSource.LoadResult.Page)?.data
+            (source.load(PagingSource.LoadParams.Refresh(null, PAGE_SIZE, false)) as? PagingSource.LoadResult.Page)?.data
                 ?.filter { !it.channelLogin.isNullOrBlank() }?.distinctBy { it.channelLogin }
         } catch (e: Exception) {
             null

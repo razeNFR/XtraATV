@@ -47,7 +47,13 @@ class SettingsDragListAdapter : ListAdapter<SettingsDragListItem, SettingsDragLi
                     false
                 }
                 text.text = item.text
-                if (setDefault != null) {
+                // a row under another one: moved in, smaller, no handle and no default (it follows its row)
+                val sub = item.parent != null
+                val density = root.resources.displayMetrics.density
+                root.setPaddingRelative(((if (sub) 44 else 10) * density).toInt(), root.paddingTop, root.paddingEnd, root.paddingBottom)
+                text.textSize = if (sub) 13f else 14f
+                image.visibility = if (sub) View.INVISIBLE else View.VISIBLE
+                if (setDefault != null && !sub) {
                     setAsDefault.visibility = View.VISIBLE
                     setAsDefault.setOnClickListener {
                         setAsDefault.setImageResource(R.drawable.baseline_home_black_24)

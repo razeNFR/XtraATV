@@ -19,4 +19,5 @@
     <item name="tvNavFollowedChannels" type="id" />
     <item name="tvNavFollowedGames" type="id" />
     <item name="tvPipLabel" type="id" />
+    <item name="tvDisabledRow" type="id" />
 </resources>

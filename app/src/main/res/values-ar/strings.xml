@@ -770,4 +770,14 @@
     <string name="tv_login_page_ok">تم تسجيل الدخول بصفحة Twitch ✓</string>
     <string name="tv_login_other_account">حساب مختلف عن حساب تسجيل الدخول الآخر: تمت إزالة تسجيل الدخول الآخر</string>
     <string name="tv_login_logged_out">تم تسجيل الخروج</string>
+    <string name="channel_button_download">زر «تنزيل»</string>
+    <string name="channel_button_share">زر «مشاركة»</string>
+    <string name="channel_button_notifications">زر «الإشعارات»</string>
+    <string name="setting_disabled_dependency">فعّل «%s» أولاً</string>
+    <string name="setting_disabled_either">فعّل «%1$s» أو «%2$s» أولاً</string>
+    <string name="setting_disabled_generic">غير متاح مع الإعدادات الأخرى المختارة</string>
+    <string name="tv_hello">مرحبًا</string>
+    <string name="tv_hello_name">مرحبًا، %s</string>
+    <string name="tv_good_evening">مساء الخير</string>
+    <string name="tv_good_evening_name">مساء الخير، %s</string>
 </resources>

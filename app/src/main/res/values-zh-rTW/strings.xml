@@ -770,4 +770,14 @@
     <string name="tv_login_page_ok">已使用 Twitch 頁面登入 ✓</string>
     <string name="tv_login_other_account">與另一種登入不是同一個帳戶：另一種登入已移除</string>
     <string name="tv_login_logged_out">已登出</string>
+    <string name="channel_button_download">「下載」按鈕</string>
+    <string name="channel_button_share">「分享」按鈕</string>
+    <string name="channel_button_notifications">「通知」按鈕</string>
+    <string name="setting_disabled_dependency">請先開啟「%s」</string>
+    <string name="setting_disabled_either">請先開啟「%1$s」或「%2$s」</string>
+    <string name="setting_disabled_generic">在目前其他設定下無法使用</string>
+    <string name="tv_hello">你好</string>
+    <string name="tv_hello_name">你好，%s</string>
+    <string name="tv_good_evening">晚安</string>
+    <string name="tv_good_evening_name">晚安，%s</string>
 </resources>

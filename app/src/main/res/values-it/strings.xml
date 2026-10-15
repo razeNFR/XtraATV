@@ -770,4 +770,14 @@
     <string name="tv_login_page_ok">Accesso con la pagina di Twitch ✓</string>
     <string name="tv_login_other_account">Account diverso da quello dell\'altro accesso: l\'altro accesso è stato rimosso</string>
     <string name="tv_login_logged_out">Disconnesso</string>
+    <string name="channel_button_download">Pulsante «Scarica»</string>
+    <string name="channel_button_share">Pulsante «Condividi»</string>
+    <string name="channel_button_notifications">Pulsante «Notifiche»</string>
+    <string name="setting_disabled_dependency">Attiva prima «%s»</string>
+    <string name="setting_disabled_either">Attiva prima «%1$s» o «%2$s»</string>
+    <string name="setting_disabled_generic">Non disponibile con le altre impostazioni scelte</string>
+    <string name="tv_hello">Ciao</string>
+    <string name="tv_hello_name">Ciao, %s</string>
+    <string name="tv_good_evening">Buonasera</string>
+    <string name="tv_good_evening_name">Buonasera, %s</string>
 </resources>
