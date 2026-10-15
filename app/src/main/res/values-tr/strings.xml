@@ -741,4 +741,8 @@
     <string name="tv_menu_followed_games">Takip edilen kategoriler</string>
     <string name="tv_menu_extras">Yan menüde ek girişler</string>
     <string name="tv_menu_extras_summary">Takip edilen videolara, kanallara veya kategorilere kısayollar</string>
+    <string name="tv_switch_current">Bu liste</string>
+    <string name="tv_switch_suggested">Öneriler</string>
+    <string name="tv_switch_empty">Bu listede canlı yayın yok</string>
+    <string name="tv_pip_hint">Küçük pencere: değiştirmek için OK\'u basılı tutun, kapatmak için Geri</string>
 </resources>

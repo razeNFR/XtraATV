@@ -740,4 +740,8 @@
     <string name="tv_menu_followed_games">Categorias seguidas</string>
     <string name="tv_menu_extras">Mais itens no menu lateral</string>
     <string name="tv_menu_extras_summary">Atalhos para os vídeos, canais ou categorias seguidos</string>
+    <string name="tv_switch_current">Esta lista</string>
+    <string name="tv_switch_suggested">Sugestões</string>
+    <string name="tv_switch_empty">Nenhum stream ao vivo nesta lista</string>
+    <string name="tv_pip_hint">Janela pequena: segure OK para trocar, Voltar para fechar</string>
 </resources>

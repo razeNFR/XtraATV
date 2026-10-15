@@ -740,4 +740,8 @@
     <string name="tv_menu_followed_games">关注的分类</string>
     <string name="tv_menu_extras">侧边菜单的更多项目</string>
     <string name="tv_menu_extras_summary">关注的视频、频道或分类的快捷方式</string>
+    <string name="tv_switch_current">此列表</string>
+    <string name="tv_switch_suggested">推荐</string>
+    <string name="tv_switch_empty">此列表中没有正在直播的频道</string>
+    <string name="tv_pip_hint">小窗口：长按 OK 交换直播，按返回关闭</string>
 </resources>

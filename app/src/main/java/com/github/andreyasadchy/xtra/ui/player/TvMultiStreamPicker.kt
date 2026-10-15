@@ -34,7 +34,9 @@ object TvMultiStreamPicker {
                     preselected = setOfNotNull(current?.channelLogin),
                     max = MAX,
                     onValidate = { selected -> activity.startMultiStream(selected) },
-                )
+                ),
+                // streams can be picked in the other lists too, the checked ones are kept from one tab to the other
+                rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(activity, current),
             )
         }
     }
@@ -53,7 +55,8 @@ object TvMultiStreamPicker {
                 activity,
                 candidates,
                 null,
-                TvStreamSwitcher.Selection(title = title, preselected = emptySet(), max = 1, onValidate = { it.firstOrNull()?.let(onPicked) })
+                TvStreamSwitcher.Selection(title = title, preselected = emptySet(), max = 1, onValidate = { it.firstOrNull()?.let(onPicked) }, exclude = exclude),
+                rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(activity, null),
             )
         }
     }

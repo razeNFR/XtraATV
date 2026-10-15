@@ -794,7 +794,62 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    /** TV: second stream in a small window over the full screen player. */
+    private val tvPip by lazy {
+        // a layer over the player, full screen, that only holds the small window and never takes the focus
+        val layer = android.widget.FrameLayout(this).apply {
+            elevation = 24 * resources.displayMetrics.density
+            isFocusable = false
+            isClickable = false
+        }
+        (binding.root as ViewGroup).addView(layer, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        com.github.andreyasadchy.xtra.ui.player.TvPip(this, layer)
+    }
+    private var dispatchingPlayerKey = false
+
+    fun isPlayerMaximized() = (playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true
+
+    fun hasPlayer() = playerFragment != null
+
+    /** The full screen player has the focus and its controls are hidden: OK opens them. */
+    fun isPlayerFocusedWithoutControls(): Boolean {
+        val player = playerFragment as? PlayerFragment ?: return false
+        val focus = currentFocus
+        return player.isMaximizedPlayer() && !player.areControlsShown() && (focus == null || focus.isInside(binding.playerContainer))
+    }
+
+    /** A key given to the player as if the small window was not there. */
+    fun dispatchPlayerKey(event: KeyEvent) {
+        dispatchingPlayerKey = true
+        try {
+            dispatchKeyEvent(event)
+        } finally {
+            dispatchingPlayerKey = false
+        }
+    }
+
+    fun currentPlayingStream(): Stream? = (playerFragment as? PlayerFragment)?.getPlayingStream()
+
+    /** OK held on a stream of the row of the other streams: it plays in a small window, without sound. */
+    fun openTvPip(stream: Stream) {
+        if (stream.channelLogin == currentStreamLogin) {
+            return
+        }
+        val first = tvPip.stream == null
+        tvPip.open(stream)
+        if (first) {
+            com.github.andreyasadchy.xtra.ui.player.TvPip.showHint(this)
+        }
+    }
+
+    fun closeTvPip() {
+        tvPip.close()
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (isTv && !dispatchingPlayerKey && tvPip.onKey(event)) {
+            return true
+        }
         if (BuildConfig.DEBUG && isTv) {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
         }
@@ -1201,6 +1256,10 @@ class MainActivity : AppCompatActivity() {
     val isKeepingPlayerInBackground get() = keepPlayerInBackground
 
     override fun onStop() {
+        if (isTv && !openingOwnScreen && !isChangingConfigurations) {
+            // leaving the app: the small window closes, only the main stream may keep its sound
+            closeTvPip()
+        }
         keepPlayerInBackground = false
         if (isTv && !openingOwnScreen && !isChangingConfigurations) {
             val player = playerFragment as? PlayerFragment
@@ -1607,6 +1666,7 @@ class MainActivity : AppCompatActivity() {
 
     /** TV multi-stream: replaces the player with up to 4 streams shown together. */
     fun startMultiStream(streams: List<Stream>) {
+        closeTvPip()
         (playerFragment as? PlayerFragment)?.let {
             it.close()
             closePlayer()
@@ -1625,8 +1685,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showStreamSwitcher() {
-        // shown at once with the list in memory, it fills in by itself if a newer list comes
-        TvStreamSwitcher.show(this, streamQueue, currentStreamLogin)
+        // shown at once with the list in memory, it fills in by itself if a newer list comes; tabs above it for the
+        // other lists (followed, popular, languages, category), OK held opens a stream in a small window
+        TvStreamSwitcher.show(
+            this,
+            streamQueue,
+            currentStreamLogin,
+            rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(this, currentPlayingStream()),
+            onPip = { openTvPip(it) },
+        )
         refreshQueueIfOld()
     }
 
@@ -1902,6 +1969,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closePlayer() {
+        closeTvPip()
         setMainContentFocusable(true)
         supportFragmentManager.beginTransaction()
             .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)

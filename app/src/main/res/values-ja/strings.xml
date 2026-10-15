@@ -740,4 +740,8 @@
     <string name="tv_menu_followed_games">フォロー中のカテゴリ</string>
     <string name="tv_menu_extras">サイドメニューの追加項目</string>
     <string name="tv_menu_extras_summary">フォロー中の動画、チャンネル、カテゴリへのショートカット</string>
+    <string name="tv_switch_current">このリスト</string>
+    <string name="tv_switch_suggested">おすすめ</string>
+    <string name="tv_switch_empty">このリストに配信中のものはありません</string>
+    <string name="tv_pip_hint">小窓: OK長押しで入れ替え、戻るで閉じる</string>
 </resources>

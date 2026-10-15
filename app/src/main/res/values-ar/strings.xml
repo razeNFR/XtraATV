@@ -740,4 +740,8 @@
     <string name="tv_menu_followed_games">الفئات المتابَعة</string>
     <string name="tv_menu_extras">عناصر إضافية في القائمة الجانبية</string>
     <string name="tv_menu_extras_summary">اختصارات إلى فيديوهات أو قنوات أو فئات المتابَعين</string>
+    <string name="tv_switch_current">هذه القائمة</string>
+    <string name="tv_switch_suggested">مقترحات</string>
+    <string name="tv_switch_empty">لا يوجد بث مباشر في هذه القائمة</string>
+    <string name="tv_pip_hint">نافذة صغيرة: اضغط مطولًا على OK للتبديل، ورجوع للإغلاق</string>
 </resources>

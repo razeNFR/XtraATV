@@ -740,4 +740,8 @@
     <string name="tv_menu_followed_games">Отслеживаемые категории</string>
     <string name="tv_menu_extras">Дополнительные пункты бокового меню</string>
     <string name="tv_menu_extras_summary">Ярлыки к видео, каналам или категориям, которые вы отслеживаете</string>
+    <string name="tv_switch_current">Этот список</string>
+    <string name="tv_switch_suggested">Предложения</string>
+    <string name="tv_switch_empty">В этом списке нет трансляций в эфире</string>
+    <string name="tv_pip_hint">Маленькое окно: удерживайте OK, чтобы поменять, «Назад» — закрыть</string>
 </resources>

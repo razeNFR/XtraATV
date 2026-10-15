@@ -740,4 +740,8 @@
     <string name="tv_menu_followed_games">Gefolgte Kategorien</string>
     <string name="tv_menu_extras">Weitere Einträge im Seitenmenü</string>
     <string name="tv_menu_extras_summary">Verknüpfungen zu Videos, Kanälen oder Kategorien, denen du folgst</string>
+    <string name="tv_switch_current">Diese Liste</string>
+    <string name="tv_switch_suggested">Vorschläge</string>
+    <string name="tv_switch_empty">Kein Livestream in dieser Liste</string>
+    <string name="tv_pip_hint">Kleines Fenster: OK gedrückt halten zum Tauschen, Zurück zum Schließen</string>
 </resources>

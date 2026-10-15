@@ -1851,6 +1851,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     fun isMaximizedPlayer() = _binding != null && isMaximized
 
+    /** TV: the controls (buttons, timeline) are on screen. */
+    fun areControlsShown() = _binding?.playerControls?.root?.isVisible == true
+
     fun isPlayingStreamMaximized() = _binding != null && isMaximized && playbackService?.type == BasePlaybackService.STREAM
 
     /** Gives the focus to the player when it is maximized, returns false if it is not. */

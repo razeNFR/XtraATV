@@ -759,4 +759,8 @@
     <string name="tv_menu_followed_games">Followed categories</string>
     <string name="tv_menu_extras">More entries in the side menu</string>
     <string name="tv_menu_extras_summary">Shortcuts to the videos, channels or categories of the followed channels</string>
+    <string name="tv_switch_current">This list</string>
+    <string name="tv_switch_suggested">Suggested</string>
+    <string name="tv_switch_empty">No live stream in this list</string>
+    <string name="tv_pip_hint">Small window: hold OK to swap the streams, back to close it</string>
 </resources>

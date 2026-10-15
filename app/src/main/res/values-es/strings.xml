@@ -745,4 +745,8 @@
     <string name="tv_menu_followed_games">Categorías seguidas</string>
     <string name="tv_menu_extras">Más entradas en el menú lateral</string>
     <string name="tv_menu_extras_summary">Accesos directos a los vídeos, canales o categorías seguidos</string>
+    <string name="tv_switch_current">Esta lista</string>
+    <string name="tv_switch_suggested">Sugerencias</string>
+    <string name="tv_switch_empty">Ningún stream en directo en esta lista</string>
+    <string name="tv_pip_hint">Ventana pequeña: mantén OK para intercambiar, Atrás para cerrarla</string>
 </resources>

@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatDialog
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil3.imageLoader
@@ -26,6 +27,7 @@ import com.github.andreyasadchy.xtra.ui.view.TvCards
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
+import kotlinx.coroutines.launch
 
 /**
  * TV: row of the streams from the list the current stream was opened from, shown over the player
@@ -50,13 +52,31 @@ object TvStreamSwitcher {
         val preselected: Set<String>,
         val max: Int,
         val onValidate: (List<Stream>) -> Unit,
+        /** Streams left out of the other lists (the ones already in the multi-stream). */
+        val exclude: Set<String> = emptySet(),
     )
 
-    fun show(activity: MainActivity, streams: List<Stream>, currentChannelLogin: String?, selection: Selection? = null) {
-        if (streams.isEmpty()) {
+    /**
+     * [rows]: other lists the row can show (followed, popular, languages, category), picked with tabs above the cards:
+     * up from the cards goes to the tabs, a tab shows its list, down goes back to the cards.
+     * [onPip]: OK held on a card opens it in a small window over the stream (not in selection mode).
+     */
+    fun show(
+        activity: MainActivity,
+        streams: List<Stream>,
+        currentChannelLogin: String?,
+        selection: Selection? = null,
+        rows: List<com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Row> = emptyList(),
+        onPip: ((Stream) -> Unit)? = null,
+    ) {
+        if (streams.isEmpty() && rows.isEmpty()) {
             return
         }
         val checked = selection?.preselected?.toMutableSet()
+        // tab shown (0: the list given), the lists already loaded, every stream shown (the checked ones of all the tabs)
+        var currentTab = 0
+        val loadedTabs = mutableMapOf<Int, List<Stream>>(0 to streams)
+        val seen = LinkedHashMap<String, Stream>()
         val dialog = AppCompatDialog(activity)
         val density = activity.resources.displayMetrics.density
         val horizontalPadding = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
@@ -98,6 +118,35 @@ object TvStreamSwitcher {
             }.also { header.addView(it) }
         } else null
         root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        // tabs of the lists: the list of the stream first, then the other rows
+        val tabTitles = if (rows.isNotEmpty()) {
+            listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)) + rows.map { it.title }
+        } else emptyList()
+        val tabViews = mutableListOf<TextView>()
+        if (tabTitles.size > 1) {
+            val tabsLayout = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(horizontalPadding + (4 * density).toInt(), (8 * density).toInt(), horizontalPadding, (2 * density).toInt())
+            }
+            tabTitles.forEach { title ->
+                tabViews += TextView(activity).apply {
+                    text = title
+                    textSize = 15f
+                    isFocusable = true
+                    setTextColor(activity.getColorStateList(R.color.tv_pill_text))
+                    setBackgroundResource(R.drawable.tv_tab_chip_background)
+                    val padding = (8 * density).toInt()
+                    setPadding(padding * 2, padding, padding * 2, padding)
+                    setShadowLayer(4 * density, 0f, 1 * density, 0x99000000.toInt())
+                }.also { tabsLayout.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = (10 * density).toInt() }) }
+            }
+            tabViews.firstOrNull()?.isSelected = true
+            root.addView(android.widget.HorizontalScrollView(activity).apply {
+                isHorizontalScrollBarEnabled = false
+                isFocusable = false
+                addView(tabsLayout)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
         val recyclerView = RecyclerView(activity).apply {
             layoutManager = LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false)
             clipToPadding = false
@@ -142,7 +191,19 @@ object TvStreamSwitcher {
                 updateValidate()
             } else {
                 dialog.dismiss()
-                activity.startStream(stream)
+                val row = rows.getOrNull(currentTab - 1)
+                if (row != null) {
+                    // a stream of another list: that list becomes the one of left / right and of this row
+                    activity.startStream(stream, adapter.streams, row.source)
+                } else {
+                    activity.startStream(stream)
+                }
+            }
+        }
+        if (selection == null && onPip != null) {
+            adapter.onLongClick = { stream ->
+                dialog.dismiss()
+                onPip(stream)
             }
         }
         recyclerView.adapter = adapter
@@ -154,10 +215,50 @@ object TvStreamSwitcher {
             }
             dialog.dismiss()
             // in the order of the row, the current stream first
-            val all = (adapter.streams + streams).distinctBy { it.channelLogin }
+            val all = (adapter.streams + streams + seen.values).distinctBy { it.channelLogin }
             selection?.onValidate(all.filter { it.channelLogin in logins }.sortedBy { if (it.channelLogin == currentChannelLogin) 0 else 1 })
         }
         root.addView(recyclerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        // a tab with the focus shows its list (loaded once), after a short stop on it
+        var tabJob: kotlinx.coroutines.Job? = null
+        val showTab = { index: Int, list: List<Stream> ->
+            currentTab = index
+            tabViews.forEachIndexed { i, view -> view.isSelected = i == index }
+            preview?.stop()
+            list.forEach { stream -> stream.channelLogin?.let { seen.putIfAbsent(it, stream) } }
+            adapter.streams = list
+            adapter.notifyDataSetChanged()
+            recyclerView.scrollToPosition(0)
+        }
+        tabViews.forEachIndexed { index, view ->
+            view.setOnFocusChangeListener { _, hasFocus ->
+                tabJob?.cancel()
+                if (hasFocus && index != currentTab) {
+                    tabJob = activity.lifecycleScope.launch {
+                        kotlinx.coroutines.delay(250L)
+                        val list = loadedTabs[index] ?: rows.getOrNull(index - 1)?.let { row ->
+                            com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.load(row.source())
+                        }?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }?.also { loadedTabs[index] = it }
+                        if (list.isNullOrEmpty()) {
+                            if (list != null) {
+                                android.widget.Toast.makeText(activity, R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        } else if (dialog.isShowing) {
+                            showTab(index, list)
+                        }
+                    }
+                }
+            }
+            // down from a tab: the first card of its list
+            view.setOnKeyListener { _, keyCode, event ->
+                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                    (recyclerView.layoutManager?.findViewByPosition((recyclerView.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition())
+                        ?: recyclerView.getChildAt(0))?.requestFocus()
+                    true
+                } else false
+            }
+        }
+        streams.forEach { stream -> stream.channelLogin?.let { seen.putIfAbsent(it, stream) } }
         dialog.setContentView(root)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(0))
@@ -177,9 +278,10 @@ object TvStreamSwitcher {
         }
         val update: (List<Stream>) -> Unit = update@{ list ->
             // only when streamers came or went or moved, not for new viewer counts: the row does not move for nothing
-            if (!dialog.isShowing || list.isEmpty() || list.map { it.channelLogin } == adapter.streams.map { it.channelLogin }) {
+            if (!dialog.isShowing || list.isEmpty() || currentTab != 0 || list.map { it.channelLogin } == adapter.streams.map { it.channelLogin }) {
                 return@update
             }
+            loadedTabs[0] = list
             val focusedLogin = recyclerView.focusedChild?.let { recyclerView.getChildAdapterPosition(it) }
                 ?.let { adapter.streams.getOrNull(it)?.channelLogin }
             adapter.streams = list
@@ -196,8 +298,13 @@ object TvStreamSwitcher {
                 updater = null
             }
             preview?.release()
+            tabJob?.cancel()
         }
         dialog.show()
+        if (streams.isEmpty()) {
+            // nothing in the list of the stream: the first other row
+            tabViews.getOrNull(1)?.post { tabViews[1].requestFocus() }
+        }
     }
 
     private class Adapter(
@@ -208,6 +315,9 @@ object TvStreamSwitcher {
         private val checked: Set<String>?,
         private val onClick: (Stream) -> Unit,
     ) : RecyclerView.Adapter<Adapter.ViewHolder>() {
+
+        /** OK held on a card (the small window of the player), none in selection mode. */
+        var onLongClick: ((Stream) -> Unit)? = null
 
         class ViewHolder(val binding: FragmentStreamsListItemBinding, val badge: android.widget.ImageView) : RecyclerView.ViewHolder(binding.root)
 
@@ -245,6 +355,16 @@ object TvStreamSwitcher {
             holder.badge.visibility = if (checked != null && stream.channelLogin in checked) View.VISIBLE else View.GONE
             with(holder.binding) {
                 root.setOnClickListener { onClick(stream) }
+                val longClick = onLongClick
+                if (longClick != null) {
+                    root.setOnLongClickListener {
+                        longClick(stream)
+                        true
+                    }
+                } else {
+                    root.setOnLongClickListener(null)
+                    root.isLongClickable = false
+                }
                 root.setOnFocusChangeListener { view, hasFocus ->
                     if (hasFocus) {
                         preview?.schedule(view, stream.channelLogin)

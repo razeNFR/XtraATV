@@ -741,4 +741,8 @@
     <string name="tv_menu_followed_games">Kategori yang diikuti</string>
     <string name="tv_menu_extras">Entri tambahan di menu samping</string>
     <string name="tv_menu_extras_summary">Pintasan ke video, channel, atau kategori yang diikuti</string>
+    <string name="tv_switch_current">Daftar ini</string>
+    <string name="tv_switch_suggested">Saran</string>
+    <string name="tv_switch_empty">Tidak ada siaran langsung di daftar ini</string>
+    <string name="tv_pip_hint">Jendela kecil: tahan OK untuk menukar, Kembali untuk menutup</string>
 </resources>
