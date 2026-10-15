@@ -747,4 +747,5 @@
     <string name="tv_pip_hint">Jendela kecil: tahan OK untuk menukar, Kembali untuk menutup</string>
     <string name="tv_multistream_focus">Mode fokus: stream ini besar</string>
     <string name="tv_multistream_grid">Kembali ke grid</string>
+    <string name="tv_followed_videos_need_code">Video yang diikuti memerlukan login dengan kode: login lewat twitch.tv/activate (Akun)</string>
 </resources>

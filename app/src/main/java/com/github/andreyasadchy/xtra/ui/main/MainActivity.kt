@@ -1078,7 +1078,7 @@ class MainActivity : AppCompatActivity() {
             com.github.andreyasadchy.xtra.ui.tv.TvTheme(accent) {
                 com.github.andreyasadchy.xtra.ui.tv.TvSideMenu(tvMenuState) { id ->
                     binding.navBar.selectedItemId = id
-                    tvMenuState.selected = binding.navBar.selectedItemId
+                    tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
                     if (id != R.id.tvNavSettings && id != R.id.tvNavAccount) {
                         // the chosen screen gets the focus, the menu folds away
                         focusContentAfterMenu(id == R.id.tvNavSearch)
@@ -1088,13 +1088,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Entry of the side menu shown as chosen instead of its screen ("Followed videos" rather than "Following"). */
+    private var tvMenuExtraSelected: Int? = null
+
     /** TV side menu: a tab of the followed channels (videos, channels, categories), its screen opened if needed. */
-    private fun openFollowedTab(key: String) {
+    private fun openFollowedTab(key: String, entry: Int) {
+        val loggedInWithCode = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank()
+        if (key == "2" && !loggedInWithCode) {
+            // the videos of the followed channels need the login with the code (the token of the app)
+            Toast.makeText(this, R.string.tv_followed_videos_need_code, Toast.LENGTH_LONG).show()
+            return
+        }
+        tvMenuExtraSelected = entry
+        tvMenuState.selected = entry
         val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.getOrNull(0)
+        if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment && current.showTab(key)) {
+            return
+        }
+        com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.requestedTab = key
         if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment) {
-            current.showTab(key)
+            // the tab is hidden on the screen open: the screen again, with that tab
+            navController.navigate(R.id.followPagerFragment)
         } else {
-            com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.requestedTab = key
             binding.navBar.menu.findItem(R.id.followPagerFragment)?.let { NavigationUI.onNavDestinationSelected(it, navController) }
                 ?: navController.navigate(R.id.followPagerFragment)
         }
@@ -2065,9 +2080,12 @@ class MainActivity : AppCompatActivity() {
         if (isTv) {
             onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
             onBackPressedDispatcher.addCallback(this, tvGridBackCallback)
-            navController.addOnDestinationChangedListener { _, _, _ ->
+            navController.addOnDestinationChangedListener { _, destination, _ ->
                 updateTvMenuBackCallback()
-                binding.root.post { tvMenuState.selected = binding.navBar.selectedItemId }
+                if (destination.id != R.id.followPagerFragment) {
+                    tvMenuExtraSelected = null
+                }
+                binding.root.post { tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId }
             }
         }
         val tabList = prefs.getString(C.UI_NAVIGATION_TAB_LIST, null).let { tabPref ->
@@ -2180,15 +2198,24 @@ class MainActivity : AppCompatActivity() {
                                 R.id.tvNavFollowedVideos -> "2"
                                 R.id.tvNavFollowedChannels -> "3"
                                 else -> "0"
-                            }
+                            },
+                            it.itemId
                         )
                         return@setOnItemSelectedListener false
                     }
                 }
+                tvMenuExtraSelected = null
                 NavigationUI.onNavDestinationSelected(it, navController)
                 return@setOnItemSelectedListener true
             }
             setOnItemReselectedListener {
+                if (tvMenuExtraSelected != null && it.itemId == R.id.followPagerFragment) {
+                    // back to "Following" from one of its shortcuts: the screen with all its tabs again
+                    tvMenuExtraSelected = null
+                    tvMenuState.selected = it.itemId
+                    navController.navigate(R.id.followPagerFragment)
+                    return@setOnItemReselectedListener
+                }
                 if (!navController.popBackStack(it.itemId, false)) {
                     val currentFragment = supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.getOrNull(0)
                     if (currentFragment is Scrollable) {

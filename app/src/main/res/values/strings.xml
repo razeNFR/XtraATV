@@ -765,4 +765,5 @@
     <string name="tv_pip_hint">Small window: hold OK to swap the streams, back to close it</string>
     <string name="tv_multistream_focus">Focus mode: this stream big</string>
     <string name="tv_multistream_grid">Back to the grid</string>
+    <string name="tv_followed_videos_need_code">The videos of the followed channels need the login with the code: log in with twitch.tv/activate (Account)</string>
 </resources>

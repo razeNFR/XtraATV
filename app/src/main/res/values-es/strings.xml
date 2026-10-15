@@ -751,4 +751,5 @@
     <string name="tv_pip_hint">Ventana pequeña: mantén OK para intercambiar, Atrás para cerrarla</string>
     <string name="tv_multistream_focus">Modo foco: este stream en grande</string>
     <string name="tv_multistream_grid">Volver a la cuadrícula</string>
+    <string name="tv_followed_videos_need_code">Los vídeos de los seguidos necesitan el inicio de sesión con código: inicia sesión con twitch.tv/activate (Cuenta)</string>
 </resources>

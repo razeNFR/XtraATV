@@ -746,4 +746,5 @@
     <string name="tv_pip_hint">小視窗：長按 OK 交換直播，按返回關閉</string>
     <string name="tv_multistream_focus">焦點模式：放大此直播</string>
     <string name="tv_multistream_grid">返回網格</string>
+    <string name="tv_followed_videos_need_code">追隨的影片需要使用代碼登入：透過 twitch.tv/activate 登入（帳戶）</string>
 </resources>

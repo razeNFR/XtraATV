@@ -746,4 +746,5 @@
     <string name="tv_pip_hint">小窓: OK長押しで入れ替え、戻るで閉じる</string>
     <string name="tv_multistream_focus">フォーカスモード: この配信を大きく</string>
     <string name="tv_multistream_grid">グリッドに戻る</string>
+    <string name="tv_followed_videos_need_code">フォロー中の動画にはコードでのログインが必要です: twitch.tv/activate でログイン (アカウント)</string>
 </resources>

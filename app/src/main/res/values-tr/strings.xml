@@ -747,4 +747,5 @@
     <string name="tv_pip_hint">Küçük pencere: değiştirmek için OK\'u basılı tutun, kapatmak için Geri</string>
     <string name="tv_multistream_focus">Odak modu: bu yayın büyük</string>
     <string name="tv_multistream_grid">Izgaraya dön</string>
+    <string name="tv_followed_videos_need_code">Takip edilen videolar için kodla giriş gerekir: twitch.tv/activate ile giriş yapın (Hesap)</string>
 </resources>

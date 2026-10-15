@@ -746,4 +746,5 @@
     <string name="tv_pip_hint">Janela pequena: segure OK para trocar, Voltar para fechar</string>
     <string name="tv_multistream_focus">Modo foco: este stream em tamanho grande</string>
     <string name="tv_multistream_grid">Voltar à grade</string>
+    <string name="tv_followed_videos_need_code">Os vídeos dos seguidos precisam do login com código: entre com twitch.tv/activate (Conta)</string>
 </resources>

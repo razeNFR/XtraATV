@@ -746,4 +746,5 @@
     <string name="tv_pip_hint">Finestra piccola: tieni premuto OK per scambiare, Indietro per chiuderla</string>
     <string name="tv_multistream_focus">Modalità focus: questo stream in grande</string>
     <string name="tv_multistream_grid">Torna alla griglia</string>
+    <string name="tv_followed_videos_need_code">I video dei seguiti richiedono l\'accesso con il codice: accedi con twitch.tv/activate (Account)</string>
 </resources>
