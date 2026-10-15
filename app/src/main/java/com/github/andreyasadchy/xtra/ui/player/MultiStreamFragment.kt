@@ -49,6 +49,9 @@ class MultiStreamFragment : Fragment() {
         var playingSince = 0L
         val stops = ArrayDeque<Long>()
         var raiseJob: kotlinx.coroutines.Job? = null
+        /** Picture of the stream under its video while it loads, the video shows once its first picture comes. */
+        var picture: android.widget.ImageView? = null
+        var texture: TextureView? = null
         /** Playing a backup player type for the time of an ad, back to the normal one once it is over. */
         var onBackup = false
         var backJob: kotlinx.coroutines.Job? = null
@@ -131,6 +134,11 @@ class MultiStreamFragment : Fragment() {
             foreground = GradientDrawable().apply {
                 setStroke((4 * density).toInt(), Color.TRANSPARENT)
             }
+            // the picture of the stream under the video while it loads, never a black cell
+            addView(android.widget.ImageView(context).apply {
+                id = R.id.tvLoadingPicture
+                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(texture, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
                 val margin = (12 * density).toInt()
@@ -142,6 +150,16 @@ class MultiStreamFragment : Fragment() {
             setVideoTextureView(texture)
         }
         val tile = Tile(stream, tileView, player, label)
+        tile.picture = tileView.findViewById(R.id.tvLoadingPicture)
+        tile.texture = texture
+        player.addListener(object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                // the video is there: it shows over the picture
+                if (texture.alpha < 1f) {
+                    texture.animate().alpha(1f).setDuration(250L).start()
+                }
+            }
+        })
         tiles.add(tile)
         root.addView(tileView)
         updateVideoSizes()
@@ -583,6 +601,18 @@ class MultiStreamFragment : Fragment() {
     private fun loadStream(tile: Tile) {
         val login = tile.stream.channelLogin ?: return
         val player = tile.player
+        // the newest picture of the stream until its video comes
+        tile.texture?.animate()?.cancel()
+        tile.texture?.alpha = 0f
+        tile.picture?.let { picture ->
+            picture.setImageDrawable(null)
+            val stream = tile.stream
+            com.github.andreyasadchy.xtra.ui.tv.TvLoadingPicture.show(
+                picture, login,
+                stream.thumbnail?.takeUnless { com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream) || stream.thumbnailURL.isNullOrBlank() },
+                stream.channelImage, viewLifecycleOwner.lifecycleScope
+            ) { view != null && tile in tiles && tile.stream.channelLogin == login && (tile.texture?.alpha ?: 1f) < 1f }
+        }
         tile.playingSince = 0L
         tile.qualityStepsDown = 0
         tile.stops.clear()

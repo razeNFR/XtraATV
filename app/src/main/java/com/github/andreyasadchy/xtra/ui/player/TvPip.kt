@@ -83,6 +83,12 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             elevation = 16 * density
             isFocusable = false
             val texture = TextureView(context)
+            // the picture of the stream under the video while it loads
+            addView(android.widget.ImageView(context).apply {
+                id = R.id.tvLoadingPicture
+                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            texture.id = R.id.tvPipTexture
             addView(texture, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(TextView(context).apply {
                 id = R.id.tvPipLabel
@@ -103,6 +109,12 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
                 addListener(object : Player.Listener {
                     private var lastSwitch = 0L
+
+                    override fun onRenderedFirstFrame() {
+                        // the video is there: it shows over the picture
+                        view?.findViewById<TextureView>(R.id.tvPipTexture)?.takeIf { it.alpha < 1f }?.animate()?.alpha(1f)?.setDuration(250L)?.start()
+                    }
+
                     override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
                         // ad blocker like the multi-stream: an ad started, the stream of another player type
                         val playlist = (currentManifest as? androidx.media3.exoplayer.hls.HlsManifest)?.mediaPlaylist ?: return
@@ -117,6 +129,18 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             }
         }
         frame.findViewById<TextView>(R.id.tvPipLabel)?.text = stream.channelName ?: login
+        // the newest picture of the stream until its video comes
+        val texture = frame.findViewById<TextureView>(R.id.tvPipTexture)
+        texture?.animate()?.cancel()
+        texture?.alpha = 0f
+        frame.findViewById<android.widget.ImageView>(R.id.tvLoadingPicture)?.let { picture ->
+            picture.setImageDrawable(null)
+            com.github.andreyasadchy.xtra.ui.tv.TvLoadingPicture.show(
+                picture, login,
+                stream.thumbnail?.takeUnless { com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream) || stream.thumbnailURL.isNullOrBlank() },
+                stream.channelImage, activity.lifecycleScope
+            ) { this.stream?.channelLogin == login && (texture?.alpha ?: 1f) < 1f }
+        }
         frame.visibility = View.VISIBLE
         noPlayerChecks = 0
         load(login)

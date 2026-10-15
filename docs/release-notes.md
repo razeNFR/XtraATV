@@ -2,7 +2,8 @@
 
 ### Changes
 - **Faster stream start**: the access of Twitch is asked as soon as OK is pressed, the connections to the servers of the video are opened while the player opens, and the stream starts with less video waited for. Left / right in the player keeps the player open and the streams next to the one watched are prepared in advance, switching is quicker. Nothing changes with a proxy or the ad blocker.
-- **No more black screen while a stream loads**: the latest picture of the stream is shown until its video comes.
+- **No more black screen while a stream loads**: the newest picture of the stream is shown until its video comes (the last picture of its preview when it played), also in the small window and the multi-stream.
+- **Thumbnails up to date**: the thumbnails of the streams are loaded again every minute, instead of old copies.
 - **The player remembers the last button you were on**: after the other streams row, the timeline or a panel, the focus comes back to it, also from one stream to the next.
 - **Chat of the broadcast when going back in a live**: the chat replay plays with the video, like on a VOD.
 - **Channel page**: the focus is on the first video when it opens (else on the first button).

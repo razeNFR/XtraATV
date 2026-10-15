@@ -1808,11 +1808,13 @@ class MainActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.start(this, stream.channelLogin)
         com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
         if (isTv && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
-            // the picture of the stream instead of a black screen while it loads: the one of its card, then the latest
-            val card = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail)
-            val fresh = stream.thumbnail?.takeUnless { com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream) }
-                ?.let { "$it?t=${System.currentTimeMillis() / 1000}" } ?: card
-            com.github.andreyasadchy.xtra.ui.player.PlayerFragment.pendingLoadingPicture = fresh?.let { it to card }
+            // the picture of the stream instead of a black screen while it loads: the newest one there is
+            val fresh = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream)
+            com.github.andreyasadchy.xtra.ui.player.PlayerFragment.pendingLoadingPicture = com.github.andreyasadchy.xtra.ui.player.PlayerFragment.Companion.LoadingPicture(
+                stream.channelLogin,
+                stream.thumbnail?.takeUnless { fresh || stream.thumbnailURL.isNullOrBlank() },
+                stream.channelImage,
+            )
         }
         if (queue != null) {
             streamQueue = queue

@@ -661,10 +661,8 @@ private fun StreamCard(
         ) {
             AsyncImage(
                 // smaller thumbnails than the 1280x720 of the lists, the cards are small
-                model = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail?.replace("1280x720", "640x360")?.let { url ->
-                    val stamp = actions.thumbnailStamp()
-                    if (stamp > 0) "$url?t=$stamp" else url
-                }),
+                // the minute is in the address (TvThumbnails): the newest thumbnail of Twitch, loaded again each minute
+                model = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail?.replace("1280x720", "640x360")),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -674,7 +672,11 @@ private fun StreamCard(
                 AndroidView(
                     factory = { context -> TextureView(context) },
                     update = { player.setVideoTextureView(it) },
-                    onRelease = { player.clearVideoTextureView(it) },
+                    onRelease = {
+                        // the last picture of the preview, shown while the stream opens
+                        com.github.andreyasadchy.xtra.ui.tv.TvPreviewFrames.capture(stream.channelLogin, it)
+                        player.clearVideoTextureView(it)
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }

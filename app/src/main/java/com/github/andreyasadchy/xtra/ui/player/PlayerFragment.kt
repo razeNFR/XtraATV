@@ -2878,7 +2878,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var loadingPicture: android.widget.ImageView? = null
 
     private fun showLoadingPicture() {
-        val (fresh, card) = pendingLoadingPicture ?: return
+        val picture = pendingLoadingPicture ?: return
         pendingLoadingPicture = null
         val context = requireContext()
         val image = android.widget.ImageView(context).apply {
@@ -2889,18 +2889,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val index = binding.playerLayout.indexOfChild(binding.aspectRatioFrameLayout) + 1
         binding.playerLayout.addView(image, index, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         loadingPicture = image
-        // the picture of the card at once (already loaded), then the latest picture Twitch has of the stream
-        if (card != null) {
-            context.imageLoader.enqueue(coil3.request.ImageRequest.Builder(context).data(card).target(image).build())
+        com.github.andreyasadchy.xtra.ui.tv.TvLoadingPicture.show(image, picture.channelLogin, picture.thumbnail, picture.fallback, viewLifecycleOwner.lifecycleScope) {
+            loadingPicture === image && view != null
         }
-        context.imageLoader.enqueue(
-            coil3.request.ImageRequest.Builder(context)
-                .data(fresh)
-                .memoryCachePolicy(coil3.request.CachePolicy.WRITE_ONLY)
-                .diskCachePolicy(coil3.request.CachePolicy.WRITE_ONLY)
-                .target(onSuccess = { result -> if (loadingPicture === image) image.setImageDrawable(result.asDrawable(context.resources)) })
-                .build()
-        )
         // never kept for long: an error or the sound only mode has no first picture
         image.postDelayed({ hideLoadingPicture() }, 20_000L)
     }
@@ -3851,7 +3842,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
          * TV: picture of the stream that is opening (the picture of its card, then the latest one of Twitch), shown in place
          * of a black screen until the first picture of the video.
          */
-        var pendingLoadingPicture: Pair<String, String?>? = null
+        var pendingLoadingPicture: LoadingPicture? = null
+
+        class LoadingPicture(val channelLogin: String?, val thumbnail: String?, val fallback: String?)
 
         /** Button of the controls focused last (its id, else its description), kept from one player to the next. */
         private var lastControlId = View.NO_ID

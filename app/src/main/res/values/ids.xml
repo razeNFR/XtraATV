@@ -20,4 +20,6 @@
     <item name="tvNavFollowedGames" type="id" />
     <item name="tvPipLabel" type="id" />
     <item name="tvDisabledRow" type="id" />
+    <item name="tvLoadingPicture" type="id" />
+    <item name="tvPipTexture" type="id" />
 </resources>
