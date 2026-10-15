@@ -64,6 +64,9 @@ class ExoPlayerFragment : PlayerFragment() {
         keptAcrossStop = false
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED && playbackService?.type == BasePlaybackService.STREAM) {
+                    onTvStreamEnded()
+                }
                 binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING
                 val showPlayButton = Util.shouldShowPlayButton(playbackService?.player)
                 if (showPlayButton) {
@@ -223,6 +226,9 @@ class ExoPlayerFragment : PlayerFragment() {
             override fun toast(resId: Int, duration: Int) {
                 if (view != null) {
                     Toast.makeText(requireContext(), resId, duration).show()
+                    if (resId == R.string.stream_ended) {
+                        onTvStreamEnded()
+                    }
                 }
             }
 
@@ -375,6 +381,8 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun getVideoFrameRate() = playbackService?.player?.videoFormat?.let { format ->
         format.frameRate.takeIf { format.height > 0 && it > 0f }
     }
+
+    override fun isPlayingNow(): Boolean = playbackService?.visiblePlayer?.isPlaying == true
 
     override fun isPlayingOrLoading() = playbackService?.visiblePlayer?.playWhenReady == true
 

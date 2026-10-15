@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -36,6 +37,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,7 +52,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
@@ -141,6 +145,10 @@ fun TvHomeScreen(
     actions: TvHomeActions,
     resume: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>? = null,
     stats: TvHomeStats? = null,
+    /** Popular streams of one language each (Xtra TV settings), under Popular. */
+    languageRows: List<TvHomeRow<Stream>> = emptyList(),
+    /** Account for the greeting at the top right (no name: not logged in). */
+    account: TvHomeAccount? = null,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -149,27 +157,51 @@ fun TvHomeScreen(
     // a row with the focus glides to the top, with the end of the row above still in sight (Google TV)
     val bringRow: (Int) -> Unit = { index ->
         scope.launch {
-            listState.animateScrollToItem(index, if (index <= 1) 0 else -peek)
+            listState.animateScrollToItem(index, if (index <= 0) 0 else -peek)
         }
     }
     val rows = listOfNotNull(
         followed?.takeIf { it.items.isNotEmpty() }?.let { "followed" to it },
         popular?.takeIf { it.items.isNotEmpty() }?.let { "popular" to it },
-    )
+    ) + languageRows.filter { it.items.isNotEmpty() }.map { "language_" + it.title to it }
+    val listRequester = remember { FocusRequester() }
+    val hasCards = rows.isNotEmpty() || resume?.items?.isNotEmpty() == true || games?.items?.isNotEmpty() == true
+    Column(
+        Modifier
+            .fillMaxSize()
+            // coming into the home (side menu, back from a screen): the rows get the focus (the last card, else the
+            // first stream), never "refresh" above them
+            .focusProperties {
+                onEnter = {
+                    // nothing loaded yet: "refresh" keeps the focus until the rows come
+                    if (requestedFocusDirection != FocusDirection.Down && hasCards) {
+                        cancelFocusChange()
+                        listRequester.requestFocus()
+                    }
+                }
+            }
+    ) {
+        // always on screen above the rows: refresh, then the greeting, the picture of the account and the time (only
+        // to read, the focus never stops there)
+        Row(
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RefreshPill(actions)
+            Spacer(Modifier.weight(1f))
+            Greeting(account)
+        }
     CompositionLocalProvider(LocalBringIntoViewSpec provides NoScrollSpec) {
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .weight(1f)
+                .focusRequester(listRequester)
                 .focusRestorer(firstCard),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 240.dp),
+            contentPadding = PaddingValues(top = 0.dp, bottom = 240.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            item(key = "header") {
-                Row(Modifier.padding(start = 12.dp, top = 4.dp).onFocusChanged { if (it.hasFocus) bringRow(0) }) {
-                    RefreshPill(actions)
-                }
-            }
             // first load: grey cards in place of the rows, like YouTube
             val skeletons = if (followed == null && popular == null && games == null) 2 else 0
             if (skeletons > 0) {
@@ -179,13 +211,13 @@ fun TvHomeScreen(
             }
             rows.forEachIndexed { rowIndex, (key, row) ->
                 item(key = key) {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(rowIndex + 1) }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) bringRow(rowIndex) }) {
                         StreamRow(row, previewLogin, previewPlayer, actions, if (rowIndex == 0) firstCard else null)
                     }
                 }
             }
             // continue watching, then the statistics, over the categories
-            val resumeIndex = rows.size + 1 + skeletons
+            val resumeIndex = rows.size + skeletons
             val hasResume = resume != null && resume.items.isNotEmpty()
             if (hasResume) {
                 item(key = "resume") {
@@ -211,6 +243,58 @@ fun TvHomeScreen(
                 }
             }
         }
+    }
+    }
+}
+
+/** Account shown at the top right of the home. */
+class TvHomeAccount(val name: String?, val image: String?)
+
+@Composable
+private fun Greeting(account: TvHomeAccount?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // the time, again at each new minute
+    var now by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L)
+            now = System.currentTimeMillis()
+        }
+    }
+    val hour = java.util.Calendar.getInstance().apply { timeInMillis = now }.get(java.util.Calendar.HOUR_OF_DAY)
+    val name = account?.name
+    val greeting = context.getString(
+        if (hour >= 18 || hour < 5) {
+            if (name != null) R.string.tv_good_evening_name else R.string.tv_good_evening
+        } else {
+            if (name != null) R.string.tv_hello_name else R.string.tv_hello
+        },
+        name ?: ""
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(greeting, fontSize = 15.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 320.dp))
+        Spacer(Modifier.width(12.dp))
+        val image = account?.image
+        if (name != null && image != null) {
+            AsyncImage(
+                model = image,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(34.dp).clip(CircleShape)
+            )
+        } else {
+            Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0x26FFFFFF)), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.tv_ic_person), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(
+            android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(now)),
+            fontSize = 20.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1
+        )
     }
 }
 
@@ -339,8 +423,10 @@ private fun StreamRow(row: TvHomeRow<Stream>, previewLogin: () -> String?, previ
                     onClick = { actions.openStream(stream, row.items) },
                 )
             }
-            item(key = "seeAll") {
-                SeeAllCard(width = 220.dp, aspect = 16f / 9f) { actions.seeAll(row.seeAllId) }
+            if (row.seeAllId != 0) {
+                item(key = "seeAll") {
+                    SeeAllCard(width = 220.dp, aspect = 16f / 9f) { actions.seeAll(row.seeAllId) }
+                }
             }
         }
         }
@@ -543,7 +629,20 @@ private fun StreamCard(
             )
             Spacer(Modifier.width(if (small) 8.dp else 10.dp))
             Column {
-                Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // a star before the name of a favorite channel
+                val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (favorites.any { it.login == stream.channelLogin }) {
+                        Icon(
+                            painterResource(R.drawable.tv_ic_star),
+                            contentDescription = null,
+                            tint = Color(0xFFFACC15),
+                            modifier = Modifier.size(if (small) 13.dp else 16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 Text(stream.title?.trim() ?: "", fontSize = if (small) 11.sp else 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (!stream.gameName.isNullOrBlank()) {
                     Text(stream.gameName ?: "", fontSize = if (small) 11.sp else 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)

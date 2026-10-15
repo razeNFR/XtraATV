@@ -63,6 +63,25 @@ class LoginActivity : AppCompatActivity() {
     private var readHeaders2 = false
     private var checkUrl = false
 
+    private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
+
+    /** TV: the page of the account, shown over the login steps. */
+    private var tvScreen: androidx.compose.ui.platform.ComposeView? = null
+    private val tvStatus = androidx.compose.runtime.mutableStateOf(TvLoginStatus(code = false, page = false, username = null))
+
+    /** TV: something was saved or removed, the app reloads when the page closes. */
+    private var tvChanged = false
+
+    /** TV: 0 the page of the account, 1 the code, 2 the Twitch page. */
+    private var tvStep = 0
+    private var codeJob: kotlinx.coroutines.Job? = null
+    private var startPageLogin: (() -> Unit)? = null
+
+    companion object {
+        /** The tokens were refused by Twitch: all of them are removed before the page opens. */
+        const val EXTRA_EXPIRED = "tv_login_expired"
+    }
+
     private lateinit var binding: ActivityLoginBinding
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -90,42 +109,11 @@ class LoginActivity : AppCompatActivity() {
             val gqlHeaders = TwitchApiHelper.getGQLHeaders(this@LoginActivity, true)
             val oldGQLToken = gqlHeaders[C.HEADER_TOKEN]?.removePrefix("OAuth ")
             val oldGQLWebToken = tokenPrefs().getString(C.GQL_TOKEN_WEB, null)
-            if (!oldGQLToken.isNullOrBlank() || !oldHelixToken.isNullOrBlank()) {
-                TwitchApiHelper.checkedValidation = false
-                tokenPrefs().edit {
-                    putString(C.TOKEN, null)
-                    putString(C.GQL_HEADERS, null)
-                    putLong(C.INTEGRITY_EXPIRATION, 0)
-                    putString(C.GQL_TOKEN2, null)
-                    putString(C.GQL_TOKEN_WEB, null)
-                    putString(C.USER_ID, null)
-                    putString(C.USERNAME, null)
-                }
-                lifecycleScope.launch {
-                    if (!helixClientId.isNullOrBlank() && !oldHelixToken.isNullOrBlank()) {
-                        try {
-                            xtraModule.authRepository.revoke(networkLibrary, "client_id=${helixClientId}&token=${oldHelixToken}")
-                        } catch (e: Exception) {
-
-                        }
-                    }
-                    val gqlClientId = gqlHeaders[C.HEADER_CLIENT_ID]
-                    if (!gqlClientId.isNullOrBlank() && !oldGQLToken.isNullOrBlank() && oldGQLToken != oldGQLWebToken) {
-                        try {
-                            xtraModule.authRepository.revoke(networkLibrary, "client_id=${gqlClientId}&token=${oldGQLToken}")
-                        } catch (e: Exception) {
-
-                        }
-                    }
-                    val gqlWebClientId = prefs().getString(C.GQL_CLIENT_ID_WEB, "kimne78kx3ncx6brgo4mv6wki5h1ko")
-                    if (!gqlWebClientId.isNullOrBlank() && !oldGQLWebToken.isNullOrBlank()) {
-                        try {
-                            xtraModule.authRepository.revoke(networkLibrary, "client_id=${gqlWebClientId}&token=${oldGQLWebToken}")
-                        } catch (e: Exception) {
-
-                        }
-                    }
-                }
+            // TV: the page of the account shows what is saved, each way of logging in is added or done again without
+            // losing the other one, everything is removed only with its log out button (or when Twitch refused the tokens)
+            val clearOld = !isTv || intent.getBooleanExtra(EXTRA_EXPIRED, false)
+            if (clearOld && (!oldGQLToken.isNullOrBlank() || !oldHelixToken.isNullOrBlank() || !oldGQLWebToken.isNullOrBlank())) {
+                logoutAll(networkLibrary)
             }
             if (prefs().getString(C.GQL_CLIENT_ID2, "kd1unb4b3q4t58fwlpcbzcbnm76a8fp") == "kd1unb4b3q4t58fwlpcbzcbnm76a8fp") {
                 prefs().edit {
@@ -163,28 +151,14 @@ class LoginActivity : AppCompatActivity() {
                 appendQueryParameter("redirect_uri", helixRedirect)
                 appendQueryParameter("scope", helixScopes.joinToString(" "))
             }.build().toString()
-            webView.visibility = View.VISIBLE
-            textZoom.visibility = View.VISIBLE
-            havingTrouble.visibility = View.VISIBLE
+            if (!isTv) {
+                webView.visibility = View.VISIBLE
+                textZoom.visibility = View.VISIBLE
+                havingTrouble.visibility = View.VISIBLE
+            }
             setupButtons(networkLibrary, helixClientId, helixAuthUrl)
-            if (resources.getBoolean(R.bool.isTv)) {
-                // TV: log in with a code typed on twitch.tv/activate, or with the Twitch page (the only one that gives 1440p)
-                var chosen = false
-                com.github.andreyasadchy.xtra.ui.tv.TvDialogs.showChoices(
-                    this@LoginActivity,
-                    getString(R.string.log_in),
-                    listOf(getString(R.string.tv_login_with_code), getString(R.string.tv_login_with_page)),
-                    -1
-                ) { which ->
-                    chosen = true
-                    if (which == 0) {
-                        setupExternalCodeLogin(networkLibrary, helixClientId, helixAuthUrl)
-                    }
-                }.setOnDismissListener {
-                    if (!chosen) {
-                        finish()
-                    }
-                }
+            if (isTv) {
+                setupTvScreen(networkLibrary, helixClientId, helixAuthUrl)
             }
             CookieManager.getInstance().removeAllCookies(null)
             val isLightTheme = obtainStyledAttributes(intArrayOf(androidx.appcompat.R.attr.isLightTheme)).use {
@@ -246,7 +220,12 @@ class LoginActivity : AppCompatActivity() {
                                         }
                                     }
                                 } else {
-                                    if (valid) {
+                                    if (valid && isTv) {
+                                        // TV: back to the page of the account, the code is its other choice
+                                        gqlWebClientId = clientId
+                                        gqlWebToken = token
+                                        done()
+                                    } else if (valid) {
                                         gqlWebClientId = clientId
                                         gqlWebToken = token
                                         var getTvToken = false
@@ -333,12 +312,166 @@ class LoginActivity : AppCompatActivity() {
                     }
                 }
             }
-            if (apiSetting == 1) {
-                readHeaders = true
-                webView.loadUrl("https://www.twitch.tv/login")
-            } else {
-                checkUrl = true
-                webView.loadUrl(helixAuthUrl)
+            startPageLogin = {
+                if (apiSetting == 1) {
+                    readHeaders = true
+                    webView.loadUrl("https://www.twitch.tv/login")
+                } else {
+                    checkUrl = true
+                    webView.loadUrl(helixAuthUrl)
+                }
+            }
+            if (!isTv) {
+                startPageLogin?.invoke()
+            }
+        }
+    }
+
+    private fun currentTvStatus(): TvLoginStatus {
+        val tokens = tokenPrefs()
+        return TvLoginStatus(
+            code = !tokens.getString(C.GQL_TOKEN2, null).isNullOrBlank(),
+            page = !tokens.getString(C.TOKEN, null).isNullOrBlank() || !tokens.getString(C.GQL_TOKEN_WEB, null).isNullOrBlank(),
+            username = tokens.getString(C.USERNAME, null)?.takeIf { it.isNotBlank() },
+            shown = tvStatus.value.shown + 1
+        )
+    }
+
+    private fun setupTvScreen(networkLibrary: String?, helixClientId: String?, helixAuthUrl: String) {
+        val view = com.github.andreyasadchy.xtra.ui.tv.TvDialogs.composeView(this) {
+            TvLoginScreen(
+                status = tvStatus.value,
+                onCode = {
+                    resetLogin()
+                    tvStep = 1
+                    tvScreen?.visibility = View.GONE
+                    setupExternalCodeLogin(networkLibrary, helixClientId, helixAuthUrl)
+                },
+                onPage = {
+                    resetLogin()
+                    tvStep = 2
+                    tvScreen?.visibility = View.GONE
+                    CookieManager.getInstance().removeAllCookies(null)
+                    with(binding) {
+                        webView.visibility = View.VISIBLE
+                        textZoom.visibility = View.VISIBLE
+                        havingTrouble.visibility = View.VISIBLE
+                        havingTrouble.text = getString(R.string.trouble_logging_in)
+                        havingTrouble.isClickable = true
+                        havingTrouble.isFocusable = true
+                        setupButtons(networkLibrary, helixClientId, helixAuthUrl)
+                        webView.requestFocus()
+                    }
+                    startPageLogin?.invoke()
+                },
+                onLogout = {
+                    logoutAll(networkLibrary)
+                    tvChanged = true
+                    Toast.makeText(this, R.string.tv_login_logged_out, Toast.LENGTH_SHORT).show()
+                    tvStatus.value = currentTvStatus()
+                },
+                onDone = { finishTv() }
+            )
+        }
+        view.isFocusable = false
+        binding.root.addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        view.elevation = 100f
+        tvScreen = view
+        tvStatus.value = currentTvStatus()
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (tvStep != 0) {
+                    showTvScreen()
+                } else {
+                    finishTv()
+                }
+            }
+        })
+    }
+
+    /** TV: stops the login under way and shows the page of the account again, with what is saved now. */
+    private fun showTvScreen() {
+        tvStep = 0
+        codeJob?.cancel()
+        codeJob = null
+        readHeaders = false
+        readHeaders2 = false
+        checkUrl = false
+        with(binding) {
+            webView.stopLoading()
+            webView.loadUrl("about:blank")
+            webView.visibility = View.GONE
+            secondaryWebView.visibility = View.GONE
+            textZoom.visibility = View.GONE
+            havingTrouble.visibility = View.GONE
+            progressBar.visibility = View.GONE
+            codeText.visibility = View.GONE
+            codeText.text = getString(R.string.loading)
+            copyCode.visibility = View.GONE
+            openUrl.visibility = View.GONE
+            next.visibility = View.GONE
+        }
+        tvScreen?.visibility = View.VISIBLE
+        tvStatus.value = currentTvStatus()
+    }
+
+    private fun finishTv() {
+        setResult(if (tvChanged) RESULT_OK else RESULT_CANCELED)
+        finish()
+    }
+
+    private fun resetLogin() {
+        helixToken = null
+        gqlClientId = null
+        gqlToken = null
+        gqlWebClientId = null
+        gqlWebToken = null
+        userId = null
+        userLogin = null
+    }
+
+    /** Removes every token of the account and revokes them at Twitch. */
+    private fun logoutAll(networkLibrary: String?) {
+        val helixHeaders = TwitchApiHelper.getHelixHeaders(this)
+        val helixClientId = helixHeaders[C.HEADER_CLIENT_ID]
+        val oldHelixToken = helixHeaders[C.HEADER_TOKEN]?.removePrefix("Bearer ")
+        val gqlHeaders = TwitchApiHelper.getGQLHeaders(this, true)
+        val oldGQLToken = gqlHeaders[C.HEADER_TOKEN]?.removePrefix("OAuth ")
+        val oldGQLWebToken = tokenPrefs().getString(C.GQL_TOKEN_WEB, null)
+        TwitchApiHelper.checkedValidation = false
+        tokenPrefs().edit {
+            putString(C.TOKEN, null)
+            putString(C.GQL_HEADERS, null)
+            putLong(C.INTEGRITY_EXPIRATION, 0)
+            putString(C.GQL_TOKEN2, null)
+            putString(C.GQL_TOKEN_WEB, null)
+            putString(C.USER_ID, null)
+            putString(C.USERNAME, null)
+        }
+        CookieManager.getInstance().removeAllCookies(null)
+        lifecycleScope.launch {
+            if (!helixClientId.isNullOrBlank() && !oldHelixToken.isNullOrBlank()) {
+                try {
+                    xtraModule.authRepository.revoke(networkLibrary, "client_id=${helixClientId}&token=${oldHelixToken}")
+                } catch (e: Exception) {
+
+                }
+            }
+            val gqlClientId = gqlHeaders[C.HEADER_CLIENT_ID]
+            if (!gqlClientId.isNullOrBlank() && !oldGQLToken.isNullOrBlank() && oldGQLToken != oldGQLWebToken) {
+                try {
+                    xtraModule.authRepository.revoke(networkLibrary, "client_id=${gqlClientId}&token=${oldGQLToken}")
+                } catch (e: Exception) {
+
+                }
+            }
+            val gqlWebClientId = prefs().getString(C.GQL_CLIENT_ID_WEB, "kimne78kx3ncx6brgo4mv6wki5h1ko")
+            if (!gqlWebClientId.isNullOrBlank() && !oldGQLWebToken.isNullOrBlank()) {
+                try {
+                    xtraModule.authRepository.revoke(networkLibrary, "client_id=${gqlWebClientId}&token=${oldGQLWebToken}")
+                } catch (e: Exception) {
+
+                }
             }
         }
     }
@@ -388,7 +521,10 @@ class LoginActivity : AppCompatActivity() {
                                 if (!token.isNullOrBlank()) {
                                     lifecycleScope.launch {
                                         val valid = validateHelixToken(networkLibrary, helixClientId, token)
-                                        if (valid) {
+                                        if (valid && isTv) {
+                                            helixToken = token
+                                            done()
+                                        } else if (valid) {
                                             helixToken = token
                                             var getTvToken = false
                                             this@LoginActivity.getAlertDialogBuilder()
@@ -578,6 +714,9 @@ class LoginActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     val response = xtraModule.authRepository.getDeviceCode(networkLibrary, "client_id=${gqlClientId}&scopes=channel_read+chat%3Aread+user_blocks_edit+user_blocks_read+user_follows_edit+user_read")
+                    if (isTv && tvStep != 1) {
+                        return@launch
+                    }
                     deviceCode = response.deviceCode
                     userCode = response.userCode
                     codeText.text = userCode
@@ -624,6 +763,9 @@ class LoginActivity : AppCompatActivity() {
                                 } else {
                                     if (!helixToken.isNullOrBlank()) {
                                         done()
+                                    } else if (isTv) {
+                                        Toast.makeText(this@LoginActivity, R.string.connection_error, Toast.LENGTH_LONG).show()
+                                        showTvScreen()
                                     } else {
                                         deviceCode = null
                                         error()
@@ -660,7 +802,8 @@ class LoginActivity : AppCompatActivity() {
                 havingTrouble.isFocusable = false
                 havingTrouble.text = getString(R.string.tv_login_code_help)
                 next.requestFocus()
-                lifecycleScope.launch {
+                codeJob?.cancel()
+                codeJob = lifecycleScope.launch {
                     while (true) {
                         kotlinx.coroutines.delay(5000L)
                         check(false)
@@ -715,6 +858,10 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun done() {
+        if (isTv) {
+            doneTv()
+            return
+        }
         if (!gqlToken.isNullOrBlank() || !helixToken.isNullOrBlank()) {
             TwitchApiHelper.checkedValidation = true
             prefs().edit {
@@ -741,6 +888,61 @@ class LoginActivity : AppCompatActivity() {
         }
         setResult(RESULT_OK)
         finish()
+    }
+
+    /** TV: saves the way of logging in just done, the other one is kept, then the page of the account comes back. */
+    private fun doneTv() {
+        val step = tvStep
+        if (step == 0) {
+            return
+        }
+        val code = step == 1 && !gqlToken.isNullOrBlank()
+        val page = step == 2 && (!helixToken.isNullOrBlank() || !gqlWebToken.isNullOrBlank())
+        if (code || page) {
+            TwitchApiHelper.checkedValidation = true
+            val tokens = tokenPrefs()
+            val savedUserId = tokens.getString(C.USER_ID, null)?.takeIf { it.isNotBlank() }
+            // the other way of logging in was done with another account: it is removed, the two would mix accounts
+            val otherAccount = savedUserId != null && !userId.isNullOrBlank() && savedUserId != userId
+            prefs().edit {
+                if (code && !gqlClientId.isNullOrBlank()) {
+                    putString(C.GQL_CLIENT_ID2, gqlClientId)
+                }
+                if (page && !gqlWebClientId.isNullOrBlank()) {
+                    putString(C.GQL_CLIENT_ID_WEB, gqlWebClientId)
+                }
+            }
+            tokens.edit {
+                if (code) {
+                    putString(C.GQL_TOKEN2, gqlToken)
+                }
+                if (page) {
+                    putString(C.TOKEN, helixToken)
+                    putString(C.GQL_TOKEN_WEB, gqlWebToken)
+                }
+                if (otherAccount) {
+                    if (code) {
+                        putString(C.TOKEN, null)
+                        putString(C.GQL_TOKEN_WEB, null)
+                    } else {
+                        putString(C.GQL_TOKEN2, null)
+                    }
+                }
+                if (!userId.isNullOrBlank()) {
+                    putString(C.USER_ID, userId)
+                }
+                if (!userLogin.isNullOrBlank()) {
+                    putString(C.USERNAME, userLogin)
+                }
+            }
+            tvChanged = true
+            Toast.makeText(
+                this,
+                if (otherAccount) R.string.tv_login_other_account else if (code) R.string.tv_login_code_ok else R.string.tv_login_page_ok,
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        showTvScreen()
     }
 
     override fun onDestroy() {

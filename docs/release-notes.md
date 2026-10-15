@@ -1,17 +1,28 @@
-# Xtra TV 1.1.1
+# Xtra TV 1.2.0
 
 ### New
-- **Remove a stream from the multi-stream**: with 3 or 4 streams, the panel of a streamer can now remove it, and the others take its place.
-- **Both chats in split screen**: with 2 streams, the chats of both streamers now show up by themselves under their streams. From the panel of a streamer, its chat can be hidden or put above its stream instead.
+- **Favorite channels**: hold OK on a stream and choose "Add to favorites". When they are live, your favorites come first in the followed streams (home, Followed page, other streams of the player), in your own order, with a star. Their order can be changed in the Xtra TV settings.
+- **Rows by language on the home**: pick one or more languages in the Xtra TV settings to get a row of the popular streams for each of them, under Popular.
+- **Tabs in the other streams row**: while watching, press up from the cards of the other streams to reach tabs: this list, followed, popular, your language rows and the category of the stream (in its languages). Picking a stream from another tab makes it the list of left / right. The row loads more streams as you go to its end. The tabs are also there when picking the streams of a multi-stream.
+- **Small window**: hold OK on a stream of the other streams row to watch it in a small window at the top right, while the sound of the main stream goes on. Hold OK again to swap the two streams, press back to close it.
+- **Focus mode in the multi-stream**: with 3 or 4 streams, one stream big with its chat at its right and the others small under it. Press OK on a small stream to put it big, hold OK to open its panel.
+- **Shortcuts under Following in the side menu**: the videos, the channels and the categories of the followed channels, checked in Interface > Navigation tabs.
+- **New account page**: the two ways of logging in side by side (code on twitch.tv/activate, Twitch login page) with what each one gives and lacks and whether it is done. Each one can be done again at any time without losing the other, and a log out button removes everything.
+- **Top bar of the home**: Refresh, a greeting with your name and picture, and the time, always on screen. The time is also at the right of the title of the other screens.
+- **End of a stream**: when a stream ends, the player closes and you are back where you were, unless a raid takes you to another stream. In a multi-stream, only the stream that ended leaves.
+- **Buttons of the channel page**: Download, Share and Notifications can each be hidden in Interface > Channel tabs.
+- **Version number in the settings**, under the name of the screen.
+
+### Changes
+- **Card sizes by name**: the size of the cards on the home and in the lists now reads very big, big, medium, small or very small.
+- **Opaque side menu**: the texts of the screen behind no longer show through it.
+- **Other streams button** on every stream of the player.
+- **Simpler Interface settings**: the display switches are gone and their options are on for everyone (stream previews, round pictures, compact numbers, uptime, tags, tabs pages, time left, recent searches...). "Activate notifications when following" stays.
+- **Grayed out settings** can be reached with the remote, OK on them tells what turns them on.
 
 ### Fixes
-- **Previews stop when you move away**: a preview no longer keeps playing after the focus leaves its card, for example when going to the header, the side menu or another row of the home.
-- **Bigger card during the preview**:
-  - with 2 columns or 2 cards per row, the cards no longer grow, they are already big;
-  - with 3 columns, the rows under a grown card in the first row now move down instead of being covered;
-  - a grown card on the side of the grid keeps the same space around it as the others;
-  - the D-pad goes from a grown card to the cards that were around it before it grew, and the list stays well framed when it goes back to its size.
-- **Timeline back in a stream opened from the multi-stream**: the bar to go back into the VOD of the live shows again.
+- The screensaver no longer starts during a multi-stream.
+- A tab hidden in the settings no longer leaves its page in the next tab (videos shown in the channels tab).
 
 ### Install
-Download `XtraTV-1.1.1-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.2.0-tv.apk` below and install it over the previous version, your settings and account are kept.

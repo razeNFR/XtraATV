@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -261,6 +262,25 @@ object TvHeader {
     }
 
     @Composable
+    private fun Clock() {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            while (true) {
+                kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L)
+                now = System.currentTimeMillis()
+            }
+        }
+        Text(
+            android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(now)),
+            fontSize = 20.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1
+        )
+    }
+
+    @Composable
     private fun Header(snapshot: Snapshot, firstRequester: FocusRequester, appBar: AppBarLayout) {
         Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -288,6 +308,9 @@ object TvHeader {
                         Text(snapshot.subtitle, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
+                // the time at the right of the title line, like on the home (the title stops before it)
+                Spacer(Modifier.width(16.dp))
+                Clock()
             }
             Spacer(Modifier.height(10.dp))
             val all = snapshot.left + snapshot.tabs + snapshot.right

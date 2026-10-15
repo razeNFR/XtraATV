@@ -111,6 +111,13 @@ class StreamsAdapter(
                         } else {
                             item.channelName
                         }
+                        // TV: a yellow star before the name of a favorite channel
+                        if (com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.channelLogin) && context.resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)) {
+                            username.text = android.text.SpannableStringBuilder("★ ").apply {
+                                setSpan(android.text.style.ForegroundColorSpan(0xFFFACC15.toInt()), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                                append(username.text)
+                            }
+                        }
                         username.setOnClickListener(channelListener)
                     } else {
                         username.visibility = View.GONE

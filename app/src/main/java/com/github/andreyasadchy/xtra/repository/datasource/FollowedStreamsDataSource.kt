@@ -77,7 +77,8 @@ class FollowedStreamsDataSource(
             }
             list.sortByDescending { it.viewerCount }
             LoadResult.Page(
-                data = list,
+                // TV: the favorite channels live first (none on the phone and tablet)
+                data = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.sort(list),
                 prevKey = null,
                 nextKey = result?.nextKey
             )

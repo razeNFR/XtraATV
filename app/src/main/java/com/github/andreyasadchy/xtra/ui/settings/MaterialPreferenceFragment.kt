@@ -56,6 +56,7 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
         // the rows draw their own focus, not the frame of the other lists
         listView.setTag(com.github.andreyasadchy.xtra.R.id.tvRowsHighlighted, true)
         val styleRow = { view: android.view.View ->
+            keepDisabledRowFocusable(view)
             if (view.isFocusable) {
                 val background = view.getTag(com.github.andreyasadchy.xtra.R.id.tvSettingsRowBackground) as? android.graphics.drawable.Drawable
                 if (background == null || view.background !== background) {
@@ -106,6 +107,49 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
         if (list.isAttachedToWindow) {
             list.viewTreeObserver.addOnPreDrawListener(listener)
         }
+    }
+
+    /** Why a setting is grayed out, for the ones that depend on others in the code (not with a dependency). */
+    protected val disabledHints = mutableMapOf<String, () -> String>()
+
+    /**
+     * TV: a grayed out setting can't get the focus, the focus jumped over it badly (pressed several times to go past).
+     * Its row stays focusable, faded, and OK on it says what turns it on.
+     */
+    private fun keepDisabledRowFocusable(view: android.view.View) {
+        val title = view.findViewById<android.widget.TextView>(android.R.id.title) ?: return
+        if (title.isEnabled) {
+            if (view.getTag(com.github.andreyasadchy.xtra.R.id.tvDisabledRow) == true) {
+                view.setTag(com.github.andreyasadchy.xtra.R.id.tvDisabledRow, false)
+                view.alpha = 1f
+            }
+            return
+        }
+        if (!view.isEnabled || view.getTag(com.github.andreyasadchy.xtra.R.id.tvDisabledRow) != true) {
+            view.setTag(com.github.andreyasadchy.xtra.R.id.tvDisabledRow, true)
+            view.isEnabled = true
+            view.isFocusable = true
+            view.alpha = 0.5f
+            view.setOnClickListener {
+                val preference = findByTitle(preferenceScreen, title.text?.toString())
+                val hint = preference?.key?.let { disabledHints[it]?.invoke() }
+                    ?: preference?.dependency?.let { findPreference<Preference>(it)?.title?.toString() }?.let { getString(com.github.andreyasadchy.xtra.R.string.setting_disabled_dependency, it) }
+                    ?: getString(com.github.andreyasadchy.xtra.R.string.setting_disabled_generic)
+                android.widget.Toast.makeText(requireContext(), hint, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun findByTitle(group: androidx.preference.PreferenceGroup?, title: String?): Preference? {
+        if (group == null || title == null) return null
+        for (i in 0 until group.preferenceCount) {
+            val preference = group.getPreference(i)
+            if (preference.isVisible && preference.title?.toString() == title) return preference
+            if (preference is androidx.preference.PreferenceGroup) {
+                findByTitle(preference, title)?.let { return it }
+            }
+        }
+        return null
     }
 
     override fun onPause() {

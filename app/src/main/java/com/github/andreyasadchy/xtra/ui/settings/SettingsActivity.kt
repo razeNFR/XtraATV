@@ -57,6 +57,7 @@ import androidx.preference.forEach
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.github.andreyasadchy.xtra.BuildConfig
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.SettingsNavGraphDirections
 import com.github.andreyasadchy.xtra.databinding.ActivitySettingsBinding
@@ -150,6 +151,9 @@ class SettingsActivity : AppCompatActivity() {
         })
         binding.toolbar.setupWithNavController(navController, appBarConfiguration)
         if (TvUi.isTv(this)) {
+            // under the name of the screen: the app and its version ("Xtra TV 1.2.0", "(debug)" on the test builds)
+            val version = BuildConfig.VERSION_NAME.removeSuffix("-DEBUG").removeSuffix("-tv")
+            binding.tvSettingsSubtitle?.text = getString(R.string.app_name) + " " + version + if (BuildConfig.DEBUG) " (debug)" else ""
             // Google TV style: the name of the screen in big on the left, the toolbar keeps the back and search buttons
             navController.addOnDestinationChangedListener { _, _, _ ->
                 binding.toolbar.post {
@@ -192,12 +196,41 @@ class SettingsActivity : AppCompatActivity() {
         })
     }
 
-    fun showDragListDialog(list: List<SettingsDragListItem>, prefKey: String, title: CharSequence?) {
+    /**
+     * Reorder dialog. [onSave] replaces the saving in [prefKey] (the favorites of the TV), without [showDefault]
+     * the items have no "default" button.
+     */
+    fun showDragListDialog(
+        list: List<SettingsDragListItem>,
+        prefKey: String,
+        title: CharSequence?,
+        showDefault: Boolean = true,
+        onSave: ((List<SettingsDragListItem>) -> Unit)? = null,
+    ) {
         val listAdapter = SettingsDragListAdapter()
         val dragCallback = object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+            override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
+                // the rows under another one follow it, they are not moved by themselves
+                return if (list.getOrNull(viewHolder.bindingAdapterPosition)?.parent != null) 0 else super.getMovementFlags(recyclerView, viewHolder)
+            }
+
             override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
                 val fromPosition = viewHolder.bindingAdapterPosition
-                val toPosition = target.bindingAdapterPosition
+                var toPosition = target.bindingAdapterPosition
+                if (fromPosition == RecyclerView.NO_POSITION || toPosition == RecyclerView.NO_POSITION || list.getOrNull(fromPosition)?.parent != null) {
+                    return false
+                }
+                // over the rows under another one: the move goes past that whole group
+                list.getOrNull(toPosition)?.parent?.let { parentKey ->
+                    toPosition = if (toPosition < fromPosition) {
+                        list.indexOfFirst { it.key == parentKey }
+                    } else {
+                        (list.indexOfLast { it.parent == parentKey } + 1).takeIf { it < list.size } ?: return false
+                    }
+                    if (toPosition < 0 || toPosition == fromPosition) {
+                        return false
+                    }
+                }
                 if (fromPosition < toPosition) {
                     for (from in fromPosition until toPosition) {
                         val to = from + 1
@@ -209,6 +242,22 @@ class SettingsActivity : AppCompatActivity() {
                         val from = to + 1
                         Collections.swap(list, from, to)
                         listAdapter.notifyItemMoved(from, to)
+                    }
+                }
+                // the rows under another one go back right under it
+                val rows = list as? MutableList<SettingsDragListItem>
+                if (rows != null) {
+                    rows.filter { it.parent != null }.groupBy { it.parent }.forEach { (parentKey, children) ->
+                        children.forEachIndexed { index, child ->
+                            val at = rows.indexOf(child)
+                            rows.removeAt(at)
+                            val parentIndex = rows.indexOfFirst { it.key == parentKey }
+                            val wanted = if (parentIndex >= 0) (parentIndex + 1 + index).coerceAtMost(rows.size) else at
+                            rows.add(wanted, child)
+                            if (at != wanted) {
+                                listAdapter.notifyItemMoved(at, wanted)
+                            }
+                        }
                     }
                 }
                 return true
@@ -228,7 +277,7 @@ class SettingsActivity : AppCompatActivity() {
             val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10F, resources.displayMetrics).toInt()
             setPadding(0, padding, 0, 0)
         }
-        listAdapter.setDefault = { item ->
+        listAdapter.setDefault = if (!showDefault) null else { item ->
             list.find { it.default }?.let { previous ->
                 previous.default = false
                 recyclerView.findViewHolderForAdapterPosition(
@@ -250,6 +299,10 @@ class SettingsActivity : AppCompatActivity() {
             .setTitle(title)
             .setView(recyclerView)
             .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
+                if (onSave != null) {
+                    onSave(listAdapter.currentList)
+                    return@setPositiveButton
+                }
                 prefs().edit {
                     putString(prefKey, listAdapter.currentList.joinToString(",") {
                         "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
@@ -761,7 +814,31 @@ class SettingsActivity : AppCompatActivity() {
                         enabled = split[2] != "0",
                     )
                 }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, C.UI_NAVIGATION_TAB_LIST, preference.title)
+                // TV: the shortcuts of the side menu to the tabs of the followed channels, checked under "Following"
+                val isTv = requireContext().resources.getBoolean(R.bool.isTv)
+                val extras = requireContext().prefs().getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
+                val rows = if (isTv) {
+                    tabs.flatMap { tab ->
+                        if (tab.key == "2") {
+                            listOf(tab) + listOf(
+                                "videos" to R.string.tv_menu_followed_videos,
+                                "channels" to R.string.tv_menu_followed_channels,
+                                "games" to R.string.tv_menu_followed_games,
+                            ).map { (key, text) -> SettingsDragListItem(key = key, text = getString(text), default = false, enabled = key in extras, parent = "2") }
+                        } else listOf(tab)
+                    }.toMutableList()
+                } else tabs
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(rows, C.UI_NAVIGATION_TAB_LIST, preference.title) { saved ->
+                    requireContext().prefs().edit {
+                        putString(C.UI_NAVIGATION_TAB_LIST, saved.filter { it.parent == null }.joinToString(",") {
+                            "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
+                        })
+                        if (isTv) {
+                            putStringSet(C.TV_MENU_EXTRAS, saved.filter { it.parent != null && it.enabled }.map { it.key }.toSet())
+                        }
+                    }
+                    (requireActivity() as? SettingsActivity)?.setResult()
+                }
                 true
             }
             findPreference<Preference>("ui_following_tabs_dialog")?.setOnPreferenceClickListener { preference ->
@@ -860,7 +937,24 @@ class SettingsActivity : AppCompatActivity() {
                         enabled = split[2] != "0",
                     )
                 }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, C.UI_CHANNEL_TABS, preference.title)
+                // the buttons of the channel page, each one can be hidden, after the tabs
+                val hidden = requireContext().prefs().getStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, null).orEmpty()
+                val rows = (tabs + listOf(
+                    "download" to R.string.channel_button_download,
+                    "share" to R.string.channel_button_share,
+                    "notifications" to R.string.channel_button_notifications,
+                ).map { (key, text) ->
+                    SettingsDragListItem(key = key, text = getString(text), default = false, enabled = key !in hidden, parent = "buttons")
+                }).toMutableList()
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(rows, C.UI_CHANNEL_TABS, preference.title) { saved ->
+                    requireContext().prefs().edit {
+                        putString(C.UI_CHANNEL_TABS, saved.filter { it.parent == null }.joinToString(",") {
+                            "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
+                        })
+                        putStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, saved.filter { it.parent != null && !it.enabled }.map { it.key }.toSet())
+                    }
+                    (requireActivity() as? SettingsActivity)?.setResult()
+                }
                 true
             }
             findPreference<Preference>("ui_game_tabs_dialog")?.setOnPreferenceClickListener { preference ->
@@ -1359,6 +1453,9 @@ class SettingsActivity : AppCompatActivity() {
             val miniKeep = findPreference<SwitchPreferenceCompat>(C.TV_MINI_PLAYER_KEEP_ON_HOME)
             val audioKeep = findPreference<SwitchPreferenceCompat>(C.TV_AUDIO_ONLY_KEEP_ON_HOME)
             fullscreenKeep?.isEnabled = miniKeep?.isChecked != false || audioKeep?.isChecked != false
+            disabledHints[C.TV_FULLSCREEN_KEEP_ON_HOME] = {
+                getString(R.string.setting_disabled_either, miniKeep?.title ?: "", audioKeep?.title ?: "")
+            }
             miniKeep?.setOnPreferenceChangeListener { _, newValue ->
                 fullscreenKeep?.isEnabled = newValue == true || audioKeep?.isChecked != false
                 true
@@ -1367,10 +1464,37 @@ class SettingsActivity : AppCompatActivity() {
                 fullscreenKeep?.isEnabled = newValue == true || miniKeep?.isChecked != false
                 true
             }
+            // favorite channels: their order (first in the followed streams), unchecked ones leave the favorites
+            findPreference<Preference>("tv_favorites")?.let { preference ->
+                val context = requireContext()
+                com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(context)
+                val updateSummary = {
+                    val count = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.value.size
+                    preference.summary = if (count == 0) getString(R.string.tv_favorites_empty) else getString(R.string.tv_favorites_count, count)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    val favorites = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.value
+                    if (favorites.isEmpty()) {
+                        android.widget.Toast.makeText(context, R.string.tv_favorites_how, android.widget.Toast.LENGTH_LONG).show()
+                    } else {
+                        val items = favorites.map { SettingsDragListItem(key = it.login, text = it.name ?: it.login, default = false, enabled = true) }.toMutableList()
+                        (requireActivity() as? SettingsActivity)?.showDragListDialog(items, "", preference.title, showDefault = false) { list ->
+                            val names = favorites.associate { it.login to it.name }
+                            com.github.andreyasadchy.xtra.ui.tv.TvFavorites.reorder(
+                                context,
+                                list.filter { it.enabled }.map { com.github.andreyasadchy.xtra.ui.tv.TvFavorites.Favorite(it.key, names[it.key]) }
+                            )
+                            updateSummary()
+                        }
+                    }
+                    true
+                }
+            }
             // the ambiance color is drawn when the app starts: it offers to restart it
             findPreference<ListPreference>(C.TV_AMBIENT_COLOR)?.setOnPreferenceChangeListener { _, newValue ->
                 if (newValue != requireContext().prefs().getString(C.TV_AMBIENT_COLOR, "violet")) {
-                    (requireActivity() as? SettingsActivity)?.changed = true
+                    (requireActivity() as? SettingsActivity)?.setResult()
                     requireContext().getAlertDialogBuilder()
                         .setMessage(R.string.tv_ambient_restart)
                         .setPositiveButton(R.string.yes) { _, _ ->

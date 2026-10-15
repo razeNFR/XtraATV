@@ -35,12 +35,45 @@ import com.google.android.material.tabs.TabLayoutMediator
 
 class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
 
+    companion object {
+        /** TV side menu: tab to show when the screen opens ("0" categories, "2" videos, "3" channels). */
+        var requestedTab: String? = null
+    }
+
     private var _binding: FragmentMediaPagerBinding? = null
     private val binding get() = _binding!!
     private var firstLaunch = true
 
+    /** Keys of the tabs shown ("0" categories, "1" live, "2" videos, "3" channels). */
+    private var shownTabs: List<String> = emptyList()
+
+    private var pendingTab = -1
+
+    override fun onViewStateRestored(savedInstanceState: Bundle?) {
+        super.onViewStateRestored(savedInstanceState)
+        val index = pendingTab
+        pendingTab = -1
+        if (index >= 0) {
+            binding.viewPager.post {
+                if (_binding != null) {
+                    binding.viewPager.setCurrentItem(index, false)
+                }
+            }
+        }
+    }
+
+    /** TV side menu: goes to a tab of the screen already open, false when it is not shown there. */
+    fun showTab(key: String): Boolean {
+        val index = shownTabs.indexOf(key)
+        if (index >= 0 && _binding != null) {
+            binding.viewPager.setCurrentItem(index, false)
+            return true
+        }
+        return false
+    }
+
     override val currentFragment: Fragment?
-        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(binding.viewPager.currentItem) ?: binding.viewPager.currentItem}")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,7 +136,7 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
                     list
                 } else defaultTabs
             }
-            val tabs = tabList.mapNotNull {
+            val enabledTabs = tabList.mapNotNull {
                 val split = it.split(':')
                 val key = split[0]
                 val enabled = split[2] != "0"
@@ -113,6 +146,10 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
                     null
                 }
             }
+            // TV: opened from an entry of the side menu (videos, channels, categories of the followed channels); a tab
+            // hidden in the settings is shown alone, the settings stay as they are
+            val requested = requestedTab?.also { requestedTab = null }?.takeIf { it != "2" || showVideosTab }
+            val tabs = if (requested != null && requested !in enabledTabs) listOf(requested) else enabledTabs
             if (tabs.size <= 1) {
                 tabLayout.visibility = View.GONE
             } else {
@@ -126,7 +163,7 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
             viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
                     viewPager.doOnLayout {
-                        childFragmentManager.findFragmentByTag("f${position}")?.let { fragment ->
+                        childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
                             if (requireContext().resources.getBoolean(R.bool.isTv)) {
                                 // TV: the header stays still like on a category page, the lift state changed at each scroll of the list and made it flicker
                             } else if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
@@ -155,6 +192,14 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
                     }
                 }
             })
+            if (requested != null) {
+                viewPager.setCurrentItem(tabs.indexOf(requested), false)
+                // the screen may come back with its last tab (the side menu keeps the state of its screens): the tab asked
+                // for is chosen again once that state is put back
+                pendingTab = tabs.indexOf(requested)
+                firstLaunch = false
+            }
+            shownTabs = tabs
             if (firstLaunch) {
                 val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
                 viewPager.setCurrentItem(

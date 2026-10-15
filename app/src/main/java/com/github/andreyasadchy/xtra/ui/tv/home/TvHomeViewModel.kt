@@ -22,6 +22,7 @@ import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /** Rows of the TV home: followed channels live, popular streams, categories. */
@@ -35,17 +36,64 @@ class TvHomeViewModel(
     val followed = MutableStateFlow<List<Stream>?>(null)
     val popular = MutableStateFlow<List<Stream>?>(null)
     val games = MutableStateFlow<List<Game>?>(null)
+    /** Rows of the popular streams of one language (Xtra TV settings), in the order of the languages. */
+    val languageRows = MutableStateFlow<List<Pair<String, List<Stream>>>>(emptyList())
     /** True while the rows load again, the refresh button turns. */
     val refreshing = MutableStateFlow(false)
     /** Time of the last load: added to the thumbnails, Twitch keeps the same address for a new picture. */
     val stamp = MutableStateFlow(0L)
     private var loadedAt = 0L
+    private var loadedLanguages: Set<String>? = null
+
+    /** Picture of the account logged in, for the greeting at the top of the home. */
+    val accountImage = MutableStateFlow<String?>(null)
+    private var accountImageOf: String? = null
+
+    private fun loadAccountImage() {
+        val userId = applicationContext.tokenPrefs().getString(C.USER_ID, null)?.takeIf { it.isNotBlank() }
+        if (userId == null) {
+            accountImage.value = null
+            accountImageOf = null
+            return
+        }
+        if (userId == accountImageOf && accountImage.value != null) {
+            return
+        }
+        accountImageOf = userId
+        viewModelScope.launch {
+            try {
+                val prefs = applicationContext.prefs()
+                accountImage.value = graphQLRepository.loadQueryUser(
+                    prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    TwitchApiHelper.getGQLHeaders(applicationContext),
+                    id = userId
+                ).data?.user?.profileImageURL
+            } catch (e: Exception) {
+
+            }
+        }
+    }
+
+    init {
+        // a channel added to the favorites or removed: the followed row is sorted again at once
+        viewModelScope.launch {
+            com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collect {
+                followed.value?.let { list ->
+                    followed.value = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.sort(list.sortedByDescending { stream -> stream.viewerCount })
+                }
+            }
+        }
+    }
 
     /** Loads the rows, again when they are older than a few minutes. */
     fun load(force: Boolean = false) {
-        if (!force && loadedAt != 0L && System.currentTimeMillis() - loadedAt < 3 * 60_000L) {
+        loadAccountImage()
+        // languages of the rows changed in the settings: loaded again at once
+        val rowLanguages = applicationContext.prefs().getStringSet(C.TV_HOME_LANGUAGE_ROWS, null).orEmpty().toSet()
+        if (!force && loadedAt != 0L && System.currentTimeMillis() - loadedAt < 3 * 60_000L && rowLanguages == loadedLanguages) {
             return
         }
+        loadedLanguages = rowLanguages
         loadedAt = System.currentTimeMillis()
         val prefs = applicationContext.prefs()
         val networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP)
@@ -58,6 +106,12 @@ class TvHomeViewModel(
         }
         jobs += viewModelScope.launch {
             popular.value = loadPage(createPopularSource())
+        }
+        val languages = prefs.getStringSet(C.TV_HOME_LANGUAGE_ROWS, null)?.filter { it.isNotBlank() }?.sorted().orEmpty()
+        jobs += viewModelScope.launch {
+            languageRows.value = languages.map { language ->
+                async { language to loadPage(createLanguageSource(language)) }
+            }.map { it.await() }.filter { it.second.isNotEmpty() }
         }
         jobs += viewModelScope.launch {
             games.value = loadPage(
@@ -103,6 +157,24 @@ class TvHomeViewModel(
             gqlQueryLanguages = languages?.mapNotNull { language -> com.github.andreyasadchy.xtra.graphql.type.Language.entries.find { it.rawValue == language } },
             gqlQuerySort = StreamSort.VIEWER_COUNT,
             gqlLanguages = languages,
+            gqlSort = "VIEWER_COUNT",
+            tags = null,
+            gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),
+            graphQLRepository = graphQLRepository,
+            helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
+            helixRepository = helixRepository,
+            enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false),
+            networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+        )
+    }
+
+    /** Source of a row of the popular streams of one language. */
+    fun createLanguageSource(language: String): PagingSource<Int, Stream> {
+        val prefs = applicationContext.prefs()
+        return StreamsDataSource(
+            gqlQueryLanguages = com.github.andreyasadchy.xtra.graphql.type.Language.entries.filter { it.rawValue == language },
+            gqlQuerySort = StreamSort.VIEWER_COUNT,
+            gqlLanguages = listOf(language),
             gqlSort = "VIEWER_COUNT",
             tags = null,
             gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),

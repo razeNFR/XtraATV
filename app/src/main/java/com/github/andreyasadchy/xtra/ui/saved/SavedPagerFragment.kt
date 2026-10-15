@@ -49,7 +49,7 @@ class SavedPagerFragment : Fragment(), Scrollable, FragmentHost {
     private var fileResultLauncher: ActivityResultLauncher<Intent>? = null
 
     override val currentFragment: Fragment?
-        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(binding.viewPager.currentItem) ?: binding.viewPager.currentItem}")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -172,7 +172,7 @@ class SavedPagerFragment : Fragment(), Scrollable, FragmentHost {
             viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
                     viewPager.doOnLayout {
-                        childFragmentManager.findFragmentByTag("f${position}")?.let { fragment ->
+                        childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
                             if (requireContext().resources.getBoolean(R.bool.isTv)) {
                                 // TV: the header stays still like on a category page, the lift state changed at each scroll of the list and made it flicker
                             } else if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {

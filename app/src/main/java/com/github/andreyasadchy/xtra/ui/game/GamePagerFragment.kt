@@ -71,7 +71,7 @@ class GamePagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
     private var firstLaunch = true
 
     override val currentFragment: Fragment?
-        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(binding.viewPager.currentItem) ?: binding.viewPager.currentItem}")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -265,7 +265,7 @@ class GamePagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
             viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
                     viewPager.doOnLayout {
-                        childFragmentManager.findFragmentByTag("f${position}")?.let { fragment ->
+                        childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
                             if (fragment is Sortable) {
                                 fragment.setupSortBar(sortBar)
                                 sortBar.root.doOnLayout {

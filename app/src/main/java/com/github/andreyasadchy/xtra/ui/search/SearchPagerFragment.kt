@@ -51,7 +51,7 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
     private var firstLaunch = true
 
     override val currentFragment: Fragment?
-        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(binding.viewPager.currentItem) ?: binding.viewPager.currentItem}")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,7 +111,7 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                 override fun onPageSelected(position: Int) {
                     (currentFragment as? Searchable)?.search(binding.searchView.query.toString())
                     viewPager.doOnLayout {
-                        childFragmentManager.findFragmentByTag("f${position}")?.let { fragment ->
+                        childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
                             if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
                                 fragment.view?.findViewById<RecyclerView>(R.id.recyclerView)?.let {
                                     appBar.setLiftOnScrollTargetView(it)

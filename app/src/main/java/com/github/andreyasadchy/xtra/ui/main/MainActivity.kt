@@ -153,7 +153,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = prefs()
         migrateSettings()
+        forceDisplaySettings()
         if (resources.getBoolean(R.bool.isTv)) {
+            // favorite channels, read before the followed streams are loaded
+            com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
             prefs.edit {
                 // on TV leaving the app stops the stream: no picture-in-picture, no background audio (the phone settings are hidden)
                 putBoolean(C.PLAYER_PICTURE_IN_PICTURE, false)
@@ -792,7 +795,64 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    /** TV: second stream in a small window over the full screen player. */
+    private val tvPip by lazy {
+        // a layer over the player, full screen, that only holds the small window and never takes the focus
+        val layer = android.widget.FrameLayout(this).apply {
+            elevation = 24 * resources.displayMetrics.density
+            isFocusable = false
+            isClickable = false
+        }
+        (binding.root as ViewGroup).addView(layer, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        com.github.andreyasadchy.xtra.ui.player.TvPip(this, layer)
+    }
+    private var dispatchingPlayerKey = false
+
+    fun isPlayerMaximized() = (playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true
+
+    fun hasPlayer() = playerFragment != null
+
+    /** The full screen player has the focus and its controls are hidden: OK opens them. */
+    fun isPlayerFocusedWithoutControls(): Boolean {
+        val player = playerFragment as? PlayerFragment ?: return false
+        val focus = currentFocus
+        return player.isMaximizedPlayer() && !player.areControlsShown() && (focus == null || focus.isInside(binding.playerContainer))
+    }
+
+    /** A key given to the player as if the small window was not there. */
+    fun dispatchPlayerKey(event: KeyEvent) {
+        dispatchingPlayerKey = true
+        try {
+            dispatchKeyEvent(event)
+        } finally {
+            dispatchingPlayerKey = false
+        }
+    }
+
+    fun currentPlayingStream(): Stream? = (playerFragment as? PlayerFragment)?.getPlayingStream()
+
+    /** OK held on a stream of the row of the other streams: it plays in a small window, without sound. */
+    fun openTvPip(stream: Stream) {
+        if (stream.channelLogin == currentStreamLogin) {
+            return
+        }
+        val first = tvPip.stream == null
+        tvPip.open(stream)
+        if (first) {
+            com.github.andreyasadchy.xtra.ui.player.TvPip.showHint(this)
+        }
+    }
+
+    fun closeTvPip() {
+        if (isTv) {
+            tvPip.close()
+        }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (isTv && !dispatchingPlayerKey && tvPip.onKey(event)) {
+            return true
+        }
         if (BuildConfig.DEBUG && isTv) {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
         }
@@ -979,10 +1039,16 @@ class MainActivity : AppCompatActivity() {
             R.id.savedMediaFragment to R.drawable.ic_file_download_black_24dp,
             R.id.tvNavSettings to R.drawable.baseline_settings_black_24,
             R.id.tvNavAccount to R.drawable.baseline_person_black_24,
+            R.id.tvNavFollowedVideos to R.drawable.tv_ic_video_library,
+            R.id.tvNavFollowedChannels to R.drawable.tv_ic_person,
+            R.id.tvNavFollowedGames to R.drawable.tv_ic_gamepad,
         )
         val menu = binding.navBar.menu
-        tvMenuState.items = (0 until menu.size()).map { index ->
+        val followedTabs = listOf(R.id.tvNavFollowedVideos, R.id.tvNavFollowedChannels, R.id.tvNavFollowedGames)
+        val hasFollowing = menu.findItem(R.id.followPagerFragment) != null
+        val entries = (0 until menu.size()).map { index ->
             val item = menu.getItem(index)
+            val sub = hasFollowing && item.itemId in followedTabs
             com.github.andreyasadchy.xtra.ui.tv.TvMenuItem(
                 id = item.itemId,
                 title = item.title.toString(),
@@ -991,9 +1057,25 @@ class MainActivity : AppCompatActivity() {
                     R.id.tvNavSearch -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_TOP
                     R.id.tvNavSettings, R.id.tvNavAccount -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_BOTTOM
                     else -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_MAIN
-                }
+                },
+                sub = sub,
+                // under "Following" the short name is enough
+                label = if (sub) {
+                    getString(
+                        when (item.itemId) {
+                            R.id.tvNavFollowedVideos -> R.string.videos
+                            R.id.tvNavFollowedChannels -> R.string.channels
+                            else -> R.string.games
+                        }
+                    )
+                } else item.title.toString()
             )
         }
+        // the shortcuts to the tabs of the followed channels go right under "Following"
+        tvMenuState.items = if (hasFollowing) {
+            val subs = entries.filter { it.sub }
+            entries.filter { !it.sub }.flatMap { if (it.id == R.id.followPagerFragment) listOf(it) + subs else listOf(it) }
+        } else entries
         tvMenuState.selected = binding.navBar.selectedItemId
         com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
             tvMenuState.items.find { it.id == tvMenuState.selected }?.title
@@ -1016,13 +1098,40 @@ class MainActivity : AppCompatActivity() {
             com.github.andreyasadchy.xtra.ui.tv.TvTheme(accent) {
                 com.github.andreyasadchy.xtra.ui.tv.TvSideMenu(tvMenuState) { id ->
                     binding.navBar.selectedItemId = id
-                    tvMenuState.selected = binding.navBar.selectedItemId
+                    tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
                     if (id != R.id.tvNavSettings && id != R.id.tvNavAccount) {
                         // the chosen screen gets the focus, the menu folds away
                         focusContentAfterMenu(id == R.id.tvNavSearch)
                     }
                 }
             }
+        }
+    }
+
+    /** Entry of the side menu shown as chosen instead of its screen ("Followed videos" rather than "Following"). */
+    private var tvMenuExtraSelected: Int? = null
+
+    /** TV side menu: a tab of the followed channels (videos, channels, categories), its screen opened if needed. */
+    private fun openFollowedTab(key: String, entry: Int) {
+        val loggedInWithCode = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank()
+        if (key == "2" && !loggedInWithCode) {
+            // the videos of the followed channels need the login with the code (the token of the app)
+            Toast.makeText(this, R.string.tv_followed_videos_need_code, Toast.LENGTH_LONG).show()
+            return
+        }
+        tvMenuExtraSelected = entry
+        tvMenuState.selected = entry
+        val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.getOrNull(0)
+        if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment && current.showTab(key)) {
+            return
+        }
+        com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.requestedTab = key
+        if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment) {
+            // the tab is hidden on the screen open: the screen again, with that tab
+            navController.navigate(R.id.followPagerFragment)
+        } else {
+            binding.navBar.menu.findItem(R.id.followPagerFragment)?.let { NavigationUI.onNavDestinationSelected(it, navController) }
+                ?: navController.navigate(R.id.followPagerFragment)
         }
     }
 
@@ -1144,6 +1253,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun onAccountClicked() {
+        if (resources.getBoolean(R.bool.isTv)) {
+            // TV: the page of the account shows what is saved, with its log in and log out buttons
+            loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+            return
+        }
         val isLoggedIn = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank() ||
                 !TwitchApiHelper.getHelixHeaders(this)[C.HEADER_TOKEN].isNullOrBlank()
         if (isLoggedIn) {
@@ -1184,6 +1298,10 @@ class MainActivity : AppCompatActivity() {
     val isKeepingPlayerInBackground get() = keepPlayerInBackground
 
     override fun onStop() {
+        if (isTv && !openingOwnScreen && !isChangingConfigurations) {
+            // leaving the app: the small window closes, only the main stream may keep its sound
+            closeTvPip()
+        }
         keepPlayerInBackground = false
         if (isTv && !openingOwnScreen && !isChangingConfigurations) {
             val player = playerFragment as? PlayerFragment
@@ -1460,6 +1578,11 @@ class MainActivity : AppCompatActivity() {
                 startStream(next)
                 // the list is loaded again in the background for the next switch, the switch itself does not wait for it
                 refreshQueueIfOld()
+                // near the end of the list: its next page comes after it
+                val at = streamQueue.indexOf(next)
+                if (at >= 0 && (if (offset > 0) at >= streamQueue.size - 3 else at <= 2)) {
+                    extendQueue()
+                }
                 val updated = streamQueue
                 val newIndex = updated.indexOf(next)
                 // the streamers that left and right go to now
@@ -1537,17 +1660,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var queueExtendJob: kotlinx.coroutines.Job? = null
+
+    /** The next page of the list of left / right (30 more streams), added after it. */
+    private fun extendQueue() {
+        val factory = streamQueueSource ?: return
+        if (queueExtendJob?.isActive == true || queueRefreshJob?.isActive == true) {
+            return
+        }
+        val before = streamQueue
+        queueExtendJob = lifecycleScope.launch {
+            val loaded = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.loadPages(factory, before.size + 30)
+            if (loaded.isNullOrEmpty() || streamQueueSource !== factory || streamQueue !== before) {
+                return@launch
+            }
+            val known = before.mapNotNull { it.channelLogin }.toSet()
+            val added = loaded.filter { it.channelLogin !in known }
+            if (added.isNotEmpty()) {
+                streamQueue = before + added
+                TvStreamSwitcher.update(streamQueue)
+            }
+        }
+    }
+
+    /** Source of the list of left / right, null when it has none (for the row of the other streams to load more of it). */
+    val queueSource get() = streamQueueSource
+
+    /** The row of the other streams loaded more of the list of left / right: left / right go through it too. */
+    fun onQueueExtended(list: List<Stream>, source: (() -> androidx.paging.PagingSource<Int, Stream>)?) {
+        if (source != null && source === streamQueueSource && list.size > streamQueue.size) {
+            streamQueue = list
+        }
+    }
+
     /** Loads the list again from its source, in the order of Twitch. True when the list was replaced. */
     private suspend fun refreshQueue(): Boolean {
         val factory = streamQueueSource ?: return false
         val before = streamQueue
-        val loaded = try {
-            // as many streams as the list had (the ones scrolled to stay), within what one request gives
-            val params = androidx.paging.PagingSource.LoadParams.Refresh<Int>(null, before.size.coerceIn(30, 100), false)
-            (factory().load(params) as? androidx.paging.PagingSource.LoadResult.Page)?.data
-        } catch (e: Exception) {
-            null
-        }
+        // as many streams as the list had (the pages scrolled to stay), 30 by request
+        val loaded = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.loadPages(factory, before.size.coerceIn(30, 150))
         // a failed request, or the list changed meanwhile (other list opened, streamer gone): kept as it is
         if (loaded.isNullOrEmpty() || streamQueueSource !== factory || streamQueue !== before) {
             return false
@@ -1590,6 +1741,7 @@ class MainActivity : AppCompatActivity() {
 
     /** TV multi-stream: replaces the player with up to 4 streams shown together. */
     fun startMultiStream(streams: List<Stream>) {
+        closeTvPip()
         (playerFragment as? PlayerFragment)?.let {
             it.close()
             closePlayer()
@@ -1608,8 +1760,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showStreamSwitcher() {
-        // shown at once with the list in memory, it fills in by itself if a newer list comes
-        TvStreamSwitcher.show(this, streamQueue, currentStreamLogin)
+        // shown at once with the list in memory, it fills in by itself if a newer list comes; tabs above it for the
+        // other lists (followed, popular, languages, category), OK held opens a stream in a small window
+        TvStreamSwitcher.show(
+            this,
+            streamQueue,
+            currentStreamLogin,
+            rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(this, currentPlayingStream()),
+            onPip = { openTvPip(it) },
+            source = streamQueueSource,
+        )
         refreshQueueIfOld()
     }
 
@@ -1885,6 +2045,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closePlayer() {
+        closeTvPip()
         setMainContentFocusable(true)
         supportFragmentManager.beginTransaction()
             .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
@@ -1978,9 +2139,12 @@ class MainActivity : AppCompatActivity() {
         if (isTv) {
             onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
             onBackPressedDispatcher.addCallback(this, tvGridBackCallback)
-            navController.addOnDestinationChangedListener { _, _, _ ->
+            navController.addOnDestinationChangedListener { _, destination, _ ->
                 updateTvMenuBackCallback()
-                binding.root.post { tvMenuState.selected = binding.navBar.selectedItemId }
+                if (destination.id != R.id.followPagerFragment) {
+                    tvMenuExtraSelected = null
+                }
+                binding.root.post { tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId }
             }
         }
         val tabList = prefs.getString(C.UI_NAVIGATION_TAB_LIST, null).let { tabPref ->
@@ -2058,6 +2222,13 @@ class MainActivity : AppCompatActivity() {
             } else {
                 binding.navBarContainer.visibility = View.GONE
             }
+            if (isTv && prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
+                // shortcuts to the tabs of the followed channels, chosen in the Xtra TV settings
+                val extras = prefs.getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
+                if ("videos" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedVideos, Menu.NONE, R.string.tv_menu_followed_videos).setIcon(R.drawable.tv_ic_video_library)
+                if ("channels" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedChannels, Menu.NONE, R.string.tv_menu_followed_channels).setIcon(R.drawable.tv_ic_person)
+                if ("games" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedGames, Menu.NONE, R.string.tv_menu_followed_games).setIcon(R.drawable.tv_ic_gamepad)
+            }
             if (isTv) {
                 menu.add(Menu.NONE, R.id.tvNavSettings, Menu.NONE, R.string.settings).setIcon(R.drawable.baseline_settings_black_24)
                 menu.add(Menu.NONE, R.id.tvNavAccount, Menu.NONE, R.string.tv_account).setIcon(R.drawable.baseline_person_black_24)
@@ -2080,11 +2251,30 @@ class MainActivity : AppCompatActivity() {
                         onAccountClicked()
                         return@setOnItemSelectedListener false
                     }
+                    R.id.tvNavFollowedVideos, R.id.tvNavFollowedChannels, R.id.tvNavFollowedGames -> {
+                        openFollowedTab(
+                            when (it.itemId) {
+                                R.id.tvNavFollowedVideos -> "2"
+                                R.id.tvNavFollowedChannels -> "3"
+                                else -> "0"
+                            },
+                            it.itemId
+                        )
+                        return@setOnItemSelectedListener false
+                    }
                 }
+                tvMenuExtraSelected = null
                 NavigationUI.onNavDestinationSelected(it, navController)
                 return@setOnItemSelectedListener true
             }
             setOnItemReselectedListener {
+                if (tvMenuExtraSelected != null && it.itemId == R.id.followPagerFragment) {
+                    // back to "Following" from one of its shortcuts: the screen with all its tabs again
+                    tvMenuExtraSelected = null
+                    tvMenuState.selected = it.itemId
+                    navController.navigate(R.id.followPagerFragment)
+                    return@setOnItemReselectedListener
+                }
                 if (!navController.popBackStack(it.itemId, false)) {
                     val currentFragment = supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.getOrNull(0)
                     if (currentFragment is Scrollable) {
@@ -2096,6 +2286,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     @OptIn(UnstableApi::class)
+    /**
+     * Display settings removed from the UI settings: the same for everyone (previews of the streams shown, round
+     * pictures, compact numbers, uptime, tags, numbers of streams, tabs pages, scroll to top, time left, recent searches).
+     */
+    private fun forceDisplaySettings() {
+        val on = listOf(
+            C.UI_ROUND_USER_IMAGE, C.UI_TRUNCATE_VIEW_COUNT, C.UI_UPTIME, C.UI_TAGS, C.UI_BROADCASTERS_COUNT,
+            C.UI_FOLLOW_PAGER, C.UI_SAVED_PAGER, C.UI_GAME_PAGER, C.UI_SCROLL_TOP, C.UI_BOOKMARK_TIME_LEFT, C.UI_STORE_RECENT_SEARCHES,
+        )
+        if (on.any { !prefs.getBoolean(it, true) } || prefs.getString(C.COMPACT_STREAMS, "disabled") != "disabled") {
+            prefs.edit {
+                on.forEach { putBoolean(it, true) }
+                putString(C.COMPACT_STREAMS, "disabled")
+            }
+        }
+    }
+
     private fun migrateSettings() {
         val version = prefs.getInt(C.SETTINGS_VERSION, 0).let {
             if (it == 0 && !prefs.getBoolean(C.FIRST_LAUNCH2, true)) {

@@ -28,6 +28,7 @@ import com.github.andreyasadchy.xtra.ui.tv.home.TvHomeViewModel.Companion.TvHome
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
+import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -62,7 +63,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val source: (() -> androidx.paging.PagingSource<Int, Stream>)? = when {
                     list === viewModel.followed.value -> viewModel::createFollowedSource
                     list === viewModel.popular.value -> viewModel::createPopularSource
-                    else -> null
+                    else -> viewModel.languageRows.value.find { it.second === list }?.first?.let { language -> { viewModel.createLanguageSource(language) } }
                 }
                 (activity as? MainActivity)?.startStream(stream, list, source)
             },
@@ -137,6 +138,8 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val followed by viewModel.followed.collectAsState()
                 val popular by viewModel.popular.collectAsState()
                 val games by viewModel.games.collectAsState()
+                val languageRows by viewModel.languageRows.collectAsState()
+                val accountImage by viewModel.accountImage.collectAsState()
                 TvTheme(accent) {
                     TvHomeScreen(
                         followed = followed?.let { TvHomeRow(getString(R.string.tv_followed_live), it, followedId, R.drawable.tv_ic_heart) },
@@ -147,6 +150,13 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         actions = actions,
                         resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
                         stats = statsState.value,
+                        languageRows = languageRows.map { (language, streams) ->
+                            TvHomeRow(getString(R.string.tv_popular_in, languageName(language)), streams, 0, R.drawable.tv_ic_globe)
+                        },
+                        account = TvHomeAccount(
+                            name = context.tokenPrefs().getString(C.USERNAME, null)?.takeIf { it.isNotBlank() },
+                            image = accountImage,
+                        ),
                     )
                 }
             }
@@ -157,6 +167,12 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         super.onResume()
         viewModel.load()
         loadLocalRows()
+    }
+
+    /** Name of a language in the language of the app ("fr" -> "Français"). */
+    private fun languageName(code: String): String {
+        val name = java.util.Locale.forLanguageTag(code).getDisplayLanguage(resources.configuration.locales[0])
+        return name.takeIf { it.isNotBlank() && it != code }?.replaceFirstChar { it.titlecase(resources.configuration.locales[0]) } ?: code.uppercase()
     }
 
     /** "Continue watching" and the statistics, read on this device. */

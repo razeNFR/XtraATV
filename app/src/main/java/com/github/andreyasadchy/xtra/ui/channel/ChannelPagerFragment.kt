@@ -87,7 +87,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
     private var firstLaunch = true
 
     override val currentFragment: Fragment?
-        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+        get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(binding.viewPager.currentItem) ?: binding.viewPager.currentItem}")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -168,6 +168,12 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
             val appBarConfiguration = AppBarConfiguration(setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment))
             toolbar.setupWithNavController(navController, appBarConfiguration)
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
+            // buttons hidden in the settings (tabs of the channel)
+            requireContext().prefs().getStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, null)?.let { hidden ->
+                toolbar.menu.findItem(R.id.download)?.isVisible = "download" !in hidden
+                toolbar.menu.findItem(R.id.share)?.isVisible = "share" !in hidden
+                toolbar.menu.findItem(R.id.toggleNotifications)?.isVisible = "notifications" !in hidden
+            }
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     R.id.toggleNotifications -> {
@@ -476,7 +482,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                         AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL
                     }
                     viewPager.doOnLayout {
-                        childFragmentManager.findFragmentByTag("f${position}").let { fragment ->
+                        childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}").let { fragment ->
                             if (fragment is Sortable) {
                                 fragment.setupSortBar(sortBar)
                                 sortBar.root.doOnLayout {
