@@ -7,11 +7,18 @@
 - **Small window**: hold OK on a stream of the other streams row to watch it in a small window at the top right, while the sound of the main stream goes on. Hold OK again to swap the two streams, press back to close it.
 - **Focus mode in the multi-stream**: with 3 or 4 streams, one stream big with its chat at its right and the others small under it. Press OK on a small stream to put it big, hold OK to open its panel. Turn it on or off from the panel of a stream.
 - **More entries in the side menu**: shortcuts to the videos, the channels or the categories of the followed channels can be added in the Xtra TV settings.
+- **New account page**: the two ways of logging in side by side (code on twitch.tv/activate, Twitch login page) with what each one gives and lacks and whether it is done. Each one can be done or done again at any time without losing the other, and a log out button removes everything.
 - **Version number in the settings**, under the name of the screen.
 
 ### Changes
 - **Card sizes by name**: the size of the cards on the home and in the lists now reads very big, big, medium, small or very small.
 - **Opaque side menu**: the texts of the screen behind no longer show through it.
+- **Other streams button** on every stream of the player, the row has its tabs even for a stream opened alone.
+- **Tabs of the other streams row** change the list when OK is pressed, with a loading shown.
+
+### Fixes
+- A tab hidden in the settings no longer leaves its page in the next tab (videos shown in the channels tab).
+- The side menu shortcuts open their own tab (even when it is hidden in the settings) and stay selected.
 
 ### Install
 Download `XtraTV-1.2.0-tv.apk` below and install it over the previous version, your settings and account are kept.

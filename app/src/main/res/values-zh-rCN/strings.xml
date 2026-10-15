@@ -749,4 +749,25 @@
     <string name="tv_followed_videos_need_code">关注的视频需要使用代码登录：通过 twitch.tv/activate 登录（账户）</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">无法加载列表，请重试</string>
+    <string name="tv_login_title">Twitch 账户</string>
+    <string name="tv_login_status_user">已登录：%s</string>
+    <string name="tv_login_status_none">未登录</string>
+    <string name="tv_login_both_hint">两种都完成即可使用全部功能。每种都可以随时完成或重新进行，不会丢失另一种。</string>
+    <string name="tv_login_code_title">在 twitch.tv/activate 输入代码</string>
+    <string name="tv_login_code_gives">关注频道的视频\n关注和取消关注频道\n账户功能（已屏蔽用户、聊天）</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Twitch 登录页面</string>
+    <string name="tv_login_page_gives">1440p\n正在直播的关注频道和聊天</string>
+    <string name="tv_login_page_misses">关注频道的视频\n部分账户功能</string>
+    <string name="tv_login_gives">可获得</string>
+    <string name="tv_login_misses">缺少</string>
+    <string name="tv_login_connected">已连接 ✓</string>
+    <string name="tv_login_not_connected">未连接</string>
+    <string name="tv_login_connect">登录</string>
+    <string name="tv_login_redo">重新登录</string>
+    <string name="tv_login_done_button">完成</string>
+    <string name="tv_login_code_ok">已使用代码登录 ✓</string>
+    <string name="tv_login_page_ok">已使用 Twitch 页面登录 ✓</string>
+    <string name="tv_login_other_account">与另一种登录不是同一个账户：另一种登录已移除</string>
+    <string name="tv_login_logged_out">已退出登录</string>
 </resources>

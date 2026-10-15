@@ -749,4 +749,25 @@
     <string name="tv_followed_videos_need_code">I video dei seguiti richiedono l\'accesso con il codice: accedi con twitch.tv/activate (Account)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Impossibile caricare l\'elenco, riprova</string>
+    <string name="tv_login_title">Account Twitch</string>
+    <string name="tv_login_status_user">Accesso come %s</string>
+    <string name="tv_login_status_none">Non connesso</string>
+    <string name="tv_login_both_hint">Fai entrambi per avere tutto. Ognuno può essere fatto o rifatto in qualsiasi momento, senza perdere l\'altro.</string>
+    <string name="tv_login_code_title">Codice su twitch.tv/activate</string>
+    <string name="tv_login_code_gives">Video dei canali seguiti\nSeguire e smettere di seguire canali\nFunzioni dell\'account (utenti bloccati, chat)</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Pagina di accesso di Twitch</string>
+    <string name="tv_login_page_gives">1440p\nCanali seguiti in diretta e chat</string>
+    <string name="tv_login_page_misses">Video dei canali seguiti\nParte delle funzioni dell\'account</string>
+    <string name="tv_login_gives">Ottieni</string>
+    <string name="tv_login_misses">Manca</string>
+    <string name="tv_login_connected">Connesso ✓</string>
+    <string name="tv_login_not_connected">Non connesso</string>
+    <string name="tv_login_connect">Accedi</string>
+    <string name="tv_login_redo">Rifai</string>
+    <string name="tv_login_done_button">Fatto</string>
+    <string name="tv_login_code_ok">Accesso con il codice ✓</string>
+    <string name="tv_login_page_ok">Accesso con la pagina di Twitch ✓</string>
+    <string name="tv_login_other_account">Account diverso da quello dell\'altro accesso: l\'altro accesso è stato rimosso</string>
+    <string name="tv_login_logged_out">Disconnesso</string>
 </resources>

@@ -749,4 +749,25 @@
     <string name="tv_followed_videos_need_code">Les vidéos des suivis demandent la connexion avec le code : connecte-toi avec twitch.tv/activate (Compte)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">La liste n\'a pas pu être chargée, réessaie</string>
+    <string name="tv_login_title">Compte Twitch</string>
+    <string name="tv_login_status_user">Connecté en tant que %s</string>
+    <string name="tv_login_status_none">Non connecté</string>
+    <string name="tv_login_both_hint">Faites les deux pour tout avoir. Chacun peut être fait ou refait à tout moment, sans perdre l\'autre.</string>
+    <string name="tv_login_code_title">Code sur twitch.tv/activate</string>
+    <string name="tv_login_code_gives">Vidéos des chaînes suivies\nSuivre et ne plus suivre des chaînes\nFonctions du compte (utilisateurs bloqués, chat)</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Page de connexion Twitch</string>
+    <string name="tv_login_page_gives">1440p\nChaînes suivies en direct et chat</string>
+    <string name="tv_login_page_misses">Vidéos des chaînes suivies\nUne partie des fonctions du compte</string>
+    <string name="tv_login_gives">Vous gagnez</string>
+    <string name="tv_login_misses">Il manque</string>
+    <string name="tv_login_connected">Connecté ✓</string>
+    <string name="tv_login_not_connected">Non connecté</string>
+    <string name="tv_login_connect">Se connecter</string>
+    <string name="tv_login_redo">Refaire</string>
+    <string name="tv_login_done_button">Terminé</string>
+    <string name="tv_login_code_ok">Connecté avec le code ✓</string>
+    <string name="tv_login_page_ok">Connecté avec la page Twitch ✓</string>
+    <string name="tv_login_other_account">Autre compte que celui de l\'autre connexion : l\'autre connexion a été retirée</string>
+    <string name="tv_login_logged_out">Déconnecté</string>
 </resources>

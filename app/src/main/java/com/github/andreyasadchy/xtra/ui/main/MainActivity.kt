@@ -1233,6 +1233,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun onAccountClicked() {
+        if (resources.getBoolean(R.bool.isTv)) {
+            // TV: the page of the account shows what is saved, with its log in and log out buttons
+            loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+            return
+        }
         val isLoggedIn = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank() ||
                 !TwitchApiHelper.getHelixHeaders(this)[C.HEADER_TOKEN].isNullOrBlank()
         if (isLoggedIn) {

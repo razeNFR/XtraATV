@@ -749,4 +749,25 @@
     <string name="tv_followed_videos_need_code">Os vídeos dos seguidos precisan o inicio de sesión co código: inicia sesión con twitch.tv/activate (Conta)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Non se puido cargar a lista, téntao de novo</string>
+    <string name="tv_login_title">Conta de Twitch</string>
+    <string name="tv_login_status_user">Conectado como %s</string>
+    <string name="tv_login_status_none">Non conectado</string>
+    <string name="tv_login_both_hint">Fai as dúas para telo todo. Cada unha pódese facer ou refacer en calquera momento, sen perder a outra.</string>
+    <string name="tv_login_code_title">Código en twitch.tv/activate</string>
+    <string name="tv_login_code_gives">Vídeos das canles seguidas\nSeguir e deixar de seguir canles\nFuncións da conta (usuarios bloqueados, chat)</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Páxina de inicio de sesión de Twitch</string>
+    <string name="tv_login_page_gives">1440p\nCanles seguidas en directo e chat</string>
+    <string name="tv_login_page_misses">Vídeos das canles seguidas\nParte das funcións da conta</string>
+    <string name="tv_login_gives">Obtés</string>
+    <string name="tv_login_misses">Falta</string>
+    <string name="tv_login_connected">Conectado ✓</string>
+    <string name="tv_login_not_connected">Non conectado</string>
+    <string name="tv_login_connect">Iniciar sesión</string>
+    <string name="tv_login_redo">Refacer</string>
+    <string name="tv_login_done_button">Feito</string>
+    <string name="tv_login_code_ok">Conectado co código ✓</string>
+    <string name="tv_login_page_ok">Conectado coa páxina de Twitch ✓</string>
+    <string name="tv_login_other_account">Outra conta distinta da do outro inicio de sesión: o outro quitouse</string>
+    <string name="tv_login_logged_out">Sesión pechada</string>
 </resources>	

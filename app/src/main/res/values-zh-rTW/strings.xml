@@ -749,4 +749,25 @@
     <string name="tv_followed_videos_need_code">追隨的影片需要使用代碼登入：透過 twitch.tv/activate 登入（帳戶）</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">無法載入列表，請再試一次</string>
+    <string name="tv_login_title">Twitch 帳戶</string>
+    <string name="tv_login_status_user">已登入：%s</string>
+    <string name="tv_login_status_none">未登入</string>
+    <string name="tv_login_both_hint">兩種都完成即可使用全部功能。每種都可以隨時完成或重新進行，不會失去另一種。</string>
+    <string name="tv_login_code_title">在 twitch.tv/activate 輸入代碼</string>
+    <string name="tv_login_code_gives">追隨頻道的影片\n追隨和取消追隨頻道\n帳戶功能（已封鎖使用者、聊天）</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Twitch 登入頁面</string>
+    <string name="tv_login_page_gives">1440p\n正在直播的追隨頻道和聊天</string>
+    <string name="tv_login_page_misses">追隨頻道的影片\n部分帳戶功能</string>
+    <string name="tv_login_gives">可獲得</string>
+    <string name="tv_login_misses">缺少</string>
+    <string name="tv_login_connected">已連線 ✓</string>
+    <string name="tv_login_not_connected">未連線</string>
+    <string name="tv_login_connect">登入</string>
+    <string name="tv_login_redo">重新登入</string>
+    <string name="tv_login_done_button">完成</string>
+    <string name="tv_login_code_ok">已使用代碼登入 ✓</string>
+    <string name="tv_login_page_ok">已使用 Twitch 頁面登入 ✓</string>
+    <string name="tv_login_other_account">與另一種登入不是同一個帳戶：另一種登入已移除</string>
+    <string name="tv_login_logged_out">已登出</string>
 </resources>

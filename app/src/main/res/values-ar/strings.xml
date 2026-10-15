@@ -749,4 +749,25 @@
     <string name="tv_followed_videos_need_code">فيديوهات المتابَعين تتطلب تسجيل الدخول بالرمز: سجّل الدخول عبر twitch.tv/activate (الحساب)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">تعذر تحميل القائمة، حاول مرة أخرى</string>
+    <string name="tv_login_title">حساب Twitch</string>
+    <string name="tv_login_status_user">مسجل الدخول باسم %s</string>
+    <string name="tv_login_status_none">لم يتم تسجيل الدخول</string>
+    <string name="tv_login_both_hint">قم بالطريقتين للحصول على كل شيء. يمكن القيام بكل واحدة أو إعادتها في أي وقت دون فقدان الأخرى.</string>
+    <string name="tv_login_code_title">رمز على twitch.tv/activate</string>
+    <string name="tv_login_code_gives">فيديوهات القنوات المتابَعة\nمتابعة القنوات وإلغاء متابعتها\nميزات الحساب (المستخدمون المحظورون، الدردشة)</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">صفحة تسجيل الدخول في Twitch</string>
+    <string name="tv_login_page_gives">1440p\nالقنوات المتابَعة المباشرة والدردشة</string>
+    <string name="tv_login_page_misses">فيديوهات القنوات المتابَعة\nجزء من ميزات الحساب</string>
+    <string name="tv_login_gives">تحصل على</string>
+    <string name="tv_login_misses">ينقص</string>
+    <string name="tv_login_connected">متصل ✓</string>
+    <string name="tv_login_not_connected">غير متصل</string>
+    <string name="tv_login_connect">تسجيل الدخول</string>
+    <string name="tv_login_redo">إعادة</string>
+    <string name="tv_login_done_button">تم</string>
+    <string name="tv_login_code_ok">تم تسجيل الدخول بالرمز ✓</string>
+    <string name="tv_login_page_ok">تم تسجيل الدخول بصفحة Twitch ✓</string>
+    <string name="tv_login_other_account">حساب مختلف عن حساب تسجيل الدخول الآخر: تمت إزالة تسجيل الدخول الآخر</string>
+    <string name="tv_login_logged_out">تم تسجيل الخروج</string>
 </resources>

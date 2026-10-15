@@ -749,4 +749,25 @@
     <string name="tv_followed_videos_need_code">フォロー中の動画にはコードでのログインが必要です: twitch.tv/activate でログイン (アカウント)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">リストを読み込めませんでした。もう一度お試しください</string>
+    <string name="tv_login_title">Twitch アカウント</string>
+    <string name="tv_login_status_user">%s としてログイン中</string>
+    <string name="tv_login_status_none">ログインしていません</string>
+    <string name="tv_login_both_hint">両方行うとすべての機能が使えます。どちらも、もう一方を失わずにいつでも実行・やり直しできます。</string>
+    <string name="tv_login_code_title">twitch.tv/activate のコード</string>
+    <string name="tv_login_code_gives">フォロー中のチャンネルの動画\nチャンネルのフォローと解除\nアカウント機能（ブロック中のユーザー、チャット）</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Twitch ログインページ</string>
+    <string name="tv_login_page_gives">1440p\nフォロー中の配信とチャット</string>
+    <string name="tv_login_page_misses">フォロー中のチャンネルの動画\nアカウント機能の一部</string>
+    <string name="tv_login_gives">できること</string>
+    <string name="tv_login_misses">できないこと</string>
+    <string name="tv_login_connected">接続済み ✓</string>
+    <string name="tv_login_not_connected">未接続</string>
+    <string name="tv_login_connect">ログイン</string>
+    <string name="tv_login_redo">やり直す</string>
+    <string name="tv_login_done_button">完了</string>
+    <string name="tv_login_code_ok">コードでログインしました ✓</string>
+    <string name="tv_login_page_ok">Twitch ページでログインしました ✓</string>
+    <string name="tv_login_other_account">もう一方のログインと別のアカウントです：もう一方のログインは削除されました</string>
+    <string name="tv_login_logged_out">ログアウトしました</string>
 </resources>

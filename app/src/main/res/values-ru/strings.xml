@@ -749,4 +749,25 @@
     <string name="tv_followed_videos_need_code">Для видео отслеживаемых нужен вход по коду: войдите через twitch.tv/activate (Аккаунт)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Не удалось загрузить список, попробуйте ещё раз</string>
+    <string name="tv_login_title">Аккаунт Twitch</string>
+    <string name="tv_login_status_user">Вы вошли как %s</string>
+    <string name="tv_login_status_none">Вход не выполнен</string>
+    <string name="tv_login_both_hint">Выполните оба входа, чтобы получить всё. Каждый можно выполнить или повторить в любой момент, не теряя другой.</string>
+    <string name="tv_login_code_title">Код на twitch.tv/activate</string>
+    <string name="tv_login_code_gives">Видео отслеживаемых каналов\nПодписка и отписка от каналов\nФункции аккаунта (заблокированные, чат)</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Страница входа Twitch</string>
+    <string name="tv_login_page_gives">1440p\nОтслеживаемые каналы в эфире и чат</string>
+    <string name="tv_login_page_misses">Видео отслеживаемых каналов\nЧасть функций аккаунта</string>
+    <string name="tv_login_gives">Вы получаете</string>
+    <string name="tv_login_misses">Нет</string>
+    <string name="tv_login_connected">Подключено ✓</string>
+    <string name="tv_login_not_connected">Не подключено</string>
+    <string name="tv_login_connect">Войти</string>
+    <string name="tv_login_redo">Войти снова</string>
+    <string name="tv_login_done_button">Готово</string>
+    <string name="tv_login_code_ok">Вход по коду выполнен ✓</string>
+    <string name="tv_login_page_ok">Вход через страницу Twitch выполнен ✓</string>
+    <string name="tv_login_other_account">Другой аккаунт, чем при другом входе: другой вход удалён</string>
+    <string name="tv_login_logged_out">Вы вышли</string>
 </resources>

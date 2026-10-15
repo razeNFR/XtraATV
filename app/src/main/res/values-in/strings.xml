@@ -750,4 +750,25 @@
     <string name="tv_followed_videos_need_code">Video yang diikuti memerlukan login dengan kode: login lewat twitch.tv/activate (Akun)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Daftar tidak dapat dimuat, coba lagi</string>
+    <string name="tv_login_title">Akun Twitch</string>
+    <string name="tv_login_status_user">Masuk sebagai %s</string>
+    <string name="tv_login_status_none">Belum masuk</string>
+    <string name="tv_login_both_hint">Lakukan keduanya untuk mendapatkan semuanya. Masing-masing bisa dilakukan atau diulang kapan saja, tanpa kehilangan yang lain.</string>
+    <string name="tv_login_code_title">Kode di twitch.tv/activate</string>
+    <string name="tv_login_code_gives">Video dari channel yang diikuti\nMengikuti dan berhenti mengikuti channel\nFitur akun (pengguna diblokir, chat)</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Halaman masuk Twitch</string>
+    <string name="tv_login_page_gives">1440p\nChannel yang diikuti yang live dan chat</string>
+    <string name="tv_login_page_misses">Video dari channel yang diikuti\nSebagian fitur akun</string>
+    <string name="tv_login_gives">Anda dapat</string>
+    <string name="tv_login_misses">Tidak ada</string>
+    <string name="tv_login_connected">Terhubung ✓</string>
+    <string name="tv_login_not_connected">Tidak terhubung</string>
+    <string name="tv_login_connect">Masuk</string>
+    <string name="tv_login_redo">Masuk lagi</string>
+    <string name="tv_login_done_button">Selesai</string>
+    <string name="tv_login_code_ok">Masuk dengan kode ✓</string>
+    <string name="tv_login_page_ok">Masuk dengan halaman Twitch ✓</string>
+    <string name="tv_login_other_account">Akun berbeda dari login lainnya: login lainnya dihapus</string>
+    <string name="tv_login_logged_out">Telah keluar</string>
 </resources>

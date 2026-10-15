@@ -750,4 +750,25 @@
     <string name="tv_followed_videos_need_code">Takip edilen videolar için kodla giriş gerekir: twitch.tv/activate ile giriş yapın (Hesap)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Liste yüklenemedi, tekrar deneyin</string>
+    <string name="tv_login_title">Twitch hesabı</string>
+    <string name="tv_login_status_user">%s olarak giriş yapıldı</string>
+    <string name="tv_login_status_none">Giriş yapılmadı</string>
+    <string name="tv_login_both_hint">Her şeye sahip olmak için ikisini de yapın. Her biri, diğerini kaybetmeden istediğiniz zaman yapılabilir veya yeniden yapılabilir.</string>
+    <string name="tv_login_code_title">twitch.tv/activate üzerinde kod</string>
+    <string name="tv_login_code_gives">Takip edilen kanalların videoları\nKanalları takip etme ve bırakma\nHesap özellikleri (engellenenler, sohbet)</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Twitch giriş sayfası</string>
+    <string name="tv_login_page_gives">1440p\nCanlı takip edilen kanallar ve sohbet</string>
+    <string name="tv_login_page_misses">Takip edilen kanalların videoları\nHesap özelliklerinin bir kısmı</string>
+    <string name="tv_login_gives">Kazandıklarınız</string>
+    <string name="tv_login_misses">Eksik olanlar</string>
+    <string name="tv_login_connected">Bağlı ✓</string>
+    <string name="tv_login_not_connected">Bağlı değil</string>
+    <string name="tv_login_connect">Giriş yap</string>
+    <string name="tv_login_redo">Yeniden yap</string>
+    <string name="tv_login_done_button">Bitti</string>
+    <string name="tv_login_code_ok">Kod ile giriş yapıldı ✓</string>
+    <string name="tv_login_page_ok">Twitch sayfası ile giriş yapıldı ✓</string>
+    <string name="tv_login_other_account">Diğer girişten farklı bir hesap: diğer giriş kaldırıldı</string>
+    <string name="tv_login_logged_out">Çıkış yapıldı</string>
 </resources>

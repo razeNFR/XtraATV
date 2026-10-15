@@ -749,4 +749,25 @@
     <string name="tv_followed_videos_need_code">Die Videos gefolgter Kanäle brauchen die Anmeldung mit Code: melde dich über twitch.tv/activate an (Konto)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Die Liste konnte nicht geladen werden, versuche es erneut</string>
+    <string name="tv_login_title">Twitch-Konto</string>
+    <string name="tv_login_status_user">Angemeldet als %s</string>
+    <string name="tv_login_status_none">Nicht angemeldet</string>
+    <string name="tv_login_both_hint">Mach beides, um alles zu haben. Jede Anmeldung kann jederzeit gemacht oder wiederholt werden, ohne die andere zu verlieren.</string>
+    <string name="tv_login_code_title">Code auf twitch.tv/activate</string>
+    <string name="tv_login_code_gives">Videos der gefolgten Kanäle\nKanälen folgen und entfolgen\nKontofunktionen (blockierte Nutzer, Chat)</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Twitch-Anmeldeseite</string>
+    <string name="tv_login_page_gives">1440p\nGefolgte Kanäle live und Chat</string>
+    <string name="tv_login_page_misses">Videos der gefolgten Kanäle\nEin Teil der Kontofunktionen</string>
+    <string name="tv_login_gives">Du bekommst</string>
+    <string name="tv_login_misses">Es fehlt</string>
+    <string name="tv_login_connected">Verbunden ✓</string>
+    <string name="tv_login_not_connected">Nicht verbunden</string>
+    <string name="tv_login_connect">Anmelden</string>
+    <string name="tv_login_redo">Erneut anmelden</string>
+    <string name="tv_login_done_button">Fertig</string>
+    <string name="tv_login_code_ok">Mit dem Code angemeldet ✓</string>
+    <string name="tv_login_page_ok">Mit der Twitch-Seite angemeldet ✓</string>
+    <string name="tv_login_other_account">Anderes Konto als bei der anderen Anmeldung: die andere Anmeldung wurde entfernt</string>
+    <string name="tv_login_logged_out">Abgemeldet</string>
 </resources>

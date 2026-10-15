@@ -1023,7 +1023,7 @@ class MainViewModel(
             } catch (e: Exception) {
                 if (e is IllegalStateException && e.message == "401") {
                     Toast.makeText(activity, R.string.token_expired, Toast.LENGTH_LONG).show()
-                    (activity as? MainActivity)?.logoutResultLauncher?.launch(Intent(activity, LoginActivity::class.java))
+                    (activity as? MainActivity)?.logoutResultLauncher?.launch(Intent(activity, LoginActivity::class.java).putExtra(LoginActivity.EXTRA_EXPIRED, true))
                 }
             }
         }

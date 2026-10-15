@@ -768,4 +768,25 @@
     <string name="tv_followed_videos_need_code">The videos of the followed channels need the login with the code: log in with twitch.tv/activate (Account)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">The list could not be loaded, try again</string>
+    <string name="tv_login_title">Twitch account</string>
+    <string name="tv_login_status_user">Logged in as %s</string>
+    <string name="tv_login_status_none">Not logged in</string>
+    <string name="tv_login_both_hint">Do both to get everything. Each one can be done or done again at any time, without losing the other.</string>
+    <string name="tv_login_code_title">Code on twitch.tv/activate</string>
+    <string name="tv_login_code_gives">Videos of the followed channels\nFollow and unfollow channels\nAccount features (blocked users, chat)</string>
+    <string name="tv_login_code_misses">1440p</string>
+    <string name="tv_login_page_title">Twitch login page</string>
+    <string name="tv_login_page_gives">1440p\nLive followed channels and chat</string>
+    <string name="tv_login_page_misses">Videos of the followed channels\nPart of the account features</string>
+    <string name="tv_login_gives">You get</string>
+    <string name="tv_login_misses">Missing</string>
+    <string name="tv_login_connected">Connected ✓</string>
+    <string name="tv_login_not_connected">Not connected</string>
+    <string name="tv_login_connect">Log in</string>
+    <string name="tv_login_redo">Log in again</string>
+    <string name="tv_login_done_button">Done</string>
+    <string name="tv_login_code_ok">Logged in with the code ✓</string>
+    <string name="tv_login_page_ok">Logged in with the Twitch page ✓</string>
+    <string name="tv_login_other_account">Another account than the one of the other login: the other login was removed</string>
+    <string name="tv_login_logged_out">Logged out</string>
 </resources>
