@@ -278,6 +278,10 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun setPlayerSurface(secondaryPlayer: Boolean) {
+                // the screen of the player is not there (made again, closing): nothing to move
+                if (view == null || !isAdded) {
+                    return
+                }
                 if (secondaryPlayer) {
                     binding.playerSurface.visibility = View.VISIBLE
                     playbackService?.player?.setVideoSurfaceView(null)

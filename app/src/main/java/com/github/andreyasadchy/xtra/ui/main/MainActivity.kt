@@ -152,6 +152,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = prefs()
+        showLastCrash()
         migrateSettings()
         forceDisplaySettings()
         if (resources.getBoolean(R.bool.isTv)) {
@@ -2131,6 +2132,25 @@ class MainActivity : AppCompatActivity() {
 
     fun showTvStreamActions(stream: Stream, last: List<com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra> = emptyList()) {
         com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.show(this, stream, last = last)
+    }
+
+    /** Debug builds: the error of the last crash, once, so that it can be photographed and sent. */
+    private fun showLastCrash() {
+        if (!BuildConfig.DEBUG) {
+            return
+        }
+        val file = java.io.File(filesDir, com.github.andreyasadchy.xtra.XtraApp.CRASH_FILE)
+        val text = try {
+            file.takeIf { it.exists() }?.readText()
+        } catch (e: Exception) {
+            null
+        } ?: return
+        file.delete()
+        getAlertDialogBuilder()
+            .setTitle("Crash")
+            .setMessage(text.take(4000))
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     /** The home, when it is the screen shown. */
