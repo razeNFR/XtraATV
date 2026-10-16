@@ -274,7 +274,7 @@ class ExoPlayerService : BasePlaybackService() {
                         val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || prefs().getBoolean(C.PLAYER_ADBLOCK, true)
                         if (useProxy || useVideoSwap || hideAds) {
                             val playlist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
-                            val ads = checkPlaylist(playlist)
+                            val ads = checkPlaylist(playlist, mainPlayer = true)
                             val oldValue = playingAds
                             playingAds = ads
                             if (ads) {
@@ -960,6 +960,8 @@ class ExoPlayerService : BasePlaybackService() {
         // the stream loads (again): its first seconds are not counted as stops for the quality of Auto
         playingSince = 0L
         if (!restart) {
+            // an ad at the start of the stream is looked for in its whole first playlist
+            checkFirstPlaylist = true
             TvLoadTimer.mark("Ouverture du lecteur")
         } else {
             // a restart (ad blocker, error): the player asks the access itself
@@ -1688,8 +1690,25 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
-    private fun checkPlaylist(playlist: HlsMediaPlaylist?): Boolean {
-        return playlist?.segments?.lastOrNull()?.let { segment ->
+    /**
+     * Ad in the playlist: its last segment, or any of its segments for the first playlist of a stream (an ad at the
+     * start, "pre-roll", is then caught before any of it is shown).
+     */
+    private fun checkPlaylist(playlist: HlsMediaPlaylist?, mainPlayer: Boolean = false): Boolean {
+        if (playlist != null && mainPlayer && checkFirstPlaylist) {
+            checkFirstPlaylist = false
+            if (playlist.segments.any { isAdSegment(playlist, it) }) {
+                return true
+            }
+        }
+        return playlist?.segments?.lastOrNull()?.let { isAdSegment(playlist, it) } == true
+    }
+
+    /** True for the first media playlist after a stream started to load. */
+    private var checkFirstPlaylist = false
+
+    private fun isAdSegment(playlist: HlsMediaPlaylist, segment: HlsMediaPlaylist.Segment): Boolean {
+        return segment.let { segment ->
             val title = segment.title.substringBefore('|')
             if (title == "Amazon" || title == "Adform" || title == "DCM") {
                 true
@@ -1713,8 +1732,15 @@ class ExoPlayerService : BasePlaybackService() {
         } == true
     }
 
+    /** Changes with each stream played in this service: what the ad blocker started for a previous stream stops. */
+    private var streamGeneration = 0
+    private var secondaryLoadJob: Job? = null
+
     private fun startSecondaryPlayer(proxy: Boolean) {
-        lifecycleScope.launch {
+        val generation = streamGeneration
+        val login = channelLogin
+        secondaryLoadJob?.cancel()
+        secondaryLoadJob = lifecycleScope.launch {
             val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
             val streamProxy = if (proxy) {
                 streamProxyList?.getOrNull(currentStreamProxy)
@@ -2125,14 +2151,26 @@ class ExoPlayerService : BasePlaybackService() {
                         }.build()
                     )
                 )
+                // another stream meanwhile (left / right): this backup player was for the previous one
+                if (generation != streamGeneration || channelLogin != login || !(videoSwapActive || this@ExoPlayerService.proxyMediaPlaylist)) {
+                    player.release()
+                    return@launch
+                }
                 player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
                 player.setPlaybackSpeed(1f)
                 player.prepare()
                 player.playWhenReady = true
+                val previous = secondaryPlayer
                 secondaryPlayer = player
                 serviceListener?.setPlayerSurface(true)
-            } else {
+                // the backup player it replaces (next player type) no longer plays behind it
+                if (previous != null && previous !== player) {
+                    previous.release()
+                }
+            } else if (generation == streamGeneration) {
                 stopSecondaryPlayer()
+            } else {
+                player.release()
             }
         }
     }
@@ -2350,8 +2388,20 @@ class ExoPlayerService : BasePlaybackService() {
         }
         started = false
         loaded = false
+        // everything the ad blocker started for this stream stops, nothing of it may come over the next one
+        streamGeneration++
+        secondaryLoadJob?.cancel()
+        secondaryLoadJob = null
         if (secondaryPlayer != null) {
             stopSecondaryPlayer()
+        }
+        secondaryPlayerTimerJob?.cancel()
+        secondaryPlayerTimerJob = null
+        videoSwapActive = false
+        this.proxyMediaPlaylist = false
+        if (hidden) {
+            hidden = false
+            player?.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
         }
         adDelayJob?.cancel()
         adDelayJob = null

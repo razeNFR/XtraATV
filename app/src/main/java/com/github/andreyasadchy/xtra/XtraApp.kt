@@ -31,6 +31,9 @@ class XtraApp : Application(), SingletonImageLoader.Factory {
 
     companion object {
         lateinit var INSTANCE: Application
+
+        /** Debug builds: the error of the last crash, shown when the app starts again. */
+        const val CRASH_FILE = "last_crash.txt"
     }
 
     lateinit var xtraModule: XtraModule
@@ -39,6 +42,19 @@ class XtraApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         INSTANCE = this
         xtraModule = XtraModule(this)
+        if (BuildConfig.DEBUG) {
+            // debug builds: the error of a crash is kept, the app shows it when it starts again (no logcat needed)
+            val previous = Thread.getDefaultUncaughtExceptionHandler()
+            Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+                try {
+                    java.io.File(filesDir, CRASH_FILE).writeText(
+                        "${java.util.Date()}\n${BuildConfig.VERSION_NAME}\n\n${android.util.Log.getStackTraceString(error)}"
+                    )
+                } catch (e: Exception) {
+                }
+                previous?.uncaughtException(thread, error)
+            }
+        }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             val conscrypt = Conscrypt.newProvider()
             Security.insertProviderAt(conscrypt, 1)
