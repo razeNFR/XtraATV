@@ -63,6 +63,10 @@ class ExoPlayerFragment : PlayerFragment() {
         }
         keptAcrossStop = false
         val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                hideLoadingPicture()
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED && playbackService?.type == BasePlaybackService.STREAM) {
                     onTvStreamEnded()
@@ -304,6 +308,10 @@ class ExoPlayerFragment : PlayerFragment() {
                     (playbackService?.secondaryPlayer ?: playbackService?.player)?.setVideoSurfaceView(binding.playerSurface)
                     (playbackService?.secondaryPlayer ?: playbackService?.player)?.addListener(listener)
                     playerListener = listener
+                    // the video already plays (it started before this screen was ready): no picture over it
+                    if ((playbackService?.secondaryPlayer ?: playbackService?.player)?.playbackState == Player.STATE_READY) {
+                        hideLoadingPicture()
+                    }
                     val endTime = playbackService?.setSleepTimer(-1)
                     if (endTime != null && endTime > 0L) {
                         val duration = endTime - System.currentTimeMillis()
@@ -646,6 +654,24 @@ class ExoPlayerFragment : PlayerFragment() {
         serviceConnection?.let { requireContext().unbindService(it) }
         serviceConnection = null
         playbackService = null
+    }
+
+    /**
+     * TV: the next stream plays in the same service (left / right, another stream from the player), this screen lets it
+     * go without stopping it. Null when it can't be kept (proxy, sound only...): the player is closed as before.
+     */
+    fun handOverForStreamSwitch(): ExoPlayerService? {
+        val service = playbackService ?: return null
+        if (!isTv || !isMaximizedPlayer() || !service.prepareStreamSwitch()) {
+            return null
+        }
+        playerListener?.let { (service.secondaryPlayer ?: service.player)?.removeListener(it) }
+        playerListener = null
+        service.serviceListener = null
+        serviceConnection?.let { requireContext().unbindService(it) }
+        serviceConnection = null
+        playbackService = null
+        return service
     }
 
     override fun close(deleteStates: Boolean) {

@@ -782,4 +782,6 @@
     <string name="tv_good_evening">İyi akşamlar</string>
     <string name="tv_good_evening_name">İyi akşamlar, %s</string>
     <string name="tv_multistream_stream_ended">%s yayını bitirdi</string>
+    <string name="tv_switch_pip_hint">Küçük pencerede izlemek için bir yayında OK\'a basılı tutun</string>
+    <string name="tv_pip_already_shown">Bu yayın zaten ekranda</string>
 </resources>

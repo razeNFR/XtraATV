@@ -46,6 +46,17 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private val homeRefreshing = mutableStateOf(false)
     private val resumeItems = mutableStateOf<List<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>>(emptyList())
     private val statsState = mutableStateOf<TvHomeStats?>(null)
+    private val homeFocus = TvHomeFocus()
+
+    /** Coming from the side menu: the first stream of the first row. */
+    fun focusFirstCard() {
+        homeFocus.focusFirst()
+    }
+
+    /** The player closed: the card of the stream watched, else the first stream. */
+    fun focusLastCard() {
+        homeFocus.focusLast()
+    }
     /** Picture of the focused stream behind the rows. */
 
     init {
@@ -153,6 +164,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         languageRows = languageRows.map { (language, streams) ->
                             TvHomeRow(getString(R.string.tv_popular_in, languageName(language)), streams, 0, R.drawable.tv_ic_globe)
                         },
+                        focus = homeFocus,
                         account = TvHomeAccount(
                             name = context.tokenPrefs().getString(C.USERNAME, null)?.takeIf { it.isNotBlank() },
                             image = accountImage,

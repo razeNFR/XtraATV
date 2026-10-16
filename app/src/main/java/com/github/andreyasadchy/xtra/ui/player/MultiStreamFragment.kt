@@ -44,6 +44,17 @@ class MultiStreamFragment : Fragment() {
         /** Container of the chat under this stream (2 streams). */
         var chatContainer: FrameLayout? = null
         var adListener: Player.Listener? = null
+        /** Steps under the quality of its place, after real stops of this stream (0: the full quality). */
+        var qualityStepsDown = 0
+        var playingSince = 0L
+        val stops = ArrayDeque<Long>()
+        var raiseJob: kotlinx.coroutines.Job? = null
+        /** Picture of the stream under its video while it loads, the video shows once its first picture comes. */
+        var picture: android.widget.ImageView? = null
+        var texture: TextureView? = null
+        /** Playing a backup player type for the time of an ad, back to the normal one once it is over. */
+        var onBackup = false
+        var backJob: kotlinx.coroutines.Job? = null
     }
 
     private val tiles = mutableListOf<Tile>()
@@ -123,6 +134,11 @@ class MultiStreamFragment : Fragment() {
             foreground = GradientDrawable().apply {
                 setStroke((4 * density).toInt(), Color.TRANSPARENT)
             }
+            // the picture of the stream under the video while it loads, never a black cell
+            addView(android.widget.ImageView(context).apply {
+                id = R.id.tvLoadingPicture
+                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(texture, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
                 val margin = (12 * density).toInt()
@@ -134,6 +150,16 @@ class MultiStreamFragment : Fragment() {
             setVideoTextureView(texture)
         }
         val tile = Tile(stream, tileView, player, label)
+        tile.picture = tileView.findViewById(R.id.tvLoadingPicture)
+        tile.texture = texture
+        player.addListener(object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                // the video is there: it shows over the picture
+                if (texture.alpha < 1f) {
+                    texture.animate().alpha(1f).setDuration(250L).start()
+                }
+            }
+        })
         tiles.add(tile)
         root.addView(tileView)
         updateVideoSizes()
@@ -184,12 +210,58 @@ class MultiStreamFragment : Fragment() {
         return tile
     }
 
-    /** Lower quality when more streams share the screen. */
+    /**
+     * Quality of each stream by its size on the screen, the highest one up to it (the choice of the player would stay
+     * low with the low latency of Twitch): 2 streams and the big one of the focus mode at full quality, the small ones
+     * 480p, grid of 3 or 4 720p. A stream that stops for real goes one step down, and back up later.
+     */
     private fun updateVideoSizes() {
-        tiles.forEach {
-            it.player.trackSelectionParameters = it.player.trackSelectionParameters.buildUpon().apply {
-                if (tiles.size > 2) setMaxVideoSize(854, 480) else setMaxVideoSize(1280, 720)
-            }.build()
+        val focus = isFocusLayout()
+        val big = if (focus) bigTile() else null
+        tiles.forEach { tile ->
+            val steps = listOf(Int.MAX_VALUE, 1080, 720, 480, 360)
+            val base = when {
+                focus && tile === big -> Int.MAX_VALUE
+                focus -> 480
+                tiles.size <= 2 -> Int.MAX_VALUE
+                else -> 720
+            }
+            val height = steps.filter { it <= base }.getOrElse(tile.qualityStepsDown) { 360 }
+            tile.player.trackSelectionParameters = tile.player.trackSelectionParameters.buildUpon()
+                .setMaxVideoSize(Int.MAX_VALUE, height)
+                .setForceHighestSupportedBitrate(true)
+                .build()
+        }
+    }
+
+    /** A stream that stops twice in a minute (after 10 s of play) goes one quality down, up again after 2 min 30. */
+    private fun onTileState(tile: Tile, state: Int) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (state == Player.STATE_READY) {
+            if (tile.playingSince == 0L) {
+                tile.playingSince = now
+            }
+        } else if (state == Player.STATE_BUFFERING && tile.playingSince != 0L && now - tile.playingSince >= 10_000L) {
+            tile.stops.addLast(now)
+            while (tile.stops.isNotEmpty() && now - tile.stops.first() > 60_000L) {
+                tile.stops.removeFirst()
+            }
+            if (tile.stops.size >= 2 && tile.qualityStepsDown < 3) {
+                tile.stops.clear()
+                tile.qualityStepsDown++
+                updateVideoSizes()
+                tile.raiseJob?.cancel()
+                tile.raiseJob = viewLifecycleOwner.lifecycleScope.launch {
+                    while (tile.qualityStepsDown > 0) {
+                        kotlinx.coroutines.delay(150_000L)
+                        if (view == null || tile !in tiles) {
+                            return@launch
+                        }
+                        tile.qualityStepsDown--
+                        updateVideoSizes()
+                    }
+                }
+            }
         }
     }
 
@@ -360,6 +432,8 @@ class MultiStreamFragment : Fragment() {
     }
 
     private fun layoutTiles() {
+        // the quality follows the place of each stream (big or small in focus mode)
+        updateVideoSizes()
         val width = root.width
         val height = root.height
         if (width == 0 || height == 0) {
@@ -527,6 +601,22 @@ class MultiStreamFragment : Fragment() {
     private fun loadStream(tile: Tile) {
         val login = tile.stream.channelLogin ?: return
         val player = tile.player
+        // the newest picture of the stream until its video comes
+        tile.texture?.animate()?.cancel()
+        tile.texture?.alpha = 0f
+        tile.picture?.let { picture ->
+            picture.setImageDrawable(null)
+            val stream = tile.stream
+            com.github.andreyasadchy.xtra.ui.tv.TvLoadingPicture.show(
+                picture, login,
+                stream.thumbnail?.takeUnless { com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream) || stream.thumbnailURL.isNullOrBlank() },
+                stream.channelImage, viewLifecycleOwner.lifecycleScope
+            ) { view != null && tile in tiles && tile.stream.channelLogin == login && (tile.texture?.alpha ?: 1f) < 1f }
+        }
+        tile.playingSince = 0L
+        tile.qualityStepsDown = 0
+        tile.stops.clear()
+        tile.raiseJob?.cancel()
         playStream(login, player, tile)
         // the stream ended (no more playlist, or the end of it): it leaves the multi-stream after a few seconds
         player.addListener(object : Player.Listener {
@@ -537,6 +627,9 @@ class MultiStreamFragment : Fragment() {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (view != null && tile in tiles) {
+                    onTileState(tile, playbackState)
+                }
                 if (playbackState == Player.STATE_ENDED) {
                     onStreamEnded(tile, login)
                 }
@@ -549,10 +642,10 @@ class MultiStreamFragment : Fragment() {
                     val playlist = (player.currentManifest as? androidx.media3.exoplayer.hls.HlsManifest)?.mediaPlaylist ?: return
                     val ads = playlist.tags.any { it.contains("stitched-ad", true) || it.contains("X-TV-TWITCH-AD", true) }
                     val now = System.currentTimeMillis()
-                    if (ads && now - lastSwitch > 20_000L && view != null) {
-                        // an ad started: the stream of an other player type
+                    if (ads && now - lastSwitch > 20_000L && view != null && tile.stream.channelLogin == login) {
+                        // an ad started: a backup player type (autoplay first) until the ad is over
                         lastSwitch = now
-                        playStream(login, player, tile)
+                        playStream(login, player, tile, backup = true)
                     }
                 }
             }
@@ -589,14 +682,61 @@ class MultiStreamFragment : Fragment() {
     }
 
     /** Ad blocker on every stream, like VAFT: the player type without an ad playing. */
-    private fun playStream(login: String, player: ExoPlayer, tile: Tile) {
+    /**
+     * Ad blocker on every stream, like the video swap of the player: the normal player type (all the qualities), a
+     * backup type (autoplay first) only while an ad plays, then back to the normal one once its playlist has no ad.
+     */
+    private fun playStream(login: String, player: ExoPlayer, tile: Tile, backup: Boolean = false) {
+        // a new playlist (start, ad blocker): its first seconds do not count as stops
+        tile.playingSince = 0L
+        tile.backJob?.cancel()
         viewLifecycleOwner.lifecycleScope.launch {
-            val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(requireContext(), login)
+            val context = context ?: return@launch
+            val app = context.applicationContext as com.github.andreyasadchy.xtra.XtraApp
+            val normal = if (!backup) {
+                try {
+                    ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, login)
+                } catch (e: Exception) {
+                    null
+                }
+            } else null
+            val url = normal ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getBackupPlaylistUrl(app, login)
             if (url != null && view != null && tile.stream.channelLogin == login) {
+                tile.onBackup = normal == null
                 player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
                 player.repeatMode = Player.REPEAT_MODE_OFF
                 player.prepare()
                 player.playWhenReady = true
+                if (tile.onBackup) {
+                    waitForEndOfAd(login, player, tile)
+                }
+            }
+        }
+    }
+
+    /** On a backup player type: every 30 s, back to the normal one as soon as its playlist has no ad. */
+    private fun waitForEndOfAd(login: String, player: ExoPlayer, tile: Tile) {
+        tile.backJob?.cancel()
+        tile.backJob = viewLifecycleOwner.lifecycleScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(30_000L)
+                if (view == null || tile !in tiles || tile.stream.channelLogin != login || !tile.onBackup) {
+                    return@launch
+                }
+                val app = (context?.applicationContext as? com.github.andreyasadchy.xtra.XtraApp) ?: return@launch
+                val normal = try {
+                    ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, login)
+                } catch (e: Exception) {
+                    null
+                } ?: continue
+                if (!com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.playlistHasAds(app, normal) && view != null && tile in tiles && tile.stream.channelLogin == login) {
+                    tile.onBackup = false
+                    tile.playingSince = 0L
+                    player.setMediaItem(MediaItem.Builder().setUri(normal).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+                    player.prepare()
+                    player.playWhenReady = true
+                    return@launch
+                }
             }
         }
     }

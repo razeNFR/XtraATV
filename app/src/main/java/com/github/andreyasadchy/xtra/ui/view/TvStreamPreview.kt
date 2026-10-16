@@ -46,6 +46,8 @@ class TvStreamPreview(
     private var pendingCard: View? = null
     private var pendingLogin: String? = null
     private val startAction = Runnable { start() }
+    /** Stream whose preview plays: its last picture is kept when it stops. */
+    private var playingLogin: String? = null
 
     fun schedule(card: View, channelLogin: String?) {
         if (card == this.card || card == pendingCard) {
@@ -70,6 +72,7 @@ class TvStreamPreview(
         val thumbnail = card.findViewById<View>(R.id.thumbnail)?.takeIf { it.isShown && it.width > 0 } ?: return
         val owner = recyclerView.findViewTreeLifecycleOwner() ?: return
         this.card = card
+        playingLogin = login
         loadJob = owner.lifecycleScope.launch {
             val context = recyclerView.context
             val url = TvPreviewSource.getPlaylistUrl(context, login)
@@ -129,6 +132,9 @@ class TvStreamPreview(
         pendingLogin = null
         loadJob?.cancel()
         loadJob = null
+        // the last picture of the preview, shown while the stream opens
+        textureView?.takeIf { it.alpha > 0.5f }?.let { com.github.andreyasadchy.xtra.ui.tv.TvPreviewFrames.capture(playingLogin, it) }
+        playingLogin = null
         player?.stop()
         player?.clearVideoSurface()
         textureView?.let { (it.parent as? FrameLayout)?.removeView(it) }

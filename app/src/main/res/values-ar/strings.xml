@@ -781,4 +781,6 @@
     <string name="tv_good_evening">مساء الخير</string>
     <string name="tv_good_evening_name">مساء الخير، %s</string>
     <string name="tv_multistream_stream_ended">أنهى %s البث</string>
+    <string name="tv_switch_pip_hint">اضغط مطولاً على OK فوق بث لمشاهدته في نافذة صغيرة</string>
+    <string name="tv_pip_already_shown">هذا البث معروض بالفعل على الشاشة</string>
 </resources>

@@ -71,6 +71,24 @@ class PlayerViewModel(
     val stream = MutableStateFlow<Stream?>(null)
     private var streamUpdateJob: Job? = null
     val unlistedVideoQualities = MutableStateFlow<String?>(null)
+
+    /**
+     * The VOD being recorded of a live (its last archive, started with the stream): its id gives the chat of the
+     * broadcast when the live is watched back in time. Null when the channel keeps no VOD of it.
+     */
+    suspend fun findArchiveVideoId(networkLibrary: String?, headers: Map<String, String>, channelId: String?, channelLogin: String?, streamCreatedAt: String?): String? {
+        return try {
+            val started = streamCreatedAt?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: return null
+            val node = graphQLRepository.loadQueryUserVideos(
+                networkLibrary, headers, channelId, channelLogin.takeIf { channelId.isNullOrBlank() },
+                com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME, listOf(com.github.andreyasadchy.xtra.graphql.type.BroadcastType.ARCHIVE), 1, null
+            ).data?.user?.videos?.edges?.firstOrNull()?.node ?: return null
+            val created = node.createdAt?.toString()?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: return null
+            node.id.takeIf { kotlin.math.abs(created - started) < 15 * 60_000L }
+        } catch (e: Exception) {
+            null
+        }
+    }
     val isBookmarked = MutableStateFlow<Boolean?>(null)
     val gamesList = MutableStateFlow<List<Game>?>(null)
     private val _isFollowing = MutableStateFlow<Boolean?>(null)

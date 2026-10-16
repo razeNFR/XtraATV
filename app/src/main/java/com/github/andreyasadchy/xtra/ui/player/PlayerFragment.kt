@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.player
 
 import coil3.imageLoader
+import coil3.asDrawable
 import coil3.request.target
 import coil3.request.transformations
 import android.animation.Animator
@@ -94,6 +95,7 @@ import com.google.android.material.timepicker.TimeFormat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
@@ -206,6 +208,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         if (isTv) {
+            showLoadingPicture()
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     while (true) {
@@ -653,7 +656,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     fastForward()
                 }
                 if (isTv) {
-                    progressBar.setOnKeyListener { _, keyCode, event -> onTimeBarKey(keyCode, event) }
+                    progressBar.setOnKeyListener { _, keyCode, event ->
+                        // down from the timeline: back to the button the focus was on, not the nearest one
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN && _binding != null) {
+                            val last = findLastControl()
+                            if (last != null && last.isShown && last.isFocusable && last.requestFocus()) {
+                                return@setOnKeyListener true
+                            }
+                        }
+                        onTimeBarKey(keyCode, event)
+                    }
                     // discreet timeline: the scrubber and the accent color only show while it has the focus
                     val playedColor = MaterialColors.getColor(progressBar, androidx.appcompat.R.attr.colorPrimary)
                     progressBar.hideScrubber(false)
@@ -950,19 +962,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                             // go back in the live: open the VOD of the stream being broadcast at the chosen position
                                             pendingDvr = false
                                             val offset = pendingDvrPosition.coerceAtLeast(0L)
-                                            (requireActivity() as MainActivity).startVideo(
-                                                Video(
-                                                    channelId = playbackService?.channelId,
-                                                    channelLogin = playbackService?.channelLogin,
-                                                    channelName = playbackService?.channelName,
-                                                    gameId = playbackService?.gameId,
-                                                    gameSlug = playbackService?.gameSlug,
-                                                    gameName = playbackService?.gameName,
-                                                    title = playbackService?.title,
-                                                ),
-                                                offset,
-                                                qualities = qualities
+                                            val video = Video(
+                                                channelId = playbackService?.channelId,
+                                                channelLogin = playbackService?.channelLogin,
+                                                channelName = playbackService?.channelName,
+                                                gameId = playbackService?.gameId,
+                                                gameSlug = playbackService?.gameSlug,
+                                                gameName = playbackService?.gameName,
+                                                title = playbackService?.title,
+                                                createdAt = playbackService?.createdAt,
                                             )
+                                            // the VOD being recorded gives the chat of the broadcast (its replay), found
+                                            // while the video opens; none when the channel keeps no VOD
+                                            val activity = requireActivity() as MainActivity
+                                            activity.dvrChatVideoId = withTimeoutOrNull(2500L) {
+                                                viewModel.findArchiveVideoId(
+                                                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                                                    TwitchApiHelper.getGQLHeaders(requireContext()),
+                                                    playbackService?.channelId,
+                                                    playbackService?.channelLogin,
+                                                    playbackService?.createdAt,
+                                                )
+                                            }
+                                            activity.startVideo(video, offset, qualities = qualities)
                                         } else {
                                             (requireActivity() as MainActivity).startVideo(Video(), 0, qualities = qualities)
                                         }
@@ -1215,7 +1237,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     BasePlaybackService.VIDEO -> ChatFragment.newInstance(
                         playbackService?.channelId,
                         playbackService?.channelLogin,
-                        playbackService?.videoId,
+                        // a live watched back in time: the chat of the VOD being recorded
+                        playbackService?.videoId ?: (activity as? MainActivity)?.takeIf { it.dvrStream != null }?.dvrChatVideoId,
                         playbackService?.createdAt,
                         0,
                     )
@@ -2812,6 +2835,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val controls = _binding?.playerControls ?: return@OnGlobalFocusChangeListener
         if (newFocus != null && newFocus != controls.progressBar && (newFocus.parent == controls.bottomLeftLayout || newFocus.parent == controls.bottomRightLayout || newFocus == controls.playPause)) {
             lastHudControl = java.lang.ref.WeakReference(newFocus)
+            // kept by the app (id, else description), not by this screen: the next player finds it again
+            lastControlId = newFocus.id
+            lastControlLabel = newFocus.contentDescription?.toString()
         }
     }
 
@@ -2826,6 +2852,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private fun focusPrimaryControl() {
         with(binding.playerControls) {
+            // the button pressed last, kept from one stream to the next (left / right, other streams)
+            findLastControl()?.let { last ->
+                if (last.isShown && last.isFocusable && last.requestFocus()) {
+                    return
+                }
+            }
             lastHudControl?.get()?.let { last ->
                 if (last.isShown && last.isFocusable && last.requestFocus()) {
                     return
@@ -2841,6 +2873,45 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 root.requestFocus()
             }
         }
+    }
+
+    private var loadingPicture: android.widget.ImageView? = null
+
+    private fun showLoadingPicture() {
+        val picture = pendingLoadingPicture ?: return
+        pendingLoadingPicture = null
+        val context = requireContext()
+        val image = android.widget.ImageView(context).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(android.graphics.Color.BLACK)
+        }
+        // over the video, under the loading circle and the controls
+        val index = binding.playerLayout.indexOfChild(binding.aspectRatioFrameLayout) + 1
+        binding.playerLayout.addView(image, index, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        loadingPicture = image
+        com.github.andreyasadchy.xtra.ui.tv.TvLoadingPicture.show(image, picture.channelLogin, picture.thumbnail, picture.fallback, viewLifecycleOwner.lifecycleScope) {
+            loadingPicture === image && view != null
+        }
+        // never kept for long: an error or the sound only mode has no first picture
+        image.postDelayed({ hideLoadingPicture() }, 20_000L)
+    }
+
+    /** The first picture of the video is on screen: the picture of the stream fades away. */
+    protected fun hideLoadingPicture() {
+        val image = loadingPicture ?: return
+        loadingPicture = null
+        image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
+    }
+
+    /** The button of the controls focused last, in this player or a previous one; null when this one has none like it. */
+    private fun findLastControl(): View? {
+        val controls = _binding?.playerControls ?: return null
+        if (lastControlId != View.NO_ID) {
+            controls.root.findViewById<View>(lastControlId)?.let { return it }
+        }
+        val label = lastControlLabel ?: return null
+        return listOf(controls.bottomLeftLayout, controls.bottomRightLayout).flatMap { layout -> (0 until layout.childCount).map { layout.getChildAt(it) } }
+            .firstOrNull { it.contentDescription?.toString() == label }
     }
 
     /** Called by the activity for every key event, keeps the controls visible while they are used with a D-pad. */
@@ -3264,7 +3335,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
      * back, the player closes and the screen it was opened from is shown again.
      */
     protected fun onTvStreamEnded() {
-        if (!isTv || streamEndJob?.isActive == true || view == null) {
+        if (view == null || !isAdded || !isTv || streamEndJob?.isActive == true) {
             return
         }
         val activity = activity as? MainActivity ?: return
@@ -3766,5 +3837,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val DVR_CAUGHT_UP_MS = 10_000L
         private const val LIVE_FIRST_STEP_MS = 60_000L
         const val KEY_OFFLINE = "offline"
+
+        /**
+         * TV: picture of the stream that is opening (the picture of its card, then the latest one of Twitch), shown in place
+         * of a black screen until the first picture of the video.
+         */
+        var pendingLoadingPicture: LoadingPicture? = null
+
+        class LoadingPicture(val channelLogin: String?, val thumbnail: String?, val fallback: String?)
+
+        /** Button of the controls focused last (its id, else its description), kept from one player to the next. */
+        private var lastControlId = View.NO_ID
+        private var lastControlLabel: String? = null
     }
 }

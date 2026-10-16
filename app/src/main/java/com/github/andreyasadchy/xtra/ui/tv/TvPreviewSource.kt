@@ -114,6 +114,54 @@ object TvPreviewSource {
         return fallback
     }
 
+    /**
+     * Multi-stream: playlist of the backup player types while an ad plays on the normal one, autoplay first like the
+     * video swap of the player (their qualities are limited, it is only for the time of the ad).
+     */
+    suspend fun getBackupPlaylistUrl(context: Context, channelLogin: String): String? {
+        val xtraModule = (context.applicationContext as XtraApp).xtraModule
+        val prefs = context.prefs()
+        var fallback: String? = null
+        for ((platform, playerType) in listOf("android" to "autoplay", "web" to "embed")) {
+            val url = try {
+                xtraModule.playerRepository.loadStreamPlaylistUrl(
+                    context = context,
+                    networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    gqlHeaders = if (platform == "web") {
+                        TwitchApiHelper.getGQLWebHeaders(context, prefs.getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true))
+                    } else {
+                        TwitchApiHelper.getGQLHeaders(context, prefs.getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true))
+                    },
+                    channelLogin = channelLogin,
+                    platform = platform,
+                    playerType = playerType,
+                    supportedCodecs = prefs.getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
+                    proxyPlaybackAccessToken = false,
+                    proxyHost = null,
+                    proxyPort = null,
+                    proxyUser = null,
+                    proxyPassword = null,
+                    proxyTimeout = null,
+                    enableIntegrity = false,
+                )
+            } catch (e: Exception) {
+                null
+            } ?: continue
+            if (fallback == null) {
+                fallback = url
+            }
+            if (!hasAds(xtraModule.okHttpClient.value, url)) {
+                return url
+            }
+        }
+        return fallback
+    }
+
+    /** True when the stream of this playlist plays an ad now. */
+    suspend fun playlistHasAds(context: Context, multivariantUrl: String): Boolean {
+        return hasAds((context.applicationContext as XtraApp).xtraModule.okHttpClient.value, multivariantUrl)
+    }
+
     /** Looks at the media playlist of the lowest quality for the marks of an ad (VAFT does the same). */
     private suspend fun hasAds(client: okhttp3.OkHttpClient, multivariantUrl: String): Boolean = withContext(Dispatchers.IO) {
         try {

@@ -1164,6 +1164,11 @@ class MainActivity : AppCompatActivity() {
             }
             when {
                 target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> TvUi.focusFirstItem(target)
+                target != null && target.id == R.id.tvHome -> {
+                    // the home: the first stream of the first row, never "refresh"
+                    target.requestFocus()
+                    currentTvHome()?.focusFirstCard()
+                }
                 target != null -> target.requestFocus()
                 tries < 15 -> focusContentAfterMenu(search, tries + 1)
             }
@@ -1543,6 +1548,9 @@ class MainActivity : AppCompatActivity() {
 
     /** Live stream whose in-progress VOD is being watched, to go back to the live from the VOD. */
     var dvrStream: Stream? = null
+
+    /** Id of the VOD being recorded of [dvrStream], for the chat of the broadcast. */
+    var dvrChatVideoId: String? = null
     private var currentStreamLogin: String? = null
 
     private var switchJob: kotlinx.coroutines.Job? = null
@@ -1650,14 +1658,34 @@ class MainActivity : AppCompatActivity() {
 
     /** Loads the list again in the background when the last load is older than 30 seconds: it is not waited for. */
     private fun refreshQueueIfOld() {
-        if (streamQueueSource == null || System.currentTimeMillis() - queueRefreshedAt < QUEUE_FRESH_MS || queueRefreshJob?.isActive == true) {
+        if (System.currentTimeMillis() - queueRefreshedAt < QUEUE_FRESH_MS || queueRefreshJob?.isActive == true) {
             return
         }
         queueRefreshJob = lifecycleScope.launch {
-            if (refreshQueue()) {
-                TvStreamSwitcher.update(streamQueue)
+            if (streamQueueSource != null) {
+                if (refreshQueue()) {
+                    TvStreamSwitcher.update(streamQueue)
+                }
+            } else if (streamQueue.size > 1) {
+                // a list without a source: the streamers that stopped leave it
+                val before = streamQueue
+                removeOfflineFromQueue()
+                queueRefreshedAt = System.currentTimeMillis()
+                if (streamQueue !== before) {
+                    TvStreamSwitcher.update(streamQueue)
+                }
             }
         }
+    }
+
+    /** Only the streams of [list] that are still live (the ones whose channel is unknown are kept). */
+    suspend fun liveStreamsOnly(list: List<Stream>): List<Stream> {
+        val ids = list.mapNotNull { it.channelId }
+        if (ids.isEmpty()) {
+            return list
+        }
+        val live = loadLiveStreams(ids) ?: return list
+        return list.filter { stream -> stream.channelId == null || live.containsKey(stream.channelId) }
     }
 
     private var queueExtendJob: kotlinx.coroutines.Job? = null
@@ -1744,7 +1772,7 @@ class MainActivity : AppCompatActivity() {
         closeTvPip()
         (playerFragment as? PlayerFragment)?.let {
             it.close()
-            closePlayer()
+            closePlayer(focusHome = false)
         }
         setMainContentFocusable(false)
         supportFragmentManager.beginTransaction()
@@ -1774,7 +1802,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null) {
+        // the time of the start of the stream counts from here (debug builds), and its access of Twitch is asked
+        // at once, while the player opens
+        com.github.andreyasadchy.xtra.ui.player.TvLoadTimer.start()
+        com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.start(this, stream.channelLogin)
         com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
+        if (isTv && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
+            // the picture of the stream instead of a black screen while it loads: the newest one there is
+            val fresh = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream)
+            com.github.andreyasadchy.xtra.ui.player.PlayerFragment.pendingLoadingPicture = com.github.andreyasadchy.xtra.ui.player.PlayerFragment.Companion.LoadingPicture(
+                stream.channelLogin,
+                stream.thumbnail?.takeUnless { fresh || stream.thumbnailURL.isNullOrBlank() },
+                stream.channelImage,
+            )
+        }
         if (queue != null) {
             streamQueue = queue
             streamQueueSource = queueSource
@@ -1784,7 +1825,15 @@ class MainActivity : AppCompatActivity() {
         }
         currentStreamLogin = stream.channelLogin
         dvrStream = null
-        (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
+        dvrChatVideoId = null
+        // TV, no player open: the playback service starts as soon as the stream is saved, while the screen of the
+        // player is made (it binds to it once ready, the service starts only once)
+        val startServiceEarly = isTv && playerFragment == null && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER
+        // TV, a stream already playing full screen: the next one plays in the same service, only the screen is made again
+        val keptService = if (isTv) (playerFragment as? ExoPlayerFragment)?.handOverForStreamSwitch() else null
+        if (keptService == null) {
+            (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
+        }
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.STREAM,
             streamId = stream.id,
@@ -1799,12 +1848,52 @@ class MainActivity : AppCompatActivity() {
             thumbnail = stream.thumbnail,
             createdAt = stream.createdAt,
             viewerCount = stream.viewerCount,
-        ))
+        )) {
+            if (keptService != null) {
+                keptService.startSwitchedStream()
+            } else if (startServiceEarly && playerFragment != null && currentStreamLogin == stream.channelLogin) {
+                startService(Intent(this, com.github.andreyasadchy.xtra.ui.player.ExoPlayerService::class.java).apply {
+                    action = com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.INTENT_START
+                })
+            }
+        }
         val fragment = when (prefs.getString(C.PLAYER, C.EXOPLAYER)) {
             C.MEDIA_PLAYER -> MediaPlayerFragment()
             else -> ExoPlayerFragment()
         }
         startPlayer(fragment)
+        prepareNeighborStreams()
+    }
+
+    private var neighborJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * TV: while a stream plays, the access of Twitch to the streams of left / right is asked in the background (a few
+     * seconds after the start, again every 90 s), switching to them does not wait for it.
+     */
+    private fun prepareNeighborStreams() {
+        neighborJob?.cancel()
+        if (!isTv) {
+            return
+        }
+        val login = currentStreamLogin ?: return
+        neighborJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(4000L)
+            while (currentStreamLogin == login && playerFragment != null) {
+                val queue = streamQueue
+                val index = queue.indexOfFirst { it.channelLogin == login }
+                if (index >= 0 && queue.size > 1) {
+                    com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.prepareNeighbors(
+                        this@MainActivity,
+                        listOf(
+                            queue[Math.floorMod(index - 1, queue.size)].channelLogin,
+                            queue[Math.floorMod(index + 1, queue.size)].channelLogin,
+                        ).filter { it != login }
+                    )
+                }
+                kotlinx.coroutines.delay(90_000L)
+            }
+        }
     }
 
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false, qualities: String? = null) {
@@ -2044,9 +2133,22 @@ class MainActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.show(this, stream, last = last)
     }
 
-    fun closePlayer() {
+    /** The home, when it is the screen shown. */
+    private fun currentTvHome(): com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment? {
+        return supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments
+            ?.firstOrNull { it.isVisible } as? com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment
+    }
+
+    fun closePlayer(focusHome: Boolean = true) {
+        neighborJob?.cancel()
+        com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.clear()
         closeTvPip()
         setMainContentFocusable(true)
+        // back on the home: the card of the stream that was watched, else the first stream (not when a multi-stream
+        // takes the place of the player: its streams keep the focus)
+        if (focusHome) {
+            currentTvHome()?.focusLastCard()
+        }
         supportFragmentManager.beginTransaction()
             .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
             .remove(supportFragmentManager.findFragmentById(R.id.playerContainer)!!)

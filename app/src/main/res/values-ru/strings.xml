@@ -781,4 +781,6 @@
     <string name="tv_good_evening">Добрый вечер</string>
     <string name="tv_good_evening_name">Добрый вечер, %s</string>
     <string name="tv_multistream_stream_ended">%s завершил трансляцию</string>
+    <string name="tv_switch_pip_hint">Удерживайте OK на трансляции, чтобы смотреть её в маленьком окне</string>
+    <string name="tv_pip_already_shown">Эта трансляция уже на экране</string>
 </resources>

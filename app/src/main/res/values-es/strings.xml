@@ -786,4 +786,6 @@
     <string name="tv_good_evening">Buenas noches</string>
     <string name="tv_good_evening_name">Buenas noches, %s</string>
     <string name="tv_multistream_stream_ended">%s terminó su directo</string>
+    <string name="tv_switch_pip_hint">Mantén OK en un directo para verlo en una ventana pequeña</string>
+    <string name="tv_pip_already_shown">Este directo ya está en pantalla</string>
 </resources>

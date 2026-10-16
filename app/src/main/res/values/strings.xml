@@ -800,4 +800,6 @@
     <string name="tv_good_evening">Good evening</string>
     <string name="tv_good_evening_name">Good evening, %s</string>
     <string name="tv_multistream_stream_ended">%s ended</string>
+    <string name="tv_switch_pip_hint">Hold OK on a stream to watch it in a small window</string>
+    <string name="tv_pip_already_shown">This stream is already on the screen</string>
 </resources>

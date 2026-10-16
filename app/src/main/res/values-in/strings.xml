@@ -782,4 +782,6 @@
     <string name="tv_good_evening">Selamat malam</string>
     <string name="tv_good_evening_name">Selamat malam, %s</string>
     <string name="tv_multistream_stream_ended">%s telah mengakhiri siaran</string>
+    <string name="tv_switch_pip_hint">Tahan OK pada siaran untuk menontonnya di jendela kecil</string>
+    <string name="tv_pip_already_shown">Siaran ini sudah ada di layar</string>
 </resources>
