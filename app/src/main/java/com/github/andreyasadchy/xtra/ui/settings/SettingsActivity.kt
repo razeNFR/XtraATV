@@ -1448,21 +1448,22 @@ class SettingsActivity : AppCompatActivity() {
     class XtraTvSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.xtratv_preferences, rootKey)
-            // full screen: the sound can only be kept when the mini player or the sound only mode keeps it
-            val fullscreenKeep = findPreference<SwitchPreferenceCompat>(C.TV_FULLSCREEN_KEEP_ON_HOME)
-            val miniKeep = findPreference<SwitchPreferenceCompat>(C.TV_MINI_PLAYER_KEEP_ON_HOME)
-            val audioKeep = findPreference<SwitchPreferenceCompat>(C.TV_AUDIO_ONLY_KEEP_ON_HOME)
-            fullscreenKeep?.isEnabled = miniKeep?.isChecked != false || audioKeep?.isChecked != false
-            disabledHints[C.TV_FULLSCREEN_KEEP_ON_HOME] = {
-                getString(R.string.setting_disabled_either, miniKeep?.title ?: "", audioKeep?.title ?: "")
-            }
-            miniKeep?.setOnPreferenceChangeListener { _, newValue ->
-                fullscreenKeep?.isEnabled = newValue == true || audioKeep?.isChecked != false
-                true
-            }
-            audioKeep?.setOnPreferenceChangeListener { _, newValue ->
-                fullscreenKeep?.isEnabled = newValue == true || miniKeep?.isChecked != false
-                true
+            // what leaving the app keeps playing: the summary says it in full for the choice made
+            findPreference<ListPreference>(C.TV_KEEP_SOUND_ON_LEAVE)?.let { preference ->
+                val updateSummary = { value: String? ->
+                    preference.summary = getString(
+                        when (value) {
+                            "never" -> R.string.tv_keep_sound_never_summary
+                            "minimized" -> R.string.tv_keep_sound_minimized_summary
+                            else -> R.string.tv_keep_sound_always_summary
+                        }
+                    )
+                }
+                updateSummary(preference.value)
+                preference.setOnPreferenceChangeListener { _, newValue ->
+                    updateSummary(newValue as? String)
+                    true
+                }
             }
             // favorite channels: their order (first in the followed streams), unchecked ones leave the favorites
             findPreference<Preference>("tv_favorites")?.let { preference ->
@@ -1932,7 +1933,10 @@ class SettingsActivity : AppCompatActivity() {
                     Triple(R.xml.update_preferences, SettingsNavGraphDirections.actionGlobalUpdateSettingsFragment(), getString(R.string.update_settings)),
                     Triple(R.xml.xtratv_preferences, SettingsNavGraphDirections.actionGlobalXtraTvSettingsFragment(), getString(R.string.xtratv_settings)),
                     Triple(R.xml.adblock_preferences, SettingsNavGraphDirections.actionGlobalAdblockSettingsFragment(), getString(R.string.adblock)),
-                ).forEach { item ->
+                ).filter {
+                    // no theme settings on TV
+                    !(resources.getBoolean(R.bool.isTv) && it.first == R.xml.theme_preferences)
+                }.forEach { item ->
                     // the settings inside the categories are found too
                     fun androidx.preference.PreferenceGroup.flatten(): List<Preference> = (0 until preferenceCount).flatMap { index ->
                         getPreference(index).let { if (it is PreferenceCategory) it.flatten() else listOf(it) }

@@ -38,27 +38,12 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="tv_mini_player_keep_on_home"
-            android:summary="@string/tv_mini_player_keep_on_home_summary"
-            android:title="@string/tv_mini_player_keep_on_home"
-            app:iconSpaceReserved="false"
-            app:singleLineTitle="false" />
-
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="tv_audio_only_keep_on_home"
-            android:summary="@string/tv_audio_only_keep_on_home_summary"
-            android:title="@string/tv_audio_only_keep_on_home"
-            app:iconSpaceReserved="false"
-            app:singleLineTitle="false" />
-
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="tv_fullscreen_keep_on_home"
-            android:summary="@string/tv_fullscreen_keep_on_home_summary"
-            android:title="@string/tv_fullscreen_keep_on_home"
+        <ListPreference
+            android:defaultValue="always"
+            android:entries="@array/tvKeepSoundEntries"
+            android:entryValues="@array/tvKeepSoundValues"
+            android:key="tv_keep_sound_on_leave"
+            android:title="@string/tv_keep_sound_on_leave"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
@@ -120,6 +105,25 @@
         app:iconSpaceReserved="false">
 
 
+        <ListPreference
+            android:defaultValue="2"
+            android:entries="@array/followedEntries"
+            android:entryValues="@array/miscValues"
+            android:key="tv_start_on_followed"
+            android:summary="%s"
+            android:title="@string/startonfollowed"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_menu_on_launch"
+            android:summaryOff="@string/tv_menu_on_launch_off"
+            android:summaryOn="@string/tv_menu_on_launch_on"
+            android:title="@string/tv_menu_on_launch"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
         <Preference
             android:key="tv_favorites"
             android:title="@string/tv_favorites"
@@ -153,6 +157,31 @@
             android:key="tv_stream_columns"
             android:summary="%s"
             android:title="@string/tv_stream_columns"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/tv_live_alerts_category"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_live_alerts"
+            android:summary="@string/tv_live_alerts_summary"
+            android:title="@string/tv_live_alerts"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <ListPreference
+            android:defaultValue="5"
+            android:dependency="tv_live_alerts"
+            android:entries="@array/tvLiveAlertsDurationEntries"
+            android:entryValues="@array/tvLiveAlertsDurationValues"
+            android:key="tv_live_alerts_duration"
+            android:summary="%s"
+            android:title="@string/tv_live_alerts_duration"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 

@@ -195,6 +195,8 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
             "player_background_audio_pip_locked", "player_handle_audio_becoming_noisy", "player_show_stream_notification_seekbar",
             "player_default_cellular_quality", "playerRewindV2", "playerForwardV2", "sleep_timer_lock", "admin_settings",
             "tv_back_minimizes_player",
+            // the theme is the one of Xtra TV; the start page has its own setting in the Xtra TV settings
+            "theme_settings", "ui_startonfollowed",
         )
     }
 }
