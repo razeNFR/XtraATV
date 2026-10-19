@@ -158,6 +158,8 @@ class ExoPlayerService : BasePlaybackService() {
         fun toast(text: CharSequence, duration: Int)
         fun updateVideoInfo()
         fun setPlayerSurface(secondaryPlayer: Boolean)
+        /** TV: a picture of the stream itself (not of an ad) is on the screen, the loading picture can go. */
+        fun streamPictureShown()
     }
 
     var serviceListener: Listener? = null
@@ -216,6 +218,8 @@ class ExoPlayerService : BasePlaybackService() {
 
                 override fun onRenderedFirstFrame() {
                     TvLoadTimer.finish(isSwapping)?.let { serviceListener?.toast(it, Toast.LENGTH_LONG) }
+                    mainFrameRendered = true
+                    checkStreamPictureShown()
                 }
 
                 override fun onTimelineChanged(timeline: Timeline, reason: Int) {
@@ -272,13 +276,22 @@ class ExoPlayerService : BasePlaybackService() {
                         val useProxy = useStreamProxy && !stopProxy && streamProxyList?.getOrNull(currentStreamProxy)?.proxyMediaPlaylist == true
                         val useVideoSwap = useVideoSwap && !stopVideoSwap
                         val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || prefs().getBoolean(C.PLAYER_ADBLOCK, true)
+                        if (!(useProxy || useVideoSwap || hideAds) && (player?.currentManifest as? HlsManifest)?.mediaPlaylist != null) {
+                            // nothing looks for ads: the first playlist has nothing to wait for
+                            checkFirstPlaylist = false
+                            checkStreamPictureShown()
+                        }
                         if (useProxy || useVideoSwap || hideAds) {
                             val playlist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
                             val ads = checkPlaylist(playlist, mainPlayer = true)
                             val oldValue = playingAds
                             playingAds = ads
+                            checkStreamPictureShown()
                             if (ads) {
                                 if (!oldValue) {
+                                    // pre-roll (start of the stream) or mid-roll, shown in the badge of the ad blocker
+                                    adRollType = rollTypeOf(playlist) ?: if (firstPlaylistAd) "preroll" else "midroll"
+                                    firstPlaylistAd = false
                                     // statistics of the home: an ad break handled by the ad blocker (or a proxy)
                                     com.github.andreyasadchy.xtra.ui.tv.TvStats.addAdBlocked(this@ExoPlayerService)
                                     when {
@@ -380,7 +393,7 @@ class ExoPlayerService : BasePlaybackService() {
                                                                 setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
                                                             }.build()
                                                         }
-                                                        player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+                                                        player.volume = userVolume()
                                                     }
                                                 }
                                                 adDelayJob = null
@@ -533,7 +546,7 @@ class ExoPlayerService : BasePlaybackService() {
                                                             MediaItem.fromUri(url)
                                                         )
                                                     )
-                                                    player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+                                                    player.volume = userVolume()
                                                     player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
                                                     player.prepare()
                                                     player.playWhenReady = true
@@ -897,7 +910,7 @@ class ExoPlayerService : BasePlaybackService() {
                                             MediaItem.fromUri(url)
                                         )
                                     )
-                                    player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+                                    player.volume = userVolume()
                                     player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
                                     player.prepare()
                                     player.playWhenReady = !restorePauseState || !paused
@@ -941,7 +954,7 @@ class ExoPlayerService : BasePlaybackService() {
                                         }.build()
                                     }
                                     player.setMediaItem(MediaItem.fromUri(url))
-                                    player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+                                    player.volume = userVolume()
                                     player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
                                     player.prepare()
                                     player.playWhenReady = true
@@ -962,6 +975,11 @@ class ExoPlayerService : BasePlaybackService() {
         if (!restart) {
             // an ad at the start of the stream is looked for in its whole first playlist
             checkFirstPlaylist = true
+            firstPlaylistAd = false
+            adRollType = null
+            // the loading picture stays until a picture of the stream itself is shown
+            mainFrameRendered = false
+            streamPictureShown = false
             TvLoadTimer.mark("Ouverture du lecteur")
         } else {
             // a restart (ad blocker, error): the player asks the access itself
@@ -1289,7 +1307,7 @@ class ExoPlayerService : BasePlaybackService() {
                             }.build()
                         )
                     )
-                    player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+                    player.volume = userVolume()
                     player.setPlaybackSpeed(1f)
                     player.prepare()
                     player.playWhenReady = !restorePauseState || !paused
@@ -1373,7 +1391,7 @@ class ExoPlayerService : BasePlaybackService() {
                             MediaItem.fromUri(url)
                         )
                     )
-                    player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+                    player.volume = userVolume()
                     player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
                     player.prepare()
                     player.playWhenReady = !restorePauseState || !paused
@@ -1527,7 +1545,7 @@ class ExoPlayerService : BasePlaybackService() {
                             MediaItem.fromUri(url)
                         )
                     )
-                    player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+                    player.volume = userVolume()
                     player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
                     player.prepare()
                     player.playWhenReady = !restorePauseState || !paused
@@ -1698,6 +1716,7 @@ class ExoPlayerService : BasePlaybackService() {
         if (playlist != null && mainPlayer && checkFirstPlaylist) {
             checkFirstPlaylist = false
             if (playlist.segments.any { isAdSegment(playlist, it) }) {
+                firstPlaylistAd = true
                 return true
             }
         }
@@ -1706,6 +1725,46 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** True for the first media playlist after a stream started to load. */
     private var checkFirstPlaylist = false
+
+    /** The first playlist of the stream had an ad: a pre-roll. */
+    private var firstPlaylistAd = false
+
+    /** Kind of the ad being blocked, "preroll" or "midroll", for the badge of the ad blocker. */
+    private var adRollType: String? = null
+
+    /** The kind of ad Twitch writes in its marks (X-TV-TWITCH-AD-ROLL-TYPE), null when it is not there. */
+    private fun rollTypeOf(playlist: HlsMediaPlaylist?): String? {
+        playlist ?: return null
+        val value = playlist.interstitials.firstNotNullOfOrNull { dateRange ->
+            dateRange.clientDefinedAttributes.find { it.name == "X-TV-TWITCH-AD-ROLL-TYPE" }?.textValue
+        } ?: playlist.tags.firstNotNullOfOrNull { tag ->
+            Regex("X-TV-TWITCH-AD-ROLL-TYPE=\"?([A-Za-z]+)").find(tag)?.groupValues?.get(1)
+        }
+        return when {
+            value == null -> null
+            value.contains("pre", true) -> "preroll"
+            value.contains("mid", true) -> "midroll"
+            else -> null
+        }
+    }
+
+    /** The main player showed a picture since the stream started to load. */
+    private var mainFrameRendered = false
+
+    /**
+     * TV: a picture of the stream itself is on the screen since it started to load: of the main player once its first
+     * playlist was checked without an ad, else of the backup player of the ad blocker. Until then the player screen keeps
+     * the loading picture over the video, an ad at the start (also after a switch of stream) is never seen.
+     */
+    var streamPictureShown = false
+        private set
+
+    private fun checkStreamPictureShown() {
+        if (!streamPictureShown && type == STREAM && mainFrameRendered && !checkFirstPlaylist && !playingAds && !isSwapping) {
+            streamPictureShown = true
+            serviceListener?.streamPictureShown()
+        }
+    }
 
     private fun isAdSegment(playlist: HlsMediaPlaylist, segment: HlsMediaPlaylist.Segment): Boolean {
         return segment.let { segment ->
@@ -1751,6 +1810,14 @@ class ExoPlayerService : BasePlaybackService() {
             // statistics of the home: proxy or backup player type used
             com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this@ExoPlayerService, streamProxy?.host ?: videoSwap?.playerType)
             val playerListener = object : Player.Listener {
+                override fun onRenderedFirstFrame() {
+                    // the stream without the ad is on the screen: the loading picture can go
+                    if (generation == streamGeneration && !streamPictureShown) {
+                        streamPictureShown = true
+                        serviceListener?.streamPictureShown()
+                    }
+                }
+
                 override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                     val playlist = (secondaryPlayer?.currentManifest as? HlsManifest)?.mediaPlaylist
                     val ads = checkPlaylist(playlist)
@@ -2156,7 +2223,7 @@ class ExoPlayerService : BasePlaybackService() {
                     player.release()
                     return@launch
                 }
-                player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+                player.volume = userVolume()
                 player.setPlaybackSpeed(1f)
                 player.prepare()
                 player.playWhenReady = true
@@ -2248,9 +2315,21 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** Status of the ad blocker, shown on the player like the VAFT userscript does. */
     fun getAdblockStatus(): String? {
+        // pre-roll (start of the stream) or mid-roll
+        val roll = when (adRollType) {
+            "preroll" -> getString(R.string.tv_adblock_preroll)
+            "midroll" -> getString(R.string.tv_adblock_midroll)
+            else -> null
+        }
+        val source = when {
+            videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.playerType ?: "backup"
+            proxyMediaPlaylist -> "proxy"
+            else -> null
+        }
         return when {
-            videoSwapActive -> getString(R.string.tv_adblock_blocking, videoSwapList?.getOrNull(currentVideoSwapItem)?.playerType ?: "backup")
-            proxyMediaPlaylist -> getString(R.string.tv_adblock_blocking, "proxy")
+            source != null && roll != null -> getString(R.string.tv_adblock_blocking_roll, roll, source)
+            source != null -> getString(R.string.tv_adblock_blocking, source)
+            hidden && roll != null -> getString(R.string.tv_adblock_waiting_roll, roll)
             hidden -> getString(R.string.tv_adblock_waiting)
             else -> null
         }
@@ -2378,20 +2457,36 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
+    /** TV: the next stream can play in this service (not with a proxy or the sound only mode). */
+    fun canKeepForStreamSwitch(): Boolean {
+        return created && type == STREAM && !useStreamProxy && customProxyList.isNullOrEmpty() && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY
+    }
+
     /**
      * TV, left / right or another stream from the player: the service and its player are kept for the next stream
      * (no new player to make). Called before the next stream is saved: what belongs to this stream stops here.
      */
     fun prepareStreamSwitch(): Boolean {
-        if (!created || type != STREAM || useStreamProxy || !customProxyList.isNullOrEmpty() || quality?.name == VideoQuality.AUDIO_ONLY_QUALITY) {
+        if (!canKeepForStreamSwitch()) {
             return false
         }
         started = false
         loaded = false
+        // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
+        // no sound), it must not come back on the screen for a moment when the backup player goes
+        player?.volume = 0f
+        player?.stop()
         // everything the ad blocker started for this stream stops, nothing of it may come over the next one
         streamGeneration++
         secondaryLoadJob?.cancel()
         secondaryLoadJob = null
+        // nothing of the stream that ends counts for the next one: no picture of it shown yet, its first playlist not
+        // checked yet (else the events of the player being emptied would take the loading picture away at once)
+        streamPictureShown = false
+        mainFrameRendered = false
+        checkFirstPlaylist = true
+        firstPlaylistAd = false
+        adRollType = null
         if (secondaryPlayer != null) {
             stopSecondaryPlayer()
         }
@@ -2401,12 +2496,14 @@ class ExoPlayerService : BasePlaybackService() {
         this.proxyMediaPlaylist = false
         if (hidden) {
             hidden = false
-            player?.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+            player?.volume = userVolume()
         }
         adDelayJob?.cancel()
         adDelayJob = null
         player?.stop()
         player?.clearMediaItems()
+        // stopped: the sound of the next stream comes back
+        player?.volume = userVolume()
         resetAutoQuality()
         return true
     }
@@ -2465,13 +2562,20 @@ class ExoPlayerService : BasePlaybackService() {
                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
                 }.build()
             }
-            player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+            player.volume = userVolume()
         }
         secondaryPlayer?.release()
         secondaryPlayer = null
     }
 
-    fun getCurrentVolume() = secondaryPlayer?.volume ?: player?.volume
+    /** Volume of the stream, without the share taken by the small window of the TV (the volume control shows this one). */
+    fun getCurrentVolume(): Float? {
+        val mix = TvPip.mainMix
+        if (mix <= 0f) {
+            return prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
+        }
+        return (secondaryPlayer?.volume ?: player?.volume)?.let { (it / mix).coerceAtMost(1f) }
+    }
 
     fun togglePause() {
         if (secondaryPlayer != null) {
@@ -2530,9 +2634,25 @@ class ExoPlayerService : BasePlaybackService() {
     fun changeVolume(volume: Float) {
         val secondaryPlayer = secondaryPlayer
         if (secondaryPlayer != null) {
-            secondaryPlayer.volume = volume
+            secondaryPlayer.volume = volume * TvPip.mainMix
         } else {
-            player?.volume = volume
+            player?.volume = volume * TvPip.mainMix
+        }
+    }
+
+    /** The volume of the settings, with the share the small window of the TV leaves to this stream. */
+    private fun userVolume() = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f * TvPip.mainMix
+
+    /** TV: the sound of the small window changed (its panel, opened or closed): the stream that is heard follows. */
+    fun refreshVolume() {
+        if (hidden || duckedVolume != null) {
+            return
+        }
+        if (isSwapping) {
+            secondaryPlayer?.volume = userVolume()
+        } else if (!playingAds) {
+            // during an ad the main player stays silent, the ad blocker gives its sound back after it
+            player?.volume = userVolume()
         }
     }
 

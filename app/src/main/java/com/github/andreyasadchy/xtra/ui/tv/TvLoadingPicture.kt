@@ -26,6 +26,9 @@ object TvLoadingPicture {
         val loader = context.imageLoader
         return scope.launch {
             var fresh = false
+            // a picture put here by this call (a placeholder shown before, like the last picture of the stream left by a
+            // switch, does not count: it is replaced)
+            var shown = false
             // the picture Twitch has now, it replaces the copy shown meanwhile
             val freshJob = launch {
                 val url = TvThumbnails.withStamp(thumbnail, System.currentTimeMillis() / 1000) ?: return@launch
@@ -37,6 +40,7 @@ object TvLoadingPicture {
                 )
                 if (result is SuccessResult && isCurrent()) {
                     fresh = true
+                    shown = true
                     image.setImageDrawable(result.image.asDrawable(context.resources))
                 }
             }
@@ -47,13 +51,14 @@ object TvLoadingPicture {
                 val result = loader.execute(ImageRequest.Builder(context).data(url).networkCachePolicy(CachePolicy.DISABLED).build())
                 if (result is SuccessResult) {
                     if (!fresh && isCurrent()) {
+                        shown = true
                         image.setImageDrawable(result.image.asDrawable(context.resources))
                     }
                     break
                 }
             }
             // nothing in the cache: the picture of the channel while the thumbnail comes
-            if (!fresh && image.drawable == null && fallback != null && isCurrent()) {
+            if (!fresh && !shown && fallback != null && isCurrent()) {
                 val result = loader.execute(ImageRequest.Builder(context).data(fallback).build())
                 if (result is SuccessResult && !fresh && isCurrent()) {
                     image.setImageDrawable(result.image.asDrawable(context.resources))

@@ -166,6 +166,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun getCurrentPosition(): Long? = null
     open fun getCurrentSpeed(): Float? = null
     open fun getCurrentVolume(): Float? = null
+
+    /** TV: the sound of the small window changed, the volume of this stream follows it. */
+    open fun refreshVolume() {}
     open fun getTotalDuration(): Long? = null
     open fun playPause() {}
     open fun rewind() {}
@@ -2346,6 +2349,131 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    /**
+     * TV: a switch of stream starts: a copy of the picture on the screen is taken (in the background, the switch does not
+     * wait for it), the next player screen shows it until the picture of the next stream is there.
+     */
+    fun captureSwitchFrame() {
+        if (!isTv || !isMaximized) {
+            return
+        }
+        // the stream left was still loading: its loading picture is what is on the screen
+        ((loadingPicture?.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap)?.let {
+            putSwitchFrame(it)
+            return
+        }
+        val surface = _binding?.playerSurface ?: return
+        if (!surface.holder.surface.isValid || surface.width <= 0 || surface.height <= 0) {
+            return
+        }
+        val width = 640
+        val height = (640f * surface.height / surface.width).toInt().coerceAtLeast(1)
+        val bitmap = try {
+            android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        } catch (e: Throwable) {
+            return
+        }
+        try {
+            android.view.PixelCopy.request(surface, bitmap, { result ->
+                if (result == android.view.PixelCopy.SUCCESS) {
+                    putSwitchFrame(bitmap)
+                }
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
+        } catch (e: Exception) {
+            // the surface went away meanwhile: no copy, the loading picture of the next stream as before
+        }
+    }
+
+    /** TV: the small window closed: its button goes away, the focus moves to another button of the controls if it was on it. */
+    fun onTvPipClosed() {
+        val button = _binding?.playerControls?.tvPipSettings ?: return
+        val hadFocus = button.hasFocus()
+        button.visibility = View.GONE
+        if (hadFocus && binding.playerControls.root.isVisible) {
+            focusPrimaryControl()
+        }
+    }
+
+    /**
+     * TV: panel of the small window: its corner and its size (it moves at once), the sound (the big stream, the small
+     * window or both, with the balance between them), swap the streams, close it. All of it is kept for the next time.
+     */
+    private fun showTvPipPanel() {
+        val activity = activity as? MainActivity ?: return
+        if (!activity.isTvPipOpen()) {
+            return
+        }
+        val prefs = activity.prefs()
+        val cornerValues = listOf("tl", "tr", "bl", "br")
+        val corners = listOf(
+            getString(R.string.tv_pip_corner_tl),
+            getString(R.string.tv_pip_corner_tr),
+            getString(R.string.tv_pip_corner_bl),
+            getString(R.string.tv_pip_corner_br),
+        )
+        val sizes = listOf(getString(R.string.tv_pip_size_small), getString(R.string.tv_pip_size_medium), getString(R.string.tv_pip_size_large))
+        val soundValues = listOf("main", "pip", "both")
+        val sounds = listOf(getString(R.string.tv_pip_sound_main), getString(R.string.tv_pip_sound_pip), getString(R.string.tv_pip_sound_both))
+        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(activity) { dismiss ->
+            val corner = androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableIntStateOf(cornerValues.indexOf(prefs.getString(C.TV_PIP_CORNER, "tr")).coerceAtLeast(0))
+            }
+            val sound = androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableIntStateOf(soundValues.indexOf(prefs.getString(C.TV_PIP_SOUND, "main")).coerceAtLeast(0))
+            }
+            // the panel on the other side of the screen, the small window stays in sight
+            val pipOnLeft = corner.intValue == 0 || corner.intValue == 2
+            com.github.andreyasadchy.xtra.ui.tv.SidePanel(
+                title = getString(R.string.tv_pip_settings),
+                alignEnd = pipOnLeft,
+                scrollable = true,
+            ) {
+                val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_pip_position), corners, corner.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) {
+                    corner.intValue = it
+                    prefs.edit { putString(C.TV_PIP_CORNER, cornerValues[it]) }
+                    activity.applyTvPipSettings()
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_pip_size), sizes, prefs.getInt(C.TV_PIP_SIZE, 1).coerceIn(0, 2)) {
+                    prefs.edit { putInt(C.TV_PIP_SIZE, it) }
+                    activity.applyTvPipSettings()
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_pip_sound), sounds, sound.intValue) {
+                    sound.intValue = it
+                    prefs.edit { putString(C.TV_PIP_SOUND, soundValues[it]) }
+                    activity.applyTvPipSettings()
+                }
+                // the balance only means something when both streams are heard
+                if (sound.intValue == 2) {
+                    com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                        getString(R.string.tv_pip_balance),
+                        prefs.getInt(C.TV_PIP_BALANCE, 0).coerceIn(-100, 100),
+                        -100..100,
+                        step = 10,
+                        valueText = { value ->
+                            val main = if (value > 0) 100 - value else 100
+                            val small = if (value < 0) 100 + value else 100
+                            getString(R.string.tv_pip_balance_value, main, small)
+                        }
+                    ) {
+                        prefs.edit { putInt(C.TV_PIP_BALANCE, it) }
+                        activity.applyTvPipSettings()
+                    }
+                }
+                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
+                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_pip_swap)) {
+                    dismiss()
+                    activity.swapTvPip()
+                }
+                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_pip_close)) {
+                    dismiss()
+                    activity.closeTvPip()
+                }
+                androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
+            }
+        }
+    }
+
     @androidx.compose.runtime.Composable
     private fun textSizeRow(prefs: android.content.SharedPreferences) {
         com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_text_size), prefs.getInt(C.CHAT_SIZE_MODIFIER, 100), 60..200, step = 10, valueText = { "$it %" }) {
@@ -2410,6 +2538,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatLayout.animate().translationY(if (visible) getTvChatLift() else 0f).setDuration(200L).start()
             }
             if (visible) {
+                // the button of the small window, only while it is open
+                playerControls.tvPipSettings?.visibility = if ((activity as? MainActivity)?.isTvPipOpen() == true) View.VISIBLE else View.GONE
                 playerControls.tvQualityInfo?.let { info ->
                     val label = getCurrentQualityLabel()
                     info.text = label
@@ -2462,7 +2592,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.contentDescription = getString(label)
                 }
                 button
-            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream, chatLayoutSettings)
+            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream, tvPipSettings, chatLayoutSettings)
             buttons.forEach { button ->
                 button.setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
@@ -2504,6 +2634,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         ))
                     }
                 }
+            }
+            // the small window: its button is there while it is open (see onTvControllerVisibility)
+            tvPipSettings?.setOnClickListener {
+                hideController()
+                showTvPipPanel()
             }
             val isLoggedIn = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
                     !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank()
@@ -2889,6 +3024,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val index = binding.playerLayout.indexOfChild(binding.aspectRatioFrameLayout) + 1
         binding.playerLayout.addView(image, index, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         loadingPicture = image
+        // a switch of stream: the last picture of the stream left until the picture of this one comes, never a black screen
+        // (put first, the picture of this stream replaces it as soon as it is there)
+        takeSwitchFrame()?.let { image.setImageBitmap(it) } ?: run {
+            switchFrameListener = { frame -> if (loadingPicture === image && image.drawable == null) image.setImageBitmap(frame) }
+        }
         com.github.andreyasadchy.xtra.ui.tv.TvLoadingPicture.show(image, picture.channelLogin, picture.thumbnail, picture.fallback, viewLifecycleOwner.lifecycleScope) {
             loadingPicture === image && view != null
         }
@@ -2898,6 +3038,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** The first picture of the video is on screen: the picture of the stream fades away. */
     protected fun hideLoadingPicture() {
+        switchFrameListener = null
         val image = loadingPicture ?: return
         loadingPicture = null
         image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
@@ -3377,20 +3518,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var tvAudioOnly = false
 
     /**
-     * TV: leaving the app (home) keeps the sound of the mini player, of the sound only mode or of the full screen player,
-     * each one can be turned off in the Xtra TV settings.
+     * TV: leaving the app (Home, or Back on the first screen) keeps the sound of the mini player and of the sound only
+     * mode ("minimized"), and also of the full screen player ("always"), as chosen in the Xtra TV settings.
      */
     fun keepsPlayingWhenAppLeft(): Boolean {
         if (!isTv || _binding == null || playbackService == null) {
             return false
         }
-        val prefs = requireContext().prefs()
-        if (isMaximized) {
-            // full screen: the sound goes on too when the mini player or the sound only mode keeps it, unless turned off
-            return prefs.getBoolean(C.TV_FULLSCREEN_KEEP_ON_HOME, true) &&
-                    (prefs.getBoolean(C.TV_MINI_PLAYER_KEEP_ON_HOME, true) || prefs.getBoolean(C.TV_AUDIO_ONLY_KEEP_ON_HOME, true))
+        return when (requireContext().prefs().getString(C.TV_KEEP_SOUND_ON_LEAVE, "always")) {
+            "never" -> false
+            "minimized" -> !isMaximized
+            else -> true
         }
-        return if (tvAudioOnly) prefs.getBoolean(C.TV_AUDIO_ONLY_KEEP_ON_HOME, true) else prefs.getBoolean(C.TV_MINI_PLAYER_KEEP_ON_HOME, true)
     }
 
     /** TV audio only: the mini player is hidden and the picture is not decoded, the sound goes on. */
@@ -3843,6 +3982,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
          * of a black screen until the first picture of the video.
          */
         var pendingLoadingPicture: LoadingPicture? = null
+
+        /** TV: last picture of the stream left by a switch of stream (left / right...), for a second or two. */
+        private var switchFrame: android.graphics.Bitmap? = null
+        private var switchFrameAt = 0L
+        /** The loading picture of the next stream waits for that picture (taken a little after the switch started). */
+        private var switchFrameListener: ((android.graphics.Bitmap) -> Unit)? = null
+
+        private fun takeSwitchFrame(): android.graphics.Bitmap? {
+            val frame = switchFrame?.takeIf { android.os.SystemClock.elapsedRealtime() - switchFrameAt < 3000L }
+            switchFrame = null
+            return frame
+        }
+
+        private fun putSwitchFrame(frame: android.graphics.Bitmap) {
+            val listener = switchFrameListener
+            if (listener != null) {
+                switchFrameListener = null
+                listener(frame)
+            } else {
+                switchFrame = frame
+                switchFrameAt = android.os.SystemClock.elapsedRealtime()
+            }
+        }
 
         class LoadingPicture(val channelLogin: String?, val thumbnail: String?, val fallback: String?)
 

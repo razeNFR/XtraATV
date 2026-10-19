@@ -138,6 +138,32 @@
         <item>audio</item>
     </string-array>
 
+    <string-array name="tvKeepSoundEntries">
+        <item>@string/tv_keep_sound_never</item>
+        <item>@string/tv_keep_sound_minimized</item>
+        <item>@string/tv_keep_sound_always</item>
+    </string-array>
+
+    <string-array name="tvKeepSoundValues" translatable="false">
+        <item>never</item>
+        <item>minimized</item>
+        <item>always</item>
+    </string-array>
+
+    <string-array name="tvLiveAlertsDurationEntries" translatable="false">
+        <item>3 s</item>
+        <item>5 s</item>
+        <item>7 s</item>
+        <item>10 s</item>
+    </string-array>
+
+    <string-array name="tvLiveAlertsDurationValues" translatable="false">
+        <item>3</item>
+        <item>5</item>
+        <item>7</item>
+        <item>10</item>
+    </string-array>
+
     <string-array name="tvHomeCards" translatable="false">
         <item>2</item>
         <item>3</item>

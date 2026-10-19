@@ -43,6 +43,7 @@ import androidx.core.content.res.use
 import androidx.core.net.toUri
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.doOnLayout
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -167,6 +168,22 @@ class MainActivity : AppCompatActivity() {
                 if (!prefs.contains(C.TV_BACK_ACTION)) {
                     putString(C.TV_BACK_ACTION, if (prefs.getBoolean(C.TV_BACK_MINIMIZES_PLAYER, false)) "mini" else "stop")
                 }
+                // sound when the app is left: the 3 old switches (mini player, sound only, full screen) become one choice
+                if (!prefs.contains(C.TV_KEEP_SOUND_ON_LEAVE)) {
+                    val mini = prefs.getBoolean(C.TV_MINI_PLAYER_KEEP_ON_HOME, true)
+                    val audio = prefs.getBoolean(C.TV_AUDIO_ONLY_KEEP_ON_HOME, true)
+                    val fullscreen = prefs.getBoolean(C.TV_FULLSCREEN_KEEP_ON_HOME, true)
+                    putString(C.TV_KEEP_SOUND_ON_LEAVE, when {
+                        !mini && !audio -> "never"
+                        fullscreen -> "always"
+                        else -> "minimized"
+                    })
+                }
+                // no theme setting on TV: a theme chosen before (light, rounded corners...) goes back to the one of Xtra TV
+                listOf(
+                    C.THEME, C.UI_THEME_FOLLOW_SYSTEM, C.UI_THEME_DARK_ON, C.UI_THEME_DARK_OFF, C.UI_THEME_ROUNDED_CORNERS,
+                    C.UI_THEME_REDUCED_PADDING, C.UI_THEME_COMPACT_TEXT, C.UI_THEME_MATERIAL3,
+                ).forEach { if (prefs.contains(it)) remove(it) }
             }
         }
         if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_QUALITY, false)) {
@@ -242,9 +259,14 @@ class MainActivity : AppCompatActivity() {
                             restoreTvScreenFocus()
                         }
                         if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment) {
-                            // browsing starts in the side menu
                             tvInitialFocusDone = true
-                            showTvMenu(true)
+                            if (!prefs.getBoolean(C.TV_HIDE_MENU_ON_LAUNCH, false)) {
+                                // browsing starts in the side menu
+                                showTvMenu(true)
+                            } else {
+                                // the side menu stays closed: the focus on the start page (its list may still be loading)
+                                focusContentAfterMenu(false, maxTries = 60)
+                            }
                         } else {
                             ensureFocus()
                         }
@@ -807,6 +829,17 @@ class MainActivity : AppCompatActivity() {
         (binding.root as ViewGroup).addView(layer, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         com.github.andreyasadchy.xtra.ui.player.TvPip(this, layer)
     }
+    /** TV: banner when a followed streamer goes live, while the app is open. */
+    private val tvLiveAlerts by lazy {
+        // a layer over everything (player, small window), that never takes the focus
+        val layer = android.widget.FrameLayout(this).apply {
+            elevation = 32 * resources.displayMetrics.density
+            isFocusable = false
+            isClickable = false
+        }
+        (binding.root as ViewGroup).addView(layer, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        com.github.andreyasadchy.xtra.ui.tv.TvLiveAlerts(this, layer)
+    }
     private var dispatchingPlayerKey = false
 
     fun isPlayerMaximized() = (playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true
@@ -831,6 +864,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun currentPlayingStream(): Stream? = (playerFragment as? PlayerFragment)?.getPlayingStream()
+
+    /** TV: the small window is open over the full screen player. */
+    fun isTvPipOpen() = isTv && tvPip.stream != null
+
+    /** TV: corner, size and sound of the small window changed in its panel. */
+    fun applyTvPipSettings() {
+        if (tvPip.stream != null) {
+            tvPip.applyLayout()
+            tvPip.applySound()
+        }
+    }
+
+    /** The small window closed: the player takes its button away (and the focus off it). */
+    fun onTvPipClosed() {
+        (playerFragment as? PlayerFragment)?.onTvPipClosed()
+    }
+
+    fun swapTvPip() {
+        tvPip.swapStreams()
+    }
+
+    /** The volume of the full screen stream follows the sound chosen for the small window. */
+    fun refreshPlayerVolume() {
+        (playerFragment as? PlayerFragment)?.refreshVolume()
+    }
 
     /** OK held on a stream of the row of the other streams: it plays in a small window, without sound. */
     fun openTvPip(stream: Stream) {
@@ -1014,6 +1072,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Back in the side menu of the first screen leaves the app: like Home, the stream of the mini player or of the sound
+     * only mode keeps playing behind when the Xtra TV settings keep the sound (else the app closes as before).
+     */
+    private val tvLeaveBackCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            val player = playerFragment as? PlayerFragment
+            val leavesApp = isTvMenuShown && ::navController.isInitialized && navController.previousBackStackEntry == null &&
+                    player?.isMaximizedPlayer() != true
+            if (leavesApp && player?.keepsPlayingWhenAppLeft() == true) {
+                moveTaskToBack(true)
+            } else {
+                // anything else: the back of before
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
+            }
+        }
+    }
+
     private val tvMenuBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             showTvMenu(true)
@@ -1155,7 +1233,7 @@ class MainActivity : AppCompatActivity() {
         focusContentAfterMenu(false)
     }
 
-    private fun focusContentAfterMenu(search: Boolean, tries: Int = 0) {
+    private fun focusContentAfterMenu(search: Boolean, tries: Int = 0, maxTries: Int = 15) {
         binding.root.postDelayed({
             val target = if (search) {
                 binding.navHostFragment.findViewById<View>(R.id.tvSearchBar)
@@ -1171,7 +1249,7 @@ class MainActivity : AppCompatActivity() {
                     currentTvHome()?.focusFirstCard()
                 }
                 target != null -> target.requestFocus()
-                tries < 15 -> focusContentAfterMenu(search, tries + 1)
+                tries < maxTries -> focusContentAfterMenu(search, tries + 1, maxTries)
             }
         }, if (tries == 0) 250L else 150L)
     }
@@ -1297,6 +1375,9 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         openingOwnScreen = false
         keepPlayerInBackground = false
+        if (isTv && ::binding.isInitialized) {
+            tvLiveAlerts.start()
+        }
     }
 
     /** TV: the app was left with the mini player or the sound only mode, the sound goes on behind. */
@@ -1304,6 +1385,9 @@ class MainActivity : AppCompatActivity() {
     val isKeepingPlayerInBackground get() = keepPlayerInBackground
 
     override fun onStop() {
+        if (isTv && ::binding.isInitialized) {
+            tvLiveAlerts.stop()
+        }
         if (isTv && !openingOwnScreen && !isChangingConfigurations) {
             // leaving the app: the small window closes, only the main stream may keep its sound
             closeTvPip()
@@ -1830,7 +1914,11 @@ class MainActivity : AppCompatActivity() {
         // TV, no player open: the playback service starts as soon as the stream is saved, while the screen of the
         // player is made (it binds to it once ready, the service starts only once)
         val startServiceEarly = isTv && playerFragment == null && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER
-        // TV, a stream already playing full screen: the next one plays in the same service, only the screen is made again
+        // TV, a stream already playing full screen: its last picture stays on the screen until the picture of the next one
+        // comes (never a black screen), the next one plays in the same service, only the screen is made again
+        if (isTv) {
+            (playerFragment as? PlayerFragment)?.captureSwitchFrame()
+        }
         val keptService = if (isTv) (playerFragment as? ExoPlayerFragment)?.handOverForStreamSwitch() else null
         if (keptService == null) {
             (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
@@ -1869,6 +1957,32 @@ class MainActivity : AppCompatActivity() {
     private var neighborJob: kotlinx.coroutines.Job? = null
 
     /**
+     * TV: loads the pictures shown while a stream loads (its thumbnail of this minute, else the picture of its channel) of
+     * the 2 streams on each side of the one watched, into the cache the loading picture reads first.
+     */
+    private fun preloadNeighborPictures(login: String) {
+        val queue = streamQueue
+        val index = queue.indexOfFirst { it.channelLogin == login }
+        if (index < 0 || queue.size < 2) {
+            return
+        }
+        val neighbors = listOf(-1, 1, -2, 2).map { queue[Math.floorMod(index + it, queue.size)] }
+            .filter { it.channelLogin != login }
+            .distinctBy { it.channelLogin }
+        val loader = coil3.SingletonImageLoader.get(this)
+        neighbors.forEach { stream ->
+            val fresh = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream)
+            val thumbnail = stream.thumbnail?.takeUnless { fresh || stream.thumbnailURL.isNullOrBlank() }
+            listOfNotNull(
+                com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.withStamp(thumbnail, com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.minute()),
+                stream.channelImage,
+            ).forEach { url ->
+                loader.enqueue(coil3.request.ImageRequest.Builder(this).data(url).build())
+            }
+        }
+    }
+
+    /**
      * TV: while a stream plays, the access of Twitch to the streams of left / right is asked in the background (a few
      * seconds after the start, again every 90 s), switching to them does not wait for it.
      */
@@ -1879,10 +1993,20 @@ class MainActivity : AppCompatActivity() {
         }
         val login = currentStreamLogin ?: return
         neighborJob = lifecycleScope.launch {
-            kotlinx.coroutines.delay(4000L)
+            // the pictures of the 2 streams on each side first (small, quick): a switch to them shows their picture at
+            // once, like a stream already seen
+            kotlinx.coroutines.delay(1500L)
+            preloadNeighborPictures(login)
+            kotlinx.coroutines.delay(2500L)
+            var first = true
             while (currentStreamLogin == login && playerFragment != null) {
                 val queue = streamQueue
                 val index = queue.indexOfFirst { it.channelLogin == login }
+                // the thumbnails change each minute: loaded again with the access of the streams
+                if (!first) {
+                    preloadNeighborPictures(login)
+                }
+                first = false
                 if (index >= 0 && queue.size > 1) {
                     com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.prepareNeighbors(
                         this@MainActivity,
@@ -2259,6 +2383,7 @@ class MainActivity : AppCompatActivity() {
     private fun initNavigation() {
         navController = (supportFragmentManager.findFragmentById(R.id.navHostFragment) as NavHostFragment).navController
         if (isTv) {
+            onBackPressedDispatcher.addCallback(this, tvLeaveBackCallback)
             onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
             onBackPressedDispatcher.addCallback(this, tvGridBackCallback)
             navController.addOnDestinationChangedListener { _, destination, _ ->
@@ -2289,7 +2414,22 @@ class MainActivity : AppCompatActivity() {
                     !TwitchApiHelper.getHelixHeaders(this)[C.HEADER_TOKEN].isNullOrBlank()
             val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
             when {
-                isTv -> it.setStartDestination(R.id.tvHomeFragment)
+                isTv -> {
+                    // TV: the page with the house in the navigation tabs (the home at first); a tab unchecked since then
+                    // can't be opened, the home is
+                    val startPage = prefs.getString(C.TV_START_PAGE, "home")
+                    val shown = tabList.any { tab -> tab.split(':').let { it[0] == startPage && it[2] != "0" } }
+                    it.setStartDestination(
+                        when {
+                            !shown -> R.id.tvHomeFragment
+                            startPage == "0" -> R.id.rootGamesFragment
+                            startPage == "1" -> R.id.rootTopFragment
+                            startPage == "2" -> R.id.followPagerFragment
+                            startPage == "3" -> R.id.savedPagerFragment
+                            else -> R.id.tvHomeFragment
+                        }
+                    )
+                }
                 (isLoggedIn && startOnFollowed < 2) || (!isLoggedIn && startOnFollowed == 0) || defaultItem == "2" -> {
                     if (prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
                         it.setStartDestination(R.id.followPagerFragment)
@@ -2358,6 +2498,14 @@ class MainActivity : AppCompatActivity() {
             setupWithNavController(navController)
             if (isTv) {
                 setupTvSideMenu()
+                if (prefs.getBoolean(C.TV_HIDE_MENU_ON_LAUNCH, false)) {
+                    // the side menu stays closed when the app starts: folded away before anything is drawn, no animation
+                    val sideMenu = binding.navBarContainer
+                    isTvMenuShown = false
+                    sideMenu.alpha = 0f
+                    sideMenu.visibility = View.INVISIBLE
+                    sideMenu.doOnLayout { if (!isTvMenuShown) it.translationX = -it.width.toFloat() }
+                }
             }
             setOnItemSelectedListener {
                 when (it.itemId) {

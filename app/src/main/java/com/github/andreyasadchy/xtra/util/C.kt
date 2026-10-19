@@ -104,6 +104,20 @@ object C {
     const val TV_STREAM_COLUMNS = "tv_stream_columns"
     const val TV_BACK_MINIMIZES_PLAYER = "tv_back_minimizes_player"
     const val TV_BACK_ACTION = "tv_back_action"
+    /** What leaving the app (Home, or Back on the first screen) keeps playing: "never", "minimized" (mini player, sound only) or "always". */
+    const val TV_KEEP_SOUND_ON_LEAVE = "tv_keep_sound_on_leave"
+    /** TV page the app opens on, the house of the navigation tabs: "home" (default) or the key of a tab ("0".."3"). */
+    const val TV_START_PAGE = "tv_start_page"
+    /** TV: the side menu stays closed when the app starts, the start page is shown at once. */
+    const val TV_HIDE_MENU_ON_LAUNCH = "tv_hide_menu_on_launch"
+    /** TV: banner at the top when a followed streamer goes live while the app is open, and its time on screen (s). */
+    const val TV_LIVE_ALERTS = "tv_live_alerts"
+    const val TV_LIVE_ALERTS_DURATION = "tv_live_alerts_duration"
+    /** TV small window over the player: corner ("tl", "tr", "bl", "br"), size (0..2), sound ("main" / "pip"), balance (-100..100). */
+    const val TV_PIP_CORNER = "tv_pip_corner"
+    const val TV_PIP_SIZE = "tv_pip_size"
+    const val TV_PIP_SOUND = "tv_pip_sound"
+    const val TV_PIP_BALANCE = "tv_pip_balance"
     const val UI_TAGS = "ui_tags"
     const val UI_SCROLL_TOP = "ui_scrolltop"
     const val UI_BOOKMARK_TIME_LEFT = "ui_bookmark_time_left"

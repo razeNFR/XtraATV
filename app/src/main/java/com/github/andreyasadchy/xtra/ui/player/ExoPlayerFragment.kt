@@ -64,7 +64,10 @@ class ExoPlayerFragment : PlayerFragment() {
         keptAcrossStop = false
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
-                hideLoadingPicture()
+                // a live stream: the service says when the picture is the stream itself and not an ad
+                if (playbackService?.type != BasePlaybackService.STREAM) {
+                    hideLoadingPicture()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -277,6 +280,12 @@ class ExoPlayerFragment : PlayerFragment() {
                 }
             }
 
+            override fun streamPictureShown() {
+                if (view != null && isAdded) {
+                    hideLoadingPicture()
+                }
+            }
+
             override fun setPlayerSurface(secondaryPlayer: Boolean) {
                 // the screen of the player is not there (made again, closing): nothing to move
                 if (view == null || !isAdded) {
@@ -312,8 +321,15 @@ class ExoPlayerFragment : PlayerFragment() {
                     (playbackService?.secondaryPlayer ?: playbackService?.player)?.setVideoSurfaceView(binding.playerSurface)
                     (playbackService?.secondaryPlayer ?: playbackService?.player)?.addListener(listener)
                     playerListener = listener
-                    // the video already plays (it started before this screen was ready): no picture over it
-                    if ((playbackService?.secondaryPlayer ?: playbackService?.player)?.playbackState == Player.STATE_READY) {
+                    // the video already plays (it started before this screen was ready): no picture over it; for a live
+                    // stream only once a picture of the stream itself was shown (not an ad at its start, not before
+                    // its first playlist was checked)
+                    val shown = if (playbackService?.type == BasePlaybackService.STREAM) {
+                        playbackService?.streamPictureShown == true
+                    } else {
+                        (playbackService?.secondaryPlayer ?: playbackService?.player)?.playbackState == Player.STATE_READY
+                    }
+                    if (shown) {
                         hideLoadingPicture()
                     }
                     val endTime = playbackService?.setSleepTimer(-1)
@@ -446,6 +462,10 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun getCurrentVolume(): Float? {
         return playbackService?.getCurrentVolume()
+    }
+
+    override fun refreshVolume() {
+        playbackService?.refreshVolume()
     }
 
     override fun getTotalDuration() = (playbackService?.player?.currentManifest as? HlsManifest)?.mediaPlaylist?.durationUs?.div(1000)
@@ -666,12 +686,18 @@ class ExoPlayerFragment : PlayerFragment() {
      */
     fun handOverForStreamSwitch(): ExoPlayerService? {
         val service = playbackService ?: return null
-        if (!isTv || !isMaximizedPlayer() || !service.prepareStreamSwitch()) {
+        if (!isTv || !isMaximizedPlayer() || !service.canKeepForStreamSwitch()) {
             return null
         }
-        playerListener?.let { (service.secondaryPlayer ?: service.player)?.removeListener(it) }
+        // this screen lets go of both players first: what the stream that ends does while it stops (the backup player
+        // of the ad blocker going away) no longer reaches this screen
+        playerListener?.let {
+            service.player?.removeListener(it)
+            service.secondaryPlayer?.removeListener(it)
+        }
         playerListener = null
         service.serviceListener = null
+        service.prepareStreamSwitch()
         serviceConnection?.let { requireContext().unbindService(it) }
         serviceConnection = null
         playbackService = null

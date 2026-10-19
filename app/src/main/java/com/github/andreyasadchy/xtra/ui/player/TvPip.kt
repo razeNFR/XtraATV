@@ -21,13 +21,15 @@ import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource
+import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * TV: a second live stream in a small window at the top right of the full screen player, without sound
- * (opened by holding OK on a stream of the row of the other streams).
+ * TV: a second live stream in a small window over the full screen player (opened by holding OK on a stream of the row
+ * of the other streams). Its corner, its size and the sound (big stream, small window or both with a balance) are
+ * chosen in its panel, opened by the "Small window" button of the controls, and kept for the next time.
  * While it is shown: OK held swaps the two streams, back closes it, OK alone still opens the controls of the player.
  * It hides with the player (mini player, browsing) and closes with it.
  */
@@ -64,11 +66,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         val context = activity
         val density = context.resources.displayMetrics.density
         val frame = view ?: FrameLayout(context).apply {
-            val width = (context.resources.displayMetrics.widthPixels * 0.3f).toInt()
-            layoutParams = FrameLayout.LayoutParams(width, width * 9 / 16, Gravity.TOP or Gravity.END).apply {
-                val margin = context.resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
-                setMargins(margin, context.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical), margin, margin)
-            }
+            layoutParams = FrameLayout.LayoutParams(0, 0)
             setBackgroundColor(Color.BLACK)
             foreground = GradientDrawable().apply {
                 setStroke((3 * density).toInt(), Color.WHITE)
@@ -128,6 +126,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 })
             }
         }
+        applyLayout()
+        applySound()
         frame.findViewById<TextView>(R.id.tvPipLabel)?.text = stream.channelName ?: login
         // the newest picture of the stream until its video comes
         val texture = frame.findViewById<TextureView>(R.id.tvPipTexture)
@@ -161,8 +161,60 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         }
     }
 
+    /** Corner and size of the small window, as chosen in its panel. */
+    fun applyLayout() {
+        val frame = view ?: return
+        val prefs = activity.prefs()
+        val metrics = activity.resources.displayMetrics
+        val fraction = when (prefs.getInt(C.TV_PIP_SIZE, 1)) {
+            0 -> 0.22f
+            2 -> 0.4f
+            else -> 0.3f
+        }
+        val width = (metrics.widthPixels * fraction).toInt()
+        val corner = prefs.getString(C.TV_PIP_CORNER, "tr")
+        val gravity = (if (corner == "bl" || corner == "br") Gravity.BOTTOM else Gravity.TOP) or
+                (if (corner == "tl" || corner == "bl") Gravity.START else Gravity.END)
+        val horizontal = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+        val vertical = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+        frame.layoutParams = FrameLayout.LayoutParams(width, width * 9 / 16, gravity).apply {
+            setMargins(horizontal, vertical, horizontal, vertical)
+        }
+    }
+
+    /**
+     * Sound of the two streams: the big one only, the small window only, or both with the balance between them (at
+     * 0 both at full volume, towards one side the other one gets quieter).
+     */
+    fun applySound() {
+        val prefs = activity.prefs()
+        val volume = prefs.getInt(C.PLAYER_VOLUME, 100) / 100f
+        val balance = prefs.getInt(C.TV_PIP_BALANCE, 0).coerceIn(-100, 100)
+        val (main, small) = when (prefs.getString(C.TV_PIP_SOUND, "main")) {
+            "pip" -> 0f to 1f
+            "both" -> (if (balance > 0) 1f - balance / 100f else 1f) to (if (balance < 0) 1f + balance / 100f else 1f)
+            else -> 1f to 0f
+        }
+        player?.volume = small * volume
+        setMainMix(main)
+    }
+
+    private fun setMainMix(mix: Float) {
+        if (mainMix != mix) {
+            mainMix = mix
+            activity.refreshPlayerVolume()
+        }
+    }
+
     fun close() {
+        val wasOpen = stream != null
         stream = null
+        // the big stream gets all of its sound back
+        setMainMix(1f)
+        if (wasOpen) {
+            // its button leaves the controls, the focus does not get lost with it
+            activity.onTvPipClosed()
+        }
         loadJob?.cancel()
         loadJob = null
         container.removeCallbacks(followPlayer)
@@ -186,7 +238,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         }
         val isOk = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
         when {
-            event.keyCode == KeyEvent.KEYCODE_BACK -> {
+            // back hides the controls first (the player does it), it closes the small window only once they are hidden
+            event.keyCode == KeyEvent.KEYCODE_BACK && activity.isPlayerFocusedWithoutControls() -> {
                 if (event.action == KeyEvent.ACTION_UP) {
                     close()
                 }
@@ -232,7 +285,22 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         }
     }
 
+    /** OK held, or the button of the panel: the two streams change places. */
+    fun swapStreams() {
+        if (stream != null) {
+            swap()
+        }
+    }
+
     companion object {
+        /**
+         * Share of its volume the stream of the full screen player keeps while the small window is open (1 without it),
+         * read by the playback service each time it sets the volume.
+         */
+        @Volatile
+        var mainMix = 1f
+            private set
+
         fun showHint(activity: MainActivity) {
             Toast.makeText(activity, R.string.tv_pip_hint, Toast.LENGTH_LONG).show()
         }
