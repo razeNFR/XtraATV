@@ -15,6 +15,7 @@
 - The old "Start on Following page" setting (made for phones, it did nothing on TV) is hidden on TV: the house of the navigation tabs does it.
 
 ### Fixes
+- **No more black screen when switching streams**: the pictures of the streams on each side are loaded in advance, and until the picture of the next stream is there the last picture of the stream left stays on the screen.
 - **Back with the small window**: Back hides the controls first, it closes the small window only once they are hidden (it closed it at once, and the focus got lost with its button).
 - **Ad pictures when switching streams**: switching streams (left / right, other streams, small window) could show a picture of an ad of the stream left and one of the stream opened. The stream left stops before anything of its ad can come back on the screen, and the picture of the next stream stays until its own video (not an ad) is shown. The protections against the crash when switching quickly are kept.
 

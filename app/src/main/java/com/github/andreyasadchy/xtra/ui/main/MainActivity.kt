@@ -1914,7 +1914,11 @@ class MainActivity : AppCompatActivity() {
         // TV, no player open: the playback service starts as soon as the stream is saved, while the screen of the
         // player is made (it binds to it once ready, the service starts only once)
         val startServiceEarly = isTv && playerFragment == null && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER
-        // TV, a stream already playing full screen: the next one plays in the same service, only the screen is made again
+        // TV, a stream already playing full screen: its last picture stays on the screen until the picture of the next one
+        // comes (never a black screen), the next one plays in the same service, only the screen is made again
+        if (isTv) {
+            (playerFragment as? PlayerFragment)?.captureSwitchFrame()
+        }
         val keptService = if (isTv) (playerFragment as? ExoPlayerFragment)?.handOverForStreamSwitch() else null
         if (keptService == null) {
             (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
@@ -1953,6 +1957,32 @@ class MainActivity : AppCompatActivity() {
     private var neighborJob: kotlinx.coroutines.Job? = null
 
     /**
+     * TV: loads the pictures shown while a stream loads (its thumbnail of this minute, else the picture of its channel) of
+     * the 2 streams on each side of the one watched, into the cache the loading picture reads first.
+     */
+    private fun preloadNeighborPictures(login: String) {
+        val queue = streamQueue
+        val index = queue.indexOfFirst { it.channelLogin == login }
+        if (index < 0 || queue.size < 2) {
+            return
+        }
+        val neighbors = listOf(-1, 1, -2, 2).map { queue[Math.floorMod(index + it, queue.size)] }
+            .filter { it.channelLogin != login }
+            .distinctBy { it.channelLogin }
+        val loader = coil3.SingletonImageLoader.get(this)
+        neighbors.forEach { stream ->
+            val fresh = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream)
+            val thumbnail = stream.thumbnail?.takeUnless { fresh || stream.thumbnailURL.isNullOrBlank() }
+            listOfNotNull(
+                com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.withStamp(thumbnail, com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.minute()),
+                stream.channelImage,
+            ).forEach { url ->
+                loader.enqueue(coil3.request.ImageRequest.Builder(this).data(url).build())
+            }
+        }
+    }
+
+    /**
      * TV: while a stream plays, the access of Twitch to the streams of left / right is asked in the background (a few
      * seconds after the start, again every 90 s), switching to them does not wait for it.
      */
@@ -1963,10 +1993,20 @@ class MainActivity : AppCompatActivity() {
         }
         val login = currentStreamLogin ?: return
         neighborJob = lifecycleScope.launch {
-            kotlinx.coroutines.delay(4000L)
+            // the pictures of the 2 streams on each side first (small, quick): a switch to them shows their picture at
+            // once, like a stream already seen
+            kotlinx.coroutines.delay(1500L)
+            preloadNeighborPictures(login)
+            kotlinx.coroutines.delay(2500L)
+            var first = true
             while (currentStreamLogin == login && playerFragment != null) {
                 val queue = streamQueue
                 val index = queue.indexOfFirst { it.channelLogin == login }
+                // the thumbnails change each minute: loaded again with the access of the streams
+                if (!first) {
+                    preloadNeighborPictures(login)
+                }
+                first = false
                 if (index >= 0 && queue.size > 1) {
                     com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.prepareNeighbors(
                         this@MainActivity,

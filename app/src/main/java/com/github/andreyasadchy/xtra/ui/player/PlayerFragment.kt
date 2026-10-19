@@ -2349,6 +2349,41 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    /**
+     * TV: a switch of stream starts: a copy of the picture on the screen is taken (in the background, the switch does not
+     * wait for it), the next player screen shows it until the picture of the next stream is there.
+     */
+    fun captureSwitchFrame() {
+        if (!isTv || !isMaximized) {
+            return
+        }
+        // the stream left was still loading: its loading picture is what is on the screen
+        ((loadingPicture?.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap)?.let {
+            putSwitchFrame(it)
+            return
+        }
+        val surface = _binding?.playerSurface ?: return
+        if (!surface.holder.surface.isValid || surface.width <= 0 || surface.height <= 0) {
+            return
+        }
+        val width = 640
+        val height = (640f * surface.height / surface.width).toInt().coerceAtLeast(1)
+        val bitmap = try {
+            android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        } catch (e: Throwable) {
+            return
+        }
+        try {
+            android.view.PixelCopy.request(surface, bitmap, { result ->
+                if (result == android.view.PixelCopy.SUCCESS) {
+                    putSwitchFrame(bitmap)
+                }
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
+        } catch (e: Exception) {
+            // the surface went away meanwhile: no copy, the loading picture of the next stream as before
+        }
+    }
+
     /** TV: the small window closed: its button goes away, the focus moves to another button of the controls if it was on it. */
     fun onTvPipClosed() {
         val button = _binding?.playerControls?.tvPipSettings ?: return
@@ -2989,6 +3024,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val index = binding.playerLayout.indexOfChild(binding.aspectRatioFrameLayout) + 1
         binding.playerLayout.addView(image, index, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         loadingPicture = image
+        // a switch of stream: the last picture of the stream left until the picture of this one comes, never a black screen
+        // (put first, the picture of this stream replaces it as soon as it is there)
+        takeSwitchFrame()?.let { image.setImageBitmap(it) } ?: run {
+            switchFrameListener = { frame -> if (loadingPicture === image && image.drawable == null) image.setImageBitmap(frame) }
+        }
         com.github.andreyasadchy.xtra.ui.tv.TvLoadingPicture.show(image, picture.channelLogin, picture.thumbnail, picture.fallback, viewLifecycleOwner.lifecycleScope) {
             loadingPicture === image && view != null
         }
@@ -2998,6 +3038,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** The first picture of the video is on screen: the picture of the stream fades away. */
     protected fun hideLoadingPicture() {
+        switchFrameListener = null
         val image = loadingPicture ?: return
         loadingPicture = null
         image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
@@ -3941,6 +3982,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
          * of a black screen until the first picture of the video.
          */
         var pendingLoadingPicture: LoadingPicture? = null
+
+        /** TV: last picture of the stream left by a switch of stream (left / right...), for a second or two. */
+        private var switchFrame: android.graphics.Bitmap? = null
+        private var switchFrameAt = 0L
+        /** The loading picture of the next stream waits for that picture (taken a little after the switch started). */
+        private var switchFrameListener: ((android.graphics.Bitmap) -> Unit)? = null
+
+        private fun takeSwitchFrame(): android.graphics.Bitmap? {
+            val frame = switchFrame?.takeIf { android.os.SystemClock.elapsedRealtime() - switchFrameAt < 3000L }
+            switchFrame = null
+            return frame
+        }
+
+        private fun putSwitchFrame(frame: android.graphics.Bitmap) {
+            val listener = switchFrameListener
+            if (listener != null) {
+                switchFrameListener = null
+                listener(frame)
+            } else {
+                switchFrame = frame
+                switchFrameAt = android.os.SystemClock.elapsedRealtime()
+            }
+        }
 
         class LoadingPicture(val channelLogin: String?, val thumbnail: String?, val fallback: String?)
 
