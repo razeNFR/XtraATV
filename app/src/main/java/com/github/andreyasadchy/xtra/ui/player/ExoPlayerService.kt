@@ -289,6 +289,9 @@ class ExoPlayerService : BasePlaybackService() {
                             checkStreamPictureShown()
                             if (ads) {
                                 if (!oldValue) {
+                                    // pre-roll (start of the stream) or mid-roll, shown in the badge of the ad blocker
+                                    adRollType = rollTypeOf(playlist) ?: if (firstPlaylistAd) "preroll" else "midroll"
+                                    firstPlaylistAd = false
                                     // statistics of the home: an ad break handled by the ad blocker (or a proxy)
                                     com.github.andreyasadchy.xtra.ui.tv.TvStats.addAdBlocked(this@ExoPlayerService)
                                     when {
@@ -972,6 +975,8 @@ class ExoPlayerService : BasePlaybackService() {
         if (!restart) {
             // an ad at the start of the stream is looked for in its whole first playlist
             checkFirstPlaylist = true
+            firstPlaylistAd = false
+            adRollType = null
             // the loading picture stays until a picture of the stream itself is shown
             mainFrameRendered = false
             streamPictureShown = false
@@ -1711,6 +1716,7 @@ class ExoPlayerService : BasePlaybackService() {
         if (playlist != null && mainPlayer && checkFirstPlaylist) {
             checkFirstPlaylist = false
             if (playlist.segments.any { isAdSegment(playlist, it) }) {
+                firstPlaylistAd = true
                 return true
             }
         }
@@ -1719,6 +1725,28 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** True for the first media playlist after a stream started to load. */
     private var checkFirstPlaylist = false
+
+    /** The first playlist of the stream had an ad: a pre-roll. */
+    private var firstPlaylistAd = false
+
+    /** Kind of the ad being blocked, "preroll" or "midroll", for the badge of the ad blocker. */
+    private var adRollType: String? = null
+
+    /** The kind of ad Twitch writes in its marks (X-TV-TWITCH-AD-ROLL-TYPE), null when it is not there. */
+    private fun rollTypeOf(playlist: HlsMediaPlaylist?): String? {
+        playlist ?: return null
+        val value = playlist.interstitials.firstNotNullOfOrNull { dateRange ->
+            dateRange.clientDefinedAttributes.find { it.name == "X-TV-TWITCH-AD-ROLL-TYPE" }?.textValue
+        } ?: playlist.tags.firstNotNullOfOrNull { tag ->
+            Regex("X-TV-TWITCH-AD-ROLL-TYPE=\"?([A-Za-z]+)").find(tag)?.groupValues?.get(1)
+        }
+        return when {
+            value == null -> null
+            value.contains("pre", true) -> "preroll"
+            value.contains("mid", true) -> "midroll"
+            else -> null
+        }
+    }
 
     /** The main player showed a picture since the stream started to load. */
     private var mainFrameRendered = false
@@ -2287,9 +2315,21 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** Status of the ad blocker, shown on the player like the VAFT userscript does. */
     fun getAdblockStatus(): String? {
+        // pre-roll (start of the stream) or mid-roll
+        val roll = when (adRollType) {
+            "preroll" -> getString(R.string.tv_adblock_preroll)
+            "midroll" -> getString(R.string.tv_adblock_midroll)
+            else -> null
+        }
+        val source = when {
+            videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.playerType ?: "backup"
+            proxyMediaPlaylist -> "proxy"
+            else -> null
+        }
         return when {
-            videoSwapActive -> getString(R.string.tv_adblock_blocking, videoSwapList?.getOrNull(currentVideoSwapItem)?.playerType ?: "backup")
-            proxyMediaPlaylist -> getString(R.string.tv_adblock_blocking, "proxy")
+            source != null && roll != null -> getString(R.string.tv_adblock_blocking_roll, roll, source)
+            source != null -> getString(R.string.tv_adblock_blocking, source)
+            hidden && roll != null -> getString(R.string.tv_adblock_waiting_roll, roll)
             hidden -> getString(R.string.tv_adblock_waiting)
             else -> null
         }
@@ -2440,7 +2480,13 @@ class ExoPlayerService : BasePlaybackService() {
         streamGeneration++
         secondaryLoadJob?.cancel()
         secondaryLoadJob = null
+        // nothing of the stream that ends counts for the next one: no picture of it shown yet, its first playlist not
+        // checked yet (else the events of the player being emptied would take the loading picture away at once)
         streamPictureShown = false
+        mainFrameRendered = false
+        checkFirstPlaylist = true
+        firstPlaylistAd = false
+        adRollType = null
         if (secondaryPlayer != null) {
             stopSecondaryPlayer()
         }

@@ -790,9 +790,6 @@
     <string name="tv_keep_sound_never_summary">用主页键或在第一个屏幕按返回离开应用时，总是停止直播</string>
     <string name="tv_keep_sound_minimized_summary">用主页键或在第一个屏幕按返回离开时，如果直播在迷你播放器或仅音频模式，声音继续。从全屏播放器离开时，直播停止</string>
     <string name="tv_keep_sound_always_summary">用主页键或在第一个屏幕按返回离开时，迷你播放器、仅音频以及全屏播放器的声音都会继续</string>
-    <string name="tv_menu_on_launch">启动时显示侧边菜单</string>
-    <string name="tv_menu_on_launch_on">应用在侧边菜单中启动</string>
-    <string name="tv_menu_on_launch_off">应用在起始页的第一个直播上启动</string>
     <string name="tv_live_alerts_category">开播通知</string>
     <string name="tv_live_alerts">开播横幅</string>
     <string name="tv_live_alerts_summary">你关注的主播开播时在屏幕顶部显示横幅，仅在应用打开时</string>
@@ -818,4 +815,10 @@
     <string name="tv_pip_balance_value">大 %1$d %% · 小 %2$d %%</string>
     <string name="tv_pip_swap">交换直播</string>
     <string name="tv_pip_close">关闭小窗口</string>
+    <string name="tv_hide_menu_on_launch">启动时隐藏侧边菜单</string>
+    <string name="tv_hide_menu_on_launch_summary">侧边菜单保持关闭，直接显示起始页</string>
+    <string name="tv_adblock_preroll">片头</string>
+    <string name="tv_adblock_midroll">片中</string>
+    <string name="tv_adblock_blocking_roll">正在屏蔽%1$s广告（%2$s）</string>
+    <string name="tv_adblock_waiting_roll">正在等待%1$s广告结束</string>
 </resources>

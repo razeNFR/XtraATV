@@ -790,9 +790,6 @@
     <string name="tv_keep_sound_never_summary">用主畫面鍵或在第一個畫面按返回離開應用程式時，一律停止直播</string>
     <string name="tv_keep_sound_minimized_summary">用主畫面鍵或在第一個畫面按返回離開時，如果直播在迷你播放器或僅音訊模式，聲音會繼續。從全螢幕播放器離開時，直播會停止</string>
     <string name="tv_keep_sound_always_summary">用主畫面鍵或在第一個畫面按返回離開時，迷你播放器、僅音訊以及全螢幕播放器的聲音都會繼續</string>
-    <string name="tv_menu_on_launch">啟動時顯示側邊選單</string>
-    <string name="tv_menu_on_launch_on">應用程式在側邊選單中啟動</string>
-    <string name="tv_menu_on_launch_off">應用程式在起始頁的第一個直播上啟動</string>
     <string name="tv_live_alerts_category">開播通知</string>
     <string name="tv_live_alerts">開播橫幅</string>
     <string name="tv_live_alerts_summary">你追隨的實況主開播時在畫面頂端顯示橫幅，僅在應用程式開啟時</string>
@@ -818,4 +815,10 @@
     <string name="tv_pip_balance_value">大 %1$d %% · 小 %2$d %%</string>
     <string name="tv_pip_swap">交換直播</string>
     <string name="tv_pip_close">關閉小視窗</string>
+    <string name="tv_hide_menu_on_launch">啟動時隱藏側邊選單</string>
+    <string name="tv_hide_menu_on_launch_summary">側邊選單保持關閉，直接顯示起始頁</string>
+    <string name="tv_adblock_preroll">片頭</string>
+    <string name="tv_adblock_midroll">片中</string>
+    <string name="tv_adblock_blocking_roll">正在封鎖%1$s廣告（%2$s）</string>
+    <string name="tv_adblock_waiting_roll">正在等待%1$s廣告結束</string>
 </resources>

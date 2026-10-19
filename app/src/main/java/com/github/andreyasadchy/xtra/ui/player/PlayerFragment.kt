@@ -2349,6 +2349,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    /** TV: the small window closed: its button goes away, the focus moves to another button of the controls if it was on it. */
+    fun onTvPipClosed() {
+        val button = _binding?.playerControls?.tvPipSettings ?: return
+        val hadFocus = button.hasFocus()
+        button.visibility = View.GONE
+        if (hadFocus && binding.playerControls.root.isVisible) {
+            focusPrimaryControl()
+        }
+    }
+
     /**
      * TV: panel of the small window: its corner and its size (it moves at once), the sound (the big stream, the small
      * window or both, with the balance between them), swap the streams, close it. All of it is kept for the next time.

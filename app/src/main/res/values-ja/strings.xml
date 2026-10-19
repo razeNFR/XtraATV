@@ -790,9 +790,6 @@
     <string name="tv_keep_sound_never_summary">ホーム、または最初の画面で戻るでアプリを離れると、配信は常に停止します</string>
     <string name="tv_keep_sound_minimized_summary">ホーム、または最初の画面で戻るで離れたとき、ミニプレーヤーか音声のみなら音声が続きます。全画面プレーヤーからは配信が停止します</string>
     <string name="tv_keep_sound_always_summary">ホーム、または最初の画面で戻るで離れたとき、ミニプレーヤー、音声のみ、全画面プレーヤーのどれからでも音声が続きます</string>
-    <string name="tv_menu_on_launch">起動時のサイドメニュー</string>
-    <string name="tv_menu_on_launch_on">アプリはサイドメニューで起動します</string>
-    <string name="tv_menu_on_launch_off">アプリは開始ページの最初の配信で起動します</string>
     <string name="tv_live_alerts_category">配信開始の通知</string>
     <string name="tv_live_alerts">配信開始バナー</string>
     <string name="tv_live_alerts_summary">フォロー中の配信者が配信を始めると画面上部にバナーを表示（アプリを開いている間のみ）</string>
@@ -818,4 +815,10 @@
     <string name="tv_pip_balance_value">大 %1$d %% · 小 %2$d %%</string>
     <string name="tv_pip_swap">配信を入れ替える</string>
     <string name="tv_pip_close">小窓を閉じる</string>
+    <string name="tv_hide_menu_on_launch">起動時にサイドメニューを隠す</string>
+    <string name="tv_hide_menu_on_launch_summary">サイドメニューは閉じたまま、開始ページがすぐに表示されます</string>
+    <string name="tv_adblock_preroll">プレロール</string>
+    <string name="tv_adblock_midroll">ミッドロール</string>
+    <string name="tv_adblock_blocking_roll">%1$s 広告をブロック中（%2$s）</string>
+    <string name="tv_adblock_waiting_roll">%1$s 広告の終了を待っています</string>
 </resources>

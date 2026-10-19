@@ -790,9 +790,6 @@
     <string name="tv_keep_sound_never_summary">Выход из приложения кнопкой «Домой» или «Назад» на первом экране всегда останавливает трансляцию</string>
     <string name="tv_keep_sound_minimized_summary">Кнопкой «Домой» или «Назад» на первом экране звук продолжается, если трансляция была в мини-плеере или в режиме «только звук». Из полноэкранного плеера трансляция останавливается</string>
     <string name="tv_keep_sound_always_summary">Кнопкой «Домой» или «Назад» на первом экране звук продолжается в мини-плеере, в режиме «только звук» и из полноэкранного плеера</string>
-    <string name="tv_menu_on_launch">Боковое меню при запуске</string>
-    <string name="tv_menu_on_launch_on">Приложение открывается в боковом меню</string>
-    <string name="tv_menu_on_launch_off">Приложение открывается на первой трансляции стартовой страницы</string>
     <string name="tv_live_alerts_category">Уведомления о трансляциях</string>
     <string name="tv_live_alerts">Баннер трансляции</string>
     <string name="tv_live_alerts_summary">Баннер вверху экрана, когда стример, на которого вы подписаны, начинает трансляцию, только пока приложение открыто</string>
@@ -818,4 +815,10 @@
     <string name="tv_pip_balance_value">Большая %1$d %% · Маленькое %2$d %%</string>
     <string name="tv_pip_swap">Поменять трансляции местами</string>
     <string name="tv_pip_close">Закрыть маленькое окно</string>
+    <string name="tv_hide_menu_on_launch">Скрывать боковое меню при запуске</string>
+    <string name="tv_hide_menu_on_launch_summary">Боковое меню остаётся закрытым, сразу открывается стартовая страница</string>
+    <string name="tv_adblock_preroll">pre-roll</string>
+    <string name="tv_adblock_midroll">mid-roll</string>
+    <string name="tv_adblock_blocking_roll">Блокировка рекламы %1$s (%2$s)</string>
+    <string name="tv_adblock_waiting_roll">Ожидание конца рекламы %1$s</string>
 </resources>

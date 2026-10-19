@@ -790,9 +790,6 @@
     <string name="tv_keep_sound_never_summary">Saír da app con Inicio, ou con Atrás na primeira pantalla, sempre detén o stream</string>
     <string name="tv_keep_sound_minimized_summary">Con Inicio, ou Atrás na primeira pantalla, o son continúa se o stream estaba no minirreprodutor ou en só son. Desde o reprodutor a pantalla completa, o stream detense</string>
     <string name="tv_keep_sound_always_summary">Con Inicio, ou Atrás na primeira pantalla, o son continúa no minirreprodutor, en só son e tamén desde o reprodutor a pantalla completa</string>
-    <string name="tv_menu_on_launch">Menú lateral ao iniciar</string>
-    <string name="tv_menu_on_launch_on">A app comeza no menú lateral</string>
-    <string name="tv_menu_on_launch_off">A app comeza no primeiro stream da páxina de inicio</string>
     <string name="tv_live_alerts_category">Notificacións de directo</string>
     <string name="tv_live_alerts">Banner de directo</string>
     <string name="tv_live_alerts_summary">Un banner arriba da pantalla cando un streamer que segues comeza un directo, só coa app aberta</string>
@@ -818,4 +815,10 @@
     <string name="tv_pip_balance_value">Grande %1$d %% · Pequena %2$d %%</string>
     <string name="tv_pip_swap">Intercambiar os streams</string>
     <string name="tv_pip_close">Pechar a xanela pequena</string>
+    <string name="tv_hide_menu_on_launch">Ocultar o menú lateral ao iniciar</string>
+    <string name="tv_hide_menu_on_launch_summary">O menú lateral queda pechado, a páxina de inicio móstrase directamente</string>
+    <string name="tv_adblock_preroll">pre-roll</string>
+    <string name="tv_adblock_midroll">mid-roll</string>
+    <string name="tv_adblock_blocking_roll">Bloqueando un anuncio %1$s (%2$s)</string>
+    <string name="tv_adblock_waiting_roll">Agardando o final do anuncio %1$s</string>
 </resources>	

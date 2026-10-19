@@ -52,9 +52,10 @@ class SettingsDragListAdapter : ListAdapter<SettingsDragListItem, SettingsDragLi
                 val density = root.resources.displayMetrics.density
                 root.setPaddingRelative(((if (sub) 44 else 10) * density).toInt(), root.paddingTop, root.paddingEnd, root.paddingBottom)
                 text.textSize = if (sub) 13f else 14f
-                image.visibility = if (sub) View.INVISIBLE else View.VISIBLE
+                image.visibility = if (sub || item.locked) View.INVISIBLE else View.VISIBLE
                 if (setDefault != null && !sub) {
-                    setAsDefault.visibility = View.VISIBLE
+                    // no house on an unchecked tab: it can't be the one opened first
+                    setAsDefault.visibility = if (item.enabled) View.VISIBLE else View.INVISIBLE
                     setAsDefault.setOnClickListener {
                         setAsDefault.setImageResource(R.drawable.baseline_home_black_24)
                         setAsDefault.isClickable = false
@@ -70,10 +71,28 @@ class SettingsDragListAdapter : ListAdapter<SettingsDragListItem, SettingsDragLi
                 } else {
                     setAsDefault.visibility = View.GONE
                 }
-                checkBox.visibility = View.VISIBLE
+                // the listener of the row shown before is removed first, setting the box does not change that other row
+                checkBox.setOnCheckedChangeListener(null)
+                checkBox.visibility = if (item.locked) View.INVISIBLE else View.VISIBLE
                 checkBox.isChecked = item.enabled
-                checkBox.setOnCheckedChangeListener { buttonView, isChecked ->
+                checkBox.setOnCheckedChangeListener { _, isChecked ->
                     item.enabled = isChecked
+                    if (setDefault != null && !sub) {
+                        setAsDefault.visibility = if (isChecked) View.VISIBLE else View.INVISIBLE
+                        val rows = currentList
+                        if (!isChecked && item.default) {
+                            // the tab opened first was unchecked: the house goes to the first checked tab
+                            rows.firstOrNull { it !== item && it.enabled && it.parent == null }?.let { next ->
+                                setDefault!!(next)
+                                root.post { notifyItemChanged(rows.indexOf(next)) }
+                            }
+                        } else if (isChecked && rows.none { it.default && it.enabled && it.parent == null }) {
+                            // no checked tab had the house: this one takes it
+                            setDefault!!(item)
+                            setAsDefault.setImageResource(R.drawable.baseline_home_black_24)
+                            setAsDefault.isClickable = false
+                        }
+                    }
                 }
             }
         }

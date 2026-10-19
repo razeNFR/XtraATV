@@ -790,9 +790,6 @@
     <string name="tv_keep_sound_never_summary">مغادرة التطبيق بزر الرئيسية، أو برجوع في الشاشة الأولى، توقف البث دائمًا</string>
     <string name="tv_keep_sound_minimized_summary">بزر الرئيسية، أو رجوع في الشاشة الأولى، يستمر الصوت إذا كان البث في المشغل المصغر أو الصوت فقط. من مشغل ملء الشاشة يتوقف البث</string>
     <string name="tv_keep_sound_always_summary">بزر الرئيسية، أو رجوع في الشاشة الأولى، يستمر الصوت في المشغل المصغر والصوت فقط وأيضًا من مشغل ملء الشاشة</string>
-    <string name="tv_menu_on_launch">القائمة الجانبية عند التشغيل</string>
-    <string name="tv_menu_on_launch_on">يبدأ التطبيق في القائمة الجانبية</string>
-    <string name="tv_menu_on_launch_off">يبدأ التطبيق على أول بث في صفحة البداية</string>
     <string name="tv_live_alerts_category">إشعارات البث المباشر</string>
     <string name="tv_live_alerts">شريط البث المباشر</string>
     <string name="tv_live_alerts_summary">شريط أعلى الشاشة عندما يبدأ صانع محتوى تتابعه بثًا مباشرًا، فقط أثناء فتح التطبيق</string>
@@ -818,4 +815,10 @@
     <string name="tv_pip_balance_value">الكبير %1$d %% · الصغيرة %2$d %%</string>
     <string name="tv_pip_swap">تبديل البثين</string>
     <string name="tv_pip_close">إغلاق النافذة الصغيرة</string>
+    <string name="tv_hide_menu_on_launch">إخفاء القائمة الجانبية عند التشغيل</string>
+    <string name="tv_hide_menu_on_launch_summary">تبقى القائمة الجانبية مغلقة، وتظهر صفحة البداية مباشرة</string>
+    <string name="tv_adblock_preroll">pre-roll</string>
+    <string name="tv_adblock_midroll">mid-roll</string>
+    <string name="tv_adblock_blocking_roll">جارٍ حظر إعلان %1$s (%2$s)</string>
+    <string name="tv_adblock_waiting_roll">في انتظار نهاية إعلان %1$s</string>
 </resources>

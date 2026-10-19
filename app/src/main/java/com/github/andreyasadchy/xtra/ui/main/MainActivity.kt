@@ -43,6 +43,7 @@ import androidx.core.content.res.use
 import androidx.core.net.toUri
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.doOnLayout
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -259,11 +260,11 @@ class MainActivity : AppCompatActivity() {
                         }
                         if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment) {
                             tvInitialFocusDone = true
-                            if (prefs.getBoolean(C.TV_MENU_ON_LAUNCH, true)) {
+                            if (!prefs.getBoolean(C.TV_HIDE_MENU_ON_LAUNCH, false)) {
                                 // browsing starts in the side menu
                                 showTvMenu(true)
                             } else {
-                                // straight on the first stream of the start page (its list may still be loading)
+                                // the side menu stays closed: the focus on the start page (its list may still be loading)
                                 focusContentAfterMenu(false, maxTries = 60)
                             }
                         } else {
@@ -873,6 +874,11 @@ class MainActivity : AppCompatActivity() {
             tvPip.applyLayout()
             tvPip.applySound()
         }
+    }
+
+    /** The small window closed: the player takes its button away (and the focus off it). */
+    fun onTvPipClosed() {
+        (playerFragment as? PlayerFragment)?.onTvPipClosed()
     }
 
     fun swapTvPip() {
@@ -2369,13 +2375,20 @@ class MainActivity : AppCompatActivity() {
             val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
             when {
                 isTv -> {
-                    // TV: the home, or the Following page when the Xtra TV settings ask for it
-                    val tvStartOnFollowed = prefs.getString(C.TV_START_ON_FOLLOWED, "2")?.toIntOrNull() ?: 2
-                    if ((isLoggedIn && tvStartOnFollowed < 2) || (!isLoggedIn && tvStartOnFollowed == 0)) {
-                        it.setStartDestination(R.id.followPagerFragment)
-                    } else {
-                        it.setStartDestination(R.id.tvHomeFragment)
-                    }
+                    // TV: the page with the house in the navigation tabs (the home at first); a tab unchecked since then
+                    // can't be opened, the home is
+                    val startPage = prefs.getString(C.TV_START_PAGE, "home")
+                    val shown = tabList.any { tab -> tab.split(':').let { it[0] == startPage && it[2] != "0" } }
+                    it.setStartDestination(
+                        when {
+                            !shown -> R.id.tvHomeFragment
+                            startPage == "0" -> R.id.rootGamesFragment
+                            startPage == "1" -> R.id.rootTopFragment
+                            startPage == "2" -> R.id.followPagerFragment
+                            startPage == "3" -> R.id.savedPagerFragment
+                            else -> R.id.tvHomeFragment
+                        }
+                    )
                 }
                 (isLoggedIn && startOnFollowed < 2) || (!isLoggedIn && startOnFollowed == 0) || defaultItem == "2" -> {
                     if (prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
@@ -2445,6 +2458,14 @@ class MainActivity : AppCompatActivity() {
             setupWithNavController(navController)
             if (isTv) {
                 setupTvSideMenu()
+                if (prefs.getBoolean(C.TV_HIDE_MENU_ON_LAUNCH, false)) {
+                    // the side menu stays closed when the app starts: folded away before anything is drawn, no animation
+                    val sideMenu = binding.navBarContainer
+                    isTvMenuShown = false
+                    sideMenu.alpha = 0f
+                    sideMenu.visibility = View.INVISIBLE
+                    sideMenu.doOnLayout { if (!isTvMenuShown) it.translationX = -it.width.toFloat() }
+                }
             }
             setOnItemSelectedListener {
                 when (it.itemId) {

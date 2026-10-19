@@ -207,9 +207,14 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     }
 
     fun close() {
+        val wasOpen = stream != null
         stream = null
         // the big stream gets all of its sound back
         setMainMix(1f)
+        if (wasOpen) {
+            // its button leaves the controls, the focus does not get lost with it
+            activity.onTvPipClosed()
+        }
         loadJob?.cancel()
         loadJob = null
         container.removeCallbacks(followPlayer)
@@ -233,7 +238,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         }
         val isOk = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
         when {
-            event.keyCode == KeyEvent.KEYCODE_BACK -> {
+            // back hides the controls first (the player does it), it closes the small window only once they are hidden
+            event.keyCode == KeyEvent.KEYCODE_BACK && activity.isPlayerFocusedWithoutControls() -> {
                 if (event.action == KeyEvent.ACTION_UP) {
                     close()
                 }

@@ -105,22 +105,11 @@
         app:iconSpaceReserved="false">
 
 
-        <ListPreference
-            android:defaultValue="2"
-            android:entries="@array/followedEntries"
-            android:entryValues="@array/miscValues"
-            android:key="tv_start_on_followed"
-            android:summary="%s"
-            android:title="@string/startonfollowed"
-            app:iconSpaceReserved="false"
-            app:singleLineTitle="false" />
-
         <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="tv_menu_on_launch"
-            android:summaryOff="@string/tv_menu_on_launch_off"
-            android:summaryOn="@string/tv_menu_on_launch_on"
-            android:title="@string/tv_menu_on_launch"
+            android:defaultValue="false"
+            android:key="tv_hide_menu_on_launch"
+            android:summary="@string/tv_hide_menu_on_launch_summary"
+            android:title="@string/tv_hide_menu_on_launch"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 

@@ -211,13 +211,18 @@ class SettingsActivity : AppCompatActivity() {
         val dragCallback = object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
             override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
                 // the rows under another one follow it, they are not moved by themselves
-                return if (list.getOrNull(viewHolder.bindingAdapterPosition)?.parent != null) 0 else super.getMovementFlags(recyclerView, viewHolder)
+                val item = list.getOrNull(viewHolder.bindingAdapterPosition)
+                return if (item?.parent != null || item?.locked == true) 0 else super.getMovementFlags(recyclerView, viewHolder)
             }
 
             override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
                 val fromPosition = viewHolder.bindingAdapterPosition
                 var toPosition = target.bindingAdapterPosition
                 if (fromPosition == RecyclerView.NO_POSITION || toPosition == RecyclerView.NO_POSITION || list.getOrNull(fromPosition)?.parent != null) {
+                    return false
+                }
+                // a locked row (the home of the TV) stays where it is, nothing goes past it
+                if (list.getOrNull(fromPosition)?.locked == true || list.getOrNull(toPosition)?.locked == true) {
                     return false
                 }
                 // over the rows under another one: the move goes past that whole group
@@ -276,6 +281,11 @@ class SettingsActivity : AppCompatActivity() {
             adapter = listAdapter
             val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10F, resources.displayMetrics).toInt()
             setPadding(0, padding, 0, 0)
+        }
+        if (showDefault && list.none { it.default && it.enabled && it.parent == null }) {
+            // the house was on an unchecked tab (or nowhere): it goes to the first checked one
+            list.forEach { it.default = false }
+            list.firstOrNull { it.enabled && it.parent == null }?.default = true
         }
         listAdapter.setDefault = if (!showDefault) null else { item ->
             list.find { it.default }?.let { previous ->
@@ -817,8 +827,14 @@ class SettingsActivity : AppCompatActivity() {
                 // TV: the shortcuts of the side menu to the tabs of the followed channels, checked under "Following"
                 val isTv = requireContext().resources.getBoolean(R.bool.isTv)
                 val extras = requireContext().prefs().getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
+                // TV: the home on top (it can't be moved nor hidden), the house says the page the app opens on
+                val startPage = requireContext().prefs().getString(C.TV_START_PAGE, "home")
+                if (isTv) {
+                    tabs.forEach { it.default = it.key == startPage }
+                }
+                val home = SettingsDragListItem(key = "home", text = getString(R.string.tv_home), default = startPage == "home", enabled = true, locked = true)
                 val rows = if (isTv) {
-                    tabs.flatMap { tab ->
+                    (listOf(home) + tabs.flatMap { tab ->
                         if (tab.key == "2") {
                             listOf(tab) + listOf(
                                 "videos" to R.string.tv_menu_followed_videos,
@@ -826,14 +842,16 @@ class SettingsActivity : AppCompatActivity() {
                                 "games" to R.string.tv_menu_followed_games,
                             ).map { (key, text) -> SettingsDragListItem(key = key, text = getString(text), default = false, enabled = key in extras, parent = "2") }
                         } else listOf(tab)
-                    }.toMutableList()
+                    }).toMutableList()
                 } else tabs
                 (requireActivity() as? SettingsActivity)?.showDragListDialog(rows, C.UI_NAVIGATION_TAB_LIST, preference.title) { saved ->
                     requireContext().prefs().edit {
-                        putString(C.UI_NAVIGATION_TAB_LIST, saved.filter { it.parent == null }.joinToString(",") {
+                        putString(C.UI_NAVIGATION_TAB_LIST, saved.filter { it.parent == null && !it.locked }.joinToString(",") {
                             "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
                         })
                         if (isTv) {
+                            // the page the app opens on: the row with the house (a checked one), else the home
+                            putString(C.TV_START_PAGE, saved.firstOrNull { it.default && it.enabled && it.parent == null }?.key ?: "home")
                             putStringSet(C.TV_MENU_EXTRAS, saved.filter { it.parent != null && it.enabled }.map { it.key }.toSet())
                         }
                     }

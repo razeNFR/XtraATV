@@ -809,9 +809,6 @@
     <string name="tv_keep_sound_never_summary">Leaving the app with Home, or with Back on the first screen, always stops the stream</string>
     <string name="tv_keep_sound_minimized_summary">With Home, or Back on the first screen, the sound goes on if the stream was in the mini player or in sound only. From the full screen player, the stream stops</string>
     <string name="tv_keep_sound_always_summary">With Home, or Back on the first screen, the sound goes on in the mini player, in sound only and also from the full screen player</string>
-    <string name="tv_menu_on_launch">Side menu when the app starts</string>
-    <string name="tv_menu_on_launch_on">The app starts in the side menu</string>
-    <string name="tv_menu_on_launch_off">The app starts on the first stream of the start page</string>
     <string name="tv_live_alerts_category">Live notifications</string>
     <string name="tv_live_alerts">Live banner</string>
     <string name="tv_live_alerts_summary">A banner at the top of the screen when a streamer you follow goes live, only while the app is open</string>
@@ -837,4 +834,10 @@
     <string name="tv_pip_balance_value">Big %1$d %% · Small %2$d %%</string>
     <string name="tv_pip_swap">Swap the streams</string>
     <string name="tv_pip_close">Close the small window</string>
+    <string name="tv_hide_menu_on_launch">Hide the side menu when the app starts</string>
+    <string name="tv_hide_menu_on_launch_summary">The side menu stays closed, the start page is shown at once</string>
+    <string name="tv_adblock_preroll">pre-roll</string>
+    <string name="tv_adblock_midroll">mid-roll</string>
+    <string name="tv_adblock_blocking_roll">Blocking a %1$s ad (%2$s)</string>
+    <string name="tv_adblock_waiting_roll">Waiting for the end of the %1$s ad</string>
 </resources>

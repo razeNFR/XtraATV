@@ -791,9 +791,6 @@
     <string name="tv_keep_sound_never_summary">Uygulamadan Ana ekran ile veya ilk ekranda Geri ile çıkmak yayını her zaman durdurur</string>
     <string name="tv_keep_sound_minimized_summary">Ana ekran ile veya ilk ekranda Geri ile, yayın mini oynatıcıda ya da yalnızca seste ise ses devam eder. Tam ekran oynatıcıdan çıkınca yayın durur</string>
     <string name="tv_keep_sound_always_summary">Ana ekran ile veya ilk ekranda Geri ile ses mini oynatıcıda, yalnızca seste ve tam ekran oynatıcıdan da devam eder</string>
-    <string name="tv_menu_on_launch">Açılışta yan menü</string>
-    <string name="tv_menu_on_launch_on">Uygulama yan menüde açılır</string>
-    <string name="tv_menu_on_launch_off">Uygulama başlangıç sayfasının ilk yayınında açılır</string>
     <string name="tv_live_alerts_category">Canlı bildirimleri</string>
     <string name="tv_live_alerts">Canlı afişi</string>
     <string name="tv_live_alerts_summary">Takip ettiğin bir yayıncı canlı yayına başladığında ekranın üstünde bir afiş, yalnızca uygulama açıkken</string>
@@ -819,4 +816,10 @@
     <string name="tv_pip_balance_value">Büyük %%%1$d · Küçük %%%2$d</string>
     <string name="tv_pip_swap">Yayınları değiştir</string>
     <string name="tv_pip_close">Küçük pencereyi kapat</string>
+    <string name="tv_hide_menu_on_launch">Açılışta yan menüyü gizle</string>
+    <string name="tv_hide_menu_on_launch_summary">Yan menü kapalı kalır, başlangıç sayfası hemen görünür</string>
+    <string name="tv_adblock_preroll">pre-roll</string>
+    <string name="tv_adblock_midroll">mid-roll</string>
+    <string name="tv_adblock_blocking_roll">%1$s reklam engelleniyor (%2$s)</string>
+    <string name="tv_adblock_waiting_roll">%1$s reklamın bitmesi bekleniyor</string>
 </resources>
