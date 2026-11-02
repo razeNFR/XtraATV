@@ -848,4 +848,9 @@
     <string name="tv_proxy_all_settings">Semua pengaturan proxy…</string>
     <string name="tv_focus_switch">Ganti halaman tanpa OK</string>
     <string name="tv_focus_switch_summary">Tab dan menu samping menampilkan halamannya begitu mendapat fokus</string>
+    <string name="tv_update_title_version">Xtra TV %1$s tersedia</string>
+    <string name="tv_update_now">Perbarui</string>
+    <string name="tv_update_ignore">Abaikan</string>
+    <string name="tv_proxy_add">Tambah proxy</string>
+    <string name="tv_proxy_full_screen">Layar penuh proxy…</string>
 </resources>

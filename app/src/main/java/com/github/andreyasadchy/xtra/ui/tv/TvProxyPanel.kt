@@ -1,5 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.tv
 
+import android.content.Context
+import android.view.LayoutInflater
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -13,11 +15,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -26,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,42 +41,66 @@ import androidx.core.net.toUri
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.databinding.DialogCustomProxyEditBinding
 import com.github.andreyasadchy.xtra.model.ui.CustomProxy
+import com.github.andreyasadchy.xtra.repository.PlayerRepository
+import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
- * TV: the custom proxies from the player (OK held on its button): each one turned on or off, moved up or down with the
- * arrows like in the settings. The same list as the settings: the changes are saved there when the panel closes.
+ * TV: the custom proxies in a side panel: each one turned on or off, moved up or down with the arrows, with its status
+ * (online / offline, like the screen of the settings). From the player (OK held on its button) or from the settings,
+ * where they can also be added, edited and deleted ([Manage]). The changes of order are saved when the panel closes.
  */
 object TvProxyPanel {
 
-    private class Entry(val proxy: CustomProxy, enabled: Boolean) {
-        var enabled by androidx.compose.runtime.mutableStateOf(enabled)
+    private class Entry(val proxy: CustomProxy) {
+        var enabled by mutableStateOf(proxy.enabled)
+        var url by mutableStateOf(proxy.url)
+        var addQueryParams = proxy.addQueryParams
     }
+
+    /** From the settings: a proxy added, edited or deleted is saved at once in [repository]. */
+    class Manage(val scope: CoroutineScope, val repository: PlayerRepository)
 
     /**
      * [onClosed]: the panel closed, with the list in its new order when something changed (null when nothing did).
-     * [openSettings]: the screen of the settings of the custom proxies (to add, remove or edit one).
+     * [openSettings]: the full screen of the settings of the custom proxies.
      */
     fun show(
-        context: android.content.Context,
+        context: Context,
         proxies: List<CustomProxy>,
         openSettings: () -> Unit,
+        manage: Manage? = null,
         onClosed: (List<CustomProxy>?) -> Unit,
     ) {
-        val entries = mutableStateListOf<Entry>().apply { addAll(proxies.sortedBy { it.position }.map { Entry(it, it.enabled) }) }
+        val entries = mutableStateListOf<Entry>().apply { addAll(proxies.sortedBy { it.position }.map { Entry(it) }) }
         val original = proxies.sortedBy { it.position }.map { it.id to it.enabled }
         val dialog = TvDialogs.show(context) { dismiss ->
-            SidePanel(title = context.getString(R.string.tv_proxy_panel_title), subtitle = context.getString(R.string.tv_proxy_panel_subtitle), scrollable = true) {
+            SidePanel(title = context.getString(R.string.tv_proxy_panel_title), subtitle = context.getString(R.string.tv_proxy_panel_subtitle), width = if (manage != null) 500.dp else 440.dp, scrollable = true) {
                 val first = remember { FocusRequester() }
                 entries.forEachIndexed { index, entry ->
-                    androidx.compose.runtime.key(entry.proxy.id) {
+                    androidx.compose.runtime.key(entry) {
+                        // the status, checked again when the url changes
+                        val online by produceState<Boolean?>(null, entry.url) {
+                            value = null
+                            value = TvProxyStatus.check(context, entry.url)
+                        }
                         ProxyRow(
-                            label = entry.proxy.url?.let { shortUrl(it) } ?: "",
+                            label = entry.url?.let { shortUrl(it) } ?: "",
+                            online = online,
                             enabled = entry.enabled,
                             canUp = index > 0,
                             canDown = index < entries.lastIndex,
                             modifier = if (index == 0) Modifier.focusRequester(first) else Modifier,
-                            onToggle = { entry.enabled = !entry.enabled },
+                            onToggle = {
+                                entry.enabled = !entry.enabled
+                                if (manage != null) {
+                                    entry.proxy.enabled = entry.enabled
+                                    manage.scope.launch { manage.repository.updateCustomProxy(entry.proxy) }
+                                }
+                            },
                             onMove = { step ->
                                 val target = index + step
                                 if (target in entries.indices) {
@@ -78,11 +108,42 @@ object TvProxyPanel {
                                     entries.add(target, moved)
                                 }
                             },
+                            onEdit = if (manage != null) {
+                                {
+                                    showEdit(context, entry.url, entry.addQueryParams, onSave = { url, addQueryParams ->
+                                        TvProxyStatus.forget(entry.url)
+                                        TvProxyStatus.forget(url)
+                                        entry.proxy.url = url
+                                        entry.proxy.addQueryParams = addQueryParams
+                                        entry.addQueryParams = addQueryParams
+                                        entry.url = url
+                                        manage.scope.launch { manage.repository.updateCustomProxy(entry.proxy) }
+                                    }, onDelete = {
+                                        entries.remove(entry)
+                                        manage.scope.launch { manage.repository.deleteCustomProxy(entry.proxy) }
+                                    })
+                                }
+                            } else null,
                         )
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                ButtonRow(context.getString(R.string.tv_proxy_all_settings)) {
+                if (manage != null) {
+                    // no proxy yet: the focus on "Add"
+                    ButtonRow(context.getString(R.string.tv_proxy_add), if (entries.isEmpty()) Modifier.focusRequester(first) else Modifier) {
+                        showEdit(context, null, true, onSave = { url, addQueryParams ->
+                            if (!url.isNullOrBlank()) {
+                                val item = CustomProxy(url = url, addQueryParams = addQueryParams, position = entries.size)
+                                TvProxyStatus.forget(url)
+                                manage.scope.launch {
+                                    item.id = manage.repository.saveCustomProxy(item).toInt()
+                                    entries.add(Entry(item))
+                                }
+                            }
+                        }, onDelete = null)
+                    }
+                }
+                ButtonRow(context.getString(if (manage != null) R.string.tv_proxy_full_screen else R.string.tv_proxy_all_settings)) {
                     dismiss()
                     openSettings()
                 }
@@ -104,6 +165,31 @@ object TvProxyPanel {
         }
     }
 
+    /** The url of a proxy to add or edit (and delete it, for an edited one), like the screen of the settings. */
+    private fun showEdit(context: Context, url: String?, addQueryParams: Boolean, onSave: (String?, Boolean) -> Unit, onDelete: (() -> Unit)?) {
+        val binding = DialogCustomProxyEditBinding.inflate(LayoutInflater.from(context))
+        binding.editText.editText?.setText(url ?: "")
+        binding.checkBox.isChecked = addQueryParams
+        val builder = context.getAlertDialogBuilder()
+            .setView(binding.root)
+            .setPositiveButton(context.getString(android.R.string.ok)) { _, _ ->
+                onSave(binding.editText.editText?.text?.toString()?.trim(), binding.checkBox.isChecked)
+            }
+            .setNegativeButton(context.getString(android.R.string.cancel), null)
+        if (onDelete != null) {
+            builder.setNeutralButton(context.getString(R.string.delete)) { _, _ ->
+                val delete = context.getString(R.string.delete)
+                context.getAlertDialogBuilder()
+                    .setTitle(delete)
+                    .setMessage(context.getString(R.string.delete_proxy_message))
+                    .setPositiveButton(delete) { _, _ -> onDelete() }
+                    .setNegativeButton(context.getString(android.R.string.cancel), null)
+                    .show()
+            }
+        }
+        builder.show()
+    }
+
     /** "https://eu.luminous.dev/live/$channel" -> "eu.luminous.dev". */
     private fun shortUrl(url: String): String {
         return (url.toUri().takeIf { it.host != null } ?: "https://$url".toUri()).host ?: url
@@ -112,12 +198,14 @@ object TvProxyPanel {
     @Composable
     private fun ProxyRow(
         label: String,
+        online: Boolean?,
         enabled: Boolean,
         canUp: Boolean,
         canDown: Boolean,
         modifier: Modifier,
         onToggle: () -> Unit,
         onMove: (Int) -> Unit,
+        onEdit: (() -> Unit)?,
     ) {
         Row(
             Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -135,6 +223,27 @@ object TvProxyPanel {
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        // the status: green online, red offline, grey while it is checked
+                        val statusColor = when (online) {
+                            true -> colorResource(R.color.online)
+                            false -> colorResource(R.color.offline)
+                            null -> Color(0x99FFFFFF)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(statusColor))
+                            Spacer(Modifier.size(6.dp))
+                            Text(
+                                when (online) {
+                                    true -> androidx.compose.ui.res.stringResource(R.string.online)
+                                    false -> androidx.compose.ui.res.stringResource(R.string.offline)
+                                    null -> androidx.compose.ui.res.stringResource(R.string.loading)
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (focused && online == null) TvColors.onFocused.copy(alpha = 0.7f) else statusColor,
+                                maxLines = 1,
+                            )
+                        }
                     }
                     Spacer(Modifier.size(10.dp))
                     // switch: the color of accent when on
@@ -147,6 +256,11 @@ object TvProxyPanel {
                     ) {
                         Box(Modifier.padding(3.dp).size(16.dp).clip(RoundedCornerShape(8.dp)).background(Color.White))
                     }
+                }
+            }
+            if (onEdit != null) {
+                Pill(Modifier, onEdit) { focused ->
+                    Icon(painterResource(R.drawable.tv_ic_edit), contentDescription = null, tint = if (focused) TvColors.onFocused else Color.White, modifier = Modifier.size(20.dp))
                 }
             }
             Pill(Modifier, { if (canUp) onMove(-1) }, alpha = if (canUp) 1f else 0.35f) { focused ->

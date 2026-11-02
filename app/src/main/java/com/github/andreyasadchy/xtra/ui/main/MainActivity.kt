@@ -461,10 +461,7 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.updateUrl.collectLatest {
                     if (it != null) {
-                        getAlertDialogBuilder()
-                            .setTitle(getString(R.string.update_available))
-                            .setMessage(getString(R.string.update_message))
-                            .setPositiveButton(getString(R.string.yes)) { _, _ ->
+                        val startUpdate: () -> Unit = {
                                 if (prefs.getBoolean(C.UPDATE_USE_BROWSER, false)) {
                                     try {
                                         val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
@@ -503,13 +500,23 @@ class MainActivity : AppCompatActivity() {
                                         .show()
                                     updateDownloadDialog = dialog
                                 }
+                        }
+                        val ignoreUpdate: () -> Unit = {
+                            tokenPrefs().edit {
+                                putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
                             }
-                            .setNegativeButton(getString(R.string.no)) { _, _ ->
-                                tokenPrefs().edit {
-                                    putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
-                                }
-                            }
-                            .show()
+                        }
+                        if (isTv) {
+                            // TV: the version and its changelog, the focus on "Update"
+                            com.github.andreyasadchy.xtra.ui.tv.TvUpdateDialog.show(this@MainActivity, viewModel.updateVersion, viewModel.updateNotes, startUpdate, ignoreUpdate)
+                        } else {
+                            getAlertDialogBuilder()
+                                .setTitle(getString(R.string.update_available))
+                                .setMessage(getString(R.string.update_message))
+                                .setPositiveButton(getString(R.string.yes)) { _, _ -> startUpdate() }
+                                .setNegativeButton(getString(R.string.no)) { _, _ -> ignoreUpdate() }
+                                .show()
+                        }
                     }
                 }
             }

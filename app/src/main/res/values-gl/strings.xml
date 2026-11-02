@@ -847,4 +847,9 @@
     <string name="tv_proxy_all_settings">Todos os axustes dos proxys…</string>
     <string name="tv_focus_switch">Cambiar de páxina sen OK</string>
     <string name="tv_focus_switch_summary">As lapelas e o menú lateral amosan a súa páxina en canto teñen o foco</string>
+    <string name="tv_update_title_version">Xtra TV %1$s está dispoñible</string>
+    <string name="tv_update_now">Actualizar</string>
+    <string name="tv_update_ignore">Ignorar</string>
+    <string name="tv_proxy_add">Engadir un proxy</string>
+    <string name="tv_proxy_full_screen">Pantalla completa dos proxys…</string>
 </resources>	

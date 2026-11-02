@@ -105,15 +105,8 @@ object TvStreamSwitcher {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (4 * density).toInt())
         }
-        // multi-stream: a band of the color of accent over the row and the icon of the multi-stream before its title, the
-        // row of the other streams stays plain
-        if (selection != null) {
-            root.addView(View(activity).apply {
-                setBackgroundColor(com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
-            }, 0, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (4 * density).toInt()).apply {
-                bottomMargin = (10 * density).toInt()
-            })
-        }
+        // multi-stream: the icon of the multi-stream before its title, numbered streams and smaller cards (the row of
+        // the other streams stays as it is)
         header.addView(TextView(activity).apply {
             text = selection?.title ?: activity.getString(R.string.tv_switch_stream)
             if (selection != null) {
@@ -129,7 +122,7 @@ object TvStreamSwitcher {
             // readable over a bright video
             setShadowLayer(8 * density, 0f, 2 * density, 0xE6000000.toInt())
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        // selection: "Validate (n)" over the row, up from the cards
+        // selection: "Validate (n)", first on the line of the tabs (seen even with many tabs), else in the header
         val validate = if (selection != null && checked != null) {
             TextView(activity).apply {
                 setTextColor(activity.getColorStateList(R.color.tv_pill_text))
@@ -146,7 +139,7 @@ object TvStreamSwitcher {
                 }
                 setCompoundDrawablesRelative(icon, null, null, null)
                 compoundDrawablePadding = (8 * density).toInt()
-            }.also { header.addView(it) }
+            }
         } else null
         root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         // multi-stream with several streams to pick: what OK does
@@ -179,7 +172,13 @@ object TvStreamSwitcher {
         if (tabTitles.size > 1) {
             val tabsLayout = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
                 setPadding(horizontalPadding + (4 * density).toInt(), (8 * density).toInt(), horizontalPadding, (2 * density).toInt())
+            }
+            validate?.let { button ->
+                tabsLayout.addView(button, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    marginEnd = (18 * density).toInt()
+                })
             }
             tabTitles.forEach { title ->
                 tabViews += TextView(activity).apply {
@@ -273,7 +272,20 @@ object TvStreamSwitcher {
             validate?.alpha = if ((checked?.size ?: 0) < minChecked) 0.45f else 1f
         }
         updateValidate()
-        adapter = Adapter(streams, (250 * density).toInt(), preview, checked) { stream ->
+        // no tabs: "Validate" at the right of the title
+        if (validate != null && validate.parent == null) {
+            header.addView(validate)
+        }
+        // down from "Validate": the cards
+        validate?.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                (recyclerView.layoutManager?.findViewByPosition((recyclerView.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition())
+                    ?: recyclerView.getChildAt(0))?.requestFocus()
+                true
+            } else false
+        }
+        // multi-stream: smaller cards, more streams in sight
+        adapter = Adapter(streams, ((if (selection != null) 175 else 250) * density).toInt(), preview, checked) { stream ->
             if (selection != null && checked != null) {
                 val login = stream.channelLogin ?: return@Adapter
                 when {

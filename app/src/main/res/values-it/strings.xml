@@ -847,4 +847,9 @@
     <string name="tv_proxy_all_settings">Tutte le impostazioni dei proxy…</string>
     <string name="tv_focus_switch">Cambia pagina senza OK</string>
     <string name="tv_focus_switch_summary">Le schede e il menu laterale mostrano la loro pagina appena hanno il focus</string>
+    <string name="tv_update_title_version">Xtra TV %1$s è disponibile</string>
+    <string name="tv_update_now">Aggiorna</string>
+    <string name="tv_update_ignore">Ignora</string>
+    <string name="tv_proxy_add">Aggiungi un proxy</string>
+    <string name="tv_proxy_full_screen">Schermata completa dei proxy…</string>
 </resources>

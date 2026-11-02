@@ -847,4 +847,9 @@
     <string name="tv_proxy_all_settings">所有代理設定…</string>
     <string name="tv_focus_switch">不用按 OK 切換頁面</string>
     <string name="tv_focus_switch_summary">分頁和側邊選單取得焦點後立即顯示對應頁面</string>
+    <string name="tv_update_title_version">Xtra TV %1$s 已推出</string>
+    <string name="tv_update_now">更新</string>
+    <string name="tv_update_ignore">忽略</string>
+    <string name="tv_proxy_add">新增代理</string>
+    <string name="tv_proxy_full_screen">代理完整頁面…</string>
 </resources>

@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -110,6 +111,8 @@ class TvHomeActions(
     /** Row of the latest videos of the followed channels: OK plays the video. */
     val openFollowedVideo: (com.github.andreyasadchy.xtra.model.ui.Video) -> Unit = {},
     val formatVideoDuration: (Int) -> String = { "" },
+    /** Goes up at each refresh with the button once the rows came: a light sweeps over them. */
+    val sweepCount: () -> Int = { 0 },
 )
 
 class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int, val icon: Int? = null)
@@ -305,12 +308,37 @@ fun TvHomeScreen(
             Spacer(Modifier.weight(1f))
             Greeting(account)
         }
+    // refreshed with the button: a light sweeps once over the rows, like the other pages
+    val sweepCount = actions.sweepCount()
+    val sweep = remember { androidx.compose.animation.core.Animatable(-1f) }
+    LaunchedEffect(sweepCount) {
+        if (sweepCount > 0) {
+            sweep.snapTo(0f)
+            sweep.animateTo(1f, androidx.compose.animation.core.tween(700, easing = androidx.compose.animation.core.LinearEasing))
+            sweep.snapTo(-1f)
+        }
+    }
     CompositionLocalProvider(LocalBringIntoViewSpec provides NoScrollSpec) {
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .drawWithContent {
+                    drawContent()
+                    val progress = sweep.value
+                    if (progress >= 0f) {
+                        val band = size.width * 0.35f
+                        val x = -band + progress * (size.width + band * 2)
+                        drawRect(
+                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(Color.Transparent, Color.White.copy(alpha = 0.27f), Color.Transparent),
+                                start = androidx.compose.ui.geometry.Offset(x, 0f),
+                                end = androidx.compose.ui.geometry.Offset(x + band, 0f),
+                            )
+                        )
+                    }
+                }
                 .focusRestorer(if (firstIsGhost) ghostCard else firstCard)
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {

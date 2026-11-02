@@ -211,6 +211,24 @@ class SettingsActivity : AppCompatActivity() {
         showDefault: Boolean = true,
         onSave: ((List<SettingsDragListItem>) -> Unit)? = null,
     ) {
+        // the list saved as before: by the screen that opened it, else in its setting
+        val save = { saved: List<SettingsDragListItem> ->
+            if (onSave != null) {
+                onSave(saved)
+            } else {
+                prefs().edit {
+                    putString(prefKey, saved.joinToString(",") {
+                        "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
+                    })
+                    setResult()
+                }
+            }
+        }
+        if (TvUi.isTv(this)) {
+            // TV: a side panel like the proxies of the player (switch, house, arrows), saved when it closes
+            com.github.andreyasadchy.xtra.ui.tv.TvListPanel.show(this, title, list, showDefault, save)
+            return
+        }
         val listAdapter = SettingsDragListAdapter()
         val dragCallback = object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
             override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
@@ -313,16 +331,7 @@ class SettingsActivity : AppCompatActivity() {
             .setTitle(title)
             .setView(recyclerView)
             .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
-                if (onSave != null) {
-                    onSave(listAdapter.currentList)
-                    return@setPositiveButton
-                }
-                prefs().edit {
-                    putString(prefKey, listAdapter.currentList.joinToString(",") {
-                        "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
-                    })
-                    setResult()
-                }
+                save(listAdapter.currentList)
             }
             .setNegativeButton(getString(android.R.string.cancel), null)
             .show()
@@ -518,8 +527,30 @@ class SettingsActivity : AppCompatActivity() {
                 true
             }
             findPreference<Preference>("custom_proxy_settings")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalCustomProxySettingsFragment())
+                val openScreen = {
+                    requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                    findNavController().navigate(SettingsNavGraphDirections.actionGlobalCustomProxySettingsFragment())
+                }
+                if (TvUi.isTv(requireContext())) {
+                    // TV: the proxies in a side panel (status, on / off, order, add, edit, delete), the screen stays there
+                    val activity = requireActivity()
+                    val repository = (activity.application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val proxies = repository.getCustomProxies()
+                        com.github.andreyasadchy.xtra.ui.tv.TvProxyPanel.show(
+                            activity,
+                            proxies,
+                            openSettings = { if (isAdded) openScreen() },
+                            manage = com.github.andreyasadchy.xtra.ui.tv.TvProxyPanel.Manage(activity.lifecycleScope, repository),
+                        ) { changed ->
+                            if (changed != null) {
+                                activity.lifecycleScope.launch { repository.updateCustomProxies(changed) }
+                            }
+                        }
+                    }
+                } else {
+                    openScreen()
+                }
                 true
             }
             findPreference<Preference>("stream_proxy_settings")?.setOnPreferenceClickListener {
@@ -638,10 +669,7 @@ class SettingsActivity : AppCompatActivity() {
 
                                 }
                             }
-                            requireActivity().getAlertDialogBuilder()
-                                .setTitle(getString(R.string.update_available))
-                                .setMessage(getString(R.string.update_message))
-                                .setPositiveButton(getString(R.string.yes)) { _, _ ->
+                            val startUpdate: () -> Unit = {
                                     if (requireContext().prefs().getBoolean(C.UPDATE_USE_BROWSER, false)) {
                                         try {
                                             val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
@@ -680,9 +708,18 @@ class SettingsActivity : AppCompatActivity() {
                                             .show()
                                         updateDownloadDialog = dialog
                                     }
-                                }
-                                .setNegativeButton(getString(R.string.no), null)
-                                .show()
+                            }
+                            if (TvUi.isTv(requireContext())) {
+                                // TV: the version and its changelog, the focus on "Update"
+                                com.github.andreyasadchy.xtra.ui.tv.TvUpdateDialog.show(requireActivity(), viewModel.updateVersion, viewModel.updateNotes, startUpdate) {}
+                            } else {
+                                requireActivity().getAlertDialogBuilder()
+                                    .setTitle(getString(R.string.update_available))
+                                    .setMessage(getString(R.string.update_message))
+                                    .setPositiveButton(getString(R.string.yes)) { _, _ -> startUpdate() }
+                                    .setNegativeButton(getString(R.string.no), null)
+                                    .show()
+                            }
                         } else {
                             Toast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
                         }

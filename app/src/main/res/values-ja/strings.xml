@@ -847,4 +847,9 @@
     <string name="tv_proxy_all_settings">プロキシの設定をすべて表示…</string>
     <string name="tv_focus_switch">OK なしでページを切り替える</string>
     <string name="tv_focus_switch_summary">タブとサイドメニューはフォーカスが当たるとすぐにページを表示します</string>
+    <string name="tv_update_title_version">Xtra TV %1$s が利用可能です</string>
+    <string name="tv_update_now">アップデート</string>
+    <string name="tv_update_ignore">無視</string>
+    <string name="tv_proxy_add">プロキシを追加</string>
+    <string name="tv_proxy_full_screen">プロキシの全画面表示…</string>
 </resources>

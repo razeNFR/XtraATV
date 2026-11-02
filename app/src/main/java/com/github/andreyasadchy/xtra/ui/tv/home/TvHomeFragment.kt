@@ -46,6 +46,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private val homeRefreshing = mutableStateOf(false)
     /** Time "refresh" was pressed (0: the rows load by themselves), for its animation and its message. */
     private var refreshClickedAt = 0L
+    private val homeSweep = androidx.compose.runtime.mutableIntStateOf(0)
     private val resumeItems = mutableStateOf<List<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>>(emptyList())
     private val statsState = mutableStateOf<TvHomeStats?>(null)
     private val homeFocus = TvHomeFocus()
@@ -122,6 +123,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             cardsPerRow = context.prefs().getString(C.TV_HOME_CARDS, "3")?.toIntOrNull() ?: 3,
             thumbnailStamp = { homeStamp.longValue },
             refreshing = { homeRefreshing.value },
+            sweepCount = { homeSweep.intValue },
             openVideo = { item ->
                 stopPreview()
                 (activity as? MainActivity)?.startVideo(item.toVideo(), item.positionMs)
@@ -147,6 +149,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     refreshClickedAt = 0L
                     if (wait > 0L) kotlinx.coroutines.delay(wait)
                     homeRefreshing.value = false
+                    homeSweep.intValue++
                     context?.let { android.widget.Toast.makeText(it, R.string.tv_refreshed, android.widget.Toast.LENGTH_SHORT).show() }
                 } else {
                     homeRefreshing.value = false
