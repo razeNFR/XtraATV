@@ -110,6 +110,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // delay of the live chat: the picture of the player
+        viewModel.programTime = { (parentFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment)?.getLivePictureTime() }
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.integrity.collect {
@@ -972,6 +974,9 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     fun updatePosition(position: Long) {
         viewModel.updatePosition(position)
     }
+
+    /** The delay of the chat in Auto (ms), 0 while not measured. */
+    fun getAutoDelayMs() = viewModel.autoDelayMs
 
     fun updateSpeed(speed: Float) {
         viewModel.updateSpeed(speed)

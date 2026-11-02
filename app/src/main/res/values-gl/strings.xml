@@ -852,4 +852,13 @@
     <string name="tv_update_ignore">Ignorar</string>
     <string name="tv_proxy_add">Engadir un proxy</string>
     <string name="tv_proxy_full_screen">Pantalla completa dos proxys…</string>
+    <string name="tv_chat_delay">Atraso do chat</string>
+    <string name="tv_chat_delay_off">Desactivado</string>
+    <string name="tv_chat_delay_auto">Auto</string>
+    <string name="tv_chat_delay_manual">Manual</string>
+    <string name="tv_chat_delay_seconds">Atraso</string>
+    <string name="tv_chat_delay_seconds_summary">Úsase cando o atraso do chat está en Manual</string>
+    <string name="tv_chat_delay_auto_info">Segue a latencia do stream: as mensaxes chegan co momento do que falan (só en directo)</string>
+    <string name="tv_chat_delay_auto_now">Agora %1$s s</string>
+    <string name="tv_chat_delay_auto_measuring">Medindo…</string>
 </resources>	

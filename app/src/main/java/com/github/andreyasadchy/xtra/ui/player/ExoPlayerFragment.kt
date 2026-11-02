@@ -458,6 +458,17 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun getCurrentPosition() = playbackService?.player?.currentPosition
 
+    override fun getLivePictureTime(): Long? {
+        val service = playbackService ?: return null
+        if (service.type != BasePlaybackService.STREAM) return null
+        val player = service.player ?: return null
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty || player.currentMediaItemIndex !in 0 until timeline.windowCount) return null
+        // the time of the first segment of the playlist (EXT-X-PROGRAM-DATE-TIME) + where the picture is in it
+        val start = timeline.getWindow(player.currentMediaItemIndex, Timeline.Window()).windowStartTimeMs
+        return if (start != androidx.media3.common.C.TIME_UNSET) start + player.currentPosition else null
+    }
+
     override fun getCurrentSpeed() = playbackService?.player?.playbackParameters?.speed
 
     override fun getCurrentVolume(): Float? {

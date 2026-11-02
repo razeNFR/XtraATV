@@ -989,7 +989,84 @@ class ChatViewModel(
         )
     }
 
+    /**
+     * Chat delay (live): what the player shows, in the time of Twitch (null: not known). Given by the chat of the player.
+     */
+    var programTime: (() -> Long?)? = null
+    /** The delay of the chat in Auto, measured on the last message shown with the picture (ms). */
+    @Volatile
+    var autoDelayMs = 0L
+        private set
+    private val delayedMessages = ArrayDeque<Pair<ChatMessage, Long>>()
+    private var delayJob: Job? = null
+    private var ownUserId: String? = null
+
+    /** The live chat waits for the stream: "chat_delay_mode" 0 off, 1 auto, 2 manual ("chat_delay_seconds"). */
+    private fun delayMode() = applicationContext.prefs().getString(C.CHAT_DELAY_MODE, "0")?.toIntOrNull() ?: 0
+
     suspend fun onMessage(message: ChatMessage) {
+        // a message of the live chat (with its time of Twitch), not one of ours: shown when the stream gets there
+        if (started && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && delayMode() != 0) {
+            synchronized(delayedMessages) {
+                delayedMessages.addLast(message to System.currentTimeMillis())
+            }
+            startDelayLoop()
+            return
+        }
+        showMessage(message)
+    }
+
+    private fun startDelayLoop() {
+        if (delayJob?.isActive == true) {
+            return
+        }
+        delayJob = viewModelScope.launch {
+            while (true) {
+                val head = synchronized(delayedMessages) { delayedMessages.firstOrNull() }
+                if (head == null) {
+                    if (delayMode() == 0) break
+                    delay(100)
+                    continue
+                }
+                val (message, arrival) = head
+                val waited = System.currentTimeMillis() - arrival
+                val due = when {
+                    // never more than 60 s, and the delay turned off: everything at once
+                    waited >= 60_000L || delayMode() == 0 -> true
+                    delayMode() == 2 -> waited >= applicationContext.prefs().getInt(C.CHAT_DELAY_SECONDS, 5).coerceIn(1, 60) * 1000L
+                    else -> {
+                        val shown = try {
+                            programTime?.invoke()
+                        } catch (e: Exception) {
+                            null
+                        }
+                        if (shown != null && message.timestamp != null) {
+                            (shown >= message.timestamp).also { if (it) autoDelayMs = waited }
+                        } else {
+                            // not known (start, ad...): the last delay measured, else no delay
+                            waited >= autoDelayMs
+                        }
+                    }
+                }
+                if (due) {
+                    synchronized(delayedMessages) {
+                        if (delayedMessages.firstOrNull() === head) delayedMessages.removeFirst()
+                    }
+                    showMessage(message)
+                } else {
+                    delay(100)
+                }
+            }
+        }
+    }
+
+    private fun clearDelayedMessages() {
+        delayJob?.cancel()
+        delayJob = null
+        synchronized(delayedMessages) { delayedMessages.clear() }
+    }
+
+    private suspend fun showMessage(message: ChatMessage) {
         synchronized(chatMessages) {
             chatMessages.add(message)
             val removeCount = if (chatMessages.size > messageLimit) {
@@ -1013,6 +1090,7 @@ class ChatViewModel(
     fun startLiveChat(channelId: String?, channelLogin: String) {
         stopLiveChat()
         started = true
+        ownUserId = applicationContext.tokenPrefs().getString(C.USER_ID, null)
         val gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true)
         val helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext)
         val networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
@@ -1120,6 +1198,8 @@ class ChatViewModel(
     }
 
     fun stopLiveChat() {
+        clearDelayedMessages()
+        autoDelayMs = 0L
         if (started) {
             started = false
             if (chatReadIRCSocket != null) {

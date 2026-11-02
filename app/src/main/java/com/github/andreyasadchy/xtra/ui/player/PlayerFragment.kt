@@ -45,8 +45,11 @@ import androidx.activity.trackPipAnimationHintView
 import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -207,6 +210,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     open fun getCurrentPosition(): Long? = null
+    /** Live: the time of Twitch of the picture shown (the delay of the chat follows it), null when not known. */
+    open fun getLivePictureTime(): Long? = null
     open fun getCurrentSpeed(): Float? = null
     open fun getCurrentVolume(): Float? = null
 
@@ -2390,6 +2395,45 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_opacity), prefs.getInt(C.TV_CHAT_OPACITY, 55), 0..100, step = 5, valueText = { "$it %" }) {
                     update(C.TV_CHAT_OPACITY, it)
                 }
+                // delay of the live chat: off, auto (the latency of the stream) or 1 to 60 s
+                val delayMode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getString(C.CHAT_DELAY_MODE, "0")?.toIntOrNull()?.coerceIn(0, 2) ?: 0) }
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                    getString(R.string.tv_chat_delay),
+                    listOf(getString(R.string.tv_chat_delay_off), getString(R.string.tv_chat_delay_auto), getString(R.string.tv_chat_delay_manual)),
+                    delayMode.intValue,
+                ) {
+                    delayMode.intValue = it
+                    prefs.edit { putString(C.CHAT_DELAY_MODE, it.toString()) }
+                }
+                androidx.compose.runtime.key(delayMode.intValue) {
+                    when (delayMode.intValue) {
+                        1 -> {
+                            val measured by androidx.compose.runtime.produceState(chatFragment?.getAutoDelayMs() ?: 0L) {
+                                while (true) {
+                                    value = chatFragment?.getAutoDelayMs() ?: 0L
+                                    kotlinx.coroutines.delay(1000)
+                                }
+                            }
+                            val now = if (measured > 0L) {
+                                getString(R.string.tv_chat_delay_auto_now, "%.1f".format(measured / 1000f))
+                            } else {
+                                getString(R.string.tv_chat_delay_auto_measuring)
+                            }
+                            androidx.tv.material3.Text(
+                                getString(R.string.tv_chat_delay_auto_info) + "\n" + now,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                color = com.github.andreyasadchy.xtra.ui.tv.TvColors.secondaryText,
+                                modifier = androidx.compose.ui.Modifier.padding(start = 18.dp, end = 18.dp, top = 2.dp, bottom = 6.dp),
+                            )
+                        }
+                        2 -> {
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_delay_seconds), prefs.getInt(C.CHAT_DELAY_SECONDS, 5).coerceIn(1, 60), 1..60, valueText = { "$it s" }) {
+                                prefs.edit { putInt(C.CHAT_DELAY_SECONDS, it) }
+                            }
+                        }
+                    }
+                }
                 androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
                 com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_reset)) {
                     prefs.edit {
@@ -2401,6 +2445,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         remove(C.TV_CHAT_MODE)
                         remove(C.TV_CHAT_LINES)
                         remove(C.CHAT_SIZE_MODIFIER)
+                        remove(C.CHAT_DELAY_MODE)
+                        remove(C.CHAT_DELAY_SECONDS)
                     }
                     chatFragment?.applySizeModifier()
                     if (_binding != null) {

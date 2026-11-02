@@ -852,4 +852,13 @@
     <string name="tv_update_ignore">忽略</string>
     <string name="tv_proxy_add">添加代理</string>
     <string name="tv_proxy_full_screen">代理完整页面…</string>
+    <string name="tv_chat_delay">聊天延迟</string>
+    <string name="tv_chat_delay_off">关闭</string>
+    <string name="tv_chat_delay_auto">自动</string>
+    <string name="tv_chat_delay_manual">手动</string>
+    <string name="tv_chat_delay_seconds">延迟</string>
+    <string name="tv_chat_delay_seconds_summary">聊天延迟为手动时使用</string>
+    <string name="tv_chat_delay_auto_info">跟随直播延迟：消息与其所说的画面同时出现（仅直播）</string>
+    <string name="tv_chat_delay_auto_now">当前 %1$s 秒</string>
+    <string name="tv_chat_delay_auto_measuring">正在测量…</string>
 </resources>
