@@ -123,6 +123,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 (activity as? MainActivity)?.startVideo(item.toVideo(), item.positionMs)
             },
             showVideoActions = { item -> showVideoActions(item) },
+            openFollowedVideo = { video ->
+                stopPreview()
+                (activity as? MainActivity)?.startVideo(video, null)
+            },
+            formatVideoDuration = { seconds -> android.text.format.DateUtils.formatElapsedTime(seconds.toLong()) },
             formatDuration = { ms -> getString(R.string.tv_time_left, android.text.format.DateUtils.formatElapsedTime(ms / 1000)) },
         )
         viewLifecycleOwner.lifecycleScope.launch {
@@ -147,6 +152,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 val followed by viewModel.followed.collectAsState()
+                val followedVideos by viewModel.followedVideos.collectAsState()
                 val popular by viewModel.popular.collectAsState()
                 val games by viewModel.games.collectAsState()
                 val languageRows by viewModel.languageRows.collectAsState()
@@ -160,6 +166,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         previewPlayer = { previewPlayer.value },
                         actions = actions,
                         resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
+                        videos = followedVideos?.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_followed_videos_row), it, 0, R.drawable.tv_ic_video_library) },
                         stats = statsState.value,
                         languageRows = languageRows.map { (language, streams) ->
                             TvHomeRow(getString(R.string.tv_popular_in, languageName(language)), streams, 0, R.drawable.tv_ic_globe)

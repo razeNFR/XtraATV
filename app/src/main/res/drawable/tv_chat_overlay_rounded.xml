@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chat over the stream away from the edges: opaque black, its opacity is the one chosen in the chat layout panel. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#FF000000" />
+    <corners android:radius="12dp" />
+</shape>

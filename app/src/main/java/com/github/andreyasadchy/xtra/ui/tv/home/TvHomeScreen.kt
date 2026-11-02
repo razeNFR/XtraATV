@@ -107,6 +107,9 @@ class TvHomeActions(
     val openVideo: (com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item) -> Unit = {},
     val showVideoActions: (com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item) -> Unit = {},
     val formatDuration: (Long) -> String = { "" },
+    /** Row of the latest videos of the followed channels: OK plays the video. */
+    val openFollowedVideo: (com.github.andreyasadchy.xtra.model.ui.Video) -> Unit = {},
+    val formatVideoDuration: (Int) -> String = { "" },
 )
 
 class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int, val icon: Int? = null)
@@ -144,6 +147,8 @@ fun TvHomeScreen(
     previewPlayer: () -> ExoPlayer?,
     actions: TvHomeActions,
     resume: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>? = null,
+    /** Latest videos of the followed channels, under "Continue watching". */
+    videos: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video>? = null,
     stats: TvHomeStats? = null,
     /** Popular streams of one language each (Xtra TV settings), under Popular. */
     languageRows: List<TvHomeRow<Stream>> = emptyList(),
@@ -166,7 +171,17 @@ fun TvHomeScreen(
         followed?.takeIf { it.items.isNotEmpty() }?.let { "followed" to it },
         popular?.takeIf { it.items.isNotEmpty() }?.let { "popular" to it },
     ) + languageRows.filter { it.items.isNotEmpty() }.map { "language_" + it.title to it }
-    val hasCards = rows.isNotEmpty() || resume?.items?.isNotEmpty() == true || games?.items?.isNotEmpty() == true
+    // the rows of streams in their place on the screen: a row still loading is a row of grey cards (null) where it will be
+    val slots: List<Pair<String, TvHomeRow<Stream>?>> = listOfNotNull(
+        if (followed == null) "followed" to null else rows.find { it.first == "followed" },
+        if (popular == null) "popular" to null else rows.find { it.first == "popular" },
+    ) + rows.filter { it.first.startsWith("language_") }
+    // the first row is still loading: the focus waits on its first grey card, then goes to its first stream (or to the
+    // first stream of the next row when it has none)
+    val firstIsGhost = slots.firstOrNull()?.second == null && slots.isNotEmpty()
+    val ghostCard = remember { FocusRequester() }
+    var onGhost by remember { mutableStateOf(false) }
+    val hasCards = rows.isNotEmpty() || resume?.items?.isNotEmpty() == true || videos?.items?.isNotEmpty() == true || games?.items?.isNotEmpty() == true
     // "refresh" only takes the focus with up from the first row (or while nothing is loaded): coming into the home,
     // the focus never lands on it
     val refreshRequester = remember { FocusRequester() }
@@ -183,9 +198,36 @@ fun TvHomeScreen(
             focus.focusFirst()
         }
     }
+    // the grey card had the focus and its row came (or turned out empty): the focus goes on, unless it moved meanwhile
+    val firstKey = slots.firstOrNull()?.first
+    LaunchedEffect(firstKey, firstIsGhost) {
+        if (!onGhost) {
+            return@LaunchedEffect
+        }
+        androidx.compose.runtime.withFrameNanos { }
+        androidx.compose.runtime.withFrameNanos { }
+        if (firstIsGhost) {
+            runCatching { ghostCard.requestFocus() }
+        } else if (slots.isNotEmpty() || hasCards) {
+            onGhost = false
+            listState.scrollToItem(0)
+            runCatching { firstCard.requestFocus() }
+        }
+    }
     val request = focus.request
-    LaunchedEffect(request, hasCards) {
-        if (request == null || !hasCards) {
+    LaunchedEffect(request, hasCards, firstIsGhost) {
+        if (request == null || (!hasCards && !firstIsGhost)) {
+            return@LaunchedEffect
+        }
+        if (firstIsGhost) {
+            // the first row is loading: on its first grey card until it comes
+            listState.scrollToItem(0)
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
+            if (runCatching { ghostCard.requestFocus() }.getOrNull() == true) {
+                onGhost = true
+            }
+            if (focus.request === request) focus.request = null
             return@LaunchedEffect
         }
         // the request is cleared once the focus is placed: clearing it first restarted this effect and stopped it
@@ -230,6 +272,7 @@ fun TvHomeScreen(
                     .focusProperties { canFocus = refreshAllowed || !hasCards }
                     .onFocusChanged {
                         refreshFocused = it.hasFocus
+                        if (it.hasFocus) onGhost = false
                         if (!it.hasFocus) refreshAllowed = false
                     }
                     .onPreviewKeyEvent { event ->
@@ -249,7 +292,7 @@ fun TvHomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .focusRestorer(firstCard)
+                .focusRestorer(if (firstIsGhost) ghostCard else firstCard)
                 .onPreviewKeyEvent { event ->
                     // up from the first row: "refresh"
                     if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && focusedItem == 0) {
@@ -261,16 +304,24 @@ fun TvHomeScreen(
             contentPadding = PaddingValues(top = 0.dp, bottom = 240.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // first load: grey cards in place of the rows, like YouTube
-            val skeletons = if (followed == null && popular == null && games == null) 2 else 0
-            if (skeletons > 0) {
-                items(skeletons, key = { "skeleton$it" }) {
-                    SkeletonRow(actions)
+            slots.forEachIndexed { rowIndex, (key, row) ->
+                if (row == null) {
+                    // still loading: grey cards in its place, like YouTube; the first one takes the focus when this row
+                    // is the first of the home
+                    item(key = "${key}_skeleton") {
+                        SkeletonRow(
+                            actions,
+                            if (rowIndex == 0) {
+                                Modifier
+                                    .focusRequester(ghostCard)
+                                    .onFocusChanged { if (it.hasFocus) { onGhost = true; focusedItem = rowIndex } }
+                            } else null,
+                        )
+                    }
+                    return@forEachIndexed
                 }
-            }
-            rows.forEachIndexed { rowIndex, (key, row) ->
                 item(key = key) {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = rowIndex; bringRow(rowIndex) } }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = rowIndex; bringRow(rowIndex) } }) {
                         StreamRow(
                             row, previewLogin, previewPlayer, actions, if (rowIndex == 0) firstCard else null,
                             state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
@@ -292,19 +343,29 @@ fun TvHomeScreen(
                 }
             }
             // continue watching, then the statistics, over the categories
-            val resumeIndex = rows.size + skeletons
+            val resumeIndex = slots.size
             val hasResume = resume != null && resume.items.isNotEmpty()
             if (hasResume) {
                 item(key = "resume") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = resumeIndex; bringRow(resumeIndex) } }) {
-                        ResumeRow(resume!!, actions, if (rows.isEmpty()) firstCard else null)
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = resumeIndex; bringRow(resumeIndex) } }) {
+                        ResumeRow(resume!!, actions, if (slots.isEmpty()) firstCard else null)
                     }
                 }
             }
-            val statsIndex = resumeIndex + if (hasResume) 1 else 0
+            // the latest videos of the followed channels, under "Continue watching"
+            val videosIndex = resumeIndex + if (hasResume) 1 else 0
+            val hasVideos = videos != null && videos.items.isNotEmpty()
+            if (hasVideos) {
+                item(key = "followed_videos") {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = videosIndex; bringRow(videosIndex) } }) {
+                        VideoRow(videos!!, actions, if (slots.isEmpty() && !hasResume) firstCard else null)
+                    }
+                }
+            }
+            val statsIndex = videosIndex + if (hasVideos) 1 else 0
             if (stats != null) {
                 item(key = "stats") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = statsIndex; bringRow(statsIndex) } }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = statsIndex; bringRow(statsIndex) } }) {
                         StatsCard(stats, actions)
                     }
                 }
@@ -312,8 +373,8 @@ fun TvHomeScreen(
             val gamesIndex = statsIndex + if (stats != null) 1 else 0
             if (games != null && games.items.isNotEmpty()) {
                 item(key = "games") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = gamesIndex; bringRow(gamesIndex) } }) {
-                        GameRow(games, actions, if (rows.isEmpty() && !hasResume) firstCard else null)
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = gamesIndex; bringRow(gamesIndex) } }) {
+                        GameRow(games, actions, if (slots.isEmpty() && !hasResume && !hasVideos) firstCard else null)
                     }
                 }
             }
@@ -393,29 +454,62 @@ private fun Greeting(account: TvHomeAccount?) {
     }
 }
 
-/** Grey cards shown while the home loads. */
+/**
+ * Grey cards shown while a row of the home loads, with a light that sweeps over them (it is loading). [firstCardModifier]:
+ * the first card can take the focus (the first row of the home), it shows it with a white border.
+ */
 @Composable
-private fun SkeletonRow(actions: TvHomeActions) {
+private fun SkeletonRow(actions: TvHomeActions, firstCardModifier: Modifier? = null) {
     val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
     val count = actions.cardsPerRow.coerceIn(2, 6)
     val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
     val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton")
-    val alpha by transition.animateFloat(
-        0.06f, 0.14f,
-        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900), androidx.compose.animation.core.RepeatMode.Reverse),
-        label = "alpha"
+    val sweep by transition.animateFloat(
+        0f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(1300, easing = androidx.compose.animation.core.LinearEasing),
+            androidx.compose.animation.core.RepeatMode.Restart,
+        ),
+        label = "sweep"
     )
+    val density = LocalDensity.current
+    val screenPx = with(density) { screenWidth.toPx() }
+    val bandPx = screenPx * 0.35f
+    // the light crosses the whole row from left to right, each card shows the part of it over the card
+    val lightX = -bandPx + sweep * (screenPx + bandPx * 2)
+    val base = Color.White.copy(alpha = 0.07f)
+    val light = Color.White.copy(alpha = 0.18f)
+    val shimmer = { left: Float ->
+        androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(base, light, base),
+            start = androidx.compose.ui.geometry.Offset(lightX - left, 0f),
+            end = androidx.compose.ui.geometry.Offset(lightX - left + bandPx, 0f),
+        )
+    }
+    val startPx = with(density) { 12.dp.toPx() }
+    val stepPx = with(density) { (cardWidth + 16.dp).toPx() }
     Column(Modifier.padding(start = 12.dp, top = 14.dp, bottom = 8.dp)) {
-        Box(Modifier.width(220.dp).height(22.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = alpha)))
+        Box(Modifier.width(220.dp).height(22.dp).clip(RoundedCornerShape(6.dp)).background(shimmer(startPx)))
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            repeat(count) {
+            repeat(count) { index ->
+                val left = startPx + index * stepPx
+                val focusModifier = if (index == 0 && firstCardModifier != null) {
+                    val interaction = remember { MutableInteractionSource() }
+                    val focused by interaction.collectIsFocusedAsState()
+                    firstCardModifier
+                        .leftEdge(0, actions.openMenu)
+                        .focusable(interactionSource = interaction)
+                        .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
+                } else Modifier
                 Column(Modifier.width(cardWidth)) {
-                    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = alpha)))
+                    Box(
+                        Modifier.fillMaxWidth().aspectRatio(16f / 9f).then(focusModifier).clip(RoundedCornerShape(10.dp)).background(shimmer(left))
+                    )
                     Spacer(Modifier.height(10.dp))
-                    Box(Modifier.fillMaxWidth(0.7f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = alpha)))
+                    Box(Modifier.fillMaxWidth(0.7f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(shimmer(left)))
                     Spacer(Modifier.height(6.dp))
-                    Box(Modifier.fillMaxWidth(0.45f).height(12.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = alpha)))
+                    Box(Modifier.fillMaxWidth(0.45f).height(12.dp).clip(RoundedCornerShape(4.dp)).background(shimmer(left)))
                 }
             }
         }
@@ -787,6 +881,91 @@ private fun ResumeRow(row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResum
                 }
             }
         }
+    }
+}
+
+/** Latest videos of the followed channels. */
+@Composable
+private fun VideoRow(row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video>, actions: TvHomeActions, firstRequester: FocusRequester?) {
+    Column {
+        RowTitle(row.title, row.icon)
+        val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+        val count = actions.cardsPerRow.coerceIn(2, 6)
+        val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
+            LazyRow(
+                modifier = Modifier.focusRestorer(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(row.items, key = { index, item -> item.id ?: "video$index" }) { index, item ->
+                    FollowedVideoCard(
+                        width = cardWidth,
+                        video = item,
+                        actions = actions,
+                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FollowedVideoCard(width: Dp, video: com.github.andreyasadchy.xtra.model.ui.Video, actions: TvHomeActions, modifier: Modifier) {
+    val small = width < 230.dp
+    FocusCard(
+        width = width,
+        modifier = modifier,
+        onClick = { actions.openFollowedVideo(video) },
+    ) { focused ->
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF26252C))
+                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
+        ) {
+            AsyncImage(
+                model = video.thumbnail,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            val seconds = video.durationSeconds ?: 0
+            if (seconds > 0) {
+                Text(
+                    actions.formatVideoDuration(seconds),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color(0xCC000000))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            video.title.orEmpty(),
+            fontSize = if (small) 13.sp else 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+        Text(
+            listOfNotNull(video.channelName, video.gameName?.takeIf { it.isNotBlank() }).joinToString(" · "),
+            fontSize = if (small) 12.sp else 13.sp,
+            color = Color.White.copy(alpha = 0.7f),
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }
 

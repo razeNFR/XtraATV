@@ -22,4 +22,5 @@
     <item name="tvDisabledRow" type="id" />
     <item name="tvLoadingPicture" type="id" />
     <item name="tvPipTexture" type="id" />
+    <item name="tvPipDim" type="id" />
 </resources>

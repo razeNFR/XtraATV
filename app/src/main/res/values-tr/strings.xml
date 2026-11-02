@@ -822,4 +822,19 @@
     <string name="tv_adblock_midroll">mid-roll</string>
     <string name="tv_adblock_blocking_roll">%1$s reklam engelleniyor (%2$s)</string>
     <string name="tv_adblock_waiting_roll">%1$s reklamın bitmesi bekleniyor</string>
+    <string name="tv_keep_sound_mini_only">Yalnızca mini oynatıcıda</string>
+    <string name="tv_keep_sound_audio_only">Yalnızca seste</string>
+    <string name="tv_keep_sound_fullscreen">Tam ekrandan</string>
+    <string name="tv_keep_sound_mini_summary">Ana ekran ile veya ilk ekranda Geri ile, yayın mini oynatıcıdaysa ses devam eder. Tam ekrandan çıkınca yayın durur</string>
+    <string name="tv_keep_sound_audio_summary">Ana ekran ile veya ilk ekranda Geri ile, yayın yalnızca sesteyse ses devam eder. Tam ekrandan çıkınca yayın durur</string>
+    <string name="tv_keep_sound_fullscreen_summary">Tam ekran yayın sırasında Ana ekrana basmak sesi arka planda sürdürür</string>
+    <string name="tv_chat_middle_right">Orta sağ</string>
+    <string name="tv_chat_middle_left">Orta sol</string>
+    <string name="tv_chat_middle_top">Orta üst</string>
+    <string name="tv_chat_middle_bottom">Orta alt</string>
+    <string name="tv_dim">Karartma</string>
+    <string name="tv_dim_button_summary">OK yayının karartmasını açar veya kapatır, OK basılı tutmak şiddetini ayarlar</string>
+    <string name="tv_dim_level">Karartma düzeyi</string>
+    <string name="tv_dim_off">Kapat</string>
+    <string name="tv_followed_videos_row">Takip ettiğin kanalların son videoları</string>
 </resources>

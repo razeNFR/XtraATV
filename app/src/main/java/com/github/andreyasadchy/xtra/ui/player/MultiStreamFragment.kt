@@ -109,6 +109,9 @@ class MultiStreamFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val streams = BundleCompat.getParcelableArrayList(requireArguments(), KEY_STREAMS, Stream::class.java).orEmpty().take(MAX)
         streams.forEach { addTile(it) }
+        // the dimming of the streams covers the cells and their chats (the panels are over it, not dimmed)
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.addListener(dimListener)
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(root)
         // 2 streams: both chats at once, once the screen is laid out
         root.post { if (view != null) showBothChats() }
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutTiles() }
@@ -751,7 +754,10 @@ class MultiStreamFragment : Fragment() {
         tiles.forEach { it.player.play() }
     }
 
+    private val dimListener: () -> Unit = { com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(root) }
+
     override fun onDestroyView() {
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(dimListener)
         root.removeCallbacks(followFocus)
         tiles.forEach { it.player.release() }
         tiles.clear()

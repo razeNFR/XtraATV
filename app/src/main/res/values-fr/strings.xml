@@ -821,4 +821,19 @@
     <string name="tv_adblock_midroll">mid-roll</string>
     <string name="tv_adblock_blocking_roll">Blocage d\'une pub %1$s (%2$s)</string>
     <string name="tv_adblock_waiting_roll">En attente de la fin de la pub %1$s</string>
+    <string name="tv_keep_sound_mini_only">Seulement en mini lecteur</string>
+    <string name="tv_keep_sound_audio_only">Seulement en son seul</string>
+    <string name="tv_keep_sound_fullscreen">Depuis le plein écran</string>
+    <string name="tv_keep_sound_mini_summary">Avec Accueil, ou Retour sur le premier écran, le son continue si le stream était en mini lecteur. Depuis le lecteur en plein écran, le stream s\'arrête</string>
+    <string name="tv_keep_sound_audio_summary">Avec Accueil, ou Retour sur le premier écran, le son continue si le stream était en son seul. Depuis le lecteur en plein écran, le stream s\'arrête</string>
+    <string name="tv_keep_sound_fullscreen_summary">Appuyer sur Accueil pendant un stream en plein écran garde son son en arrière-plan</string>
+    <string name="tv_chat_middle_right">Milieu droite</string>
+    <string name="tv_chat_middle_left">Milieu gauche</string>
+    <string name="tv_chat_middle_top">Milieu haut</string>
+    <string name="tv_chat_middle_bottom">Milieu bas</string>
+    <string name="tv_dim">Luminosité</string>
+    <string name="tv_dim_button_summary">OK active ou désactive l\'assombrissement du stream, OK maintenu règle son intensité</string>
+    <string name="tv_dim_level">Assombrissement</string>
+    <string name="tv_dim_off">Désactiver</string>
+    <string name="tv_followed_videos_row">Dernières vidéos de tes chaînes suivies</string>
 </resources>

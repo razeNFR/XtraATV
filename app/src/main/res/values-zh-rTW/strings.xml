@@ -821,4 +821,19 @@
     <string name="tv_adblock_midroll">片中</string>
     <string name="tv_adblock_blocking_roll">正在封鎖%1$s廣告（%2$s）</string>
     <string name="tv_adblock_waiting_roll">正在等待%1$s廣告結束</string>
+    <string name="tv_keep_sound_mini_only">僅在迷你播放器時</string>
+    <string name="tv_keep_sound_audio_only">僅在僅音訊時</string>
+    <string name="tv_keep_sound_fullscreen">從全螢幕播放器</string>
+    <string name="tv_keep_sound_mini_summary">用主畫面鍵或在第一個畫面按返回離開時，如果直播在迷你播放器，聲音會繼續。從全螢幕播放器離開時，直播會停止</string>
+    <string name="tv_keep_sound_audio_summary">用主畫面鍵或在第一個畫面按返回離開時，如果直播在僅音訊模式，聲音會繼續。從全螢幕播放器離開時，直播會停止</string>
+    <string name="tv_keep_sound_fullscreen_summary">全螢幕觀看直播時按主畫面鍵，聲音會在背景繼續</string>
+    <string name="tv_chat_middle_right">右側中間</string>
+    <string name="tv_chat_middle_left">左側中間</string>
+    <string name="tv_chat_middle_top">頂端中間</string>
+    <string name="tv_chat_middle_bottom">底部中間</string>
+    <string name="tv_dim">調暗</string>
+    <string name="tv_dim_button_summary">OK 開啟或關閉直播調暗，長按 OK 調整強度</string>
+    <string name="tv_dim_level">調暗程度</string>
+    <string name="tv_dim_off">關閉</string>
+    <string name="tv_followed_videos_row">你追隨頻道的最新影片</string>
 </resources>

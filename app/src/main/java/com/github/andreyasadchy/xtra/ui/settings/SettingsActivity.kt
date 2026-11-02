@@ -1466,20 +1466,45 @@ class SettingsActivity : AppCompatActivity() {
     class XtraTvSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.xtratv_preferences, rootKey)
-            // what leaving the app keeps playing: the summary says it in full for the choice made
+            // what leaving the app keeps playing: its choices follow the back button of the player (the mini player and the
+            // sound only mode are only reached with it), the summary says in full what the choice does
+            val backAction = findPreference<ListPreference>(C.TV_BACK_ACTION)
             findPreference<ListPreference>(C.TV_KEEP_SOUND_ON_LEAVE)?.let { preference ->
-                val updateSummary = { value: String? ->
+                val update = { back: String?, value: String? ->
+                    when (back) {
+                        "mini" -> {
+                            preference.entries = arrayOf<CharSequence>(getString(R.string.tv_keep_sound_never), getString(R.string.tv_keep_sound_mini_only), getString(R.string.tv_keep_sound_always))
+                            preference.entryValues = arrayOf<CharSequence>("never", "minimized", "always")
+                        }
+                        "audio" -> {
+                            preference.entries = arrayOf<CharSequence>(getString(R.string.tv_keep_sound_never), getString(R.string.tv_keep_sound_audio_only), getString(R.string.tv_keep_sound_always))
+                            preference.entryValues = arrayOf<CharSequence>("never", "minimized", "always")
+                        }
+                        else -> {
+                            // back stops the stream: no mini player nor sound only, only the full screen player is left
+                            preference.entries = arrayOf<CharSequence>(getString(R.string.tv_keep_sound_never), getString(R.string.tv_keep_sound_fullscreen))
+                            preference.entryValues = arrayOf<CharSequence>("never", "always")
+                        }
+                    }
+                    // a choice the back button makes useless (only in the mini player, back stopping the stream) works as
+                    // "never" and is shown so, it is kept for when the back button changes again
                     preference.summary = getString(
-                        when (value) {
-                            "never" -> R.string.tv_keep_sound_never_summary
-                            "minimized" -> R.string.tv_keep_sound_minimized_summary
-                            else -> R.string.tv_keep_sound_always_summary
+                        when {
+                            value == "always" && back != "mini" && back != "audio" -> R.string.tv_keep_sound_fullscreen_summary
+                            value == "always" -> R.string.tv_keep_sound_always_summary
+                            value == "minimized" && back == "mini" -> R.string.tv_keep_sound_mini_summary
+                            value == "minimized" && back == "audio" -> R.string.tv_keep_sound_audio_summary
+                            else -> R.string.tv_keep_sound_never_summary
                         }
                     )
                 }
-                updateSummary(preference.value)
+                update(backAction?.value, preference.value)
                 preference.setOnPreferenceChangeListener { _, newValue ->
-                    updateSummary(newValue as? String)
+                    update(backAction?.value, newValue as? String)
+                    true
+                }
+                backAction?.setOnPreferenceChangeListener { _, newValue ->
+                    update(newValue as? String, preference.value)
                     true
                 }
             }

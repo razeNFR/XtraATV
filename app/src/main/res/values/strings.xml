@@ -840,4 +840,19 @@
     <string name="tv_adblock_midroll">mid-roll</string>
     <string name="tv_adblock_blocking_roll">Blocking a %1$s ad (%2$s)</string>
     <string name="tv_adblock_waiting_roll">Waiting for the end of the %1$s ad</string>
+    <string name="tv_keep_sound_mini_only">Only in mini player</string>
+    <string name="tv_keep_sound_audio_only">Only in sound only</string>
+    <string name="tv_keep_sound_fullscreen">From the full screen player</string>
+    <string name="tv_keep_sound_mini_summary">With Home, or Back on the first screen, the sound goes on if the stream was in the mini player. From the full screen player, the stream stops</string>
+    <string name="tv_keep_sound_audio_summary">With Home, or Back on the first screen, the sound goes on if the stream was in sound only. From the full screen player, the stream stops</string>
+    <string name="tv_keep_sound_fullscreen_summary">Pressing Home while a stream plays full screen keeps its sound in the background</string>
+    <string name="tv_chat_middle_right">Middle right</string>
+    <string name="tv_chat_middle_left">Middle left</string>
+    <string name="tv_chat_middle_top">Middle top</string>
+    <string name="tv_chat_middle_bottom">Middle bottom</string>
+    <string name="tv_dim">Dimming</string>
+    <string name="tv_dim_button_summary">OK turns the dimming of the stream on or off, OK held sets how dark it is</string>
+    <string name="tv_dim_level">Darkness</string>
+    <string name="tv_dim_off">Turn off</string>
+    <string name="tv_followed_videos_row">Latest videos of your followed channels</string>
 </resources>

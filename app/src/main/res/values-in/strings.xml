@@ -822,4 +822,19 @@
     <string name="tv_adblock_midroll">mid-roll</string>
     <string name="tv_adblock_blocking_roll">Memblokir iklan %1$s (%2$s)</string>
     <string name="tv_adblock_waiting_roll">Menunggu iklan %1$s selesai</string>
+    <string name="tv_keep_sound_mini_only">Hanya di pemutar mini</string>
+    <string name="tv_keep_sound_audio_only">Hanya di hanya suara</string>
+    <string name="tv_keep_sound_fullscreen">Dari layar penuh</string>
+    <string name="tv_keep_sound_mini_summary">Dengan Beranda, atau Kembali di layar pertama, suara tetap berjalan jika stream ada di pemutar mini. Dari layar penuh, stream berhenti</string>
+    <string name="tv_keep_sound_audio_summary">Dengan Beranda, atau Kembali di layar pertama, suara tetap berjalan jika stream ada di hanya suara. Dari layar penuh, stream berhenti</string>
+    <string name="tv_keep_sound_fullscreen_summary">Menekan Beranda saat stream layar penuh tetap memutar suaranya di latar belakang</string>
+    <string name="tv_chat_middle_right">Tengah kanan</string>
+    <string name="tv_chat_middle_left">Tengah kiri</string>
+    <string name="tv_chat_middle_top">Tengah atas</string>
+    <string name="tv_chat_middle_bottom">Tengah bawah</string>
+    <string name="tv_dim">Redupkan</string>
+    <string name="tv_dim_button_summary">OK menyalakan atau mematikan peredupan stream, tahan OK untuk mengatur tingkatnya</string>
+    <string name="tv_dim_level">Tingkat redup</string>
+    <string name="tv_dim_off">Matikan</string>
+    <string name="tv_followed_videos_row">Video terbaru dari channel yang kamu ikuti</string>
 </resources>
