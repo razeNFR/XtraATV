@@ -150,6 +150,10 @@ class SettingsActivity : AppCompatActivity() {
             true
         })
         binding.toolbar.setupWithNavController(navController, appBarConfiguration)
+        // TV: opened from the player on the list of the custom proxies ("All the proxy settings")
+        if (savedInstanceState == null && intent?.getStringExtra(EXTRA_OPEN) == OPEN_CUSTOM_PROXIES) {
+            navController.navigate(SettingsNavGraphDirections.actionGlobalCustomProxySettingsFragment())
+        }
         if (TvUi.isTv(this)) {
             // under the name of the screen: the app and its version ("Xtra TV 1.2.0", "(debug)" on the test builds)
             val version = BuildConfig.VERSION_NAME.removeSuffix("-DEBUG").removeSuffix("-tv")
@@ -367,6 +371,8 @@ class SettingsActivity : AppCompatActivity() {
 
     companion object {
         const val KEY_CHANGED = "changed"
+        const val EXTRA_OPEN = "open"
+        const val OPEN_CUSTOM_PROXIES = "custom_proxies"
     }
 
     class SettingsFragment : MaterialPreferenceFragment() {
@@ -956,7 +962,7 @@ class SettingsActivity : AppCompatActivity() {
                     )
                 }
                 // the buttons of the channel page, each one can be hidden, after the tabs
-                val hidden = requireContext().prefs().getStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, null).orEmpty()
+                val hidden = requireContext().prefs().getStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, C.DEFAULT_CHANNEL_HIDDEN_BUTTONS).orEmpty()
                 val rows = (tabs + listOf(
                     "download" to R.string.channel_button_download,
                     "share" to R.string.channel_button_share,
@@ -1245,6 +1251,8 @@ class SettingsActivity : AppCompatActivity() {
                     C.TV_BUTTON_CHAT_MESSAGE to R.drawable.tv_ic_chat_send,
                     C.TV_BUTTON_CHAT_LAYOUT to R.drawable.tv_ic_chat_layout,
                     C.TV_BUTTON_STATS to R.drawable.tv_ic_stats,
+                    C.TV_BUTTON_DIM to R.drawable.tv_ic_dim,
+                    C.TV_BUTTON_PROXY to R.drawable.tv_ic_proxy,
                     "player_download" to R.drawable.ic_file_download_black_24dp,
                     "player_follow" to R.drawable.baseline_favorite_border_black_24,
                     "player_sleep" to R.drawable.baseline_alarm_black_24,

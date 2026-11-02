@@ -152,7 +152,8 @@ object TvDialogs {
 fun TvTheme(accent: Int, content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = ComposeColor(accent),
+            // the ambiance color of the Xtra TV settings when one is chosen
+            primary = ComposeColor(if (TvAccent.current != null) TvAccent.color else accent),
             surface = ComposeColor(0xFF1C1B22),
             onSurface = ComposeColor.White,
         ),
@@ -164,7 +165,10 @@ object TvColors {
     val panel = ComposeColor(0xF2141318)
     val item = ComposeColor(0x14FFFFFF)
     val focused = ComposeColor(0xFFF2F2F7)
-    val onFocused = ComposeColor(0xFF111014)
+    /** Text and icons of a focused (white) item: the ambiance color, dark enough to read. */
+    val onFocused get() = ComposeColor(TvAccent.onLight)
+    /** The ambiance color (violet of Twitch without one). */
+    val accent get() = ComposeColor(TvAccent.color)
     val secondaryText = ComposeColor(0xB3FFFFFF)
 }
 

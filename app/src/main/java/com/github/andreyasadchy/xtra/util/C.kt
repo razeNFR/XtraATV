@@ -99,6 +99,8 @@ object C {
     const val TV_MENU_EXTRAS = "tv_menu_extras"
     /** Buttons of the channel page hidden in the settings ("download", "share", "notifications"). */
     const val UI_CHANNEL_HIDDEN_BUTTONS = "ui_channel_hidden_buttons"
+    /** Until they are chosen in the settings, the 3 buttons of the channel page are hidden (of little use on a TV). */
+    val DEFAULT_CHANNEL_HIDDEN_BUTTONS = setOf("download", "share", "notifications")
     const val TV_PLAYER_CLOCK = "tv_player_clock"
     const val TV_AMBIENT_COLOR = "tv_ambient_color"
     const val TV_STREAM_COLUMNS = "tv_stream_columns"
@@ -110,6 +112,8 @@ object C {
     const val TV_START_PAGE = "tv_start_page"
     /** TV: the side menu stays closed when the app starts, the start page is shown at once. */
     const val TV_HIDE_MENU_ON_LAUNCH = "tv_hide_menu_on_launch"
+    /** TV: tabs and entries of the side menu show their page as soon as they have the focus, without OK (off at first). */
+    const val TV_FOCUS_SWITCH = "tv_focus_switch"
     /** TV: banner at the top when a followed streamer goes live while the app is open, and its time on screen (s). */
     const val TV_LIVE_ALERTS = "tv_live_alerts"
     const val TV_LIVE_ALERTS_DURATION = "tv_live_alerts_duration"
@@ -236,6 +240,8 @@ object C {
     const val TV_BUTTON_MULTI_STREAM = "tv_button_multi_stream"
     const val TV_BUTTON_CHAT_LAYOUT = "tv_button_chat_layout"
     const val TV_BUTTON_DIM = "tv_button_dim"
+    /** TV: button of the custom proxy in the player (hidden at first). */
+    const val TV_BUTTON_PROXY = "tv_button_proxy"
     /** TV: how dark the dimming of the streams is, 10 to 90 % (50 % at first). */
     const val TV_DIM_LEVEL = "tv_dim_level"
     const val TV_HOME_LANGUAGES = "tv_home_languages"

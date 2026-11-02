@@ -59,6 +59,8 @@ class TvMenuState {
     var onNowPlayingClose: () -> Unit = {}
     var selected by mutableIntStateOf(0)
     internal val requesters = mutableMapOf<Int, FocusRequester>()
+    /** An entry got the focus (to show its page without OK, an option of the Xtra TV settings). */
+    var onFocusItem: (Int) -> Unit = {}
 
     /** Moves the focus to the screen being shown, else to the first entry. */
     fun focusSelected(): Boolean {
@@ -135,7 +137,12 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 selected = item.id == state.selected,
                 modifier = Modifier
                     .focusRequester(requester)
-                    .onFocusChanged { if (it.isFocused) focusedIndex = index },
+                    .onFocusChanged {
+                        if (it.isFocused) {
+                            focusedIndex = index
+                            state.onFocusItem(item.id)
+                        }
+                    },
             ) {
                 onClick(item.id)
             }

@@ -48,8 +48,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.tv.material3.Icon
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
 import androidx.tv.material3.Text
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.tv.TvColors
 import com.github.andreyasadchy.xtra.ui.tv.TvDialogs
@@ -77,12 +80,15 @@ object TvHeader {
         val stats: String?,
         val left: List<Action>,
         val tabs: List<Action>,
+        /** Right after the tabs: refresh. */
+        val afterTabs: List<Action>,
         val right: List<Action>,
     ) {
         fun same(other: Snapshot?): Boolean {
             return other != null && other.image === image && other.title == title && other.subtitle == subtitle && other.stats == stats &&
                     other.left.map { it.key + it.label } == left.map { it.key + it.label } &&
                     other.tabs.map { it.label + it.selected } == tabs.map { it.label + it.selected } &&
+                    other.afterTabs.map { it.key } == afterTabs.map { it.key } &&
                     other.right.map { it.key + it.label } == right.map { it.key + it.label }
         }
     }
@@ -234,9 +240,11 @@ object TvHeader {
                     if (following) R.drawable.baseline_favorite_black_24 else R.drawable.baseline_favorite_border_black_24
                 ) { toolbar.menu.performIdentifierAction(R.id.followButton, 0) })
             }
-        } else {
-            left.add(Action("refresh", context.getString(R.string.refresh), R.drawable.tv_ic_refresh) { TvUi.refreshVisibleList(appBar) })
         }
+        // refresh at the right of the tabs (at the left of the screen when it has no tabs), never where the focus lands first
+        val afterTabs = if (!isChannel) {
+            listOf(Action("refresh", context.getString(R.string.refresh), R.drawable.tv_ic_refresh) { TvUi.refreshVisibleList(appBar) })
+        } else emptyList()
         val tabs = (appBar.findViewById<View>(R.id.tabLayout) as? TabLayout)?.takeIf { visible(it) && it.tabCount > 1 }?.let { tabLayout ->
             (0 until tabLayout.tabCount).mapNotNull { index ->
                 tabLayout.getTabAt(index)?.let { tab ->
@@ -258,7 +266,7 @@ object TvHeader {
             val filters = sortBar.findViewById<TextView>(R.id.filtersText)?.takeIf { it.visibility == View.VISIBLE }?.text?.toString()?.takeIf { it.isNotBlank() }
             right.add(Action("sort", listOfNotNull(sortText ?: context.getString(R.string.sort), filters).joinToString(" · "), R.drawable.baseline_sort_black_24) { sortBar.performClick() })
         }
-        return Snapshot(image, isChannel, title, subtitle, stats, left, tabs, right)
+        return Snapshot(image, isChannel, title, subtitle, stats, left, tabs, afterTabs, right)
     }
 
     @Composable
@@ -313,7 +321,7 @@ object TvHeader {
                 Clock()
             }
             Spacer(Modifier.height(10.dp))
-            val all = snapshot.left + snapshot.tabs + snapshot.right
+            val all = snapshot.left + snapshot.tabs + snapshot.afterTabs + snapshot.right
             Row(
                 Modifier.onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -330,7 +338,7 @@ object TvHeader {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 all.forEachIndexed { index, action ->
-                    if (index == snapshot.left.size + snapshot.tabs.size && snapshot.right.isNotEmpty()) {
+                    if (index == snapshot.left.size + snapshot.tabs.size + snapshot.afterTabs.size && snapshot.right.isNotEmpty()) {
                         Spacer(Modifier.weight(1f))
                     }
                     Pill(
@@ -355,6 +363,29 @@ object TvHeader {
     private fun Pill(action: Action, isTab: Boolean, modifier: Modifier) {
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
+        // option of the Xtra TV settings: a tab shows its page after a short stop on it, without OK
+        if (isTab && !action.selected) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val focusSwitch = remember { context.prefs().getBoolean(com.github.andreyasadchy.xtra.util.C.TV_FOCUS_SWITCH, false) }
+            if (focusSwitch) {
+                androidx.compose.runtime.LaunchedEffect(focused) {
+                    if (focused) {
+                        kotlinx.coroutines.delay(300L)
+                        action.run()
+                    }
+                }
+            }
+        }
+        // refresh: its icon turns while the list loads again (at least a moment, so it is always seen)
+        val turning = action.key == "refresh" && TvUi.refreshing.value
+        val rotation = if (turning) {
+            val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "refresh")
+            transition.animateFloat(
+                0f, 360f,
+                androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(700, easing = androidx.compose.animation.core.LinearEasing)),
+                label = "rotation"
+            ).value
+        } else 0f
         val background = when {
             focused -> TvColors.focused
             isTab && action.selected -> Color(0x40FFFFFF)
@@ -364,6 +395,8 @@ object TvHeader {
         val content = when {
             focused -> TvColors.onFocused
             isTab && !action.selected -> TvColors.secondaryText
+            // the tab shown, in the color of accent (ambiance color of the Xtra TV settings)
+            isTab && com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null -> TvColors.accent
             else -> Color.White
         }
         Row(
@@ -375,7 +408,12 @@ object TvHeader {
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (action.icon != null) {
-                Icon(painterResource(action.icon), contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
+                Icon(
+                    painterResource(action.icon),
+                    contentDescription = null,
+                    tint = if (turning && !focused) TvColors.accent else content,
+                    modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = rotation }
+                )
                 Spacer(Modifier.width(10.dp))
             }
             Text(

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="games">ゲーム</string>
+    <string name="games">カテゴリー</string>
     <string name="popular">人気</string>
     <string name="following">フォロー中</string>
     <string name="downloads">ダウンロード</string>
@@ -836,4 +836,15 @@
     <string name="tv_dim_level">暗さ</string>
     <string name="tv_dim_off">オフにする</string>
     <string name="tv_followed_videos_row">フォロー中チャンネルの最新動画</string>
+    <string name="tv_refreshed">更新しました</string>
+    <string name="tv_multistream_hint">OK：配信を追加／削除 · 最大 %1$d</string>
+    <string name="tv_proxy_button">プロキシ</string>
+    <string name="tv_proxy_button_summary">OK でカスタムプロキシをオン／オフ、OK 長押しでプロキシ一覧</string>
+    <string name="tv_proxy_on">プロキシ オン</string>
+    <string name="tv_proxy_off">プロキシ オフ</string>
+    <string name="tv_proxy_panel_title">カスタムプロキシ</string>
+    <string name="tv_proxy_panel_subtitle">上から順に、動作する最初のプロキシを使います</string>
+    <string name="tv_proxy_all_settings">プロキシの設定をすべて表示…</string>
+    <string name="tv_focus_switch">OK なしでページを切り替える</string>
+    <string name="tv_focus_switch_summary">タブとサイドメニューはフォーカスが当たるとすぐにページを表示します</string>
 </resources>

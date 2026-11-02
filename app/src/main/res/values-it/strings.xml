@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="games">Giochi</string>
+    <string name="games">Categorie</string>
     <string name="popular">Popolari</string>
     <string name="following">Seguiti</string>
     <string name="downloads">Download</string>
@@ -836,4 +836,15 @@
     <string name="tv_dim_level">Intensità</string>
     <string name="tv_dim_off">Disattiva</string>
     <string name="tv_followed_videos_row">Ultimi video dei canali che segui</string>
+    <string name="tv_refreshed">Aggiornato</string>
+    <string name="tv_multistream_hint">OK: aggiungi o togli uno stream · fino a %1$d</string>
+    <string name="tv_proxy_button">Proxy</string>
+    <string name="tv_proxy_button_summary">OK attiva o disattiva il proxy personalizzato, tenere premuto OK apre l\'elenco dei proxy</string>
+    <string name="tv_proxy_on">Proxy attivo</string>
+    <string name="tv_proxy_off">Proxy disattivato</string>
+    <string name="tv_proxy_panel_title">Proxy personalizzati</string>
+    <string name="tv_proxy_panel_subtitle">Viene usato il primo proxy che funziona, partendo dall\'alto</string>
+    <string name="tv_proxy_all_settings">Tutte le impostazioni dei proxy…</string>
+    <string name="tv_focus_switch">Cambia pagina senza OK</string>
+    <string name="tv_focus_switch_summary">Le schede e il menu laterale mostrano la loro pagina appena hanno il focus</string>
 </resources>

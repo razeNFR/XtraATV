@@ -7,6 +7,7 @@ import android.widget.TextView
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.util.prefs
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.color.MaterialColors
@@ -23,6 +24,10 @@ object TvUi {
      * focus highlight and, in the main screen, the toolbar actions moved to the navigation rail are hidden.
      */
     fun adapt(view: View, hideToolbarActions: Boolean) {
+        // loading circles in the color of accent (the ambiance color of the Xtra TV settings)
+        if (view is android.widget.ProgressBar && com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null) {
+            view.indeterminateTintList = com.github.andreyasadchy.xtra.ui.tv.TvAccent.colorList
+        }
         when (view) {
             is AppBarLayout -> {
                 for (i in 0 until view.childCount) {
@@ -131,6 +136,14 @@ object TvUi {
         fun adaptTab(tab: View) {
             if (tab.foreground == null) {
                 tab.foreground = tab.context.getDrawable(R.drawable.tv_row_focus)
+            }
+            // option of the Xtra TV settings: a tab shows its page after a short stop on it, without OK
+            if (tab.context.prefs().getBoolean(com.github.andreyasadchy.xtra.util.C.TV_FOCUS_SWITCH, false)) {
+                val select = Runnable { if (tab.hasFocus() && !tab.isSelected) tab.performClick() }
+                tab.setOnFocusChangeListener { _, hasFocus ->
+                    tab.removeCallbacks(select)
+                    if (hasFocus) tab.postDelayed(select, 300L)
+                }
             }
         }
         for (i in 0 until strip.childCount) {
@@ -302,6 +315,9 @@ object TvUi {
         wrapper.addView(sortBar, android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
+    /** A list is loaded again with the refresh button: its icon turns (at least a moment, so it is always seen). */
+    val refreshing = androidx.compose.runtime.mutableStateOf(false)
+
     fun refreshVisibleList(from: View) {
         // the screen the button is in: up to the root of the fragment
         var root: View = from
@@ -311,7 +327,49 @@ object TvUi {
             root = parent
         }
         val grid = findVisibleGrid(root) ?: return
-        (grid.adapter as? androidx.paging.PagingDataAdapter<*, *>)?.refresh()
+        val adapter = grid.adapter as? androidx.paging.PagingDataAdapter<*, *>
+        if (adapter == null) {
+            grid.scrollToPosition(0)
+            return
+        }
+        if (refreshing.value) {
+            return
+        }
+        refreshing.value = true
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        var loading = false
+        val finish = {
+            // the cards stay: a light sweeps over them once and a short message says it is done
+            val wait = (800L - (android.os.SystemClock.elapsedRealtime() - startedAt)).coerceAtLeast(0L)
+            grid.postDelayed({
+                refreshing.value = false
+                if (grid.isAttachedToWindow) {
+                    grid.sweep()
+                    android.widget.Toast.makeText(grid.context, R.string.tv_refreshed, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }, wait)
+        }
+        val self = arrayOfNulls<(androidx.paging.CombinedLoadStates) -> Unit>(1)
+        val listener: (androidx.paging.CombinedLoadStates) -> Unit = { states ->
+            when (states.refresh) {
+                is androidx.paging.LoadState.Loading -> loading = true
+                else -> if (loading) {
+                    loading = false
+                    self[0]?.let { adapter.removeLoadStateListener(it) }
+                    finish()
+                }
+            }
+        }
+        self[0] = listener
+        adapter.addLoadStateListener(listener)
+        // never turning for ever (the list had nothing to load again)
+        grid.postDelayed({
+            if (refreshing.value && !loading) {
+                adapter.removeLoadStateListener(listener)
+                finish()
+            }
+        }, 5000L)
+        adapter.refresh()
         grid.scrollToPosition(0)
     }
 

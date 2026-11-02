@@ -76,8 +76,20 @@ object TvStreamSwitcher {
         }
         val checked = selection?.preselected?.toMutableSet()
         // tab shown (0: the list given), the lists already loaded, every stream shown (the checked ones of all the tabs)
-        var currentTab = 0
-        val loadedTabs = mutableMapOf<Int, List<Stream>>(0 to streams)
+        // the list of the stream has a tab of its own when it is one of the rows (followed, popular...): that tab shows it
+        // and is selected, no "This list" tab next to the same list (picking streams of a multi-stream keeps it)
+        val originRow = if (selection == null) com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.originRow(activity, source, rows) else -1
+        val originTab = if (originRow >= 0) originRow else 0
+        // the row a tab shows, null for the list of the stream
+        val rowOf: (Int) -> com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Row? = { index ->
+            if (originRow >= 0) {
+                if (index == originRow) null else rows.getOrNull(index)
+            } else {
+                rows.getOrNull(index - 1)
+            }
+        }
+        var currentTab = originTab
+        val loadedTabs = mutableMapOf<Int, List<Stream>>(originTab to streams)
         val seen = LinkedHashMap<String, Stream>()
         val dialog = AppCompatDialog(activity)
         val density = activity.resources.displayMetrics.density
@@ -93,8 +105,25 @@ object TvStreamSwitcher {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (4 * density).toInt())
         }
+        // multi-stream: a band of the color of accent over the row and the icon of the multi-stream before its title, the
+        // row of the other streams stays plain
+        if (selection != null) {
+            root.addView(View(activity).apply {
+                setBackgroundColor(com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
+            }, 0, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (4 * density).toInt()).apply {
+                bottomMargin = (10 * density).toInt()
+            })
+        }
         header.addView(TextView(activity).apply {
             text = selection?.title ?: activity.getString(R.string.tv_switch_stream)
+            if (selection != null) {
+                val icon = activity.getDrawable(R.drawable.tv_ic_multistream)?.mutate()?.apply {
+                    setTint(com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
+                    setBounds(0, 0, (26 * density).toInt(), (26 * density).toInt())
+                }
+                setCompoundDrawablesRelative(icon, null, null, null)
+                compoundDrawablePadding = (10 * density).toInt()
+            }
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 20f
             // readable over a bright video
@@ -120,6 +149,16 @@ object TvStreamSwitcher {
             }.also { header.addView(it) }
         } else null
         root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        // multi-stream with several streams to pick: what OK does
+        if (selection != null && selection.max > 1) {
+            root.addView(TextView(activity).apply {
+                text = activity.getString(R.string.tv_multistream_hint, selection.max)
+                setTextColor(0xCCFFFFFF.toInt())
+                textSize = 14f
+                setShadowLayer(6 * density, 0f, 1 * density, 0xE6000000.toInt())
+                setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (2 * density).toInt())
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
         // what OK held does, over the row (not when picking the streams of a multi-stream)
         if (selection == null && onPip != null) {
             root.addView(TextView(activity).apply {
@@ -131,9 +170,11 @@ object TvStreamSwitcher {
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         // tabs of the lists: the list of the stream first, then the other rows
-        val tabTitles = if (rows.isNotEmpty()) {
-            listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)) + rows.map { it.title }
-        } else emptyList()
+        val tabTitles = when {
+            rows.isEmpty() -> emptyList()
+            originRow >= 0 -> rows.map { it.title }
+            else -> listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)) + rows.map { it.title }
+        }
         val tabViews = mutableListOf<TextView>()
         if (tabTitles.size > 1) {
             val tabsLayout = LinearLayout(activity).apply {
@@ -152,7 +193,7 @@ object TvStreamSwitcher {
                     setShadowLayer(4 * density, 0f, 1 * density, 0x99000000.toInt())
                 }.also { tabsLayout.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = (10 * density).toInt() }) }
             }
-            tabViews.firstOrNull()?.isSelected = true
+            tabViews.getOrNull(originTab)?.isSelected = true
             root.addView(android.widget.HorizontalScrollView(activity).apply {
                 isHorizontalScrollBarEnabled = false
                 isFocusable = false
@@ -249,11 +290,14 @@ object TvStreamSwitcher {
                     }
                     else -> checked.add(login)
                 }
-                adapter.streams.indexOf(stream).takeIf { it >= 0 }?.let { adapter.notifyItemChanged(it) }
+                // the numbers of the other selected streams follow (one taken away: the next ones move up)
+                adapter.notifyItemRangeChanged(0, adapter.itemCount)
                 updateValidate()
             } else {
                 dialog.dismiss()
-                val row = rows.getOrNull(currentTab - 1)
+                // the info of the stream reached for a moment, like left / right
+                PlayerFragment.peekHudOnStart = true
+                val row = rowOf(currentTab)
                 if (row != null) {
                     // a stream of another list: that list becomes the one of left / right and of this row
                     activity.startStream(stream, adapter.streams, row.source)
@@ -277,7 +321,7 @@ object TvStreamSwitcher {
         // more of the list near its end (30 streams by page), for the list of the stream and the other tabs
         val pages = mutableMapOf<Int, com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages>()
         if (source != null && selection == null) {
-            pages[0] = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(source)
+            pages[originTab] = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(source)
         }
         var moreJob: kotlinx.coroutines.Job? = null
         adapter.onFocused = { position ->
@@ -307,7 +351,7 @@ object TvStreamSwitcher {
                     loadedTabs[tab] = adapter.streams
                     added.forEach { stream -> stream.channelLogin?.let { seen.putIfAbsent(it, stream) } }
                     adapter.notifyItemRangeInserted(start, added.size)
-                    if (tab == 0) {
+                    if (tab == originTab) {
                         activity.onQueueExtended(adapter.streams, source)
                     }
                 }
@@ -352,7 +396,7 @@ object TvStreamSwitcher {
                     val list = cached ?: run {
                         // loading: the tab says so until the list comes
                         view.text = activity.getString(R.string.tv_switch_loading, tabTitles[index])
-                        rows.getOrNull(index - 1)?.let { row ->
+                        rowOf(index)?.let { row ->
                             val rowPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(row.source)
                             pages[index] = rowPages
                             rowPages.next()?.distinctBy { it.channelLogin }
@@ -413,10 +457,10 @@ object TvStreamSwitcher {
         }
         val update: (List<Stream>) -> Unit = update@{ list ->
             // only when streamers came or went or moved, not for new viewer counts: the row does not move for nothing
-            if (!dialog.isShowing || list.isEmpty() || currentTab != 0 || list.map { it.channelLogin } == adapter.streams.map { it.channelLogin }) {
+            if (!dialog.isShowing || list.isEmpty() || currentTab != originTab || list.map { it.channelLogin } == adapter.streams.map { it.channelLogin }) {
                 return@update
             }
-            loadedTabs[0] = list
+            loadedTabs[originTab] = list
             val old = adapter.streams
             if (list.size > old.size && list.subList(0, old.size).map { it.channelLogin } == old.map { it.channelLogin }) {
                 // only more streams at the end: added after the row, the focus does not move
@@ -465,7 +509,7 @@ object TvStreamSwitcher {
         /** A card got the focus (its place in the list): more of the list is loaded near its end. */
         var onFocused: ((Int) -> Unit)? = null
 
-        class ViewHolder(val binding: FragmentStreamsListItemBinding, val badge: android.widget.ImageView) : RecyclerView.ViewHolder(binding.root)
+        class ViewHolder(val binding: FragmentStreamsListItemBinding, val badge: TextView) : RecyclerView.ViewHolder(binding.root)
 
         override fun getItemCount() = streams.size
 
@@ -474,17 +518,17 @@ object TvStreamSwitcher {
             binding.root.layoutParams = binding.root.layoutParams.apply { width = itemWidth }
             TvCards.prepare(binding.root)
             val density = parent.resources.displayMetrics.density
-            // green check of a selected stream, at the top right of the card
-            val badge = android.widget.ImageView(parent.context).apply {
-                setImageResource(R.drawable.tv_ic_check)
-                setColorFilter(android.graphics.Color.WHITE)
+            // number of a selected stream (its place in the multi-stream), at the top right of the card, in the color of accent
+            val badge = TextView(parent.context).apply {
+                gravity = Gravity.CENTER
+                setTextColor(android.graphics.Color.WHITE)
+                textSize = 15f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
                 background = android.graphics.drawable.GradientDrawable().apply {
                     shape = android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(0xFF22C55E.toInt())
+                    setColor(com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
                     setStroke((2 * density).toInt(), android.graphics.Color.WHITE)
                 }
-                val padding = (5 * density).toInt()
-                setPadding(padding, padding, padding, padding)
                 visibility = View.GONE
                 elevation = 8 * density
             }
@@ -498,7 +542,9 @@ object TvStreamSwitcher {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val stream = streams[position]
             val context = holder.itemView.context
-            holder.badge.visibility = if (checked != null && stream.channelLogin in checked) View.VISIBLE else View.GONE
+            val number = checked?.indexOf(stream.channelLogin)?.takeIf { it >= 0 }?.plus(1)
+            holder.badge.visibility = if (number != null) View.VISIBLE else View.GONE
+            holder.badge.text = number?.toString()
             with(holder.binding) {
                 root.setOnClickListener { onClick(stream) }
                 val longClick = onLongClick

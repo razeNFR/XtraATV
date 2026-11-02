@@ -37,6 +37,45 @@ class GridRecyclerView : RecyclerView {
 
     private val gridLayoutManager: GridLayoutManager
 
+    /** TV: a light that sweeps once over the cards after a refresh (0 to 1 while it moves, -1 when none). */
+    private var sweepProgress = -1f
+    private val sweepPaint = android.graphics.Paint()
+
+    fun sweep() {
+        if (!isTv || width == 0) {
+            return
+        }
+        android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 700L
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener {
+                sweepProgress = it.animatedValue as Float
+                invalidate()
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    sweepProgress = -1f
+                    invalidate()
+                }
+            })
+            start()
+        }
+    }
+
+    override fun draw(canvas: android.graphics.Canvas) {
+        super.draw(canvas)
+        if (sweepProgress >= 0f) {
+            val band = width * 0.35f
+            val x = -band + sweepProgress * (width + band * 2)
+            sweepPaint.shader = android.graphics.LinearGradient(
+                x, 0f, x + band, 0f,
+                intArrayOf(android.graphics.Color.TRANSPARENT, android.graphics.Color.argb(70, 255, 255, 255), android.graphics.Color.TRANSPARENT),
+                null, android.graphics.Shader.TileMode.CLAMP
+            )
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), sweepPaint)
+        }
+    }
+
     /**
      * TV lists of streams: the card whose preview plays grows and the others move to make room
      * (turned off with the growth of the cards in the Xtra TV settings).

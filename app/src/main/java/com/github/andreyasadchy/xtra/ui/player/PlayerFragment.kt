@@ -156,9 +156,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             return
         }
         hudPeek = true
+        // only the info of the stream (title, channel, category, viewers, quality...), no buttons nor timeline
+        setHudInfoOnly(true)
         showController()
         binding.root.removeCallbacks(hudPeekHideAction)
         binding.root.postDelayed(hudPeekHideAction, 2500L)
+    }
+
+    /** TV: the buttons and the timeline of the HUD hidden (the info of the stream after a switch) or shown again. */
+    private fun setHudInfoOnly(infoOnly: Boolean) {
+        val controls = _binding?.playerControls?.root ?: return
+        val visibility = if (infoOnly) View.GONE else View.VISIBLE
+        controls.findViewById<View>(R.id.bottomLayout)?.visibility = visibility
+        (controls.findViewById<View>(R.id.bottomLeftLayout)?.parent as? View)?.visibility = visibility
     }
 
     /** The HUD gets the focus (or goes): it is no longer a short look. */
@@ -173,7 +183,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private val backPressedCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-            if (_binding != null && controllerAutoHide && controllerHideOnTouch && binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()) {
+            if (_binding != null && hudPeek && binding.playerControls.root.isVisible) {
+                // the info of the stream shown after a switch: back only hides it
+                hideController()
+            } else if (_binding != null && controllerAutoHide && controllerHideOnTouch && binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()) {
                 hideController()
             } else if (_binding != null && binding.chatLayout.hasFocus()) {
                 binding.dragView.requestFocus()
@@ -700,7 +713,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         onTimeBarKey(keyCode, event)
                     }
                     // discreet timeline: the scrubber and the accent color only show while it has the focus
-                    val playedColor = MaterialColors.getColor(progressBar, androidx.appcompat.R.attr.colorPrimary)
+                    // the color of accent: the ambiance color of the Xtra TV settings
+                    val playedColor = if (com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvAccent.color
+                    } else {
+                        MaterialColors.getColor(progressBar, androidx.appcompat.R.attr.colorPrimary)
+                    }
                     progressBar.hideScrubber(false)
                     progressBar.setPlayedColor(0xE6FFFFFF.toInt())
                     progressBar.setOnFocusChangeListener { _, hasFocus ->
@@ -2445,6 +2463,39 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         )
     }
 
+    /** TV: the icon of the proxy button says if the custom proxy is on. */
+    private fun updateTvProxyIcon() {
+        val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+        _binding?.playerControls?.tvProxy?.setImageResource(if (on) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
+    }
+
+    /** TV: the list of the custom proxies (OK held on the proxy button), saved in the settings when it closes. */
+    private fun showTvProxyPanel() {
+        val activity = activity as? MainActivity ?: return
+        val repository = (activity.application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository
+        viewLifecycleOwner.lifecycleScope.launch {
+            val proxies = repository.getCustomProxies()
+            if (_binding == null) {
+                return@launch
+            }
+            com.github.andreyasadchy.xtra.ui.tv.TvProxyPanel.show(
+                activity,
+                proxies,
+                openSettings = { activity.openCustomProxySettings() },
+            ) { changed ->
+                if (changed != null) {
+                    activity.lifecycleScope.launch {
+                        repository.updateCustomProxies(changed)
+                        // the stream plays through the proxies: it starts again with the new list
+                        if (activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)) {
+                            activity.restartCurrentStream()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /** TV: level of the dimming (OK held on its button), the stream gets darker while it changes. */
     private fun showTvDimPanel() {
         val context = requireContext()
@@ -2622,11 +2673,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (!isTv || _binding == null) {
             return
         }
-        // the small window in a bottom corner goes up over the controls while they are shown
-        (activity as? MainActivity)?.onTvControlsVisibility(visible)
+        // the small window in a bottom corner goes up over the controls while they are shown (not for the info only of a
+        // switch: no bar of buttons to make room for)
+        val lift = visible && !hudPeek
+        (activity as? MainActivity)?.onTvControlsVisibility(lift)
         with(binding) {
             if (chatLayout.isVisible) {
-                chatLayout.animate().translationY(if (visible) getTvChatLift() else 0f).setDuration(200L).start()
+                chatLayout.animate().translationY(if (lift) getTvChatLift() else 0f).setDuration(200L).start()
             }
             if (visible) {
                 // the button of the small window, only while it is open
@@ -2654,6 +2707,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         binding.root.viewTreeObserver.removeOnGlobalFocusChangeListener(hudFocusListener)
         binding.root.viewTreeObserver.addOnGlobalFocusChangeListener(hudFocusListener)
+        // loading circle in the color of accent
+        if (com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null) {
+            (binding.bufferingIndicator as? android.widget.ProgressBar)?.indeterminateTintList = com.github.andreyasadchy.xtra.ui.tv.TvAccent.colorList
+        }
         // the dimming of the streams, as it is now and when it changes
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(tvDimListener)
         com.github.andreyasadchy.xtra.ui.tv.TvDim.addListener(tvDimListener)
@@ -2687,7 +2744,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.contentDescription = getString(label)
                 }
                 button
-            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream, tvDim, tvPipSettings, chatLayoutSettings)
+            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream, tvDim, tvProxy, tvPipSettings, chatLayoutSettings)
             buttons.forEach { button ->
                 button.setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
@@ -2743,6 +2800,33 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     true
                 }
             }
+            // custom proxy: OK turns it on / off (the stream starts again with it), OK held opens the list of the proxies.
+            // Hidden at first (player buttons), and only there when a proxy is turned on in the list
+            tvProxy?.let { button ->
+                button.visibility = View.GONE
+                if (playbackService?.type == BasePlaybackService.STREAM && prefs.getBoolean(C.TV_BUTTON_PROXY, false)) {
+                    val repository = (requireActivity().application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val any = repository.getCustomProxies().any { it.enabled && !it.url.isNullOrBlank() }
+                        if (_binding != null) {
+                            button.visibility = if (any) View.VISIBLE else View.GONE
+                            updateTvProxyIcon()
+                        }
+                    }
+                }
+                button.setOnClickListener {
+                    val on = !requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+                    requireContext().prefs().edit { putBoolean(C.PLAYER_USE_CUSTOM_PROXY, on) }
+                    updateTvProxyIcon()
+                    android.widget.Toast.makeText(requireContext(), if (on) R.string.tv_proxy_on else R.string.tv_proxy_off, android.widget.Toast.LENGTH_SHORT).show()
+                    (activity as? MainActivity)?.restartCurrentStream()
+                }
+                button.setOnLongClickListener {
+                    hideController()
+                    showTvProxyPanel()
+                    true
+                }
+            }
             // the small window: its button is there while it is open (see onTvControllerVisibility)
             tvPipSettings?.setOnClickListener {
                 hideController()
@@ -2767,7 +2851,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 updateSeparator()
                 duration.viewTreeObserver.addOnGlobalLayoutListener { updateSeparator() }
             }
-            // Nuvio style: the focused button is a white disc, its icon turns dark
+            // Nuvio style: the focused button is a white disc, its icon takes the color of accent (ambiance color)
+            val focusedIcon = com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight
             buttons.forEach { button ->
                 val previous = button.onFocusChangeListener
                 button.setOnFocusChangeListener { v, hasFocus ->
@@ -2775,14 +2860,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     when (v) {
                         is android.widget.ImageView -> v.setColorFilter(
                             when {
-                                hasFocus -> Color.BLACK
+                                hasFocus -> focusedIcon
                                 v.isEnabled -> Color.WHITE
                                 else -> Color.GRAY
                             }
                         )
                         is android.widget.Button -> {
-                            v.foregroundTintList = android.content.res.ColorStateList.valueOf(if (hasFocus) Color.BLACK else Color.WHITE)
-                            v.setTextColor(if (hasFocus) Color.BLACK else Color.WHITE)
+                            v.foregroundTintList = android.content.res.ColorStateList.valueOf(if (hasFocus) focusedIcon else Color.WHITE)
+                            v.setTextColor(if (hasFocus) focusedIcon else Color.WHITE)
                         }
                     }
                 }
@@ -2840,6 +2925,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         val root = binding.playerControls.root
         tooltip.text = anchor.contentDescription
+        // the name of the button in the color of accent, like its icon
+        tooltip.setTextColor(com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight)
         tooltip.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
         val rootLocation = IntArray(2)
         val anchorLocation = IntArray(2)
@@ -3169,6 +3256,46 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()
         ) {
             showController()
+            // OK on a button of the HUD: if it opens a panel, the HUD comes back when that panel closes
+            val isSelect = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+            val focus = activity?.currentFocus
+            if (isTv && isSelect && event.repeatCount == 0 && focus != null &&
+                (focus.parent == binding.playerControls.bottomLeftLayout || focus.parent == binding.playerControls.bottomRightLayout || focus == binding.playerControls.playPause)
+            ) {
+                hudOptionPressedAt = android.os.SystemClock.elapsedRealtime()
+            }
+        }
+    }
+
+    /** TV: OK was pressed on a button of the HUD (time), a panel it opens closing gives the HUD back. */
+    private var hudOptionPressedAt = 0L
+    private var reopenHudAfterOption = false
+
+    /**
+     * TV: the window of the app lost or got back the focus (a panel, a row or a dialog over it opened or closed). A panel
+     * opened from a button of the HUD and closed without changing the stream (a switch makes a new player screen, which
+     * shows the info of its stream): the whole HUD again, the focus on the button that opened it.
+     */
+    fun onTvWindowFocusChanged(hasFocus: Boolean) {
+        if (!isTv || _binding == null) {
+            return
+        }
+        if (!hasFocus) {
+            if (android.os.SystemClock.elapsedRealtime() - hudOptionPressedAt < 2000L) {
+                reopenHudAfterOption = true
+            }
+            return
+        }
+        if (reopenHudAfterOption) {
+            reopenHudAfterOption = false
+            hudOptionPressedAt = 0L
+            binding.root.postDelayed({
+                if (view != null && isAdded && !isRemoving && isMaximized && activity?.hasWindowFocus() == true) {
+                    endHudPeek()
+                    showController(force = true)
+                    binding.playerControls.root.post { if (view != null && !binding.playerControls.root.hasFocus()) focusPrimaryControl() }
+                }
+            }, 200L)
         }
     }
 
@@ -3260,6 +3387,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     protected fun showController(show: Boolean = true, force: Boolean = false) {
+        if (show && isTv && !hudPeek) {
+            // the whole HUD again (after the info only of a switch)
+            setHudInfoOnly(false)
+        }
         if (show) {
             onTvControllerVisibility(true)
         }

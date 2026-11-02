@@ -180,7 +180,11 @@ fun TvHomeScreen(
     // first stream of the next row when it has none)
     val firstIsGhost = slots.firstOrNull()?.second == null && slots.isNotEmpty()
     val ghostCard = remember { FocusRequester() }
+    // the focus was put on a grey card by the home (not by a key): it follows the rows as they come
     var onGhost by remember { mutableStateOf(false) }
+    // a key was pressed since: the focus is where the user put it, nothing moves it any more (an automatic move of the
+    // focus, a grey card leaving the screen, does not count)
+    var userMoved by remember { mutableStateOf(false) }
     val hasCards = rows.isNotEmpty() || resume?.items?.isNotEmpty() == true || videos?.items?.isNotEmpty() == true || games?.items?.isNotEmpty() == true
     // "refresh" only takes the focus with up from the first row (or while nothing is loaded): coming into the home,
     // the focus never lands on it
@@ -200,18 +204,32 @@ fun TvHomeScreen(
     }
     // the grey card had the focus and its row came (or turned out empty): the focus goes on, unless it moved meanwhile
     val firstKey = slots.firstOrNull()?.first
-    LaunchedEffect(firstKey, firstIsGhost) {
-        if (!onGhost) {
+    LaunchedEffect(firstKey, firstIsGhost, hasCards) {
+        if (!onGhost || userMoved) {
             return@LaunchedEffect
         }
-        androidx.compose.runtime.withFrameNanos { }
-        androidx.compose.runtime.withFrameNanos { }
-        if (firstIsGhost) {
-            runCatching { ghostCard.requestFocus() }
-        } else if (slots.isNotEmpty() || hasCards) {
-            onGhost = false
-            listState.scrollToItem(0)
-            runCatching { firstCard.requestFocus() }
+        // the new first row may need a few frames to be laid out: tried again for a moment
+        repeat(30) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (userMoved) {
+                return@LaunchedEffect
+            }
+            if (firstIsGhost) {
+                if (runCatching { ghostCard.requestFocus() }.getOrNull() == true) return@LaunchedEffect
+            } else if (slots.isNotEmpty() || hasCards) {
+                listState.scrollToItem(0)
+                if (runCatching { firstCard.requestFocus() }.getOrNull() == true) {
+                    onGhost = false
+                    return@LaunchedEffect
+                }
+            } else {
+                // nothing at all (no rows, no network): "refresh" so the focus is never lost
+                refreshAllowed = true
+                if (runCatching { refreshRequester.requestFocus() }.getOrNull() == true) {
+                    onGhost = false
+                    return@LaunchedEffect
+                }
+            }
         }
     }
     val request = focus.request
@@ -225,6 +243,8 @@ fun TvHomeScreen(
             androidx.compose.runtime.withFrameNanos { }
             androidx.compose.runtime.withFrameNanos { }
             if (runCatching { ghostCard.requestFocus() }.getOrNull() == true) {
+                // a new request (side menu, player closed): the home places the focus again
+                userMoved = false
                 onGhost = true
             }
             if (focus.request === request) focus.request = null
@@ -272,7 +292,6 @@ fun TvHomeScreen(
                     .focusProperties { canFocus = refreshAllowed || !hasCards }
                     .onFocusChanged {
                         refreshFocused = it.hasFocus
-                        if (it.hasFocus) onGhost = false
                         if (!it.hasFocus) refreshAllowed = false
                     }
                     .onPreviewKeyEvent { event ->
@@ -294,6 +313,10 @@ fun TvHomeScreen(
                 .weight(1f)
                 .focusRestorer(if (firstIsGhost) ghostCard else firstCard)
                 .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) {
+                        userMoved = true
+                        onGhost = false
+                    }
                     // up from the first row: "refresh"
                     if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && focusedItem == 0) {
                         refreshAllowed = true
@@ -314,14 +337,14 @@ fun TvHomeScreen(
                             if (rowIndex == 0) {
                                 Modifier
                                     .focusRequester(ghostCard)
-                                    .onFocusChanged { if (it.hasFocus) { onGhost = true; focusedItem = rowIndex } }
+                                    .onFocusChanged { if (it.hasFocus) { if (!userMoved) onGhost = true; focusedItem = rowIndex } }
                             } else null,
                         )
                     }
                     return@forEachIndexed
                 }
                 item(key = key) {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = rowIndex; bringRow(rowIndex) } }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = rowIndex; bringRow(rowIndex) } }) {
                         StreamRow(
                             row, previewLogin, previewPlayer, actions, if (rowIndex == 0) firstCard else null,
                             state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
@@ -347,7 +370,7 @@ fun TvHomeScreen(
             val hasResume = resume != null && resume.items.isNotEmpty()
             if (hasResume) {
                 item(key = "resume") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = resumeIndex; bringRow(resumeIndex) } }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = resumeIndex; bringRow(resumeIndex) } }) {
                         ResumeRow(resume!!, actions, if (slots.isEmpty()) firstCard else null)
                     }
                 }
@@ -357,7 +380,7 @@ fun TvHomeScreen(
             val hasVideos = videos != null && videos.items.isNotEmpty()
             if (hasVideos) {
                 item(key = "followed_videos") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = videosIndex; bringRow(videosIndex) } }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = videosIndex; bringRow(videosIndex) } }) {
                         VideoRow(videos!!, actions, if (slots.isEmpty() && !hasResume) firstCard else null)
                     }
                 }
@@ -365,7 +388,7 @@ fun TvHomeScreen(
             val statsIndex = videosIndex + if (hasVideos) 1 else 0
             if (stats != null) {
                 item(key = "stats") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = statsIndex; bringRow(statsIndex) } }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = statsIndex; bringRow(statsIndex) } }) {
                         StatsCard(stats, actions)
                     }
                 }
@@ -373,7 +396,7 @@ fun TvHomeScreen(
             val gamesIndex = statsIndex + if (stats != null) 1 else 0
             if (games != null && games.items.isNotEmpty()) {
                 item(key = "games") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { onGhost = false; focusedItem = gamesIndex; bringRow(gamesIndex) } }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = gamesIndex; bringRow(gamesIndex) } }) {
                         GameRow(games, actions, if (slots.isEmpty() && !hasResume && !hasVideos) firstCard else null)
                     }
                 }

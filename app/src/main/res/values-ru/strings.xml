@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="games">Игры</string>
+    <string name="games">Категории</string>
     <string name="popular">Популярное</string>
     <string name="following">Отслеживания</string>
     <string name="downloads">Загрузки</string>
@@ -836,4 +836,15 @@
     <string name="tv_dim_level">Сила затемнения</string>
     <string name="tv_dim_off">Выключить</string>
     <string name="tv_followed_videos_row">Новые видео отслеживаемых каналов</string>
+    <string name="tv_refreshed">Обновлено</string>
+    <string name="tv_multistream_hint">OK: добавить или убрать трансляцию · до %1$d</string>
+    <string name="tv_proxy_button">Прокси</string>
+    <string name="tv_proxy_button_summary">OK включает или выключает свой прокси, удержание OK открывает список прокси</string>
+    <string name="tv_proxy_on">Прокси включён</string>
+    <string name="tv_proxy_off">Прокси выключен</string>
+    <string name="tv_proxy_panel_title">Свои прокси</string>
+    <string name="tv_proxy_panel_subtitle">Используется первый работающий прокси сверху</string>
+    <string name="tv_proxy_all_settings">Все настройки прокси…</string>
+    <string name="tv_focus_switch">Переключать страницу без OK</string>
+    <string name="tv_focus_switch_summary">Вкладки и боковое меню показывают страницу, как только получают фокус</string>
 </resources>

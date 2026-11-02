@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="games">Game</string>
+    <string name="games">Kategori</string>
     <string name="popular">Populer</string>
     <string name="following">Mengikuti</string>
     <string name="downloads">Unduhan</string>
@@ -837,4 +837,15 @@
     <string name="tv_dim_level">Tingkat redup</string>
     <string name="tv_dim_off">Matikan</string>
     <string name="tv_followed_videos_row">Video terbaru dari channel yang kamu ikuti</string>
+    <string name="tv_refreshed">Diperbarui</string>
+    <string name="tv_multistream_hint">OK: tambah atau hapus stream · hingga %1$d</string>
+    <string name="tv_proxy_button">Proxy</string>
+    <string name="tv_proxy_button_summary">OK menyalakan atau mematikan proxy kustom, tahan OK membuka daftar proxy</string>
+    <string name="tv_proxy_on">Proxy aktif</string>
+    <string name="tv_proxy_off">Proxy nonaktif</string>
+    <string name="tv_proxy_panel_title">Proxy kustom</string>
+    <string name="tv_proxy_panel_subtitle">Proxy pertama yang berfungsi dari atas yang dipakai</string>
+    <string name="tv_proxy_all_settings">Semua pengaturan proxy…</string>
+    <string name="tv_focus_switch">Ganti halaman tanpa OK</string>
+    <string name="tv_focus_switch_summary">Tab dan menu samping menampilkan halamannya begitu mendapat fokus</string>
 </resources>

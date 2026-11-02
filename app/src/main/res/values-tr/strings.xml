@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Turkish -->
 <resources>
-    <string name="games">Oyunlar</string>
+    <string name="games">Kategoriler</string>
     <string name="popular">Popüler</string>
     <string name="following">Takip Edilenler</string>
     <string name="downloads">İndirilenler</string>
@@ -837,4 +837,15 @@
     <string name="tv_dim_level">Karartma düzeyi</string>
     <string name="tv_dim_off">Kapat</string>
     <string name="tv_followed_videos_row">Takip ettiğin kanalların son videoları</string>
+    <string name="tv_refreshed">Güncellendi</string>
+    <string name="tv_multistream_hint">OK: yayın ekle veya çıkar · en fazla %1$d</string>
+    <string name="tv_proxy_button">Proxy</string>
+    <string name="tv_proxy_button_summary">OK özel proxy\'yi açar veya kapatır, OK basılı tutmak proxy listesini açar</string>
+    <string name="tv_proxy_on">Proxy açık</string>
+    <string name="tv_proxy_off">Proxy kapalı</string>
+    <string name="tv_proxy_panel_title">Özel proxy\'ler</string>
+    <string name="tv_proxy_panel_subtitle">Yukarıdan başlayarak çalışan ilk proxy kullanılır</string>
+    <string name="tv_proxy_all_settings">Tüm proxy ayarları…</string>
+    <string name="tv_focus_switch">OK olmadan sayfa değiştir</string>
+    <string name="tv_focus_switch_summary">Sekmeler ve yan menü odak alır almaz sayfalarını gösterir</string>
 </resources>

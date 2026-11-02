@@ -10,8 +10,8 @@ import com.github.andreyasadchy.xtra.repository.HelixRepository
 import com.github.andreyasadchy.xtra.util.C
 
 class GameStreamsDataSource(
-    private val gameId: String?,
-    private val gameSlug: String?,
+    val gameId: String?,
+    val gameSlug: String?,
     private val gameName: String?,
     private val gqlQueryLanguages: List<Language>?,
     private val gqlQuerySort: StreamSort?,
