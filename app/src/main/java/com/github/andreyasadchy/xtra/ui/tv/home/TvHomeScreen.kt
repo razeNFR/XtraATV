@@ -885,6 +885,7 @@ private fun ResumeRow(row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResum
 }
 
 /** Latest videos of the followed channels. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun VideoRow(row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video>, actions: TvHomeActions, firstRequester: FocusRequester?) {
     Column {
