@@ -821,4 +821,19 @@
     <string name="tv_adblock_midroll">mid-roll</string>
     <string name="tv_adblock_blocking_roll">Блокировка рекламы %1$s (%2$s)</string>
     <string name="tv_adblock_waiting_roll">Ожидание конца рекламы %1$s</string>
+    <string name="tv_keep_sound_mini_only">Только в мини-плеере</string>
+    <string name="tv_keep_sound_audio_only">Только в режиме «только звук»</string>
+    <string name="tv_keep_sound_fullscreen">Из полноэкранного плеера</string>
+    <string name="tv_keep_sound_mini_summary">Кнопкой «Домой» или «Назад» на первом экране звук продолжается, если трансляция была в мини-плеере. Из полноэкранного плеера трансляция останавливается</string>
+    <string name="tv_keep_sound_audio_summary">Кнопкой «Домой» или «Назад» на первом экране звук продолжается, если трансляция была в режиме «только звук». Из полноэкранного плеера трансляция останавливается</string>
+    <string name="tv_keep_sound_fullscreen_summary">Нажатие «Домой» во время полноэкранной трансляции оставляет звук в фоне</string>
+    <string name="tv_chat_middle_right">Посередине справа</string>
+    <string name="tv_chat_middle_left">Посередине слева</string>
+    <string name="tv_chat_middle_top">Посередине сверху</string>
+    <string name="tv_chat_middle_bottom">Посередине снизу</string>
+    <string name="tv_dim">Затемнение</string>
+    <string name="tv_dim_button_summary">OK включает или выключает затемнение трансляции, удержание OK задаёт его силу</string>
+    <string name="tv_dim_level">Сила затемнения</string>
+    <string name="tv_dim_off">Выключить</string>
+    <string name="tv_followed_videos_row">Новые видео отслеживаемых каналов</string>
 </resources>

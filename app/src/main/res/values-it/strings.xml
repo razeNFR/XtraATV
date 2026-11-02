@@ -821,4 +821,19 @@
     <string name="tv_adblock_midroll">mid-roll</string>
     <string name="tv_adblock_blocking_roll">Blocco di una pubblicità %1$s (%2$s)</string>
     <string name="tv_adblock_waiting_roll">In attesa della fine della pubblicità %1$s</string>
+    <string name="tv_keep_sound_mini_only">Solo nel mini player</string>
+    <string name="tv_keep_sound_audio_only">Solo in solo audio</string>
+    <string name="tv_keep_sound_fullscreen">Dallo schermo intero</string>
+    <string name="tv_keep_sound_mini_summary">Con Home, o Indietro sulla prima schermata, l\'audio continua se lo stream era nel mini player. Dallo schermo intero, lo stream si ferma</string>
+    <string name="tv_keep_sound_audio_summary">Con Home, o Indietro sulla prima schermata, l\'audio continua se lo stream era in solo audio. Dallo schermo intero, lo stream si ferma</string>
+    <string name="tv_keep_sound_fullscreen_summary">Premere Home durante uno stream a schermo intero mantiene l\'audio in sottofondo</string>
+    <string name="tv_chat_middle_right">Centro destra</string>
+    <string name="tv_chat_middle_left">Centro sinistra</string>
+    <string name="tv_chat_middle_top">Centro in alto</string>
+    <string name="tv_chat_middle_bottom">Centro in basso</string>
+    <string name="tv_dim">Oscuramento</string>
+    <string name="tv_dim_button_summary">OK attiva o disattiva l\'oscuramento dello stream, tenere premuto OK ne regola l\'intensità</string>
+    <string name="tv_dim_level">Intensità</string>
+    <string name="tv_dim_off">Disattiva</string>
+    <string name="tv_followed_videos_row">Ultimi video dei canali che segui</string>
 </resources>

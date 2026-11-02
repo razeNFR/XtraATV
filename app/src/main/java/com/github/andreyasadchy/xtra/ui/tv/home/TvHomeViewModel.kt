@@ -34,6 +34,8 @@ class TvHomeViewModel(
 ) : ViewModel() {
 
     val followed = MutableStateFlow<List<Stream>?>(null)
+    /** Latest videos of the followed channels (logged in only: Twitch gives them to the account). */
+    val followedVideos = MutableStateFlow<List<com.github.andreyasadchy.xtra.model.ui.Video>?>(null)
     val popular = MutableStateFlow<List<Stream>?>(null)
     val games = MutableStateFlow<List<Game>?>(null)
     /** Rows of the popular streams of one language (Xtra TV settings), in the order of the languages. */
@@ -106,6 +108,23 @@ class TvHomeViewModel(
         }
         jobs += viewModelScope.launch {
             popular.value = loadPage(createPopularSource())
+        }
+        val gqlAccountHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true)
+        if (!gqlAccountHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+            jobs += viewModelScope.launch {
+                followedVideos.value = loadPage(
+                    com.github.andreyasadchy.xtra.repository.datasource.FollowedVideosDataSource(
+                        gqlQueryType = null,
+                        gqlQuerySort = com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME,
+                        gqlHeaders = gqlAccountHeaders,
+                        graphQLRepository = graphQLRepository,
+                        enableIntegrity = enableIntegrity,
+                        networkLibrary = networkLibrary,
+                    )
+                )
+            }
+        } else {
+            followedVideos.value = emptyList()
         }
         val languages = prefs.getStringSet(C.TV_HOME_LANGUAGE_ROWS, null)?.filter { it.isNotBlank() }?.sorted().orEmpty()
         jobs += viewModelScope.launch {

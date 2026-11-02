@@ -99,7 +99,11 @@ class VideoSearchFragment : PagedListFragment(), Searchable {
                         progressBar.isVisible = loadState.refresh is LoadState.Loading && pagingAdapter.itemCount == 0
                         nothingHere.isVisible = loadState.refresh !is LoadState.Loading && pagingAdapter.itemCount == 0 && viewModel.query.value.isNotBlank()
                         if (viewModel.query.value.isBlank() && requireContext().prefs().getBoolean(C.UI_STORE_RECENT_SEARCHES, true)) {
-                            recyclerView.adapter = recentSearchAdapter
+                            // set once: setting it again at each state of the loading made the list again and the
+                            // focus was lost on the way down from the tabs, until the loading was over
+                            if (recyclerView.adapter !== recentSearchAdapter) {
+                                recyclerView.adapter = recentSearchAdapter
+                            }
                         } else {
                             if (recyclerView.adapter is RecentSearchAdapter) {
                                 recyclerView.adapter = pagingAdapter

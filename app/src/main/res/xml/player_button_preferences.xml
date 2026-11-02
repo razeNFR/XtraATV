@@ -35,6 +35,15 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:key="tv_button_dim"
+        android:summary="@string/tv_dim_button_summary"
+        android:title="@string/tv_dim"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
         android:key="tv_button_stats"
         android:title="@string/tv_stats_for_nerds"
         app:iconSpaceReserved="false"

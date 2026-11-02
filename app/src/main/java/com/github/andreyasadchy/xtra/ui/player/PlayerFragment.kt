@@ -136,6 +136,36 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     protected var controllerAutoHide = true
     private var controllerHideOnTouch = true
     private val controllerHideAction = Runnable { if (view != null) hideController() }
+
+    /**
+     * TV: the HUD is shown for a moment after a switch of stream, without the focus: left / right still switch streams,
+     * OK (or up / down without their shortcuts) gives it the focus as usual.
+     */
+    private var hudPeek = false
+    private val hudPeekHideAction = Runnable {
+        if (view != null && hudPeek) {
+            hudPeek = false
+            if (!binding.playerControls.root.hasFocus()) {
+                hideController()
+            }
+        }
+    }
+
+    private fun peekHud() {
+        if (binding.playerControls.root.hasFocus()) {
+            return
+        }
+        hudPeek = true
+        showController()
+        binding.root.removeCallbacks(hudPeekHideAction)
+        binding.root.postDelayed(hudPeekHideAction, 2500L)
+    }
+
+    /** The HUD gets the focus (or goes): it is no longer a short look. */
+    private fun endHudPeek() {
+        hudPeek = false
+        _binding?.root?.removeCallbacks(hudPeekHideAction)
+    }
     private var controllerIsAnimating = false
     private var controllerAnimation: ViewPropertyAnimator? = null
     private var backgroundColor: Int? = null
@@ -716,6 +746,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun start() {
         setupTvHud()
         setupSeekPreview()
+        // a switch of stream (left / right): the HUD of the stream reached for a moment, without the focus
+        if (isTv && peekHudOnStart) {
+            peekHudOnStart = false
+            binding.root.postDelayed({ if (view != null && isMaximized) peekHud() }, 300L)
+        }
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -2147,8 +2182,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val screenHeight = root.height.takeIf { it > 0 } ?: metrics.heightPixels
             val chatWidth = (screenWidth * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
             val chatHeight = (screenHeight * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
-            val left = position == 2 || position == 3
-            val top = position == 1 || position == 3
+            // corners 0..3, middle of a side 4..7 (right, left, top, bottom)
+            val left = position == 2 || position == 3 || position == 5
+            val top = position == 1 || position == 3 || position == 6
             when (mode) {
                 // next to the stream: the picture gets smaller and the chat takes a column
                 1 -> {
@@ -2207,6 +2243,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             1 -> Gravity.END or Gravity.TOP
                             2 -> Gravity.START or Gravity.BOTTOM
                             3 -> Gravity.START or Gravity.TOP
+                            4 -> Gravity.END or Gravity.CENTER_VERTICAL
+                            5 -> Gravity.START or Gravity.CENTER_VERTICAL
+                            6 -> Gravity.CENTER_HORIZONTAL or Gravity.TOP
+                            7 -> Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
                             else -> Gravity.END or Gravity.BOTTOM
                         }
                         marginStart = margin
@@ -2218,7 +2258,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             chatFragment?.setSingleLine(mode == 2 && prefs.getInt(C.TV_CHAT_LINES, 3) == 1)
             chatLayout.translationY = if (playerControls.root.isVisible) getTvChatLift() else 0f
-            chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_background)
+            // both backgrounds are opaque: the opacity chosen is the only one applied (the rounded one was already see-through,
+            // 100 % gave 55 % as soon as the chat left the edges)
+            chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_rounded)
             chatLayout.background?.mutate()?.alpha = (prefs.getInt(C.TV_CHAT_OPACITY, 55) * 255 / 100).coerceIn(0, 255)
             chatLayout.clipToOutline = margin != 0
         }
@@ -2231,7 +2273,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (requireContext().prefs().getInt(C.TV_CHAT_MODE, 0) != 0) {
             return 0f
         }
-        return if (position == 0 || position == 2) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
+        return if (position == 0 || position == 2 || position == 7) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
     }
 
     /**
@@ -2249,6 +2291,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             getString(R.string.tv_chat_top_right),
             getString(R.string.tv_chat_bottom_left),
             getString(R.string.tv_chat_top_left),
+            getString(R.string.tv_chat_middle_right),
+            getString(R.string.tv_chat_middle_left),
+            getString(R.string.tv_chat_middle_top),
+            getString(R.string.tv_chat_middle_bottom),
         )
         val sides = listOf(getString(R.string.tv_chat_right), getString(R.string.tv_chat_left))
         val bands = listOf(getString(R.string.tv_chat_under), getString(R.string.tv_chat_above))
@@ -2260,7 +2306,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(context) { dismiss ->
             val position = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_POSITION, 0)) }
             val mode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_MODE, 0)) }
-            val left = position.intValue == 2 || position.intValue == 3
+            val left = position.intValue == 2 || position.intValue == 3 || position.intValue == 5
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_chat_layout),
                 scrollable = true,
@@ -2290,7 +2336,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             }
                         }
                         2 -> {
-                            val top = position.intValue == 1 || position.intValue == 3
+                            val top = position.intValue == 1 || position.intValue == 3 || position.intValue == 6
                             com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), bands, if (top) 1 else 0) {
                                 position.intValue = if (it == 1) 1 else 0
                                 update(C.TV_CHAT_POSITION, position.intValue)
@@ -2381,6 +2427,49 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }, android.os.Handler(android.os.Looper.getMainLooper()))
         } catch (e: Exception) {
             // the surface went away meanwhile: no copy, the loading picture of the next stream as before
+        }
+    }
+
+    /** TV: the stream and its chat as dark as the dimming says, the icon of its button shows if it is on. */
+    private val tvDimListener: () -> Unit = { applyTvDim() }
+
+    private fun applyTvDim() {
+        val binding = _binding ?: return
+        if (!isTv) {
+            return
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(binding.aspectRatioFrameLayout)
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(binding.chatLayout)
+        binding.playerControls.tvDim?.setImageResource(
+            if (com.github.andreyasadchy.xtra.ui.tv.TvDim.active) R.drawable.tv_ic_dim_on else R.drawable.tv_ic_dim
+        )
+    }
+
+    /** TV: level of the dimming (OK held on its button), the stream gets darker while it changes. */
+    private fun showTvDimPanel() {
+        val context = requireContext()
+        // set while choosing it: seen at once
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.setActive(true)
+        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(context) { dismiss ->
+            com.github.andreyasadchy.xtra.ui.tv.SidePanel(title = getString(R.string.tv_dim), scrollable = true) {
+                val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                    getString(R.string.tv_dim_level),
+                    com.github.andreyasadchy.xtra.ui.tv.TvDim.level(context),
+                    10..90,
+                    step = 10,
+                    valueText = { "$it %" },
+                    modifier = androidx.compose.ui.Modifier.focusRequester(requester),
+                ) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvDim.setLevel(context, it)
+                }
+                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
+                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_dim_off)) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvDim.setActive(false)
+                    dismiss()
+                }
+                androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
+            }
         }
     }
 
@@ -2533,6 +2622,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (!isTv || _binding == null) {
             return
         }
+        // the small window in a bottom corner goes up over the controls while they are shown
+        (activity as? MainActivity)?.onTvControlsVisibility(visible)
         with(binding) {
             if (chatLayout.isVisible) {
                 chatLayout.animate().translationY(if (visible) getTvChatLift() else 0f).setDuration(200L).start()
@@ -2563,6 +2654,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         binding.root.viewTreeObserver.removeOnGlobalFocusChangeListener(hudFocusListener)
         binding.root.viewTreeObserver.addOnGlobalFocusChangeListener(hudFocusListener)
+        // the dimming of the streams, as it is now and when it changes
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(tvDimListener)
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.addListener(tvDimListener)
+        binding.root.post { applyTvDim() }
         with(binding.playerControls) {
             // seeking is done on the timeline on TV
             rewind.visibility = View.GONE
@@ -2592,7 +2687,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.contentDescription = getString(label)
                 }
                 button
-            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream, tvPipSettings, chatLayoutSettings)
+            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream, tvDim, tvPipSettings, chatLayoutSettings)
             buttons.forEach { button ->
                 button.setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
@@ -2633,6 +2728,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             title = playbackService?.title,
                         ))
                     }
+                }
+            }
+            // dimming of the stream: OK turns it on / off, OK held opens its level
+            tvDim?.let { button ->
+                button.visibility = if (prefs.getBoolean(C.TV_BUTTON_DIM, true)) View.VISIBLE else View.GONE
+                button.setOnClickListener {
+                    showController(force = true)
+                    com.github.andreyasadchy.xtra.ui.tv.TvDim.setActive(!com.github.andreyasadchy.xtra.ui.tv.TvDim.active)
+                }
+                button.setOnLongClickListener {
+                    hideController()
+                    showTvDimPanel()
+                    true
                 }
             }
             // the small window: its button is there while it is open (see onTvControllerVisibility)
@@ -3088,7 +3196,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 val queueSize = (activity as? MainActivity)?.streamQueue?.size ?: 0
-                if (isTv && playbackService?.type == BasePlaybackService.STREAM && !binding.playerControls.root.isVisible &&
+                if (isTv && playbackService?.type == BasePlaybackService.STREAM && (!binding.playerControls.root.isVisible || hudPeek) &&
                     requireContext().prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
                 ) {
                     // option: HUD hidden, left / right go to the previous / next streamer of the list the stream comes from,
@@ -3115,9 +3223,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                if (!isSelect && isTv && playbackService?.type == BasePlaybackService.STREAM && !binding.playerControls.root.isVisible &&
+                if (!isSelect && isTv && playbackService?.type == BasePlaybackService.STREAM && (!binding.playerControls.root.isVisible || hudPeek) &&
                     requireContext().prefs().getBoolean(C.TV_DPAD_UP_DOWN, false)
                 ) {
+                    if (hudPeek) {
+                        endHudPeek()
+                        hideController()
+                    }
                     // option: HUD hidden, up shows the other streams, down shows or hides the chat
                     if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
@@ -3129,6 +3241,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     return true
                 }
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    // the HUD shown after a switch takes the focus now
+                    endHudPeek()
                     showController(force = true)
                     binding.playerControls.root.post {
                         if (view != null && isMaximized && binding.playerControls.root.isVisible && !binding.playerControls.root.hasFocus()) {
@@ -3197,6 +3311,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun hideController(force: Boolean = false) {
+        endHudPeek()
         onTvControllerVisibility(false)
         if (binding.playerControls.root.hasFocus() && (force || !controllerIsAnimating)) {
             binding.dragView.requestFocus()
@@ -3946,6 +4061,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(tvDimListener)
         _binding?.root?.removeCallbacks(tvHudTicker)
         _binding?.root?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnGlobalFocusChangeListener(hudFocusListener)
         if (isTv) {
@@ -3982,6 +4098,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
          * of a black screen until the first picture of the video.
          */
         var pendingLoadingPicture: LoadingPicture? = null
+
+        /** TV: the next player screen comes from a switch of stream, it shows its HUD for a moment (without the focus). */
+        var peekHudOnStart = false
 
         /** TV: last picture of the stream left by a switch of stream (left / right...), for a second or two. */
         private var switchFrame: android.graphics.Bitmap? = null

@@ -1,23 +1,20 @@
-# Xtra TV 1.2.3
+# Xtra TV 1.2.4
 
 ### New
-- **Small window settings**: while a small window is open, a new "Small window" button in the controls of the player opens its panel: its corner (4 corners), its size (small, medium, large), the sound (the big stream, the small window or both, with a balance between them), swap the streams, close it. Everything moves at once and is kept for the next time.
-- **Live banner**: while the app is open, a banner at the top of the screen says when a streamer you follow goes live (with the category and the title). It can be turned off, and its time on screen chosen (3 to 10 s), in the Xtra TV settings, "Live notifications". Nothing runs when the app is closed.
-- **Back keeps the sound like Home**: Back on the first screen of the app (side menu) no longer closes the stream of the mini player or of the sound only mode when the sound is kept.
-- **Start page with the house**: in Settings > Interface > Navigation tabs, "Home" is now in the list and the tab with the house is the page the app opens on (Home at first). The house of the other tab lists (Following, Saved, Channel, Category, Search) is the tab opened first on that page.
-- **Hide the side menu when the app starts** (Xtra TV settings, "Home and look"): the side menu stays closed and the start page is shown at once.
-- **Ad blocker badge**: it says if the ad being replaced is a pre-roll (start of the stream) or a mid-roll.
+- **Dim the stream**: a new "Dimming" button in the player controls. OK turns it on or off, OK held sets how dark it gets (10 to 90 %, 50 % at first). The video, the chat, the multi-stream and the small window are dimmed, never the controls, the panels or the previews of the screens that pick a stream. The level is kept; the dimming itself is off again the next time the app starts. The button can be hidden in Settings > Player buttons.
+- **Latest videos of your followed channels** on the home, under "Continue watching" (logged in).
+- **Stream info when switching**: switching streams with left / right shows the HUD of the new stream for a moment (title, category, viewers, quality...) without taking the focus, so left / right keep switching. OK, or up / down without their shortcuts, gives it the focus as usual.
+- **Chat in the middle of a side**: over the stream, the chat can now also sit in the middle right, middle left, middle top or middle bottom.
 
 ### Changes
-- **One setting for the sound when leaving the app**: the 3 switches (mini player, sound only, full screen) become one choice, "Sound when leaving the app (Home or Back)": never, only in the mini player or sound only, or always (full screen too). Your previous choice is kept.
-- The **Theme** setting is removed on TV (it was made for phones); a theme changed before goes back to the one of Xtra TV.
-- No house on an unchecked tab in the tab lists: unchecking the tab that had it gives it to the first checked tab.
-- The old "Start on Following page" setting (made for phones, it did nothing on TV) is hidden on TV: the house of the navigation tabs does it.
+- **Loading home**: the Following and Popular rows show animated grey cards while they load. The focus waits on the first card of Following and goes to its first stream once it is there, or to Popular when nobody you follow is live. It never moves if you already moved it.
+- **The small window makes room for the controls**: in a bottom corner, it goes up above the controls while they are shown, then back down.
+- **"Sound when leaving the app" follows the Back button**: its choices depend on "Back button in a stream" (with "Stop the stream", only "Never" and "From the full screen player" are left), and its text says exactly what happens.
 
 ### Fixes
-- **No more black screen when switching streams**: the pictures of the streams on each side are loaded in advance, and until the picture of the next stream is there the last picture of the stream left stays on the screen.
-- **Back with the small window**: Back hides the controls first, it closes the small window only once they are hidden (it closed it at once, and the focus got lost with its button).
-- **Ad pictures when switching streams**: switching streams (left / right, other streams, small window) could show a picture of an ad of the stream left and one of the stream opened. The stream left stops before anything of its ad can come back on the screen, and the picture of the next stream stays until its own video (not an ad) is shown. The protections against the crash when switching quickly are kept.
+- **Search**: going down from the tabs (videos, streams, channels, categories) to the search history no longer gets stuck.
+- **Chat opacity**: it no longer drops when "distance from the edge" is raised, and 100 % is now fully opaque.
+- The 1.2.3 notes pointed to "Settings > Interface > Navigation tabs": the right place is **Settings > UI > Bottom navigation tabs**.
 
 ### Install
-Download `XtraTV-1.2.3-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.2.4-tv.apk` below and install it over the previous version, your settings and account are kept.

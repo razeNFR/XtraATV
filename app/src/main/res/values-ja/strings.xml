@@ -821,4 +821,19 @@
     <string name="tv_adblock_midroll">ミッドロール</string>
     <string name="tv_adblock_blocking_roll">%1$s 広告をブロック中（%2$s）</string>
     <string name="tv_adblock_waiting_roll">%1$s 広告の終了を待っています</string>
+    <string name="tv_keep_sound_mini_only">ミニプレーヤーのときだけ</string>
+    <string name="tv_keep_sound_audio_only">音声のみのときだけ</string>
+    <string name="tv_keep_sound_fullscreen">全画面から</string>
+    <string name="tv_keep_sound_mini_summary">ホーム、または最初の画面で戻るで離れたとき、ミニプレーヤーなら音声が続きます。全画面プレーヤーからは配信が停止します</string>
+    <string name="tv_keep_sound_audio_summary">ホーム、または最初の画面で戻るで離れたとき、音声のみなら音声が続きます。全画面プレーヤーからは配信が停止します</string>
+    <string name="tv_keep_sound_fullscreen_summary">全画面で配信中にホームを押すと、音声がバックグラウンドで続きます</string>
+    <string name="tv_chat_middle_right">右中央</string>
+    <string name="tv_chat_middle_left">左中央</string>
+    <string name="tv_chat_middle_top">上中央</string>
+    <string name="tv_chat_middle_bottom">下中央</string>
+    <string name="tv_dim">暗くする</string>
+    <string name="tv_dim_button_summary">OK で配信の暗さをオン／オフ、OK 長押しで暗さを調整</string>
+    <string name="tv_dim_level">暗さ</string>
+    <string name="tv_dim_off">オフにする</string>
+    <string name="tv_followed_videos_row">フォロー中チャンネルの最新動画</string>
 </resources>

@@ -876,6 +876,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** The controls of the full screen player are shown or hidden: the small window makes room for them. */
+    fun onTvControlsVisibility(visible: Boolean) {
+        if (isTv && tvPip.stream != null) {
+            tvPip.setControlsShown(visible)
+        }
+    }
+
     /** The small window closed: the player takes its button away (and the focus off it). */
     fun onTvPipClosed() {
         (playerFragment as? PlayerFragment)?.onTvPipClosed()
@@ -897,6 +904,8 @@ class MainActivity : AppCompatActivity() {
         }
         val first = tvPip.stream == null
         tvPip.open(stream)
+        // opened while the controls are shown: above them at once
+        tvPip.setControlsShown((playerFragment as? PlayerFragment)?.areControlsShown() == true)
         if (first) {
             com.github.andreyasadchy.xtra.ui.player.TvPip.showHint(this)
         }
@@ -1668,6 +1677,8 @@ class MainActivity : AppCompatActivity() {
                     }
                     continue
                 }
+                // the HUD of the stream reached is shown for a moment, left / right keep switching
+                com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = true
                 startStream(next)
                 // the list is loaded again in the background for the next switch, the switch itself does not wait for it
                 refreshQueueIfOld()

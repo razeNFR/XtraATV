@@ -821,4 +821,19 @@
     <string name="tv_adblock_midroll">Mid-Roll</string>
     <string name="tv_adblock_blocking_roll">Blockiere eine %1$s-Werbung (%2$s)</string>
     <string name="tv_adblock_waiting_roll">Warte auf das Ende der %1$s-Werbung</string>
+    <string name="tv_keep_sound_mini_only">Nur im Mini-Player</string>
+    <string name="tv_keep_sound_audio_only">Nur im Nur-Ton-Modus</string>
+    <string name="tv_keep_sound_fullscreen">Aus dem Vollbild-Player</string>
+    <string name="tv_keep_sound_mini_summary">Mit Home oder Zurück auf dem ersten Bildschirm läuft der Ton weiter, wenn der Stream im Mini-Player war. Aus dem Vollbild-Player stoppt der Stream</string>
+    <string name="tv_keep_sound_audio_summary">Mit Home oder Zurück auf dem ersten Bildschirm läuft der Ton weiter, wenn der Stream im Nur-Ton-Modus war. Aus dem Vollbild-Player stoppt der Stream</string>
+    <string name="tv_keep_sound_fullscreen_summary">Home während eines Vollbild-Streams lässt den Ton im Hintergrund weiterlaufen</string>
+    <string name="tv_chat_middle_right">Mitte rechts</string>
+    <string name="tv_chat_middle_left">Mitte links</string>
+    <string name="tv_chat_middle_top">Mitte oben</string>
+    <string name="tv_chat_middle_bottom">Mitte unten</string>
+    <string name="tv_dim">Abdunkeln</string>
+    <string name="tv_dim_button_summary">OK schaltet das Abdunkeln des Streams ein oder aus, OK gedrückt halten stellt die Stärke ein</string>
+    <string name="tv_dim_level">Abdunklung</string>
+    <string name="tv_dim_off">Ausschalten</string>
+    <string name="tv_followed_videos_row">Neueste Videos deiner gefolgten Kanäle</string>
 </resources>

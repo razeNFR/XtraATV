@@ -235,6 +235,9 @@ object C {
     const val TV_BUTTON_CHAT_MESSAGE = "tv_button_chat_message"
     const val TV_BUTTON_MULTI_STREAM = "tv_button_multi_stream"
     const val TV_BUTTON_CHAT_LAYOUT = "tv_button_chat_layout"
+    const val TV_BUTTON_DIM = "tv_button_dim"
+    /** TV: how dark the dimming of the streams is, 10 to 90 % (50 % at first). */
+    const val TV_DIM_LEVEL = "tv_dim_level"
     const val TV_HOME_LANGUAGES = "tv_home_languages"
     const val TV_DEFAULT_LANGUAGES = "tv_default_languages"
     const val TV_CHAT_WIDTH = "tv_chat_width"

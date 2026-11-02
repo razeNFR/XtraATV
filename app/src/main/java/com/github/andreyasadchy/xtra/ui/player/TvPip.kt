@@ -88,6 +88,11 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             texture.id = R.id.tvPipTexture
             addView(texture, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            // the dimming of the streams (the frame has its own border as foreground: a layer of its own over the video)
+            addView(View(context).apply {
+                id = R.id.tvPipDim
+                isFocusable = false
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(TextView(context).apply {
                 id = R.id.tvPipLabel
                 setTextColor(Color.WHITE)
@@ -128,6 +133,9 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         }
         applyLayout()
         applySound()
+        applyDim()
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(dimListener)
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.addListener(dimListener)
         frame.findViewById<TextView>(R.id.tvPipLabel)?.text = stream.channelName ?: login
         // the newest picture of the stream until its video comes
         val texture = frame.findViewById<TextureView>(R.id.tvPipTexture)
@@ -180,6 +188,25 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         frame.layoutParams = FrameLayout.LayoutParams(width, width * 9 / 16, gravity).apply {
             setMargins(horizontal, vertical, horizontal, vertical)
         }
+        frame.animate().cancel()
+        frame.translationY = controlsLift()
+    }
+
+    /** The controls of the player are on screen: they are not hidden under the small window. */
+    private var controlsShown = false
+
+    fun setControlsShown(shown: Boolean) {
+        if (controlsShown == shown) {
+            return
+        }
+        controlsShown = shown
+        view?.animate()?.translationY(controlsLift())?.setDuration(200L)?.start()
+    }
+
+    /** In a bottom corner, the small window goes up above the bar of the controls while they are shown. */
+    private fun controlsLift(): Float {
+        val corner = activity.prefs().getString(C.TV_PIP_CORNER, "tr")
+        return if (controlsShown && (corner == "bl" || corner == "br")) -activity.resources.getDimension(R.dimen.tv_chat_lift) else 0f
     }
 
     /**
@@ -206,9 +233,17 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         }
     }
 
+    private val dimListener: () -> Unit = { applyDim() }
+
+    private fun applyDim() {
+        view?.findViewById<View>(R.id.tvPipDim)?.let { com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(it) }
+    }
+
     fun close() {
+        com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(dimListener)
         val wasOpen = stream != null
         stream = null
+        controlsShown = false
         // the big stream gets all of its sound back
         setMainMix(1f)
         if (wasOpen) {

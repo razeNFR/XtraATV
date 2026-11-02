@@ -821,4 +821,19 @@
     <string name="tv_adblock_midroll">mid-roll</string>
     <string name="tv_adblock_blocking_roll">Bloqueando un anuncio %1$s (%2$s)</string>
     <string name="tv_adblock_waiting_roll">Agardando o final do anuncio %1$s</string>
+    <string name="tv_keep_sound_mini_only">Só no minirreprodutor</string>
+    <string name="tv_keep_sound_audio_only">Só en só son</string>
+    <string name="tv_keep_sound_fullscreen">Desde a pantalla completa</string>
+    <string name="tv_keep_sound_mini_summary">Con Inicio, ou Atrás na primeira pantalla, o son continúa se o stream estaba no minirreprodutor. Desde a pantalla completa, o stream detense</string>
+    <string name="tv_keep_sound_audio_summary">Con Inicio, ou Atrás na primeira pantalla, o son continúa se o stream estaba en só son. Desde a pantalla completa, o stream detense</string>
+    <string name="tv_keep_sound_fullscreen_summary">Premer Inicio durante un stream a pantalla completa mantén o son en segundo plano</string>
+    <string name="tv_chat_middle_right">Centro dereita</string>
+    <string name="tv_chat_middle_left">Centro esquerda</string>
+    <string name="tv_chat_middle_top">Centro arriba</string>
+    <string name="tv_chat_middle_bottom">Centro abaixo</string>
+    <string name="tv_dim">Escurecer</string>
+    <string name="tv_dim_button_summary">OK activa ou desactiva o escurecemento do stream, manter OK axusta a intensidade</string>
+    <string name="tv_dim_level">Escurecemento</string>
+    <string name="tv_dim_off">Desactivar</string>
+    <string name="tv_followed_videos_row">Últimos vídeos das canles que segues</string>
 </resources>	

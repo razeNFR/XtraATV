@@ -821,4 +821,19 @@
     <string name="tv_adblock_midroll">mid-roll</string>
     <string name="tv_adblock_blocking_roll">جارٍ حظر إعلان %1$s (%2$s)</string>
     <string name="tv_adblock_waiting_roll">في انتظار نهاية إعلان %1$s</string>
+    <string name="tv_keep_sound_mini_only">فقط في المشغل المصغر</string>
+    <string name="tv_keep_sound_audio_only">فقط في الصوت فقط</string>
+    <string name="tv_keep_sound_fullscreen">من ملء الشاشة</string>
+    <string name="tv_keep_sound_mini_summary">بزر الرئيسية، أو رجوع في الشاشة الأولى، يستمر الصوت إذا كان البث في المشغل المصغر. من ملء الشاشة يتوقف البث</string>
+    <string name="tv_keep_sound_audio_summary">بزر الرئيسية، أو رجوع في الشاشة الأولى، يستمر الصوت إذا كان البث في وضع الصوت فقط. من ملء الشاشة يتوقف البث</string>
+    <string name="tv_keep_sound_fullscreen_summary">الضغط على الرئيسية أثناء بث بملء الشاشة يبقي صوته في الخلفية</string>
+    <string name="tv_chat_middle_right">الوسط يمينًا</string>
+    <string name="tv_chat_middle_left">الوسط يسارًا</string>
+    <string name="tv_chat_middle_top">الوسط أعلى</string>
+    <string name="tv_chat_middle_bottom">الوسط أسفل</string>
+    <string name="tv_dim">التعتيم</string>
+    <string name="tv_dim_button_summary">OK يشغل أو يوقف تعتيم البث، والضغط المطول على OK يضبط شدته</string>
+    <string name="tv_dim_level">شدة التعتيم</string>
+    <string name="tv_dim_off">إيقاف</string>
+    <string name="tv_followed_videos_row">أحدث فيديوهات القنوات التي تتابعها</string>
 </resources>
