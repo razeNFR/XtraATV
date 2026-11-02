@@ -124,6 +124,27 @@
         app:showSeekBarValue="true"
         app:singleLineTitle="false" />
 
+    <ListPreference
+        android:defaultValue="0"
+        android:entries="@array/chatDelayEntries"
+        android:entryValues="@array/chatDelayValues"
+        android:key="chat_delay_mode"
+        android:summary="%s"
+        android:title="@string/tv_chat_delay"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SeekBarPreference
+        android:defaultValue="5"
+        android:key="chat_delay_seconds"
+        android:max="60"
+        android:summary="@string/tv_chat_delay_seconds_summary"
+        android:title="@string/tv_chat_delay_seconds"
+        app:iconSpaceReserved="false"
+        app:min="1"
+        app:showSeekBarValue="true"
+        app:singleLineTitle="false" />
+
     <SeekBarPreference
         android:defaultValue="600"
         android:key="chat_limit"

@@ -853,4 +853,14 @@
     <string name="tv_update_ignore">Abaikan</string>
     <string name="tv_proxy_add">Tambah proxy</string>
     <string name="tv_proxy_full_screen">Layar penuh proxy…</string>
+    <string name="tv_chat_delay">Tunda obrolan</string>
+    <string name="tv_chat_delay_off">Mati</string>
+    <string name="tv_chat_delay_auto">Otomatis</string>
+    <string name="tv_chat_delay_manual">Manual</string>
+    <string name="tv_chat_delay_seconds">Tunda</string>
+    <string name="tv_chat_delay_seconds_summary">Dipakai saat tunda obrolan diatur Manual</string>
+    <string name="tv_chat_delay_auto_info">Mengikuti latensi stream: pesan muncul bersama momen yang dibicarakan (hanya siaran langsung)</string>
+    <string name="tv_chat_delay_auto_now">Saat ini %1$s dtk</string>
+    <string name="tv_chat_delay_auto_measuring">Mengukur…</string>
+    <string name="tv_multistream_origin_offline">%1$s tidak lagi siaran langsung</string>
 </resources>

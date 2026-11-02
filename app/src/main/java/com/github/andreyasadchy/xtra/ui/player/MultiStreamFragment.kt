@@ -85,7 +85,63 @@ class MultiStreamFragment : Fragment() {
 
     private val backCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-            (activity as? MainActivity)?.closeMultiStream()
+            goBack()
+        }
+    }
+
+    private var goingBack = false
+
+    /** A stream of a tile that plays (no error, not ended): it is live. */
+    private fun Tile.isPlaying(): Boolean {
+        return player.playerError == null && (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+    }
+
+    /**
+     * Back: the stream the multi-stream was made from when it is still live, else the stream with the focus, else the first
+     * one that plays, else the multi-stream closes like before (made from the home: it closes).
+     */
+    private fun goBack() {
+        val activity = activity as? MainActivity ?: return
+        if (goingBack) {
+            return
+        }
+        val origin = BundleCompat.getParcelable(requireArguments(), KEY_ORIGIN, Stream::class.java)
+        if (origin == null || origin.channelLogin.isNullOrBlank()) {
+            activity.closeMultiStream()
+            return
+        }
+        goingBack = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val originTile = tiles.find { it.stream.channelLogin == origin.channelLogin }
+            val originLive = when {
+                originTile != null -> originTile.isPlaying()
+                // not in the multi-stream: asked to Twitch, 2.5 s at most (no answer: the next choice)
+                else -> kotlinx.coroutines.withTimeoutOrNull(2500L) {
+                    activity.isStreamLive(origin)
+                } == true
+            }
+            if (view == null) {
+                return@launch
+            }
+            val playing = tiles.filter { it.isPlaying() }
+            // the stream with the focus, or the big one of the focus mode
+            val focused = playing.find { it.view.hasFocus() } ?: playing.find { focusMode && it.stream.channelLogin == bigLogin }
+            val choices = buildList {
+                if (originLive) add(originTile?.stream ?: origin)
+                focused?.let { add(it.stream) }
+                addAll(playing.map { it.stream })
+            }.distinctBy { it.channelLogin }
+            val next = choices.firstOrNull()
+            if (next == null) {
+                activity.closeMultiStream()
+                return@launch
+            }
+            if (!originLive) {
+                android.widget.Toast.makeText(activity, getString(R.string.tv_multistream_origin_offline, origin.channelName ?: origin.channelLogin), android.widget.Toast.LENGTH_SHORT).show()
+            }
+            activity.closeMultiStream()
+            // the next choices if this one ends at once
+            activity.startStreamFromMultiStream(next, choices.drop(1))
         }
     }
 
@@ -579,6 +635,15 @@ class MultiStreamFragment : Fragment() {
         }
     }
 
+    /** The chat of a stream with its delay in Auto: the time of Twitch of the picture of its tile (null when not known). */
+    fun getLivePictureTime(channelLogin: String?): Long? {
+        val player = tiles.find { it.stream.channelLogin == channelLogin }?.player ?: return null
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty || player.currentMediaItemIndex !in 0 until timeline.windowCount) return null
+        val start = timeline.getWindow(player.currentMediaItemIndex, androidx.media3.common.Timeline.Window()).windowStartTimeMs
+        return if (start != androidx.media3.common.C.TIME_UNSET) start + player.currentPosition else null
+    }
+
     private fun addChat(stream: Stream): FrameLayout {
         val container = FrameLayout(requireContext()).apply {
             id = View.generateViewId()
@@ -774,8 +839,11 @@ class MultiStreamFragment : Fragment() {
         )
         private const val KEY_STREAMS = "streams"
 
-        fun newInstance(streams: List<Stream>) = MultiStreamFragment().apply {
-            arguments = bundleOf(KEY_STREAMS to ArrayList(streams))
+        private const val KEY_ORIGIN = "origin"
+
+        /** [origin]: the stream it was made from, back goes to it. */
+        fun newInstance(streams: List<Stream>, origin: Stream? = null) = MultiStreamFragment().apply {
+            arguments = bundleOf(KEY_STREAMS to ArrayList(streams), KEY_ORIGIN to origin)
         }
     }
 }

@@ -110,6 +110,16 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // delay of the live chat: the picture of the player
+        val delayLogin = arguments?.getString(KEY_CHANNEL_LOGIN)
+        viewModel.programTime = {
+            when (val parent = parentFragment) {
+                is com.github.andreyasadchy.xtra.ui.player.PlayerFragment -> parent.getLivePictureTime()
+                // multi-stream: each chat with the picture of its own stream
+                is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment -> parent.getLivePictureTime(delayLogin)
+                else -> null
+            }
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.integrity.collect {
@@ -972,6 +982,9 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     fun updatePosition(position: Long) {
         viewModel.updatePosition(position)
     }
+
+    /** The delay of the chat in Auto (ms), 0 while not measured. */
+    fun getAutoDelayMs() = viewModel.autoDelayMs
 
     fun updateSpeed(speed: Float) {
         viewModel.updateSpeed(speed)

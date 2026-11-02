@@ -852,4 +852,14 @@
     <string name="tv_update_ignore">無視</string>
     <string name="tv_proxy_add">プロキシを追加</string>
     <string name="tv_proxy_full_screen">プロキシの全画面表示…</string>
+    <string name="tv_chat_delay">チャットの遅延</string>
+    <string name="tv_chat_delay_off">オフ</string>
+    <string name="tv_chat_delay_auto">自動</string>
+    <string name="tv_chat_delay_manual">手動</string>
+    <string name="tv_chat_delay_seconds">遅延</string>
+    <string name="tv_chat_delay_seconds_summary">チャットの遅延が手動のときに使います</string>
+    <string name="tv_chat_delay_auto_info">配信の遅延に合わせます：メッセージは話題の場面と一緒に表示されます（ライブのみ）</string>
+    <string name="tv_chat_delay_auto_now">現在 %1$s 秒</string>
+    <string name="tv_chat_delay_auto_measuring">測定中…</string>
+    <string name="tv_multistream_origin_offline">%1$s は配信を終了しました</string>
 </resources>

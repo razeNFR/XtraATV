@@ -852,4 +852,14 @@
     <string name="tv_update_ignore">Ignorieren</string>
     <string name="tv_proxy_add">Proxy hinzufügen</string>
     <string name="tv_proxy_full_screen">Proxy-Vollbildansicht…</string>
+    <string name="tv_chat_delay">Chat-Verzögerung</string>
+    <string name="tv_chat_delay_off">Aus</string>
+    <string name="tv_chat_delay_auto">Auto</string>
+    <string name="tv_chat_delay_manual">Manuell</string>
+    <string name="tv_chat_delay_seconds">Verzögerung</string>
+    <string name="tv_chat_delay_seconds_summary">Wird verwendet, wenn die Chat-Verzögerung auf Manuell steht</string>
+    <string name="tv_chat_delay_auto_info">Folgt der Latenz des Streams: Nachrichten erscheinen mit dem Moment, um den es geht (nur live)</string>
+    <string name="tv_chat_delay_auto_now">Aktuell %1$s s</string>
+    <string name="tv_chat_delay_auto_measuring">Wird gemessen…</string>
+    <string name="tv_multistream_origin_offline">%1$s ist nicht mehr live</string>
 </resources>

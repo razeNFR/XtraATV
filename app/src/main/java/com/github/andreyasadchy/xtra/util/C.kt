@@ -277,6 +277,8 @@ object C {
     const val CHAT_THEME_ADAPTED_USERNAME_COLOR = "chat_theme_adapted_username_color"
     const val CHAT_BOLD_NAMES = "chat_boldnames"
     const val CHAT_LIMIT = "chat_limit"
+    const val CHAT_DELAY_MODE = "chat_delay_mode"
+    const val CHAT_DELAY_SECONDS = "chat_delay_seconds"
     const val CHAT_ZERO_WIDTH = "chat_zerowidth"
     const val CHAT_FIRST_MSG_VISIBILITY = "chat_firstmsg_visibility"
     const val CHAT_TIMESTAMPS = "chat_timestamps"

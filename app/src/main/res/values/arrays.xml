@@ -438,4 +438,14 @@
         <item>pink</item>
         <item>none</item>
     </string-array>
+    <string-array name="chatDelayEntries">
+        <item>@string/tv_chat_delay_off</item>
+        <item>@string/tv_chat_delay_auto</item>
+        <item>@string/tv_chat_delay_manual</item>
+    </string-array>
+    <string-array name="chatDelayValues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </string-array>
 </resources>
