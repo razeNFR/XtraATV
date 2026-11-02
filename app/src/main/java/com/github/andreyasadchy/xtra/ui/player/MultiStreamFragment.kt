@@ -579,6 +579,15 @@ class MultiStreamFragment : Fragment() {
         }
     }
 
+    /** The chat of a stream with its delay in Auto: the time of Twitch of the picture of its tile (null when not known). */
+    fun getLivePictureTime(channelLogin: String?): Long? {
+        val player = tiles.find { it.stream.channelLogin == channelLogin }?.player ?: return null
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty || player.currentMediaItemIndex !in 0 until timeline.windowCount) return null
+        val start = timeline.getWindow(player.currentMediaItemIndex, androidx.media3.common.Timeline.Window()).windowStartTimeMs
+        return if (start != androidx.media3.common.C.TIME_UNSET) start + player.currentPosition else null
+    }
+
     private fun addChat(stream: Stream): FrameLayout {
         val container = FrameLayout(requireContext()).apply {
             id = View.generateViewId()
