@@ -6,6 +6,8 @@
   - **Manual**: a slider from 1 to 60 s.
   - Your own messages show up at once, the recent messages loaded with the stream are not delayed, the delay never goes over 60 s, and when the latency is not known the chat shows its messages without delay (it never gets stuck).
 
+- **Back from a multi-stream**: a multi-stream made from a stream goes back to that stream instead of closing everything. When it is no longer live: the stream with the focus, else the first one that plays (a message says so); if none plays, the multi-stream closes like before. Made from the home, it closes like before.
+
 ### Changes
 - **Chat panel icon**: a chat bubble with a gear, so it is clearly the settings of the chat.
 

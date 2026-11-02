@@ -880,4 +880,5 @@
     <string name="tv_chat_delay_auto_info">Follows the latency of the stream: messages show up with the moment they are about (live only)</string>
     <string name="tv_chat_delay_auto_now">Currently %1$s s</string>
     <string name="tv_chat_delay_auto_measuring">Measuring…</string>
+    <string name="tv_multistream_origin_offline">%1$s is no longer live</string>
 </resources>

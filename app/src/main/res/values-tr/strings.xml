@@ -862,4 +862,5 @@
     <string name="tv_chat_delay_auto_info">Yayının gecikmesini izler: mesajlar bahsettikleri anla birlikte gelir (yalnızca canlı)</string>
     <string name="tv_chat_delay_auto_now">Şu an %1$s sn</string>
     <string name="tv_chat_delay_auto_measuring">Ölçülüyor…</string>
+    <string name="tv_multistream_origin_offline">%1$s artık canlı değil</string>
 </resources>

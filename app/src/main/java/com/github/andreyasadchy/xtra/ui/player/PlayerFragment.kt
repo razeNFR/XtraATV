@@ -3773,6 +3773,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         val activity = activity as? MainActivity ?: return
         val login = activity.currentPlayingStream()?.channelLogin
+        // just back from a multi-stream: the next stream of it instead of closing
+        activity.takeMultiStreamFallback(login)?.let { next ->
+            activity.startStream(next, peekHud = true)
+            return
+        }
         streamEndJob = viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(6000L)
             // a raid announced in the chat: its stream comes, the player waits for it (30 s at most)

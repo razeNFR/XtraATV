@@ -861,4 +861,5 @@
     <string name="tv_chat_delay_auto_info">يتبع زمن تأخر البث: تظهر الرسائل مع اللحظة التي تتحدث عنها (البث المباشر فقط)</string>
     <string name="tv_chat_delay_auto_now">حاليًا %1$s ث</string>
     <string name="tv_chat_delay_auto_measuring">جارٍ القياس…</string>
+    <string name="tv_multistream_origin_offline">%1$s لم يعد في بث مباشر</string>
 </resources>

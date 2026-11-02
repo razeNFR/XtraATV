@@ -1941,7 +1941,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** TV multi-stream: replaces the player with up to 4 streams shown together. */
-    fun startMultiStream(streams: List<Stream>) {
+    fun startMultiStream(streams: List<Stream>, origin: Stream? = null) {
         closeTvPip()
         (playerFragment as? PlayerFragment)?.let {
             it.close()
@@ -1949,8 +1949,38 @@ class MainActivity : AppCompatActivity() {
         }
         setMainContentFocusable(false)
         supportFragmentManager.beginTransaction()
-            .replace(R.id.playerContainer, com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment.newInstance(streams), MULTI_STREAM_TAG)
+            .replace(R.id.playerContainer, com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment.newInstance(streams, origin), MULTI_STREAM_TAG)
             .commit()
+    }
+
+    /** Back from a multi-stream: the next streams to start when the one started ends at once (20 s). */
+    private var multiStreamFallback: List<Stream> = emptyList()
+    private var multiStreamFallbackLogin: String? = null
+    private var multiStreamFallbackAt = 0L
+
+    fun startStreamFromMultiStream(stream: Stream, fallback: List<Stream>) {
+        multiStreamFallback = fallback
+        multiStreamFallbackLogin = stream.channelLogin
+        multiStreamFallbackAt = System.currentTimeMillis()
+        startStream(stream, peekHud = true)
+    }
+
+    /** The stream [login] ended just after a back from a multi-stream: the next choice, null when there is none. */
+    fun takeMultiStreamFallback(login: String?): Stream? {
+        if (login == null || login != multiStreamFallbackLogin || System.currentTimeMillis() - multiStreamFallbackAt > 20_000L) {
+            return null
+        }
+        val next = multiStreamFallback.firstOrNull() ?: return null
+        multiStreamFallback = multiStreamFallback.drop(1)
+        multiStreamFallbackLogin = next.channelLogin
+        multiStreamFallbackAt = System.currentTimeMillis()
+        return next
+    }
+
+    /** Whether [stream] is live, asked to Twitch (null: no answer). */
+    suspend fun isStreamLive(stream: Stream): Boolean? {
+        val id = stream.channelId ?: return null
+        return loadLiveStreams(listOf(id))?.containsKey(id)
     }
 
     fun closeMultiStream() {
@@ -1974,9 +2004,12 @@ class MainActivity : AppCompatActivity() {
         refreshQueueIfOld()
     }
 
-    fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null) {
-        // the info of the stream after a switch only when a stream already played full screen (not opened from a list)
-        if (!(isTv && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true)) {
+    fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null, peekHud: Boolean = false) {
+        // the info of the stream after a switch only when a stream already played full screen (not opened from a list),
+        // or back from a multi-stream
+        if (isTv && peekHud) {
+            com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = true
+        } else if (!(isTv && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true)) {
             com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = false
         }
         // the time of the start of the stream counts from here (debug builds), and its access of Twitch is asked

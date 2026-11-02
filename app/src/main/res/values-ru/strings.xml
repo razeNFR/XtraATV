@@ -861,4 +861,5 @@
     <string name="tv_chat_delay_auto_info">Следует за задержкой трансляции: сообщения появляются вместе с моментом, о котором они (только в эфире)</string>
     <string name="tv_chat_delay_auto_now">Сейчас %1$s с</string>
     <string name="tv_chat_delay_auto_measuring">Измерение…</string>
+    <string name="tv_multistream_origin_offline">%1$s больше не в эфире</string>
 </resources>

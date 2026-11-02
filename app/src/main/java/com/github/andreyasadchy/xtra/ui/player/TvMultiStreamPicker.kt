@@ -34,7 +34,7 @@ object TvMultiStreamPicker {
                     title = activity.getString(R.string.tv_multistream_select_title, MAX),
                     preselected = setOfNotNull(current?.channelLogin),
                     max = MAX,
-                    onValidate = { selected -> activity.startMultiStream(selected) },
+                    onValidate = { selected -> activity.startMultiStream(selected, current) },
                 ),
                 // streams can be picked in the other lists too, the checked ones are kept from one tab to the other
                 rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(activity, current),

@@ -861,4 +861,5 @@
     <string name="tv_chat_delay_auto_info">Segue a latencia do stream: as mensaxes chegan co momento do que falan (só en directo)</string>
     <string name="tv_chat_delay_auto_now">Agora %1$s s</string>
     <string name="tv_chat_delay_auto_measuring">Medindo…</string>
+    <string name="tv_multistream_origin_offline">%1$s xa non está en directo</string>
 </resources>	

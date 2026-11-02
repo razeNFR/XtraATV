@@ -862,4 +862,5 @@
     <string name="tv_chat_delay_auto_info">Mengikuti latensi stream: pesan muncul bersama momen yang dibicarakan (hanya siaran langsung)</string>
     <string name="tv_chat_delay_auto_now">Saat ini %1$s dtk</string>
     <string name="tv_chat_delay_auto_measuring">Mengukur…</string>
+    <string name="tv_multistream_origin_offline">%1$s tidak lagi siaran langsung</string>
 </resources>

@@ -861,4 +861,5 @@
     <string name="tv_chat_delay_auto_info">Folgt der Latenz des Streams: Nachrichten erscheinen mit dem Moment, um den es geht (nur live)</string>
     <string name="tv_chat_delay_auto_now">Aktuell %1$s s</string>
     <string name="tv_chat_delay_auto_measuring">Wird gemessen…</string>
+    <string name="tv_multistream_origin_offline">%1$s ist nicht mehr live</string>
 </resources>
