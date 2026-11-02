@@ -197,6 +197,9 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
             "tv_back_minimizes_player",
             // the theme is the one of Xtra TV; the start page has its own setting in the Xtra TV settings
             "theme_settings", "ui_startonfollowed",
+            // a clock face for the sleep timer is made for a touch screen; the live notifications of Android are replaced
+            // by the live banner of Xtra TV
+            "sleep_timer_use_time_picker", "live_notifications_enabled",
         )
     }
 }

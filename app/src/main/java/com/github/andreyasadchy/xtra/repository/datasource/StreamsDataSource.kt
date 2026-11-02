@@ -12,9 +12,9 @@ import com.github.andreyasadchy.xtra.util.C
 class StreamsDataSource(
     private val gqlQueryLanguages: List<Language>?,
     private val gqlQuerySort: StreamSort?,
-    private val gqlLanguages: List<String>?,
-    private val gqlSort: String?,
-    private val tags: List<String>?,
+    val gqlLanguages: List<String>?,
+    val gqlSort: String?,
+    val tags: List<String>?,
     private val gqlHeaders: Map<String, String>,
     private val graphQLRepository: GraphQLRepository,
     private val helixHeaders: Map<String, String>,

@@ -20,7 +20,35 @@ import com.github.andreyasadchy.xtra.util.tokenPrefs
  */
 object TvStreamSources {
 
-    class Row(val title: String, val source: () -> PagingSource<Int, Stream>)
+    /** [kind]: "followed", "popular", "language:<code>" or "game:<id or slug>", to find the row a list comes from. */
+    class Row(val title: String, val source: () -> PagingSource<Int, Stream>, val kind: String? = null)
+
+    /**
+     * The row the list of a stream comes from, made with the same kind of source (followed, popular in the languages of
+     * Popular, popular in one language, the category of the stream): -1 when none of the rows shows that list (a search,
+     * the page of a channel, another category...).
+     */
+    fun originRow(context: Context, source: (() -> PagingSource<Int, Stream>)?, rows: List<Row>): Int {
+        val origin = runCatching { source?.invoke() }.getOrNull() ?: return -1
+        val kind = when (origin) {
+            is FollowedStreamsDataSource -> "followed"
+            is StreamsDataSource -> {
+                if (!origin.tags.isNullOrEmpty() || (origin.gqlSort != null && origin.gqlSort != "VIEWER_COUNT")) {
+                    return -1
+                }
+                val languages = origin.gqlLanguages?.filter { it.isNotBlank() }?.sorted().orEmpty()
+                val popularLanguages = context.prefs().getStringSet(C.TV_HOME_LANGUAGES, null)?.filter { it.isNotBlank() }?.sorted().orEmpty()
+                when {
+                    languages == popularLanguages -> "popular"
+                    languages.size == 1 -> "language:" + languages.first()
+                    else -> return -1
+                }
+            }
+            is GameStreamsDataSource -> "game:" + (origin.gameId ?: origin.gameSlug ?: return -1)
+            else -> return -1
+        }
+        return rows.indexOfFirst { it.kind == kind }
+    }
 
     fun followed(context: Context): PagingSource<Int, Stream> {
         val app = context.applicationContext as XtraApp
@@ -179,14 +207,14 @@ object TvStreamSources {
         val loggedIn = !TwitchApiHelper.getGQLHeaders(context, true)[C.HEADER_TOKEN].isNullOrBlank() ||
                 !TwitchApiHelper.getHelixHeaders(context)[C.HEADER_TOKEN].isNullOrBlank()
         if (loggedIn) {
-            rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.tv_followed_live)) { followed(context) }
+            rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.tv_followed_live), { followed(context) }, "followed")
         }
-        rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.popular)) { popular(context) }
+        rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.popular), { popular(context) }, "popular")
         context.prefs().getStringSet(C.TV_HOME_LANGUAGE_ROWS, null)?.filter { it.isNotBlank() }?.sorted()?.forEach { language ->
-            rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.tv_popular_in, languageName(context, language))) { popular(context, listOf(language)) }
+            rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.tv_popular_in, languageName(context, language)), { popular(context, listOf(language)) }, "language:$language")
         }
         if (current != null && (!current.gameId.isNullOrBlank() || !current.gameSlug.isNullOrBlank()) && !current.gameName.isNullOrBlank()) {
-            rows += Row(current.gameName!!) { game(context, current.gameId, current.gameSlug, current.gameName) }
+            rows += Row(current.gameName!!, { game(context, current.gameId, current.gameSlug, current.gameName) }, "game:" + (current.gameId ?: current.gameSlug))
         }
         return rows
     }

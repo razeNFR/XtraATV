@@ -78,6 +78,8 @@ class SettingsViewModel(
 
     val updateUrl = MutableSharedFlow<String?>()
     var updateSize: Long? = null
+    var updateVersion: String? = null
+    var updateNotes: String? = null
     var updateJob: Job? = null
     val updateProgress = MutableSharedFlow<Int>()
     val closeUpdateDialog = MutableSharedFlow<Boolean>()
@@ -321,6 +323,9 @@ class SettingsViewModel(
                         }?.let {
                             if (it > lastChecked) {
                                 updateSize = obj["size"]?.jsonPrimitive?.longOrNull
+                                // TV: the version and the notes of the release, shown in the dialog of the update
+                                updateVersion = (response["name"] ?: response["tag_name"])?.jsonPrimitive?.contentOrNull
+                                updateNotes = response["body"]?.jsonPrimitive?.contentOrNull
                                 obj.getValue("browser_download_url").jsonPrimitive.contentOrNull
                             } else null
                         }

@@ -63,6 +63,14 @@
 
         <SwitchPreferenceCompat
             android:defaultValue="false"
+            android:key="tv_focus_switch"
+            android:summary="@string/tv_focus_switch_summary"
+            android:title="@string/tv_focus_switch"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
             android:key="tv_dpad_up_down"
             android:summary="@string/tv_dpad_up_down_summary"
             android:title="@string/tv_dpad_up_down"

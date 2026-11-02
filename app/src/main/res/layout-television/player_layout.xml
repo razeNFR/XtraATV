@@ -423,6 +423,19 @@
                         app:tint="@android:color/white"
                         tools:visibility="visible" />
                     <ImageButton
+                        android:id="@+id/tvProxy"
+                        android:layout_width="@dimen/player_button_size"
+                        android:layout_height="@dimen/player_button_size"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/tv_player_button_background"
+                        android:padding="@dimen/tv_player_button_padding"
+                        android:scaleType="fitCenter"
+                        android:contentDescription="@string/tv_proxy_button"
+                        android:src="@drawable/tv_ic_proxy"
+                        android:visibility="gone"
+                        app:tint="@android:color/white"
+                        tools:visibility="visible" />
+                    <ImageButton
                         android:id="@+id/tvPipSettings"
                         android:layout_width="@dimen/player_button_size"
                         android:layout_height="@dimen/player_button_size"

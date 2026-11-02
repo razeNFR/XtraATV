@@ -19,7 +19,7 @@
     <string name="lang_ja" translatable="false">日本語</string>
     <string name="lang_zh_tw" translatable="false">中文（繁體）</string>
     <string name="lang_zh_cn" translatable="false">中文（简体）</string>
-    <string name="games">Games</string>
+    <string name="games">Categories</string>
     <string name="popular">Popular</string>
     <string name="following">Following</string>
     <string name="downloads">Downloads</string>
@@ -855,4 +855,20 @@
     <string name="tv_dim_level">Darkness</string>
     <string name="tv_dim_off">Turn off</string>
     <string name="tv_followed_videos_row">Latest videos of your followed channels</string>
+    <string name="tv_refreshed">Updated</string>
+    <string name="tv_multistream_hint">OK: add or remove a stream · up to %1$d</string>
+    <string name="tv_proxy_button">Proxy</string>
+    <string name="tv_proxy_button_summary">OK turns the custom proxy on or off, OK held opens the list of the proxies</string>
+    <string name="tv_proxy_on">Proxy on</string>
+    <string name="tv_proxy_off">Proxy off</string>
+    <string name="tv_proxy_panel_title">Custom proxies</string>
+    <string name="tv_proxy_panel_subtitle">The first proxy that works is used, from the top</string>
+    <string name="tv_proxy_all_settings">All the proxy settings…</string>
+    <string name="tv_focus_switch">Change page without OK</string>
+    <string name="tv_focus_switch_summary">Tabs and side menu entries show their page as soon as they have the focus</string>
+    <string name="tv_update_title_version">Xtra TV %1$s is available</string>
+    <string name="tv_update_now">Update</string>
+    <string name="tv_update_ignore">Ignore</string>
+    <string name="tv_proxy_add">Add a proxy</string>
+    <string name="tv_proxy_full_screen">Full screen of the proxies…</string>
 </resources>

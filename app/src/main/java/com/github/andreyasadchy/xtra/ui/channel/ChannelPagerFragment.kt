@@ -198,7 +198,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
             toolbar.setupWithNavController(navController, appBarConfiguration)
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             // buttons hidden in the settings (tabs of the channel)
-            requireContext().prefs().getStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, null)?.let { hidden ->
+            requireContext().prefs().getStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, C.DEFAULT_CHANNEL_HIDDEN_BUTTONS)?.let { hidden ->
                 toolbar.menu.findItem(R.id.download)?.isVisible = "download" !in hidden
                 toolbar.menu.findItem(R.id.share)?.isVisible = "share" !in hidden
                 toolbar.menu.findItem(R.id.toggleNotifications)?.isVisible = "notifications" !in hidden

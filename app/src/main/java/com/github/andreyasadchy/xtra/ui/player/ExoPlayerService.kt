@@ -174,6 +174,9 @@ class ExoPlayerService : BasePlaybackService() {
                 if (player?.isPlaying == true && (type == STREAM || type == VIDEO)) {
                     com.github.andreyasadchy.xtra.ui.tv.TvStats.addWatchTime(this@ExoPlayerService, channelLogin, channelName, 30_000L)
                 }
+                // the system (and the screensavers of the launchers that look at it) sees a playback going on: its state
+                // is given again now and then, whichever player plays (the backup player of the ad blocker too)
+                updatePlaybackState()
             }
         }
     }
@@ -1810,6 +1813,15 @@ class ExoPlayerService : BasePlaybackService() {
             // statistics of the home: proxy or backup player type used
             com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this@ExoPlayerService, streamProxy?.host ?: videoSwap?.playerType)
             val playerListener = object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    // the backup player plays: the system sees the playback going on
+                    updatePlaybackState()
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    updatePlaybackState()
+                }
+
                 override fun onRenderedFirstFrame() {
                     // the stream without the ad is on the screen: the loading picture can go
                     if (generation == streamGeneration && !streamPictureShown) {
@@ -2566,6 +2578,8 @@ class ExoPlayerService : BasePlaybackService() {
         }
         secondaryPlayer?.release()
         secondaryPlayer = null
+        // the main player plays again: the state the system sees is its own
+        updatePlaybackState()
     }
 
     /** Volume of the stream, without the share taken by the small window of the TV (the volume control shows this one). */

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="games">游戏</string>
+    <string name="games">分类</string>
     <string name="popular">热门</string>
     <string name="following">关注</string>
     <string name="downloads">下载</string>
@@ -836,4 +836,20 @@
     <string name="tv_dim_level">调暗程度</string>
     <string name="tv_dim_off">关闭</string>
     <string name="tv_followed_videos_row">你关注频道的最新视频</string>
+    <string name="tv_refreshed">已更新</string>
+    <string name="tv_multistream_hint">OK：添加或移除直播 · 最多 %1$d 个</string>
+    <string name="tv_proxy_button">代理</string>
+    <string name="tv_proxy_button_summary">OK 开启或关闭自定义代理，长按 OK 打开代理列表</string>
+    <string name="tv_proxy_on">代理已开启</string>
+    <string name="tv_proxy_off">代理已关闭</string>
+    <string name="tv_proxy_panel_title">自定义代理</string>
+    <string name="tv_proxy_panel_subtitle">从上往下使用第一个可用的代理</string>
+    <string name="tv_proxy_all_settings">所有代理设置…</string>
+    <string name="tv_focus_switch">无需按 OK 切换页面</string>
+    <string name="tv_focus_switch_summary">标签和侧边菜单获得焦点后立即显示对应页面</string>
+    <string name="tv_update_title_version">Xtra TV %1$s 可用</string>
+    <string name="tv_update_now">更新</string>
+    <string name="tv_update_ignore">忽略</string>
+    <string name="tv_proxy_add">添加代理</string>
+    <string name="tv_proxy_full_screen">代理完整页面…</string>
 </resources>

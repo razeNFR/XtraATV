@@ -40,6 +40,8 @@ class XtraApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        // TV: the color of accent of the app, the ambiance color of the Xtra TV settings
+        com.github.andreyasadchy.xtra.ui.tv.TvAccent.init(this)
         INSTANCE = this
         xtraModule = XtraModule(this)
         if (BuildConfig.DEBUG) {

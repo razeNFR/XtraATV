@@ -157,6 +157,8 @@ class MainActivity : AppCompatActivity() {
         migrateSettings()
         forceDisplaySettings()
         if (resources.getBoolean(R.bool.isTv)) {
+            // the color of accent, read again (the app restarts this screen when the ambiance color changes)
+            com.github.andreyasadchy.xtra.ui.tv.TvAccent.init(this)
             // favorite channels, read before the followed streams are loaded
             com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
             prefs.edit {
@@ -178,6 +180,14 @@ class MainActivity : AppCompatActivity() {
                         fullscreen -> "always"
                         else -> "minimized"
                     })
+                }
+                // no clock face for the sleep timer on TV (made for a touch screen)
+                putBoolean(C.SLEEP_TIMER_USE_TIME_PICKER, false)
+                // the live notifications of Android (checked in the background) are replaced by the live banner: turned off,
+                // their background check is cancelled with them
+                if (prefs.getBoolean("live_notifications_enabled", false)) {
+                    putBoolean("live_notifications_enabled", false)
+                    androidx.work.WorkManager.getInstance(this@MainActivity).cancelUniqueWork("live_notifications")
                 }
                 // no theme setting on TV: a theme chosen before (light, rounded corners...) goes back to the one of Xtra TV
                 listOf(
@@ -212,7 +222,16 @@ class MainActivity : AppCompatActivity() {
         applyTheme()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        binding.root.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
+        binding.root.viewTreeObserver.addOnGlobalFocusChangeListener listener@{ oldFocus, newFocus ->
+            // the page shown from the side menu without OK takes the focus by itself (its list loaded): the focus stays in
+            // the menu, only right (or OK) goes into the page
+            if (isTv && oldFocus != null && newFocus != null && oldFocus.isInside(binding.navBarContainer) && newFocus.isInside(binding.navHostFragment) &&
+                android.os.SystemClock.elapsedRealtime() - tvMenuAutoNavAt < 2000L &&
+                !(lastTvKeyCode in listOf(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER) && android.os.SystemClock.elapsedRealtime() - lastTvKeyAt < 500L)
+            ) {
+                binding.root.post { tvMenuState.focusSelected() }
+                return@listener
+            }
             if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
                 lastContentFocus = newFocus
             }
@@ -442,10 +461,7 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.updateUrl.collectLatest {
                     if (it != null) {
-                        getAlertDialogBuilder()
-                            .setTitle(getString(R.string.update_available))
-                            .setMessage(getString(R.string.update_message))
-                            .setPositiveButton(getString(R.string.yes)) { _, _ ->
+                        val startUpdate: () -> Unit = {
                                 if (prefs.getBoolean(C.UPDATE_USE_BROWSER, false)) {
                                     try {
                                         val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
@@ -484,13 +500,23 @@ class MainActivity : AppCompatActivity() {
                                         .show()
                                     updateDownloadDialog = dialog
                                 }
+                        }
+                        val ignoreUpdate: () -> Unit = {
+                            tokenPrefs().edit {
+                                putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
                             }
-                            .setNegativeButton(getString(R.string.no)) { _, _ ->
-                                tokenPrefs().edit {
-                                    putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
-                                }
-                            }
-                            .show()
+                        }
+                        if (isTv) {
+                            // TV: the version and its changelog, the focus on "Update"
+                            com.github.andreyasadchy.xtra.ui.tv.TvUpdateDialog.show(this@MainActivity, viewModel.updateVersion, viewModel.updateNotes, startUpdate, ignoreUpdate)
+                        } else {
+                            getAlertDialogBuilder()
+                                .setTitle(getString(R.string.update_available))
+                                .setMessage(getString(R.string.update_message))
+                                .setPositiveButton(getString(R.string.yes)) { _, _ -> startUpdate() }
+                                .setNegativeButton(getString(R.string.no)) { _, _ -> ignoreUpdate() }
+                                .show()
+                        }
                     }
                 }
             }
@@ -918,6 +944,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            lastTvKeyCode = event.keyCode
+            lastTvKeyAt = android.os.SystemClock.elapsedRealtime()
+        }
         if (isTv && !dispatchingPlayerKey && tvPip.onKey(event)) {
             return true
         }
@@ -1165,6 +1195,16 @@ class MainActivity : AppCompatActivity() {
             entries.filter { !it.sub }.flatMap { if (it.id == R.id.followPagerFragment) listOf(it) + subs else listOf(it) }
         } else entries
         tvMenuState.selected = binding.navBar.selectedItemId
+        // option: the page of the focused entry is shown without OK (not search, settings nor account, they open screens)
+        tvMenuState.onFocusItem = { id ->
+            binding.root.removeCallbacks(tvMenuAutoNav)
+            if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavSearch && id != R.id.tvNavSettings && id != R.id.tvNavAccount &&
+                id != tvMenuState.selected
+            ) {
+                tvMenuPendingId = id
+                binding.root.postDelayed(tvMenuAutoNav, 400L)
+            }
+        }
         com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
             tvMenuState.items.find { it.id == tvMenuState.selected }?.title
         }
@@ -1185,6 +1225,9 @@ class MainActivity : AppCompatActivity() {
         composeView.setContent {
             com.github.andreyasadchy.xtra.ui.tv.TvTheme(accent) {
                 com.github.andreyasadchy.xtra.ui.tv.TvSideMenu(tvMenuState) { id ->
+                    // OK on an entry: its page gets the focus (even right after it was shown without OK)
+                    binding.root.removeCallbacks(tvMenuAutoNav)
+                    tvMenuAutoNavAt = 0L
                     binding.navBar.selectedItemId = id
                     tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
                     if (id != R.id.tvNavSettings && id != R.id.tvNavAccount) {
@@ -1194,6 +1237,23 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /** Last key pressed (and when): a move of the focus asked by the user, not by a page that loaded. */
+    private var lastTvKeyCode = 0
+    private var lastTvKeyAt = 0L
+    /** When a page was shown from the side menu without OK. */
+    private var tvMenuAutoNavAt = 0L
+    private var tvMenuPendingId = 0
+    /** Option of the Xtra TV settings: the entry focused in the side menu shows its page after a short stop on it. */
+    private val tvMenuAutoNav = Runnable {
+        val id = tvMenuPendingId
+        if (id == 0 || !isTvMenuShown || id == binding.navBar.selectedItemId && tvMenuExtraSelected == null) {
+            return@Runnable
+        }
+        tvMenuAutoNavAt = android.os.SystemClock.elapsedRealtime()
+        binding.navBar.selectedItemId = id
+        tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
     }
 
     /** Entry of the side menu shown as chosen instead of its screen ("Followed videos" rather than "Following"). */
@@ -1345,6 +1405,17 @@ class MainActivity : AppCompatActivity() {
         settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java))
     }
 
+    /** TV: the settings of the custom proxies (from the proxy panel of the player). */
+    fun openCustomProxySettings() {
+        settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_OPEN, SettingsActivity.OPEN_CUSTOM_PROXIES))
+    }
+
+    /** TV: the stream watched starts again (proxy turned on or off): its last picture stays until it plays again. */
+    fun restartCurrentStream() {
+        val stream = currentPlayingStream() ?: return
+        startStream(stream)
+    }
+
     fun onAccountClicked() {
         if (resources.getBoolean(R.bool.isTv)) {
             // TV: the page of the account shows what is saved, with its log in and log out buttons
@@ -1416,6 +1487,12 @@ class MainActivity : AppCompatActivity() {
             closeMultiStream()
         }
         super.onStop()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // TV: a panel opened from the HUD of the player closed, the HUD comes back
+        (playerFragment as? PlayerFragment)?.onTvWindowFocusChanged(hasFocus)
     }
 
     override fun onUserLeaveHint() {
@@ -1898,6 +1975,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null) {
+        // the info of the stream after a switch only when a stream already played full screen (not opened from a list)
+        if (!(isTv && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true)) {
+            com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = false
+        }
         // the time of the start of the stream counts from here (debug builds), and its access of Twitch is asked
         // at once, while the player opens
         com.github.andreyasadchy.xtra.ui.player.TvLoadTimer.start()

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="games">Jogos</string>
+    <string name="games">Categorias</string>
     <string name="popular">Populares</string>
     <string name="following">Seguindo</string>
     <string name="downloads">Baixados</string>
@@ -836,4 +836,20 @@
     <string name="tv_dim_level">Escurecimento</string>
     <string name="tv_dim_off">Desligar</string>
     <string name="tv_followed_videos_row">Últimos vídeos dos canais que você segue</string>
+    <string name="tv_refreshed">Atualizado</string>
+    <string name="tv_multistream_hint">OK: adicionar ou remover um stream · até %1$d</string>
+    <string name="tv_proxy_button">Proxy</string>
+    <string name="tv_proxy_button_summary">OK liga ou desliga o proxy personalizado, segurar OK abre a lista de proxys</string>
+    <string name="tv_proxy_on">Proxy ligado</string>
+    <string name="tv_proxy_off">Proxy desligado</string>
+    <string name="tv_proxy_panel_title">Proxys personalizados</string>
+    <string name="tv_proxy_panel_subtitle">O primeiro proxy que funciona é usado, de cima para baixo</string>
+    <string name="tv_proxy_all_settings">Todas as configurações de proxy…</string>
+    <string name="tv_focus_switch">Mudar de página sem OK</string>
+    <string name="tv_focus_switch_summary">As abas e o menu lateral mostram sua página assim que ganham o foco</string>
+    <string name="tv_update_title_version">Xtra TV %1$s está disponível</string>
+    <string name="tv_update_now">Atualizar</string>
+    <string name="tv_update_ignore">Ignorar</string>
+    <string name="tv_proxy_add">Adicionar um proxy</string>
+    <string name="tv_proxy_full_screen">Tela completa de proxys…</string>
 </resources>

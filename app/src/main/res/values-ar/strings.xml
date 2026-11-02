@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="games">الألعاب</string>
+    <string name="games">الفئات</string>
     <string name="popular">الأكثر شعبية</string>
     <string name="following">المُتابَعين</string>
     <string name="downloads">التنزيلات</string>
@@ -836,4 +836,20 @@
     <string name="tv_dim_level">شدة التعتيم</string>
     <string name="tv_dim_off">إيقاف</string>
     <string name="tv_followed_videos_row">أحدث فيديوهات القنوات التي تتابعها</string>
+    <string name="tv_refreshed">تم التحديث</string>
+    <string name="tv_multistream_hint">OK: إضافة بث أو إزالته · حتى %1$d</string>
+    <string name="tv_proxy_button">بروكسي</string>
+    <string name="tv_proxy_button_summary">OK يشغّل البروكسي المخصص أو يوقفه، والضغط المطوّل على OK يفتح قائمة البروكسيات</string>
+    <string name="tv_proxy_on">البروكسي مفعّل</string>
+    <string name="tv_proxy_off">البروكسي معطّل</string>
+    <string name="tv_proxy_panel_title">البروكسيات المخصصة</string>
+    <string name="tv_proxy_panel_subtitle">يُستخدم أول بروكسي يعمل بدءًا من الأعلى</string>
+    <string name="tv_proxy_all_settings">كل إعدادات البروكسي…</string>
+    <string name="tv_focus_switch">تغيير الصفحة بدون OK</string>
+    <string name="tv_focus_switch_summary">تعرض التبويبات والقائمة الجانبية صفحتها بمجرد حصولها على التركيز</string>
+    <string name="tv_update_title_version">Xtra TV %1$s متاح</string>
+    <string name="tv_update_now">تحديث</string>
+    <string name="tv_update_ignore">تجاهل</string>
+    <string name="tv_proxy_add">إضافة بروكسي</string>
+    <string name="tv_proxy_full_screen">شاشة البروكسيات الكاملة…</string>
 </resources>

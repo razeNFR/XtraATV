@@ -255,9 +255,37 @@ fun Activity.applyTheme() {
 }
 
 fun Context.getAlertDialogBuilder(): AlertDialog.Builder {
+    if (resources.getBoolean(R.bool.isTv)) {
+        // TV: the focus is on the main button ("Yes", "OK"...) as soon as the dialog opens, no key to press first
+        return if (prefs().getBoolean(C.UI_THEME_MATERIAL3, true)) TvMaterialDialogBuilder(this) else TvDialogBuilder(this)
+    }
     return if (prefs().getBoolean(C.UI_THEME_MATERIAL3, true)) {
         MaterialAlertDialogBuilder(this)
     } else {
         AlertDialog.Builder(this)
     }
+}
+
+/** The focus on the positive button once shown (not for a dialog with a list: its checked entry keeps the focus). */
+private fun AlertDialog.focusPositiveButtonOnShow() {
+    setOnShowListener {
+        if (listView == null) {
+            getButton(AlertDialog.BUTTON_POSITIVE)?.takeIf { it.visibility == android.view.View.VISIBLE }?.let { button ->
+                button.post {
+                    // a text to type (url of a proxy...): it keeps the focus
+                    if (currentFocus !is android.widget.EditText) {
+                        button.requestFocus()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private class TvMaterialDialogBuilder(context: Context) : MaterialAlertDialogBuilder(context) {
+    override fun create(): AlertDialog = super.create().also { it.focusPositiveButtonOnShow() }
+}
+
+private class TvDialogBuilder(context: Context) : AlertDialog.Builder(context) {
+    override fun create(): AlertDialog = super.create().also { it.focusPositiveButtonOnShow() }
 }

@@ -44,6 +44,9 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     // snapshot states: the cards that read them follow their changes
     private val homeStamp = androidx.compose.runtime.mutableLongStateOf(0L)
     private val homeRefreshing = mutableStateOf(false)
+    /** Time "refresh" was pressed (0: the rows load by themselves), for its animation and its message. */
+    private var refreshClickedAt = 0L
+    private val homeSweep = androidx.compose.runtime.mutableIntStateOf(0)
     private val resumeItems = mutableStateOf<List<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>>(emptyList())
     private val statsState = mutableStateOf<TvHomeStats?>(null)
     private val homeFocus = TvHomeFocus()
@@ -113,11 +116,14 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             formatCount = { count -> TwitchApiHelper.formatCount(count, true) },
             refresh = {
                 stopPreview()
+                refreshClickedAt = android.os.SystemClock.elapsedRealtime()
+                homeRefreshing.value = true
                 viewModel.load(force = true)
             },
             cardsPerRow = context.prefs().getString(C.TV_HOME_CARDS, "3")?.toIntOrNull() ?: 3,
             thumbnailStamp = { homeStamp.longValue },
             refreshing = { homeRefreshing.value },
+            sweepCount = { homeSweep.intValue },
             openVideo = { item ->
                 stopPreview()
                 (activity as? MainActivity)?.startVideo(item.toVideo(), item.positionMs)
@@ -134,7 +140,21 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             viewModel.stamp.collect { homeStamp.longValue = it }
         }
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.refreshing.collect { homeRefreshing.value = it }
+            viewModel.refreshing.collect { refreshing ->
+                if (refreshing) {
+                    homeRefreshing.value = true
+                } else if (refreshClickedAt > 0L) {
+                    // refreshed with the button: its icon turns at least a moment, then a short message says it is done
+                    val wait = 800L - (android.os.SystemClock.elapsedRealtime() - refreshClickedAt)
+                    refreshClickedAt = 0L
+                    if (wait > 0L) kotlinx.coroutines.delay(wait)
+                    homeRefreshing.value = false
+                    homeSweep.intValue++
+                    context?.let { android.widget.Toast.makeText(it, R.string.tv_refreshed, android.widget.Toast.LENGTH_SHORT).show() }
+                } else {
+                    homeRefreshing.value = false
+                }
+            }
         }
         viewLifecycleOwner.lifecycleScope.launch {
             // a video watched in the mini player over the home comes in "Continue watching" right away
