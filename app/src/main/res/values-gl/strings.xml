@@ -905,4 +905,6 @@
     <string name="tv_stats_streak_current">Actual: %1$d días</string>
     <string name="tv_stats_ads_weeks">Últimas 8 semanas · %1$d esta semana</string>
     <string name="tv_stats_times">%1$d veces</string>
+    <string name="tv_chat_show_replies">Amosar a que responde unha mensaxe</string>
+    <string name="tv_chat_show_replies_summary">Unha liña curta enriba dunha resposta: a quen responde e o comezo da súa mensaxe</string>
 </resources>	

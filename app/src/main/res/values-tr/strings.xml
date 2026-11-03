@@ -906,4 +906,6 @@
     <string name="tv_stats_streak_current">Devam eden: %1$d gün</string>
     <string name="tv_stats_ads_weeks">Son 8 hafta · bu hafta %1$d</string>
     <string name="tv_stats_times">%1$d kez</string>
+    <string name="tv_chat_show_replies">Bir mesajın neye yanıt verdiğini göster</string>
+    <string name="tv_chat_show_replies_summary">Bir yanıtın üstünde kısa bir satır: kime yanıt verdiği ve mesajının başı</string>
 </resources>

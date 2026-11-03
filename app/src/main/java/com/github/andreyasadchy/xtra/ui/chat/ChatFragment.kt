@@ -159,7 +159,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         redeemedChatMsg = getString(R.string.redeemed),
                         redeemedNoMsg = getString(R.string.user_redeemed),
                         rewardChatMsg = getString(R.string.chat_reward),
-                        replyMessage = getString(R.string.replying_to_message),
+                        // TV: the line above a reply short ("↪ @name : the start of the message")
+                        replyMessage = if (resources.getBoolean(R.bool.isTv)) "↪ @%1\$s : %2\$s" else getString(R.string.replying_to_message),
                         useRandomColors = requireContext().prefs().getBoolean(C.CHAT_RANDOM_COLOR, true),
                         useReadableColors = requireContext().prefs().getBoolean(C.CHAT_THEME_ADAPTED_USERNAME_COLOR, true),
                         isLightTheme = requireContext().obtainStyledAttributes(intArrayOf(androidx.appcompat.R.attr.isLightTheme)).use {

@@ -250,7 +250,12 @@ class ChatAdapter(
                 setHorizontallyScrolling(singleLine)
                 if (chatMessage.type == ChatMessage.REPLY_MESSAGE) {
                     movementMethod = null
-                    maxLines = 2
+                    // TV: one small line, the reply under it is the message
+                    val tv = context.resources.getBoolean(R.bool.isTv)
+                    if (tv) {
+                        textSize = messageTextSize * 0.82f
+                    }
+                    maxLines = if (tv) 1 else 2
                     ellipsize = TextUtils.TruncateAt.END
                     TooltipCompat.setTooltipText(this, chatMessage.replyParent?.message ?: chatMessage.replyParent?.systemMsg)
                     setOnClickListener {

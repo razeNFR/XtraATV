@@ -909,7 +909,7 @@ class ChatViewModel(
                             "NOTICE" -> ChatUtils.parseNotice(ircMessage)
                             else -> null
                         }?.let {
-                            if (it.reply?.message != null) {
+                            if (it.reply?.message != null && showReplies()) {
                                 list.add(ChatMessage(
                                     type = ChatMessage.REPLY_MESSAGE,
                                     reply = it.reply,
@@ -1066,7 +1066,13 @@ class ChatViewModel(
         synchronized(delayedMessages) { delayedMessages.clear() }
     }
 
+    /** The line "Replying to ..." above a reply, from the chat settings. */
+    private fun showReplies() = applicationContext.prefs().getBoolean(C.CHAT_SHOW_REPLIES, true)
+
     private suspend fun showMessage(message: ChatMessage) {
+        if (message.type == ChatMessage.REPLY_MESSAGE && !showReplies()) {
+            return
+        }
         synchronized(chatMessages) {
             chatMessages.add(message)
             val removeCount = if (chatMessages.size > messageLimit) {
@@ -2789,7 +2795,7 @@ class ChatViewModel(
                                                             when (ircMessage.command) {
                                                                 "PRIVMSG", "USERNOTICE" -> {
                                                                     val chatMessage = ChatUtils.parseChatMessage(ircMessage)
-                                                                    if (chatMessage.reply?.message != null) {
+                                                                    if (chatMessage.reply?.message != null && showReplies()) {
                                                                         liveMessages.add(ChatMessage(
                                                                             type = ChatMessage.REPLY_MESSAGE,
                                                                             reply = chatMessage.reply,

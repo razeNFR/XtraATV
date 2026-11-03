@@ -905,4 +905,6 @@
     <string name="tv_stats_streak_current">الحالية: %1$d يوم</string>
     <string name="tv_stats_ads_weeks">آخر 8 أسابيع · %1$d هذا الأسبوع</string>
     <string name="tv_stats_times">%1$d مرة</string>
+    <string name="tv_chat_show_replies">عرض ما يرد عليه الرد</string>
+    <string name="tv_chat_show_replies_summary">سطر قصير فوق الرد: لمن يرد وبداية رسالته</string>
 </resources>

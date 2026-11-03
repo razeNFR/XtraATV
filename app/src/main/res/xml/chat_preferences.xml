@@ -124,6 +124,14 @@
         app:showSeekBarValue="true"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_show_replies"
+        android:summary="@string/tv_chat_show_replies_summary"
+        android:title="@string/tv_chat_show_replies"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <ListPreference
         android:defaultValue="1"
         android:entries="@array/chatDelayEntries"

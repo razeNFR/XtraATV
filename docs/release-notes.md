@@ -14,6 +14,7 @@
 - Channel page: notifications, share and download as icons (the bell is full when the notifications are on).
 - Smaller title in the player.
 - Chat delay on Auto by default.
+- Chat: the "Replying to…" line is shorter, and can be hidden in the chat settings.
 - "UI" renamed "Interface", "Navigation tabs" renamed "Navigation panel".
 - About 80 texts that were still in English are now translated.
 

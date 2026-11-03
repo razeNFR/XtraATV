@@ -905,4 +905,6 @@
     <string name="tv_stats_streak_current">目前：%1$d 天</string>
     <string name="tv_stats_ads_weeks">最近 8 週 · 本週 %1$d</string>
     <string name="tv_stats_times">%1$d 次</string>
+    <string name="tv_chat_show_replies">顯示訊息回覆的內容</string>
+    <string name="tv_chat_show_replies_summary">回覆上方的簡短一行：回覆的對象和原訊息的開頭</string>
 </resources>
