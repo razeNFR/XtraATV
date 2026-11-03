@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusDirection
@@ -115,6 +116,8 @@ class TvHomeActions(
     val sweepCount: () -> Int = { 0 },
     /** OK on the card of the statistics: their page in detail. */
     val openStats: () -> Unit = {},
+    /** The statistics of the badge of the top of the home (icon, text), one shown at a time. */
+    val statsBadges: () -> List<Pair<Int, String>> = { emptyList() },
     /** How long a stream is live for its badge ("2 h 39"), null to show none. */
     val uptime: (com.github.andreyasadchy.xtra.model.ui.Stream) -> String? = { null },
 )
@@ -203,6 +206,8 @@ fun TvHomeScreen(
     val rowStates = remember { mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
     val cardRequesters = remember { mutableMapOf<String, FocusRequester>() }
     var refreshFocused by remember { mutableStateOf(false) }
+    /** The badge of the statistics at the left of the greeting has the focus (reached from "refresh" with right). */
+    var badgeFocused by remember { mutableStateOf(false) }
     // the rows came while "refresh" had the focus (first load): the focus goes to the first stream
     LaunchedEffect(hasCards) {
         if (hasCards && refreshFocused && !refreshAllowed) {
@@ -296,7 +301,7 @@ fun TvHomeScreen(
                 actions,
                 Modifier
                     .focusRequester(refreshRequester)
-                    .focusProperties { canFocus = refreshAllowed || !hasCards }
+                    .focusProperties { canFocus = refreshAllowed || badgeFocused || !hasCards }
                     .onFocusChanged {
                         refreshFocused = it.hasFocus
                         if (!it.hasFocus) refreshAllowed = false
@@ -310,6 +315,20 @@ fun TvHomeScreen(
                     }
             )
             Spacer(Modifier.weight(1f))
+            // a statistic that changes each minute, OK opens their page; reached from "refresh" (right)
+            StatsBadge(
+                actions,
+                Modifier
+                    .focusProperties { canFocus = refreshFocused || badgeFocused || !hasCards }
+                    .onFocusChanged { badgeFocused = it.hasFocus }
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && hasCards) {
+                            focus.focusLast()
+                            true
+                        } else false
+                    }
+            )
+            Spacer(Modifier.width(16.dp))
             Greeting(account)
         }
     // refreshed with the button: a light sweeps once over the rows, like the other pages
@@ -568,6 +587,35 @@ private fun SkeletonRow(actions: TvHomeActions, firstCardModifier: Modifier? = n
                 }
             }
         }
+    }
+}
+
+/** A statistic of the TV (time today, streak of days, top streamer of the week...), the next one each minute. */
+@Composable
+private fun StatsBadge(actions: TvHomeActions, modifier: Modifier = Modifier) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    var items by remember { mutableStateOf(actions.statsBadges()) }
+    var index by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L)
+            items = actions.statsBadges()
+            index++
+        }
+    }
+    val item = items.takeIf { it.isNotEmpty() }?.let { it[index % it.size] } ?: return
+    Row(
+        modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+            .clickable(interactionSource = interaction, indication = null, onClick = actions.openStats)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(painterResource(item.first), contentDescription = null, tint = if (focused) TvColors.onFocused else TvColors.accent, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(item.second, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (focused) TvColors.onFocused else Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 340.dp))
     }
 }
 
@@ -983,6 +1031,47 @@ private fun VideoRow(row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video
     }
 }
 
+/**
+ * The picture of a video; a video without one yet (Twitch gives a "?" while it records or is processed): the avatar of
+ * the streamer in the middle, over a blurred copy of it.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.VideoThumbnail(thumbnail: String?, channelImage: String?) {
+    if (!com.github.andreyasadchy.xtra.ui.tv.TvVideoThumbnail.isMissing(thumbnail)) {
+        AsyncImage(
+            model = thumbnail,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        return
+    }
+    if (channelImage != null) {
+        AsyncImage(
+            model = channelImage,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().blur(28.dp).graphicsLayer { alpha = 0.55f }
+        )
+    }
+    Box(Modifier.fillMaxSize().background(Color(0x59000000)))
+    if (channelImage != null) {
+        AsyncImage(
+            model = channelImage,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.align(Alignment.Center).fillMaxHeight(0.5f).aspectRatio(1f).clip(CircleShape)
+        )
+    } else {
+        Icon(
+            painterResource(R.drawable.tv_ic_video_library),
+            contentDescription = null,
+            tint = Color(0x99FFFFFF),
+            modifier = Modifier.align(Alignment.Center).size(40.dp)
+        )
+    }
+}
+
 @Composable
 private fun FollowedVideoCard(width: Dp, video: com.github.andreyasadchy.xtra.model.ui.Video, actions: TvHomeActions, modifier: Modifier) {
     val small = width < 230.dp
@@ -1000,12 +1089,7 @@ private fun FollowedVideoCard(width: Dp, video: com.github.andreyasadchy.xtra.mo
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
         ) {
-            AsyncImage(
-                model = video.thumbnail,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            VideoThumbnail(video.thumbnail, video.channelImage)
             val seconds = video.durationSeconds ?: 0
             if (seconds > 0) {
                 Text(
@@ -1059,12 +1143,7 @@ private fun ResumeCard(width: Dp, item: com.github.andreyasadchy.xtra.ui.tv.TvRe
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
         ) {
-            AsyncImage(
-                model = item.thumbnail,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            VideoThumbnail(item.thumbnail, item.channelImage)
             // time left, like the cards of Google TV
             val durationMs = (item.durationSeconds ?: 0) * 1000L
             if (durationMs > 0) {

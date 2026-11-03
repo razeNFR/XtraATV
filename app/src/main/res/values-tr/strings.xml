@@ -908,4 +908,14 @@
     <string name="tv_stats_times">%1$d kez</string>
     <string name="tv_chat_show_replies">Bir mesajın neye yanıt verdiğini göster</string>
     <string name="tv_chat_show_replies_summary">Bir yanıtın üstünde kısa bir satır: kime yanıt verdiği ve mesajının başı</string>
+    <string name="tv_home_followed_videos">Takip edilen kanalların son videoları</string>
+    <string name="tv_home_followed_videos_summary">Ana ekrandaki satırı, hâlâ kaydedilen videolar hariç</string>
+    <string name="tv_chat_band">Şerit</string>
+    <string name="tv_chat_band_separate">Ayrı</string>
+    <string name="tv_chat_band_overlay">Yayının üstünde</string>
+    <string name="tv_badge_today">Bugün %1$s izlendi</string>
+    <string name="tv_badge_streak">%1$d gün üst üste</string>
+    <string name="tv_badge_top_week">%1$s, bu hafta en çok izlediğin</string>
+    <string name="tv_badge_ads_week">Bu hafta %1$d reklam engellendi</string>
+    <string name="tv_badge_streams_today">Bugün %1$d yayın açıldı</string>
 </resources>

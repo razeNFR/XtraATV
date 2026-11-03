@@ -20,6 +20,21 @@
             app:layout_constraintTop_toTopOf="parent"
             tools:src="@tools:sample/backgrounds/scenic" />
 
+        <!-- a video without picture yet: the avatar of the streamer in the middle (its blurred copy fills the picture) -->
+        <ImageView
+            android:id="@+id/thumbnailAvatar"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@id/thumbnail"
+            app:layout_constraintDimensionRatio="1:1"
+            app:layout_constraintEnd_toEndOf="@id/thumbnail"
+            app:layout_constraintHeight_percent="0.24"
+            app:layout_constraintStart_toStartOf="@id/thumbnail"
+            app:layout_constraintTop_toTopOf="@id/thumbnail" />
+
         <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
             android:id="@+id/type"
             style="@style/TvThumbnailBadge"

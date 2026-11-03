@@ -24,9 +24,28 @@ import com.github.andreyasadchy.xtra.model.ui.Stream
  */
 object TvSwitchOverlay {
 
-    private const val DURATION = 3500L
+    /** In case the info of the stream never shows (it hides the streamers left and right with it). */
+    private const val DURATION = 4500L
+
+    /** The info of the stream goes (after its 2.5 s, back, or the whole HUD): the streamers left and right go with it. */
+    fun hide(activity: Activity?, force: Boolean = false) {
+        // the player of the previous stream closing just after the switch must not hide the streamers just shown
+        if (!force && android.os.SystemClock.elapsedRealtime() - shownAt < 800L) {
+            return
+        }
+        val decor = activity?.window?.decorView as? FrameLayout ?: return
+        decor.findViewById<View>(R.id.tvSwitchOverlay)?.let { root ->
+            root.animate().cancel()
+            root.animate().alpha(0f).setDuration(200).withEndAction {
+                (root.parent as? ViewGroup)?.removeView(root)
+            }.start()
+        }
+    }
+
+    private var shownAt = 0L
 
     fun show(activity: Activity, previous: Stream?, next: Stream?) {
+        shownAt = android.os.SystemClock.elapsedRealtime()
         val decor = activity.window?.decorView as? FrameLayout ?: return
         decor.findViewById<View>(R.id.tvSwitchOverlay)?.let { decor.removeView(it) }
         if (previous == null && next == null) {

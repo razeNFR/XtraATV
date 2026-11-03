@@ -124,6 +124,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             thumbnailStamp = { homeStamp.longValue },
             refreshing = { homeRefreshing.value },
             sweepCount = { homeSweep.intValue },
+            statsBadges = { statsBadges() },
             openStats = {
                 activity?.let { com.github.andreyasadchy.xtra.ui.tv.TvStatsPage.show(it) { loadStats() } }
             },
@@ -192,7 +193,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         previewPlayer = { previewPlayer.value },
                         actions = actions,
                         resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
-                        videos = followedVideos?.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_followed_videos_row), it, 0, R.drawable.tv_ic_video_library) },
+                        // the videos still recording (the live of a channel live now) are left out: the live is in the row above
+                        videos = followedVideos?.takeIf { context.prefs().getBoolean(C.TV_HOME_FOLLOWED_VIDEOS, true) }
+                            ?.filterNot { video -> isRecording(video, followed) }
+                            ?.takeIf { it.isNotEmpty() }
+                            ?.let { TvHomeRow(getString(R.string.tv_followed_videos_row), it, 0, R.drawable.tv_ic_video_library) },
                         stats = statsState.value,
                         languageRows = languageRows.map { (language, streams) ->
                             TvHomeRow(getString(R.string.tv_popular_in, languageName(language)), streams, 0, R.drawable.tv_ic_globe)
@@ -225,6 +230,32 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         val context = context ?: return
         resumeItems.value = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.list(context)
         loadStats()
+    }
+
+    /** The statistics of the badge of the top of the home, the ones that have something to say. */
+    private fun statsBadges(): List<Pair<Int, String>> {
+        val context = context ?: return emptyList()
+        val today = com.github.andreyasadchy.xtra.ui.tv.TvStats.detail(context, 1)
+        val week = com.github.andreyasadchy.xtra.ui.tv.TvStats.detail(context, 7)
+        val time = { ms: Long -> getString(R.string.tv_stats_hours, ms / 3_600_000L, (ms / 60_000L) % 60) }
+        return listOfNotNull(
+            today.watchMs.takeIf { it >= 60_000L }?.let { R.drawable.tv_ic_schedule to getString(R.string.tv_badge_today, time(it)) },
+            today.currentStreak.takeIf { it >= 2 }?.let { R.drawable.tv_ic_trending to getString(R.string.tv_badge_streak, it) },
+            week.streamers.firstOrNull()?.let { R.drawable.tv_ic_star to getString(R.string.tv_badge_top_week, it.name) },
+            week.ads.takeIf { it > 0 }?.let { R.drawable.tv_ic_shield to getString(R.string.tv_badge_ads_week, it) },
+            today.streams.takeIf { it > 0 }?.let { R.drawable.tv_ic_live to getString(R.string.tv_badge_streams_today, it) },
+        ).ifEmpty { listOf(R.drawable.tv_ic_bar_chart to getString(R.string.tv_stats)) }
+    }
+
+    /** A video of a channel live now, started with that live (or still without a picture): it records it. */
+    private fun isRecording(video: com.github.andreyasadchy.xtra.model.ui.Video, live: List<com.github.andreyasadchy.xtra.model.ui.Stream>?): Boolean {
+        val stream = live?.find { it.channelLogin != null && it.channelLogin.equals(video.channelLogin, true) } ?: return false
+        if (com.github.andreyasadchy.xtra.ui.tv.TvVideoThumbnail.isMissing(video.thumbnailURL)) {
+            return true
+        }
+        val videoStart = video.createdAt?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: return false
+        val streamStart = stream.createdAt?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: return false
+        return videoStart >= streamStart - 15 * 60_000L
     }
 
     private fun loadStats() {

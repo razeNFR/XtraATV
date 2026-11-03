@@ -907,4 +907,14 @@
     <string name="tv_stats_times">%1$d-mal</string>
     <string name="tv_chat_show_replies">Anzeigen, worauf eine Nachricht antwortet</string>
     <string name="tv_chat_show_replies_summary">Eine kurze Zeile über einer Antwort: wem sie antwortet und der Anfang der Nachricht</string>
+    <string name="tv_home_followed_videos">Neueste Videos gefolgter Kanäle</string>
+    <string name="tv_home_followed_videos_summary">Ihre Zeile auf dem Startbildschirm, ohne noch laufende Aufnahmen</string>
+    <string name="tv_chat_band">Leiste</string>
+    <string name="tv_chat_band_separate">Getrennt</string>
+    <string name="tv_chat_band_overlay">Über dem Stream</string>
+    <string name="tv_badge_today">%1$s heute geschaut</string>
+    <string name="tv_badge_streak">%1$d Tage in Folge</string>
+    <string name="tv_badge_top_week">%1$s, diese Woche am meisten geschaut</string>
+    <string name="tv_badge_ads_week">%1$d Werbungen diese Woche blockiert</string>
+    <string name="tv_badge_streams_today">%1$d Streams heute geöffnet</string>
 </resources>
