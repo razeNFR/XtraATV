@@ -955,6 +955,21 @@ class MainActivity : AppCompatActivity() {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
         }
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
+        if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            val player = playerFragment as? PlayerFragment
+            if (player != null && player.handlesDpadSwitch()) {
+                // left / right change the streamer whatever has the focus: the keys pressed while a switch makes the new
+                // player screen never reach the HUD (seek) nor the screens behind the player (focus lost)
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && streamQueue.size > 1) {
+                    switchStream(if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+                }
+                val focus = currentFocus
+                if (focus == null || !focus.isShown || !focus.isInside(binding.playerContainer)) {
+                    player.requestPlayerFocus()
+                }
+                return true
+            }
+        }
         if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot()) {
             // back on a main screen opens the menu, back again in the menu leaves the app
             if (event.action == KeyEvent.ACTION_UP) {
@@ -1386,6 +1401,10 @@ class MainActivity : AppCompatActivity() {
         if (player != null && player.requestPlayerFocus()) {
             return true
         }
+        if (isTv && player != null && player.isMaximizedScreen()) {
+            // the player screen is being made (a switch): the focus waits for it, it never goes behind the player
+            return true
+        }
         if (isTv && isTvMenuShown && (focus == null || !focus.isShown)) {
             // the leanback menu is where browsing starts
             showTvMenu(true)
@@ -1732,10 +1751,18 @@ class MainActivity : AppCompatActivity() {
     private var queueRefreshedAt = 0L
     private var queueRefreshJob: kotlinx.coroutines.Job? = null
 
+    /** A left / right pressed while a switch was still being made: done right after it, not lost. */
+    private var pendingSwitch = 0
+
     fun switchStream(offset: Int) {
-        if (streamQueue.size < 2 || switchJob?.isActive == true) {
+        if (streamQueue.size < 2) {
             return
         }
+        if (switchJob?.isActive == true) {
+            pendingSwitch = offset
+            return
+        }
+        pendingSwitch = 0
         switchJob = lifecycleScope.launch {
             var tries = 0
             while (tries++ < 5) {
@@ -1773,6 +1800,16 @@ class MainActivity : AppCompatActivity() {
                     updated.getOrNull(Math.floorMod(newIndex + 1, updated.size)),
                 )
                 return@launch
+            }
+        }
+        // a left / right pressed meanwhile: the next switch once this one is made
+        switchJob?.invokeOnCompletion {
+            binding.root.post {
+                val next = pendingSwitch
+                pendingSwitch = 0
+                if (next != 0 && !isFinishing) {
+                    switchStream(next)
+                }
             }
         }
     }

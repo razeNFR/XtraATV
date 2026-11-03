@@ -165,8 +165,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** TV: left / right change the streamer (option on, a live stream, a HUD not opened on purpose). */
     private fun dpadSwitchesStreams(): Boolean {
-        return isTv && isStreamScreen() && !hudOpenedByUser && requireContext().prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
+        return isTv && isStreamScreen() && !hudOpenedByUser && context?.prefs()?.getBoolean(C.TV_DPAD_SWITCH_STREAM, false) == true
     }
+
+    /**
+     * TV: left / right of the remote are handled by the activity before Android looks for the view that gets them: a
+     * switch replaces the player screen, and the keys pressed meanwhile (queued while the new screen is made) found no
+     * focused view and went to a button of the HUD (seek) or behind the player (focus lost). True also while the new
+     * screen has no view yet. Not when the chat has the focus nor in a HUD opened on purpose.
+     */
+    fun handlesDpadSwitch(): Boolean {
+        if (!isTv || !isMaximized || !dpadSwitchesStreams()) {
+            return false
+        }
+        return _binding == null || !binding.chatLayout.hasFocus()
+    }
+
+    /** The player screen is in full screen (also before its view is made). */
+    fun isMaximizedScreen() = isMaximized && !isRemoving
     private val hudPeekHideAction = Runnable {
         if (view != null && hudPeek) {
             hudPeek = false

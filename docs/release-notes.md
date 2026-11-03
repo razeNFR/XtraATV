@@ -13,7 +13,7 @@
 ### Changes
 - **Long stream titles**: on the focused card (home, followed, lists, stream banner of the player), a title too long for the card scrolls after a second.
 - **New streams**: while Twitch has not made the thumbnail of a stream yet, the picture of the channel is shown instead of the grey camera (cards and picture while a stream loads).
-- **Left / right in the player**: quick switches no longer open the whole HUD nor move back in the timeline; the timeline only takes left / right once you opened the HUD yourself (OK, up / down).
+- **Left / right in the player**: quick switches no longer open the whole HUD, move in the timeline or lose the focus; the timeline only takes left / right once you opened the HUD yourself (OK, up / down).
 - **New public proxy**: twitch-al.nadeko.net is added to the custom proxies (at the end of the list, on).
 - **Settings**: left from a setting goes back to its category, right comes back to the same setting, down on the last row stays there.
 - **Ads and proxies**: the 1440p warning is gone from the top; what each option means for the 1440p is now written on the ad blocker and on the custom proxies.
