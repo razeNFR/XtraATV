@@ -909,4 +909,12 @@
     <string name="tv_chat_show_replies_summary">سطر قصير فوق الرد: لمن يرد وبداية رسالته</string>
     <string name="tv_home_followed_videos">أحدث فيديوهات القنوات المتابعة</string>
     <string name="tv_home_followed_videos_summary">صفّها في الصفحة الرئيسية، دون الفيديوهات التي ما زالت تُسجَّل</string>
+    <string name="tv_chat_band">الشريط</string>
+    <string name="tv_chat_band_separate">منفصل</string>
+    <string name="tv_chat_band_overlay">فوق البث</string>
+    <string name="tv_badge_today">%1$s مشاهدة اليوم</string>
+    <string name="tv_badge_streak">%1$d أيام متتالية</string>
+    <string name="tv_badge_top_week">%1$s، الأكثر مشاهدة هذا الأسبوع</string>
+    <string name="tv_badge_ads_week">%1$d إعلانات محظورة هذا الأسبوع</string>
+    <string name="tv_badge_streams_today">%1$d بثوث فُتحت اليوم</string>
 </resources>

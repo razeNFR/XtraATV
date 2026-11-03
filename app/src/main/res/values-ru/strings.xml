@@ -909,4 +909,12 @@
     <string name="tv_chat_show_replies_summary">Короткая строка над ответом: кому он и начало сообщения</string>
     <string name="tv_home_followed_videos">Новые видео отслеживаемых каналов</string>
     <string name="tv_home_followed_videos_summary">Строка на главной, без видео, которые ещё записываются</string>
+    <string name="tv_chat_band">Полоса</string>
+    <string name="tv_chat_band_separate">Отдельно</string>
+    <string name="tv_chat_band_overlay">Поверх трансляции</string>
+    <string name="tv_badge_today">%1$s просмотра сегодня</string>
+    <string name="tv_badge_streak">%1$d дн. подряд</string>
+    <string name="tv_badge_top_week">%1$s — самый просматриваемый за неделю</string>
+    <string name="tv_badge_ads_week">Заблокировано реклам за неделю: %1$d</string>
+    <string name="tv_badge_streams_today">Открыто трансляций сегодня: %1$d</string>
 </resources>

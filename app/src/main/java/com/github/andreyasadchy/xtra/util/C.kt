@@ -281,6 +281,7 @@ object C {
     const val CHAT_DELAY_SECONDS = "chat_delay_seconds"
     const val CHAT_SHOW_REPLIES = "chat_show_replies"
     const val TV_HOME_FOLLOWED_VIDEOS = "tv_home_followed_videos"
+    const val TV_CHAT_BAND_OVERLAY = "tv_chat_band_overlay"
     const val CHAT_ZERO_WIDTH = "chat_zerowidth"
     const val CHAT_FIRST_MSG_VISIBILITY = "chat_firstmsg_visibility"
     const val CHAT_TIMESTAMPS = "chat_timestamps"

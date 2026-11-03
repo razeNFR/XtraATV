@@ -909,4 +909,12 @@
     <string name="tv_chat_show_replies_summary">回复上方的简短一行：回复的对象和原消息的开头</string>
     <string name="tv_home_followed_videos">关注频道的最新视频</string>
     <string name="tv_home_followed_videos_summary">主页上的这一行，不含仍在录制的视频</string>
+    <string name="tv_chat_band">横条</string>
+    <string name="tv_chat_band_separate">分开</string>
+    <string name="tv_chat_band_overlay">覆盖在直播上</string>
+    <string name="tv_badge_today">今天已看 %1$s</string>
+    <string name="tv_badge_streak">连续 %1$d 天</string>
+    <string name="tv_badge_top_week">%1$s，本周你看得最多</string>
+    <string name="tv_badge_ads_week">本周已拦截 %1$d 个广告</string>
+    <string name="tv_badge_streams_today">今天打开了 %1$d 个直播</string>
 </resources>

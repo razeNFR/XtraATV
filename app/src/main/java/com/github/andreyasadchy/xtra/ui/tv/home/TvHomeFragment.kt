@@ -124,6 +124,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             thumbnailStamp = { homeStamp.longValue },
             refreshing = { homeRefreshing.value },
             sweepCount = { homeSweep.intValue },
+            statsBadges = { statsBadges() },
             openStats = {
                 activity?.let { com.github.andreyasadchy.xtra.ui.tv.TvStatsPage.show(it) { loadStats() } }
             },
@@ -229,6 +230,21 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         val context = context ?: return
         resumeItems.value = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.list(context)
         loadStats()
+    }
+
+    /** The statistics of the badge of the top of the home, the ones that have something to say. */
+    private fun statsBadges(): List<Pair<Int, String>> {
+        val context = context ?: return emptyList()
+        val today = com.github.andreyasadchy.xtra.ui.tv.TvStats.detail(context, 1)
+        val week = com.github.andreyasadchy.xtra.ui.tv.TvStats.detail(context, 7)
+        val time = { ms: Long -> getString(R.string.tv_stats_hours, ms / 3_600_000L, (ms / 60_000L) % 60) }
+        return listOfNotNull(
+            today.watchMs.takeIf { it >= 60_000L }?.let { R.drawable.tv_ic_schedule to getString(R.string.tv_badge_today, time(it)) },
+            today.currentStreak.takeIf { it >= 2 }?.let { R.drawable.tv_ic_trending to getString(R.string.tv_badge_streak, it) },
+            week.streamers.firstOrNull()?.let { R.drawable.tv_ic_star to getString(R.string.tv_badge_top_week, it.name) },
+            week.ads.takeIf { it > 0 }?.let { R.drawable.tv_ic_shield to getString(R.string.tv_badge_ads_week, it) },
+            today.streams.takeIf { it > 0 }?.let { R.drawable.tv_ic_live to getString(R.string.tv_badge_streams_today, it) },
+        ).ifEmpty { listOf(R.drawable.tv_ic_bar_chart to getString(R.string.tv_stats)) }
     }
 
     /** A video of a channel live now, started with that live (or still without a picture): it records it. */

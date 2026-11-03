@@ -928,4 +928,12 @@
     <string name="tv_chat_show_replies_summary">A short line above a reply: who it answers and the start of their message</string>
     <string name="tv_home_followed_videos">Latest videos of the followed channels</string>
     <string name="tv_home_followed_videos_summary">Its row on the home, the videos still recording are left out</string>
+    <string name="tv_chat_band">Band</string>
+    <string name="tv_chat_band_separate">Separate</string>
+    <string name="tv_chat_band_overlay">Over the stream</string>
+    <string name="tv_badge_today">%1$s watched today</string>
+    <string name="tv_badge_streak">%1$d days in a row</string>
+    <string name="tv_badge_top_week">%1$s, your most watched this week</string>
+    <string name="tv_badge_ads_week">%1$d ads blocked this week</string>
+    <string name="tv_badge_streams_today">%1$d streams opened today</string>
 </resources>

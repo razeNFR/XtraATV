@@ -909,4 +909,12 @@
     <string name="tv_chat_show_replies_summary">Una riga breve sopra una risposta: a chi risponde e l\'inizio del suo messaggio</string>
     <string name="tv_home_followed_videos">Ultimi video dei canali seguiti</string>
     <string name="tv_home_followed_videos_summary">La sua riga nella home, senza i video ancora in registrazione</string>
+    <string name="tv_chat_band">Banda</string>
+    <string name="tv_chat_band_separate">Separata</string>
+    <string name="tv_chat_band_overlay">Sopra lo stream</string>
+    <string name="tv_badge_today">%1$s guardate oggi</string>
+    <string name="tv_badge_streak">%1$d giorni di fila</string>
+    <string name="tv_badge_top_week">%1$s, il più guardato della settimana</string>
+    <string name="tv_badge_ads_week">%1$d pubblicità bloccate questa settimana</string>
+    <string name="tv_badge_streams_today">%1$d stream aperti oggi</string>
 </resources>

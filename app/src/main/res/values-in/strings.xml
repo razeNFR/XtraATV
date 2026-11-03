@@ -910,4 +910,12 @@
     <string name="tv_chat_show_replies_summary">Baris pendek di atas balasan: siapa yang dibalas dan awal pesannya</string>
     <string name="tv_home_followed_videos">Video terbaru dari kanal yang diikuti</string>
     <string name="tv_home_followed_videos_summary">Barisnya di beranda, tanpa video yang masih direkam</string>
+    <string name="tv_chat_band">Pita</string>
+    <string name="tv_chat_band_separate">Terpisah</string>
+    <string name="tv_chat_band_overlay">Di atas stream</string>
+    <string name="tv_badge_today">%1$s ditonton hari ini</string>
+    <string name="tv_badge_streak">%1$d hari berturut-turut</string>
+    <string name="tv_badge_top_week">%1$s, paling sering ditonton minggu ini</string>
+    <string name="tv_badge_ads_week">%1$d iklan diblokir minggu ini</string>
+    <string name="tv_badge_streams_today">%1$d stream dibuka hari ini</string>
 </resources>

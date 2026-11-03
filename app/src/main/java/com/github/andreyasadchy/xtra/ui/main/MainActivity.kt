@@ -2005,13 +2005,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null, peekHud: Boolean = false) {
-        // the info of the stream after a switch only when a stream already played full screen (not opened from a list),
-        // or back from a multi-stream
-        if (isTv && peekHud) {
-            com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = true
-        } else if (!(isTv && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true)) {
-            com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = false
-        }
+        // TV: the info of the stream for a moment each time a stream starts (from the home, a list, a switch...)
+        com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = isTv
         // the time of the start of the stream counts from here (debug builds), and its access of Twitch is asked
         // at once, while the player opens
         com.github.andreyasadchy.xtra.ui.player.TvLoadTimer.start()

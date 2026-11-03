@@ -148,6 +148,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private val hudPeekHideAction = Runnable {
         if (view != null && hudPeek) {
             hudPeek = false
+            TvSwitchOverlay.hide(activity)
             if (!binding.playerControls.root.hasFocus()) {
                 hideController()
             }
@@ -176,6 +177,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** The HUD gets the focus (or goes): it is no longer a short look. */
     private fun endHudPeek() {
+        if (hudPeek) {
+            TvSwitchOverlay.hide(activity)
+        }
         hudPeek = false
         _binding?.root?.removeCallbacks(hudPeekHideAction)
     }
@@ -187,7 +191,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private val backPressedCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
             if (_binding != null && hudPeek && binding.playerControls.root.isVisible) {
-                // the info of the stream shown after a switch: back only hides it
+                // the info of the stream shown after a switch: back only hides it (and the streamers left and right)
+                TvSwitchOverlay.hide(activity, force = true)
                 hideController()
             } else if (_binding != null && controllerAutoHide && controllerHideOnTouch && binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()) {
                 hideController()
@@ -2237,10 +2242,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     val lineHeight = maxOf(textHeight, emoteHeight) + 2 * metrics.density
                     val lines = prefs.getInt(C.TV_CHAT_LINES, 3)
                     val bandHeight = (lineHeight * lines + 8 * metrics.density).toInt().coerceAtMost((screenHeight * 0.6f).toInt())
+                    // option: the band over the stream, the picture stays full screen
+                    val overStream = prefs.getBoolean(C.TV_CHAT_BAND_OVERLAY, false)
                     playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
                         width = ViewGroup.LayoutParams.MATCH_PARENT
-                        height = screenHeight - bandHeight
-                        gravity = if (top) Gravity.BOTTOM else Gravity.TOP
+                        height = if (overStream) ViewGroup.LayoutParams.MATCH_PARENT else screenHeight - bandHeight
+                        gravity = if (overStream) Gravity.NO_GRAVITY else if (top) Gravity.BOTTOM else Gravity.TOP
                         marginEnd = 0
                     }
                     chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
@@ -2292,8 +2299,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** The chat goes up over the controls only when it is at the bottom of the screen. */
     private fun getTvChatLift(): Float {
         val position = requireContext().prefs().getInt(C.TV_CHAT_POSITION, 0)
+        val mode = requireContext().prefs().getInt(C.TV_CHAT_MODE, 0)
+        // the band at the bottom over the stream: it goes up over the controls while they are shown
+        if (mode == 2 && requireContext().prefs().getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) {
+            val top = position == 1 || position == 3 || position == 6
+            return if (top) 0f else -resources.getDimension(R.dimen.tv_chat_lift)
+        }
         // next to or under the stream, the controls are on the picture and the chat stays where it is
-        if (requireContext().prefs().getInt(C.TV_CHAT_MODE, 0) != 0) {
+        if (mode != 0) {
             return 0f
         }
         return if (position == 0 || position == 2 || position == 7) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
@@ -2363,6 +2376,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), bands, if (top) 1 else 0) {
                                 position.intValue = if (it == 1) 1 else 0
                                 update(C.TV_CHAT_POSITION, position.intValue)
+                            }
+                            // the band apart (the picture a bit smaller) or over the stream (the picture full screen)
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                                getString(R.string.tv_chat_band),
+                                listOf(getString(R.string.tv_chat_band_separate), getString(R.string.tv_chat_band_overlay)),
+                                if (prefs.getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) 1 else 0,
+                            ) {
+                                prefs.edit { putBoolean(C.TV_CHAT_BAND_OVERLAY, it == 1) }
+                                if (_binding != null) {
+                                    applyTvChatLayout()
+                                }
                             }
                             textSizeRow(prefs)
                             com.github.andreyasadchy.xtra.ui.tv.SliderRow(
@@ -2446,6 +2470,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         remove(C.TV_CHAT_LINES)
                         remove(C.CHAT_SIZE_MODIFIER)
                         remove(C.CHAT_DELAY_MODE)
+                        remove(C.TV_CHAT_BAND_OVERLAY)
                         remove(C.CHAT_DELAY_SECONDS)
                     }
                     chatFragment?.applySizeModifier()

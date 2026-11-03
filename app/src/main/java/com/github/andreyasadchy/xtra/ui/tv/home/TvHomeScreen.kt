@@ -116,6 +116,8 @@ class TvHomeActions(
     val sweepCount: () -> Int = { 0 },
     /** OK on the card of the statistics: their page in detail. */
     val openStats: () -> Unit = {},
+    /** The statistics of the badge of the top of the home (icon, text), one shown at a time. */
+    val statsBadges: () -> List<Pair<Int, String>> = { emptyList() },
     /** How long a stream is live for its badge ("2 h 39"), null to show none. */
     val uptime: (com.github.andreyasadchy.xtra.model.ui.Stream) -> String? = { null },
 )
@@ -204,6 +206,8 @@ fun TvHomeScreen(
     val rowStates = remember { mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
     val cardRequesters = remember { mutableMapOf<String, FocusRequester>() }
     var refreshFocused by remember { mutableStateOf(false) }
+    /** The badge of the statistics at the left of the greeting has the focus (reached from "refresh" with right). */
+    var badgeFocused by remember { mutableStateOf(false) }
     // the rows came while "refresh" had the focus (first load): the focus goes to the first stream
     LaunchedEffect(hasCards) {
         if (hasCards && refreshFocused && !refreshAllowed) {
@@ -297,7 +301,7 @@ fun TvHomeScreen(
                 actions,
                 Modifier
                     .focusRequester(refreshRequester)
-                    .focusProperties { canFocus = refreshAllowed || !hasCards }
+                    .focusProperties { canFocus = refreshAllowed || badgeFocused || !hasCards }
                     .onFocusChanged {
                         refreshFocused = it.hasFocus
                         if (!it.hasFocus) refreshAllowed = false
@@ -311,6 +315,20 @@ fun TvHomeScreen(
                     }
             )
             Spacer(Modifier.weight(1f))
+            // a statistic that changes each minute, OK opens their page; reached from "refresh" (right)
+            StatsBadge(
+                actions,
+                Modifier
+                    .focusProperties { canFocus = refreshFocused || badgeFocused || !hasCards }
+                    .onFocusChanged { badgeFocused = it.hasFocus }
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && hasCards) {
+                            focus.focusLast()
+                            true
+                        } else false
+                    }
+            )
+            Spacer(Modifier.width(16.dp))
             Greeting(account)
         }
     // refreshed with the button: a light sweeps once over the rows, like the other pages
@@ -569,6 +587,35 @@ private fun SkeletonRow(actions: TvHomeActions, firstCardModifier: Modifier? = n
                 }
             }
         }
+    }
+}
+
+/** A statistic of the TV (time today, streak of days, top streamer of the week...), the next one each minute. */
+@Composable
+private fun StatsBadge(actions: TvHomeActions, modifier: Modifier = Modifier) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    var items by remember { mutableStateOf(actions.statsBadges()) }
+    var index by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L)
+            items = actions.statsBadges()
+            index++
+        }
+    }
+    val item = items.takeIf { it.isNotEmpty() }?.let { it[index % it.size] } ?: return
+    Row(
+        modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+            .clickable(interactionSource = interaction, indication = null, onClick = actions.openStats)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(painterResource(item.first), contentDescription = null, tint = if (focused) TvColors.onFocused else TvColors.accent, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(item.second, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (focused) TvColors.onFocused else Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 340.dp))
     }
 }
 
