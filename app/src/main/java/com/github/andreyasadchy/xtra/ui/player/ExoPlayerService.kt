@@ -437,6 +437,8 @@ class ExoPlayerService : BasePlaybackService() {
                                         val host = customProxyList?.getOrNull(currentCustomProxy)?.url?.let {
                                             it.toUri().host ?: "https://$it".toUri().host
                                         }
+                                        // not tried again for a while, on this stream or the next ones
+                                        customProxyList?.getOrNull(currentCustomProxy)?.let { customProxyHost(it) }?.let { TvProxyStatus.markFailed(it) }
                                         currentCustomProxy += 1
                                         if (host != null) {
                                             serviceListener?.toast(getString(R.string.proxy_error, host), Toast.LENGTH_LONG)
@@ -831,16 +833,19 @@ class ExoPlayerService : BasePlaybackService() {
                             it.enabled && !it.url.isNullOrBlank()
                         }.sortedBy { it.position }
                     }
-                    // option: the custom proxies only while an ad plays, the stream itself straight from Twitch (low
-                    // latency, 1440p): they are the first backups of the ad blocker, back to the stream once the ad is over
-                    val adsOnlyProxies = if (useCustomProxy && prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1") {
-                        useCustomProxy = false
+                    // the custom proxies are the first backups of the ad blocker while an ad plays (in the mode "always", the
+                    // other proxies than the one of the stream when an ad comes through it), back to the stream once it is over
+                    val adsOnlyProxies = if (useCustomProxy) {
                         channelLogin?.let { login ->
                             customProxyList.orEmpty().mapIndexedNotNull { index, proxy ->
                                 customProxyUrl(proxy, login)?.let { url -> VideoSwap(AD_PROXY_PLATFORM, url, index) }
                             }
                         }.orEmpty()
                     } else emptyList()
+                    // option: the custom proxies only while an ad plays, the stream itself straight from Twitch (low latency, 1440p)
+                    if (useCustomProxy && prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1") {
+                        useCustomProxy = false
+                    }
                     if (useStreamProxy) {
                         streamProxyList = xtraModule.playerRepository.getStreamProxies().filter {
                             it.enabled && !it.host.isNullOrBlank() && it.port != null
@@ -858,7 +863,8 @@ class ExoPlayerService : BasePlaybackService() {
                             if (adblock) ADBLOCK_PLAYER_TYPES.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, index) } else emptyList()
                         }
                     }
-                    // the custom proxies used while the ad plays are checked meanwhile: the offline ones are not tried
+                    // the custom proxies are checked meanwhile: the offline ones are not tried (from the next stream for the one
+                    // of the stream in the mode "always", the stream does not wait for it)
                     adsOnlyProxies.mapNotNull { swap -> swap.playerType?.let { url -> adProxyHost(swap)?.let { it to url } } }.forEach { (host, url) ->
                         lifecycleScope.launch {
                             if (!TvProxyStatus.reachable(this@ExoPlayerService, url)) {
@@ -1017,6 +1023,10 @@ class ExoPlayerService : BasePlaybackService() {
             } else null
             if (restart || qualities.isNullOrEmpty()) {
                 val proxyUrl = if (useCustomProxy) {
+                    // the custom proxies known offline (checked at the start of a stream, or failed a moment ago) are not tried
+                    while (customProxyList?.getOrNull(currentCustomProxy)?.let { customProxyHost(it) }?.let { TvProxyStatus.isFailed(it) } == true) {
+                        currentCustomProxy += 1
+                    }
                     customProxyList?.getOrNull(currentCustomProxy)?.let { proxy -> customProxyUrl(proxy, channelLogin) }
                 } else null
                 if (proxyUrl != null) {
@@ -2335,9 +2345,20 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** The custom proxies known offline (checked at the start of the stream, or failed a moment ago) are not tried. */
     private fun skipFailedAdProxies() {
-        while (videoSwapList?.getOrNull(currentVideoSwapItem)?.let { adProxyHost(it) }?.let { TvProxyStatus.isFailed(it) } == true) {
+        while (videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
+                adProxyHost(swap)?.let { host ->
+                    // mode "always": the proxy of the stream is the one the ad came through
+                    TvProxyStatus.isFailed(host) || (useCustomProxy && swap.position == currentCustomProxy)
+                }
+            } == true) {
             currentVideoSwapItem += 1
         }
+    }
+
+    /** Host of a custom proxy, as [adProxyHost] gives it. */
+    private fun customProxyHost(proxy: CustomProxy): String? {
+        val url = proxy.url ?: return null
+        return (url.toUri().takeIf { it.host != null } ?: "https://$url".toUri()).host?.removePrefix("www.")
     }
 
     /** True while the backup player of the ad blocker shows the picture. */

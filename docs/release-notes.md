@@ -2,6 +2,7 @@
 
 ### New
 - **Proxies only during ads**: custom proxies can now be used only while an ad plays (Ads and proxies > Custom proxies > Use, or OK held on the Proxy button of the player). The stream comes straight from Twitch the rest of the time: low latency and 1440p. If a proxy is offline, stops answering or lets the ad through, the next one is used, then the usual ad blocker. The status of the player shows the name of the proxy (for example "Proxy EU Luminous").
+- **Custom proxies, safer**: in both modes the proxies found offline are skipped (checked in the background when a stream starts, and for 10 minutes after one fails), and in the "Always" mode an ad that comes through the proxy is now played around with the other proxies first, then the ad blocker.
 
 ### Changes
 - **Long stream titles**: on the focused card (home, followed, lists, stream banner of the player), a title too long for the card scrolls after a second.
