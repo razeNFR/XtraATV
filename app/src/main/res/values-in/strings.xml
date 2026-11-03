@@ -948,4 +948,9 @@
     <string name="tv_color_coral">Koral</string>
     <string name="tv_color_lavender">Lavender</string>
     <string name="tv_color_white">Putih</string>
+    <string name="tv_adblock_ad_preroll">Iklan pre-roll</string>
+    <string name="tv_adblock_ad_midroll">Iklan mid-roll</string>
+    <string name="tv_adblock_ad">Iklan</string>
+    <string name="tv_adblock_back_live">Kembali ke siaran langsung…</string>
+    <string name="tv_adblock_on_hold">menunggu</string>
 </resources>

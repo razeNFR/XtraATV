@@ -948,4 +948,9 @@
     <string name="tv_color_coral">Mercan</string>
     <string name="tv_color_lavender">Lavanta</string>
     <string name="tv_color_white">Beyaz</string>
+    <string name="tv_adblock_ad_preroll">Pre-roll reklam</string>
+    <string name="tv_adblock_ad_midroll">Mid-roll reklam</string>
+    <string name="tv_adblock_ad">Reklam</string>
+    <string name="tv_adblock_back_live">Canlı yayına dönülüyor…</string>
+    <string name="tv_adblock_on_hold">beklemede</string>
 </resources>

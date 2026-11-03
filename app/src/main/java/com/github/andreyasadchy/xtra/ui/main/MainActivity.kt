@@ -2071,6 +2071,10 @@ class MainActivity : AppCompatActivity() {
             C.MEDIA_PLAYER -> MediaPlayerFragment()
             else -> ExoPlayerFragment()
         }
+        // the player screen knows at once that it plays a live stream (left / right switch streams), before its service is there
+        fragment.arguments = (fragment.arguments ?: Bundle()).apply {
+            putBoolean(com.github.andreyasadchy.xtra.ui.player.PlayerFragment.KEY_STREAM, true)
+        }
         startPlayer(fragment)
         prepareNeighborStreams()
     }

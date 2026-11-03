@@ -947,4 +947,9 @@
     <string name="tv_color_coral">コーラル</string>
     <string name="tv_color_lavender">ラベンダー</string>
     <string name="tv_color_white">ホワイト</string>
+    <string name="tv_adblock_ad_preroll">プレロール広告</string>
+    <string name="tv_adblock_ad_midroll">ミッドロール広告</string>
+    <string name="tv_adblock_ad">広告</string>
+    <string name="tv_adblock_back_live">ライブに戻ります…</string>
+    <string name="tv_adblock_on_hold">待機中</string>
 </resources>

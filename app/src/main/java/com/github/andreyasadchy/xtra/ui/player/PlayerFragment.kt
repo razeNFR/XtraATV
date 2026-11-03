@@ -150,6 +150,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
      * switch, HUD left on screen by a quick series of switches...) left / right always change the streamer.
      */
     private var hudOpenedByUser = false
+        set(value) {
+            field = value
+            // TV: the timeline only takes the focus in a HUD opened on purpose, it never catches left / right of a switch
+            if (isTv) {
+                _binding?.playerControls?.progressBar?.isFocusable = value
+            }
+        }
+
+    /** A live stream: from the service, or from the screen itself while its service connects (a switch just made it). */
+    private fun isStreamScreen(): Boolean {
+        return playbackService?.type == BasePlaybackService.STREAM || (playbackService == null && arguments?.getBoolean(KEY_STREAM) == true)
+    }
+
+    /** TV: left / right change the streamer (option on, a live stream, a HUD not opened on purpose). */
+    private fun dpadSwitchesStreams(): Boolean {
+        return isTv && isStreamScreen() && !hudOpenedByUser && requireContext().prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
+    }
     private val hudPeekHideAction = Runnable {
         if (view != null && hudPeek) {
             hudPeek = false
@@ -718,7 +735,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     fastForward()
                 }
                 if (isTv) {
+                    progressBar.isFocusable = hudOpenedByUser
                     progressBar.setOnKeyListener { _, keyCode, event ->
+                        // the timeline focused without a HUD opened on purpose: left / right still change the streamer
+                        if ((keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) && _binding != null && dpadSwitchesStreams()) {
+                            binding.dragView.requestFocus()
+                            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && ((activity as? MainActivity)?.streamQueue?.size ?: 0) > 1) {
+                                (activity as? MainActivity)?.switchStream(if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+                            }
+                            return@setOnKeyListener true
+                        }
                         // down from the timeline: back to the button the focus was on, not the nearest one
                         if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN && _binding != null) {
                             val last = findLastControl()
@@ -3063,10 +3089,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    open fun getAdblockStatus(): String? = null
-
-    /** How far the ad break being blocked is (0 to 1), null when its end is not known. */
-    open fun getAdblockProgress(): Float? = null
+    /** What the badge of the ad blocker shows, null while it does not work. */
+    open fun getAdblockInfo(): ExoPlayerService.AdblockInfo? = null
 
     open fun getVideoFrameRate(): Float? = null
 
@@ -3123,24 +3147,49 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    /** Small box at the top right while the ad blocker works, like the VAFT userscript. */
+    /** The badge drawn again 4 times a second while its bar and its seconds move. */
+    private val adblockBadgeRefresh = Runnable { if (_binding != null) updateAdblockBadge() }
+
+    /**
+     * Small box at the top right while the ad blocker works, on two lines like the proxyivshook userscript: the shield,
+     * "Mid-roll ad 2/3 · 12 s", the source of the stream without the ad under it, smaller, and the bar of the ad.
+     */
     private fun updateAdblockBadge() {
-        val status = getAdblockStatus()
-        val badge = tvAdblockView ?: if (status == null) return else AdblockBadge(requireContext()).apply {
+        val info = getAdblockInfo()
+        val badge = tvAdblockView ?: if (info == null) return else AdblockBadge(requireContext()).apply {
             setBackgroundResource(R.drawable.tv_chat_overlay_background)
             setTextColor(android.graphics.Color.WHITE)
             textSize = 13f
             val density = resources.displayMetrics.density
-            setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
+            // room under the text for the bar
+            setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
             getTopRightStack().addView(this, 0, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = (8 * density).toInt()
             })
             tvAdblockView = this
         }
-        if (status != null) {
-            badge.text = status
-            (badge as? AdblockBadge)?.setProgress(getAdblockProgress())
+        badge.removeCallbacks(adblockBadgeRefresh)
+        if (info != null) {
+            val text = android.text.SpannableStringBuilder()
+            com.github.andreyasadchy.xtra.util.chat.TvChatNotices.appendIcon(requireContext(), text, R.drawable.tv_ic_shield, com.github.andreyasadchy.xtra.ui.tv.TvAccent.color, badge.textSize * 1.1f)
+            val titleStart = text.length
+            text.append(info.title)
+            text.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), titleStart, text.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (!info.source.isNullOrBlank()) {
+                text.append("\n")
+                val sourceStart = text.length
+                text.append(info.source)
+                text.setSpan(android.text.style.RelativeSizeSpan(0.85f), sourceStart, text.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                text.setSpan(android.text.style.ForegroundColorSpan(0xB3FFFFFF.toInt()), sourceStart, text.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            if (badge.text?.toString() != text.toString()) {
+                badge.text = text
+            }
+            (badge as? AdblockBadge)?.setProgress(info.progress)
             badge.visibility = View.VISIBLE
+            if (info.progress != null) {
+                badge.postDelayed(adblockBadgeRefresh, 250L)
+            }
         } else {
             badge.visibility = View.GONE
         }
@@ -3283,6 +3332,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** A control with the focus went away: the timeline, else the first control on screen. */
     protected fun focusAfterHiddenControl() {
         val controls = _binding?.playerControls ?: return
+        if (isTv && !hudOpenedByUser) {
+            // a button hidden by a switch (the HUD shows only the info): the focus leaves the HUD, not to the timeline
+            binding.dragView.requestFocus()
+            return
+        }
         if (!(controls.progressBar.isShown && controls.progressBar.requestFocus())) {
             lastHudControl = null
             focusPrimaryControl()
@@ -3434,10 +3488,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 val queueSize = (activity as? MainActivity)?.streamQueue?.size ?: 0
-                if (isTv && playbackService?.type == BasePlaybackService.STREAM &&
-                    (!binding.playerControls.root.isVisible || !hudOpenedByUser) &&
-                    requireContext().prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
-                ) {
+                if (dpadSwitchesStreams()) {
                     // option: HUD hidden, left / right go to the previous / next streamer of the list the stream comes from,
                     // the timeline is only used once the D-pad is on it (the HUD opened with OK or down has the focus; the info
                     // of a switch going away does not, left / right still change the streamer then)
@@ -3469,7 +3520,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                if (!isSelect && isTv && playbackService?.type == BasePlaybackService.STREAM && (!binding.playerControls.root.isVisible || hudPeek) &&
+                if (!isSelect && isTv && isStreamScreen() && (!binding.playerControls.root.isVisible || hudPeek) &&
                     requireContext().prefs().getBoolean(C.TV_DPAD_UP_DOWN, false)
                 ) {
                     if (hudPeek) {
@@ -4349,6 +4400,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val DVR_CAUGHT_UP_MS = 10_000L
         private const val LIVE_FIRST_STEP_MS = 60_000L
         const val KEY_OFFLINE = "offline"
+        /** Set by the app when the player screen opens a live stream: known before its playback service is connected. */
+        const val KEY_STREAM = "tvStream"
 
         /**
          * TV: picture of the stream that is opening (the picture of its card, then the latest one of Twitch), shown in place

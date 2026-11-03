@@ -947,4 +947,9 @@
     <string name="tv_color_coral">珊瑚色</string>
     <string name="tv_color_lavender">薰衣草紫</string>
     <string name="tv_color_white">白色</string>
+    <string name="tv_adblock_ad_preroll">片头广告</string>
+    <string name="tv_adblock_ad_midroll">插播广告</string>
+    <string name="tv_adblock_ad">广告</string>
+    <string name="tv_adblock_back_live">正在返回直播…</string>
+    <string name="tv_adblock_on_hold">等待中</string>
 </resources>

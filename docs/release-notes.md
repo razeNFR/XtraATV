@@ -6,14 +6,14 @@
 - **Chat notices**: subscriptions, gifts, raids and announcements get a short translated line, smaller, with an icon, instead of the English sentence of Twitch.
 - **Deleted messages**: a message deleted by a moderator (or of a user timed out or banned) is now greyed out and struck through in place, or hidden with "Show deleted messages" off, instead of a new line.
 - **Replies to you**: an answer to your message or a mention of your name is highlighted with the accent color and a bar on its left (Chat > Highlight replies and mentions).
-- **Ad blocking progress**: a thin bar on the ad blocker badge shows about how far the ad break is (when Twitch gives its length).
+- **Ad blocker badge**: on two lines, "Mid-roll ad 2/3 · 12 s" over the proxy or backup used, with a thin bar for the ad playing (it starts again with the next one), then "Back to live…" until the stream is back.
 - **New accent colors**: light blue, turquoise, mint, amber, coral, lavender and white, picked from a list with a dot of each color.
 - **Settings icons**: every setting of the right column has an icon, to find it at a glance.
 
 ### Changes
 - **Long stream titles**: on the focused card (home, followed, lists, stream banner of the player), a title too long for the card scrolls after a second.
 - **New streams**: while Twitch has not made the thumbnail of a stream yet, the picture of the channel is shown instead of the grey camera (cards and picture while a stream loads).
-- **Left / right in the player**: quick switches no longer get stuck on the whole HUD nor move back in the timeline; left / right only seek once you opened the HUD yourself.
+- **Left / right in the player**: quick switches no longer open the whole HUD nor move back in the timeline; the timeline only takes left / right once you opened the HUD yourself (OK, up / down).
 - **New public proxy**: twitch-al.nadeko.net is added to the custom proxies (at the end of the list, on).
 - **Settings**: left from a setting goes back to its category, right comes back to the same setting, down on the last row stays there.
 - **Ads and proxies**: the 1440p warning is gone from the top; what each option means for the 1440p is now written on the ad blocker and on the custom proxies.

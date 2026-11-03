@@ -290,15 +290,14 @@ class ExoPlayerService : BasePlaybackService() {
                             val ads = checkPlaylist(playlist, mainPlayer = true)
                             val oldValue = playingAds
                             playingAds = ads
-                            // the end of the ad break, estimated from the marks of Twitch, for the bar of the badge
+                            // the ad being blocked from the marks of Twitch ("2/3", its end), for the badge
                             if (ads) {
                                 if (!oldValue) {
-                                    adBreakStartedAt = System.currentTimeMillis()
-                                    adBreakEndsAt = 0L
+                                    resetAdPod()
                                 }
-                                updateAdBreakEnd(playlist)
-                            } else {
-                                adBreakEndsAt = 0L
+                                updateAdPod(playlist)
+                            } else if (oldValue) {
+                                adBreakOver()
                             }
                             checkStreamPictureShown()
                             if (ads) {
@@ -1739,45 +1738,81 @@ class ExoPlayerService : BasePlaybackService() {
     /** The first playlist of the stream had an ad: a pre-roll. */
     private var firstPlaylistAd = false
 
-    /** Start of the ad break being blocked and its estimated end (0: not known), in the time of the device. */
-    private var adBreakStartedAt = 0L
-    private var adBreakEndsAt = 0L
+    /** Start and end of one ad, in the time of the device. */
+    private class AdTimes(val start: Long, val end: Long)
+
+    /** Times of the ads of the break, by their id: each one is computed once, when its mark first shows. */
+    private val adTimes = HashMap<String, AdTimes>()
+    /** The ad playing now: its place in the break (1 based, 0: not known), the number of ads (0: not known) and its times. */
+    private var adPodPosition = 0
+    private var adPodLength = 0
+    private var adPodTimes: AdTimes? = null
+
+    private fun resetAdPod() {
+        adTimes.clear()
+        adPodPosition = 0
+        adPodLength = 0
+        adPodTimes = null
+    }
 
     /**
-     * End of the ad break, from the marks of Twitch in the playlist (EXT-X-DATERANGE of the stitched ads: start, length,
-     * position in the break and number of ads), counted from the live edge of the playlist, so the clock of the device
-     * does not matter. Nothing when the marks are not there: the badge has no bar then.
+     * The ad playing now, like the proxyivshook userscript: each ad of Twitch has its mark (EXT-X-DATERANGE of a stitched
+     * ad: id, start, duration, place and number of ads) at its own start, so the newest one is the ad playing. Its end is
+     * set once, from the live edge of the playlist (the date of its last segment), so the clock of the device does not matter.
      */
-    private fun updateAdBreakEnd(playlist: HlsMediaPlaylist?) {
+    private fun updateAdPod(playlist: HlsMediaPlaylist?) {
         playlist ?: return
-        if (!playlist.hasProgramDateTime) return
-        val last = playlist.segments.lastOrNull() ?: return
-        val liveEdge = (playlist.startTimeUs + last.relativeStartTimeUs + last.durationUs) / 1000
-        var end: Long? = null
+        val last = playlist.segments.lastOrNull()
+        val liveEdge = if (playlist.hasProgramDateTime && last != null) (playlist.startTimeUs + last.relativeStartTimeUs + last.durationUs) / 1000 else null
+        var currentId: String? = null
+        var currentStart: Long? = null
+        var currentDuration: Double? = null
+        var currentPosition: Int? = null
+        var currentLength: Int? = null
         playlist.tags.forEach { tag ->
-            if (tag.startsWith("#EXT-X-DATERANGE") && tag.contains("stitched-ad", true)) {
-                val start = Regex("START-DATE=\"([^\"]+)\"").find(tag)?.groupValues?.get(1)
-                    ?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
-                val duration = Regex("(?<![A-Z-])DURATION=([\\d.]+)").find(tag)?.groupValues?.get(1)?.toDoubleOrNull()
-                val length = Regex("X-TV-TWITCH-AD-POD-LENGTH=\"?(\\d+)").find(tag)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-                val position = Regex("X-TV-TWITCH-AD-POD-POSITION=\"?(\\d+)").find(tag)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                if (start != null && duration != null && duration > 0 && length > position) {
-                    val adEnd = start + ((length - position) * duration * 1000).toLong()
-                    end = maxOf(end ?: adEnd, adEnd)
+            if (tag.startsWith("#EXT-X-DATERANGE") && tag.contains("stitched", true)) {
+                val start = Regex("START-DATE=\"([^\"]+)\"").find(tag)?.groupValues?.get(1)?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                if (currentId == null || (start != null && (currentStart == null || start > currentStart!!))) {
+                    currentId = Regex("(?<![A-Z-])ID=\"([^\"]+)\"").find(tag)?.groupValues?.get(1) ?: tag
+                    currentStart = start
+                    currentDuration = Regex("(?<![A-Z-])DURATION=([\\d.]+)").find(tag)?.groupValues?.get(1)?.toDoubleOrNull()
+                    currentPosition = Regex("X-TV-TWITCH-AD-POD-POSITION=\"?(\\d+)").find(tag)?.groupValues?.get(1)?.toIntOrNull()
+                    currentLength = Regex("X-TV-TWITCH-AD-POD-LENGTH=\"?(\\d+)").find(tag)?.groupValues?.get(1)?.toIntOrNull()
                 }
             }
         }
-        val remaining = (end ?: return) - liveEdge
-        if (remaining in 0..300_000) {
-            adBreakEndsAt = System.currentTimeMillis() + remaining
-        }
+        val id = currentId ?: return
+        adPodPosition = currentPosition?.let { it + 1 } ?: 0
+        adPodLength = currentLength?.takeIf { it > 0 } ?: 0
+        val start = currentStart
+        val duration = currentDuration
+        adPodTimes = if (start != null && duration != null && duration > 0) {
+            adTimes.getOrPut(id) {
+                val elapsed = liveEdge?.let { ((it - start) / 1000.0).coerceIn(0.0, duration) } ?: 0.0
+                val end = System.currentTimeMillis() + ((duration - elapsed) * 1000).toLong()
+                AdTimes(end - (duration * 1000).toLong(), end)
+            }
+        } else null
     }
 
-    /** How far the ad break being blocked is (0 to 1), null when its end is not known or no ad is blocked. */
-    fun getAdblockProgress(): Float? {
-        if (!playingAds || adBreakEndsAt <= adBreakStartedAt) return null
-        return ((System.currentTimeMillis() - adBreakStartedAt).toFloat() / (adBreakEndsAt - adBreakStartedAt)).coerceIn(0f, 1f)
+    /**
+     * The break is over (the stream is back): how long it took after the end of its last ad is kept, the bar of
+     * "Back to live" fills in that time the next time.
+     */
+    private fun adBreakOver() {
+        val times = adPodTimes
+        if (times != null && adPodLength > 0 && adPodPosition >= adPodLength) {
+            val measured = System.currentTimeMillis() - times.end
+            if (measured in 500..60_000) {
+                val previous = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY)
+                prefs().edit().putLong(AD_RETURN_DELAY, (previous * 2 + measured) / 3).apply()
+            }
+        }
+        resetAdPod()
     }
+
+    /** What the badge of the ad blocker shows: two lines and the bar (0 to 1, null: no bar). */
+    class AdblockInfo(val title: String, val source: String?, val progress: Float?)
 
     /** Kind of the ad being blocked, "preroll" or "midroll", for the badge of the ad blocker. */
     private var adRollType: String? = null
@@ -2460,14 +2495,12 @@ class ExoPlayerService : BasePlaybackService() {
     val visiblePlayer: ExoPlayer?
         get() = secondaryPlayer?.takeIf { videoSwapActive || proxyMediaPlaylist } ?: player
 
-    /** Status of the ad blocker, shown on the player like the VAFT userscript does. */
-    fun getAdblockStatus(): String? {
-        // pre-roll (start of the stream) or mid-roll
-        val roll = when (adRollType) {
-            "preroll" -> getString(R.string.tv_adblock_preroll)
-            "midroll" -> getString(R.string.tv_adblock_midroll)
-            else -> null
-        }
+    /**
+     * Badge of the ad blocker, like the proxyivshook userscript: "Mid-roll ad 2/3 · 12 s" over the source of the stream
+     * without the ad, a bar for the ad playing that starts again with the next one, then "Back to live…" until the stream
+     * is back. Without the marks of Twitch: the kind of ad and the source only.
+     */
+    fun getAdblockInfo(): AdblockInfo? {
         val source = when {
             videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
                 adProxyHost(swap)?.let { TvProxyStatus.displayName(it) } ?: swap.playerType
@@ -2475,13 +2508,44 @@ class ExoPlayerService : BasePlaybackService() {
             proxyMediaPlaylist -> "proxy"
             else -> null
         }
-        return when {
-            source != null && roll != null -> getString(R.string.tv_adblock_blocking_roll, roll, source)
-            source != null -> getString(R.string.tv_adblock_blocking, source)
-            hidden && roll != null -> getString(R.string.tv_adblock_waiting_roll, roll)
-            hidden -> getString(R.string.tv_adblock_waiting)
+        if (source == null && !hidden) {
+            return null
+        }
+        val ad = getString(
+            when (adRollType) {
+                "preroll" -> R.string.tv_adblock_ad_preroll
+                "midroll" -> R.string.tv_adblock_ad_midroll
+                else -> R.string.tv_adblock_ad
+            }
+        )
+        if (source == null) {
+            // no stream without the ad: the picture waits for the end of the ad
+            return AdblockInfo(ad + " · " + getString(R.string.tv_adblock_on_hold), null, null)
+        }
+        val now = System.currentTimeMillis()
+        val times = adPodTimes
+        val position = adPodPosition
+        val length = adPodLength
+        val ended = times != null && now >= times.end
+        if (times != null && ended && position > 0 && length > 0 && position >= length) {
+            // the last ad is over, Twitch keeps its marks a moment: the bar fills until the stream is back
+            val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceAtLeast(1000L)
+            return AdblockInfo(getString(R.string.tv_adblock_back_live), source, ((now - times.end).toFloat() / delay).coerceIn(0f, 0.95f))
+        }
+        val title = StringBuilder(ad)
+        if (position > 0 && length > 0) {
+            // between two ads the next one is not marked yet: its number already
+            title.append(' ').append(if (ended) minOf(position + 1, length) else position).append('/').append(length)
+        }
+        val progress = when {
+            times != null && !ended -> {
+                title.append(" · ").append(maxOf(1L, (times.end - now + 999) / 1000)).append(" s")
+                ((now - times.start).toFloat() / (times.end - times.start)).coerceIn(0f, 1f)
+            }
+            ended && position > 0 && length > 0 -> 0f
             else -> null
         }
+        return AdblockInfo(title.toString(), source, progress)
     }
 
     /** Keeps the quality of the backup player in line with the quality chosen for the main one. */
@@ -3531,6 +3595,9 @@ class ExoPlayerService : BasePlaybackService() {
         // autoplay first, like the default video swap list
         /** A backup of the ad blocker that is a custom proxy (its playlist address in the player type). */
         private const val AD_PROXY_PLATFORM = "xtra_custom_proxy"
+        /** Time between the end of the last ad and the stream back, measured on the previous breaks (ms). */
+        private const val AD_RETURN_DELAY = "tv_ad_return_delay"
+        private const val DEFAULT_AD_RETURN_DELAY = 8000L
 
         private val ADBLOCK_PLAYER_TYPES = listOf(
             "android" to "autoplay",

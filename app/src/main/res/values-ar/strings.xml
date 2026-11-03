@@ -947,4 +947,9 @@
     <string name="tv_color_coral">مرجاني</string>
     <string name="tv_color_lavender">خزامي</string>
     <string name="tv_color_white">أبيض</string>
+    <string name="tv_adblock_ad_preroll">إعلان قبل البث</string>
+    <string name="tv_adblock_ad_midroll">إعلان أثناء البث</string>
+    <string name="tv_adblock_ad">إعلان</string>
+    <string name="tv_adblock_back_live">العودة إلى البث المباشر…</string>
+    <string name="tv_adblock_on_hold">قيد الانتظار</string>
 </resources>

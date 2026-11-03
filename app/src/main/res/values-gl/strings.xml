@@ -947,4 +947,9 @@
     <string name="tv_color_coral">Coral</string>
     <string name="tv_color_lavender">Lavanda</string>
     <string name="tv_color_white">Branco</string>
+    <string name="tv_adblock_ad_preroll">Anuncio pre-roll</string>
+    <string name="tv_adblock_ad_midroll">Anuncio mid-roll</string>
+    <string name="tv_adblock_ad">Anuncio</string>
+    <string name="tv_adblock_back_live">Volvendo ao directo…</string>
+    <string name="tv_adblock_on_hold">en espera</string>
 </resources>	

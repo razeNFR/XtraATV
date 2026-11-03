@@ -947,4 +947,9 @@
     <string name="tv_color_coral">Коралловый</string>
     <string name="tv_color_lavender">Лавандовый</string>
     <string name="tv_color_white">Белый</string>
+    <string name="tv_adblock_ad_preroll">Реклама pre-roll</string>
+    <string name="tv_adblock_ad_midroll">Реклама mid-roll</string>
+    <string name="tv_adblock_ad">Реклама</string>
+    <string name="tv_adblock_back_live">Возврат к эфиру…</string>
+    <string name="tv_adblock_on_hold">ожидание</string>
 </resources>
