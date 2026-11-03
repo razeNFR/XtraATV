@@ -2,7 +2,6 @@
 
 ### New
 - **Statistics page**: OK on the stats card of the home. Time by day, top streamers and categories, viewing hours, records, ads blocked. 7 days, 30 days or all time.
-- **Channel page**: big banner, live ring on the avatar, buttons over it.
 - **Settings in two columns**: categories on the left, settings on the right. New "Ads and proxies" category.
 
 ### Pages
@@ -12,6 +11,7 @@
 
 ### Changes
 - Shorter sort button ("Viewers ↓").
+- Channel page: notifications, share and download as icons (the bell is full when the notifications are on).
 - Smaller title in the player.
 - Chat delay on Auto by default.
 - "UI" renamed "Interface", "Navigation tabs" renamed "Navigation panel".

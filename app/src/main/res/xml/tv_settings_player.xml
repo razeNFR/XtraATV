@@ -17,11 +17,5 @@
         <Preference android:key="player_button_settings" android:title="@string/player_buttons" app:iconSpaceReserved="false" app:singleLineTitle="false" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/tv_settings_cat_background" app:iconSpaceReserved="false">
-
-        <SwitchPreferenceCompat android:defaultValue="true" android:key="player_picture_in_picture" android:title="@string/picture_in_picture" app:iconSpaceReserved="false" app:singleLineTitle="false" />
-
-        <SwitchPreferenceCompat android:defaultValue="true" android:key="player_background_audio" android:title="@string/use_background_audio" app:iconSpaceReserved="false" app:singleLineTitle="false" />
-    </PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>

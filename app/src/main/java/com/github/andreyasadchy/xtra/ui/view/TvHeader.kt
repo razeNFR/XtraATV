@@ -32,8 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.Key
@@ -85,16 +83,13 @@ object TvHeader {
         /** Right after the tabs: refresh. */
         val afterTabs: List<Action>,
         val right: List<Action>,
-        /** Channel page: its banner and whether it is live (red ring around the avatar). */
-        val banner: android.graphics.Bitmap? = null,
-        val live: Boolean = false,
     ) {
         fun same(other: Snapshot?): Boolean {
-            return other != null && other.image === image && other.banner === banner && other.live == live && other.title == title && other.subtitle == subtitle && other.stats == stats &&
+            return other != null && other.image === image && other.title == title && other.subtitle == subtitle && other.stats == stats &&
                     other.left.map { it.key + it.label } == left.map { it.key + it.label } &&
                     other.tabs.map { it.label + it.selected } == tabs.map { it.label + it.selected } &&
                     other.afterTabs.map { it.key } == afterTabs.map { it.key } &&
-                    other.right.map { it.key + it.label } == right.map { it.key + it.label }
+                    other.right.map { it.key + it.label + it.icon } == right.map { it.key + it.label + it.icon }
         }
     }
 
@@ -262,7 +257,15 @@ object TvHeader {
             for (i in 0 until menu.size()) {
                 val item = menu.getItem(i)
                 if (item.isVisible && !item.title.isNullOrBlank() && item.itemId != R.id.search && item.itemId != R.id.settings && item.itemId != R.id.login && item.itemId != R.id.followButton && right.size < 3) {
-                    right.add(Action("menu${item.itemId}", item.title.toString(), null) { menu.performIdentifierAction(item.itemId, 0) })
+                    // channel page: notifications, share and download as icons only (a full bell when on), the row
+                    // stays on the screen with all its tabs
+                    val icon = when (item.itemId) {
+                        R.id.toggleNotifications -> if (item.title?.toString() == context.getString(R.string.disable_notifications)) R.drawable.tv_ic_bell else R.drawable.tv_ic_bell_outline
+                        R.id.share -> R.drawable.tv_ic_share
+                        R.id.download -> R.drawable.tv_ic_download
+                        else -> null
+                    }
+                    right.add(Action("menu${item.itemId}", if (icon != null) "" else item.title.toString(), icon) { menu.performIdentifierAction(item.itemId, 0) })
                 }
             }
         }
@@ -271,22 +274,7 @@ object TvHeader {
             val filters = sortBar.findViewById<TextView>(R.id.filtersText)?.takeIf { it.visibility == View.VISIBLE }?.text?.toString()?.takeIf { it.isNotBlank() }
             right.add(Action("sort", listOfNotNull(sortText?.let { compactSort(context, it) } ?: context.getString(R.string.sort), filters).joinToString(" · "), R.drawable.baseline_sort_black_24) { sortBar.performClick() })
         }
-        val banner = if (isChannel) {
-            appBar.findViewById<ImageView?>(R.id.bannerImage)?.takeIf { visible(it) }?.let { bannerView ->
-                bannerView.drawable?.takeIf { it.intrinsicWidth > 0 && it.intrinsicHeight > 0 }?.let {
-                    try {
-                        (bannerView.getTag(R.id.tvHeaderCompose) as? Pair<*, *>)?.takeIf { pair -> pair.first === it }?.second as? android.graphics.Bitmap
-                            ?: it.toBitmap(it.intrinsicWidth.coerceAtMost(1280), it.intrinsicHeight.coerceAtMost(480)).also { bitmap ->
-                                bannerView.setTag(R.id.tvHeaderCompose, it to bitmap)
-                            }
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
-            }
-        } else null
-        val live = isChannel && visible(appBar.findViewById(R.id.viewers))
-        return Snapshot(image, isChannel, title, subtitle, stats, left, tabs, afterTabs, right, banner, live)
+        return Snapshot(image, isChannel, title, subtitle, stats, left, tabs, afterTabs, right)
     }
 
     /**
@@ -340,34 +328,8 @@ object TvHeader {
 
     @Composable
     private fun Header(snapshot: Snapshot, firstRequester: FocusRequester, appBar: AppBarLayout) {
-        // channel page: the big banner while the list of the page is at its top, folded down to the title line once
-        // the list scrolls (more videos in sight); never changed while the header has the focus (it would lose it)
-        var expanded by remember { mutableStateOf(true) }
-        var headerFocused by remember { mutableStateOf(false) }
-        if (snapshot.roundImage) {
-            androidx.compose.runtime.LaunchedEffect(Unit) {
-                while (true) {
-                    kotlinx.coroutines.delay(250L)
-                    if (!headerFocused) {
-                        val grid = TvUi.findVisibleGrid(screenRoot(appBar))
-                        val atTop = grid == null || !grid.canScrollVertically(-1)
-                        if (expanded != atTop) {
-                            expanded = atTop
-                        }
-                    }
-                }
-            }
-        }
-        val bannerMode = snapshot.roundImage && expanded
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .onFocusChanged { state -> headerFocused = state.hasFocus }
-                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp)
-        ) {
-            if (bannerMode) {
-                ChannelBanner(snapshot, firstRequester, appBar)
-            } else Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 snapshot.image?.let { bitmap ->
                     Image(
                         bitmap = bitmap.asImageBitmap(),
@@ -397,8 +359,7 @@ object TvHeader {
                 Clock()
             }
             Spacer(Modifier.height(10.dp))
-            val left = if (bannerMode) emptyList() else snapshot.left
-            val all = left + snapshot.tabs + snapshot.afterTabs + snapshot.right
+            val all = snapshot.left + snapshot.tabs + snapshot.afterTabs + snapshot.right
             Row(
                 Modifier.onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -415,13 +376,13 @@ object TvHeader {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 all.forEachIndexed { index, action ->
-                    if (index == left.size + snapshot.tabs.size + snapshot.afterTabs.size && snapshot.right.isNotEmpty()) {
+                    if (index == snapshot.left.size + snapshot.tabs.size + snapshot.afterTabs.size && snapshot.right.isNotEmpty()) {
                         Spacer(Modifier.weight(1f))
                     }
                     Pill(
                         action = action,
-                        isTab = index >= left.size && index < left.size + snapshot.tabs.size,
-                        modifier = (if (index == 0 && !bannerMode) Modifier.focusRequester(firstRequester) else Modifier).onPreviewKeyEvent { event ->
+                        isTab = index >= snapshot.left.size && index < snapshot.left.size + snapshot.tabs.size,
+                        modifier = (if (index == 0) Modifier.focusRequester(firstRequester) else Modifier).onPreviewKeyEvent { event ->
                             // left on the first action: the side menu
                             if (index == 0 && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
                                 findActivity(appBar)?.openTvMenu()
@@ -435,107 +396,6 @@ object TvHeader {
             }
         }
     }
-
-    /**
-     * Channel page: the banner of the channel wide, darker towards the texts, the avatar (red ring when live), the
-     * name, the counts, the title and the category, and the actions (watch, follow) over it.
-     */
-    @Composable
-    private fun ChannelBanner(snapshot: Snapshot, firstRequester: FocusRequester, appBar: AppBarLayout) {
-        androidx.compose.foundation.layout.Box(
-            Modifier
-                .fillMaxWidth()
-                .height(236.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(TvColors.accent.copy(alpha = 0.45f), Color(0xFF1F1733))))
-        ) {
-            snapshot.banner?.let { bitmap ->
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize()
-                )
-            }
-            androidx.compose.foundation.layout.Box(
-                Modifier.matchParentSize().background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0x59141318), Color(0x8C1E1630), Color(0xF2141318)))
-                )
-            )
-            androidx.compose.foundation.layout.Box(
-                Modifier.matchParentSize().background(
-                    androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xE61F1733), Color(0x4D1F1733), Color.Transparent))
-                )
-            )
-            androidx.compose.foundation.layout.Box(Modifier.align(Alignment.TopEnd).padding(16.dp)) { Clock() }
-            Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    snapshot.image?.let { bitmap ->
-                        androidx.compose.foundation.layout.Box(contentAlignment = Alignment.BottomCenter) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(78.dp)
-                                    .clip(CircleShape)
-                                    .then(if (snapshot.live) Modifier.border(3.dp, Color(0xFFE91916), CircleShape) else Modifier)
-                            )
-                            if (snapshot.live) {
-                                Text(
-                                    appBar.context.getString(R.string.tv_live_badge),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier
-                                        .padding(bottom = 0.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(Color(0xFFE91916))
-                                        .padding(horizontal = 6.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(18.dp))
-                    }
-                    Column(Modifier.weight(1f)) {
-                        if (snapshot.title != null) {
-                            Text(snapshot.title, fontSize = 34.sp, fontWeight = FontWeight.Black, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        if (snapshot.stats != null) {
-                            Text(snapshot.stats, fontSize = 14.sp, color = Color(0xD9FFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-                if (snapshot.subtitle != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(snapshot.subtitle, fontSize = 14.sp, color = Color(0xE6FFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 640.dp))
-                }
-                if (snapshot.left.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    Row(
-                        Modifier.onPreviewKeyEvent { event ->
-                            event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp
-                        },
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        snapshot.left.forEachIndexed { index, action ->
-                            Pill(
-                                action = action,
-                                isTab = false,
-                                modifier = (if (index == 0) Modifier.focusRequester(firstRequester) else Modifier).onPreviewKeyEvent { event ->
-                                    if (index == 0 && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
-                                        findActivity(appBar)?.openTvMenu()
-                                        true
-                                    } else false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
 
     @Composable
     private fun Pill(action: Action, isTab: Boolean, modifier: Modifier) {
@@ -592,9 +452,11 @@ object TvHeader {
                     tint = if (turning && !focused) TvColors.accent else content,
                     modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = rotation }
                 )
-                Spacer(Modifier.width(10.dp))
+                if (action.label.isNotEmpty()) {
+                    Spacer(Modifier.width(10.dp))
+                }
             }
-            Text(
+            if (action.label.isNotEmpty()) Text(
                 action.label,
                 fontSize = 15.sp,
                 fontWeight = if (isTab && action.selected || !isTab) FontWeight.SemiBold else FontWeight.Normal,
