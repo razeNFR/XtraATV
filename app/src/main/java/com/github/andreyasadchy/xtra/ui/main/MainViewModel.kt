@@ -1192,6 +1192,17 @@ class MainViewModel(
         }
     }
 
+    /** 1.2.9: a public proxy added to the lists of the users who already have the app, once, at the end. */
+    fun addDefaultProxy(url: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val proxies = playerRepository.getCustomProxies()
+            val host = url.substringBefore('/')
+            if (proxies.none { it.url?.contains(host, true) == true }) {
+                playerRepository.saveCustomProxy(CustomProxy(url, true, (proxies.maxOfOrNull { it.position } ?: -1) + 1, true))
+            }
+        }
+    }
+
     fun updateProxies(oldProxy: String?) {
         viewModelScope.launch(Dispatchers.IO) {
             playerRepository.saveCustomProxies(
@@ -1200,6 +1211,7 @@ class MainViewModel(
                     Pair("eu2.luminous.dev/live/\$channel", true),
                     Pair("eu3.luminous.dev/live/\$channel", true),
                     Pair("as.luminous.dev/live/\$channel", true),
+                    Pair(NADEKO_PROXY, true),
                     Pair("lb-eu.cdn-perfprod.com/live/\$channel", true),
                     Pair("lb-eu2.cdn-perfprod.com/live/\$channel", true),
                     Pair("lb-eu3.cdn-perfprod.com/live/\$channel", true),
@@ -1273,6 +1285,9 @@ class MainViewModel(
     }
 
     companion object {
+        /** Public proxy of nadeko, in the default list since 1.2.9. */
+        const val NADEKO_PROXY = "twitch-al.nadeko.net/live/\$channel"
+
         val MainViewModelFactory = viewModelFactory {
             initializer {
                 val application = (this[APPLICATION_KEY] as XtraApp)

@@ -2903,5 +2903,14 @@ class MainActivity : AppCompatActivity() {
                 putInt(C.SETTINGS_VERSION, 17)
             }
         }
+        if (version < 18) {
+            // the lists made before 1.2.9 get the proxy of nadeko (a new list already has it)
+            if (version >= 14) {
+                viewModel.addDefaultProxy(MainViewModel.NADEKO_PROXY)
+            }
+            prefs.edit {
+                putInt(C.SETTINGS_VERSION, 18)
+            }
+        }
     }
 }
