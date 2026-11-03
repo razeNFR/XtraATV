@@ -17,6 +17,8 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
         if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
             // settings that only make sense on a touch screen phone or tablet: hidden before the list is shown, they no longer flash
             TV_HIDDEN_KEYS.forEach { findPreference<Preference>(it)?.isVisible = false }
+            // an icon in front of each setting, to find one at a glance
+            preferenceScreen?.let { TvSettingIcons.apply(it) }
         }
     }
 
@@ -79,6 +81,14 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
                 view.findViewById<android.widget.TextView>(android.R.id.summary)?.let {
                     val color = if (focused) focusedSummary else summary
                     if (it.currentTextColor != color) it.setTextColor(color)
+                }
+                // the icon of the setting: light grey, the ambiance color on the white of the focused row
+                view.findViewById<android.widget.ImageView>(android.R.id.icon)?.let {
+                    val color = if (focused) com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight else 0xCCFFFFFF.toInt()
+                    if (it.getTag(com.github.andreyasadchy.xtra.R.id.tvSettingIconTint) != color) {
+                        it.setTag(com.github.andreyasadchy.xtra.R.id.tvSettingIconTint, color)
+                        it.imageTintList = android.content.res.ColorStateList.valueOf(color)
+                    }
                 }
             }
         }
