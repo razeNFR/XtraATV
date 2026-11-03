@@ -917,4 +917,9 @@
     <string name="tv_badge_top_week">今週いちばん見た配信者：%1$s</string>
     <string name="tv_badge_ads_week">今週ブロックした広告：%1$d</string>
     <string name="tv_badge_streams_today">今日開いた配信：%1$d</string>
+    <string name="tv_proxy_mode">使い方</string>
+    <string name="tv_proxy_mode_always">常に</string>
+    <string name="tv_proxy_mode_ads">広告中のみ</string>
+    <string name="tv_proxies_1440p">公開プロキシは1080pまでです。1440pには1440pを配信するプロキシを使うか、「広告中のみ」を選ぶと広告以外で1440pになります。</string>
+    <string name="tv_adblock_summary_1440p">広告中は広告のない配信に切り替えます。1440pは使えます。広告の間は画質が下がることがあります。</string>
 </resources>

@@ -830,6 +830,16 @@ class ExoPlayerService : BasePlaybackService() {
                             it.enabled && !it.url.isNullOrBlank()
                         }.sortedBy { it.position }
                     }
+                    // option: the custom proxies only while an ad plays, the stream itself straight from Twitch (low
+                    // latency, 1440p): they are the first backups of the ad blocker, back to the stream once the ad is over
+                    val adsOnlyProxies = if (useCustomProxy && prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1") {
+                        useCustomProxy = false
+                        channelLogin?.let { login ->
+                            customProxyList.orEmpty().mapIndexedNotNull { index, proxy ->
+                                customProxyUrl(proxy, login)?.let { url -> VideoSwap(AD_PROXY_PLATFORM, url, index) }
+                            }
+                        }.orEmpty()
+                    } else emptyList()
                     if (useStreamProxy) {
                         streamProxyList = xtraModule.playerRepository.getStreamProxies().filter {
                             it.enabled && !it.host.isNullOrBlank() && it.port != null
@@ -838,9 +848,9 @@ class ExoPlayerService : BasePlaybackService() {
                     }
                     val adblock = prefs().getBoolean(C.PLAYER_ADBLOCK, true)
                     // the ad blocker also backs up the proxies: if an ad still comes through them, the playlist of another player type is used
-                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, true)) || adblock
+                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, true)) || adblock || adsOnlyProxies.isNotEmpty()
                     if (useVideoSwap) {
-                        videoSwapList = xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
+                        videoSwapList = adsOnlyProxies + xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
                             it.enabled && !it.platform.isNullOrBlank() && !it.playerType.isNullOrBlank()
                         }.sortedBy { it.position }.ifEmpty {
                             // ad blocker: like the VAFT userscript, switch to the playlist of another player type while ads play
@@ -998,39 +1008,7 @@ class ExoPlayerService : BasePlaybackService() {
             } else null
             if (restart || qualities.isNullOrEmpty()) {
                 val proxyUrl = if (useCustomProxy) {
-                    customProxyList?.getOrNull(currentCustomProxy)?.let { proxy ->
-                        proxy.url?.let { proxyUrl ->
-                            (proxyUrl.toUri().takeIf { it.host != null } ?: "https://$proxyUrl".toUri()).let { uri ->
-                                if (proxy.addQueryParams) {
-                                    val source = uri.getQueryParameter("allow_source") == null
-                                    val audio = uri.getQueryParameter("allow_audio_only") == null
-                                    val lowLatency = uri.getQueryParameter("fast_bread") == null
-                                    val unavailable = uri.getQueryParameter("include_unavailable") == null
-                                    val supportedCodecs = prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264")
-                                    val codecs = !supportedCodecs.isNullOrBlank() && uri.getQueryParameter("supported_codecs") == null
-                                    if (source || audio || lowLatency || unavailable || codecs) {
-                                        uri.buildUpon().apply {
-                                            if (source) {
-                                                appendQueryParameter("allow_source", "true")
-                                            }
-                                            if (audio) {
-                                                appendQueryParameter("allow_audio_only", "true")
-                                            }
-                                            if (lowLatency) {
-                                                appendQueryParameter("fast_bread", "true")
-                                            }
-                                            if (unavailable) {
-                                                appendQueryParameter("include_unavailable", "true")
-                                            }
-                                            if (codecs) {
-                                                appendQueryParameter("supported_codecs", supportedCodecs)
-                                            }
-                                        }.build()
-                                    } else uri
-                                } else uri
-                            }.toString().replace("\$channel", channelLogin)
-                        }
-                    }
+                    customProxyList?.getOrNull(currentCustomProxy)?.let { proxy -> customProxyUrl(proxy, channelLogin) }
                 } else null
                 if (proxyUrl != null) {
                     playlistUrl = proxyUrl
@@ -1811,7 +1789,10 @@ class ExoPlayerService : BasePlaybackService() {
                 videoSwapList?.getOrNull(currentVideoSwapItem)
             } else null
             // statistics of the home: proxy or backup player type used
-            com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this@ExoPlayerService, streamProxy?.host ?: videoSwap?.playerType)
+            com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(
+                this@ExoPlayerService,
+                streamProxy?.host ?: videoSwap?.let { if (it.platform == AD_PROXY_PLATFORM) it.playerType?.toUri()?.host?.removePrefix("www.") else it.playerType }
+            )
             val playerListener = object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     // the backup player plays: the system sees the playback going on
@@ -1902,7 +1883,8 @@ class ExoPlayerService : BasePlaybackService() {
                 quality?.url
             } else {
                 if (videoSwap != null) {
-                    val playlistUrl = channelLogin?.let { channelLogin ->
+                    // a custom proxy while the ad plays: its playlist, else the playlist of another player type
+                    val playlistUrl = if (videoSwap.platform == AD_PROXY_PLATFORM) videoSwap.playerType else channelLogin?.let { channelLogin ->
                         try {
                             xtraModule.playerRepository.loadStreamPlaylistUrl(
                                 context = this@ExoPlayerService,
@@ -2254,9 +2236,45 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
+    /** The playlist address of a custom proxy for [channelLogin], with the parameters of Twitch added when asked. */
+    private fun customProxyUrl(proxy: CustomProxy, channelLogin: String): String? {
+        return proxy.url?.let { proxyUrl ->
+                    (proxyUrl.toUri().takeIf { it.host != null } ?: "https://$proxyUrl".toUri()).let { uri ->
+                        if (proxy.addQueryParams) {
+                            val source = uri.getQueryParameter("allow_source") == null
+                            val audio = uri.getQueryParameter("allow_audio_only") == null
+                            val lowLatency = uri.getQueryParameter("fast_bread") == null
+                            val unavailable = uri.getQueryParameter("include_unavailable") == null
+                            val supportedCodecs = prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264")
+                            val codecs = !supportedCodecs.isNullOrBlank() && uri.getQueryParameter("supported_codecs") == null
+                            if (source || audio || lowLatency || unavailable || codecs) {
+                                uri.buildUpon().apply {
+                                    if (source) {
+                                        appendQueryParameter("allow_source", "true")
+                                    }
+                                    if (audio) {
+                                        appendQueryParameter("allow_audio_only", "true")
+                                    }
+                                    if (lowLatency) {
+                                        appendQueryParameter("fast_bread", "true")
+                                    }
+                                    if (unavailable) {
+                                        appendQueryParameter("include_unavailable", "true")
+                                    }
+                                    if (codecs) {
+                                        appendQueryParameter("supported_codecs", supportedCodecs)
+                                    }
+                                }.build()
+                            } else uri
+                        } else uri
+                    }.toString().replace("\$channel", channelLogin)
+        }
+    }
+
     private fun startVideoSwap() {
         videoSwapActive = true
-        serviceListener?.toast(R.string.starting_video_swap, Toast.LENGTH_SHORT)
+        val adProxy = videoSwapList?.getOrNull(currentVideoSwapItem)?.platform == AD_PROXY_PLATFORM
+        serviceListener?.toast(if (adProxy) R.string.starting_proxy else R.string.starting_video_swap, Toast.LENGTH_SHORT)
         player?.let { player ->
             if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
@@ -3392,6 +3410,9 @@ class ExoPlayerService : BasePlaybackService() {
         }
 
         // autoplay first, like the default video swap list
+        /** A backup of the ad blocker that is a custom proxy (its playlist address in the player type). */
+        private const val AD_PROXY_PLATFORM = "xtra_custom_proxy"
+
         private val ADBLOCK_PLAYER_TYPES = listOf(
             "android" to "autoplay",
             "web" to "embed",

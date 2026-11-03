@@ -917,4 +917,9 @@
     <string name="tv_badge_top_week">%1$s, o máis visto esta semana</string>
     <string name="tv_badge_ads_week">%1$d anuncios bloqueados esta semana</string>
     <string name="tv_badge_streams_today">%1$d streams abertos hoxe</string>
+    <string name="tv_proxy_mode">Uso</string>
+    <string name="tv_proxy_mode_always">Sempre</string>
+    <string name="tv_proxy_mode_ads">Durante os anuncios</string>
+    <string name="tv_proxies_1440p">Os proxys públicos chegan ata 1080p. Para 1440p, usa un proxy que o emita ou escolle \"Durante os anuncios\" para telo fóra dos anuncios.</string>
+    <string name="tv_adblock_summary_1440p">Durante un anuncio, cambia a un fluxo sen anuncios. O 1440p funciona; a calidade pode baixar mentres dura o anuncio.</string>
 </resources>	

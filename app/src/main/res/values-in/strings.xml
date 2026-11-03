@@ -918,4 +918,9 @@
     <string name="tv_badge_top_week">%1$s, paling sering ditonton minggu ini</string>
     <string name="tv_badge_ads_week">%1$d iklan diblokir minggu ini</string>
     <string name="tv_badge_streams_today">%1$d stream dibuka hari ini</string>
+    <string name="tv_proxy_mode">Penggunaan</string>
+    <string name="tv_proxy_mode_always">Selalu</string>
+    <string name="tv_proxy_mode_ads">Saat iklan</string>
+    <string name="tv_proxies_1440p">Proxy publik maksimal 1080p. Untuk 1440p, gunakan proxy yang menyiarkannya, atau pilih \"Saat iklan\" agar 1440p tetap di luar iklan.</string>
+    <string name="tv_adblock_summary_1440p">Saat iklan, beralih ke stream tanpa iklan. 1440p berfungsi; kualitas bisa turun selama iklan.</string>
 </resources>

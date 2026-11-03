@@ -80,6 +80,7 @@ object TvProxyPanel {
     ) {
         val entries = mutableStateListOf<Entry>().apply { addAll(proxies.sortedBy { it.position }.map { Entry(it) }) }
         val original = proxies.sortedBy { it.position }.map { it.id to it.enabled }
+        val modeBefore = context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0")
         val dialog = TvDialogs.show(context) { dismiss ->
             SidePanel(title = context.getString(R.string.tv_proxy_panel_title), subtitle = context.getString(R.string.tv_proxy_panel_subtitle), width = if (manage != null) 500.dp else 440.dp, scrollable = true) {
                 val first = remember { FocusRequester() }
@@ -101,8 +102,16 @@ object TvProxyPanel {
                             TvListPanel.Switch(useProxies)
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
                 }
+                // the proxies for the whole stream, or only while an ad plays (the stream itself from Twitch)
+                SelectorRow(
+                    context.getString(R.string.tv_proxy_mode),
+                    listOf(context.getString(R.string.tv_proxy_mode_always), context.getString(R.string.tv_proxy_mode_ads)),
+                    if (context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1") 1 else 0,
+                ) {
+                    context.prefs().edit { putString(C.PLAYER_CUSTOM_PROXY_MODE, it.toString()) }
+                }
+                Spacer(Modifier.height(8.dp))
                 entries.forEachIndexed { index, entry ->
                     androidx.compose.runtime.key(entry) {
                         // the status, checked again when the url changes
@@ -175,7 +184,8 @@ object TvProxyPanel {
         }
         dialog.setOnDismissListener {
             val now = entries.map { it.proxy.id to it.enabled }
-            if (now == original) {
+            // the mode changed: as a change of the list (the stream starts again with it)
+            if (now == original && context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == modeBefore) {
                 onClosed(null)
             } else {
                 onClosed(entries.mapIndexed { index, entry ->

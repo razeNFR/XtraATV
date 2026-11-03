@@ -917,4 +917,9 @@
     <string name="tv_badge_top_week">%1$s — самый просматриваемый за неделю</string>
     <string name="tv_badge_ads_week">Заблокировано реклам за неделю: %1$d</string>
     <string name="tv_badge_streams_today">Открыто трансляций сегодня: %1$d</string>
+    <string name="tv_proxy_mode">Использование</string>
+    <string name="tv_proxy_mode_always">Всегда</string>
+    <string name="tv_proxy_mode_ads">Во время рекламы</string>
+    <string name="tv_proxies_1440p">Публичные прокси ограничены 1080p. Для 1440p используйте прокси, который его передаёт, или выберите «Во время рекламы», чтобы получать 1440p вне рекламы.</string>
+    <string name="tv_adblock_summary_1440p">Во время рекламы переключается на поток без рекламы. 1440p работает; качество может снизиться на время рекламы.</string>
 </resources>

@@ -917,4 +917,9 @@
     <string name="tv_badge_top_week">%1$s، الأكثر مشاهدة هذا الأسبوع</string>
     <string name="tv_badge_ads_week">%1$d إعلانات محظورة هذا الأسبوع</string>
     <string name="tv_badge_streams_today">%1$d بثوث فُتحت اليوم</string>
+    <string name="tv_proxy_mode">الاستخدام</string>
+    <string name="tv_proxy_mode_always">دائمًا</string>
+    <string name="tv_proxy_mode_ads">أثناء الإعلانات</string>
+    <string name="tv_proxies_1440p">البروكسيات العامة تتوقف عند 1080p. للحصول على 1440p استخدم بروكسيًا يبثّه، أو اختر \"أثناء الإعلانات\" لتحصل عليه خارج الإعلانات.</string>
+    <string name="tv_adblock_summary_1440p">أثناء الإعلان، ينتقل إلى بث بلا إعلانات. يعمل 1440p؛ قد تنخفض الجودة طوال مدة الإعلان.</string>
 </resources>

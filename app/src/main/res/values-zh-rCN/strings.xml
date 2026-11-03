@@ -917,4 +917,9 @@
     <string name="tv_badge_top_week">%1$s，本周你看得最多</string>
     <string name="tv_badge_ads_week">本周已拦截 %1$d 个广告</string>
     <string name="tv_badge_streams_today">今天打开了 %1$d 个直播</string>
+    <string name="tv_proxy_mode">使用方式</string>
+    <string name="tv_proxy_mode_always">始终</string>
+    <string name="tv_proxy_mode_ads">仅在广告期间</string>
+    <string name="tv_proxies_1440p">公共代理最高 1080p。要 1440p，请使用支持它的代理，或选择“仅在广告期间”，广告以外即可获得 1440p。</string>
+    <string name="tv_adblock_summary_1440p">广告期间切换到无广告的流。1440p 可用；广告期间画质可能会降低。</string>
 </resources>

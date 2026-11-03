@@ -191,6 +191,55 @@ class SettingsActivity : AppCompatActivity() {
         updateTvCategoryRows()
     }
 
+    /** The row of the right column that had the focus last, back to it with right from the categories. */
+    private var tvLastRightRow: java.lang.ref.WeakReference<View>? = null
+
+    /**
+     * TV: left from the settings on the right goes back to the category shown (not to the nearest row of the left
+     * column), right from it back to the row it came from; down on the last row stays there.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (TvUi.isTv(this) && event.action == android.view.KeyEvent.ACTION_DOWN && tvCategoryRows.isNotEmpty()) {
+            val focused = currentFocus ?: return super.dispatchKeyEvent(event)
+            val list = findListOf(focused)
+            when (event.keyCode) {
+                // a row with several buttons (the full screen of the proxies) or a slider keeps left for itself
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (list != null && focused.findViewById<android.widget.SeekBar>(androidx.preference.R.id.seekbar) == null &&
+                    android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_LEFT) == null
+                ) {
+                    tvLastRightRow = java.lang.ref.WeakReference(focused)
+                    tvCategoryRows.getOrNull(tvCategory)?.requestFocus()
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (focused in tvCategoryRows) {
+                    val last = tvLastRightRow?.get()?.takeIf { it.isAttachedToWindow && it.isShown && it.isFocusable }
+                    if (last != null && last.requestFocus()) {
+                        return true
+                    }
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (list != null && !list.canScrollVertically(1) &&
+                    android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_DOWN) == null
+                ) {
+                    return true
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    /** The list of settings on the right that holds [view], null for the views outside of it. */
+    private fun findListOf(view: View): androidx.recyclerview.widget.RecyclerView? {
+        val host = binding.navHostFragment
+        var current: android.view.ViewParent? = view.parent
+        while (current != null && current !== host) {
+            if (current is androidx.recyclerview.widget.RecyclerView) {
+                return current
+            }
+            current = current.parent
+        }
+        return null
+    }
+
     private fun updateTvCategoryRows() {
         tvCategoryRows.forEachIndexed { index, row ->
             row.isActivated = index == tvCategory
@@ -934,8 +983,13 @@ class SettingsActivity : AppCompatActivity() {
                 val count = repository.getCustomProxies().size
                 if (!isAdded) return@launch
                 val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
-                preference.summary = getString(if (on) R.string.tv_proxies_on else R.string.tv_proxies_off) + " · " +
-                    if (count == 1) getString(R.string.tv_proxies_count_one) else getString(R.string.tv_proxies_count, count)
+                val adsOnly = requireContext().prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1"
+                // on / off, when (whole stream or ads only), how many; then what they change for the 1440p
+                preference.summary = listOfNotNull(
+                    getString(if (on) R.string.tv_proxies_on else R.string.tv_proxies_off),
+                    getString(if (adsOnly) R.string.tv_proxy_mode_ads else R.string.tv_proxy_mode_always).lowercase(),
+                    if (count == 1) getString(R.string.tv_proxies_count_one) else getString(R.string.tv_proxies_count, count),
+                ).joinToString(" · ") + "\n" + getString(R.string.tv_proxies_1440p)
             }
         }
     }

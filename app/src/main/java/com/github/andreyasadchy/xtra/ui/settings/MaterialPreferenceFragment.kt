@@ -57,17 +57,8 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
         listView.clipToPadding = false
         // the rows draw their own focus, not the frame of the other lists
         listView.setTag(com.github.andreyasadchy.xtra.R.id.tvRowsHighlighted, true)
-        // down on the last row: the focus stays there (left goes back to the categories of the settings)
-        val stayAtBottom = android.view.View.OnKeyListener { row, keyCode, event ->
-            keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN &&
-                !listView.canScrollVertically(1) &&
-                android.view.FocusFinder.getInstance().findNextFocus(listView, row, android.view.View.FOCUS_DOWN) == null
-        }
         val styleRow = { view: android.view.View ->
             keepDisabledRowFocusable(view)
-            if (view.getTag(com.github.andreyasadchy.xtra.R.id.tvSettingsRowBackground) == null) {
-                view.setOnKeyListener(stayAtBottom)
-            }
             if (view.isFocusable) {
                 val background = view.getTag(com.github.andreyasadchy.xtra.R.id.tvSettingsRowBackground) as? android.graphics.drawable.Drawable
                 if (background == null || view.background !== background) {

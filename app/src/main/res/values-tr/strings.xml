@@ -918,4 +918,9 @@
     <string name="tv_badge_top_week">%1$s, bu hafta en çok izlediğin</string>
     <string name="tv_badge_ads_week">Bu hafta %1$d reklam engellendi</string>
     <string name="tv_badge_streams_today">Bugün %1$d yayın açıldı</string>
+    <string name="tv_proxy_mode">Kullanım</string>
+    <string name="tv_proxy_mode_always">Her zaman</string>
+    <string name="tv_proxy_mode_ads">Reklamlarda</string>
+    <string name="tv_proxies_1440p">Herkese açık proxy\'ler 1080p ile sınırlı. 1440p için onu yayınlayan bir proxy kullan ya da reklamlar dışında 1440p için \"Reklamlarda\" seçeneğini seç.</string>
+    <string name="tv_adblock_summary_1440p">Reklam sırasında reklamsız bir yayına geçer. 1440p çalışır; reklam süresince kalite düşebilir.</string>
 </resources>
