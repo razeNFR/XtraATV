@@ -89,7 +89,7 @@ object TvHeader {
                     other.left.map { it.key + it.label } == left.map { it.key + it.label } &&
                     other.tabs.map { it.label + it.selected } == tabs.map { it.label + it.selected } &&
                     other.afterTabs.map { it.key } == afterTabs.map { it.key } &&
-                    other.right.map { it.key + it.label } == right.map { it.key + it.label }
+                    other.right.map { it.key + it.label + it.icon } == right.map { it.key + it.label + it.icon }
         }
     }
 
@@ -257,16 +257,54 @@ object TvHeader {
             for (i in 0 until menu.size()) {
                 val item = menu.getItem(i)
                 if (item.isVisible && !item.title.isNullOrBlank() && item.itemId != R.id.search && item.itemId != R.id.settings && item.itemId != R.id.login && item.itemId != R.id.followButton && right.size < 3) {
-                    right.add(Action("menu${item.itemId}", item.title.toString(), null) { menu.performIdentifierAction(item.itemId, 0) })
+                    // channel page: notifications, share and download as icons only (a full bell when on), the row
+                    // stays on the screen with all its tabs
+                    val icon = when (item.itemId) {
+                        R.id.toggleNotifications -> if (item.title?.toString() == context.getString(R.string.disable_notifications)) R.drawable.tv_ic_bell else R.drawable.tv_ic_bell_outline
+                        R.id.share -> R.drawable.tv_ic_share
+                        R.id.download -> R.drawable.tv_ic_download
+                        else -> null
+                    }
+                    right.add(Action("menu${item.itemId}", if (icon != null) "" else item.title.toString(), icon) { menu.performIdentifierAction(item.itemId, 0) })
                 }
             }
         }
         appBar.findViewById<View>(R.id.sortBar)?.takeIf { visible(it) }?.let { sortBar ->
             val sortText = sortBar.findViewById<TextView>(R.id.sortText)?.text?.toString()?.takeIf { it.isNotBlank() }
             val filters = sortBar.findViewById<TextView>(R.id.filtersText)?.takeIf { it.visibility == View.VISIBLE }?.text?.toString()?.takeIf { it.isNotBlank() }
-            right.add(Action("sort", listOfNotNull(sortText ?: context.getString(R.string.sort), filters).joinToString(" · "), R.drawable.baseline_sort_black_24) { sortBar.performClick() })
+            right.add(Action("sort", listOfNotNull(sortText?.let { compactSort(context, it) } ?: context.getString(R.string.sort), filters).joinToString(" · "), R.drawable.baseline_sort_black_24) { sortBar.performClick() })
         }
         return Snapshot(image, isChannel, title, subtitle, stats, left, tabs, afterTabs, right)
+    }
+
+    /**
+     * The sort pill short: "Sort by: Viewers (descending)" -> "Viewers ↓", "Sort by: Last broadcast. Order: Descending"
+     * -> "Last broadcast ↓", "Sort by: Time. Period: Week" -> "Time · Week" (the icon of the pill says it is the sort).
+     */
+    private fun compactSort(context: android.content.Context, text: String): String {
+        val descending = context.getString(R.string.descending)
+        val ascending = context.getString(R.string.ascending)
+        fun arrow(order: String): String? = when {
+            order.trim().equals(descending, true) -> "↓"
+            order.trim().equals(ascending, true) -> "↑"
+            else -> null
+        }
+        fun match(res: Int): MatchResult? {
+            val format = Regex.escape(context.getString(res))
+                .replace("%1\$s", "\\E(.+?)\\Q")
+                .replace("%2\$s", "\\E(.+?)\\Q")
+            return runCatching { Regex("^$format$").find(text.trim()) }.getOrNull()
+        }
+        // "Viewers (descending)" -> "Viewers ↓"
+        fun criterion(value: String): String {
+            val inBrackets = Regex("^(.+?)\\s*\\((.+)\\)$").find(value.trim())
+            return inBrackets?.let { found -> arrow(found.groupValues[2])?.let { "${found.groupValues[1]} $it" } } ?: value.trim()
+        }
+        match(R.string.sort_and_order)?.let { return "${criterion(it.groupValues[1])} ${arrow(it.groupValues[2]) ?: it.groupValues[2].trim()}" }
+        match(R.string.sort_and_period)?.let { return "${criterion(it.groupValues[1])} · ${it.groupValues[2].trim()}" }
+        match(R.string.sort_and_type)?.let { return "${criterion(it.groupValues[1])} · ${it.groupValues[2].trim()}" }
+        match(R.string.sort_by)?.let { return criterion(it.groupValues[1]) }
+        return text
     }
 
     @Composable
@@ -414,9 +452,11 @@ object TvHeader {
                     tint = if (turning && !focused) TvColors.accent else content,
                     modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = rotation }
                 )
-                Spacer(Modifier.width(10.dp))
+                if (action.label.isNotEmpty()) {
+                    Spacer(Modifier.width(10.dp))
+                }
             }
-            Text(
+            if (action.label.isNotEmpty()) Text(
                 action.label,
                 fontSize = 15.sp,
                 fontWeight = if (isTab && action.selected || !isTab) FontWeight.SemiBold else FontWeight.Normal,

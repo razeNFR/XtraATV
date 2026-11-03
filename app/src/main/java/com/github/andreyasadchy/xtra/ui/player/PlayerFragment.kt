@@ -2396,7 +2396,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     update(C.TV_CHAT_OPACITY, it)
                 }
                 // delay of the live chat: off, auto (the latency of the stream) or 1 to 60 s
-                val delayMode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getString(C.CHAT_DELAY_MODE, "0")?.toIntOrNull()?.coerceIn(0, 2) ?: 0) }
+                val delayMode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull()?.coerceIn(0, 2) ?: 1) }
                 com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
                     getString(R.string.tv_chat_delay),
                     listOf(getString(R.string.tv_chat_delay_off), getString(R.string.tv_chat_delay_auto), getString(R.string.tv_chat_delay_manual)),

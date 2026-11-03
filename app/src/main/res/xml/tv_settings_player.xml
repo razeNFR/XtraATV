@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV settings, one category of the left column (same keys as the root screen: its actions are the same) -->
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/tv_settings_cat_playback" app:iconSpaceReserved="false">
+
+        <Preference android:key="player_settings" android:title="@string/player_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+        <Preference android:key="playback_settings" android:title="@string/playback_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+        <Preference android:key="buffer_settings" android:title="@string/buffer_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/tv_settings_cat_buttons" app:iconSpaceReserved="false">
+
+        <Preference android:key="player_button_settings" android:title="@string/player_buttons" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+    </PreferenceCategory>
+
+
+</androidx.preference.PreferenceScreen>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV settings, one category of the left column (same keys as the root screen: its actions are the same) -->
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Preference
+        android:key="tv_1440p_warning"
+        android:layout="@layout/tv_preference_warning"
+        android:selectable="false"
+        android:title="@string/tv_1440p_warning" />
+
+    <PreferenceCategory android:title="@string/adblock" app:iconSpaceReserved="false">
+
+        <Preference android:key="adblock_settings" android:summary="@string/adblock_summary" android:title="@string/adblock" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/tv_settings_cat_proxies" app:iconSpaceReserved="false">
+
+        <Preference android:key="custom_proxy_settings" android:title="@string/tv_proxy_panel_title" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat android:defaultValue="false" android:key="player_use_stream_proxy" android:title="@string/use_stream_proxies" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+        <Preference android:key="stream_proxy_settings" android:title="@string/proxy_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+    </PreferenceCategory>
+
+</androidx.preference.PreferenceScreen>

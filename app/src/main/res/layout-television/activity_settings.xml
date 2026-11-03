@@ -54,33 +54,67 @@
             android:layout_width="@dimen/tv_settings_side_width"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:paddingTop="24dp"
-            android:paddingEnd="40dp">
+            android:paddingTop="12dp"
+            android:paddingEnd="32dp">
 
-            <ImageView
-                android:id="@+id/tvSettingsIcon"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:layout_marginBottom="20dp"
-                android:src="@drawable/tv_ic_settings"
-                app:tint="?attr/colorPrimary" />
-
-            <TextView
-                android:id="@+id/tvSettingsTitle"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="@android:color/white"
-                android:textSize="34sp"
-                android:textStyle="bold" />
+                android:layout_marginBottom="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="6dp">
 
-            <TextView
-                android:id="@+id/tvSettingsSubtitle"
+                <ImageView
+                    android:id="@+id/tvSettingsIcon"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:layout_marginEnd="12dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/tv_ic_settings"
+                    app:tint="?attr/colorPrimary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tvSettingsTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="@android:color/white"
+                        android:textSize="24sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvSettingsSubtitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/app_name"
+                        android:textColor="#B3FFFFFF"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- the categories of the settings: the one shown is marked, its settings are on the right -->
+            <androidx.core.widget.NestedScrollView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="@string/app_name"
-                android:textColor="#B3FFFFFF"
-                android:textSize="16sp" />
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:paddingBottom="@dimen/tv_overscan_vertical"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/tvSettingsCategories"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </androidx.core.widget.NestedScrollView>
 
         </LinearLayout>
 

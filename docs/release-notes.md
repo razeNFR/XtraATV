@@ -1,15 +1,22 @@
-# Xtra TV 1.2.6
+# Xtra TV 1.2.7
 
 ### New
-- **Chat delay** (chat panel of the player and chat settings, off at first, kept for all the streams once set): the stream is often a few seconds behind the chat, which can spoil what is coming.
-  - **Auto** follows the latency of the stream: each message shows up with the moment it is about. It uses the times of Twitch (not the clock of the TV) and follows the delay when it changes (another stream, a proxy, a pause). In multi-stream, each chat follows its own stream. The panel shows the delay measured.
-  - **Manual**: a slider from 1 to 60 s.
-  - Your own messages show up at once, the recent messages loaded with the stream are not delayed, the delay never goes over 60 s, and when the latency is not known the chat shows its messages without delay (it never gets stuck).
+- **Statistics page**: OK on the stats card of the home. Time by day, top streamers and categories, viewing hours, records, ads blocked. 7 days, 30 days or all time.
+- **Settings in two columns**: categories on the left, settings on the right. New "Ads and proxies" category.
 
-- **Back from a multi-stream**: a multi-stream made from a stream goes back to that stream instead of closing everything. When it is no longer live: the stream with the focus, else the first one that plays (a message says so); if none plays, the multi-stream closes like before. Made from the home, it closes like before.
+### Pages
+- **Categories**: wide cards, whole box art, 4 by row.
+- **Followed channels**: avatar grid. Live first, favorites on top with a star, last live as "2 hours ago".
+- **Home**: live duration on the stream cards.
 
 ### Changes
-- **Chat panel icon**: a chat bubble with a gear, so it is clearly the settings of the chat.
+- Shorter sort button ("Viewers ↓").
+- Channel page: notifications, share and download as icons (the bell is full when the notifications are on).
+- Smaller title in the player.
+- Chat delay on Auto by default.
+- Chat: the "Replying to…" line is shorter, and can be hidden in the chat settings.
+- "UI" renamed "Interface", "Navigation tabs" renamed "Navigation panel".
+- About 80 texts that were still in English are now translated.
 
 ### Install
-Download `XtraTV-1.2.6-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.2.7-tv.apk` below and install it over the previous version, your settings and account are kept.

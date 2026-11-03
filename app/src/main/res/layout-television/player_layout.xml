@@ -53,7 +53,7 @@
                 android:shadowDy="2"
                 android:shadowRadius="6"
                 android:textColor="@android:color/white"
-                android:textSize="28sp"
+                android:textSize="18sp"
                 android:textStyle="bold"
                 android:visibility="gone"
                 tools:text="Stream title"

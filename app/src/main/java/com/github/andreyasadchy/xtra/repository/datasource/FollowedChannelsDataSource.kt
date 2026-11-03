@@ -23,9 +23,14 @@ class FollowedChannelsDataSource(
     private val helixRepository: HelixRepository,
     private val enableIntegrity: Boolean,
     private val networkLibrary: String?,
+    /** TV: the channels live first (the favorites first, then by viewers), then the favorites, then the others. */
+    private val liveFirst: Boolean = false,
+    private val favorites: List<String> = emptyList(),
 ) : PagingSource<Int, User>() {
     private var api: String? = null
     private var offset: String? = null
+    /** TV: the channels already shown first as live, left out of the next pages. */
+    private var liveIds: Set<String> = emptySet()
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, User> {
         return if (!offset.isNullOrBlank()) {
@@ -59,7 +64,7 @@ class FollowedChannelsDataSource(
                 }
             }
             LoadResult.Page(
-                data = list,
+                data = if (liveIds.isEmpty()) list else list.filter { it.id !in liveIds },
                 prevKey = null,
                 nextKey = result?.nextKey
             )
@@ -198,11 +203,45 @@ class FollowedChannelsDataSource(
                 }
             }
             LoadResult.Page(
-                data = sorted,
+                data = if (liveFirst) liveFirst(sorted) else sorted,
                 prevKey = null,
                 nextKey = result?.nextKey
             )
         }
+    }
+
+    /** TV: the followed channels live (from the live follows of the account) first, then the favorites, then the rest. */
+    private suspend fun liveFirst(sorted: List<User>): List<User> {
+        val favoriteIndex = { login: String? -> favorites.indexOf(login).takeIf { it >= 0 } ?: Int.MAX_VALUE }
+        val live = if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+            try {
+                graphQLRepository.loadQueryUserFollowedStreams(networkLibrary, gqlHeaders, 100, null)
+                    .data?.user?.followedLiveUsers?.edges?.mapNotNull { edge ->
+                        edge?.node?.let { node ->
+                            val known = sorted.find { it.id == node.id }
+                            User(
+                                id = node.id,
+                                login = node.login,
+                                name = node.displayName,
+                                profileImageURL = node.profileImageURL ?: known?.profileImageURL,
+                                lastBroadcast = known?.lastBroadcast,
+                                followedAt = known?.followedAt,
+                                accountFollow = true,
+                                localFollow = known?.localFollow == true,
+                                liveGame = node.stream?.game?.displayName,
+                                liveViewers = node.stream?.viewersCount ?: 0,
+                            )
+                        }
+                    }.orEmpty()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } else emptyList()
+        liveIds = live.mapNotNull { it.id }.toSet()
+        val liveSorted = live.sortedWith(compareBy<User> { favoriteIndex(it.login) }.thenByDescending { it.liveViewers ?: 0 })
+        // a stable sort: the favorites first in their order, the others keep the order of the sort
+        val rest = sorted.filter { it.id !in liveIds }.sortedBy { favoriteIndex(it.login) }
+        return liveSorted + rest
     }
 
     private suspend fun loadFromApi(params: LoadParams<Int>): LoadResult<Int, User> {

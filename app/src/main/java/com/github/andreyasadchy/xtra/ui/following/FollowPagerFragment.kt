@@ -49,6 +49,9 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
 
     private var pendingTab = -1
 
+    /** A tab shown alone (asked from the side menu, not among the tabs of the screen), kept when the screen comes back. */
+    private var standaloneTab: String? = null
+
     override fun onViewStateRestored(savedInstanceState: Bundle?) {
         super.onViewStateRestored(savedInstanceState)
         val index = pendingTab
@@ -148,7 +151,10 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
             }
             // TV: opened from an entry of the side menu (videos, channels, categories of the followed channels); a tab
             // hidden in the settings is shown alone, the settings stay as they are
-            val requested = requestedTab?.also { requestedTab = null }?.takeIf { it != "2" || showVideosTab }
+            // a tab asked from the side menu that is not among the tabs of the screen (Followed channels...) is the
+            // only page of the screen: it stays so when the screen comes back (back from a channel opened from it)
+            val requested = (requestedTab?.also { requestedTab = null } ?: standaloneTab)?.takeIf { it != "2" || showVideosTab }
+            standaloneTab = requested?.takeIf { it !in enabledTabs }
             val tabs = if (requested != null && requested !in enabledTabs) listOf(requested) else enabledTabs
             if (tabs.size <= 1) {
                 tabLayout.visibility = View.GONE
