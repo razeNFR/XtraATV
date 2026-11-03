@@ -70,6 +70,8 @@ class XtraApp : Application(), SingletonImageLoader.Factory {
                 logger(DebugLogger())
             }
             components {
+                // a stream thumbnail Twitch has not made yet (grey picture): the picture of the channel instead
+                add(com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.PreviewInterceptor { xtraModule.okHttpClient.value })
                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
                 when {
                     networkLibrary == C.HTTP_ENGINE && xtraModule.httpEngine.value != null -> @SuppressLint("NewApi") {

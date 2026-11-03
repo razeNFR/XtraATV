@@ -72,6 +72,7 @@ import com.github.andreyasadchy.xtra.model.ui.CustomProxy
 import com.github.andreyasadchy.xtra.model.ui.StreamProxy
 import com.github.andreyasadchy.xtra.model.ui.Video
 import com.github.andreyasadchy.xtra.model.ui.VideoSwap
+import com.github.andreyasadchy.xtra.ui.tv.TvProxyStatus
 import com.github.andreyasadchy.xtra.player.lowlatency.CronetDataSource
 import com.github.andreyasadchy.xtra.player.lowlatency.HlsPlaylistParser
 import com.github.andreyasadchy.xtra.player.lowlatency.HttpEngineDataSource
@@ -855,6 +856,14 @@ class ExoPlayerService : BasePlaybackService() {
                         }.sortedBy { it.position }.ifEmpty {
                             // ad blocker: like the VAFT userscript, switch to the playlist of another player type while ads play
                             if (adblock) ADBLOCK_PLAYER_TYPES.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, index) } else emptyList()
+                        }
+                    }
+                    // the custom proxies used while the ad plays are checked meanwhile: the offline ones are not tried
+                    adsOnlyProxies.mapNotNull { swap -> swap.playerType?.let { url -> adProxyHost(swap)?.let { it to url } } }.forEach { (host, url) ->
+                        lifecycleScope.launch {
+                            if (!TvProxyStatus.reachable(this@ExoPlayerService, url)) {
+                                TvProxyStatus.markFailed(host)
+                            }
                         }
                     }
                     loadStream(restorePauseState)
@@ -1811,6 +1820,15 @@ class ExoPlayerService : BasePlaybackService() {
                     }
                 }
 
+                override fun onPlayerError(error: PlaybackException) {
+                    // the backup (a custom proxy that stopped answering in the middle of the ad...) fails: the next one
+                    if (videoSwap != null && videoSwapActive && generation == streamGeneration && channelLogin == login &&
+                        videoSwapList?.getOrNull(currentVideoSwapItem) === videoSwap) {
+                        adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
+                        nextVideoSwap()
+                    }
+                }
+
                 override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                     val playlist = (secondaryPlayer?.currentManifest as? HlsManifest)?.mediaPlaylist
                     val ads = checkPlaylist(playlist)
@@ -1837,24 +1855,7 @@ class ExoPlayerService : BasePlaybackService() {
                                     }
                                 }
                             }
-                            videoSwapActive -> {
-                                currentVideoSwapItem += 1
-                                if (videoSwapList?.getOrNull(currentVideoSwapItem) != null) {
-                                    secondaryPlayerTimerJob?.cancel()
-                                    secondaryPlayerTimerJob = lifecycleScope.launch {
-                                        delay(3.minutes)
-                                        videoSwapActive = false
-                                        serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
-                                        stopSecondaryPlayer2()
-                                        secondaryPlayerTimerJob = null
-                                    }
-                                    startSecondaryPlayer(false)
-                                } else {
-                                    stopVideoSwap = true
-                                    serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
-                                    stopSecondaryPlayer()
-                                }
-                            }
+                            videoSwapActive -> nextVideoSwap()
                         }
                     }
                 }
@@ -2228,7 +2229,13 @@ class ExoPlayerService : BasePlaybackService() {
                 if (previous != null && previous !== player) {
                     previous.release()
                 }
+            } else if (generation == streamGeneration && videoSwap != null && videoSwapActive && channelLogin == login) {
+                // its playlist did not load (a custom proxy offline...): the next backup, like when the ad comes through
+                player.release()
+                adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
+                nextVideoSwap()
             } else if (generation == streamGeneration) {
+                player.release()
                 stopSecondaryPlayer()
             } else {
                 player.release()
@@ -2272,6 +2279,12 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     private fun startVideoSwap() {
+        skipFailedAdProxies()
+        if (videoSwapList?.getOrNull(currentVideoSwapItem) == null) {
+            // every backup tried (custom proxies offline...): the ad plays
+            stopVideoSwap = true
+            return
+        }
         videoSwapActive = true
         val adProxy = videoSwapList?.getOrNull(currentVideoSwapItem)?.platform == AD_PROXY_PLATFORM
         serviceListener?.toast(if (adProxy) R.string.starting_proxy else R.string.starting_video_swap, Toast.LENGTH_SHORT)
@@ -2292,6 +2305,39 @@ class ExoPlayerService : BasePlaybackService() {
             secondaryPlayerTimerJob = null
         }
         startSecondaryPlayer(false)
+    }
+
+    /** The backup of the ad blocker failed or let the ad through: the next one (custom proxies known offline skipped), else none. */
+    private fun nextVideoSwap() {
+        currentVideoSwapItem += 1
+        skipFailedAdProxies()
+        if (videoSwapList?.getOrNull(currentVideoSwapItem) != null) {
+            secondaryPlayerTimerJob?.cancel()
+            secondaryPlayerTimerJob = lifecycleScope.launch {
+                delay(3.minutes)
+                videoSwapActive = false
+                serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
+                stopSecondaryPlayer2()
+                secondaryPlayerTimerJob = null
+            }
+            startSecondaryPlayer(false)
+        } else {
+            stopVideoSwap = true
+            serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
+            stopSecondaryPlayer()
+        }
+    }
+
+    /** Host of a custom proxy used while the ad plays, null for a player type of Twitch. */
+    private fun adProxyHost(videoSwap: VideoSwap): String? {
+        return if (videoSwap.platform == AD_PROXY_PLATFORM) videoSwap.playerType?.toUri()?.host?.removePrefix("www.") else null
+    }
+
+    /** The custom proxies known offline (checked at the start of the stream, or failed a moment ago) are not tried. */
+    private fun skipFailedAdProxies() {
+        while (videoSwapList?.getOrNull(currentVideoSwapItem)?.let { adProxyHost(it) }?.let { TvProxyStatus.isFailed(it) } == true) {
+            currentVideoSwapItem += 1
+        }
     }
 
     /** True while the backup player of the ad blocker shows the picture. */
@@ -2352,7 +2398,9 @@ class ExoPlayerService : BasePlaybackService() {
             else -> null
         }
         val source = when {
-            videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.playerType ?: "backup"
+            videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
+                adProxyHost(swap)?.let { TvProxyStatus.displayName(it) } ?: swap.playerType
+            } ?: "backup"
             proxyMediaPlaylist -> "proxy"
             else -> null
         }

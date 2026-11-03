@@ -45,6 +45,49 @@ object TvProxyStatus {
         online
     }
 
+    private const val FAILED_KEEP_MS = 10 * 60_000L
+
+    private val failed = HashMap<String, Long>()
+
+    /**
+     * Player: whether a custom proxy can be reached at all (its "/ping" answers, whatever it says). Only no answer (no
+     * connection, timeout) counts as offline: a proxy without "/ping" is still tried.
+     */
+    suspend fun reachable(context: Context, proxyUrl: String): Boolean = withContext(Dispatchers.IO) {
+        val module = (context.applicationContext as XtraApp).xtraModule
+        val url = (proxyUrl.toUri().takeIf { it.host != null } ?: "https://$proxyUrl".toUri()).buildUpon().apply {
+            path("ping")
+            clearQuery()
+        }.build().toString()
+        try {
+            module.okHttpClient.value.newBuilder().callTimeout(5, java.util.concurrent.TimeUnit.SECONDS).build()
+                .newCall(Request.Builder().url(url).build()).executeAsync().use { true }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Player: a custom proxy offline or failing, not tried again for 10 minutes. */
+    fun markFailed(host: String) {
+        synchronized(failed) { failed[host] = System.currentTimeMillis() }
+    }
+
+    fun isFailed(host: String): Boolean = synchronized(failed) {
+        failed[host]?.let { System.currentTimeMillis() - it < FAILED_KEEP_MS } == true
+    }
+
+    /**
+     * Short name of a custom proxy for the status of the ad blocker: "eu.luminous.dev" gives "Proxy EU Luminous",
+     * "twitch-al.nadeko.net" gives "Proxy Nadeko".
+     */
+    fun displayName(host: String): String {
+        val parts = host.removePrefix("www.").split('.').filter { it.isNotBlank() }
+        if (parts.size < 2) return "Proxy $host"
+        val name = parts[parts.size - 2].replaceFirstChar { it.uppercase() }
+        val region = parts.first().takeIf { parts.size > 2 && it.length <= 3 }?.uppercase()
+        return listOfNotNull("Proxy", region, name).joinToString(" ")
+    }
+
     /** A proxy edited or added: its status is checked again. */
     fun forget(proxyUrl: String?) {
         synchronized(results) { results.remove(proxyUrl) }

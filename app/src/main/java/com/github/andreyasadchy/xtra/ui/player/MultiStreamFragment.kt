@@ -677,7 +677,7 @@ class MultiStreamFragment : Fragment() {
             val stream = tile.stream
             com.github.andreyasadchy.xtra.ui.tv.TvLoadingPicture.show(
                 picture, login,
-                stream.thumbnail?.takeUnless { com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream) || stream.thumbnailURL.isNullOrBlank() },
+                stream.thumbnail?.also { com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.remember(stream) }?.takeUnless { stream.thumbnailURL.isNullOrBlank() },
                 stream.channelImage, viewLifecycleOwner.lifecycleScope
             ) { view != null && tile in tiles && tile.stream.channelLogin == login && (tile.texture?.alpha ?: 1f) < 1f }
         }

@@ -3394,11 +3394,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 val queueSize = (activity as? MainActivity)?.streamQueue?.size ?: 0
-                if (isTv && playbackService?.type == BasePlaybackService.STREAM && (!binding.playerControls.root.isVisible || hudPeek) &&
+                if (isTv && playbackService?.type == BasePlaybackService.STREAM &&
+                    (!binding.playerControls.root.isVisible || hudPeek || !binding.playerControls.root.hasFocus()) &&
                     requireContext().prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
                 ) {
                     // option: HUD hidden, left / right go to the previous / next streamer of the list the stream comes from,
-                    // the timeline is only used once the D-pad is on it
+                    // the timeline is only used once the D-pad is on it (the HUD opened with OK or down has the focus; the info
+                    // of a switch going away does not, left / right still change the streamer then)
                     if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                         if (queueSize > 1) {
                             (activity as? MainActivity)?.switchStream(if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)

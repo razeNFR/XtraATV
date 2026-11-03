@@ -2014,10 +2014,11 @@ class MainActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
         if (isTv && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
             // the picture of the stream instead of a black screen while it loads: the newest one there is
-            val fresh = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream)
+            // a thumbnail Twitch has not made yet is replaced by the picture of the channel (TvThumbnails)
+            com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.remember(stream)
             com.github.andreyasadchy.xtra.ui.player.PlayerFragment.pendingLoadingPicture = com.github.andreyasadchy.xtra.ui.player.PlayerFragment.Companion.LoadingPicture(
                 stream.channelLogin,
-                stream.thumbnail?.takeUnless { fresh || stream.thumbnailURL.isNullOrBlank() },
+                stream.thumbnail?.takeUnless { stream.thumbnailURL.isNullOrBlank() },
                 stream.channelImage,
             )
         }
@@ -2091,8 +2092,9 @@ class MainActivity : AppCompatActivity() {
             .distinctBy { it.channelLogin }
         val loader = coil3.SingletonImageLoader.get(this)
         neighbors.forEach { stream ->
-            val fresh = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream)
-            val thumbnail = stream.thumbnail?.takeUnless { fresh || stream.thumbnailURL.isNullOrBlank() }
+            // a thumbnail Twitch has not made yet is replaced by the picture of the channel (TvThumbnails)
+            com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.remember(stream)
+            val thumbnail = stream.thumbnail?.takeUnless { stream.thumbnailURL.isNullOrBlank() }
             listOfNotNull(
                 com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.withStamp(thumbnail, com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.minute()),
                 stream.channelImage,
