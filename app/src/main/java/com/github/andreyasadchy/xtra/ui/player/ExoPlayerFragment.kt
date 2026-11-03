@@ -405,6 +405,8 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun getAdblockStatus() = playbackService?.getAdblockStatus()
 
+    override fun getAdblockProgress() = playbackService?.getAdblockProgress()
+
     // the main stream only: the backup player of the ad blocker is only there for a moment
     override fun getVideoFrameRate() = playbackService?.player?.videoFormat?.let { format ->
         format.frameRate.takeIf { format.height > 0 && it > 0f }

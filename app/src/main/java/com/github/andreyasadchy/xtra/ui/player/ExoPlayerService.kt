@@ -290,6 +290,16 @@ class ExoPlayerService : BasePlaybackService() {
                             val ads = checkPlaylist(playlist, mainPlayer = true)
                             val oldValue = playingAds
                             playingAds = ads
+                            // the end of the ad break, estimated from the marks of Twitch, for the bar of the badge
+                            if (ads) {
+                                if (!oldValue) {
+                                    adBreakStartedAt = System.currentTimeMillis()
+                                    adBreakEndsAt = 0L
+                                }
+                                updateAdBreakEnd(playlist)
+                            } else {
+                                adBreakEndsAt = 0L
+                            }
                             checkStreamPictureShown()
                             if (ads) {
                                 if (!oldValue) {
@@ -1728,6 +1738,46 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** The first playlist of the stream had an ad: a pre-roll. */
     private var firstPlaylistAd = false
+
+    /** Start of the ad break being blocked and its estimated end (0: not known), in the time of the device. */
+    private var adBreakStartedAt = 0L
+    private var adBreakEndsAt = 0L
+
+    /**
+     * End of the ad break, from the marks of Twitch in the playlist (EXT-X-DATERANGE of the stitched ads: start, length,
+     * position in the break and number of ads), counted from the live edge of the playlist, so the clock of the device
+     * does not matter. Nothing when the marks are not there: the badge has no bar then.
+     */
+    private fun updateAdBreakEnd(playlist: HlsMediaPlaylist?) {
+        playlist ?: return
+        if (!playlist.hasProgramDateTime) return
+        val last = playlist.segments.lastOrNull() ?: return
+        val liveEdge = (playlist.startTimeUs + last.relativeStartTimeUs + last.durationUs) / 1000
+        var end: Long? = null
+        playlist.tags.forEach { tag ->
+            if (tag.startsWith("#EXT-X-DATERANGE") && tag.contains("stitched-ad", true)) {
+                val start = Regex("START-DATE=\"([^\"]+)\"").find(tag)?.groupValues?.get(1)
+                    ?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                val duration = Regex("(?<![A-Z-])DURATION=([\\d.]+)").find(tag)?.groupValues?.get(1)?.toDoubleOrNull()
+                val length = Regex("X-TV-TWITCH-AD-POD-LENGTH=\"?(\\d+)").find(tag)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                val position = Regex("X-TV-TWITCH-AD-POD-POSITION=\"?(\\d+)").find(tag)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                if (start != null && duration != null && duration > 0 && length > position) {
+                    val adEnd = start + ((length - position) * duration * 1000).toLong()
+                    end = maxOf(end ?: adEnd, adEnd)
+                }
+            }
+        }
+        val remaining = (end ?: return) - liveEdge
+        if (remaining in 0..300_000) {
+            adBreakEndsAt = System.currentTimeMillis() + remaining
+        }
+    }
+
+    /** How far the ad break being blocked is (0 to 1), null when its end is not known or no ad is blocked. */
+    fun getAdblockProgress(): Float? {
+        if (!playingAds || adBreakEndsAt <= adBreakStartedAt) return null
+        return ((System.currentTimeMillis() - adBreakStartedAt).toFloat() / (adBreakEndsAt - adBreakStartedAt)).coerceIn(0f, 1f)
+    }
 
     /** Kind of the ad being blocked, "preroll" or "midroll", for the badge of the ad blocker. */
     private var adRollType: String? = null

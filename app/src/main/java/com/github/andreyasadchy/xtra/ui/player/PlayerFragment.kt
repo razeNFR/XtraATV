@@ -3065,6 +3065,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     open fun getAdblockStatus(): String? = null
 
+    /** How far the ad break being blocked is (0 to 1), null when its end is not known. */
+    open fun getAdblockProgress(): Float? = null
+
     open fun getVideoFrameRate(): Float? = null
 
     open fun isPlayingOrLoading(): Boolean = false
@@ -3092,10 +3095,38 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    /** The box of the ad blocker, with a thin bar at its bottom: how far the ad break is (estimated), when it is known. */
+    private class AdblockBadge(context: android.content.Context) : TextView(context) {
+        private var progress: Float? = null
+        private val density = context.resources.displayMetrics.density
+        private val track = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFFFFF }
+        private val bar = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+
+        fun setProgress(value: Float?) {
+            if (value != progress) {
+                progress = value
+                invalidate()
+            }
+        }
+
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            super.onDraw(canvas)
+            val value = progress ?: return
+            val left = paddingLeft.toFloat()
+            val right = (width - paddingRight).toFloat()
+            val bottom = height - 3 * density
+            val top = bottom - 2.5f * density
+            val radius = 1.25f * density
+            canvas.drawRoundRect(left, top, right, bottom, radius, radius, track)
+            bar.color = com.github.andreyasadchy.xtra.ui.tv.TvAccent.color
+            canvas.drawRoundRect(left, top, left + (right - left) * value, bottom, radius, radius, bar)
+        }
+    }
+
     /** Small box at the top right while the ad blocker works, like the VAFT userscript. */
     private fun updateAdblockBadge() {
         val status = getAdblockStatus()
-        val badge = tvAdblockView ?: if (status == null) return else TextView(requireContext()).apply {
+        val badge = tvAdblockView ?: if (status == null) return else AdblockBadge(requireContext()).apply {
             setBackgroundResource(R.drawable.tv_chat_overlay_background)
             setTextColor(android.graphics.Color.WHITE)
             textSize = 13f
@@ -3108,6 +3139,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         if (status != null) {
             badge.text = status
+            (badge as? AdblockBadge)?.setProgress(getAdblockProgress())
             badge.visibility = View.VISIBLE
         } else {
             badge.visibility = View.GONE
