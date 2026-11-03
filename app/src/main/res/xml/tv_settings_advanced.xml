@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV settings, one category of the left column (same keys as the root screen: its actions are the same) -->
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <ListPreference
+        android:defaultValue="OkHttp"
+        android:entries="@array/networkLibraryEntries"
+        android:entryValues="@array/networkLibraryEntries"
+        android:key="network_library"
+        android:summary="%s"
+        android:title="@string/network_library"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference android:key="api_token_settings" android:title="@string/api_token_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+    <Preference android:key="debug_settings" android:title="@string/debug_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>

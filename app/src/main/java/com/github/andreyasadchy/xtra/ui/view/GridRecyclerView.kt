@@ -222,7 +222,9 @@ class GridRecyclerView : RecyclerView {
             scheduleFocusCheck()
             val columns = when (adapter) {
                 is GamesAdapter, is FollowedGamesAdapter -> TV_COLUMNS_GAMES
-                is FollowedChannelsAdapter, is ChannelSearchAdapter, is StreamsCompactAdapter, is TeamMembersAdapter -> TV_COLUMNS_CHANNELS
+                // followed channels: big avatars, 6 a row
+                is FollowedChannelsAdapter -> TV_COLUMNS_AVATARS
+                is ChannelSearchAdapter, is StreamsCompactAdapter, is TeamMembersAdapter -> TV_COLUMNS_CHANNELS
                 is RecentSearchAdapter, is FiltersAdapter -> TV_COLUMNS_TEXT
                 // streams, videos and clips: from 2 big cards to 6 small ones a row, from the settings
                 else -> prefs.getString(C.TV_STREAM_COLUMNS, TV_COLUMNS_MEDIA.toString())?.toIntOrNull()?.coerceIn(2, 6) ?: TV_COLUMNS_MEDIA
@@ -615,8 +617,9 @@ class GridRecyclerView : RecyclerView {
 
     companion object {
         private const val TV_COLUMNS_MEDIA = 4
-        private const val TV_COLUMNS_GAMES = 6
+        private const val TV_COLUMNS_GAMES = 4
         private const val TV_COLUMNS_CHANNELS = 3
+        private const val TV_COLUMNS_AVATARS = 6
         private const val TV_COLUMNS_TEXT = 2
     }
 }

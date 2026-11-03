@@ -85,8 +85,21 @@ class GamesAdapter(
                                 target(gameImage)
                             }.build()
                         )
+                        // TV: the box art blurred behind the texts of the wide card
+                        gameBackground?.let { background ->
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                background.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(40f, 40f, android.graphics.Shader.TileMode.CLAMP))
+                            }
+                            fragment.requireContext().imageLoader.enqueue(
+                                ImageRequest.Builder(fragment.requireContext()).apply {
+                                    data(item.boxArt)
+                                    target(background)
+                                }.build()
+                            )
+                        }
                     } else {
                         gameImage.visibility = View.GONE
+                        gameBackground?.setImageDrawable(null)
                     }
                     if (item.name != null) {
                         gameName.visibility = View.VISIBLE
@@ -97,11 +110,16 @@ class GamesAdapter(
                     if (item.viewerCount != null) {
                         viewers.visibility = View.VISIBLE
                         val count = item.viewerCount ?: 0
-                        viewers.text = context.resources.getQuantityString(
-                            R.plurals.viewers,
-                            count,
+                        viewers.text = if (gameBackground != null) {
+                            // TV: the number next to the eye, the word does not fit
                             TwitchApiHelper.formatCount(count, context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
-                        )
+                        } else {
+                            context.resources.getQuantityString(
+                                R.plurals.viewers,
+                                count,
+                                TwitchApiHelper.formatCount(count, context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
+                            )
+                        }
                     } else {
                         viewers.visibility = View.GONE
                     }

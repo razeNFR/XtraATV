@@ -1002,7 +1002,7 @@ class ChatViewModel(
     private var ownUserId: String? = null
 
     /** The live chat waits for the stream: "chat_delay_mode" 0 off, 1 auto, 2 manual ("chat_delay_seconds"). */
-    private fun delayMode() = applicationContext.prefs().getString(C.CHAT_DELAY_MODE, "0")?.toIntOrNull() ?: 0
+    private fun delayMode() = applicationContext.prefs().getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull() ?: 1
 
     suspend fun onMessage(message: ChatMessage) {
         // a message of the live chat (with its time of Twitch), not one of ours: shown when the stream gets there

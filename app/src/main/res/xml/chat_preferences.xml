@@ -125,7 +125,7 @@
         app:singleLineTitle="false" />
 
     <ListPreference
-        android:defaultValue="0"
+        android:defaultValue="1"
         android:entries="@array/chatDelayEntries"
         android:entryValues="@array/chatDelayValues"
         android:key="chat_delay_mode"

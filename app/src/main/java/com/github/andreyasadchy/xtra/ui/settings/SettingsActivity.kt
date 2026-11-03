@@ -95,6 +95,109 @@ class SettingsActivity : AppCompatActivity() {
     private var changed = false
     var searchItem: String? = null
 
+    /** TV: a category of the left column, its first screen ([xml]: the root screen with those preferences). */
+    private class TvCategory(val title: Int, val icon: Int, val destination: Int, val xml: Int = 0)
+
+    private val tvCategories = listOf(
+        TvCategory(R.string.app_name, R.drawable.tv_ic_tv_small, R.id.xtraTvSettingsFragment),
+        TvCategory(R.string.player_settings, R.drawable.tv_ic_play, R.id.settingsFragment, R.xml.tv_settings_player),
+        TvCategory(R.string.chat_settings, R.drawable.tv_ic_chat, R.id.chatSettingsFragment),
+        TvCategory(R.string.ui_settings, R.drawable.tv_ic_view_quilt, R.id.settingsFragment, R.xml.tv_settings_interface),
+        TvCategory(R.string.tv_settings_section_ads, R.drawable.tv_ic_shield, R.id.settingsFragment, R.xml.tv_settings_ads),
+        TvCategory(R.string.download_settings, R.drawable.tv_ic_download, R.id.downloadSettingsFragment),
+        TvCategory(R.string.tv_settings_section_updates, R.drawable.tv_ic_cloud, R.id.settingsFragment, R.xml.tv_settings_updates),
+        TvCategory(R.string.tv_settings_section_advanced, R.drawable.tv_ic_tune, R.id.settingsFragment, R.xml.tv_settings_advanced),
+    )
+    private var tvCategory = 0
+    private var tvNavController: androidx.navigation.NavController? = null
+    private val tvCategoryRows = mutableListOf<android.widget.TextView>()
+    private var tvPendingCategory: Runnable? = null
+
+    private fun openTvCategory(index: Int) {
+        val navController = tvNavController ?: return
+        val category = tvCategories.getOrNull(index) ?: return
+        tvCategory = index
+        updateTvCategoryRows()
+        navController.navigate(
+            category.destination,
+            if (category.xml != 0) androidx.core.os.bundleOf(ARG_TV_XML to category.xml) else null,
+            androidx.navigation.NavOptions.Builder().setPopUpTo(navController.graph.id, true).build()
+        )
+    }
+
+    private fun buildTvCategories() {
+        val container = binding.tvSettingsCategories ?: return
+        container.removeAllViews()
+        tvCategoryRows.clear()
+        val density = resources.displayMetrics.density
+        val focused = intArrayOf(android.R.attr.state_focused)
+        val activated = intArrayOf(android.R.attr.state_activated)
+        val textColors = android.content.res.ColorStateList(
+            arrayOf(focused, activated, intArrayOf()),
+            intArrayOf(com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight, android.graphics.Color.WHITE, 0xB3FFFFFF.toInt())
+        )
+        val iconColors = android.content.res.ColorStateList(
+            arrayOf(focused, activated, intArrayOf()),
+            intArrayOf(com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight, com.github.andreyasadchy.xtra.ui.tv.TvAccent.color, 0xB3FFFFFF.toInt())
+        )
+        fun shape(color: Int) = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 14 * density
+            setColor(color)
+        }
+        tvCategories.forEachIndexed { index, category ->
+            val row = android.widget.TextView(this).apply {
+                text = getString(category.title)
+                textSize = 16f
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setTextColor(textColors)
+                isFocusable = true
+                isClickable = true
+                setPadding((14 * density).toInt(), 0, (12 * density).toInt(), 0)
+                compoundDrawablePadding = (12 * density).toInt()
+                androidx.core.content.ContextCompat.getDrawable(this@SettingsActivity, category.icon)?.mutate()?.let { icon ->
+                    val size = (22 * density).toInt()
+                    icon.setBounds(0, 0, size, size)
+                    setCompoundDrawablesRelative(icon, null, null, null)
+                }
+                androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(this, iconColors)
+                background = android.graphics.drawable.StateListDrawable().apply {
+                    addState(focused, shape(0xFFF2F2F7.toInt()))
+                    addState(activated, shape(0x24FFFFFF))
+                    addState(intArrayOf(), shape(android.graphics.Color.TRANSPARENT))
+                }
+                setOnClickListener {
+                    tvPendingCategory?.let { removeCallbacks(it) }
+                    if (index != tvCategory || tvNavController?.previousBackStackEntry != null) {
+                        openTvCategory(index)
+                    }
+                }
+                // the settings of a category show as soon as it keeps the focus a moment (like the tabs)
+                setOnFocusChangeListener { view, hasFocus ->
+                    tvPendingCategory?.let { view.removeCallbacks(it) }
+                    if (hasFocus && index != tvCategory) {
+                        val pending = Runnable { if (view.hasFocus()) openTvCategory(index) }
+                        tvPendingCategory = pending
+                        view.postDelayed(pending, 350L)
+                    }
+                }
+            }
+            container.addView(row, android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, (44 * density).toInt()).apply {
+                bottomMargin = (4 * density).toInt()
+            })
+            tvCategoryRows.add(row)
+        }
+        updateTvCategoryRows()
+    }
+
+    private fun updateTvCategoryRows() {
+        tvCategoryRows.forEachIndexed { index, row ->
+            row.isActivated = index == tvCategory
+            row.setTypeface(null, if (index == tvCategory) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState?.getBoolean(KEY_CHANGED) == true) {
@@ -150,6 +253,15 @@ class SettingsActivity : AppCompatActivity() {
             true
         })
         binding.toolbar.setupWithNavController(navController, appBarConfiguration)
+        if (TvUi.isTv(this)) {
+            // TV: the categories in the left column, the settings of the one chosen on the right
+            tvNavController = navController
+            tvCategory = savedInstanceState?.getInt(KEY_TV_CATEGORY, 0) ?: 0
+            buildTvCategories()
+            if (savedInstanceState == null) {
+                openTvCategory(0)
+            }
+        }
         // TV: opened from the player on the list of the custom proxies ("All the proxy settings")
         if (savedInstanceState == null && intent?.getStringExtra(EXTRA_OPEN) == OPEN_CUSTOM_PROXIES) {
             navController.navigate(SettingsNavGraphDirections.actionGlobalCustomProxySettingsFragment())
@@ -161,10 +273,19 @@ class SettingsActivity : AppCompatActivity() {
             // Google TV style: the name of the screen in big on the left, the toolbar keeps the back and search buttons
             navController.addOnDestinationChangedListener { _, _, _ ->
                 binding.toolbar.post {
-                    binding.tvSettingsTitle?.text = binding.toolbar.title
+                    // the first screen of a category: its name, a screen opened from it: the name of that screen
+                    binding.tvSettingsTitle?.text = if (navController.previousBackStackEntry == null) {
+                        getString(tvCategories[tvCategory].title)
+                    } else {
+                        binding.toolbar.title
+                    }
                     binding.toolbar.title = null
+                    styleTvToolbarButtons()
                 }
             }
+        }
+        if (TvUi.isTv(this)) {
+            binding.toolbar.post { styleTvToolbarButtons() }
         }
         binding.toolbar.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
@@ -198,6 +319,37 @@ class SettingsActivity : AppCompatActivity() {
                 return false
             }
         })
+    }
+
+    /**
+     * TV: back and search of the toolbar like the buttons of the player, a white disc when focused with the icon in
+     * the ambiance color.
+     */
+    private fun styleTvToolbarButtons() {
+        val tint = android.content.res.ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()),
+            intArrayOf(com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight, android.graphics.Color.WHITE)
+        )
+        fun style(view: View) {
+            when (view) {
+                is android.widget.ImageButton -> {
+                    view.setBackgroundResource(R.drawable.tv_player_button_background)
+                    view.imageTintList = tint
+                }
+                is androidx.appcompat.widget.ActionMenuView -> {
+                    for (i in 0 until view.childCount) {
+                        val item = view.getChildAt(i)
+                        item.setBackgroundResource(R.drawable.tv_player_button_background)
+                        if (item is android.widget.TextView) {
+                            androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(item, tint)
+                        }
+                    }
+                }
+            }
+        }
+        for (i in 0 until binding.toolbar.childCount) {
+            style(binding.toolbar.getChildAt(i))
+        }
     }
 
     /**
@@ -375,13 +527,17 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(KEY_CHANGED, changed)
+        outState.putInt(KEY_TV_CATEGORY, tvCategory)
         super.onSaveInstanceState(outState)
     }
 
     companion object {
         const val KEY_CHANGED = "changed"
+        private const val KEY_TV_CATEGORY = "tvCategory"
         const val EXTRA_OPEN = "open"
         const val OPEN_CUSTOM_PROXIES = "custom_proxies"
+        /** TV: the preferences of a category of the left column, for the root screen. */
+        const val ARG_TV_XML = "tvXml"
     }
 
     class SettingsFragment : MaterialPreferenceFragment() {
@@ -425,7 +581,13 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.root_preferences, rootKey)
+            // TV: one category of the left column (same keys, same actions as the root screen)
+            val tvXml = arguments?.getInt(ARG_TV_XML, 0) ?: 0
+            setPreferencesFromResource(if (tvXml != 0) tvXml else R.xml.root_preferences, rootKey)
+            findPreference<Preference>("adblock_settings")?.setOnPreferenceClickListener {
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalAdblockSettingsFragment())
+                true
+            }
             findPreference<ListPreference>(C.UI_LANGUAGE)?.apply {
                 val lang = AppCompatDelegate.getApplicationLocales()
                 if (lang.isEmpty) {
@@ -543,8 +705,13 @@ class SettingsActivity : AppCompatActivity() {
                             openSettings = { if (isAdded) openScreen() },
                             manage = com.github.andreyasadchy.xtra.ui.tv.TvProxyPanel.Manage(activity.lifecycleScope, repository),
                         ) { changed ->
-                            if (changed != null) {
-                                activity.lifecycleScope.launch { repository.updateCustomProxies(changed) }
+                            activity.lifecycleScope.launch {
+                                if (changed != null) {
+                                    repository.updateCustomProxies(changed)
+                                }
+                                if (isAdded) {
+                                    updateTvProxySummary()
+                                }
                             }
                         }
                     }
@@ -749,6 +916,26 @@ class SettingsActivity : AppCompatActivity() {
                         updateDownloadDialog?.dismiss()
                     }
                 }
+            }
+        }
+        /** TV: the row of the custom proxies says whether they are on and how many there are ("On · 3 proxies"). */
+        override fun onResume() {
+            super.onResume()
+            updateTvProxySummary()
+        }
+
+        fun updateTvProxySummary() {
+            val preference = findPreference<Preference>("custom_proxy_settings") ?: return
+            if (arguments?.getInt(ARG_TV_XML, 0) == 0) {
+                return
+            }
+            val repository = (requireActivity().application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository
+            viewLifecycleOwner.lifecycleScope.launch {
+                val count = repository.getCustomProxies().size
+                if (!isAdded) return@launch
+                val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+                preference.summary = getString(if (on) R.string.tv_proxies_on else R.string.tv_proxies_off) + " · " +
+                    if (count == 1) getString(R.string.tv_proxies_count_one) else getString(R.string.tv_proxies_count, count)
             }
         }
     }

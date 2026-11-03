@@ -20,6 +20,9 @@ class User(
     var followedAt: String? = null,
     var accountFollow: Boolean = false,
     val localFollow: Boolean = false,
+    /** TV, followed channels: the category and the viewers of the stream when the channel is live. */
+    var liveGame: String? = null,
+    var liveViewers: Int? = null,
 ) : Parcelable {
 
     val profileImage: String?

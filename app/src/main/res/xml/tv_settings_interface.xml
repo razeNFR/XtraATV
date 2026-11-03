@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV settings, one category of the left column (same keys as the root screen: its actions are the same) -->
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <ListPreference
+        android:defaultValue="auto"
+        android:entries="@array/languageEntries"
+        android:entryValues="@array/language"
+        android:key="ui_language"
+        android:summary="%s"
+        android:title="@string/language"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference android:key="ui_settings" android:title="@string/tv_settings_display" android:summary="@string/tv_settings_display_summary" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>

@@ -46,6 +46,53 @@ class FollowedChannelsAdapter(
         private val binding: FragmentFollowedChannelsListItemBinding,
         private val fragment: Fragment,
     ) : RecyclerView.ViewHolder(binding.root) {
+        /**
+         * TV: a big avatar, the live channels with a red ring, LIVE and their category with the viewers, the others
+         * with their last live in relative time ("2 hours ago") and the month they were followed. A favorite has a
+         * star, a channel followed only on this TV a small TV.
+         */
+        private fun bindTv(item: User) {
+            with(binding) {
+                val context = fragment.requireContext()
+                val live = item.liveViewers != null
+                userRing?.visibility = if (live) View.VISIBLE else View.INVISIBLE
+                liveBadge?.visibility = if (live) View.VISIBLE else View.GONE
+                favoriteStar?.visibility = if (com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.login)) View.VISIBLE else View.GONE
+                localIcon?.visibility = if (item.localFollow && !item.accountFollow) View.VISIBLE else View.GONE
+                accountText.visibility = View.GONE
+                localText.visibility = View.GONE
+                // the display name only, the login in brackets does not fit under the avatar
+                item.name?.let { username.text = it }
+                if (live) {
+                    userStream.visibility = View.VISIBLE
+                    userStream.setTextColor(0xFFFF8A88.toInt())
+                    val viewers = TwitchApiHelper.formatCount(item.liveViewers ?: 0, context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
+                    userStream.text = listOfNotNull(item.liveGame?.takeIf { it.isNotBlank() }, viewers).joinToString(" · ")
+                    userFollowed.visibility = View.GONE
+                } else {
+                    userStream.setTextColor(0xD9FFFFFF.toInt())
+                    val last = item.lastBroadcast?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } }
+                    if (last != null) {
+                        userStream.visibility = View.VISIBLE
+                        userStream.text = android.text.format.DateUtils.getRelativeTimeSpanString(
+                            last, System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS
+                        ).toString().replaceFirstChar { it.uppercase() }
+                    } else {
+                        userStream.visibility = View.GONE
+                    }
+                    val followed = item.followedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } }
+                    if (followed != null) {
+                        val locale = java.util.Locale.getDefault()
+                        val month = java.text.SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "MMMyyyy"), locale).format(java.util.Date(followed))
+                        userFollowed.visibility = View.VISIBLE
+                        userFollowed.text = context.getString(R.string.tv_followed_since, month)
+                    } else {
+                        userFollowed.visibility = View.GONE
+                    }
+                }
+            }
+        }
+
         fun bind(item: User?) {
             with(binding) {
                 if (item != null) {
@@ -128,6 +175,9 @@ class FollowedChannelsAdapter(
                         localText.visibility = View.VISIBLE
                     } else {
                         localText.visibility = View.GONE
+                    }
+                    if (liveBadge != null) {
+                        bindTv(item)
                     }
                 }
             }

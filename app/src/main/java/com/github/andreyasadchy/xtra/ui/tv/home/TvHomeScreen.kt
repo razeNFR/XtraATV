@@ -113,6 +113,10 @@ class TvHomeActions(
     val formatVideoDuration: (Int) -> String = { "" },
     /** Goes up at each refresh with the button once the rows came: a light sweeps over them. */
     val sweepCount: () -> Int = { 0 },
+    /** OK on the card of the statistics: their page in detail. */
+    val openStats: () -> Unit = {},
+    /** How long a stream is live for its badge ("2 h 39"), null to show none. */
+    val uptime: (com.github.andreyasadchy.xtra.model.ui.Stream) -> String? = { null },
 )
 
 class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int, val icon: Int? = null)
@@ -866,6 +870,22 @@ private fun StreamCard(
                     .height(36.dp)
                     .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0x80000000))))
             )
+            // how long the stream is live, at the bottom right
+            actions.uptime(stream)?.let { uptime ->
+                Text(
+                    uptime,
+                    fontSize = if (small) 10.sp else 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(Color(0xB3000000))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1117,7 +1137,8 @@ private fun StatsCard(stats: TvHomeStats, actions: TvHomeActions) {
                     )
                 )
                 .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(16.dp)) else Modifier)
-                .focusable(interactionSource = interaction)
+                // OK: the page of the statistics in detail
+                .clickable(interactionSource = interaction, indication = null) { actions.openStats() }
                 .padding(horizontal = 20.dp, vertical = 18.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1136,9 +1157,15 @@ private fun StatsCard(stats: TvHomeStats, actions: TvHomeActions) {
                     }
                 }
             }
-            if (stats.subtitle != null) {
-                Spacer(Modifier.height(10.dp))
-                Text(stats.subtitle, fontSize = 12.sp, color = TvColors.secondaryText)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stats.subtitle ?: "", fontSize = 12.sp, color = TvColors.secondaryText, modifier = Modifier.weight(1f))
+                Text(
+                    androidx.compose.ui.platform.LocalContext.current.getString(R.string.tv_stats_open),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (focused) Color.White else TvColors.secondaryText,
+                )
             }
         }
     }

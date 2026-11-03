@@ -194,7 +194,12 @@ class StreamsAdapter(
                         }
                         if (text != null) {
                             uptime.visibility = View.VISIBLE
-                            uptime.text = context.getString(R.string.uptime, text)
+                            // TV: the same short badge as the cards of the home ("2 h 39")
+                            uptime.text = if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                                com.github.andreyasadchy.xtra.ui.tv.TvUptime.format(context, item.createdAt) ?: text
+                            } else {
+                                context.getString(R.string.uptime, text)
+                            }
                         } else {
                             uptime.visibility = View.GONE
                         }

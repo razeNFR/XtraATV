@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV settings, one category of the left column (same keys as the root screen: its actions are the same) -->
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/tv_settings_cat_updates" app:iconSpaceReserved="false">
+
+        <Preference android:key="check_updates" android:title="@string/check_updates" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+        <Preference android:key="update_settings" android:title="@string/update_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/tv_settings_cat_backup" app:iconSpaceReserved="false">
+
+        <Preference android:key="backup_settings" android:title="@string/backup_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+        <Preference android:key="restore_settings" android:title="@string/restore_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+    </PreferenceCategory>
+
+</androidx.preference.PreferenceScreen>

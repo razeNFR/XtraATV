@@ -124,6 +124,12 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             thumbnailStamp = { homeStamp.longValue },
             refreshing = { homeRefreshing.value },
             sweepCount = { homeSweep.intValue },
+            openStats = {
+                activity?.let { com.github.andreyasadchy.xtra.ui.tv.TvStatsPage.show(it) { loadStats() } }
+            },
+            uptime = { stream ->
+                context.takeIf { it.prefs().getBoolean(C.UI_UPTIME, true) }?.let { com.github.andreyasadchy.xtra.ui.tv.TvUptime.format(it, stream.createdAt) }
+            },
             openVideo = { item ->
                 stopPreview()
                 (activity as? MainActivity)?.startVideo(item.toVideo(), item.positionMs)

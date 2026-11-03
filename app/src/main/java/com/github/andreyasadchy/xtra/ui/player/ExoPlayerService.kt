@@ -172,7 +172,7 @@ class ExoPlayerService : BasePlaybackService() {
             while (true) {
                 delay(30_000L)
                 if (player?.isPlaying == true && (type == STREAM || type == VIDEO)) {
-                    com.github.andreyasadchy.xtra.ui.tv.TvStats.addWatchTime(this@ExoPlayerService, channelLogin, channelName, 30_000L)
+                    com.github.andreyasadchy.xtra.ui.tv.TvStats.addWatchTime(this@ExoPlayerService, channelLogin, channelName, 30_000L, gameId, gameName, channelImage)
                 }
                 // the system (and the screensavers of the launchers that look at it) sees a playback going on: its state
                 // is given again now and then, whichever player plays (the backup player of the ad blocker too)
