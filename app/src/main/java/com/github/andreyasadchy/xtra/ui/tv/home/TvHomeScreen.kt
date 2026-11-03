@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.BringIntoViewSpec
@@ -819,6 +820,15 @@ private fun FocusCard(
     }
 }
 
+/** The title of the focused card scrolls slowly when it is too long, after a second (not while going through a row). */
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.titleMarquee(): Modifier = this.basicMarquee(
+    iterations = Int.MAX_VALUE,
+    initialDelayMillis = 1000,
+    repeatDelayMillis = 1500,
+    velocity = 40.dp,
+)
+
 @Composable
 private fun StreamCard(
     width: Dp,
@@ -962,7 +972,15 @@ private fun StreamCard(
                     }
                     Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text(stream.title?.trim() ?: "", fontSize = if (small) 11.sp else 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // the whole title scrolls on the focused card when it is longer than the card
+                Text(
+                    stream.title?.trim() ?: "",
+                    fontSize = if (small) 11.sp else 13.sp,
+                    color = TvColors.secondaryText,
+                    maxLines = 1,
+                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                )
                 if (!stream.gameName.isNullOrBlank()) {
                     Text(stream.gameName ?: "", fontSize = if (small) 11.sp else 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -1113,7 +1131,8 @@ private fun FollowedVideoCard(width: Dp, video: com.github.andreyasadchy.xtra.mo
             fontWeight = FontWeight.SemiBold,
             color = Color.White,
             maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+            modifier = if (focused) Modifier.titleMarquee() else Modifier,
         )
         Text(
             listOfNotNull(video.channelName, video.gameName?.takeIf { it.isNotBlank() }).joinToString(" · "),

@@ -570,6 +570,7 @@ object TvStreamSwitcher {
                     root.isLongClickable = false
                 }
                 root.setOnFocusChangeListener { view, hasFocus ->
+                    com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(title, hasFocus)
                     if (hasFocus) {
                         onFocused?.invoke(holder.bindingAdapterPosition)
                         preview?.schedule(view, stream.channelLogin)

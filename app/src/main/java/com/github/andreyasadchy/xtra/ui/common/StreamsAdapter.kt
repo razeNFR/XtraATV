@@ -122,6 +122,10 @@ class StreamsAdapter(
                     } else {
                         username.visibility = View.GONE
                     }
+                    if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                        root.setOnFocusChangeListener { _, hasFocus -> com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(title, hasFocus) }
+                        com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(title, root.hasFocus())
+                    }
                     val streamTitle = item.title
                     if (!streamTitle.isNullOrBlank()) {
                         title.visibility = View.VISIBLE
