@@ -907,4 +907,6 @@
     <string name="tv_stats_times">%1$d 次</string>
     <string name="tv_chat_show_replies">显示消息回复的内容</string>
     <string name="tv_chat_show_replies_summary">回复上方的简短一行：回复的对象和原消息的开头</string>
+    <string name="tv_home_followed_videos">关注频道的最新视频</string>
+    <string name="tv_home_followed_videos_summary">主页上的这一行，不含仍在录制的视频</string>
 </resources>

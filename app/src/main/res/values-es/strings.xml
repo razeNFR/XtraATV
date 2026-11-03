@@ -912,4 +912,6 @@
     <string name="tv_stats_times">%1$d veces</string>
     <string name="tv_chat_show_replies">Mostrar a qué responde un mensaje</string>
     <string name="tv_chat_show_replies_summary">Una línea corta sobre una respuesta: a quién responde y el inicio de su mensaje</string>
+    <string name="tv_home_followed_videos">Últimos vídeos de los canales seguidos</string>
+    <string name="tv_home_followed_videos_summary">Su fila en el inicio, sin los vídeos que aún se están grabando</string>
 </resources>

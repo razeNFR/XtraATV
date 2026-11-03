@@ -102,9 +102,27 @@ class VideosAdapter(
                         showDownloadDialog(item)
                         true
                     }
+                    // TV: a video without picture yet ("?" of Twitch): the avatar of the streamer, over its blurred copy
+                    val missing = thumbnailAvatar != null && com.github.andreyasadchy.xtra.ui.tv.TvVideoThumbnail.isMissing(item.thumbnailURL)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        thumbnail.setRenderEffect(if (missing && item.channelImage != null) android.graphics.RenderEffect.createBlurEffect(40f, 40f, android.graphics.Shader.TileMode.CLAMP) else null)
+                    }
+                    thumbnail.alpha = if (missing) 0.55f else 1f
+                    thumbnailAvatar?.visibility = if (missing && item.channelImage != null) View.VISIBLE else View.GONE
+                    if (missing && item.channelImage != null) {
+                        thumbnailAvatar?.let { avatar ->
+                            fragment.requireContext().imageLoader.enqueue(
+                                ImageRequest.Builder(fragment.requireContext()).apply {
+                                    data(item.channelImage)
+                                    transformations(coil3.transform.CircleCropTransformation())
+                                    target(avatar)
+                                }.build()
+                            )
+                        }
+                    }
                     fragment.requireContext().imageLoader.enqueue(
                         ImageRequest.Builder(fragment.requireContext()).apply {
-                            data(item.thumbnail)
+                            data(if (missing) item.channelImage else item.thumbnail)
                             diskCachePolicy(CachePolicy.DISABLED)
                             crossfade(true)
                             target(thumbnail)

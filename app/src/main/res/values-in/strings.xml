@@ -908,4 +908,6 @@
     <string name="tv_stats_times">%1$d kali</string>
     <string name="tv_chat_show_replies">Tampilkan pesan yang dibalas</string>
     <string name="tv_chat_show_replies_summary">Baris pendek di atas balasan: siapa yang dibalas dan awal pesannya</string>
+    <string name="tv_home_followed_videos">Video terbaru dari kanal yang diikuti</string>
+    <string name="tv_home_followed_videos_summary">Barisnya di beranda, tanpa video yang masih direkam</string>
 </resources>

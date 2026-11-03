@@ -907,4 +907,6 @@
     <string name="tv_stats_times">%1$d veces</string>
     <string name="tv_chat_show_replies">Amosar a que responde unha mensaxe</string>
     <string name="tv_chat_show_replies_summary">Unha liña curta enriba dunha resposta: a quen responde e o comezo da súa mensaxe</string>
+    <string name="tv_home_followed_videos">Últimos vídeos das canles seguidas</string>
+    <string name="tv_home_followed_videos_summary">A súa fila no inicio, sen os vídeos que aínda se gravan</string>
 </resources>	

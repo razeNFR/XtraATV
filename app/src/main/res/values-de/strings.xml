@@ -907,4 +907,6 @@
     <string name="tv_stats_times">%1$d-mal</string>
     <string name="tv_chat_show_replies">Anzeigen, worauf eine Nachricht antwortet</string>
     <string name="tv_chat_show_replies_summary">Eine kurze Zeile über einer Antwort: wem sie antwortet und der Anfang der Nachricht</string>
+    <string name="tv_home_followed_videos">Neueste Videos gefolgter Kanäle</string>
+    <string name="tv_home_followed_videos_summary">Ihre Zeile auf dem Startbildschirm, ohne noch laufende Aufnahmen</string>
 </resources>

@@ -907,4 +907,6 @@
     <string name="tv_stats_times">%1$d回</string>
     <string name="tv_chat_show_replies">返信先のメッセージを表示</string>
     <string name="tv_chat_show_replies_summary">返信の上に短い行：誰への返信かと元のメッセージの冒頭</string>
+    <string name="tv_home_followed_videos">フォロー中のチャンネルの最新動画</string>
+    <string name="tv_home_followed_videos_summary">ホームの行（録画中の動画は除く）</string>
 </resources>

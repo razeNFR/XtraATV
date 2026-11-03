@@ -908,4 +908,6 @@
     <string name="tv_stats_times">%1$d kez</string>
     <string name="tv_chat_show_replies">Bir mesajın neye yanıt verdiğini göster</string>
     <string name="tv_chat_show_replies_summary">Bir yanıtın üstünde kısa bir satır: kime yanıt verdiği ve mesajının başı</string>
+    <string name="tv_home_followed_videos">Takip edilen kanalların son videoları</string>
+    <string name="tv_home_followed_videos_summary">Ana ekrandaki satırı, hâlâ kaydedilen videolar hariç</string>
 </resources>

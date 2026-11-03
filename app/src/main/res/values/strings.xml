@@ -926,4 +926,6 @@
     <string name="tv_stats_times">%1$d times</string>
     <string name="tv_chat_show_replies">Show what a message replies to</string>
     <string name="tv_chat_show_replies_summary">A short line above a reply: who it answers and the start of their message</string>
+    <string name="tv_home_followed_videos">Latest videos of the followed channels</string>
+    <string name="tv_home_followed_videos_summary">Its row on the home, the videos still recording are left out</string>
 </resources>

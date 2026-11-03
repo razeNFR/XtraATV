@@ -907,4 +907,6 @@
     <string name="tv_stats_times">%1$d مرة</string>
     <string name="tv_chat_show_replies">عرض ما يرد عليه الرد</string>
     <string name="tv_chat_show_replies_summary">سطر قصير فوق الرد: لمن يرد وبداية رسالته</string>
+    <string name="tv_home_followed_videos">أحدث فيديوهات القنوات المتابعة</string>
+    <string name="tv_home_followed_videos_summary">صفّها في الصفحة الرئيسية، دون الفيديوهات التي ما زالت تُسجَّل</string>
 </resources>

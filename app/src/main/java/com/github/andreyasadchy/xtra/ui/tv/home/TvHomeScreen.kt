@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusDirection
@@ -983,6 +984,47 @@ private fun VideoRow(row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video
     }
 }
 
+/**
+ * The picture of a video; a video without one yet (Twitch gives a "?" while it records or is processed): the avatar of
+ * the streamer in the middle, over a blurred copy of it.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.VideoThumbnail(thumbnail: String?, channelImage: String?) {
+    if (!com.github.andreyasadchy.xtra.ui.tv.TvVideoThumbnail.isMissing(thumbnail)) {
+        AsyncImage(
+            model = thumbnail,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        return
+    }
+    if (channelImage != null) {
+        AsyncImage(
+            model = channelImage,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().blur(28.dp).graphicsLayer { alpha = 0.55f }
+        )
+    }
+    Box(Modifier.fillMaxSize().background(Color(0x59000000)))
+    if (channelImage != null) {
+        AsyncImage(
+            model = channelImage,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.align(Alignment.Center).fillMaxHeight(0.5f).aspectRatio(1f).clip(CircleShape)
+        )
+    } else {
+        Icon(
+            painterResource(R.drawable.tv_ic_video_library),
+            contentDescription = null,
+            tint = Color(0x99FFFFFF),
+            modifier = Modifier.align(Alignment.Center).size(40.dp)
+        )
+    }
+}
+
 @Composable
 private fun FollowedVideoCard(width: Dp, video: com.github.andreyasadchy.xtra.model.ui.Video, actions: TvHomeActions, modifier: Modifier) {
     val small = width < 230.dp
@@ -1000,12 +1042,7 @@ private fun FollowedVideoCard(width: Dp, video: com.github.andreyasadchy.xtra.mo
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
         ) {
-            AsyncImage(
-                model = video.thumbnail,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            VideoThumbnail(video.thumbnail, video.channelImage)
             val seconds = video.durationSeconds ?: 0
             if (seconds > 0) {
                 Text(
@@ -1059,12 +1096,7 @@ private fun ResumeCard(width: Dp, item: com.github.andreyasadchy.xtra.ui.tv.TvRe
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
         ) {
-            AsyncImage(
-                model = item.thumbnail,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            VideoThumbnail(item.thumbnail, item.channelImage)
             // time left, like the cards of Google TV
             val durationMs = (item.durationSeconds ?: 0) * 1000L
             if (durationMs > 0) {

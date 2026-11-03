@@ -192,7 +192,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         previewPlayer = { previewPlayer.value },
                         actions = actions,
                         resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
-                        videos = followedVideos?.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_followed_videos_row), it, 0, R.drawable.tv_ic_video_library) },
+                        // the videos still recording (the live of a channel live now) are left out: the live is in the row above
+                        videos = followedVideos?.takeIf { context.prefs().getBoolean(C.TV_HOME_FOLLOWED_VIDEOS, true) }
+                            ?.filterNot { video -> isRecording(video, followed) }
+                            ?.takeIf { it.isNotEmpty() }
+                            ?.let { TvHomeRow(getString(R.string.tv_followed_videos_row), it, 0, R.drawable.tv_ic_video_library) },
                         stats = statsState.value,
                         languageRows = languageRows.map { (language, streams) ->
                             TvHomeRow(getString(R.string.tv_popular_in, languageName(language)), streams, 0, R.drawable.tv_ic_globe)
@@ -225,6 +229,17 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         val context = context ?: return
         resumeItems.value = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.list(context)
         loadStats()
+    }
+
+    /** A video of a channel live now, started with that live (or still without a picture): it records it. */
+    private fun isRecording(video: com.github.andreyasadchy.xtra.model.ui.Video, live: List<com.github.andreyasadchy.xtra.model.ui.Stream>?): Boolean {
+        val stream = live?.find { it.channelLogin != null && it.channelLogin.equals(video.channelLogin, true) } ?: return false
+        if (com.github.andreyasadchy.xtra.ui.tv.TvVideoThumbnail.isMissing(video.thumbnailURL)) {
+            return true
+        }
+        val videoStart = video.createdAt?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: return false
+        val streamStart = stream.createdAt?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: return false
+        return videoStart >= streamStart - 15 * 60_000L
     }
 
     private fun loadStats() {

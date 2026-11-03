@@ -110,7 +110,8 @@ class TvHomeViewModel(
             popular.value = loadPage(createPopularSource())
         }
         val gqlAccountHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true)
-        if (!gqlAccountHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+        // the row of the latest videos of the followed channels can be hidden (Xtra TV settings)
+        if (!gqlAccountHeaders[C.HEADER_TOKEN].isNullOrBlank() && prefs.getBoolean(C.TV_HOME_FOLLOWED_VIDEOS, true)) {
             jobs += viewModelScope.launch {
                 followedVideos.value = loadPage(
                     com.github.andreyasadchy.xtra.repository.datasource.FollowedVideosDataSource(

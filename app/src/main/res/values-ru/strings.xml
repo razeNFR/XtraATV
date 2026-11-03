@@ -907,4 +907,6 @@
     <string name="tv_stats_times">%1$d раз</string>
     <string name="tv_chat_show_replies">Показывать, на что отвечает сообщение</string>
     <string name="tv_chat_show_replies_summary">Короткая строка над ответом: кому он и начало сообщения</string>
+    <string name="tv_home_followed_videos">Новые видео отслеживаемых каналов</string>
+    <string name="tv_home_followed_videos_summary">Строка на главной, без видео, которые ещё записываются</string>
 </resources>
