@@ -114,7 +114,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     protected var started = false
 
     private var isPortrait = false
-    protected val isTv by lazy { resources.getBoolean(R.bool.isTv) }
+    // read from the app, not from the screen: the activity asks a new player screen (a switch) before it is attached
+    protected val isTv by lazy { com.github.andreyasadchy.xtra.XtraApp.INSTANCE.resources.getBoolean(R.bool.isTv) }
     /** Controls stay longer on TV, moving between them with a remote takes more time than tapping. */
     protected val controllerHideDelay by lazy { if (isTv) 6000L else 3000L }
     protected var isMaximized = true
@@ -165,7 +166,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** TV: left / right change the streamer (option on, a live stream, a HUD not opened on purpose). */
     private fun dpadSwitchesStreams(): Boolean {
-        return isTv && isStreamScreen() && !hudOpenedByUser && context?.prefs()?.getBoolean(C.TV_DPAD_SWITCH_STREAM, false) == true
+        // the settings of the app: also for a new player screen not attached yet
+        return isTv && isStreamScreen() && !hudOpenedByUser && com.github.andreyasadchy.xtra.XtraApp.INSTANCE.prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
     }
 
     /**
@@ -3742,7 +3744,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     fun reconnect() = chatFragment?.reconnect()
 
-    fun secondViewIsHidden() = !binding.chatLayout.isVisible && isMaximized
+    fun secondViewIsHidden() = _binding?.chatLayout?.isVisible != true && isMaximized
 
     fun canEnterPictureInPicture(): Boolean {
         val quality = playbackService?.quality
