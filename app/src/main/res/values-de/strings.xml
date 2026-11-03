@@ -922,4 +922,22 @@
     <string name="tv_proxy_mode_ads">Während Werbung</string>
     <string name="tv_proxies_1440p">Öffentliche Proxys gehen nur bis 1080p. Für 1440p nutze einen Proxy, der es streamt, oder wähle \"Während Werbung\", um es außerhalb der Werbung zu haben.</string>
     <string name="tv_adblock_summary_1440p">Während einer Werbung wird auf einen Stream ohne Werbung gewechselt. 1440p funktioniert; die Qualität kann während der Werbung sinken.</string>
+    <string name="tv_chat_sub_prime">Prime</string>
+    <string name="tv_chat_sub_tier">Stufe %1$d</string>
+    <string name="tv_chat_sub">%1$s hat abonniert</string>
+    <string name="tv_chat_resub">%1$s hat erneut abonniert</string>
+    <string name="tv_chat_months">%1$d Monate</string>
+    <string name="tv_chat_sub_gift">%1$s hat %2$s ein Abo geschenkt</string>
+    <string name="tv_chat_sub_gifts">%1$s verschenkt %2$d Abos</string>
+    <string name="tv_chat_sub_gifts_one">%1$s verschenkt ein Abo</string>
+    <string name="tv_chat_sub_continue">%1$s führt das Abo fort</string>
+    <string name="tv_chat_raid">Raid von %1$s</string>
+    <string name="tv_chat_viewers">%1$s Zuschauer</string>
+    <string name="tv_chat_announcement">Ankündigung</string>
+    <string name="tv_chat_bits_badge">%1$s hat ein neues Bits-Abzeichen freigeschaltet</string>
+    <string name="tv_chat_watch_streak">%1$s hat %2$d Streams am Stück geschaut</string>
+    <string name="tv_chat_anonymous">Anonym</string>
+    <string name="tv_chat_message_deleted">Nachricht gelöscht</string>
+    <string name="tv_chat_highlight_mentions">Antworten und Erwähnungen hervorheben</string>
+    <string name="tv_chat_highlight_mentions_summary">Antworten auf deine Nachrichten und Nachrichten mit deinem Namen, in der Akzentfarbe</string>
 </resources>

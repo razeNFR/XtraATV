@@ -941,4 +941,22 @@
     <string name="tv_proxy_mode_ads">During ads</string>
     <string name="tv_proxies_1440p">Public proxies stop at 1080p. For 1440p, use a proxy that streams it, or choose \"During ads\" to get it outside of the ads.</string>
     <string name="tv_adblock_summary_1440p">During an ad, switches to a stream without ads. The 1440p works; the quality may drop while the ad lasts.</string>
+    <string name="tv_chat_sub_prime">Prime</string>
+    <string name="tv_chat_sub_tier">Tier %1$d</string>
+    <string name="tv_chat_sub">%1$s subscribed</string>
+    <string name="tv_chat_resub">%1$s resubscribed</string>
+    <string name="tv_chat_months">%1$d months</string>
+    <string name="tv_chat_sub_gift">%1$s gifted a sub to %2$s</string>
+    <string name="tv_chat_sub_gifts">%1$s is gifting %2$d subs</string>
+    <string name="tv_chat_sub_gifts_one">%1$s is gifting a sub</string>
+    <string name="tv_chat_sub_continue">%1$s continues their sub</string>
+    <string name="tv_chat_raid">Raid from %1$s</string>
+    <string name="tv_chat_viewers">%1$s viewers</string>
+    <string name="tv_chat_announcement">Announcement</string>
+    <string name="tv_chat_bits_badge">%1$s unlocked a new Bits badge</string>
+    <string name="tv_chat_watch_streak">%1$s watched %2$d streams in a row</string>
+    <string name="tv_chat_anonymous">Anonymous</string>
+    <string name="tv_chat_message_deleted">Message deleted</string>
+    <string name="tv_chat_highlight_mentions">Highlight replies and mentions</string>
+    <string name="tv_chat_highlight_mentions_summary">Answers to your messages and messages with your name, in the accent color</string>
 </resources>

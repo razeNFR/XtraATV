@@ -922,4 +922,22 @@
     <string name="tv_proxy_mode_ads">僅在廣告期間</string>
     <string name="tv_proxies_1440p">公共代理最高 1080p。要 1440p，請使用支援它的代理，或選擇「僅在廣告期間」，廣告以外即可獲得 1440p。</string>
     <string name="tv_adblock_summary_1440p">廣告期間切換到無廣告的串流。1440p 可用；廣告期間畫質可能會降低。</string>
+    <string name="tv_chat_sub_prime">Prime</string>
+    <string name="tv_chat_sub_tier">%1$d 級</string>
+    <string name="tv_chat_sub">%1$s 訂閱了</string>
+    <string name="tv_chat_resub">%1$s 續訂了</string>
+    <string name="tv_chat_months">%1$d 個月</string>
+    <string name="tv_chat_sub_gift">%1$s 贈送了一個訂閱給 %2$s</string>
+    <string name="tv_chat_sub_gifts">%1$s 贈送了 %2$d 個訂閱</string>
+    <string name="tv_chat_sub_gifts_one">%1$s 贈送了一個訂閱</string>
+    <string name="tv_chat_sub_continue">%1$s 繼續了訂閱</string>
+    <string name="tv_chat_raid">來自 %1$s 的突襲</string>
+    <string name="tv_chat_viewers">%1$s 名觀眾</string>
+    <string name="tv_chat_announcement">公告</string>
+    <string name="tv_chat_bits_badge">%1$s 解鎖了新的 Bits 徽章</string>
+    <string name="tv_chat_watch_streak">%1$s 連續觀看了 %2$d 場直播</string>
+    <string name="tv_chat_anonymous">匿名</string>
+    <string name="tv_chat_message_deleted">訊息已刪除</string>
+    <string name="tv_chat_highlight_mentions">醒目顯示回覆和提及</string>
+    <string name="tv_chat_highlight_mentions_summary">回覆你的訊息和提到你名字的訊息，以強調色顯示</string>
 </resources>

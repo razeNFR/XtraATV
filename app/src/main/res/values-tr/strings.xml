@@ -923,4 +923,22 @@
     <string name="tv_proxy_mode_ads">Reklamlarda</string>
     <string name="tv_proxies_1440p">Herkese açık proxy\'ler 1080p ile sınırlı. 1440p için onu yayınlayan bir proxy kullan ya da reklamlar dışında 1440p için \"Reklamlarda\" seçeneğini seç.</string>
     <string name="tv_adblock_summary_1440p">Reklam sırasında reklamsız bir yayına geçer. 1440p çalışır; reklam süresince kalite düşebilir.</string>
+    <string name="tv_chat_sub_prime">Prime</string>
+    <string name="tv_chat_sub_tier">Seviye %1$d</string>
+    <string name="tv_chat_sub">%1$s abone oldu</string>
+    <string name="tv_chat_resub">%1$s aboneliğini yeniledi</string>
+    <string name="tv_chat_months">%1$d ay</string>
+    <string name="tv_chat_sub_gift">%1$s, %2$s kullanıcısına abonelik hediye etti</string>
+    <string name="tv_chat_sub_gifts">%1$s %2$d abonelik hediye ediyor</string>
+    <string name="tv_chat_sub_gifts_one">%1$s bir abonelik hediye ediyor</string>
+    <string name="tv_chat_sub_continue">%1$s aboneliğine devam ediyor</string>
+    <string name="tv_chat_raid">%1$s baskını</string>
+    <string name="tv_chat_viewers">%1$s izleyici</string>
+    <string name="tv_chat_announcement">Duyuru</string>
+    <string name="tv_chat_bits_badge">%1$s yeni bir Bits rozeti açtı</string>
+    <string name="tv_chat_watch_streak">%1$s art arda %2$d yayın izledi</string>
+    <string name="tv_chat_anonymous">Anonim</string>
+    <string name="tv_chat_message_deleted">Mesaj silindi</string>
+    <string name="tv_chat_highlight_mentions">Yanıtları ve bahsetmeleri vurgula</string>
+    <string name="tv_chat_highlight_mentions_summary">Mesajlarına verilen yanıtlar ve adının geçtiği mesajlar, vurgu renginde</string>
 </resources>

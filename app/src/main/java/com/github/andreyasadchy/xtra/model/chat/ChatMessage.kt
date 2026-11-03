@@ -25,7 +25,13 @@ class ChatMessage(
     var translatedMessage: String? = null,
     var translationFailed: Boolean = false,
     var messageLanguage: String? = null,
+    /** Icon of a short notice line (subscription, gift, raid, timeout...): the line is smaller and grey, with this icon. */
+    val noticeIcon: Int? = null,
 ) {
+    /** Deleted by a moderator (or its author timed out / banned): shown grey and struck through, or hidden. */
+    @Volatile
+    var deleted: Boolean = false
+
     companion object {
         const val SYSTEM_MESSAGE = 0
         const val USER_MESSAGE = 1

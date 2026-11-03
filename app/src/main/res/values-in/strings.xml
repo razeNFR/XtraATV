@@ -923,4 +923,22 @@
     <string name="tv_proxy_mode_ads">Saat iklan</string>
     <string name="tv_proxies_1440p">Proxy publik maksimal 1080p. Untuk 1440p, gunakan proxy yang menyiarkannya, atau pilih \"Saat iklan\" agar 1440p tetap di luar iklan.</string>
     <string name="tv_adblock_summary_1440p">Saat iklan, beralih ke stream tanpa iklan. 1440p berfungsi; kualitas bisa turun selama iklan.</string>
+    <string name="tv_chat_sub_prime">Prime</string>
+    <string name="tv_chat_sub_tier">Tingkat %1$d</string>
+    <string name="tv_chat_sub">%1$s berlangganan</string>
+    <string name="tv_chat_resub">%1$s berlangganan lagi</string>
+    <string name="tv_chat_months">%1$d bulan</string>
+    <string name="tv_chat_sub_gift">%1$s menghadiahkan langganan ke %2$s</string>
+    <string name="tv_chat_sub_gifts">%1$s menghadiahkan %2$d langganan</string>
+    <string name="tv_chat_sub_gifts_one">%1$s menghadiahkan satu langganan</string>
+    <string name="tv_chat_sub_continue">%1$s melanjutkan langganannya</string>
+    <string name="tv_chat_raid">Raid dari %1$s</string>
+    <string name="tv_chat_viewers">%1$s penonton</string>
+    <string name="tv_chat_announcement">Pengumuman</string>
+    <string name="tv_chat_bits_badge">%1$s membuka lencana Bits baru</string>
+    <string name="tv_chat_watch_streak">%1$s menonton %2$d siaran berturut-turut</string>
+    <string name="tv_chat_anonymous">Anonim</string>
+    <string name="tv_chat_message_deleted">Pesan dihapus</string>
+    <string name="tv_chat_highlight_mentions">Sorot balasan dan sebutan</string>
+    <string name="tv_chat_highlight_mentions_summary">Balasan untuk pesanmu dan pesan yang menyebut namamu, dengan warna aksen</string>
 </resources>

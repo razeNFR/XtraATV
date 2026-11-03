@@ -132,6 +132,14 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_highlight_mentions"
+        android:summary="@string/tv_chat_highlight_mentions_summary"
+        android:title="@string/tv_chat_highlight_mentions"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <ListPreference
         android:defaultValue="1"
         android:entries="@array/chatDelayEntries"

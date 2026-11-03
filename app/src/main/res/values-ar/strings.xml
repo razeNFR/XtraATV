@@ -922,4 +922,22 @@
     <string name="tv_proxy_mode_ads">أثناء الإعلانات</string>
     <string name="tv_proxies_1440p">البروكسيات العامة تتوقف عند 1080p. للحصول على 1440p استخدم بروكسيًا يبثّه، أو اختر \"أثناء الإعلانات\" لتحصل عليه خارج الإعلانات.</string>
     <string name="tv_adblock_summary_1440p">أثناء الإعلان، ينتقل إلى بث بلا إعلانات. يعمل 1440p؛ قد تنخفض الجودة طوال مدة الإعلان.</string>
+    <string name="tv_chat_sub_prime">Prime</string>
+    <string name="tv_chat_sub_tier">المستوى %1$d</string>
+    <string name="tv_chat_sub">اشترك %1$s</string>
+    <string name="tv_chat_resub">جدّد %1$s اشتراكه</string>
+    <string name="tv_chat_months">%1$d أشهر</string>
+    <string name="tv_chat_sub_gift">أهدى %1$s اشتراكًا إلى %2$s</string>
+    <string name="tv_chat_sub_gifts">يهدي %1$s %2$d اشتراكات</string>
+    <string name="tv_chat_sub_gifts_one">يهدي %1$s اشتراكًا</string>
+    <string name="tv_chat_sub_continue">يواصل %1$s اشتراكه</string>
+    <string name="tv_chat_raid">غارة من %1$s</string>
+    <string name="tv_chat_viewers">%1$s مشاهدين</string>
+    <string name="tv_chat_announcement">إعلان</string>
+    <string name="tv_chat_bits_badge">فتح %1$s شارة Bits جديدة</string>
+    <string name="tv_chat_watch_streak">شاهد %1$s %2$d بثوث متتالية</string>
+    <string name="tv_chat_anonymous">مجهول</string>
+    <string name="tv_chat_message_deleted">تم حذف الرسالة</string>
+    <string name="tv_chat_highlight_mentions">تمييز الردود والإشارات</string>
+    <string name="tv_chat_highlight_mentions_summary">الردود على رسائلك والرسائل التي تذكر اسمك، بلون التمييز</string>
 </resources>

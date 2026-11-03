@@ -922,4 +922,22 @@
     <string name="tv_proxy_mode_ads">Pendant les pubs</string>
     <string name="tv_proxies_1440p">Les proxys publics s\'arrêtent au 1080p. Pour le 1440p, utilise un proxy qui le diffuse, ou choisis \"Pendant les pubs\" pour l\'avoir en dehors des pubs.</string>
     <string name="tv_adblock_summary_1440p">Pendant une pub, bascule sur un flux sans pub. Le 1440p fonctionne ; la qualité peut baisser le temps d\'une pub.</string>
+    <string name="tv_chat_sub_prime">Prime</string>
+    <string name="tv_chat_sub_tier">Palier %1$d</string>
+    <string name="tv_chat_sub">%1$s s\'est abonné</string>
+    <string name="tv_chat_resub">%1$s s\'est réabonné</string>
+    <string name="tv_chat_months">%1$d mois</string>
+    <string name="tv_chat_sub_gift">%1$s a offert un abonnement à %2$s</string>
+    <string name="tv_chat_sub_gifts">%1$s offre %2$d abonnements</string>
+    <string name="tv_chat_sub_gifts_one">%1$s offre un abonnement</string>
+    <string name="tv_chat_sub_continue">%1$s continue son abonnement</string>
+    <string name="tv_chat_raid">Raid de %1$s</string>
+    <string name="tv_chat_viewers">%1$s spectateurs</string>
+    <string name="tv_chat_announcement">Annonce</string>
+    <string name="tv_chat_bits_badge">%1$s a débloqué un nouveau badge de Bits</string>
+    <string name="tv_chat_watch_streak">%1$s a regardé %2$d streams d\'affilée</string>
+    <string name="tv_chat_anonymous">Anonyme</string>
+    <string name="tv_chat_message_deleted">Message supprimé</string>
+    <string name="tv_chat_highlight_mentions">Surligner les réponses et mentions</string>
+    <string name="tv_chat_highlight_mentions_summary">Les réponses à tes messages et ceux qui citent ton pseudo, dans la couleur d\'accent</string>
 </resources>
