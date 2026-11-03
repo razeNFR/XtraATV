@@ -145,12 +145,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
      * OK (or up / down without their shortcuts) gives it the focus as usual.
      */
     private var hudPeek = false
+    /**
+     * TV: the HUD was opened by the user (OK, up / down): left / right move in the timeline. Otherwise (hidden, info of a
+     * switch, HUD left on screen by a quick series of switches...) left / right always change the streamer.
+     */
+    private var hudOpenedByUser = false
     private val hudPeekHideAction = Runnable {
         if (view != null && hudPeek) {
             hudPeek = false
             TvSwitchOverlay.hide(activity)
-            if (!binding.playerControls.root.hasFocus()) {
-                hideController()
+            if (!hudOpenedByUser) {
+                // hidden even while it was still fading in or out (quick switches), it never stays on screen
+                hideController(force = true)
             }
         }
     }
@@ -3252,6 +3258,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun focusPrimaryControl() {
+        // the HUD given the focus on purpose (OK, back from an option, end of a stream...): left / right move in it
+        hudOpenedByUser = true
         with(binding.playerControls) {
             // the button pressed last, kept from one stream to the next (left / right, other streams)
             findLastControl()?.let { last ->
@@ -3395,7 +3403,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 val queueSize = (activity as? MainActivity)?.streamQueue?.size ?: 0
                 if (isTv && playbackService?.type == BasePlaybackService.STREAM &&
-                    (!binding.playerControls.root.isVisible || hudPeek || !binding.playerControls.root.hasFocus()) &&
+                    (!binding.playerControls.root.isVisible || !hudOpenedByUser) &&
                     requireContext().prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
                 ) {
                     // option: HUD hidden, left / right go to the previous / next streamer of the list the stream comes from,
@@ -3403,8 +3411,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     // of a switch going away does not, left / right still change the streamer then)
                     if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                         if (queueSize > 1) {
+                            // a HUD the user did not open never keeps the focus nor its buttons: the next presses switch too
+                            if (binding.playerControls.root.hasFocus()) {
+                                binding.dragView.requestFocus()
+                            }
                             (activity as? MainActivity)?.switchStream(if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
                         } else {
+                            hudOpenedByUser = true
                             showController(force = true)
                             binding.playerControls.root.post { if (view != null) focusPrimaryControl() }
                         }
@@ -3414,6 +3427,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (binding.playerControls.progressBar.isVisible) {
                     // seek with the timeline: the following key events go to the focused time bar
                     if (event.action == KeyEvent.ACTION_DOWN) {
+                        hudOpenedByUser = true
                         showController(force = true)
                         binding.playerControls.progressBar.requestFocus()
                     }
@@ -3442,6 +3456,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                     // the HUD shown after a switch takes the focus now
+                    hudOpenedByUser = true
                     endHudPeek()
                     showController(force = true)
                     binding.playerControls.root.post {
@@ -3515,6 +3530,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun hideController(force: Boolean = false) {
+        hudOpenedByUser = false
         endHudPeek()
         onTvControllerVisibility(false)
         if (binding.playerControls.root.hasFocus() && (force || !controllerIsAnimating)) {

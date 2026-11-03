@@ -940,4 +940,11 @@
     <string name="tv_chat_message_deleted">メッセージは削除されました</string>
     <string name="tv_chat_highlight_mentions">返信とメンションを強調</string>
     <string name="tv_chat_highlight_mentions_summary">あなたへの返信と名前を含むメッセージをアクセントカラーで表示</string>
+    <string name="tv_color_sky">水色</string>
+    <string name="tv_color_turquoise">ターコイズ</string>
+    <string name="tv_color_mint">ミント</string>
+    <string name="tv_color_amber">アンバー</string>
+    <string name="tv_color_coral">コーラル</string>
+    <string name="tv_color_lavender">ラベンダー</string>
+    <string name="tv_color_white">ホワイト</string>
 </resources>

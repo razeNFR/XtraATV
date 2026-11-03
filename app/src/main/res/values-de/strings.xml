@@ -940,4 +940,11 @@
     <string name="tv_chat_message_deleted">Nachricht gelöscht</string>
     <string name="tv_chat_highlight_mentions">Antworten und Erwähnungen hervorheben</string>
     <string name="tv_chat_highlight_mentions_summary">Antworten auf deine Nachrichten und Nachrichten mit deinem Namen, in der Akzentfarbe</string>
+    <string name="tv_color_sky">Hellblau</string>
+    <string name="tv_color_turquoise">Türkis</string>
+    <string name="tv_color_mint">Mint</string>
+    <string name="tv_color_amber">Bernstein</string>
+    <string name="tv_color_coral">Koralle</string>
+    <string name="tv_color_lavender">Lavendel</string>
+    <string name="tv_color_white">Weiß</string>
 </resources>

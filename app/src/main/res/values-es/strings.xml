@@ -945,4 +945,11 @@
     <string name="tv_chat_message_deleted">Mensaje eliminado</string>
     <string name="tv_chat_highlight_mentions">Resaltar respuestas y menciones</string>
     <string name="tv_chat_highlight_mentions_summary">Las respuestas a tus mensajes y los que citan tu nombre, en el color de acento</string>
+    <string name="tv_color_sky">Azul claro</string>
+    <string name="tv_color_turquoise">Turquesa</string>
+    <string name="tv_color_mint">Menta</string>
+    <string name="tv_color_amber">Ámbar</string>
+    <string name="tv_color_coral">Coral</string>
+    <string name="tv_color_lavender">Lavanda</string>
+    <string name="tv_color_white">Blanco</string>
 </resources>

@@ -941,4 +941,11 @@
     <string name="tv_chat_message_deleted">Mesaj silindi</string>
     <string name="tv_chat_highlight_mentions">Yanıtları ve bahsetmeleri vurgula</string>
     <string name="tv_chat_highlight_mentions_summary">Mesajlarına verilen yanıtlar ve adının geçtiği mesajlar, vurgu renginde</string>
+    <string name="tv_color_sky">Açık mavi</string>
+    <string name="tv_color_turquoise">Turkuaz</string>
+    <string name="tv_color_mint">Nane yeşili</string>
+    <string name="tv_color_amber">Kehribar</string>
+    <string name="tv_color_coral">Mercan</string>
+    <string name="tv_color_lavender">Lavanta</string>
+    <string name="tv_color_white">Beyaz</string>
 </resources>

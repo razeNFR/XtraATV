@@ -533,7 +533,7 @@ object TvStreamSwitcher {
             // number of a selected stream (its place in the multi-stream), at the top right of the card, in the color of accent
             val badge = TextView(parent.context).apply {
                 gravity = Gravity.CENTER
-                setTextColor(android.graphics.Color.WHITE)
+                setTextColor(com.github.andreyasadchy.xtra.ui.tv.TvAccent.onAccent)
                 textSize = 15f
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 background = android.graphics.drawable.GradientDrawable().apply {

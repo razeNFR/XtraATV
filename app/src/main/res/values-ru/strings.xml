@@ -940,4 +940,11 @@
     <string name="tv_chat_message_deleted">Сообщение удалено</string>
     <string name="tv_chat_highlight_mentions">Выделять ответы и упоминания</string>
     <string name="tv_chat_highlight_mentions_summary">Ответы на ваши сообщения и сообщения с вашим именем выделяются цветом акцента</string>
+    <string name="tv_color_sky">Голубой</string>
+    <string name="tv_color_turquoise">Бирюзовый</string>
+    <string name="tv_color_mint">Мятный</string>
+    <string name="tv_color_amber">Янтарный</string>
+    <string name="tv_color_coral">Коралловый</string>
+    <string name="tv_color_lavender">Лавандовый</string>
+    <string name="tv_color_white">Белый</string>
 </resources>

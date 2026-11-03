@@ -941,4 +941,11 @@
     <string name="tv_chat_message_deleted">Pesan dihapus</string>
     <string name="tv_chat_highlight_mentions">Sorot balasan dan sebutan</string>
     <string name="tv_chat_highlight_mentions_summary">Balasan untuk pesanmu dan pesan yang menyebut namamu, dengan warna aksen</string>
+    <string name="tv_color_sky">Biru muda</string>
+    <string name="tv_color_turquoise">Toska</string>
+    <string name="tv_color_mint">Mint</string>
+    <string name="tv_color_amber">Kuning amber</string>
+    <string name="tv_color_coral">Koral</string>
+    <string name="tv_color_lavender">Lavender</string>
+    <string name="tv_color_white">Putih</string>
 </resources>

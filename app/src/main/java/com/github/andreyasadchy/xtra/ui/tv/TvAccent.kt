@@ -26,7 +26,28 @@ object TvAccent {
 
     /** The accent for icons and texts on white (a focused button or row): a darker shade, always readable. */
     val onLight: Int
-        get() = current?.let { darken(it, 0.35f) } ?: 0xFF111014.toInt()
+        get() = current?.let { readableOnLight(it) } ?: 0xFF111014.toInt()
+
+    /** Text over the accent (a badge filled with it): black over a light shade, else white. */
+    val onAccent: Int
+        get() = if (Color.luminance(color) > 0.45f) 0xFF111014.toInt() else Color.WHITE
+
+    /** The accent darkened until it reads well on the white of a focused item (light shades too: yellow, mint...). */
+    private fun readableOnLight(color: Int): Int {
+        var amount = 0.35f
+        var result = darken(color, amount)
+        while (contrast(result, 0xFFF2F2F7.toInt()) < 4.5f && amount < 0.9f) {
+            amount += 0.05f
+            result = darken(color, amount)
+        }
+        return result
+    }
+
+    private fun contrast(a: Int, b: Int): Float {
+        val la = Color.luminance(a) + 0.05f
+        val lb = Color.luminance(b) + 0.05f
+        return maxOf(la, lb) / minOf(la, lb)
+    }
 
     val colorList: ColorStateList
         get() = ColorStateList.valueOf(color)

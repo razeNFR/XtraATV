@@ -1821,6 +1821,27 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
             }
+            // TV: the colors in a side panel, a dot of each color in front of its name
+            findPreference<ListPreference>(C.TV_AMBIENT_COLOR)?.let { preference ->
+                if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
+                    preference.setOnPreferenceClickListener {
+                        val values = preference.entryValues.map { it.toString() }
+                        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.showChoices(
+                            requireContext(),
+                            preference.title.toString(),
+                            preference.entries.map { it.toString() },
+                            values.indexOf(preference.value),
+                            colors = values.map { com.github.andreyasadchy.xtra.ui.tv.TvAmbient.colorOf(it) },
+                        ) { index ->
+                            val value = values[index]
+                            if (preference.callChangeListener(value)) {
+                                preference.value = value
+                            }
+                        }
+                        true
+                    }
+                }
+            }
             // the ambiance color is drawn when the app starts: it offers to restart it
             findPreference<ListPreference>(C.TV_AMBIENT_COLOR)?.setOnPreferenceChangeListener { _, newValue ->
                 if (newValue != requireContext().prefs().getString(C.TV_AMBIENT_COLOR, "violet")) {

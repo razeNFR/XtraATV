@@ -940,4 +940,11 @@
     <string name="tv_chat_message_deleted">تم حذف الرسالة</string>
     <string name="tv_chat_highlight_mentions">تمييز الردود والإشارات</string>
     <string name="tv_chat_highlight_mentions_summary">الردود على رسائلك والرسائل التي تذكر اسمك، بلون التمييز</string>
+    <string name="tv_color_sky">أزرق فاتح</string>
+    <string name="tv_color_turquoise">فيروزي</string>
+    <string name="tv_color_mint">نعناعي</string>
+    <string name="tv_color_amber">كهرماني</string>
+    <string name="tv_color_coral">مرجاني</string>
+    <string name="tv_color_lavender">خزامي</string>
+    <string name="tv_color_white">أبيض</string>
 </resources>

@@ -940,4 +940,11 @@
     <string name="tv_chat_message_deleted">訊息已刪除</string>
     <string name="tv_chat_highlight_mentions">醒目顯示回覆和提及</string>
     <string name="tv_chat_highlight_mentions_summary">回覆你的訊息和提到你名字的訊息，以強調色顯示</string>
+    <string name="tv_color_sky">淺藍</string>
+    <string name="tv_color_turquoise">綠松石</string>
+    <string name="tv_color_mint">薄荷綠</string>
+    <string name="tv_color_amber">琥珀色</string>
+    <string name="tv_color_coral">珊瑚色</string>
+    <string name="tv_color_lavender">薰衣草紫</string>
+    <string name="tv_color_white">白色</string>
 </resources>

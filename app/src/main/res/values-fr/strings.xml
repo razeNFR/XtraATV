@@ -940,4 +940,11 @@
     <string name="tv_chat_message_deleted">Message supprimé</string>
     <string name="tv_chat_highlight_mentions">Surligner les réponses et mentions</string>
     <string name="tv_chat_highlight_mentions_summary">Les réponses à tes messages et ceux qui citent ton pseudo, dans la couleur d\'accent</string>
+    <string name="tv_color_sky">Bleu clair</string>
+    <string name="tv_color_turquoise">Turquoise</string>
+    <string name="tv_color_mint">Menthe</string>
+    <string name="tv_color_amber">Ambre</string>
+    <string name="tv_color_coral">Corail</string>
+    <string name="tv_color_lavender">Lavande</string>
+    <string name="tv_color_white">Blanc</string>
 </resources>
