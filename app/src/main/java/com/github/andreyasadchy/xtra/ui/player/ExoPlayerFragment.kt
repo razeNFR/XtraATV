@@ -403,7 +403,7 @@ class ExoPlayerFragment : PlayerFragment() {
         return if (playbackService?.quality?.name == VideoQuality.AUTO_QUALITY) "${getString(R.string.auto)} · $label" else label
     }
 
-    override fun getAdblockStatus() = playbackService?.getAdblockStatus()
+    override fun getAdblockInfo() = playbackService?.getAdblockInfo()
 
     // the main stream only: the backup player of the ad blocker is only there for a moment
     override fun getVideoFrameRate() = playbackService?.player?.videoFormat?.let { format ->

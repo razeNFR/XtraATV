@@ -425,6 +425,13 @@
         <item>@string/tv_color_orange</item>
         <item>@string/tv_color_red</item>
         <item>@string/tv_color_pink</item>
+        <item>@string/tv_color_sky</item>
+        <item>@string/tv_color_turquoise</item>
+        <item>@string/tv_color_mint</item>
+        <item>@string/tv_color_amber</item>
+        <item>@string/tv_color_coral</item>
+        <item>@string/tv_color_lavender</item>
+        <item>@string/tv_color_white</item>
         <item>@string/tv_color_none</item>
     </string-array>
 
@@ -436,6 +443,13 @@
         <item>orange</item>
         <item>red</item>
         <item>pink</item>
+        <item>sky</item>
+        <item>turquoise</item>
+        <item>mint</item>
+        <item>amber</item>
+        <item>coral</item>
+        <item>lavender</item>
+        <item>white</item>
         <item>none</item>
     </string-array>
     <string-array name="chatDelayEntries">

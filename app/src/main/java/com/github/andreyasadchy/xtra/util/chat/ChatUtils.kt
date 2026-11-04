@@ -91,7 +91,8 @@ object ChatUtils {
         return IRCMessage(tags, prefix, command, params, message)
     }
 
-    fun parseChatMessage(message: IRCMessage): ChatMessage {
+    /** [notice]: the short translated line of a notice of Twitch (TvChatNotices), in place of the sentence of Twitch. */
+    fun parseChatMessage(message: IRCMessage, notice: Pair<String, Int>? = null): ChatMessage {
         val userLogin = message.tags["login"] ?: message.prefix?.substringBefore('!', "")
         val emotes = message.tags["emotes"]?.let { value ->
             buildList {
@@ -143,8 +144,9 @@ object ChatUtils {
             isAction = isAction,
             isFirst = message.tags["first-msg"] == "1",
             bits = message.tags["bits"]?.toIntOrNull(),
-            systemMsg = message.tags["system-msg"],
+            systemMsg = notice?.first ?: message.tags["system-msg"],
             msgId = message.tags["msg-id"],
+            noticeIcon = notice?.second ?: if (message.command == "USERNOTICE") R.drawable.tv_ic_info else null,
             reward = message.tags["custom-reward-id"]?.let {
                 ChannelPointReward(id = it)
             },
@@ -198,6 +200,11 @@ object ChatUtils {
             userId = message.tags["target-user-id"],
             userLogin = login,
             systemMsg = text,
+            noticeIcon = when {
+                login == null -> R.drawable.tv_ic_delete
+                duration != null -> R.drawable.tv_ic_timer
+                else -> R.drawable.tv_ic_block
+            },
             timestamp = message.tags["tmi-sent-ts"]?.toLongOrNull(),
             fullMsg = message.fullMessage
         )

@@ -43,6 +43,8 @@ import com.github.andreyasadchy.xtra.ui.view.CenteredImageSpan
 import com.github.andreyasadchy.xtra.ui.view.NamePaintImageSpan
 import com.github.andreyasadchy.xtra.ui.view.NamePaintSpan
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
+import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.prefs
 import java.text.NumberFormat
 import java.util.Random
 import kotlin.math.floor
@@ -66,6 +68,9 @@ object ChatAdapterUtils {
         var wasMentioned = false
         var translated = false
         var builderIndex = 0
+        val textSizePx = (itemView as? android.widget.TextView)?.textSize ?: 40f
+        val noticeColor = getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)
+        val highlightReplies = context.prefs().getBoolean(C.CHAT_HIGHLIGHT_MENTIONS, true)
         when {
             chatMessage.type == ChatMessage.REPLY_MESSAGE -> {
                 val userName = if (chatMessage.reply?.userName != null && chatMessage.reply.userLogin != null && !chatMessage.reply.userLogin.equals(chatMessage.reply.userName, true)) {
@@ -88,7 +93,12 @@ object ChatAdapterUtils {
                     prepareEmotes(chatMessage, message, builder, builderIndex, images, null, useReadableColors, isLightTheme, enableOverlayEmotes, useBoldNames, loggedInUser, chatUrl, getEmoteBytes, savedColors, localTwitchEmotes, showPersonalEmotes, personalEmoteSets, null, thirdPartyEmotes, cheerEmotes, savedLocalTwitchEmotes, savedLocalCheerEmotes, savedLocalEmotes)
                     builderIndex = builder.length
                 }
-                itemView.setBackgroundResource(0)
+                // the line of the message answered, above an answer to the user: highlighted with it
+                if (highlightReplies && chatMessage.replyParent?.let { repliesTo(it, loggedInUser) } == true) {
+                    itemView.background = TvChatNotices.highlight(context)
+                } else {
+                    itemView.setBackgroundResource(0)
+                }
             }
             chatMessage.message.isNullOrBlank() && (chatMessage.systemMsg != null || chatMessage.reward?.title != null) -> {
                 if (chatMessage.timestamp != null && enableTimestamps) {
@@ -100,8 +110,17 @@ object ChatAdapterUtils {
                     }
                 }
                 if (chatMessage.systemMsg != null) {
+                    val noticeStart = builderIndex
+                    // a notice of Twitch (subscription, raid, timeout...): a small grey line with its icon
+                    chatMessage.noticeIcon?.let {
+                        TvChatNotices.appendIcon(context, builder, it, com.github.andreyasadchy.xtra.ui.tv.TvAccent.color, textSizePx)
+                        builderIndex = builder.length
+                    }
                     builder.append(chatMessage.systemMsg)
                     builder.setSpan(ForegroundColorSpan(getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)), builderIndex, builderIndex + chatMessage.systemMsg.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    if (chatMessage.noticeIcon != null) {
+                        styleNotice(chatMessage, builder, noticeStart, builderIndex, builderIndex + chatMessage.systemMsg.length, savedColors, useReadableColors, isLightTheme)
+                    }
                     if (showSystemMessageEmotes) {
                         prepareEmotes(chatMessage, chatMessage.systemMsg, builder, builderIndex, images, imageClick, useReadableColors, isLightTheme, enableOverlayEmotes, useBoldNames, loggedInUser, chatUrl, getEmoteBytes, savedColors, localTwitchEmotes, showPersonalEmotes, personalEmoteSets, null, thirdPartyEmotes, cheerEmotes, savedLocalTwitchEmotes, savedLocalCheerEmotes, savedLocalEmotes)
                     }
@@ -156,7 +175,16 @@ object ChatAdapterUtils {
             }
             else -> {
                 if (chatMessage.systemMsg != null) {
+                    val noticeStart = builderIndex
+                    chatMessage.noticeIcon?.let {
+                        TvChatNotices.appendIcon(context, builder, it, com.github.andreyasadchy.xtra.ui.tv.TvAccent.color, textSizePx)
+                        builderIndex = builder.length
+                    }
                     builder.append("${chatMessage.systemMsg}\n")
+                    if (chatMessage.noticeIcon != null) {
+                        builder.setSpan(ForegroundColorSpan(noticeColor), builderIndex, builderIndex + chatMessage.systemMsg.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                        styleNotice(chatMessage, builder, noticeStart, builderIndex, builderIndex + chatMessage.systemMsg.length, savedColors, useReadableColors, isLightTheme)
+                    }
                     builderIndex += chatMessage.systemMsg.length + 1
                 } else {
                     if (chatMessage.msgId != null) {
@@ -372,18 +400,40 @@ object ChatAdapterUtils {
                         end = builderIndex + 1
                     ))
                     builderIndex += 1
+                } else if (chatMessage.deleted && !context.prefs().getBoolean(C.CHAT_SHOW_CLEAR_MSG, true)) {
+                    // deleted, option "show deleted messages" off: only a small grey mark in its place
+                    val start = builderIndex
+                    TvChatNotices.appendIcon(context, builder, R.drawable.tv_ic_delete, noticeColor, textSizePx)
+                    val text = context.getString(R.string.tv_chat_message_deleted)
+                    builder.append(text)
+                    builder.setSpan(ForegroundColorSpan(noticeColor), start, builder.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(android.text.style.RelativeSizeSpan(TvChatNotices.SIZE), start, builder.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builderIndex = builder.length
                 } else {
                     if (chatMessage.message != null) {
+                        val messageStart = builderIndex
                         builder.append(chatMessage.message)
+                        if (chatMessage.deleted) {
+                            // deleted by a moderator: grey and struck through, with a bin after it
+                            builder.setSpan(ForegroundColorSpan(noticeColor), messageStart, messageStart + chatMessage.message.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                            builder.setSpan(android.text.style.StrikethroughSpan(), messageStart, messageStart + chatMessage.message.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
                         if (chatMessage.isAction) {
                             builder.setSpan(ForegroundColorSpan(color), builderIndex, builderIndex + chatMessage.message.length, SPAN_EXCLUSIVE_EXCLUSIVE)
                         }
                         val result = prepareEmotes(chatMessage, chatMessage.message, builder, builderIndex, images, imageClick, useReadableColors, isLightTheme, enableOverlayEmotes, useBoldNames, loggedInUser, chatUrl, getEmoteBytes, savedColors, localTwitchEmotes, showPersonalEmotes, personalEmoteSets, stvUser, thirdPartyEmotes, cheerEmotes, savedLocalTwitchEmotes, savedLocalCheerEmotes, savedLocalEmotes)
                         wasMentioned = result
                         builderIndex = builder.length
+                        if (chatMessage.deleted) {
+                            builder.append(" ")
+                            TvChatNotices.appendIcon(context, builder, R.drawable.tv_ic_delete, noticeColor, textSizePx)
+                            builderIndex = builder.length
+                        }
                     }
                 }
-                if (chatMessage.translatedMessage != null) {
+                if (chatMessage.deleted) {
+                    // no translation of a deleted message
+                } else if (chatMessage.translatedMessage != null) {
                     translated = true
                     val result = addTranslation(chatMessage, builder, builderIndex, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, hideErrors)
                     builderIndex = result
@@ -393,15 +443,36 @@ object ChatAdapterUtils {
                     }
                 }
                 when {
+                    // an answer to the user or a mention of the user: the accent color over it and a bar on its left
+                    highlightReplies && (wasMentioned || repliesTo(chatMessage, loggedInUser)) -> itemView.background = TvChatNotices.highlight(context)
                     chatMessage.isFirst && firstMsgVisibility < 2 -> itemView.setBackgroundResource(R.color.chatMessageFirst)
                     chatMessage.reward?.id != null && firstMsgVisibility < 2 -> itemView.setBackgroundResource(R.color.chatMessageReward)
                     chatMessage.systemMsg != null || chatMessage.msgId != null -> itemView.setBackgroundResource(R.color.chatMessageNotice)
-                    wasMentioned -> itemView.setBackgroundResource(R.color.chatMessageMention)
                     else -> itemView.setBackgroundResource(0)
                 }
             }
         }
         return MessageResult(builder, images, imagePaint, userName, userNameStartIndex, translated)
+    }
+
+    /** An answer to a message of the logged in user (not one of the user). */
+    private fun repliesTo(chatMessage: ChatMessage, loggedInUser: String?): Boolean {
+        return !loggedInUser.isNullOrBlank() && chatMessage.reply?.userLogin.equals(loggedInUser, true) &&
+                !chatMessage.userLogin.equals(loggedInUser, true)
+    }
+
+    /** A notice line: smaller than the messages, the name of the user in bold and in its color. */
+    private fun styleNotice(chatMessage: ChatMessage, builder: SpannableStringBuilder, start: Int, textStart: Int, end: Int, savedColors: HashMap<String, Int>, useReadableColors: Boolean, isLightTheme: Boolean) {
+        builder.setSpan(android.text.style.RelativeSizeSpan(TvChatNotices.SIZE), start, end, SPAN_EXCLUSIVE_EXCLUSIVE)
+        val name = chatMessage.userName?.takeIf { it.isNotBlank() } ?: chatMessage.userLogin ?: return
+        val index = builder.substring(textStart, end).indexOf(name, ignoreCase = true)
+        if (index >= 0) {
+            val nameStart = textStart + index
+            builder.setSpan(StyleSpan(Typeface.BOLD), nameStart, nameStart + name.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+            chatMessage.color?.takeIf { it.isNotBlank() }?.let { color ->
+                builder.setSpan(ForegroundColorSpan(getSavedColor(color, savedColors, useReadableColors, isLightTheme)), nameStart, nameStart + name.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
     }
 
     class MessageResult(

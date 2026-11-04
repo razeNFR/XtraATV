@@ -72,6 +72,7 @@ import com.github.andreyasadchy.xtra.model.ui.CustomProxy
 import com.github.andreyasadchy.xtra.model.ui.StreamProxy
 import com.github.andreyasadchy.xtra.model.ui.Video
 import com.github.andreyasadchy.xtra.model.ui.VideoSwap
+import com.github.andreyasadchy.xtra.ui.tv.TvProxyStatus
 import com.github.andreyasadchy.xtra.player.lowlatency.CronetDataSource
 import com.github.andreyasadchy.xtra.player.lowlatency.HlsPlaylistParser
 import com.github.andreyasadchy.xtra.player.lowlatency.HttpEngineDataSource
@@ -289,6 +290,15 @@ class ExoPlayerService : BasePlaybackService() {
                             val ads = checkPlaylist(playlist, mainPlayer = true)
                             val oldValue = playingAds
                             playingAds = ads
+                            // the ad being blocked from the marks of Twitch ("2/3", its end), for the badge
+                            if (ads) {
+                                if (!oldValue) {
+                                    resetAdPod()
+                                }
+                                updateAdPod(playlist)
+                            } else if (oldValue) {
+                                adBreakOver()
+                            }
                             checkStreamPictureShown()
                             if (ads) {
                                 if (!oldValue) {
@@ -436,6 +446,8 @@ class ExoPlayerService : BasePlaybackService() {
                                         val host = customProxyList?.getOrNull(currentCustomProxy)?.url?.let {
                                             it.toUri().host ?: "https://$it".toUri().host
                                         }
+                                        // not tried again for a while, on this stream or the next ones
+                                        customProxyList?.getOrNull(currentCustomProxy)?.let { customProxyHost(it) }?.let { TvProxyStatus.markFailed(it) }
                                         currentCustomProxy += 1
                                         if (host != null) {
                                             serviceListener?.toast(getString(R.string.proxy_error, host), Toast.LENGTH_LONG)
@@ -830,6 +842,19 @@ class ExoPlayerService : BasePlaybackService() {
                             it.enabled && !it.url.isNullOrBlank()
                         }.sortedBy { it.position }
                     }
+                    // the custom proxies are the first backups of the ad blocker while an ad plays (in the mode "always", the
+                    // other proxies than the one of the stream when an ad comes through it), back to the stream once it is over
+                    val adsOnlyProxies = if (useCustomProxy) {
+                        channelLogin?.let { login ->
+                            customProxyList.orEmpty().mapIndexedNotNull { index, proxy ->
+                                customProxyUrl(proxy, login)?.let { url -> VideoSwap(AD_PROXY_PLATFORM, url, index) }
+                            }
+                        }.orEmpty()
+                    } else emptyList()
+                    // option: the custom proxies only while an ad plays, the stream itself straight from Twitch (low latency, 1440p)
+                    if (useCustomProxy && prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1") {
+                        useCustomProxy = false
+                    }
                     if (useStreamProxy) {
                         streamProxyList = xtraModule.playerRepository.getStreamProxies().filter {
                             it.enabled && !it.host.isNullOrBlank() && it.port != null
@@ -838,13 +863,22 @@ class ExoPlayerService : BasePlaybackService() {
                     }
                     val adblock = prefs().getBoolean(C.PLAYER_ADBLOCK, true)
                     // the ad blocker also backs up the proxies: if an ad still comes through them, the playlist of another player type is used
-                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, true)) || adblock
+                    useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, true)) || adblock || adsOnlyProxies.isNotEmpty()
                     if (useVideoSwap) {
-                        videoSwapList = xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
+                        videoSwapList = adsOnlyProxies + xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
                             it.enabled && !it.platform.isNullOrBlank() && !it.playerType.isNullOrBlank()
                         }.sortedBy { it.position }.ifEmpty {
                             // ad blocker: like the VAFT userscript, switch to the playlist of another player type while ads play
                             if (adblock) ADBLOCK_PLAYER_TYPES.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, index) } else emptyList()
+                        }
+                    }
+                    // the custom proxies are checked meanwhile: the offline ones are not tried (from the next stream for the one
+                    // of the stream in the mode "always", the stream does not wait for it)
+                    adsOnlyProxies.mapNotNull { swap -> swap.playerType?.let { url -> adProxyHost(swap)?.let { it to url } } }.forEach { (host, url) ->
+                        lifecycleScope.launch {
+                            if (!TvProxyStatus.reachable(this@ExoPlayerService, url)) {
+                                TvProxyStatus.markFailed(host)
+                            }
                         }
                     }
                     loadStream(restorePauseState)
@@ -998,39 +1032,11 @@ class ExoPlayerService : BasePlaybackService() {
             } else null
             if (restart || qualities.isNullOrEmpty()) {
                 val proxyUrl = if (useCustomProxy) {
-                    customProxyList?.getOrNull(currentCustomProxy)?.let { proxy ->
-                        proxy.url?.let { proxyUrl ->
-                            (proxyUrl.toUri().takeIf { it.host != null } ?: "https://$proxyUrl".toUri()).let { uri ->
-                                if (proxy.addQueryParams) {
-                                    val source = uri.getQueryParameter("allow_source") == null
-                                    val audio = uri.getQueryParameter("allow_audio_only") == null
-                                    val lowLatency = uri.getQueryParameter("fast_bread") == null
-                                    val unavailable = uri.getQueryParameter("include_unavailable") == null
-                                    val supportedCodecs = prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264")
-                                    val codecs = !supportedCodecs.isNullOrBlank() && uri.getQueryParameter("supported_codecs") == null
-                                    if (source || audio || lowLatency || unavailable || codecs) {
-                                        uri.buildUpon().apply {
-                                            if (source) {
-                                                appendQueryParameter("allow_source", "true")
-                                            }
-                                            if (audio) {
-                                                appendQueryParameter("allow_audio_only", "true")
-                                            }
-                                            if (lowLatency) {
-                                                appendQueryParameter("fast_bread", "true")
-                                            }
-                                            if (unavailable) {
-                                                appendQueryParameter("include_unavailable", "true")
-                                            }
-                                            if (codecs) {
-                                                appendQueryParameter("supported_codecs", supportedCodecs)
-                                            }
-                                        }.build()
-                                    } else uri
-                                } else uri
-                            }.toString().replace("\$channel", channelLogin)
-                        }
+                    // the custom proxies known offline (checked at the start of a stream, or failed a moment ago) are not tried
+                    while (customProxyList?.getOrNull(currentCustomProxy)?.let { customProxyHost(it) }?.let { TvProxyStatus.isFailed(it) } == true) {
+                        currentCustomProxy += 1
                     }
+                    customProxyList?.getOrNull(currentCustomProxy)?.let { proxy -> customProxyUrl(proxy, channelLogin) }
                 } else null
                 if (proxyUrl != null) {
                     playlistUrl = proxyUrl
@@ -1732,6 +1738,84 @@ class ExoPlayerService : BasePlaybackService() {
     /** The first playlist of the stream had an ad: a pre-roll. */
     private var firstPlaylistAd = false
 
+    /** Start and end of one ad, in the time of the device. */
+    private class AdTimes(val start: Long, val end: Long)
+
+    /** Times of the ads of the break, by their id: each one is computed once, when its mark first shows. */
+    private val adTimes = HashMap<String, AdTimes>()
+    /** The ad playing now: its place in the break (1 based, 0: not known), the number of ads (0: not known) and its times. */
+    private var adPodPosition = 0
+    private var adPodLength = 0
+    private var adPodTimes: AdTimes? = null
+    /** End of the last ad once the badge shows "Back to live" (0: not shown), it stays until the badge goes away. */
+    private var backLiveFrom = 0L
+
+    private fun resetAdPod() {
+        adTimes.clear()
+        adPodPosition = 0
+        adPodLength = 0
+        adPodTimes = null
+    }
+
+    /**
+     * The ad playing now, like the proxyivshook userscript: each ad of Twitch has its mark (EXT-X-DATERANGE of a stitched
+     * ad: id, start, duration, place and number of ads) at its own start, so the newest one is the ad playing. Its end is
+     * set once, from the live edge of the playlist (the date of its last segment), so the clock of the device does not matter.
+     */
+    private fun updateAdPod(playlist: HlsMediaPlaylist?) {
+        playlist ?: return
+        val last = playlist.segments.lastOrNull()
+        val liveEdge = if (playlist.hasProgramDateTime && last != null) (playlist.startTimeUs + last.relativeStartTimeUs + last.durationUs) / 1000 else null
+        var currentId: String? = null
+        var currentStart: Long? = null
+        var currentDuration: Double? = null
+        var currentPosition: Int? = null
+        var currentLength: Int? = null
+        playlist.tags.forEach { tag ->
+            if (tag.startsWith("#EXT-X-DATERANGE") && tag.contains("stitched", true)) {
+                val start = Regex("START-DATE=\"([^\"]+)\"").find(tag)?.groupValues?.get(1)?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                if (currentId == null || (start != null && (currentStart == null || start > currentStart!!))) {
+                    currentId = Regex("(?<![A-Z-])ID=\"([^\"]+)\"").find(tag)?.groupValues?.get(1) ?: tag
+                    currentStart = start
+                    currentDuration = Regex("(?<![A-Z-])DURATION=([\\d.]+)").find(tag)?.groupValues?.get(1)?.toDoubleOrNull()
+                    currentPosition = Regex("X-TV-TWITCH-AD-POD-POSITION=\"?(\\d+)").find(tag)?.groupValues?.get(1)?.toIntOrNull()
+                    currentLength = Regex("X-TV-TWITCH-AD-POD-LENGTH=\"?(\\d+)").find(tag)?.groupValues?.get(1)?.toIntOrNull()
+                }
+            }
+        }
+        val id = currentId ?: return
+        adPodPosition = currentPosition?.let { it + 1 } ?: 0
+        adPodLength = currentLength?.takeIf { it > 0 } ?: 0
+        val start = currentStart
+        val duration = currentDuration
+        adPodTimes = if (start != null && duration != null && duration > 0) {
+            adTimes.getOrPut(id) {
+                val elapsed = liveEdge?.let { ((it - start) / 1000.0).coerceIn(0.0, duration) } ?: 0.0
+                val end = System.currentTimeMillis() + ((duration - elapsed) * 1000).toLong()
+                AdTimes(end - (duration * 1000).toLong(), end)
+            }
+        } else null
+    }
+
+    /**
+     * The break is over (the stream is back): how long it took after the end of its last ad is kept, the bar of
+     * "Back to live" fills in that time the next time.
+     */
+    private fun adBreakOver() {
+        val times = adPodTimes
+        if (times != null && adPodLength > 0 && adPodPosition >= adPodLength) {
+            val measured = System.currentTimeMillis() - times.end
+            if (measured in 500..60_000) {
+                val previous = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY)
+                prefs().edit().putLong(AD_RETURN_DELAY, (previous * 2 + measured) / 3).apply()
+            }
+        }
+        resetAdPod()
+    }
+
+    /** What the badge of the ad blocker shows: two lines and the bar (0 to 1, null: no bar). */
+    class AdblockInfo(val title: String, val source: String?, val progress: Float?)
+
     /** Kind of the ad being blocked, "preroll" or "midroll", for the badge of the ad blocker. */
     private var adRollType: String? = null
 
@@ -1811,7 +1895,10 @@ class ExoPlayerService : BasePlaybackService() {
                 videoSwapList?.getOrNull(currentVideoSwapItem)
             } else null
             // statistics of the home: proxy or backup player type used
-            com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this@ExoPlayerService, streamProxy?.host ?: videoSwap?.playerType)
+            com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(
+                this@ExoPlayerService,
+                streamProxy?.host ?: videoSwap?.let { if (it.platform == AD_PROXY_PLATFORM) it.playerType?.toUri()?.host?.removePrefix("www.") else it.playerType }
+            )
             val playerListener = object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     // the backup player plays: the system sees the playback going on
@@ -1827,6 +1914,15 @@ class ExoPlayerService : BasePlaybackService() {
                     if (generation == streamGeneration && !streamPictureShown) {
                         streamPictureShown = true
                         serviceListener?.streamPictureShown()
+                    }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    // the backup (a custom proxy that stopped answering in the middle of the ad...) fails: the next one
+                    if (videoSwap != null && videoSwapActive && generation == streamGeneration && channelLogin == login &&
+                        videoSwapList?.getOrNull(currentVideoSwapItem) === videoSwap) {
+                        adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
+                        nextVideoSwap()
                     }
                 }
 
@@ -1856,24 +1952,7 @@ class ExoPlayerService : BasePlaybackService() {
                                     }
                                 }
                             }
-                            videoSwapActive -> {
-                                currentVideoSwapItem += 1
-                                if (videoSwapList?.getOrNull(currentVideoSwapItem) != null) {
-                                    secondaryPlayerTimerJob?.cancel()
-                                    secondaryPlayerTimerJob = lifecycleScope.launch {
-                                        delay(3.minutes)
-                                        videoSwapActive = false
-                                        serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
-                                        stopSecondaryPlayer2()
-                                        secondaryPlayerTimerJob = null
-                                    }
-                                    startSecondaryPlayer(false)
-                                } else {
-                                    stopVideoSwap = true
-                                    serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
-                                    stopSecondaryPlayer()
-                                }
-                            }
+                            videoSwapActive -> nextVideoSwap()
                         }
                     }
                 }
@@ -1902,7 +1981,8 @@ class ExoPlayerService : BasePlaybackService() {
                 quality?.url
             } else {
                 if (videoSwap != null) {
-                    val playlistUrl = channelLogin?.let { channelLogin ->
+                    // a custom proxy while the ad plays: its playlist, else the playlist of another player type
+                    val playlistUrl = if (videoSwap.platform == AD_PROXY_PLATFORM) videoSwap.playerType else channelLogin?.let { channelLogin ->
                         try {
                             xtraModule.playerRepository.loadStreamPlaylistUrl(
                                 context = this@ExoPlayerService,
@@ -2246,7 +2326,13 @@ class ExoPlayerService : BasePlaybackService() {
                 if (previous != null && previous !== player) {
                     previous.release()
                 }
+            } else if (generation == streamGeneration && videoSwap != null && videoSwapActive && channelLogin == login) {
+                // its playlist did not load (a custom proxy offline...): the next backup, like when the ad comes through
+                player.release()
+                adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
+                nextVideoSwap()
             } else if (generation == streamGeneration) {
+                player.release()
                 stopSecondaryPlayer()
             } else {
                 player.release()
@@ -2254,9 +2340,51 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
+    /** The playlist address of a custom proxy for [channelLogin], with the parameters of Twitch added when asked. */
+    private fun customProxyUrl(proxy: CustomProxy, channelLogin: String): String? {
+        return proxy.url?.let { proxyUrl ->
+                    (proxyUrl.toUri().takeIf { it.host != null } ?: "https://$proxyUrl".toUri()).let { uri ->
+                        if (proxy.addQueryParams) {
+                            val source = uri.getQueryParameter("allow_source") == null
+                            val audio = uri.getQueryParameter("allow_audio_only") == null
+                            val lowLatency = uri.getQueryParameter("fast_bread") == null
+                            val unavailable = uri.getQueryParameter("include_unavailable") == null
+                            val supportedCodecs = prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264")
+                            val codecs = !supportedCodecs.isNullOrBlank() && uri.getQueryParameter("supported_codecs") == null
+                            if (source || audio || lowLatency || unavailable || codecs) {
+                                uri.buildUpon().apply {
+                                    if (source) {
+                                        appendQueryParameter("allow_source", "true")
+                                    }
+                                    if (audio) {
+                                        appendQueryParameter("allow_audio_only", "true")
+                                    }
+                                    if (lowLatency) {
+                                        appendQueryParameter("fast_bread", "true")
+                                    }
+                                    if (unavailable) {
+                                        appendQueryParameter("include_unavailable", "true")
+                                    }
+                                    if (codecs) {
+                                        appendQueryParameter("supported_codecs", supportedCodecs)
+                                    }
+                                }.build()
+                            } else uri
+                        } else uri
+                    }.toString().replace("\$channel", channelLogin)
+        }
+    }
+
     private fun startVideoSwap() {
+        skipFailedAdProxies()
+        if (videoSwapList?.getOrNull(currentVideoSwapItem) == null) {
+            // every backup tried (custom proxies offline...): the ad plays
+            stopVideoSwap = true
+            return
+        }
         videoSwapActive = true
-        serviceListener?.toast(R.string.starting_video_swap, Toast.LENGTH_SHORT)
+        val adProxy = videoSwapList?.getOrNull(currentVideoSwapItem)?.platform == AD_PROXY_PLATFORM
+        serviceListener?.toast(if (adProxy) R.string.starting_proxy else R.string.starting_video_swap, Toast.LENGTH_SHORT)
         player?.let { player ->
             if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
@@ -2274,6 +2402,50 @@ class ExoPlayerService : BasePlaybackService() {
             secondaryPlayerTimerJob = null
         }
         startSecondaryPlayer(false)
+    }
+
+    /** The backup of the ad blocker failed or let the ad through: the next one (custom proxies known offline skipped), else none. */
+    private fun nextVideoSwap() {
+        currentVideoSwapItem += 1
+        skipFailedAdProxies()
+        if (videoSwapList?.getOrNull(currentVideoSwapItem) != null) {
+            secondaryPlayerTimerJob?.cancel()
+            secondaryPlayerTimerJob = lifecycleScope.launch {
+                delay(3.minutes)
+                videoSwapActive = false
+                serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
+                stopSecondaryPlayer2()
+                secondaryPlayerTimerJob = null
+            }
+            startSecondaryPlayer(false)
+        } else {
+            stopVideoSwap = true
+            serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
+            stopSecondaryPlayer()
+        }
+    }
+
+    /** Host of a custom proxy used while the ad plays, null for a player type of Twitch. */
+    private fun adProxyHost(videoSwap: VideoSwap): String? {
+        return if (videoSwap.platform == AD_PROXY_PLATFORM) videoSwap.playerType?.toUri()?.host?.removePrefix("www.") else null
+    }
+
+    /** The custom proxies known offline (checked at the start of the stream, or failed a moment ago) are not tried. */
+    private fun skipFailedAdProxies() {
+        while (videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
+                adProxyHost(swap)?.let { host ->
+                    // mode "always": the proxy of the stream is the one the ad came through
+                    TvProxyStatus.isFailed(host) || (useCustomProxy && swap.position == currentCustomProxy)
+                }
+            } == true) {
+            currentVideoSwapItem += 1
+        }
+    }
+
+    /** Host of a custom proxy, as [adProxyHost] gives it. */
+    private fun customProxyHost(proxy: CustomProxy): String? {
+        val url = proxy.url ?: return null
+        return (url.toUri().takeIf { it.host != null } ?: "https://$url".toUri()).host?.removePrefix("www.")
     }
 
     /** True while the backup player of the ad blocker shows the picture. */
@@ -2325,26 +2497,68 @@ class ExoPlayerService : BasePlaybackService() {
     val visiblePlayer: ExoPlayer?
         get() = secondaryPlayer?.takeIf { videoSwapActive || proxyMediaPlaylist } ?: player
 
-    /** Status of the ad blocker, shown on the player like the VAFT userscript does. */
-    fun getAdblockStatus(): String? {
-        // pre-roll (start of the stream) or mid-roll
-        val roll = when (adRollType) {
-            "preroll" -> getString(R.string.tv_adblock_preroll)
-            "midroll" -> getString(R.string.tv_adblock_midroll)
-            else -> null
-        }
+    /**
+     * Badge of the ad blocker, like the proxyivshook userscript: "Mid-roll ad 2/3 · 12 s" over the source of the stream
+     * without the ad, a bar for the ad playing that starts again with the next one, then "Back to live…" until the stream
+     * is back. Without the marks of Twitch: the kind of ad and the source only.
+     */
+    fun getAdblockInfo(): AdblockInfo? {
         val source = when {
-            videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.playerType ?: "backup"
+            videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
+                adProxyHost(swap)?.let { TvProxyStatus.displayName(it) } ?: swap.playerType
+            } ?: "backup"
             proxyMediaPlaylist -> "proxy"
             else -> null
         }
-        return when {
-            source != null && roll != null -> getString(R.string.tv_adblock_blocking_roll, roll, source)
-            source != null -> getString(R.string.tv_adblock_blocking, source)
-            hidden && roll != null -> getString(R.string.tv_adblock_waiting_roll, roll)
-            hidden -> getString(R.string.tv_adblock_waiting)
+        if (source == null && !hidden) {
+            backLiveFrom = 0L
+            return null
+        }
+        val now = System.currentTimeMillis()
+        val times = adPodTimes
+        if (backLiveFrom > 0L) {
+            if (times == null || times.end <= backLiveFrom) {
+                // "Back to live" stays until the badge goes away, even when the marks of the break are already gone
+                val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceAtLeast(1000L)
+                return AdblockInfo(getString(R.string.tv_adblock_back_live), source, ((now - backLiveFrom).toFloat() / delay).coerceIn(0f, 0.95f))
+            }
+            // a new ad started
+            backLiveFrom = 0L
+        }
+        val ad = getString(
+            when (adRollType) {
+                "preroll" -> R.string.tv_adblock_ad_preroll
+                "midroll" -> R.string.tv_adblock_ad_midroll
+                else -> R.string.tv_adblock_ad
+            }
+        )
+        if (source == null) {
+            // no stream without the ad: the picture waits for the end of the ad
+            return AdblockInfo(ad + " · " + getString(R.string.tv_adblock_on_hold), null, null)
+        }
+        val position = adPodPosition
+        val length = adPodLength
+        val ended = times != null && now >= times.end
+        if (times != null && ended && position > 0 && length > 0 && position >= length) {
+            // the last ad is over, Twitch keeps its marks a moment: the bar fills until the stream is back
+            backLiveFrom = times.end
+            val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceAtLeast(1000L)
+            return AdblockInfo(getString(R.string.tv_adblock_back_live), source, ((now - times.end).toFloat() / delay).coerceIn(0f, 0.95f))
+        }
+        val title = StringBuilder(ad)
+        if (position > 0 && length > 0) {
+            // between two ads the next one is not marked yet: its number already
+            title.append(' ').append(if (ended) minOf(position + 1, length) else position).append('/').append(length)
+        }
+        val progress = when {
+            times != null && !ended -> {
+                title.append(" · ").append(maxOf(1L, (times.end - now + 999) / 1000)).append(" s")
+                ((now - times.start).toFloat() / (times.end - times.start)).coerceIn(0f, 1f)
+            }
+            ended && position > 0 && length > 0 -> 0f
             else -> null
         }
+        return AdblockInfo(title.toString(), source, progress)
     }
 
     /** Keeps the quality of the backup player in line with the quality chosen for the main one. */
@@ -3392,6 +3606,12 @@ class ExoPlayerService : BasePlaybackService() {
         }
 
         // autoplay first, like the default video swap list
+        /** A backup of the ad blocker that is a custom proxy (its playlist address in the player type). */
+        private const val AD_PROXY_PLATFORM = "xtra_custom_proxy"
+        /** Time between the end of the last ad and the stream back, measured on the previous breaks (ms). */
+        private const val AD_RETURN_DELAY = "tv_ad_return_delay"
+        private const val DEFAULT_AD_RETURN_DELAY = 8000L
+
         private val ADBLOCK_PLAYER_TYPES = listOf(
             "android" to "autoplay",
             "web" to "embed",

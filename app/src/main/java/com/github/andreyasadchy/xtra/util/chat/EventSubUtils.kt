@@ -72,11 +72,13 @@ object EventSubUtils {
         )
     }
 
-    fun parseUserNotice(json: JSONObject, timestamp: String?): ChatMessage {
+    fun parseUserNotice(json: JSONObject, timestamp: String?, notice: Pair<String, Int>? = null): ChatMessage {
         val message = StringBuilder()
         val messageObj = json.optJSONObject("message")
         val messageText = if (messageObj?.isNull("text") == false) messageObj.optString("text").takeIf { it.isNotBlank() } else null
-        val systemMsg = if (!json.isNull("system_message")) json.optString("system_message").takeIf { it.isNotBlank() } else null
+        // our short translated line (TvChatNotices) when the kind is known, else the sentence of Twitch
+        val systemMsg = notice?.first ?: if (!json.isNull("system_message")) json.optString("system_message").takeIf { it.isNotBlank() } else null
+        val noticeIcon = notice?.second ?: com.github.andreyasadchy.xtra.R.drawable.tv_ic_info
         return if (messageText != null) {
             val emotesList = mutableListOf<TwitchEmote>()
             val fragments = messageObj?.optJSONArray("fragments")
@@ -128,6 +130,7 @@ object EventSubUtils {
                 isAction = messageText.startsWith(ChatUtils.ACTION),
                 systemMsg = systemMsg,
                 msgId = if (!json.isNull("notice_type")) json.optString("notice_type").takeIf { it.isNotBlank() } else null,
+                noticeIcon = noticeIcon,
                 timestamp = timestamp?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } },
                 fullMsg = json.toString()
             )
@@ -138,6 +141,7 @@ object EventSubUtils {
                 userLogin = if (!json.isNull("chatter_user_login")) json.optString("chatter_user_login").takeIf { it.isNotBlank() } else null,
                 userName = if (!json.isNull("chatter_user_name")) json.optString("chatter_user_name").takeIf { it.isNotBlank() } else null,
                 systemMsg = systemMsg,
+                noticeIcon = noticeIcon,
                 timestamp = timestamp?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } },
                 fullMsg = json.toString()
             )
@@ -148,6 +152,7 @@ object EventSubUtils {
         return ChatMessage(
             type = ChatMessage.NOTICE_MESSAGE,
             systemMsg = ContextCompat.getString(context, R.string.chat_clear),
+            noticeIcon = R.drawable.tv_ic_delete,
             timestamp = timestamp?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } },
             fullMsg = json.toString()
         )

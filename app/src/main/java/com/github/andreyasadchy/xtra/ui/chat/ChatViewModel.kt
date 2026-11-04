@@ -40,6 +40,7 @@ import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.chat.ChatReadIRCSocket
 import com.github.andreyasadchy.xtra.util.chat.ChatReadWebSocket
 import com.github.andreyasadchy.xtra.util.chat.ChatUtils
+import com.github.andreyasadchy.xtra.util.chat.TvChatNotices
 import com.github.andreyasadchy.xtra.util.chat.ChatWriteIRCSocket
 import com.github.andreyasadchy.xtra.util.chat.ChatWriteWebSocket
 import com.github.andreyasadchy.xtra.util.chat.EventSubUtils
@@ -152,6 +153,8 @@ class ChatViewModel(
     val addMessages = MutableSharedFlow<Pair<List<ChatMessage>, Int>>()
     val removeMessages = MutableSharedFlow<Int>()
     val updateUserMessages = MutableSharedFlow<String>()
+    /** Messages changed in place (deleted by a moderator...): the chat draws them again. */
+    val updateMessages = MutableSharedFlow<List<ChatMessage>>()
     val userEmotesUpdated = MutableSharedFlow<Unit>()
     val thirdPartyEmotesUpdated = MutableSharedFlow<Unit>()
 
@@ -889,21 +892,22 @@ class ChatViewModel(
                             "PRIVMSG" -> ChatUtils.parseChatMessage(ircMessage)
                             "USERNOTICE" -> {
                                 if (applicationContext.prefs().getBoolean(C.CHAT_SHOW_USER_NOTICE, true)) {
-                                    ChatUtils.parseChatMessage(ircMessage)
+                                    ChatUtils.parseChatMessage(ircMessage, TvChatNotices.build(applicationContext, ircMessage.tags))
                                 } else null
                             }
                             "CLEARMSG" -> {
-                                if (applicationContext.prefs().getBoolean(C.CHAT_SHOW_CLEAR_MSG, true)) {
-                                    val chatMessage = ChatUtils.parseClearMessage(ircMessage)
-                                    val deletedMessage = chatMessage.targetMsgId?.let { targetId ->
-                                        list.find { it.id == targetId }
-                                    }
-                                    getClearMessage(chatMessage, deletedMessage, applicationContext.prefs().getString(C.UI_NAME_DISPLAY, "0"))
-                                } else null
+                                // the deleted message is marked in place (grey and struck through, or hidden), no line added
+                                ChatUtils.parseClearMessage(ircMessage).targetMsgId?.let { targetId ->
+                                    list.find { it.id == targetId }?.deleted = true
+                                }
+                                null
                             }
                             "CLEARCHAT" -> {
+                                val clearChat = ChatUtils.parseClearChat(applicationContext, ircMessage)
+                                // timeout / ban: the messages of the user are marked deleted
+                                clearChat.userLogin?.let { login -> list.forEach { if (it.userLogin.equals(login, true)) it.deleted = true } }
                                 if (applicationContext.prefs().getBoolean(C.CHAT_SHOW_CLEAR_CHAT, true)) {
-                                    ChatUtils.parseClearChat(applicationContext, ircMessage)
+                                    clearChat
                                 } else null
                             }
                             "NOTICE" -> ChatUtils.parseNotice(ircMessage)
@@ -955,6 +959,19 @@ class ChatViewModel(
     fun deleteTranslatedChannel(channelId: String) {
         viewModelScope.launch {
             playerRepository.deleteTranslatedChannel(TranslatedChannel(channelId))
+        }
+    }
+
+    /** Marks the messages shown or waiting for the delay of the chat as deleted, the ones shown are drawn again. */
+    private suspend fun markDeleted(predicate: (ChatMessage) -> Boolean) {
+        synchronized(delayedMessages) {
+            delayedMessages.forEach { (message, _) -> if (predicate(message)) message.deleted = true }
+        }
+        val shown = synchronized(chatMessages) {
+            chatMessages.filter { it.type != ChatMessage.REPLY_MESSAGE && !it.deleted && predicate(it) }.onEach { it.deleted = true }
+        }
+        if (shown.isNotEmpty()) {
+            updateMessages.emit(shown)
         }
     }
 
@@ -1306,7 +1323,7 @@ class ChatViewModel(
 
         override suspend fun onChatMessage(message: ChatUtils.IRCMessage, userNotice: Boolean) {
             if (!userNotice || showUserNotice) {
-                val chatMessage = ChatUtils.parseChatMessage(message)
+                val chatMessage = ChatUtils.parseChatMessage(message, if (userNotice) TvChatNotices.build(applicationContext, message.tags) else null)
                 if (chatMessage.reply?.message != null) {
                     onMessage(ChatMessage(
                         type = ChatMessage.REPLY_MESSAGE,
@@ -1328,21 +1345,18 @@ class ChatViewModel(
         }
 
         override suspend fun onClearMessage(message: ChatUtils.IRCMessage) {
-            if (showClearMsg) {
-                val chatMessage = ChatUtils.parseClearMessage(message)
-                val deletedMessage = chatMessage.targetMsgId?.let { targetId ->
-                    synchronized(chatMessages) {
-                        chatMessages.find { it.id == targetId }
-                    }
-                }
-                val clearMessage = getClearMessage(chatMessage, deletedMessage, nameDisplay)
-                onMessage(clearMessage)
+            // the deleted message is marked in place (grey and struck through, or hidden with the option off), no line added
+            ChatUtils.parseClearMessage(message).targetMsgId?.let { targetId ->
+                markDeleted { it.id == targetId }
             }
         }
 
         override suspend fun onClearChat(message: ChatUtils.IRCMessage) {
+            val clearChat = ChatUtils.parseClearChat(applicationContext, message)
+            // timeout / ban: the messages of the user are marked deleted
+            clearChat.userLogin?.let { login -> markDeleted { it.userLogin.equals(login, true) } }
             if (showClearChat) {
-                onMessage(ChatUtils.parseClearChat(applicationContext, message))
+                onMessage(clearChat)
             }
         }
 
@@ -1449,7 +1463,7 @@ class ChatViewModel(
 
         override suspend fun onUserNotice(event: JSONObject, timestamp: String?) {
             if (showUserNotice) {
-                onChatMessage(EventSubUtils.parseUserNotice(event, timestamp), networkLibrary, isLoggedIn, accountId, channelId)
+                onChatMessage(EventSubUtils.parseUserNotice(event, timestamp, TvChatNotices.build(applicationContext, event)), networkLibrary, isLoggedIn, accountId, channelId)
             }
         }
 

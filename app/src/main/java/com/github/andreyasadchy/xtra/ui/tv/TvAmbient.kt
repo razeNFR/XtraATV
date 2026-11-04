@@ -24,6 +24,14 @@ object TvAmbient {
         "orange" to 0xFFF97316.toInt(),
         "red" to 0xFFEF4444.toInt(),
         "pink" to 0xFFEC4899.toInt(),
+        // light shades
+        "sky" to 0xFF7DD3FC.toInt(),
+        "turquoise" to 0xFF2DD4BF.toInt(),
+        "mint" to 0xFF6EE7B7.toInt(),
+        "amber" to 0xFFFBBF24.toInt(),
+        "coral" to 0xFFFB7185.toInt(),
+        "lavender" to 0xFFC4B5FD.toInt(),
+        "white" to 0xFFE5E7EB.toInt(),
     )
 
     fun color(context: Context): Int? {
@@ -31,21 +39,27 @@ object TvAmbient {
         return COLORS[key]
     }
 
+    /** Color of a value of the setting (the dot in front of it in the list), null for "none". */
+    fun colorOf(key: String?): Int? = COLORS[key]
+
     fun background(context: Context, base: Int): Drawable {
         val color = color(context) ?: return ColorDrawable(base)
+        // a light shade glows less, the background stays dark
+        val light = Color.luminance(color) > 0.45f
+        fun alpha(value: Int) = if (light) value * 3 / 5 else value
         val metrics = context.resources.displayMetrics
         val size = maxOf(metrics.widthPixels, metrics.heightPixels).toFloat()
         val glow = GradientDrawable().apply {
             gradientType = GradientDrawable.RADIAL_GRADIENT
             setGradientCenter(0.12f, 0f)
             gradientRadius = size * 0.75f
-            colors = intArrayOf(withAlpha(color, 0x4D), withAlpha(color, 0x14), Color.TRANSPARENT)
+            colors = intArrayOf(withAlpha(color, alpha(0x4D)), withAlpha(color, alpha(0x14)), Color.TRANSPARENT)
         }
         val corner = GradientDrawable().apply {
             gradientType = GradientDrawable.RADIAL_GRADIENT
             setGradientCenter(1f, 1f)
             gradientRadius = size * 0.55f
-            colors = intArrayOf(withAlpha(color, 0x26), Color.TRANSPARENT)
+            colors = intArrayOf(withAlpha(color, alpha(0x26)), Color.TRANSPARENT)
         }
         return LayerDrawable(arrayOf(ColorDrawable(base), glow, corner))
     }

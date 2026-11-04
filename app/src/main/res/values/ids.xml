@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <item name="tvNavSearch" type="id" />
+    <item name="tvMarqueeStart" type="id" />
+    <item name="tvSettingIconTint" type="id" />
     <item name="tvNavSettings" type="id" />
     <item name="tvNavAccount" type="id" />
     <item name="tvMoveUp" type="id" />

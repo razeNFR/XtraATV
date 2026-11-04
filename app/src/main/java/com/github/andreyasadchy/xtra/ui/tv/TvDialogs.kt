@@ -136,10 +136,10 @@ object TvDialogs {
     }
 
     /** One choice among a list (sort, filters...), the focus starts on the current choice. */
-    fun showChoices(context: Context, title: String, options: List<String>, selected: Int, icons: List<Int?>? = null, onSelected: (Int) -> Unit): ComponentDialog {
+    fun showChoices(context: Context, title: String, options: List<String>, selected: Int, icons: List<Int?>? = null, colors: List<Int?>? = null, onSelected: (Int) -> Unit): ComponentDialog {
         return show(context) { dismiss ->
             SidePanel(title = title) {
-                ChoiceList(options, selected, icons) {
+                ChoiceList(options, selected, icons, colors) {
                     dismiss()
                     onSelected(it)
                 }
@@ -154,6 +154,7 @@ fun TvTheme(accent: Int, content: @Composable () -> Unit) {
         colorScheme = darkColorScheme(
             // the ambiance color of the Xtra TV settings when one is chosen
             primary = ComposeColor(if (TvAccent.current != null) TvAccent.color else accent),
+            onPrimary = ComposeColor(if (TvAccent.current != null) TvAccent.onAccent else android.graphics.Color.WHITE),
             surface = ComposeColor(0xFF1C1B22),
             onSurface = ComposeColor.White,
         ),
@@ -245,7 +246,7 @@ fun FocusRow(
 }
 
 @Composable
-fun ChoiceList(options: List<String>, selected: Int, icons: List<Int?>? = null, onSelected: (Int) -> Unit) {
+fun ChoiceList(options: List<String>, selected: Int, icons: List<Int?>? = null, colors: List<Int?>? = null, onSelected: (Int) -> Unit) {
     val requester = remember { FocusRequester() }
     val state = rememberLazyListState(initialFirstVisibleItemIndex = (selected - 2).coerceAtLeast(0))
     LazyColumn(state = state) {
@@ -257,7 +258,10 @@ fun ChoiceList(options: List<String>, selected: Int, icons: List<Int?>? = null, 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // actions (icons given): an icon in front of each one, choices: a radio dot
                     val icon = icons?.getOrNull(index)
-                    if (icon != null) {
+                    if (colors != null) {
+                        // colors: a dot of the color, ringed when it is the current one ("none": an empty ring)
+                        ColorDot(colors.getOrNull(index), index == selected, focused)
+                    } else if (icon != null) {
                         androidx.tv.material3.Icon(
                             androidx.compose.ui.res.painterResource(icon),
                             contentDescription = null,
@@ -280,6 +284,18 @@ fun ChoiceList(options: List<String>, selected: Int, icons: List<Int?>? = null, 
             requester.requestFocus()
         }
     }
+}
+
+@Composable
+fun ColorDot(color: Int?, checked: Boolean, focused: Boolean) {
+    val ring = if (focused) TvColors.onFocused else ComposeColor.White
+    Box(
+        Modifier
+            .size(24.dp)
+            .border(2.dp, if (checked || color == null) ring else ComposeColor.Transparent, CircleShape)
+            .padding(4.dp)
+            .background(if (color != null) ComposeColor(color) else ComposeColor.Transparent, CircleShape)
+    )
 }
 
 @Composable

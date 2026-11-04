@@ -145,7 +145,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             picture.setImageDrawable(null)
             com.github.andreyasadchy.xtra.ui.tv.TvLoadingPicture.show(
                 picture, login,
-                stream.thumbnail?.takeUnless { com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.isFresh(stream) || stream.thumbnailURL.isNullOrBlank() },
+                stream.thumbnail?.also { com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.remember(stream) }?.takeUnless { stream.thumbnailURL.isNullOrBlank() },
                 stream.channelImage, activity.lifecycleScope
             ) { this.stream?.channelLogin == login && (texture?.alpha ?: 1f) < 1f }
         }

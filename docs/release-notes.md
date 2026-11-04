@@ -1,15 +1,22 @@
-# Xtra TV 1.2.8
+# Xtra TV 1.2.9
 
 ### New
-- **Stats badge** on the home, left of the greeting: a statistic that changes each minute (time today, days in a row, top streamer of the week...). OK opens the statistics page.
-- **Chat band over the stream**: the chat under the stream can now sit on the picture (chat panel > Band), the stream stays full screen.
-- **Home**: option to hide the "Latest videos of the followed channels" row (Xtra TV settings).
+- **Proxies only during ads**: custom proxies can now be used only while an ad plays (Ads and proxies > Custom proxies > Use, or OK held on the Proxy button of the player). The stream comes straight from Twitch the rest of the time: low latency and 1440p. If a proxy is offline, stops answering or lets the ad through, the next one is used, then the usual ad blocker. The status of the player shows the name of the proxy (for example "Proxy EU Luminous").
+- **Custom proxies, safer**: in both modes the proxies found offline are skipped (checked in the background when a stream starts, and for 10 minutes after one fails), and in the "Always" mode, when an ad comes through the proxy, the other proxies are tried first, then the ad blocker.
+- **Chat notices**: subscriptions, gifts, raids and announcements get a short translated line, smaller, with an icon, instead of the English sentence of Twitch.
+- **Deleted messages**: a message deleted by a moderator (or of a user timed out or banned) is now greyed out and struck through in place, or hidden with "Show deleted messages" off, instead of a new line.
+- **Replies to you**: an answer to your message or a mention of your name is highlighted with the accent color and a bar on its left (Chat > Highlight replies and mentions).
+- **Ad blocker badge**: on two lines, "Mid-roll ad 2/3 · 12 s" over the proxy or backup used, with a thin bar for the ad playing (it starts again with the next one), then "Back to live…" until the stream is back.
+- **New accent colors**: light blue, turquoise, mint, amber, coral, lavender and white, picked from a list with a dot of each color.
+- **Settings icons**: every setting of the right column has an icon, to find it at a glance.
 
 ### Changes
-- The stream info shows for 2.5 s each time a stream starts, from the home or any list.
-- The streamers left and right go away with the stream info.
-- Videos without a picture show the avatar of the streamer instead of a "?".
-- The videos still recording are left out of the home row (the live is already in the row above).
+- **Long stream titles**: on the focused card (home, followed, lists, stream banner of the player), a title too long for the card scrolls after a second.
+- **New streams**: while Twitch has not made the thumbnail of a stream yet, the picture of the channel is shown instead of the grey camera (cards and picture while a stream loads).
+- **Left / right in the player**: quick switches no longer open the whole HUD, move in the timeline or lose the focus; the timeline only takes left / right once you opened the HUD yourself (OK, up / down).
+- **New public proxy**: twitch-al.nadeko.net is added to the custom proxies (at the end of the list, on).
+- **Settings**: left from a setting goes back to its category, right comes back to the same setting, down on the last row stays there.
+- **Ads and proxies**: the 1440p warning is gone from the top; what each option means for the 1440p is now written on the ad blocker and on the custom proxies.
 
 ### Install
-Download `XtraTV-1.2.8-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.2.9-tv.apk` below and install it over the previous version, your settings and account are kept.

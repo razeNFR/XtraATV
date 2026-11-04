@@ -787,6 +787,22 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     }
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            // messages deleted by a moderator: drawn again grey and struck through (or hidden)
+                            viewModel.updateMessages.collect { changed ->
+                                adapter?.let { adapter ->
+                                    synchronized(viewModel.chatMessages) {
+                                        viewModel.chatMessages.mapIndexedNotNull { index, message ->
+                                            if (changed.any { it === message || (message.type == ChatMessage.REPLY_MESSAGE && it === message.replyParent) }) index else null
+                                        }
+                                    }.forEach {
+                                        adapter.notifyItemChanged(it)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.updateUserMessages.collectLatest { userId ->
                                 adapter?.let { adapter ->
                                     synchronized(viewModel.chatMessages) {

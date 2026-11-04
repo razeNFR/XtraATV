@@ -3,15 +3,9 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <Preference
-        android:key="tv_1440p_warning"
-        android:layout="@layout/tv_preference_warning"
-        android:selectable="false"
-        android:title="@string/tv_1440p_warning" />
-
     <PreferenceCategory android:title="@string/adblock" app:iconSpaceReserved="false">
 
-        <Preference android:key="adblock_settings" android:summary="@string/adblock_summary" android:title="@string/adblock" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+        <Preference android:key="adblock_settings" android:summary="@string/tv_adblock_summary_1440p" android:title="@string/adblock" app:iconSpaceReserved="false" app:singleLineTitle="false" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/tv_settings_cat_proxies" app:iconSpaceReserved="false">
