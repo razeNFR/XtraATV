@@ -174,6 +174,10 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
     }
 
     override fun onDisplayPreferenceDialog(preference: Preference) {
+        if (preference.key == C.TV_AMBIENT_COLOR && com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
+            // TV: its own panel with the colors opens from its click listener, not the list of Android as well
+            return
+        }
         if (requireContext().prefs().getBoolean(C.UI_THEME_MATERIAL3, true)) {
             when (preference) {
                 is ListPreference -> showPreferenceDialog(preference, MaterialListPreference())

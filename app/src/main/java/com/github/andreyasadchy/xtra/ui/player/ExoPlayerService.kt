@@ -1747,6 +1747,8 @@ class ExoPlayerService : BasePlaybackService() {
     private var adPodPosition = 0
     private var adPodLength = 0
     private var adPodTimes: AdTimes? = null
+    /** End of the last ad once the badge shows "Back to live" (0: not shown), it stays until the badge goes away. */
+    private var backLiveFrom = 0L
 
     private fun resetAdPod() {
         adTimes.clear()
@@ -2509,7 +2511,19 @@ class ExoPlayerService : BasePlaybackService() {
             else -> null
         }
         if (source == null && !hidden) {
+            backLiveFrom = 0L
             return null
+        }
+        val now = System.currentTimeMillis()
+        val times = adPodTimes
+        if (backLiveFrom > 0L) {
+            if (times == null || times.end <= backLiveFrom) {
+                // "Back to live" stays until the badge goes away, even when the marks of the break are already gone
+                val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceAtLeast(1000L)
+                return AdblockInfo(getString(R.string.tv_adblock_back_live), source, ((now - backLiveFrom).toFloat() / delay).coerceIn(0f, 0.95f))
+            }
+            // a new ad started
+            backLiveFrom = 0L
         }
         val ad = getString(
             when (adRollType) {
@@ -2522,13 +2536,12 @@ class ExoPlayerService : BasePlaybackService() {
             // no stream without the ad: the picture waits for the end of the ad
             return AdblockInfo(ad + " · " + getString(R.string.tv_adblock_on_hold), null, null)
         }
-        val now = System.currentTimeMillis()
-        val times = adPodTimes
         val position = adPodPosition
         val length = adPodLength
         val ended = times != null && now >= times.end
         if (times != null && ended && position > 0 && length > 0 && position >= length) {
             // the last ad is over, Twitch keeps its marks a moment: the bar fills until the stream is back
+            backLiveFrom = times.end
             val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceAtLeast(1000L)
             return AdblockInfo(getString(R.string.tv_adblock_back_live), source, ((now - times.end).toFloat() / delay).coerceIn(0f, 0.95f))
         }
