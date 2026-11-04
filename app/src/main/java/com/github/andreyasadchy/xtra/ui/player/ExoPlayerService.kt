@@ -2960,7 +2960,7 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     /** The volume of the settings, with the share the small window of the TV leaves to this stream. */
-    private fun userVolume() = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f * TvPip.mainMix
+    private fun userVolume() = if (com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.leaveMuted) 0f else prefs().getInt(C.PLAYER_VOLUME, 100) / 100f * TvPip.mainMix
 
     /** TV: the sound of the small window changed (its panel, opened or closed): the stream that is heard follows. */
     fun refreshVolume() {

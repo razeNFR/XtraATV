@@ -823,6 +823,12 @@ class MultiStreamFragment : Fragment() {
         holdPlaybackSignals()
     }
 
+    /** TV: the app was just left (Home): every stream silent while it is kept a few seconds, the selected one heard again on return. */
+    fun setLeaveMuted(muted: Boolean) {
+        val focused = tiles.firstOrNull { it.view.hasFocus() } ?: tiles.firstOrNull()
+        tiles.forEach { it.player.volume = if (!muted && it == focused) 1f else 0f }
+    }
+
     /** What the system and the launchers see of the multi-stream: a playback going on (no screensaver over it). */
     private var session: android.media.session.MediaSession? = null
 

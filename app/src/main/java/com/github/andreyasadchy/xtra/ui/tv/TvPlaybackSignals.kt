@@ -31,6 +31,10 @@ object TvPlaybackSignals {
         .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
         .build()
 
+    /** The app was just left (Home): the stream of the player is silent while it is kept a few seconds (MainActivity). */
+    @Volatile
+    var leaveMuted = false
+
     /** What plays now, with what pauses it when another app takes the sound. */
     private val owners = LinkedHashMap<Any, () -> Unit>()
     private var held = false
