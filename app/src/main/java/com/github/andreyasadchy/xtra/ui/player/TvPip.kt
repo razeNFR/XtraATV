@@ -222,7 +222,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             "both" -> (if (balance > 0) 1f - balance / 100f else 1f) to (if (balance < 0) 1f + balance / 100f else 1f)
             else -> 1f to 0f
         }
-        player?.volume = small * volume
+        player?.volume = if (leaveMuted) 0f else small * volume
         setMainMix(main)
     }
 
@@ -335,6 +335,10 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         @Volatile
         var mainMix = 1f
             private set
+
+        /** TV: the app was just left (Home), silent until it is closed or the app comes back (MainActivity). */
+        @Volatile
+        var leaveMuted = false
 
         fun showHint(activity: MainActivity) {
             Toast.makeText(activity, R.string.tv_pip_hint, Toast.LENGTH_LONG).show()

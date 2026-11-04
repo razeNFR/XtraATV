@@ -117,6 +117,8 @@ import kotlin.concurrent.schedule
 class MainActivity : AppCompatActivity() {
 
     companion object {
+        /** TV: time a screen may stay over the app before it counts as left (the streams stop). */
+        private const val LEAVE_DELAY_MS = 3000L
         const val KEY_VIDEO = "video"
 
         const val INTENT_INSTALL_UPDATE = "com.github.andreyasadchy.xtra.INSTALL_UPDATE"
@@ -1472,6 +1474,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        // back before the app counted as left: the streams go on, with their sound
+        leaveHandler.removeCallbacks(leaveApp)
+        if (isTv) {
+            setLeaveMuted(false, main = true)
+        }
         openingOwnScreen = false
         keepPlayerInBackground = false
         if (isTv && ::binding.isInitialized) {
@@ -1487,25 +1494,57 @@ class MainActivity : AppCompatActivity() {
         if (isTv && ::binding.isInitialized) {
             tvLiveAlerts.stop()
         }
-        if (isTv && !openingOwnScreen && !isChangingConfigurations) {
-            // leaving the app: the small window closes, only the main stream may keep its sound
-            closeTvPip()
-        }
+        leaveHandler.removeCallbacks(leaveApp)
         keepPlayerInBackground = false
         if (isTv && !openingOwnScreen && !isChangingConfigurations) {
-            val player = playerFragment as? PlayerFragment
-            if (player?.keepsPlayingWhenAppLeft() == true) {
-                keepPlayerInBackground = true
-            } else {
-                // TV: leaving the app stops the streams, no sound left behind
-                player?.let {
-                    it.close()
-                    closePlayer()
-                }
-            }
-            closeMultiStream()
+            // TV: a screen shown over the app for a moment (the screensaver of a launcher, given up at once as a playback
+            // goes on) must not cut the stream: the player is kept a few seconds, the app really left then closes it
+            keepPlayerInBackground = true
+            // no sound left behind meanwhile: silent at once, unless the stream keeps its sound when the app is left
+            setLeaveMuted(true, main = (playerFragment as? PlayerFragment)?.keepsPlayingWhenAppLeft() != true)
+            leaveHandler.postDelayed(leaveApp, LEAVE_DELAY_MS)
         }
         super.onStop()
+    }
+
+    /** TV: the sound while the app is left a few seconds: [main] the stream of the player too, else only the others. */
+    private fun setLeaveMuted(muted: Boolean, main: Boolean) {
+        val mainMuted = muted && main
+        if (com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.leaveMuted != mainMuted) {
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.leaveMuted = mainMuted
+            refreshPlayerVolume()
+        }
+        if (com.github.andreyasadchy.xtra.ui.player.TvPip.leaveMuted != muted) {
+            com.github.andreyasadchy.xtra.ui.player.TvPip.leaveMuted = muted
+            if (isTvPipOpen()) {
+                tvPip.applySound()
+            }
+        }
+        (supportFragmentManager.findFragmentByTag(MULTI_STREAM_TAG) as? com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment)?.setLeaveMuted(muted)
+    }
+
+    private val leaveHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** TV: the app is still left a few seconds after it was: the streams stop, no sound left behind (unless kept). */
+    private val leaveApp = Runnable {
+        if (isDestroyed || lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+            return@Runnable
+        }
+        // leaving the app: the small window closes, only the main stream may keep its sound
+        closeTvPip()
+        val player = playerFragment as? PlayerFragment
+        if (player?.keepsPlayingWhenAppLeft() == true) {
+            keepPlayerInBackground = true
+        } else {
+            keepPlayerInBackground = false
+            player?.let {
+                it.close()
+                closePlayer()
+            }
+        }
+        closeMultiStream()
+        // what is kept plays with its sound (the stream kept when the app is left), the next start too
+        setLeaveMuted(false, main = true)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
