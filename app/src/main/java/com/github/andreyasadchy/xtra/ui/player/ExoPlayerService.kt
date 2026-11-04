@@ -364,6 +364,8 @@ class ExoPlayerService : BasePlaybackService() {
                                                     }
                                                 } ?: 0
                                                 delay(delay.milliseconds)
+                                                // as VAFT: back once the piece the main player plays is one of the stream, not of the ad
+                                                awaitMainPlayerOnLive()
                                                 if (proxyMediaPlaylist) {
                                                     serviceListener?.toast(R.string.stopping_proxy, Toast.LENGTH_SHORT)
                                                     stopSecondaryPlayer()
@@ -381,6 +383,8 @@ class ExoPlayerService : BasePlaybackService() {
                                                     }
                                                 } ?: 0
                                                 delay(delay.milliseconds)
+                                                // as VAFT: back once the piece the main player plays is one of the stream, not of the ad
+                                                awaitMainPlayerOnLive()
                                                 if (videoSwapActive) {
                                                     serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
                                                     stopSecondaryPlayer()
@@ -398,6 +402,8 @@ class ExoPlayerService : BasePlaybackService() {
                                                     }
                                                 } ?: 0
                                                 delay(delay.milliseconds)
+                                                // as VAFT: back once the piece the main player plays is one of the stream, not of the ad
+                                                awaitMainPlayerOnLive()
                                                 if (hidden) {
                                                     hidden = false
                                                     player?.let { player ->
@@ -408,6 +414,7 @@ class ExoPlayerService : BasePlaybackService() {
                                                         }
                                                         player.volume = userVolume()
                                                     }
+                                                    startFreezeWatch()
                                                 }
                                                 adDelayJob = null
                                             }
@@ -756,7 +763,12 @@ class ExoPlayerService : BasePlaybackService() {
                         )
                     }.build()
                 )
-                setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
+                if (resources.getBoolean(R.bool.isTv)) {
+                    // TV: the sound of a film, the audio focus is held by the app for every player (TvPlaybackSignals)
+                    setAudioAttributes(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.playerAttributes, false)
+                } else {
+                    setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
+                }
                 setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
@@ -794,6 +806,13 @@ class ExoPlayerService : BasePlaybackService() {
                 session.setMediaButtonReceiver(
                     PendingIntent.getBroadcast(this, 0, Intent(Intent.ACTION_MEDIA_BUTTON).setClass(this, MediaButtonReceiver::class.java), PendingIntent.FLAG_MUTABLE)
                 )
+            }
+            if (resources.getBoolean(R.bool.isTv)) {
+                // TV: shown to the system as the sessions of the usual players (media buttons, transport controls, a queue
+                // of one item), with the sound of a film: the launchers looking at it see a playback going on
+                @Suppress("DEPRECATION")
+                session.setFlags(7)
+                session.setPlaybackToLocal(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.systemAttributes)
             }
             session.isActive = true
             notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -1968,7 +1987,12 @@ class ExoPlayerService : BasePlaybackService() {
                         )
                     }.build()
                 )
-                setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
+                if (resources.getBoolean(R.bool.isTv)) {
+                    // TV: the sound of a film, the audio focus is held by the app for every player (TvPlaybackSignals)
+                    setAudioAttributes(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.playerAttributes, false)
+                } else {
+                    setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
+                }
                 setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
@@ -2704,6 +2728,8 @@ class ExoPlayerService : BasePlaybackService() {
         player?.stop()
         // everything the ad blocker started for this stream stops, nothing of it may come over the next one
         streamGeneration++
+        freezeWatchJob?.cancel()
+        freezeWatchJob = null
         secondaryLoadJob?.cancel()
         secondaryLoadJob = null
         // nothing of the stream that ends counts for the next one: no picture of it shown yet, its first playlist not
@@ -2794,6 +2820,71 @@ class ExoPlayerService : BasePlaybackService() {
         secondaryPlayer = null
         // the main player plays again: the state the system sees is its own
         updatePlaybackState()
+        startFreezeWatch()
+    }
+
+    /**
+     * As VAFT: the main player is shown again only once the piece of the playlist it plays is one of the stream ("live" in
+     * its EXTINF), not one of the ad still in its buffer (20 s at most). Playlists without these names: nothing to wait for.
+     */
+    private suspend fun awaitMainPlayerOnLive() {
+        repeat(80) {
+            val player = player ?: return
+            val playlist = (player.currentManifest as? HlsManifest)?.mediaPlaylist ?: return
+            if (playlist.segments.none { it.title.isNotEmpty() }) {
+                return
+            }
+            val positionUs = player.currentPosition * 1000
+            val segment = playlist.segments.lastOrNull { it.relativeStartTimeUs <= positionUs } ?: return
+            if (segment.title.contains("live", true)) {
+                return
+            }
+            delay(250)
+        }
+    }
+
+    private var freezeWatchJob: Job? = null
+
+    /**
+     * Back to the stream after an ad: if its picture does not move (stuck on the last picture of the ad) or it keeps
+     * loading, the stream starts again at the live edge instead of staying stuck.
+     */
+    private fun startFreezeWatch() {
+        if (type != STREAM) {
+            return
+        }
+        freezeWatchJob?.cancel()
+        freezeWatchJob = lifecycleScope.launch {
+            var lastPosition = -1L
+            var frozen = 0
+            var loading = 0
+            repeat(15) {
+                delay(1000)
+                val player = player ?: return@launch
+                if (secondaryPlayer != null || hidden || !player.playWhenReady || player.playerError != null) {
+                    return@launch
+                }
+                val position = player.currentPosition
+                when (player.playbackState) {
+                    Player.STATE_READY -> {
+                        loading = 0
+                        frozen = if (position == lastPosition) frozen + 1 else 0
+                    }
+                    Player.STATE_BUFFERING -> {
+                        frozen = 0
+                        loading++
+                    }
+                    else -> return@launch
+                }
+                lastPosition = position
+                if (frozen >= 3 || loading >= 8) {
+                    player.seekToDefaultPosition()
+                    player.prepare()
+                    player.play()
+                    return@launch
+                }
+            }
+        }
     }
 
     /** Volume of the stream, without the share taken by the small window of the TV (the volume control shows this one). */
@@ -3045,8 +3136,31 @@ class ExoPlayerService : BasePlaybackService() {
                     )
                     addCustomAction(INTENT_REWIND, ContextCompat.getString(this@ExoPlayerService, R.string.rewind), androidx.media3.session.R.drawable.media3_icon_rewind)
                     addCustomAction(INTENT_FAST_FORWARD, ContextCompat.getString(this@ExoPlayerService, R.string.forward), androidx.media3.session.R.drawable.media3_icon_fast_forward)
+                    if (isTvDevice) {
+                        setActiveQueueItemId(0L)
+                    }
                 }.build()
             )
+        }
+        updateAudioFocus()
+    }
+
+    private val isTvDevice by lazy { resources.getBoolean(R.bool.isTv) }
+
+    /**
+     * TV: the app holds the audio focus while the stream or the video plays (or loads to play), whichever player shows it,
+     * and gives it back once paused or stopped.
+     */
+    private fun updateAudioFocus() {
+        if (!isTvDevice) {
+            return
+        }
+        val playing = player?.let { it.playWhenReady && it.playbackState != Player.STATE_IDLE && it.playbackState != Player.STATE_ENDED } == true ||
+                secondaryPlayer?.let { it.playWhenReady && it.playbackState != Player.STATE_IDLE && it.playbackState != Player.STATE_ENDED } == true
+        if (playing) {
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.hold(this, this) { pause() }
+        } else {
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.release(this, this)
         }
     }
 
@@ -3136,8 +3250,7 @@ class ExoPlayerService : BasePlaybackService() {
 
     private fun setMetadata(bitmap: Bitmap?) {
         (secondaryPlayer ?: player)?.let { player ->
-            session?.setMetadata(
-                MediaMetadata.Builder().apply {
+            val metadata = MediaMetadata.Builder().apply {
                     putText(MediaMetadata.METADATA_KEY_TITLE, title)
                     putText(MediaMetadata.METADATA_KEY_ARTIST, channelName)
                     if (bitmap != null) {
@@ -3153,7 +3266,11 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                     )
                 }.build()
-            )
+            session?.setMetadata(metadata)
+            if (isTvDevice) {
+                // the item playing, as a queue of one item (as the usual players show it)
+                session?.setQueue(listOf(MediaSession.QueueItem(metadata.description, 0L)))
+            }
         }
     }
 
@@ -3241,8 +3358,21 @@ class ExoPlayerService : BasePlaybackService() {
         sendNotification(bitmap)
     }
 
+    /** What the notification sent last showed: it is only sent again when something of it changed (not at every playlist). */
+    private var lastNotificationKey: String? = null
+
     private fun sendNotification(bitmap: Bitmap?) {
         (secondaryPlayer ?: player)?.let { player ->
+            val playingAtSpeed = player.isPlaying && player.playbackParameters.speed == 1f
+            val key = listOf(
+                title, channelName, bitmap?.let { System.identityHashCode(it) }, Util.shouldShowPlayButton(player), playingAtSpeed,
+                // start of the time shown, to 5 s (a seek or a stall moves it)
+                if (playingAtSpeed) (System.currentTimeMillis() - player.currentPosition) / 5000 else null
+            ).joinToString("|")
+            if (key == lastNotificationKey) {
+                return
+            }
+            lastNotificationKey = key
             val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Notification.Builder(this, getString(R.string.notification_playback_channel_id))
             } else {
@@ -3540,6 +3670,7 @@ class ExoPlayerService : BasePlaybackService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.release(this, this)
         player?.release()
         secondaryPlayer?.release()
         session?.release()

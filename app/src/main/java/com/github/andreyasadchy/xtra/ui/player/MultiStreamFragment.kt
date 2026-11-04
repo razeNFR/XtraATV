@@ -205,6 +205,8 @@ class MultiStreamFragment : Fragment() {
             })
         }
         val player = ExoPlayer.Builder(requireContext()).build().apply {
+            // the sound of a film, the audio focus held by the multi-stream itself (TvPlaybackSignals)
+            setAudioAttributes(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.playerAttributes, false)
             volume = 0f
             setVideoTextureView(texture)
         }
@@ -811,12 +813,48 @@ class MultiStreamFragment : Fragment() {
 
     override fun onStop() {
         super.onStop()
-        tiles.forEach { it.player.pause() }
+        // the streams keep playing a moment: the app left for good closes the multi-stream (MainActivity), a screen shown
+        // over it for a moment (screensaver of a launcher giving up) does not cut them, nor take the audio focus away
     }
 
     override fun onStart() {
         super.onStart()
         tiles.forEach { it.player.play() }
+        holdPlaybackSignals()
+    }
+
+    /** What the system and the launchers see of the multi-stream: a playback going on (no screensaver over it). */
+    private var session: android.media.session.MediaSession? = null
+
+    private fun holdPlaybackSignals() {
+        val context = context ?: return
+        com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.hold(context, this) { tiles.forEach { it.player.pause() } }
+        val session = session ?: android.media.session.MediaSession(context, "MultiStream").also { session = it }
+        @Suppress("DEPRECATION")
+        session.setFlags(7)
+        session.setPlaybackToLocal(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.systemAttributes)
+        val metadata = android.media.MediaMetadata.Builder()
+            .putText(android.media.MediaMetadata.METADATA_KEY_TITLE, tiles.joinToString(" · ") { it.stream.channelName ?: it.stream.channelLogin ?: "" })
+            .build()
+        session.setMetadata(metadata)
+        session.setQueue(listOf(android.media.session.MediaSession.QueueItem(metadata.description, 0L)))
+        session.setPlaybackState(
+            android.media.session.PlaybackState.Builder()
+                .setState(android.media.session.PlaybackState.STATE_PLAYING, android.media.session.PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f)
+                .setActions(android.media.session.PlaybackState.ACTION_PLAY or android.media.session.PlaybackState.ACTION_PAUSE or android.media.session.PlaybackState.ACTION_PLAY_PAUSE)
+                .setActiveQueueItemId(0L)
+                .build()
+        )
+        session.isActive = true
+    }
+
+    private fun releasePlaybackSignals() {
+        context?.let { com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.release(it, this) }
+        session?.let {
+            it.isActive = false
+            it.release()
+        }
+        session = null
     }
 
     private val dimListener: () -> Unit = { com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(root) }
@@ -826,6 +864,7 @@ class MultiStreamFragment : Fragment() {
         root.removeCallbacks(followFocus)
         tiles.forEach { it.player.release() }
         tiles.clear()
+        releasePlaybackSignals()
         super.onDestroyView()
     }
 
