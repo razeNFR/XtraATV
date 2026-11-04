@@ -954,6 +954,9 @@
     <string name="tv_adblock_back_live">Kembali ke siaran langsung…</string>
     <string name="tv_adblock_on_hold">menunggu</string>
     <string name="tv_multistream_sound">Suara</string>
-    <string name="tv_multistream_sound_selected">Suara: siaran terpilih</string>
-    <string name="tv_multistream_sound_mix">Suara: campuran</string>
+    <string name="tv_multistream_sound_selected">Siaran terpilih</string>
+    <string name="tv_multistream_sound_mix">Campuran</string>
+    <string name="tv_multistream_sound_selected_desc">Hanya siaran terpilih yang bersuara. Suara mengikuti bingkai saat kamu berganti siaran.</string>
+    <string name="tv_multistream_sound_mix_desc">Semua siaran berbunyi bersamaan, masing-masing dengan volumenya sendiri. Atur di bawah.</string>
+    <string name="tv_multistream_sound_keep">Ingat untuk multi-stream berikutnya</string>
 </resources>

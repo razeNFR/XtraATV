@@ -25,6 +25,7 @@ import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.chat.ChatFragment
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.tv.TvActionPanel
+import com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamSound
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.launch
@@ -851,60 +852,95 @@ class MultiStreamFragment : Fragment() {
     private var selectedTile: Tile? = null
 
     /**
-     * Sound of the streams: the selected one only, or every stream at its own volume (mix, kept for the next times by
-     * login, 100 % at first).
+     * Sound mix: every stream at its own volume (else the selected one only), for the whole multi-stream (streams changed
+     * or added too). Kept for the next multi-streams only with "Keep for the next multi-streams" (off at first).
      */
-    private fun applySound() {
+    private var soundMix = false
+    private val sessionVolumes = mutableMapOf<String, Int>()
+    private var soundLoaded = false
+
+    private fun loadSound() {
+        if (soundLoaded) {
+            return
+        }
         val prefs = context?.prefs() ?: return
-        val mix = prefs.getBoolean(C.TV_MULTISTREAM_SOUND_MIX, false)
+        soundLoaded = true
+        soundMix = prefs.getBoolean(C.TV_MULTISTREAM_SOUND_KEEP, false) && prefs.getBoolean(C.TV_MULTISTREAM_SOUND_MIX, false)
+    }
+
+    /** Sound of the streams: the selected one only, or every stream at its own volume (mix). */
+    private fun applySound() {
+        loadSound()
         val selected = selectedTile?.takeIf { it in tiles } ?: tiles.firstOrNull()
         tiles.forEach { tile ->
             tile.player.volume = when {
                 leaveMuted -> 0f
-                mix -> streamVolume(tile) / 100f
+                soundMix -> streamVolume(tile) / 100f
                 tile == selected -> 1f
                 else -> 0f
             }
         }
     }
 
+    /** Volume of a stream in the mix: set in this multi-stream, else the kept one (box ticked), else 100 %. */
     private fun streamVolume(tile: Tile): Int {
         val login = tile.stream.channelLogin ?: return 100
-        return context?.prefs()?.getInt(C.TV_MULTISTREAM_VOLUME_PREFIX + login, 100) ?: 100
+        sessionVolumes[login]?.let { return it }
+        val prefs = context?.prefs() ?: return 100
+        return if (prefs.getBoolean(C.TV_MULTISTREAM_SOUND_KEEP, false)) prefs.getInt(C.TV_MULTISTREAM_VOLUME_PREFIX + login, 100) else 100
     }
 
-    /** Sound panel: the selected stream only or the mix, and in the mix the volume of each stream. */
+    /** Sound panel: what each choice does, the selected stream only or the mix, the volumes and the box to keep them. */
     private fun showSoundPanel() {
         val context = context ?: return
+        loadSound()
         val prefs = context.prefs()
-        val mix = prefs.getBoolean(C.TV_MULTISTREAM_SOUND_MIX, false)
-        val actions = listOf(
-            TvActionPanel.Action(
-                getString(if (mix) R.string.tv_multistream_sound_mix else R.string.tv_multistream_sound_selected),
-                R.drawable.tv_ic_volume,
-            ) {
-                prefs.edit().putBoolean(C.TV_MULTISTREAM_SOUND_MIX, !mix).apply()
-                applySound()
-                // the panel again, with the volumes of the streams in the mix
-                root.post { if (view != null) showSoundPanel() }
-            }
-        )
-        val sliders = if (mix) {
-            tiles.mapNotNull { tile ->
-                val login = tile.stream.channelLogin ?: return@mapNotNull null
-                TvActionPanel.Slider(
-                    label = tile.stream.channelName ?: login,
-                    value = streamVolume(tile),
-                    range = 0..100,
-                    step = 10,
-                    valueText = { "$it %" },
-                ) { value ->
-                    prefs.edit().putInt(C.TV_MULTISTREAM_VOLUME_PREFIX + login, value).apply()
-                    applySound()
+        val shown = tiles.filter { it.stream.channelLogin != null }
+        TvMultiStreamSound.show(
+            context,
+            TvMultiStreamSound.Texts(
+                title = getString(R.string.tv_multistream_sound),
+                modeLabel = getString(R.string.tv_multistream_sound),
+                selected = getString(R.string.tv_multistream_sound_selected),
+                mix = getString(R.string.tv_multistream_sound_mix),
+                selectedDescription = getString(R.string.tv_multistream_sound_selected_desc),
+                mixDescription = getString(R.string.tv_multistream_sound_mix_desc),
+                remember = getString(R.string.tv_multistream_sound_keep),
+            ),
+            mix = soundMix,
+            keep = prefs.getBoolean(C.TV_MULTISTREAM_SOUND_KEEP, false),
+            streams = shown.map { it.stream.channelName ?: it.stream.channelLogin.orEmpty() },
+            volumeOf = { index -> shown.getOrNull(index)?.let { streamVolume(it) } ?: 100 },
+            onMode = { mix ->
+                soundMix = mix
+                if (prefs.getBoolean(C.TV_MULTISTREAM_SOUND_KEEP, false)) {
+                    prefs.edit().putBoolean(C.TV_MULTISTREAM_SOUND_MIX, mix).apply()
                 }
-            }
-        } else emptyList()
-        TvActionPanel.show(context, getString(R.string.tv_multistream_sound), actions, sliders = sliders)
+                applySound()
+            },
+            onVolume = { index, value ->
+                shown.getOrNull(index)?.stream?.channelLogin?.let { login ->
+                    sessionVolumes[login] = value
+                    if (prefs.getBoolean(C.TV_MULTISTREAM_SOUND_KEEP, false)) {
+                        prefs.edit().putInt(C.TV_MULTISTREAM_VOLUME_PREFIX + login, value).apply()
+                    }
+                }
+                applySound()
+            },
+            onKeep = { keep ->
+                prefs.edit().apply {
+                    putBoolean(C.TV_MULTISTREAM_SOUND_KEEP, keep)
+                    // ticked: the mix and the volumes of now are the ones of the next multi-streams; unticked: they
+                    // start again with the sound of the selected stream
+                    putBoolean(C.TV_MULTISTREAM_SOUND_MIX, keep && soundMix)
+                    if (keep) {
+                        tiles.forEach { tile ->
+                            tile.stream.channelLogin?.let { putInt(C.TV_MULTISTREAM_VOLUME_PREFIX + it, streamVolume(tile)) }
+                        }
+                    }
+                }.apply()
+            },
+        )
     }
 
     /** Frame of the selected stream and names of the streams: shown, then faded out a few seconds after the last key. */

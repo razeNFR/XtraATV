@@ -953,6 +953,9 @@
     <string name="tv_adblock_back_live">العودة إلى البث المباشر…</string>
     <string name="tv_adblock_on_hold">قيد الانتظار</string>
     <string name="tv_multistream_sound">الصوت</string>
-    <string name="tv_multistream_sound_selected">الصوت: البث المحدد</string>
-    <string name="tv_multistream_sound_mix">الصوت: مزج</string>
+    <string name="tv_multistream_sound_selected">البث المحدد</string>
+    <string name="tv_multistream_sound_mix">مزج</string>
+    <string name="tv_multistream_sound_selected_desc">البث المحدد فقط له صوت. يتبع الصوت الإطار عند تغيير البث.</string>
+    <string name="tv_multistream_sound_mix_desc">تعمل كل البثوث معًا، لكل منها مستوى صوته. اضبطها أدناه.</string>
+    <string name="tv_multistream_sound_keep">تذكر للبثوث المتعددة القادمة</string>
 </resources>

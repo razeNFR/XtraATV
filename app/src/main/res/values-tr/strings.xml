@@ -954,6 +954,9 @@
     <string name="tv_adblock_back_live">Canlı yayına dönülüyor…</string>
     <string name="tv_adblock_on_hold">beklemede</string>
     <string name="tv_multistream_sound">Ses</string>
-    <string name="tv_multistream_sound_selected">Ses: seçili yayın</string>
-    <string name="tv_multistream_sound_mix">Ses: karışım</string>
+    <string name="tv_multistream_sound_selected">Seçili yayın</string>
+    <string name="tv_multistream_sound_mix">Karışım</string>
+    <string name="tv_multistream_sound_selected_desc">Yalnızca seçili yayının sesi var. Yayın değiştirdiğinde ses çerçeveyi takip eder.</string>
+    <string name="tv_multistream_sound_mix_desc">Tüm yayınlar aynı anda, her biri kendi sesiyle çalar. Aşağıdan ayarla.</string>
+    <string name="tv_multistream_sound_keep">Sonraki çoklu yayınlar için hatırla</string>
 </resources>

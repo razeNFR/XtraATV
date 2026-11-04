@@ -953,6 +953,9 @@
     <string name="tv_adblock_back_live">ライブに戻ります…</string>
     <string name="tv_adblock_on_hold">待機中</string>
     <string name="tv_multistream_sound">音声</string>
-    <string name="tv_multistream_sound_selected">音声：選択中の配信</string>
-    <string name="tv_multistream_sound_mix">音声：ミックス</string>
+    <string name="tv_multistream_sound_selected">選択中の配信</string>
+    <string name="tv_multistream_sound_mix">ミックス</string>
+    <string name="tv_multistream_sound_selected_desc">選択中の配信だけ音が出ます。配信を切り替えると音も枠に合わせて切り替わります。</string>
+    <string name="tv_multistream_sound_mix_desc">すべての配信が同時に、それぞれの音量で再生されます。下で調整してください。</string>
+    <string name="tv_multistream_sound_keep">次回のマルチ配信でも使う</string>
 </resources>
