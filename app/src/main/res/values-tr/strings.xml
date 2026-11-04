@@ -953,4 +953,7 @@
     <string name="tv_adblock_ad">Reklam</string>
     <string name="tv_adblock_back_live">Canlı yayına dönülüyor…</string>
     <string name="tv_adblock_on_hold">beklemede</string>
+    <string name="tv_multistream_sound">Ses</string>
+    <string name="tv_multistream_sound_selected">Ses: seçili yayın</string>
+    <string name="tv_multistream_sound_mix">Ses: karışım</string>
 </resources>

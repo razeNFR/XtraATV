@@ -952,4 +952,7 @@
     <string name="tv_adblock_ad">Werbung</string>
     <string name="tv_adblock_back_live">Zurück zum Live…</string>
     <string name="tv_adblock_on_hold">wartet</string>
+    <string name="tv_multistream_sound">Ton</string>
+    <string name="tv_multistream_sound_selected">Ton: ausgewählter Stream</string>
+    <string name="tv_multistream_sound_mix">Ton: Mischung</string>
 </resources>

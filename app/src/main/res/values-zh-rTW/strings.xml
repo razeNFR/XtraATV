@@ -952,4 +952,7 @@
     <string name="tv_adblock_ad">廣告</string>
     <string name="tv_adblock_back_live">正在返回直播…</string>
     <string name="tv_adblock_on_hold">等待中</string>
+    <string name="tv_multistream_sound">聲音</string>
+    <string name="tv_multistream_sound_selected">聲音：所選直播</string>
+    <string name="tv_multistream_sound_mix">聲音：混音</string>
 </resources>

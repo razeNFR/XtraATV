@@ -20,14 +20,15 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import androidx.compose.ui.graphics.Color as ComposeColor
 
-/** TV: side panel of actions with an icon each, and an optional slider under them (multi-stream panel). */
+/** TV: side panel of actions with an icon each, and optional sliders under them (multi-stream panels). */
 object TvActionPanel {
 
     class Action(val label: String, val icon: Int, val run: () -> Unit)
 
     class Slider(val label: String, val value: Int, val range: IntRange, val step: Int, val valueText: (Int) -> String, val onChange: (Int) -> Unit)
 
-    fun show(context: Context, title: String, actions: List<Action>, slider: Slider? = null) {
+    fun show(context: Context, title: String, actions: List<Action>, slider: Slider? = null, sliders: List<Slider> = emptyList()) {
+        val allSliders = listOfNotNull(slider) + sliders
         TvDialogs.show(context) { dismiss ->
             SidePanel(title = title, scrollable = true) {
                 val first = remember { FocusRequester() }
@@ -48,20 +49,20 @@ object TvActionPanel {
                             }
                         }
                     }
-                    if (slider != null) {
+                    allSliders.forEachIndexed { index, slider ->
                         SliderRow(
                             label = slider.label,
                             value = slider.value,
                             range = slider.range,
                             step = slider.step,
                             valueText = slider.valueText,
-                            modifier = if (actions.isEmpty()) Modifier.focusRequester(first) else Modifier,
+                            modifier = if (actions.isEmpty() && index == 0) Modifier.focusRequester(first) else Modifier,
                             onChange = slider.onChange,
                         )
                     }
                 }
                 LaunchedEffect(Unit) {
-                    if (actions.isNotEmpty() || slider != null) {
+                    if (actions.isNotEmpty() || allSliders.isNotEmpty()) {
                         try {
                             first.requestFocus()
                         } catch (e: IllegalStateException) {

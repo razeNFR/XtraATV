@@ -952,4 +952,7 @@
     <string name="tv_adblock_ad">Реклама</string>
     <string name="tv_adblock_back_live">Возврат к эфиру…</string>
     <string name="tv_adblock_on_hold">ожидание</string>
+    <string name="tv_multistream_sound">Звук</string>
+    <string name="tv_multistream_sound_selected">Звук: выбранная трансляция</string>
+    <string name="tv_multistream_sound_mix">Звук: микширование</string>
 </resources>

@@ -971,4 +971,7 @@
     <string name="tv_adblock_ad">Ad</string>
     <string name="tv_adblock_back_live">Back to live…</string>
     <string name="tv_adblock_on_hold">on hold</string>
+    <string name="tv_multistream_sound">Sound</string>
+    <string name="tv_multistream_sound_selected">Sound: selected stream</string>
+    <string name="tv_multistream_sound_mix">Sound: mix</string>
 </resources>

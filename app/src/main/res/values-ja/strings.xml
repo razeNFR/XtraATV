@@ -952,4 +952,7 @@
     <string name="tv_adblock_ad">広告</string>
     <string name="tv_adblock_back_live">ライブに戻ります…</string>
     <string name="tv_adblock_on_hold">待機中</string>
+    <string name="tv_multistream_sound">音声</string>
+    <string name="tv_multistream_sound_selected">音声：選択中の配信</string>
+    <string name="tv_multistream_sound_mix">音声：ミックス</string>
 </resources>

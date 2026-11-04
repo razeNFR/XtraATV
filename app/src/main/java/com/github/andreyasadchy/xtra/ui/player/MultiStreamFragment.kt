@@ -30,7 +30,8 @@ import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.launch
 
 /**
- * TV multi-stream: up to 4 live streams on screen at once. The D-pad selects a stream, whose sound is played,
+ * TV multi-stream: up to 4 live streams on screen at once. The D-pad selects a stream, whose sound is played (or the
+ * sounds of all of them at their own volume, Sound of the panel),
  * OK opens the panel of that stream (open it in the player, its chat, change it, add a stream, its size) and back
  * leaves the multi-stream view.
  *
@@ -211,6 +212,9 @@ class MultiStreamFragment : Fragment() {
             setVideoTextureView(texture)
         }
         val tile = Tile(stream, tileView, player, label)
+        // the frame and the name show as the others do (hidden a few seconds after the last key)
+        label.alpha = chromeAlpha
+        tileView.foreground?.alpha = (chromeAlpha * 255).toInt()
         tile.picture = tileView.findViewById(R.id.tvLoadingPicture)
         tile.texture = texture
         player.addListener(object : Player.Listener {
@@ -227,13 +231,19 @@ class MultiStreamFragment : Fragment() {
         tileView.setOnFocusChangeListener { v, hasFocus ->
             ((v as FrameLayout).foreground as? GradientDrawable)?.setStroke((4 * density).toInt(), if (hasFocus) Color.WHITE else Color.TRANSPARENT)
             if (hasFocus) {
-                tiles.forEach { it.player.volume = if (it.view == v) 1f else 0f }
+                selectedTile = tile
+                applySound()
+                showChrome()
                 // 3 streams: the chat of the empty cell follows the selected stream, unless one is pinned
                 root.removeCallbacks(followFocus)
                 root.postDelayed(followFocus, 700L)
             }
         }
         tileView.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                // the frame of the selected stream and the names come back at each key, hidden again a few seconds later
+                showChrome()
+            }
             if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) && event.action == KeyEvent.ACTION_UP) {
                 if (panelOpenedByHold) {
                     panelOpenedByHold = false
@@ -268,6 +278,7 @@ class MultiStreamFragment : Fragment() {
             } else false
         }
         loadStream(tile)
+        applySound()
         return tile
     }
 
@@ -405,6 +416,9 @@ class MultiStreamFragment : Fragment() {
                 }
             }
         }
+        actions += TvActionPanel.Action(getString(R.string.tv_multistream_sound), R.drawable.tv_ic_volume) {
+            showSoundPanel()
+        }
         if (tiles.size > 2) {
             actions += TvActionPanel.Action(getString(R.string.tv_multistream_remove), R.drawable.tv_ic_delete) {
                 if (view != null && tiles.size > 2) {
@@ -474,6 +488,8 @@ class MultiStreamFragment : Fragment() {
         tile.player.stop()
         tile.player.clearMediaItems()
         loadStream(tile)
+        // the volume of the new stream (mix)
+        applySound()
         val newLogin = stream.channelLogin
         if (oldLogin != null && chatsShown.remove(oldLogin) && newLogin != null) {
             chatsShown.add(newLogin)
@@ -825,8 +841,100 @@ class MultiStreamFragment : Fragment() {
 
     /** TV: the app was just left (Home): every stream silent while it is kept a few seconds, the selected one heard again on return. */
     fun setLeaveMuted(muted: Boolean) {
-        val focused = tiles.firstOrNull { it.view.hasFocus() } ?: tiles.firstOrNull()
-        tiles.forEach { it.player.volume = if (!muted && it == focused) 1f else 0f }
+        leaveMuted = muted
+        applySound()
+    }
+
+    private var leaveMuted = false
+
+    /** The stream selected last (its sound is the one heard, unless the sounds are mixed). */
+    private var selectedTile: Tile? = null
+
+    /**
+     * Sound of the streams: the selected one only, or every stream at its own volume (mix, kept for the next times by
+     * login, 100 % at first).
+     */
+    private fun applySound() {
+        val prefs = context?.prefs() ?: return
+        val mix = prefs.getBoolean(C.TV_MULTISTREAM_SOUND_MIX, false)
+        val selected = selectedTile?.takeIf { it in tiles } ?: tiles.firstOrNull()
+        tiles.forEach { tile ->
+            tile.player.volume = when {
+                leaveMuted -> 0f
+                mix -> streamVolume(tile) / 100f
+                tile == selected -> 1f
+                else -> 0f
+            }
+        }
+    }
+
+    private fun streamVolume(tile: Tile): Int {
+        val login = tile.stream.channelLogin ?: return 100
+        return context?.prefs()?.getInt(C.TV_MULTISTREAM_VOLUME_PREFIX + login, 100) ?: 100
+    }
+
+    /** Sound panel: the selected stream only or the mix, and in the mix the volume of each stream. */
+    private fun showSoundPanel() {
+        val context = context ?: return
+        val prefs = context.prefs()
+        val mix = prefs.getBoolean(C.TV_MULTISTREAM_SOUND_MIX, false)
+        val actions = listOf(
+            TvActionPanel.Action(
+                getString(if (mix) R.string.tv_multistream_sound_mix else R.string.tv_multistream_sound_selected),
+                R.drawable.tv_ic_volume,
+            ) {
+                prefs.edit().putBoolean(C.TV_MULTISTREAM_SOUND_MIX, !mix).apply()
+                applySound()
+                // the panel again, with the volumes of the streams in the mix
+                root.post { if (view != null) showSoundPanel() }
+            }
+        )
+        val sliders = if (mix) {
+            tiles.mapNotNull { tile ->
+                val login = tile.stream.channelLogin ?: return@mapNotNull null
+                TvActionPanel.Slider(
+                    label = tile.stream.channelName ?: login,
+                    value = streamVolume(tile),
+                    range = 0..100,
+                    step = 10,
+                    valueText = { "$it %" },
+                ) { value ->
+                    prefs.edit().putInt(C.TV_MULTISTREAM_VOLUME_PREFIX + login, value).apply()
+                    applySound()
+                }
+            }
+        } else emptyList()
+        TvActionPanel.show(context, getString(R.string.tv_multistream_sound), actions, sliders = sliders)
+    }
+
+    /** Frame of the selected stream and names of the streams: shown, then faded out a few seconds after the last key. */
+    private var chromeAlpha = 1f
+    private var chromeAnimator: android.animation.ValueAnimator? = null
+    private val hideChrome = Runnable {
+        chromeAnimator?.cancel()
+        chromeAnimator = android.animation.ValueAnimator.ofFloat(chromeAlpha, 0f).apply {
+            duration = 400L
+            addUpdateListener { applyChromeAlpha(it.animatedValue as Float) }
+            start()
+        }
+    }
+
+    private fun showChrome() {
+        if (!::root.isInitialized) {
+            return
+        }
+        chromeAnimator?.cancel()
+        applyChromeAlpha(1f)
+        root.removeCallbacks(hideChrome)
+        root.postDelayed(hideChrome, CHROME_HIDE_MS)
+    }
+
+    private fun applyChromeAlpha(alpha: Float) {
+        chromeAlpha = alpha
+        tiles.forEach { tile ->
+            tile.label.alpha = alpha
+            tile.view.foreground?.alpha = (alpha * 255).toInt()
+        }
     }
 
     /** What the system and the launchers see of the multi-stream: a playback going on (no screensaver over it). */
@@ -868,6 +976,8 @@ class MultiStreamFragment : Fragment() {
     override fun onDestroyView() {
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(dimListener)
         root.removeCallbacks(followFocus)
+        root.removeCallbacks(hideChrome)
+        chromeAnimator?.cancel()
         tiles.forEach { it.player.release() }
         tiles.clear()
         releasePlaybackSignals()
@@ -876,6 +986,8 @@ class MultiStreamFragment : Fragment() {
 
     companion object {
         private const val MAX = 4
+        /** Time the frame of the selected stream and the names stay after the last key. */
+        private const val CHROME_HIDE_MS = 3000L
         private val DIRECTIONS = mapOf(
             KeyEvent.KEYCODE_DPAD_UP to View.FOCUS_UP,
             KeyEvent.KEYCODE_DPAD_DOWN to View.FOCUS_DOWN,

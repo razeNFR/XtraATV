@@ -952,4 +952,7 @@
     <string name="tv_adblock_ad">إعلان</string>
     <string name="tv_adblock_back_live">العودة إلى البث المباشر…</string>
     <string name="tv_adblock_on_hold">قيد الانتظار</string>
+    <string name="tv_multistream_sound">الصوت</string>
+    <string name="tv_multistream_sound_selected">الصوت: البث المحدد</string>
+    <string name="tv_multistream_sound_mix">الصوت: مزج</string>
 </resources>

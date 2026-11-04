@@ -953,4 +953,7 @@
     <string name="tv_adblock_ad">Iklan</string>
     <string name="tv_adblock_back_live">Kembali ke siaran langsung…</string>
     <string name="tv_adblock_on_hold">menunggu</string>
+    <string name="tv_multistream_sound">Suara</string>
+    <string name="tv_multistream_sound_selected">Suara: siaran terpilih</string>
+    <string name="tv_multistream_sound_mix">Suara: campuran</string>
 </resources>

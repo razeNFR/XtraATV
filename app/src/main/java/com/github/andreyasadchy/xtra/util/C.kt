@@ -121,6 +121,9 @@ object C {
     const val TV_PIP_CORNER = "tv_pip_corner"
     const val TV_PIP_SIZE = "tv_pip_size"
     const val TV_PIP_SOUND = "tv_pip_sound"
+    // multi-stream: the sounds of all the streams at their own volume (else the selected one only), volume of each by login
+    const val TV_MULTISTREAM_SOUND_MIX = "tv_multistream_sound_mix"
+    const val TV_MULTISTREAM_VOLUME_PREFIX = "tv_multistream_volume_"
     const val TV_PIP_BALANCE = "tv_pip_balance"
     const val UI_TAGS = "ui_tags"
     const val UI_SCROLL_TOP = "ui_scrolltop"
