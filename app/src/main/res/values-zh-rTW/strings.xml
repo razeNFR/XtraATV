@@ -952,4 +952,10 @@
     <string name="tv_adblock_ad">廣告</string>
     <string name="tv_adblock_back_live">正在返回直播…</string>
     <string name="tv_adblock_on_hold">等待中</string>
+    <string name="tv_multistream_sound">聲音</string>
+    <string name="tv_multistream_sound_selected">所選直播</string>
+    <string name="tv_multistream_sound_mix">混音</string>
+    <string name="tv_multistream_sound_selected_desc">只有所選直播有聲音。切換直播時聲音跟隨邊框。</string>
+    <string name="tv_multistream_sound_mix_desc">所有直播同時播放，各自使用自己的音量。在下方調整。</string>
+    <string name="tv_multistream_sound_keep">在之後的多直播中保留</string>
 </resources>

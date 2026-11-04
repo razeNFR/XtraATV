@@ -952,4 +952,10 @@
     <string name="tv_adblock_ad">Werbung</string>
     <string name="tv_adblock_back_live">Zurück zum Live…</string>
     <string name="tv_adblock_on_hold">wartet</string>
+    <string name="tv_multistream_sound">Ton</string>
+    <string name="tv_multistream_sound_selected">Ausgewählter Stream</string>
+    <string name="tv_multistream_sound_mix">Mischung</string>
+    <string name="tv_multistream_sound_selected_desc">Nur der ausgewählte Stream hat Ton. Der Ton folgt dem Rahmen, wenn du den Stream wechselst.</string>
+    <string name="tv_multistream_sound_mix_desc">Alle Streams laufen gleichzeitig, jeder mit eigener Lautstärke. Stelle sie unten ein.</string>
+    <string name="tv_multistream_sound_keep">Für die nächsten Multi-Streams merken</string>
 </resources>

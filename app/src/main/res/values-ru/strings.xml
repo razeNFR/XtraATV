@@ -952,4 +952,10 @@
     <string name="tv_adblock_ad">Реклама</string>
     <string name="tv_adblock_back_live">Возврат к эфиру…</string>
     <string name="tv_adblock_on_hold">ожидание</string>
+    <string name="tv_multistream_sound">Звук</string>
+    <string name="tv_multistream_sound_selected">Выбранная трансляция</string>
+    <string name="tv_multistream_sound_mix">Микширование</string>
+    <string name="tv_multistream_sound_selected_desc">Звук есть только у выбранной трансляции. Звук следует за рамкой при смене трансляции.</string>
+    <string name="tv_multistream_sound_mix_desc">Все трансляции звучат одновременно, каждая со своей громкостью. Настройте их ниже.</string>
+    <string name="tv_multistream_sound_keep">Запомнить для следующих мультистримов</string>
 </resources>

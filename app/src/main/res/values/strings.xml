@@ -971,4 +971,10 @@
     <string name="tv_adblock_ad">Ad</string>
     <string name="tv_adblock_back_live">Back to live…</string>
     <string name="tv_adblock_on_hold">on hold</string>
+    <string name="tv_multistream_sound">Sound</string>
+    <string name="tv_multistream_sound_selected">Selected stream</string>
+    <string name="tv_multistream_sound_mix">Mix</string>
+    <string name="tv_multistream_sound_selected_desc">Only the selected stream has sound. The sound follows the frame when you change streams.</string>
+    <string name="tv_multistream_sound_mix_desc">All the streams play at the same time, each at its own volume. Set them below.</string>
+    <string name="tv_multistream_sound_keep">Keep for the next multi-streams</string>
 </resources>
