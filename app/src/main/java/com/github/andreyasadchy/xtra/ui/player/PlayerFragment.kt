@@ -155,7 +155,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             field = value
             // TV: the timeline only takes the focus in a HUD opened on purpose, it never catches left / right of a switch
             if (isTv) {
-                _binding?.playerControls?.progressBar?.isFocusable = value
+                _binding?.let { binding ->
+                    val progressBar = binding.playerControls.progressBar
+                    if (!value && progressBar.isFocused) {
+                        // the timeline had the focus (HUD hidden by back or by itself): the player gets it first, else
+                        // nothing would have it any more and OK / up / down could not show the HUD again
+                        binding.dragView.requestFocus()
+                    }
+                    progressBar.isFocusable = value
+                }
             }
         }
 
