@@ -334,11 +334,11 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
          */
         @Volatile
         var mainMix = 1f
+            private set
 
         /** TV: the app was just left (Home), silent until it is closed or the app comes back (MainActivity). */
         @Volatile
         var leaveMuted = false
-            private set
 
         fun showHint(activity: MainActivity) {
             Toast.makeText(activity, R.string.tv_pip_hint, Toast.LENGTH_LONG).show()
