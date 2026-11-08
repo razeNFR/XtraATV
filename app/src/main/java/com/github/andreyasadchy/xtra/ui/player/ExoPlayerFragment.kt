@@ -300,6 +300,9 @@ class ExoPlayerFragment : PlayerFragment() {
                         playbackService?.secondaryPlayer?.addListener(it)
                     }
                 } else {
+                    if (playbackService?.player?.trackSelectionParameters?.disabledTrackTypes?.contains(androidx.media3.common.C.TRACK_TYPE_VIDEO) != true) {
+                        binding.playerSurface.visibility = View.VISIBLE
+                    }
                     playbackService?.secondaryPlayer?.setVideoSurfaceView(null)
                     playbackService?.player?.setVideoSurfaceView(binding.playerSurface)
                     playerListener?.let {

@@ -9,7 +9,8 @@
 
 ### Fixes
 - **Audio normalization during ad-blocking**: audio normalization (`DynamicsProcessing`) now stays active when switching to the backup player (Proxy / VAFT) during an ad break.
-- **Faster ad-block transitions & reliable "Back to live…" progress bar**: reduced the delay at the start and end of an ad break to near-zero by seeking the background player directly to the first clean live segment, with a smooth and accurate return-to-live progress bar.
+- **Faster ad-block transitions & reliable "Back to live…" progress bar**: synced the background main player directly to the clean live edge before switching back so there is no old frame, no lag, and the "Back to live…" badge never gets stuck.
+- **Geo-blocked streams on proxies (HTTP 403)**: proxies returning HTTP 403 on a geo-blocked channel are now skipped immediately for that channel only (falling back to direct connection / VAFT without delay) without marking the proxy as offline for other channels.
 - **Twitch WebView login on TV**: removed the unreachable *"Having trouble logging in?"* button on TV during WebView sign-in and added automatic scrolling/focus + D-pad scrolling so the **Authorize** button can always be reached.
 - **Settings backup on TVs without a file picker**: backing up or restoring settings no longer fails with "No supported app installed".
 
