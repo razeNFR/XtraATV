@@ -42,7 +42,15 @@ import kotlinx.coroutines.launch
  */
 class MultiStreamFragment : Fragment() {
 
-    private class Tile(var stream: Stream, val view: FrameLayout, val player: ExoPlayer, val label: TextView) {
+    private class Tile(
+        var stream: Stream,
+        val view: FrameLayout,
+        val player: ExoPlayer,
+        val label: TextView,
+        val infoContainer: android.widget.LinearLayout,
+        val infoTop: TextView,
+        val infoTitle: TextView,
+    ) {
         /** Container of the chat under this stream (2 streams). */
         var chatContainer: FrameLayout? = null
         var adListener: Player.Listener? = null
@@ -57,6 +65,7 @@ class MultiStreamFragment : Fragment() {
         /** Playing a backup player type for the time of an ad, back to the normal one once it is over. */
         var onBackup = false
         var backJob: kotlinx.coroutines.Job? = null
+        var infoJob: kotlinx.coroutines.Job? = null
     }
 
     private val tiles = mutableListOf<Tile>()
@@ -190,6 +199,34 @@ class MultiStreamFragment : Fragment() {
             val padding = (6 * density).toInt()
             setPadding(padding * 2, padding, padding * 2, padding)
         }
+        // selected stream: name, viewers, video quality, live duration and a scrolling single-line title over a soft bottom gradient
+        val infoTop = TextView(requireContext()).apply {
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            isSingleLine = true
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setShadowLayer(4 * density, 0f, 1 * density, 0xE6000000.toInt())
+        }
+        val infoTitle = TextView(requireContext()).apply {
+            setTextColor(0xD9FFFFFF.toInt())
+            textSize = 13f
+            isSingleLine = true
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setShadowLayer(4 * density, 0f, 1 * density, 0xE6000000.toInt())
+            setPadding(0, (2 * density).toInt(), (48 * density).toInt(), 0)
+        }
+        val infoContainer = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            background = GradientDrawable(
+                GradientDrawable.Orientation.BOTTOM_TOP,
+                intArrayOf(0xD9000000.toInt(), 0x73000000, Color.TRANSPARENT)
+            )
+            val hPad = (14 * density).toInt()
+            setPadding(hPad, (24 * density).toInt(), hPad, (10 * density).toInt())
+            visibility = View.GONE
+            addView(infoTop, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(infoTitle, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
         val tileView = FrameLayout(requireContext()).apply {
             isFocusable = true
             foreground = GradientDrawable().apply {
@@ -205,6 +242,7 @@ class MultiStreamFragment : Fragment() {
                 val margin = (12 * density).toInt()
                 setMargins(margin, margin, margin, margin)
             })
+            addView(infoContainer, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         }
         val player = ExoPlayer.Builder(requireContext()).build().apply {
             // the sound of a film, the audio focus held by the multi-stream itself (TvPlaybackSignals)
@@ -212,9 +250,10 @@ class MultiStreamFragment : Fragment() {
             volume = 0f
             setVideoTextureView(texture)
         }
-        val tile = Tile(stream, tileView, player, label)
+        val tile = Tile(stream, tileView, player, label, infoContainer, infoTop, infoTitle)
         // the frame and the name show as the others do (hidden a few seconds after the last key)
         label.alpha = chromeAlpha
+        infoContainer.alpha = chromeAlpha
         tileView.foreground?.alpha = (chromeAlpha * 255).toInt()
         tile.picture = tileView.findViewById(R.id.tvLoadingPicture)
         tile.texture = texture
@@ -225,14 +264,25 @@ class MultiStreamFragment : Fragment() {
                     texture.animate().alpha(1f).setDuration(250L).start()
                 }
             }
+
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                if (view != null && tile in tiles) {
+                    updateTileInfo(tile)
+                }
+            }
         })
         tiles.add(tile)
         root.addView(tileView)
         updateVideoSizes()
+        updateTileInfo(tile)
         tileView.setOnFocusChangeListener { v, hasFocus ->
             ((v as FrameLayout).foreground as? GradientDrawable)?.setStroke((4 * density).toInt(), if (hasFocus) Color.WHITE else Color.TRANSPARENT)
+            label.visibility = if (hasFocus) View.GONE else View.VISIBLE
+            infoContainer.visibility = if (hasFocus) View.VISIBLE else View.GONE
+            com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(infoTitle, hasFocus && chromeAlpha > 0f)
             if (hasFocus) {
                 selectedTile = tile
+                updateTileInfo(tile)
                 applySound()
                 showChrome()
                 // 3 streams: the chat of the empty cell follows the selected stream, unless one is pinned
@@ -382,7 +432,7 @@ class MultiStreamFragment : Fragment() {
             }
         }
         actions += TvActionPanel.Action(getString(R.string.tv_multistream_change), R.drawable.tv_ic_swap) {
-            TvMultiStreamPicker.pickOne(activity, tiles.mapNotNull { it.stream.channelLogin }.toSet(), getString(R.string.tv_multistream_change)) { picked ->
+            TvMultiStreamPicker.pickOne(activity, tiles.mapNotNull { it.stream.channelLogin }.toSet(), getString(R.string.tv_multistream_change), tile.stream) { picked ->
                 if (view != null) {
                     replaceStream(tile, picked)
                 }
@@ -390,7 +440,7 @@ class MultiStreamFragment : Fragment() {
         }
         if (tiles.size < MAX) {
             actions += TvActionPanel.Action(getString(R.string.tv_multistream_add), R.drawable.tv_ic_add) {
-                TvMultiStreamPicker.pickOne(activity, tiles.mapNotNull { it.stream.channelLogin }.toSet(), getString(R.string.tv_multistream_add)) { picked ->
+                TvMultiStreamPicker.pickOne(activity, tiles.mapNotNull { it.stream.channelLogin }.toSet(), getString(R.string.tv_multistream_add), tile.stream) { picked ->
                     if (view != null && tiles.size < MAX) {
                         val added = addTile(picked)
                         // the chats follow the new layout (under the streams at 2, in the empty cell at 3)
@@ -448,6 +498,7 @@ class MultiStreamFragment : Fragment() {
     private fun removeTile(tile: Tile) {
         val login = tile.stream.channelLogin
         tile.adListener?.let { tile.player.removeListener(it) }
+        tile.infoJob?.cancel()
         tile.player.release()
         tile.chatContainer?.let { removeChat(it) }
         tile.chatContainer = null
@@ -489,6 +540,7 @@ class MultiStreamFragment : Fragment() {
         tile.player.stop()
         tile.player.clearMediaItems()
         loadStream(tile)
+        updateTileInfo(tile)
         // the volume of the new stream (mix)
         applySound()
         val newLogin = stream.channelLogin
@@ -704,6 +756,33 @@ class MultiStreamFragment : Fragment() {
         tile.qualityStepsDown = 0
         tile.stops.clear()
         tile.raiseJob?.cancel()
+        tile.infoJob?.cancel()
+        if (tile.stream.createdAt.isNullOrBlank() || tile.stream.title.isNullOrBlank() || tile.stream.viewerCount == null) {
+            tile.infoJob = viewLifecycleOwner.lifecycleScope.launch {
+                val context = context ?: return@launch
+                val app = context.applicationContext as com.github.andreyasadchy.xtra.XtraApp
+                val user = runCatching {
+                    app.xtraModule.graphQLRepository.loadQueryUsersStream(
+                        context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                        com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(context),
+                        ids = tile.stream.channelId?.let { listOf(it) },
+                        logins = if (tile.stream.channelId.isNullOrBlank()) listOf(login) else null,
+                    ).data?.users?.firstOrNull()
+                }.getOrNull() ?: return@launch
+                if (view == null || tile !in tiles || tile.stream.channelLogin != login) {
+                    return@launch
+                }
+                user.stream?.let { s ->
+                    if (tile.stream.createdAt.isNullOrBlank()) tile.stream.createdAt = s.createdAt?.toString()
+                    if (tile.stream.viewerCount == null) tile.stream.viewerCount = s.viewersCount
+                    if (tile.stream.title.isNullOrBlank()) tile.stream.title = s.broadcaster?.broadcastSettings?.title
+                    if (tile.stream.gameId.isNullOrBlank()) tile.stream.gameId = s.game?.id
+                    if (tile.stream.gameSlug.isNullOrBlank()) tile.stream.gameSlug = s.game?.slug
+                    if (tile.stream.gameName.isNullOrBlank()) tile.stream.gameName = s.game?.displayName
+                    updateTileInfo(tile)
+                }
+            }
+        }
         playStream(login, player, tile)
         // the stream ended (no more playlist, or the end of it): it leaves the multi-stream after a few seconds
         player.addListener(object : Player.Listener {
@@ -959,6 +1038,7 @@ class MultiStreamFragment : Fragment() {
         if (!::root.isInitialized) {
             return
         }
+        selectedTile?.takeIf { it in tiles }?.let { updateTileInfo(it) }
         chromeAnimator?.cancel()
         applyChromeAlpha(1f)
         root.removeCallbacks(hideChrome)
@@ -969,7 +1049,53 @@ class MultiStreamFragment : Fragment() {
         chromeAlpha = alpha
         tiles.forEach { tile ->
             tile.label.alpha = alpha
+            tile.infoContainer.alpha = alpha
             tile.view.foreground?.alpha = (alpha * 255).toInt()
+            if (tile.view.hasFocus()) {
+                com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(tile.infoTitle, alpha > 0f)
+            }
+        }
+    }
+
+    /** Info shown on the selected stream: name, viewers, video quality, live duration and single-line scrolling title. */
+    private fun updateTileInfo(tile: Tile) {
+        val context = context ?: return
+        val stream = tile.stream
+        val name = stream.channelName ?: stream.channelLogin.orEmpty()
+        val truncate = context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true)
+        val viewers = stream.viewerCount?.let { com.github.andreyasadchy.xtra.util.TwitchApiHelper.formatCount(it, truncate) }
+        val format = tile.player.videoFormat
+        val quality = format?.height?.takeIf { it > 0 }?.let { h ->
+            val fps = format.frameRate.takeIf { it > 0f }?.let { kotlin.math.round(it).toInt() }
+            "${h}p${fps?.takeIf { it > 30 } ?: ""}"
+        }
+        val uptime = com.github.andreyasadchy.xtra.ui.tv.TvUptime.format(context, stream.createdAt)
+        val builder = android.text.SpannableStringBuilder(name)
+        if (name.isNotEmpty()) {
+            builder.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, name.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        val metaStart = builder.length
+        if (!viewers.isNullOrBlank()) {
+            builder.append("   ● ")
+            val dotIndex = builder.length - 2
+            builder.setSpan(android.text.style.ForegroundColorSpan(0xFFEF4444.toInt()), dotIndex, dotIndex + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            builder.append(viewers)
+        }
+        if (!quality.isNullOrBlank()) {
+            builder.append(if (builder.length == metaStart) "   " else "  ·  ").append(quality)
+        }
+        if (!uptime.isNullOrBlank()) {
+            builder.append(if (builder.length == metaStart) "   " else "  ·  ").append(uptime)
+        }
+        if (builder.length > metaStart) {
+            builder.setSpan(android.text.style.RelativeSizeSpan(0.92f), metaStart, builder.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        tile.infoTop.text = builder
+        val titleText = stream.title?.trim().orEmpty()
+        tile.infoTitle.visibility = if (titleText.isEmpty()) View.GONE else View.VISIBLE
+        if (tile.infoTitle.text.toString() != titleText) {
+            tile.infoTitle.text = titleText
+            com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(tile.infoTitle, tile.view.hasFocus() && chromeAlpha > 0f)
         }
     }
 

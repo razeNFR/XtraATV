@@ -982,7 +982,14 @@ private fun StreamCard(
                     modifier = if (focused) Modifier.titleMarquee() else Modifier,
                 )
                 if (!stream.gameName.isNullOrBlank()) {
-                    Text(stream.gameName ?: "", fontSize = if (small) 11.sp else 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        stream.gameName ?: "",
+                        fontSize = if (small) 11.sp else 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                    )
                 }
             }
         }
@@ -1207,10 +1214,25 @@ private fun ResumeCard(width: Dp, item: com.github.andreyasadchy.xtra.ui.tv.TvRe
             )
             Spacer(Modifier.width(if (small) 8.dp else 10.dp))
             Column {
-                Text(item.title?.trim() ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    item.title?.trim() ?: "",
+                    fontSize = if (small) 13.sp else 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                )
                 Text(item.channelName ?: item.channelLogin ?: "", fontSize = if (small) 11.sp else 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (!item.gameName.isNullOrBlank()) {
-                    Text(item.gameName, fontSize = if (small) 11.sp else 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        item.gameName,
+                        fontSize = if (small) 11.sp else 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                    )
                 }
             }
         }
@@ -1289,7 +1311,16 @@ private fun GameCard(game: Game, actions: TvHomeActions, modifier: Modifier) {
             )
         }
         Spacer(Modifier.height(6.dp))
-        Text(game.name ?: "", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // the whole category name scrolls on the focused card when it is longer than the card
+        Text(
+            game.name ?: "",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+            modifier = if (focused) Modifier.titleMarquee() else Modifier,
+        )
         game.viewerCount?.let {
             Text(actions.formatViewers(it), fontSize = 12.sp, color = TvColors.secondaryText, maxLines = 1)
         }

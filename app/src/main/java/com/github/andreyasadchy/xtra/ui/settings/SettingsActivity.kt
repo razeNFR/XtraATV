@@ -822,15 +822,65 @@ class SettingsActivity : AppCompatActivity() {
                 true
             }
             findPreference<Preference>("backup_settings")?.setOnPreferenceClickListener {
-                backupResultLauncher?.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
+                if (TvUi.isTv(requireContext())) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+                        requireContext(),
+                        getString(R.string.backup_settings),
+                        listOf(
+                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_backup_save_tv), R.drawable.tv_ic_download) {
+                                com.github.andreyasadchy.xtra.ui.tv.TvBackup.saveToTv(requireContext(), lifecycleScope)
+                            },
+                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_backup_qr_send), R.drawable.tv_ic_share) {
+                                com.github.andreyasadchy.xtra.ui.tv.TvBackup.showQrExport(requireContext(), lifecycleScope)
+                            },
+                        )
+                    )
+                } else {
+                    try {
+                        backupResultLauncher?.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
+                    } catch (e: ActivityNotFoundException) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvBackup.saveToTv(requireContext(), lifecycleScope)
+                    }
+                }
                 true
             }
             findPreference<Preference>("restore_settings")?.setOnPreferenceClickListener {
-                restoreResultLauncher?.launch(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "*/*"
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                })
+                if (TvUi.isTv(requireContext())) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+                        requireContext(),
+                        getString(R.string.restore_settings),
+                        listOf(
+                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_backup_restore_tv), R.drawable.tv_ic_history) {
+                                com.github.andreyasadchy.xtra.ui.tv.TvBackup.restoreFromTv(requireContext(), lifecycleScope) {
+                                    try {
+                                        restoreResultLauncher?.launch(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                            addCategory(Intent.CATEGORY_OPENABLE)
+                                            type = "*/*"
+                                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                                        })
+                                    } catch (e: ActivityNotFoundException) {
+                                        Toast.makeText(requireContext(), R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
+                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_backup_qr_receive), R.drawable.tv_ic_wifi) {
+                                com.github.andreyasadchy.xtra.ui.tv.TvBackup.showQrImport(requireContext(), lifecycleScope)
+                            },
+                        )
+                    )
+                } else {
+                    try {
+                        restoreResultLauncher?.launch(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "*/*"
+                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        })
+                    } catch (e: ActivityNotFoundException) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvBackup.restoreFromTv(requireContext(), lifecycleScope) {
+                            Toast.makeText(requireContext(), R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
                 true
             }
             findPreference<Preference>("debug_settings")?.setOnPreferenceClickListener {

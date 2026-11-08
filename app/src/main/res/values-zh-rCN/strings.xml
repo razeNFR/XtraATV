@@ -958,4 +958,14 @@
     <string name="tv_multistream_sound_selected_desc">只有所选直播有声音。切换直播时声音跟随边框。</string>
     <string name="tv_multistream_sound_mix_desc">所有直播同时播放，各自使用自己的音量。在下方调整。</string>
     <string name="tv_multistream_sound_keep">在之后的多直播中保留</string>
+    <string name="tv_backup_save_tv">保存到电视</string>
+    <string name="tv_backup_restore_tv">从电视恢复</string>
+    <string name="tv_backup_qr_send">发送到手机（二维码）</string>
+    <string name="tv_backup_qr_receive">从手机接收（二维码）</string>
+    <string name="tv_backup_qr_send_help">使用连接同一 Wi-Fi 的手机扫描此二维码以下载备份文件。</string>
+    <string name="tv_backup_qr_receive_help">使用连接同一 Wi-Fi 的手机扫描此二维码并选择您的备份文件。</string>
+    <string name="tv_backup_saved">备份已保存：%s</string>
+    <string name="tv_backup_restored">设置已恢复</string>
+    <string name="tv_backup_not_found">电视上未找到备份文件</string>
+    <string name="tv_backup_no_network">请先将电视连接到 Wi-Fi 或以太网</string>
 </resources>

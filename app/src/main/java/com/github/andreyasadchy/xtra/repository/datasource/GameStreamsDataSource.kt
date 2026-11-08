@@ -12,7 +12,7 @@ import com.github.andreyasadchy.xtra.util.C
 class GameStreamsDataSource(
     val gameId: String?,
     val gameSlug: String?,
-    private val gameName: String?,
+    val gameName: String?,
     private val gqlQueryLanguages: List<Language>?,
     private val gqlQuerySort: StreamSort?,
     private val gqlLanguages: List<String>?,

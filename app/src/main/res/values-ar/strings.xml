@@ -958,4 +958,14 @@
     <string name="tv_multistream_sound_selected_desc">البث المحدد فقط له صوت. يتبع الصوت الإطار عند تغيير البث.</string>
     <string name="tv_multistream_sound_mix_desc">تعمل كل البثوث معًا، لكل منها مستوى صوته. اضبطها أدناه.</string>
     <string name="tv_multistream_sound_keep">تذكر للبثوث المتعددة القادمة</string>
+    <string name="tv_backup_save_tv">حفظ على التلفاز</string>
+    <string name="tv_backup_restore_tv">استعادة من التلفاز</string>
+    <string name="tv_backup_qr_send">إرسال إلى هاتف (رمز QR)</string>
+    <string name="tv_backup_qr_receive">استلام من هاتف (رمز QR)</string>
+    <string name="tv_backup_qr_send_help">امسح رمز QR هذا بهاتفك المتصل بنفس شبكة Wi-Fi لتنزيل ملف النسخ الاحتياطي.</string>
+    <string name="tv_backup_qr_receive_help">امسح رمز QR هذا بهاتفك المتصل بنفس شبكة Wi-Fi واختر ملف النسخ الاحتياطي.</string>
+    <string name="tv_backup_saved">تم حفظ النسخة الاحتياطية: %s</string>
+    <string name="tv_backup_restored">تمت استعادة الإعدادات</string>
+    <string name="tv_backup_not_found">لم يتم العثور على ملف نسخ احتياطي على التلفاز</string>
+    <string name="tv_backup_no_network">قم بتوصيل التلفاز بشبكة Wi-Fi أو Ethernet أولاً</string>
 </resources>

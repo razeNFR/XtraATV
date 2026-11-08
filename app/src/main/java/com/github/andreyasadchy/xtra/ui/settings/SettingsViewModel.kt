@@ -458,6 +458,15 @@ class SettingsViewModel(
 
     fun restoreSettings(list: List<String>, networkLibrary: String?, gqlHeaders: Map<String, String>, helixHeaders: Map<String, String>) {
         viewModelScope.launch(Dispatchers.IO) {
+            val first = list.firstOrNull()
+            if (first != null && first.endsWith(".zip", ignoreCase = true)) {
+                val bytes = runCatching {
+                    applicationContext.contentResolver.openInputStream(first.toUri())?.use { it.readBytes() }
+                }.getOrNull()
+                if (bytes != null && com.github.andreyasadchy.xtra.ui.tv.TvBackup.applyBackupBytes(applicationContext, bytes)) {
+                    return@launch
+                }
+            }
             list.take(2).forEach { url ->
                 if (url.endsWith(".xml")) {
                     FileOutputStream("${applicationContext.applicationInfo.dataDir}/shared_prefs/${applicationContext.packageName}_preferences.xml").use { outputStream ->

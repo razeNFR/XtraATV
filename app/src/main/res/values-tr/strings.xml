@@ -959,4 +959,14 @@
     <string name="tv_multistream_sound_selected_desc">Yalnızca seçili yayının sesi var. Yayın değiştirdiğinde ses çerçeveyi takip eder.</string>
     <string name="tv_multistream_sound_mix_desc">Tüm yayınlar aynı anda, her biri kendi sesiyle çalar. Aşağıdan ayarla.</string>
     <string name="tv_multistream_sound_keep">Sonraki çoklu yayınlar için hatırla</string>
+    <string name="tv_backup_save_tv">TV\'ye kaydet</string>
+    <string name="tv_backup_restore_tv">TV\'den geri yükle</string>
+    <string name="tv_backup_qr_send">Telefona gönder (QR kodu)</string>
+    <string name="tv_backup_qr_receive">Telefondan al (QR kodu)</string>
+    <string name="tv_backup_qr_send_help">Yedek dosyasını indirmek için aynı Wi-Fi ağındaki telefonunuzla bu QR kodunu tarayın.</string>
+    <string name="tv_backup_qr_receive_help">Aynı Wi-Fi ağındaki telefonunuzla bu QR kodunu tarayın ve yedek dosyanızı seçin.</string>
+    <string name="tv_backup_saved">Yedek kaydedildi: %s</string>
+    <string name="tv_backup_restored">Ayarlar geri yüklendi</string>
+    <string name="tv_backup_not_found">TV\'de yedek dosyası bulunamadı</string>
+    <string name="tv_backup_no_network">Önce TV\'yi Wi-Fi veya Ethernet\'e bağlayın</string>
 </resources>

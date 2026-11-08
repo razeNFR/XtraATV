@@ -958,4 +958,14 @@
     <string name="tv_multistream_sound_selected_desc">Звук есть только у выбранной трансляции. Звук следует за рамкой при смене трансляции.</string>
     <string name="tv_multistream_sound_mix_desc">Все трансляции звучат одновременно, каждая со своей громкостью. Настройте их ниже.</string>
     <string name="tv_multistream_sound_keep">Запомнить для следующих мультистримов</string>
+    <string name="tv_backup_save_tv">Сохранить на ТВ</string>
+    <string name="tv_backup_restore_tv">Восстановить с ТВ</string>
+    <string name="tv_backup_qr_send">Отправить на телефон (QR-код)</string>
+    <string name="tv_backup_qr_receive">Получить с телефона (QR-код)</string>
+    <string name="tv_backup_qr_send_help">Отсканируйте этот QR-код телефоном в той же сети Wi-Fi, чтобы скачать файл резервной копии.</string>
+    <string name="tv_backup_qr_receive_help">Отсканируйте этот QR-код телефоном в той же сети Wi-Fi и выберите файл резервной копии.</string>
+    <string name="tv_backup_saved">Резервная копия сохранена: %s</string>
+    <string name="tv_backup_restored">Настройки восстановлены</string>
+    <string name="tv_backup_not_found">Файл резервной копии на ТВ не найден</string>
+    <string name="tv_backup_no_network">Сначала подключите ТВ к Wi-Fi или Ethernet</string>
 </resources>

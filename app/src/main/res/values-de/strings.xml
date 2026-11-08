@@ -958,4 +958,14 @@
     <string name="tv_multistream_sound_selected_desc">Nur der ausgewählte Stream hat Ton. Der Ton folgt dem Rahmen, wenn du den Stream wechselst.</string>
     <string name="tv_multistream_sound_mix_desc">Alle Streams laufen gleichzeitig, jeder mit eigener Lautstärke. Stelle sie unten ein.</string>
     <string name="tv_multistream_sound_keep">Für die nächsten Multi-Streams merken</string>
+    <string name="tv_backup_save_tv">Auf dem Fernseher speichern</string>
+    <string name="tv_backup_restore_tv">Vom Fernseher wiederherstellen</string>
+    <string name="tv_backup_qr_send">An ein Telefon senden (QR-Code)</string>
+    <string name="tv_backup_qr_receive">Von einem Telefon empfangen (QR-Code)</string>
+    <string name="tv_backup_qr_send_help">Scannen Sie diesen QR-Code mit Ihrem Telefon im selben WLAN, um die Sicherungsdatei herunterzuladen.</string>
+    <string name="tv_backup_qr_receive_help">Scannen Sie diesen QR-Code mit Ihrem Telefon im selben WLAN und wählen Sie Ihre Sicherungsdatei aus.</string>
+    <string name="tv_backup_saved">Sicherung gespeichert: %s</string>
+    <string name="tv_backup_restored">Einstellungen wiederhergestellt</string>
+    <string name="tv_backup_not_found">Keine Sicherungsdatei auf dem Fernseher gefunden</string>
+    <string name="tv_backup_no_network">Verbinden Sie den Fernseher zuerst mit WLAN oder Ethernet</string>
 </resources>

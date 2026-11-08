@@ -44,7 +44,7 @@ object TvStreamSources {
                     else -> return -1
                 }
             }
-            is GameStreamsDataSource -> "game:" + (origin.gameId ?: origin.gameSlug ?: return -1)
+            is GameStreamsDataSource -> "game:" + (origin.gameId ?: origin.gameSlug ?: origin.gameName ?: return -1)
             else -> return -1
         }
         return rows.indexOfFirst { it.kind == kind }
@@ -114,6 +114,21 @@ object TvStreamSources {
                 networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
             )
         }
+    }
+
+    /** Live streams matching [query]. */
+    fun search(context: Context, query: String): PagingSource<Int, Stream> {
+        val app = context.applicationContext as XtraApp
+        val prefs = context.prefs()
+        return com.github.andreyasadchy.xtra.repository.datasource.SearchStreamsDataSource(
+            query = query.trim(),
+            gqlHeaders = TwitchApiHelper.getGQLHeaders(context),
+            graphQLRepository = app.xtraModule.graphQLRepository,
+            helixHeaders = TwitchApiHelper.getHelixHeaders(context),
+            helixRepository = app.xtraModule.helixRepository,
+            enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false),
+            networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+        )
     }
 
     /** A source made at its first load (it needs to read the database first), then used for the next pages. */
@@ -213,8 +228,8 @@ object TvStreamSources {
         context.prefs().getStringSet(C.TV_HOME_LANGUAGE_ROWS, null)?.filter { it.isNotBlank() }?.sorted()?.forEach { language ->
             rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.tv_popular_in, languageName(context, language)), { popular(context, listOf(language)) }, "language:$language")
         }
-        if (current != null && (!current.gameId.isNullOrBlank() || !current.gameSlug.isNullOrBlank()) && !current.gameName.isNullOrBlank()) {
-            rows += Row(current.gameName!!, { game(context, current.gameId, current.gameSlug, current.gameName) }, "game:" + (current.gameId ?: current.gameSlug))
+        if (current != null && !current.gameName.isNullOrBlank()) {
+            rows += Row(current.gameName!!, { game(context, current.gameId, current.gameSlug, current.gameName) }, "game:" + (current.gameId ?: current.gameSlug ?: current.gameName))
         }
         return rows
     }

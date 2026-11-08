@@ -101,6 +101,10 @@ class GamesAdapter(
                         gameImage.visibility = View.GONE
                         gameBackground?.setImageDrawable(null)
                     }
+                    if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                        root.setOnFocusChangeListener { _, hasFocus -> com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(gameName, hasFocus) }
+                        com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(gameName, root.hasFocus())
+                    }
                     if (item.name != null) {
                         gameName.visibility = View.VISIBLE
                         gameName.text = item.name
