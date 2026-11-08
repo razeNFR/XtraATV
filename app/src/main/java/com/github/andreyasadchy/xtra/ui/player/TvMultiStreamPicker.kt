@@ -63,6 +63,7 @@ object TvMultiStreamPicker {
                 .distinctBy { it.channelLogin }
             if (candidates.isEmpty()) {
                 candidates = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.load(com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.popular(activity))
+                    .orEmpty()
                     .filter { !it.channelLogin.isNullOrBlank() && it.channelLogin !in exclude }
                     .distinctBy { it.channelLogin }
             }

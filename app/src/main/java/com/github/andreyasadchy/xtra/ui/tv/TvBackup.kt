@@ -274,7 +274,7 @@ object TvBackup {
                         Text(url, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ComposeColor.White)
                         Spacer(Modifier.height(18.dp))
                         ButtonRow(
-                            label = context.getString(R.string.close),
+                            label = context.getString(R.string.close_player),
                             modifier = Modifier.focusRequester(closeRequester),
                             onClick = dismiss,
                         )
@@ -338,7 +338,7 @@ object TvBackup {
                         Text(url, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ComposeColor.White)
                         Spacer(Modifier.height(18.dp))
                         ButtonRow(
-                            label = context.getString(R.string.close),
+                            label = context.getString(R.string.close_player),
                             modifier = Modifier.focusRequester(closeRequester),
                             onClick = dismiss,
                         )

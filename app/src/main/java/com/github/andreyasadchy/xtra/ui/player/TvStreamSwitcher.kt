@@ -193,7 +193,7 @@ object TvStreamSwitcher {
                     setPadding(padding * 2, padding, padding * 2, padding)
                     setShadowLayer(4 * density, 0f, 1 * density, 0x99000000.toInt())
                     if (index == searchTabIndex) {
-                        val icon = activity.getDrawable(R.drawable.ic_search_black_24dp)?.mutate()?.apply {
+                        val icon = activity.getDrawable(R.drawable.baseline_search_black_24)?.mutate()?.apply {
                             setTintList(activity.getColorStateList(R.color.tv_pill_text))
                             setBounds(0, 0, (18 * density).toInt(), (18 * density).toInt())
                         }
