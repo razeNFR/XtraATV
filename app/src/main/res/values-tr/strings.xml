@@ -969,4 +969,7 @@
     <string name="tv_backup_restored">Ayarlar geri yüklendi</string>
     <string name="tv_backup_not_found">TV\'de yedek dosyası bulunamadı</string>
     <string name="tv_backup_no_network">Önce TV\'yi Wi-Fi veya Ethernet\'e bağlayın</string>
+    <string name="tv_settings_section_about">Hakkında</string>
+    <string name="tv_about_github">GitHub deposu (QR kodu)</string>
+    <string name="tv_about_device">Cihaz bilgileri</string>
 </resources>

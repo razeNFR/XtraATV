@@ -968,4 +968,7 @@
     <string name="tv_backup_restored">设置已恢复</string>
     <string name="tv_backup_not_found">电视上未找到备份文件</string>
     <string name="tv_backup_no_network">请先将电视连接到 Wi-Fi 或以太网</string>
+    <string name="tv_settings_section_about">关于</string>
+    <string name="tv_about_github">GitHub 仓库（二维码）</string>
+    <string name="tv_about_device">设备信息</string>
 </resources>

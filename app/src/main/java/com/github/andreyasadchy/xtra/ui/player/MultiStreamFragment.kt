@@ -1149,7 +1149,7 @@ class MultiStreamFragment : Fragment() {
     companion object {
         private const val MAX = 4
         /** Time the frame of the selected stream and the names stay after the last key. */
-        private const val CHROME_HIDE_MS = 3000L
+        private const val CHROME_HIDE_MS = 5000L
         private val DIRECTIONS = mapOf(
             KeyEvent.KEYCODE_DPAD_UP to View.FOCUS_UP,
             KeyEvent.KEYCODE_DPAD_DOWN to View.FOCUS_DOWN,

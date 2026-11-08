@@ -107,6 +107,7 @@ class SettingsActivity : AppCompatActivity() {
         TvCategory(R.string.download_settings, R.drawable.tv_ic_download, R.id.downloadSettingsFragment),
         TvCategory(R.string.tv_settings_section_updates, R.drawable.tv_ic_cloud, R.id.settingsFragment, R.xml.tv_settings_updates),
         TvCategory(R.string.tv_settings_section_advanced, R.drawable.tv_ic_tune, R.id.settingsFragment, R.xml.tv_settings_advanced),
+        TvCategory(R.string.tv_settings_section_about, R.drawable.tv_ic_info, R.id.settingsFragment, R.xml.tv_settings_about),
     )
     private var tvCategory = 0
     private var tvNavController: androidx.navigation.NavController? = null
@@ -887,6 +888,27 @@ class SettingsActivity : AppCompatActivity() {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalDebugSettingsFragment())
                 true
+            }
+            findPreference<Preference>("about_app")?.apply {
+                if (tvXml != 0) {
+                    title = "${getString(R.string.app_name)} ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+                }
+                summary = com.github.andreyasadchy.xtra.ui.tv.TvAbout.CREDIT_TEXT
+                setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvAbout.show(requireContext())
+                    true
+                }
+            }
+            findPreference<Preference>("about_github")?.setOnPreferenceClickListener {
+                com.github.andreyasadchy.xtra.ui.tv.TvAbout.show(requireContext())
+                true
+            }
+            findPreference<Preference>("about_device")?.apply {
+                summary = com.github.andreyasadchy.xtra.ui.tv.TvAbout.deviceSummary()
+                setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvAbout.show(requireContext())
+                    true
+                }
             }
         }
 

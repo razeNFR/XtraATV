@@ -968,4 +968,7 @@
     <string name="tv_backup_restored">تمت استعادة الإعدادات</string>
     <string name="tv_backup_not_found">لم يتم العثور على ملف نسخ احتياطي على التلفاز</string>
     <string name="tv_backup_no_network">قم بتوصيل التلفاز بشبكة Wi-Fi أو Ethernet أولاً</string>
+    <string name="tv_settings_section_about">حول</string>
+    <string name="tv_about_github">مستودع GitHub (رمز QR)</string>
+    <string name="tv_about_device">معلومات الجهاز</string>
 </resources>

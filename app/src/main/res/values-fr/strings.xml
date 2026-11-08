@@ -968,4 +968,7 @@
     <string name="tv_backup_restored">Paramètres restaurés</string>
     <string name="tv_backup_not_found">Aucun fichier de sauvegarde trouvé sur la TV</string>
     <string name="tv_backup_no_network">Connectez d\'abord la TV au Wi-Fi ou à Ethernet</string>
+    <string name="tv_settings_section_about">À propos</string>
+    <string name="tv_about_github">Dépôt GitHub (QR code)</string>
+    <string name="tv_about_device">Informations de l\'appareil</string>
 </resources>

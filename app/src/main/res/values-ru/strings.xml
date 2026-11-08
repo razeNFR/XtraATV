@@ -968,4 +968,7 @@
     <string name="tv_backup_restored">Настройки восстановлены</string>
     <string name="tv_backup_not_found">Файл резервной копии на ТВ не найден</string>
     <string name="tv_backup_no_network">Сначала подключите ТВ к Wi-Fi или Ethernet</string>
+    <string name="tv_settings_section_about">О приложении</string>
+    <string name="tv_about_github">Репозиторий GitHub (QR-код)</string>
+    <string name="tv_about_device">Информация об устройстве</string>
 </resources>

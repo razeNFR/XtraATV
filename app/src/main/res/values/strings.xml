@@ -987,4 +987,7 @@
     <string name="tv_backup_restored">Settings restored</string>
     <string name="tv_backup_not_found">No backup file found on the TV</string>
     <string name="tv_backup_no_network">Connect the TV to Wi-Fi or Ethernet first</string>
+    <string name="tv_settings_section_about">About</string>
+    <string name="tv_about_github">GitHub repository (QR code)</string>
+    <string name="tv_about_device">Device information</string>
 </resources>

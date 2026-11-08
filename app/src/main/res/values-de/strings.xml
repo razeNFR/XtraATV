@@ -968,4 +968,7 @@
     <string name="tv_backup_restored">Einstellungen wiederhergestellt</string>
     <string name="tv_backup_not_found">Keine Sicherungsdatei auf dem Fernseher gefunden</string>
     <string name="tv_backup_no_network">Verbinden Sie den Fernseher zuerst mit WLAN oder Ethernet</string>
+    <string name="tv_settings_section_about">Über</string>
+    <string name="tv_about_github">GitHub-Repository (QR-Code)</string>
+    <string name="tv_about_device">Geräteinformationen</string>
 </resources>

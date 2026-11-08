@@ -968,4 +968,7 @@
     <string name="tv_backup_restored">設定已還原</string>
     <string name="tv_backup_not_found">電視上找不到備份檔案</string>
     <string name="tv_backup_no_network">請先將電視連接到 Wi-Fi 或乙太網路</string>
+    <string name="tv_settings_section_about">關於</string>
+    <string name="tv_about_github">GitHub 儲存庫（QR 碼）</string>
+    <string name="tv_about_device">裝置資訊</string>
 </resources>

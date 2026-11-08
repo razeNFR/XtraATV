@@ -493,7 +493,7 @@ object TvBackup {
 }
 
 /** Compact ISO/IEC 18004 QR code generator (Byte mode, Version 3, ECC Level L — up to 53 bytes). */
-private object QrCode {
+internal object QrCode {
 
     fun encode(text: String, sizePx: Int): Bitmap {
         val data = text.toByteArray(Charsets.ISO_8859_1)

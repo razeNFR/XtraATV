@@ -968,4 +968,7 @@
     <string name="tv_backup_restored">設定を復元しました</string>
     <string name="tv_backup_not_found">テレビにバックアップファイルが見つかりません</string>
     <string name="tv_backup_no_network">先にテレビをWi-Fiまたはイーサネットに接続してください</string>
+    <string name="tv_settings_section_about">アプリについて</string>
+    <string name="tv_about_github">GitHub リポジトリ (QR コード)</string>
+    <string name="tv_about_device">デバイス情報</string>
 </resources>

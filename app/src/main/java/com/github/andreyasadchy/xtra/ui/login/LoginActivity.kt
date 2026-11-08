@@ -311,6 +311,47 @@ class LoginActivity : AppCompatActivity() {
                         view?.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
                     }
                 }
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    if (isTv && url?.contains("/oauth2/authorize") == true) {
+                        view?.evaluateJavascript(
+                            """
+                            (function() {
+                                function focusAuthorize() {
+                                    var btn = document.querySelector('button[data-a-target="passport-authorize-button"], button.js-authorize-button');
+                                    if (btn && !document.querySelector('input[type="password"]')) {
+                                        btn.scrollIntoView({block: 'center'});
+                                        btn.focus();
+                                        return true;
+                                    }
+                                    return false;
+                                }
+                                if (!focusAuthorize()) {
+                                    setTimeout(focusAuthorize, 400);
+                                    setTimeout(focusAuthorize, 1200);
+                                }
+                            })();
+                            """.trimIndent(),
+                            null
+                        )
+                    }
+                }
+            }
+            if (isTv) {
+                webView.setOnKeyListener { v, keyCode, event ->
+                    if (event.action == android.view.KeyEvent.ACTION_DOWN &&
+                        (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN || keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) &&
+                        webView.url?.contains("/oauth2/authorize") == true
+                    ) {
+                        val dy = if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) 240 else -240
+                        v.scrollBy(0, dy)
+                        webView.evaluateJavascript(
+                            "window.scrollBy(0, $dy); var b = document.querySelector('button[data-a-target=\"passport-authorize-button\"], button.js-authorize-button'); if (b && $dy > 0) b.focus();",
+                            null
+                        )
+                    }
+                    false
+                }
             }
             startPageLogin = {
                 if (apiSetting == 1) {
@@ -354,12 +395,10 @@ class LoginActivity : AppCompatActivity() {
                     CookieManager.getInstance().removeAllCookies(null)
                     with(binding) {
                         webView.visibility = View.VISIBLE
-                        textZoom.visibility = View.VISIBLE
-                        havingTrouble.visibility = View.VISIBLE
-                        havingTrouble.text = getString(R.string.trouble_logging_in)
-                        havingTrouble.isClickable = true
-                        havingTrouble.isFocusable = true
-                        setupButtons(networkLibrary, helixClientId, helixAuthUrl)
+                        textZoom.visibility = View.GONE
+                        havingTrouble.visibility = View.GONE
+                        havingTrouble.isClickable = false
+                        havingTrouble.isFocusable = false
                         webView.requestFocus()
                     }
                     startPageLogin?.invoke()
@@ -683,8 +722,8 @@ class LoginActivity : AppCompatActivity() {
                                 helixToken = token
                             }
                             webView.visibility = View.VISIBLE
-                            textZoom.visibility = View.VISIBLE
-                            havingTrouble.visibility = View.VISIBLE
+                            textZoom.visibility = if (isTv) View.GONE else View.VISIBLE
+                            havingTrouble.visibility = if (isTv) View.GONE else View.VISIBLE
                             progressBar.visibility = View.GONE
                             readHeaders = true
                             webView.loadUrl("https://www.twitch.tv/login")
@@ -851,8 +890,8 @@ class LoginActivity : AppCompatActivity() {
             userId = null
             userLogin = null
             webView.visibility = View.VISIBLE
-            textZoom.visibility = View.VISIBLE
-            havingTrouble.visibility = View.VISIBLE
+            textZoom.visibility = if (isTv) View.GONE else View.VISIBLE
+            havingTrouble.visibility = if (isTv) View.GONE else View.VISIBLE
             progressBar.visibility = View.GONE
         }
     }

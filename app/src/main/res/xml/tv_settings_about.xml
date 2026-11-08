@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV settings, About category of the left column -->
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Preference
+        android:key="about_app"
+        android:summary="XtraTV forked from https://github.com/crackededed/Xtra by razeN with AI"
+        android:title="@string/app_name"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="about_github"
+        android:summary="https://github.com/razeNFR/XtraATV"
+        android:title="@string/tv_about_github"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="about_device"
+        android:title="@string/tv_about_device"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="check_updates"
+        android:title="@string/check_updates"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>
