@@ -297,6 +297,7 @@ class ExoPlayerService : BasePlaybackService() {
                                 adDelayJob = null
                                 backLiveFrom = 0L
                                 backLiveProgress = 0f
+                                player?.setPlaybackSpeed(1f)
                                 if (!oldValue) {
                                     resetAdPod()
                                 }
@@ -1701,24 +1702,15 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     /**
-     * Ad in the playlist: its last segment, or any of its recent segments near the live edge for the first playlist of a
-     * stream (an ad at the start, "pre-roll", is then caught before any of it is shown).
+     * Ad in the playlist: its last segment, or any of its segments for the first playlist of a stream (an ad at the
+     * start, "pre-roll", is then caught before its end).
      */
     private fun checkPlaylist(playlist: HlsMediaPlaylist?, mainPlayer: Boolean = false): Boolean {
         if (playlist != null && mainPlayer && checkFirstPlaylist) {
             checkFirstPlaylist = false
-            if (playlist.segments.takeLast(3).any { isAdSegment(playlist, it) }) {
+            if (playlist.segments.any { isAdSegment(playlist, it) }) {
                 firstPlaylistAd = true
                 return true
-            }
-            val lastAdIdx = playlist.segments.indexOfLast { isAdSegment(playlist, it) }
-            if (lastAdIdx >= 0 && lastAdIdx + 1 < playlist.segments.size) {
-                val firstLiveMs = playlist.segments[lastAdIdx + 1].relativeStartTimeUs / 1000
-                player?.let { p ->
-                    if (p.currentPosition < firstLiveMs) {
-                        p.seekTo(firstLiveMs + 50L)
-                    }
-                }
             }
         }
         return playlist?.segments?.lastOrNull()?.let { isAdSegment(playlist, it) } == true
@@ -2558,24 +2550,18 @@ class ExoPlayerService : BasePlaybackService() {
         val position = adPodPosition
         val length = adPodLength
         val ended = times != null && now >= times.end
-        if (!playingAds || backLiveFrom > 0L || (times != null && ended && position > 0 && length > 0 && position >= length)) {
-            if (playingAds && times != null && !ended) {
-                // A new ad in the break is currently playing
-                backLiveFrom = 0L
-                backLiveProgress = 0f
-            } else {
-                if (backLiveFrom == 0L) {
-                    backLiveFrom = if (times != null && ended) times.end else now
-                }
-                if (adDelayJob?.isActive != true && (!playingAds || now - backLiveFrom >= 1500L)) {
-                    startReturnToLiveIfNeeded()
-                }
-                val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceIn(1500L, 6000L)
-                val timeProgress = ((now - backLiveFrom).toFloat() / delay).coerceIn(0f, 0.92f)
-                val progress = maxOf(timeProgress, backLiveProgress).coerceIn(0.05f, 0.95f)
-                backLiveProgress = progress
-                return AdblockInfo(getString(R.string.tv_adblock_back_live), source, progress)
+        if (!playingAds) {
+            if (backLiveFrom == 0L) {
+                backLiveFrom = now
             }
+            if (adDelayJob?.isActive != true) {
+                startReturnToLiveIfNeeded()
+            }
+            val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceIn(1500L, 6000L)
+            val timeProgress = ((now - backLiveFrom).toFloat() / delay).coerceIn(0f, 0.92f)
+            val progress = maxOf(timeProgress, backLiveProgress).coerceIn(0.05f, 0.95f)
+            backLiveProgress = progress
+            return AdblockInfo(getString(R.string.tv_adblock_back_live), source, progress)
         }
         val ad = getString(
             when (adRollType) {
@@ -2598,7 +2584,7 @@ class ExoPlayerService : BasePlaybackService() {
                 title.append(" · ").append(maxOf(1L, (times.end - now + 999) / 1000)).append(" s")
                 ((now - times.start).toFloat() / (times.end - times.start)).coerceIn(0f, 1f)
             }
-            ended && position > 0 && length > 0 -> 0f
+            ended && position > 0 && length > 0 -> if (position >= length) 1f else 0f
             else -> null
         }
         return AdblockInfo(title.toString(), source, progress)
@@ -2743,6 +2729,7 @@ class ExoPlayerService : BasePlaybackService() {
         loaded = false
         // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
         // no sound), it must not come back on the screen for a moment when the backup player goes
+        player?.setPlaybackSpeed(1f)
         player?.volume = 0f
         player?.stop()
         // everything the ad blocker started for this stream stops, nothing of it may come over the next one
@@ -2821,6 +2808,7 @@ class ExoPlayerService : BasePlaybackService() {
         videoPreviewLookupDone = false
         paused = false
         player?.let { player ->
+            player.setPlaybackSpeed(1f)
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                 clearOverrides()
                 setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
@@ -2847,6 +2835,7 @@ class ExoPlayerService : BasePlaybackService() {
         secondaryPlayer?.playWhenReady = false
         serviceListener?.setPlayerSurface(false)
         player?.let { player ->
+            player.setPlaybackSpeed(1f)
             if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
@@ -2862,7 +2851,7 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     private fun startReturnToLiveIfNeeded() {
-        if (!(proxyMediaPlaylist || videoSwapActive || hidden)) {
+        if (playingAds || !(proxyMediaPlaylist || videoSwapActive || hidden)) {
             return
         }
         if (backLiveFrom == 0L) {
@@ -2876,9 +2865,7 @@ class ExoPlayerService : BasePlaybackService() {
         adDelayJob = lifecycleScope.launch {
             try {
                 val ready = returnToLiveAfterAd(generation, login)
-                val adStillRunning = playingAds && (adPodTimes == null || System.currentTimeMillis() < adPodTimes!!.end)
-                if (ready && !adStillRunning && generation == streamGeneration && channelLogin == login) {
-                    playingAds = false
+                if (ready && !playingAds && generation == streamGeneration && channelLogin == login) {
                     adBreakOver()
                     when {
                         proxyMediaPlaylist -> {
@@ -2892,6 +2879,7 @@ class ExoPlayerService : BasePlaybackService() {
                         hidden -> {
                             hidden = false
                             player?.let { player ->
+                                player.setPlaybackSpeed(1f)
                                 if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
                                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                                         setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
@@ -2904,88 +2892,82 @@ class ExoPlayerService : BasePlaybackService() {
                     }
                 }
             } finally {
+                player?.setPlaybackSpeed(1f)
                 adDelayJob = null
             }
         }
     }
 
     /**
-     * Fast return to live after an ad break: once the main player's playlist has clean "live" segments at its tail,
-     * re-enables its video track in the background (while muted and while secondaryPlayer is still shown), seeks
-     * directly to the clean live edge to purge any buffered ad segments or old pre-ad frames, and waits briefly
-     * for STATE_READY before switching the surface and audio back.
+     * Drains the remaining buffered ad segments on the muted main player at 2x speed without calling seekTo(),
+     * waiting until mainPlayer.currentPosition is strictly inside a "live" segment past all ad segments before
+     * restoring 1x speed, re-enabling video decoding, and switching back from the backup player.
      */
     private suspend fun returnToLiveAfterAd(generation: Int, login: String?): Boolean {
         if (backLiveFrom == 0L) {
             backLiveFrom = System.currentTimeMillis()
         }
-        for (step in 0 until 12) {
-            if (generation != streamGeneration || channelLogin != login) {
-                return false
-            }
-            if (playingAds && (adPodTimes == null || System.currentTimeMillis() < adPodTimes!!.end)) {
-                return false
-            }
-            val mainPlayer = player ?: return false
-            val currentPlaylist = (mainPlayer.currentManifest as? HlsManifest)?.mediaPlaylist
-            val segments = currentPlaylist?.segments.orEmpty()
-            if (currentPlaylist != null && segments.isNotEmpty()) {
-                val lastAdIdx = segments.indexOfLast { seg ->
-                    isAdSegment(currentPlaylist, seg) || (seg.title.isNotEmpty() && !seg.title.contains("live", true))
+        val initialPlayer = player ?: return false
+        initialPlayer.volume = 0f
+        if (initialPlayer.playbackState == Player.STATE_IDLE || initialPlayer.playbackState == Player.STATE_ENDED) {
+            initialPlayer.prepare()
+        }
+        initialPlayer.play()
+        var initialGapMs = 0L
+        var videoReenabled = false
+        var liveReadySteps = 0
+        try {
+            initialPlayer.setPlaybackSpeed(2f)
+            for (step in 0 until 150) {
+                if (playingAds || generation != streamGeneration || channelLogin != login) {
+                    return false
                 }
-                val firstLiveIdx = lastAdIdx + 1
-                var liveTailUs = 0L
-                for (i in firstLiveIdx until segments.size) {
-                    liveTailUs += segments[i].durationUs
+                val p = player ?: return false
+                val playlist = (p.currentManifest as? HlsManifest)?.mediaPlaylist ?: return true
+                val segments = playlist.segments
+                if (segments.isEmpty()) {
+                    return true
                 }
-                val liveTailMs = liveTailUs / 1000
-                val tailRatio = (liveTailMs.toFloat() / 2000f).coerceIn(0f, 1f)
-                backLiveProgress = maxOf(backLiveProgress, 0.10f + tailRatio * 0.45f)
-                if (lastAdIdx == -1 || liveTailMs >= 2000L) {
-                    break
+                val lastAdIdx = segments.indexOfLast { isAdSegment(playlist, it) }
+                val posMs = p.currentPosition
+                val posUs = posMs * 1000
+                val currentIdx = segments.indexOfLast { it.relativeStartTimeUs <= posUs }
+                val onLiveSegment = currentIdx > lastAdIdx &&
+                    currentIdx >= 0 &&
+                    !isAdSegment(playlist, segments[currentIdx]) &&
+                    (segments.none { it.title.isNotEmpty() } || segments[currentIdx].title.contains("live", true))
+                if (onLiveSegment) {
+                    p.setPlaybackSpeed(1f)
+                    if (!videoReenabled && !hidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
+                        videoReenabled = true
+                        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().apply {
+                            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
+                        }.build()
+                    }
+                    liveReadySteps++
+                    backLiveProgress = maxOf(backLiveProgress, (0.80f + liveReadySteps * 0.05f).coerceAtMost(0.95f))
+                    if (hidden || (p.playbackState == Player.STATE_READY && liveReadySteps >= 3) || liveReadySteps >= 8) {
+                        return true
+                    }
+                } else {
+                    if (lastAdIdx + 1 < segments.size) {
+                        val firstLiveStartMs = segments[lastAdIdx + 1].relativeStartTimeUs / 1000
+                        val remainingMs = (firstLiveStartMs - posMs).coerceAtLeast(0L)
+                        if (initialGapMs <= 0L && remainingMs > 0L) {
+                            initialGapMs = remainingMs
+                        }
+                        if (initialGapMs > 0L) {
+                            val drainRatio = (1f - remainingMs.toFloat() / initialGapMs.toFloat()).coerceIn(0f, 1f)
+                            backLiveProgress = maxOf(backLiveProgress, 0.08f + drainRatio * 0.70f)
+                        }
+                    }
                 }
-                if (step == 5 && firstLiveIdx >= segments.size) {
-                    mainPlayer.seekToDefaultPosition()
-                    mainPlayer.prepare()
-                    mainPlayer.play()
-                }
+                delay(100)
             }
-            delay(200)
+            return !playingAds && generation == streamGeneration && channelLogin == login
+        } finally {
+            player?.setPlaybackSpeed(1f)
         }
-        if (generation != streamGeneration || channelLogin != login) {
-            return false
-        }
-        if (playingAds && (adPodTimes == null || System.currentTimeMillis() < adPodTimes!!.end)) {
-            return false
-        }
-        val mainPlayer = player ?: return false
-        if (!hidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
-            mainPlayer.trackSelectionParameters = mainPlayer.trackSelectionParameters.buildUpon().apply {
-                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
-            }.build()
-        }
-        mainPlayer.volume = 0f
-        mainPlayer.seekToDefaultPosition()
-        if (mainPlayer.playbackState == Player.STATE_IDLE || mainPlayer.playbackState == Player.STATE_ENDED) {
-            mainPlayer.prepare()
-        }
-        mainPlayer.play()
-        backLiveProgress = maxOf(backLiveProgress, 0.65f)
-        for (waitStep in 0 until 10) {
-            if (generation != streamGeneration || channelLogin != login) {
-                return false
-            }
-            if (playingAds && (adPodTimes == null || System.currentTimeMillis() < adPodTimes!!.end)) {
-                return false
-            }
-            backLiveProgress = maxOf(backLiveProgress, 0.68f + (waitStep + 1) * 0.027f)
-            if (mainPlayer.playbackState == Player.STATE_READY && waitStep >= 1) {
-                return true
-            }
-            delay(150)
-        }
-        return generation == streamGeneration && channelLogin == login &&
-            (!playingAds || (adPodTimes != null && System.currentTimeMillis() >= adPodTimes!!.end))
     }
 
     private var freezeWatchJob: Job? = null
