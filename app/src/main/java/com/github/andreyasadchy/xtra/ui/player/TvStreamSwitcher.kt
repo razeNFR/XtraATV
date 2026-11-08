@@ -162,12 +162,14 @@ object TvStreamSwitcher {
                 setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (2 * density).toInt())
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        // tabs of the lists: the list of the stream first, then the other rows
-        val tabTitles = when {
-            rows.isEmpty() -> emptyList()
+        // tabs of the lists: the list of the stream first, then the other rows, and Search at the end
+        val baseTitles = when {
+            rows.isEmpty() -> listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current))
             originRow >= 0 -> rows.map { it.title }
             else -> listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)) + rows.map { it.title }
         }
+        val tabTitles = baseTitles + activity.getString(R.string.search)
+        val searchTabIndex = tabTitles.lastIndex
         val tabViews = mutableListOf<TextView>()
         if (tabTitles.size > 1) {
             val tabsLayout = LinearLayout(activity).apply {
@@ -180,7 +182,7 @@ object TvStreamSwitcher {
                     marginEnd = (18 * density).toInt()
                 })
             }
-            tabTitles.forEach { title ->
+            tabTitles.forEachIndexed { index, title ->
                 tabViews += TextView(activity).apply {
                     text = title
                     textSize = 15f
@@ -190,6 +192,14 @@ object TvStreamSwitcher {
                     val padding = (8 * density).toInt()
                     setPadding(padding * 2, padding, padding * 2, padding)
                     setShadowLayer(4 * density, 0f, 1 * density, 0x99000000.toInt())
+                    if (index == searchTabIndex) {
+                        val icon = activity.getDrawable(R.drawable.baseline_search_black_24)?.mutate()?.apply {
+                            setTintList(activity.getColorStateList(R.color.tv_pill_text))
+                            setBounds(0, 0, (18 * density).toInt(), (18 * density).toInt())
+                        }
+                        setCompoundDrawablesRelative(icon, null, null, null)
+                        compoundDrawablePadding = (6 * density).toInt()
+                    }
                 }.also { tabsLayout.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = (10 * density).toInt() }) }
             }
             tabViews.getOrNull(originTab)?.isSelected = true
@@ -332,7 +342,7 @@ object TvStreamSwitcher {
         recyclerView.adapter = adapter
         // more of the list near its end (30 streams by page), for the list of the stream and the other tabs
         val pages = mutableMapOf<Int, com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages>()
-        if (source != null && selection == null) {
+        if (source != null) {
             pages[originTab] = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(source)
         }
         var moreJob: kotlinx.coroutines.Job? = null
@@ -363,7 +373,7 @@ object TvStreamSwitcher {
                     loadedTabs[tab] = adapter.streams
                     added.forEach { stream -> stream.channelLogin?.let { seen.putIfAbsent(it, stream) } }
                     adapter.notifyItemRangeInserted(start, added.size)
-                    if (tab == originTab) {
+                    if (tab == originTab && selection == null) {
                         activity.onQueueExtended(adapter.streams, source)
                     }
                 }
@@ -383,6 +393,7 @@ object TvStreamSwitcher {
         root.addView(recyclerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         // a tab with the focus shows its list (loaded once), after a short stop on it
         var tabJob: kotlinx.coroutines.Job? = null
+        var searchQuery = ""
         val showTab = { index: Int, list: List<Stream> ->
             currentTab = index
             pendingTarget = RecyclerView.NO_POSITION
@@ -394,15 +405,57 @@ object TvStreamSwitcher {
             adapter.notifyDataSetChanged()
             recyclerView.scrollToPosition(0)
         }
+        val runSearch: (String, TextView) -> Unit = { query, view ->
+            val trimmed = query.trim()
+            if (trimmed.isNotEmpty()) {
+                searchQuery = trimmed
+                val label = "${activity.getString(R.string.search)}: $trimmed"
+                tabJob?.cancel()
+                tabViews.forEachIndexed { i, tab -> tab.text = if (i == searchTabIndex && searchQuery.isNotEmpty()) label else tabTitles[i] }
+                tabJob = activity.lifecycleScope.launch {
+                    view.text = activity.getString(R.string.tv_switch_loading, label)
+                    val searchPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages {
+                        com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.search(activity, trimmed)
+                    }
+                    pages[searchTabIndex] = searchPages
+                    val list = searchPages.next()?.distinctBy { it.channelLogin }
+                        ?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }
+                        ?.also { loadedTabs[searchTabIndex] = it }
+                    view.text = label
+                    if (!dialog.isShowing) {
+                        return@launch
+                    }
+                    if (list.isNullOrEmpty()) {
+                        android.widget.Toast.makeText(activity, if (list == null) R.string.tv_switch_error else R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        showTab(searchTabIndex, list)
+                        recyclerView.post { recyclerView.layoutManager?.findViewByPosition(0)?.requestFocus() }
+                    }
+                }
+            }
+        }
         tabViews.forEachIndexed { index, view ->
-            // OK on a tab shows its list (loaded once); moving over the tabs changes nothing
+            // OK on a tab shows its list (loaded once); on Search it always opens the search box
             view.setOnClickListener {
+                if (index == searchTabIndex) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(activity) { dismiss ->
+                        com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
+                            title = activity.getString(R.string.search),
+                            hint = activity.getString(R.string.search),
+                            sendLabel = activity.getString(R.string.search),
+                        ) { text ->
+                            dismiss()
+                            runSearch(text, view)
+                        }
+                    }
+                    return@setOnClickListener
+                }
                 if (index == currentTab) {
                     recyclerView.getChildAt(0)?.requestFocus()
                     return@setOnClickListener
                 }
                 tabJob?.cancel()
-                tabViews.forEachIndexed { i, tab -> tab.text = tabTitles[i] }
+                tabViews.forEachIndexed { i, tab -> tab.text = if (i == searchTabIndex && searchQuery.isNotEmpty()) "${activity.getString(R.string.search)}: $searchQuery" else tabTitles[i] }
                 tabJob = activity.lifecycleScope.launch {
                     val cached = loadedTabs[index]
                     val list = cached ?: run {
@@ -571,6 +624,7 @@ object TvStreamSwitcher {
                 }
                 root.setOnFocusChangeListener { view, hasFocus ->
                     com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(title, hasFocus)
+                    com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(gameName, hasFocus)
                     if (hasFocus) {
                         onFocused?.invoke(holder.bindingAdapterPosition)
                         preview?.schedule(view, stream.channelLogin)

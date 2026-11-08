@@ -959,4 +959,17 @@
     <string name="tv_multistream_sound_selected_desc">Hanya siaran terpilih yang bersuara. Suara mengikuti bingkai saat kamu berganti siaran.</string>
     <string name="tv_multistream_sound_mix_desc">Semua siaran berbunyi bersamaan, masing-masing dengan volumenya sendiri. Atur di bawah.</string>
     <string name="tv_multistream_sound_keep">Ingat untuk multi-stream berikutnya</string>
+    <string name="tv_backup_save_tv">Simpan ke TV</string>
+    <string name="tv_backup_restore_tv">Pulihkan dari TV</string>
+    <string name="tv_backup_qr_send">Kirim ke ponsel (kode QR)</string>
+    <string name="tv_backup_qr_receive">Terima dari ponsel (kode QR)</string>
+    <string name="tv_backup_qr_send_help">Pindai kode QR ini dengan ponsel Anda di Wi-Fi yang sama untuk mengunduh file cadangan.</string>
+    <string name="tv_backup_qr_receive_help">Pindai kode QR ini dengan ponsel Anda di Wi-Fi yang sama dan pilih file cadangan Anda.</string>
+    <string name="tv_backup_saved">Cadangan disimpan: %s</string>
+    <string name="tv_backup_restored">Pengaturan dipulihkan</string>
+    <string name="tv_backup_not_found">File cadangan tidak ditemukan di TV</string>
+    <string name="tv_backup_no_network">Hubungkan TV ke Wi-Fi atau Ethernet terlebih dahulu</string>
+    <string name="tv_settings_section_about">Tentang</string>
+    <string name="tv_about_github">Repositori GitHub (kode QR)</string>
+    <string name="tv_about_device">Informasi perangkat</string>
 </resources>

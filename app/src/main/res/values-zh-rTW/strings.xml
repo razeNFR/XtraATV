@@ -958,4 +958,17 @@
     <string name="tv_multistream_sound_selected_desc">只有所選直播有聲音。切換直播時聲音跟隨邊框。</string>
     <string name="tv_multistream_sound_mix_desc">所有直播同時播放，各自使用自己的音量。在下方調整。</string>
     <string name="tv_multistream_sound_keep">在之後的多直播中保留</string>
+    <string name="tv_backup_save_tv">儲存到電視</string>
+    <string name="tv_backup_restore_tv">從電視還原</string>
+    <string name="tv_backup_qr_send">傳送到手機（QR 圖碼）</string>
+    <string name="tv_backup_qr_receive">從手機接收（QR 圖碼）</string>
+    <string name="tv_backup_qr_send_help">使用連接相同 Wi-Fi 的手機掃描此 QR 圖碼以下載備份檔案。</string>
+    <string name="tv_backup_qr_receive_help">使用連接相同 Wi-Fi 的手機掃描此 QR 圖碼並選擇您的備份檔案。</string>
+    <string name="tv_backup_saved">備份已儲存：%s</string>
+    <string name="tv_backup_restored">設定已還原</string>
+    <string name="tv_backup_not_found">電視上找不到備份檔案</string>
+    <string name="tv_backup_no_network">請先將電視連接到 Wi-Fi 或乙太網路</string>
+    <string name="tv_settings_section_about">關於</string>
+    <string name="tv_about_github">GitHub 儲存庫（QR 碼）</string>
+    <string name="tv_about_device">裝置資訊</string>
 </resources>

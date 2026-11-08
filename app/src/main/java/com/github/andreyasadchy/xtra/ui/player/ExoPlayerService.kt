@@ -123,6 +123,7 @@ class ExoPlayerService : BasePlaybackService() {
     private var showStreamNotificationSeekbar = true
 
     private var dynamicsProcessing: DynamicsProcessing? = null
+    private var secondaryDynamicsProcessing: DynamicsProcessing? = null
     private var sleepTimer: Timer? = null
     private var sleepTimerEndTime = 0L
     private var lastSavedPosition: Long? = null
@@ -189,7 +190,7 @@ class ExoPlayerService : BasePlaybackService() {
             val playerListener = object : Player.Listener {
                 override fun onAudioSessionIdChanged(audioSessionId: Int) {
                     dynamicsProcessing?.let {
-                        it.release()
+                        runCatching { it.release() }
                         dynamicsProcessing = null
                     }
                     if (prefs().getBoolean(C.PLAYER_AUDIO_COMPRESSOR, false)) {
@@ -292,12 +293,15 @@ class ExoPlayerService : BasePlaybackService() {
                             playingAds = ads
                             // the ad being blocked from the marks of Twitch ("2/3", its end), for the badge
                             if (ads) {
+                                adDelayJob?.cancel()
+                                adDelayJob = null
+                                backLiveFrom = 0L
+                                backLiveProgress = 0f
+                                player?.setPlaybackSpeed(1f)
                                 if (!oldValue) {
                                     resetAdPod()
                                 }
                                 updateAdPod(playlist)
-                            } else if (oldValue) {
-                                adBreakOver()
                             }
                             checkStreamPictureShown()
                             if (ads) {
@@ -352,75 +356,8 @@ class ExoPlayerService : BasePlaybackService() {
                                         }
                                     }
                                 }
-                            } else {
-                                when {
-                                    proxyMediaPlaylist -> {
-                                        if (adDelayJob == null) {
-                                            adDelayJob = lifecycleScope.launch {
-                                                val delay = player?.let { player ->
-                                                    playlist?.segments?.lastOrNull()?.let { segment ->
-                                                        // This seems to be too much delay but at least it should hide the ad
-                                                        (segment.relativeStartTimeUs / 1000) - player.currentPosition
-                                                    }
-                                                } ?: 0
-                                                delay(delay.milliseconds)
-                                                // as VAFT: back once the piece the main player plays is one of the stream, not of the ad
-                                                awaitMainPlayerOnLive()
-                                                if (proxyMediaPlaylist) {
-                                                    serviceListener?.toast(R.string.stopping_proxy, Toast.LENGTH_SHORT)
-                                                    stopSecondaryPlayer()
-                                                }
-                                                adDelayJob = null
-                                            }
-                                        }
-                                    }
-                                    videoSwapActive -> {
-                                        if (adDelayJob == null) {
-                                            adDelayJob = lifecycleScope.launch {
-                                                val delay = player?.let { player ->
-                                                    playlist?.segments?.lastOrNull()?.let { segment ->
-                                                        (segment.relativeStartTimeUs / 1000) - player.currentPosition
-                                                    }
-                                                } ?: 0
-                                                delay(delay.milliseconds)
-                                                // as VAFT: back once the piece the main player plays is one of the stream, not of the ad
-                                                awaitMainPlayerOnLive()
-                                                if (videoSwapActive) {
-                                                    serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
-                                                    stopSecondaryPlayer()
-                                                }
-                                                adDelayJob = null
-                                            }
-                                        }
-                                    }
-                                    hidden -> {
-                                        if (adDelayJob == null) {
-                                            adDelayJob = lifecycleScope.launch {
-                                                val delay = player?.let { player ->
-                                                    playlist?.segments?.lastOrNull()?.let { segment ->
-                                                        (segment.relativeStartTimeUs / 1000) - player.currentPosition
-                                                    }
-                                                } ?: 0
-                                                delay(delay.milliseconds)
-                                                // as VAFT: back once the piece the main player plays is one of the stream, not of the ad
-                                                awaitMainPlayerOnLive()
-                                                if (hidden) {
-                                                    hidden = false
-                                                    player?.let { player ->
-                                                        if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
-                                                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                                                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
-                                                            }.build()
-                                                        }
-                                                        player.volume = userVolume()
-                                                    }
-                                                    startFreezeWatch()
-                                                }
-                                                adDelayJob = null
-                                            }
-                                        }
-                                    }
-                                }
+                            } else if (proxyMediaPlaylist || videoSwapActive || hidden) {
+                                startReturnToLiveIfNeeded()
                             }
                         }
                     }
@@ -453,26 +390,52 @@ class ExoPlayerService : BasePlaybackService() {
                                         val host = customProxyList?.getOrNull(currentCustomProxy)?.url?.let {
                                             it.toUri().host ?: "https://$it".toUri().host
                                         }
-                                        // not tried again for a while, on this stream or the next ones
-                                        customProxyList?.getOrNull(currentCustomProxy)?.let { customProxyHost(it) }?.let { TvProxyStatus.markFailed(it) }
+                                        val proxyHost = customProxyList?.getOrNull(currentCustomProxy)?.let { customProxyHost(it) }
                                         currentCustomProxy += 1
-                                        if (host != null) {
-                                            serviceListener?.toast(getString(R.string.proxy_error, host), Toast.LENGTH_LONG)
-                                        }
-                                        lifecycleScope.launch {
-                                            delay(1500.milliseconds)
-                                            restartPlayer()
+                                        if (responseCode == 403) {
+                                            // 403 = geo-blocked / forbidden on this channel: skip for this channel only and retry immediately
+                                            proxyHost?.let { geoBlockedProxiesForChannel.add(it) }
+                                            lifecycleScope.launch {
+                                                restartPlayer()
+                                            }
+                                        } else {
+                                            // not tried again for a while, on this stream or the next ones
+                                            proxyHost?.let { TvProxyStatus.markFailed(it) }
+                                            if (host != null) {
+                                                serviceListener?.toast(getString(R.string.proxy_error, host), Toast.LENGTH_LONG)
+                                            }
+                                            lifecycleScope.launch {
+                                                delay(1500.milliseconds)
+                                                restartPlayer()
+                                            }
                                         }
                                     }
                                     useStreamProxy && (responseCode >= 400 || timeout) -> {
                                         val host = streamProxyList?.getOrNull(currentStreamProxy)?.host
                                         currentStreamProxy += 1
-                                        if (host != null) {
-                                            serviceListener?.toast(getString(R.string.proxy_error, host), Toast.LENGTH_LONG)
+                                        if (responseCode == 403) {
+                                            lifecycleScope.launch {
+                                                restartPlayer()
+                                            }
+                                        } else {
+                                            if (host != null) {
+                                                serviceListener?.toast(getString(R.string.proxy_error, host), Toast.LENGTH_LONG)
+                                            }
+                                            lifecycleScope.launch {
+                                                delay(1500.milliseconds)
+                                                restartPlayer()
+                                            }
                                         }
+                                    }
+                                    isSwapping || hidden -> {
+                                        // Background main player errored while ads are blocked: reconnect it silently at live edge
                                         lifecycleScope.launch {
-                                            delay(1500.milliseconds)
-                                            restartPlayer()
+                                            delay(1000.milliseconds)
+                                            if (isSwapping || hidden) {
+                                                player?.seekToDefaultPosition()
+                                                player?.prepare()
+                                                player?.play()
+                                            }
                                         }
                                     }
                                     else -> {
@@ -1051,8 +1014,10 @@ class ExoPlayerService : BasePlaybackService() {
             } else null
             if (restart || qualities.isNullOrEmpty()) {
                 val proxyUrl = if (useCustomProxy) {
-                    // the custom proxies known offline (checked at the start of a stream, or failed a moment ago) are not tried
-                    while (customProxyList?.getOrNull(currentCustomProxy)?.let { customProxyHost(it) }?.let { TvProxyStatus.isFailed(it) } == true) {
+                    // the custom proxies known offline or geo-blocked (403) on this channel are not tried
+                    while (customProxyList?.getOrNull(currentCustomProxy)?.let { customProxyHost(it) }?.let {
+                        TvProxyStatus.isFailed(it) || geoBlockedProxiesForChannel.contains(it)
+                    } == true) {
                         currentCustomProxy += 1
                     }
                     customProxyList?.getOrNull(currentCustomProxy)?.let { proxy -> customProxyUrl(proxy, channelLogin) }
@@ -1738,7 +1703,7 @@ class ExoPlayerService : BasePlaybackService() {
 
     /**
      * Ad in the playlist: its last segment, or any of its segments for the first playlist of a stream (an ad at the
-     * start, "pre-roll", is then caught before any of it is shown).
+     * start, "pre-roll", is then caught before its end).
      */
     private fun checkPlaylist(playlist: HlsMediaPlaylist?, mainPlayer: Boolean = false): Boolean {
         if (playlist != null && mainPlayer && checkFirstPlaylist) {
@@ -1768,6 +1733,7 @@ class ExoPlayerService : BasePlaybackService() {
     private var adPodTimes: AdTimes? = null
     /** End of the last ad once the badge shows "Back to live" (0: not shown), it stays until the badge goes away. */
     private var backLiveFrom = 0L
+    private var backLiveProgress = 0f
 
     private fun resetAdPod() {
         adTimes.clear()
@@ -1821,14 +1787,16 @@ class ExoPlayerService : BasePlaybackService() {
      * "Back to live" fills in that time the next time.
      */
     private fun adBreakOver() {
-        val times = adPodTimes
-        if (times != null && adPodLength > 0 && adPodPosition >= adPodLength) {
-            val measured = System.currentTimeMillis() - times.end
-            if (measured in 500..60_000) {
-                val previous = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY)
-                prefs().edit().putLong(AD_RETURN_DELAY, (previous * 2 + measured) / 3).apply()
+        val start = backLiveFrom.takeIf { it > 0L } ?: adPodTimes?.end
+        if (start != null) {
+            val measured = System.currentTimeMillis() - start
+            if (measured in 400..20_000) {
+                val previous = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceIn(1000L, 10_000L)
+                prefs().edit().putLong(AD_RETURN_DELAY, (previous + measured) / 2).apply()
             }
         }
+        backLiveFrom = 0L
+        backLiveProgress = 0f
         resetAdPod()
     }
 
@@ -1900,6 +1868,8 @@ class ExoPlayerService : BasePlaybackService() {
     /** Changes with each stream played in this service: what the ad blocker started for a previous stream stops. */
     private var streamGeneration = 0
     private var secondaryLoadJob: Job? = null
+    /** Proxies that returned HTTP 403 (geo-blocked / forbidden) on the current channel, skipped for this channel only. */
+    private val geoBlockedProxiesForChannel = HashSet<String>()
 
     private fun startSecondaryPlayer(proxy: Boolean) {
         val generation = streamGeneration
@@ -1919,6 +1889,19 @@ class ExoPlayerService : BasePlaybackService() {
                 streamProxy?.host ?: videoSwap?.let { if (it.platform == AD_PROXY_PLATFORM) it.playerType?.toUri()?.host?.removePrefix("www.") else it.playerType }
             )
             val playerListener = object : Player.Listener {
+                override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                    if (generation != streamGeneration || channelLogin != login) {
+                        return
+                    }
+                    secondaryDynamicsProcessing?.let {
+                        runCatching { it.release() }
+                        secondaryDynamicsProcessing = null
+                    }
+                    if (prefs().getBoolean(C.PLAYER_AUDIO_COMPRESSOR, false)) {
+                        secondaryDynamicsProcessing = createDynamicsProcessing(audioSessionId)
+                    }
+                }
+
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     // the backup player plays: the system sees the playback going on
                     updatePlaybackState()
@@ -1940,7 +1923,12 @@ class ExoPlayerService : BasePlaybackService() {
                     // the backup (a custom proxy that stopped answering in the middle of the ad...) fails: the next one
                     if (videoSwap != null && videoSwapActive && generation == streamGeneration && channelLogin == login &&
                         videoSwapList?.getOrNull(currentVideoSwapItem) === videoSwap) {
-                        adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
+                        val code = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode ?: 0
+                        if (code == 403) {
+                            adProxyHost(videoSwap)?.let { geoBlockedProxiesForChannel.add(it) }
+                        } else {
+                            adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
+                        }
                         nextVideoSwap()
                     }
                 }
@@ -1982,7 +1970,8 @@ class ExoPlayerService : BasePlaybackService() {
                         setBufferDurationsMs(
                             prefs().getString(C.PLAYER_BUFFER_MIN, "15000")?.toIntOrNull() ?: 15000,
                             prefs().getString(C.PLAYER_BUFFER_MAX, "50000")?.toIntOrNull() ?: 50000,
-                            prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull() ?: 2000,
+                            prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull()
+                                ?.let { if (it == 2000 && resources.getBoolean(R.bool.isTv)) 1000 else it } ?: 2000,
                             prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000
                         )
                     }.build()
@@ -2001,6 +1990,7 @@ class ExoPlayerService : BasePlaybackService() {
             }.build()
             player.addListener(playerListener)
             matchSecondaryQuality(player)
+            var playlistStatusCode = 0
             val url = if (streamProxy != null) {
                 quality?.url
             } else {
@@ -2047,7 +2037,8 @@ class ExoPlayerService : BasePlaybackService() {
                                                 timeout.stop()
                                             }
                                         }
-                                        if (response.info.httpStatusCode in 200..299) {
+                                        playlistStatusCode = response.info.httpStatusCode
+                                        if (playlistStatusCode in 200..299) {
                                             response.body.decodeToString()
                                         } else null
                                     }
@@ -2066,12 +2057,14 @@ class ExoPlayerService : BasePlaybackService() {
                                                 timeout.stop()
                                             }
                                         }
-                                        if (response.info.httpStatusCode in 200..299) {
+                                        playlistStatusCode = response.info.httpStatusCode
+                                        if (playlistStatusCode in 200..299) {
                                             response.body.decodeToString()
                                         } else null
                                     }
                                     else -> {
                                         xtraModule.okHttpClient.value.newCall(Request.Builder().url(playlistUrl).build()).executeAsync().use { response ->
+                                            playlistStatusCode = response.code
                                             if (response.isSuccessful) {
                                                 response.body.string()
                                             } else null
@@ -2339,21 +2332,34 @@ class ExoPlayerService : BasePlaybackService() {
                     player.release()
                     return@launch
                 }
+                val previous = secondaryPlayer
+                if (previous != null && previous !== player) {
+                    secondaryDynamicsProcessing?.let {
+                        runCatching { it.release() }
+                        secondaryDynamicsProcessing = null
+                    }
+                }
                 player.volume = userVolume()
                 player.setPlaybackSpeed(1f)
                 player.prepare()
                 player.playWhenReady = true
-                val previous = secondaryPlayer
                 secondaryPlayer = player
+                if (prefs().getBoolean(C.PLAYER_AUDIO_COMPRESSOR, false) && secondaryDynamicsProcessing == null) {
+                    secondaryDynamicsProcessing = createDynamicsProcessing(player.audioSessionId)
+                }
                 serviceListener?.setPlayerSurface(true)
                 // the backup player it replaces (next player type) no longer plays behind it
                 if (previous != null && previous !== player) {
                     previous.release()
                 }
             } else if (generation == streamGeneration && videoSwap != null && videoSwapActive && channelLogin == login) {
-                // its playlist did not load (a custom proxy offline...): the next backup, like when the ad comes through
+                // its playlist did not load (a custom proxy offline or 403 geo-blocked...): the next backup, like when the ad comes through
                 player.release()
-                adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
+                if (playlistStatusCode == 403) {
+                    adProxyHost(videoSwap)?.let { geoBlockedProxiesForChannel.add(it) }
+                } else {
+                    adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
+                }
                 nextVideoSwap()
             } else if (generation == streamGeneration) {
                 player.release()
@@ -2454,12 +2460,12 @@ class ExoPlayerService : BasePlaybackService() {
         return if (videoSwap.platform == AD_PROXY_PLATFORM) videoSwap.playerType?.toUri()?.host?.removePrefix("www.") else null
     }
 
-    /** The custom proxies known offline (checked at the start of the stream, or failed a moment ago) are not tried. */
+    /** The custom proxies known offline or geo-blocked (403) on this channel are not tried. */
     private fun skipFailedAdProxies() {
         while (videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
                 adProxyHost(swap)?.let { host ->
                     // mode "always": the proxy of the stream is the one the ad came through
-                    TvProxyStatus.isFailed(host) || (useCustomProxy && swap.position == currentCustomProxy)
+                    TvProxyStatus.isFailed(host) || geoBlockedProxiesForChannel.contains(host) || (useCustomProxy && swap.position == currentCustomProxy)
                 }
             } == true) {
             currentVideoSwapItem += 1
@@ -2536,18 +2542,26 @@ class ExoPlayerService : BasePlaybackService() {
         }
         if (source == null && !hidden) {
             backLiveFrom = 0L
+            backLiveProgress = 0f
             return null
         }
         val now = System.currentTimeMillis()
         val times = adPodTimes
-        if (backLiveFrom > 0L) {
-            if (times == null || times.end <= backLiveFrom) {
-                // "Back to live" stays until the badge goes away, even when the marks of the break are already gone
-                val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceAtLeast(1000L)
-                return AdblockInfo(getString(R.string.tv_adblock_back_live), source, ((now - backLiveFrom).toFloat() / delay).coerceIn(0f, 0.95f))
+        val position = adPodPosition
+        val length = adPodLength
+        val ended = times != null && now >= times.end
+        if (!playingAds) {
+            if (backLiveFrom == 0L) {
+                backLiveFrom = now
             }
-            // a new ad started
-            backLiveFrom = 0L
+            if (adDelayJob?.isActive != true) {
+                startReturnToLiveIfNeeded()
+            }
+            val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceIn(1500L, 6000L)
+            val timeProgress = ((now - backLiveFrom).toFloat() / delay).coerceIn(0f, 0.92f)
+            val progress = maxOf(timeProgress, backLiveProgress).coerceIn(0.05f, 0.95f)
+            backLiveProgress = progress
+            return AdblockInfo(getString(R.string.tv_adblock_back_live), source, progress)
         }
         val ad = getString(
             when (adRollType) {
@@ -2560,15 +2574,6 @@ class ExoPlayerService : BasePlaybackService() {
             // no stream without the ad: the picture waits for the end of the ad
             return AdblockInfo(ad + " · " + getString(R.string.tv_adblock_on_hold), null, null)
         }
-        val position = adPodPosition
-        val length = adPodLength
-        val ended = times != null && now >= times.end
-        if (times != null && ended && position > 0 && length > 0 && position >= length) {
-            // the last ad is over, Twitch keeps its marks a moment: the bar fills until the stream is back
-            backLiveFrom = times.end
-            val delay = prefs().getLong(AD_RETURN_DELAY, DEFAULT_AD_RETURN_DELAY).coerceAtLeast(1000L)
-            return AdblockInfo(getString(R.string.tv_adblock_back_live), source, ((now - times.end).toFloat() / delay).coerceIn(0f, 0.95f))
-        }
         val title = StringBuilder(ad)
         if (position > 0 && length > 0) {
             // between two ads the next one is not marked yet: its number already
@@ -2579,7 +2584,7 @@ class ExoPlayerService : BasePlaybackService() {
                 title.append(" · ").append(maxOf(1L, (times.end - now + 999) / 1000)).append(" s")
                 ((now - times.start).toFloat() / (times.end - times.start)).coerceIn(0f, 1f)
             }
-            ended && position > 0 && length > 0 -> 0f
+            ended && position > 0 && length > 0 -> if (position >= length) 1f else 0f
             else -> null
         }
         return AdblockInfo(title.toString(), source, progress)
@@ -2724,6 +2729,7 @@ class ExoPlayerService : BasePlaybackService() {
         loaded = false
         // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
         // no sound), it must not come back on the screen for a moment when the backup player goes
+        player?.setPlaybackSpeed(1f)
         player?.volume = 0f
         player?.stop()
         // everything the ad blocker started for this stream stops, nothing of it may come over the next one
@@ -2732,6 +2738,8 @@ class ExoPlayerService : BasePlaybackService() {
         freezeWatchJob = null
         secondaryLoadJob?.cancel()
         secondaryLoadJob = null
+        adDelayJob?.cancel()
+        adDelayJob = null
         // nothing of the stream that ends counts for the next one: no picture of it shown yet, its first playlist not
         // checked yet (else the events of the player being emptied would take the loading picture away at once)
         streamPictureShown = false
@@ -2739,8 +2747,17 @@ class ExoPlayerService : BasePlaybackService() {
         checkFirstPlaylist = true
         firstPlaylistAd = false
         adRollType = null
+        playingAds = false
+        backLiveFrom = 0L
+        backLiveProgress = 0f
+        geoBlockedProxiesForChannel.clear()
+        resetAdPod()
         if (secondaryPlayer != null) {
             stopSecondaryPlayer()
+        }
+        secondaryDynamicsProcessing?.let {
+            runCatching { it.release() }
+            secondaryDynamicsProcessing = null
         }
         secondaryPlayerTimerJob?.cancel()
         secondaryPlayerTimerJob = null
@@ -2750,8 +2767,6 @@ class ExoPlayerService : BasePlaybackService() {
             hidden = false
             player?.volume = userVolume()
         }
-        adDelayJob?.cancel()
-        adDelayJob = null
         player?.stop()
         player?.clearMediaItems()
         // stopped: the sound of the next stream comes back
@@ -2766,6 +2781,10 @@ class ExoPlayerService : BasePlaybackService() {
             return
         }
         playingAds = false
+        backLiveFrom = 0L
+        backLiveProgress = 0f
+        geoBlockedProxiesForChannel.clear()
+        resetAdPod()
         stopProxy = false
         stopVideoSwap = false
         videoSwapActive = false
@@ -2789,6 +2808,7 @@ class ExoPlayerService : BasePlaybackService() {
         videoPreviewLookupDone = false
         paused = false
         player?.let { player ->
+            player.setPlaybackSpeed(1f)
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                 clearOverrides()
                 setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
@@ -2800,15 +2820,22 @@ class ExoPlayerService : BasePlaybackService() {
     private fun stopSecondaryPlayer() {
         proxyMediaPlaylist = false
         videoSwapActive = false
+        secondaryLoadJob?.cancel()
+        secondaryLoadJob = null
         secondaryPlayerTimerJob?.cancel()
         secondaryPlayerTimerJob = null
         stopSecondaryPlayer2()
     }
 
     private fun stopSecondaryPlayer2() {
+        secondaryDynamicsProcessing?.let {
+            runCatching { it.release() }
+            secondaryDynamicsProcessing = null
+        }
         secondaryPlayer?.playWhenReady = false
         serviceListener?.setPlayerSurface(false)
         player?.let { player ->
+            player.setPlaybackSpeed(1f)
             if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
@@ -2823,23 +2850,123 @@ class ExoPlayerService : BasePlaybackService() {
         startFreezeWatch()
     }
 
+    private fun startReturnToLiveIfNeeded() {
+        if (playingAds || !(proxyMediaPlaylist || videoSwapActive || hidden)) {
+            return
+        }
+        if (backLiveFrom == 0L) {
+            backLiveFrom = System.currentTimeMillis()
+        }
+        if (adDelayJob?.isActive == true) {
+            return
+        }
+        val generation = streamGeneration
+        val login = channelLogin
+        adDelayJob = lifecycleScope.launch {
+            try {
+                val ready = returnToLiveAfterAd(generation, login)
+                if (ready && !playingAds && generation == streamGeneration && channelLogin == login) {
+                    adBreakOver()
+                    when {
+                        proxyMediaPlaylist -> {
+                            serviceListener?.toast(R.string.stopping_proxy, Toast.LENGTH_SHORT)
+                            stopSecondaryPlayer()
+                        }
+                        videoSwapActive -> {
+                            serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
+                            stopSecondaryPlayer()
+                        }
+                        hidden -> {
+                            hidden = false
+                            player?.let { player ->
+                                player.setPlaybackSpeed(1f)
+                                if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
+                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                                        setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
+                                    }.build()
+                                }
+                                player.volume = userVolume()
+                            }
+                            startFreezeWatch()
+                        }
+                    }
+                }
+            } finally {
+                player?.setPlaybackSpeed(1f)
+                adDelayJob = null
+            }
+        }
+    }
+
     /**
-     * As VAFT: the main player is shown again only once the piece of the playlist it plays is one of the stream ("live" in
-     * its EXTINF), not one of the ad still in its buffer (20 s at most). Playlists without these names: nothing to wait for.
+     * Drains the remaining buffered ad segments on the muted main player at 2x speed without calling seekTo(),
+     * waiting until mainPlayer.currentPosition is strictly inside a "live" segment past all ad segments before
+     * restoring 1x speed, re-enabling video decoding, and switching back from the backup player.
      */
-    private suspend fun awaitMainPlayerOnLive() {
-        repeat(80) {
-            val player = player ?: return
-            val playlist = (player.currentManifest as? HlsManifest)?.mediaPlaylist ?: return
-            if (playlist.segments.none { it.title.isNotEmpty() }) {
-                return
+    private suspend fun returnToLiveAfterAd(generation: Int, login: String?): Boolean {
+        if (backLiveFrom == 0L) {
+            backLiveFrom = System.currentTimeMillis()
+        }
+        val initialPlayer = player ?: return false
+        initialPlayer.volume = 0f
+        if (initialPlayer.playbackState == Player.STATE_IDLE || initialPlayer.playbackState == Player.STATE_ENDED) {
+            initialPlayer.prepare()
+        }
+        initialPlayer.play()
+        var initialGapMs = 0L
+        var videoReenabled = false
+        var liveReadySteps = 0
+        try {
+            initialPlayer.setPlaybackSpeed(2f)
+            for (step in 0 until 150) {
+                if (playingAds || generation != streamGeneration || channelLogin != login) {
+                    return false
+                }
+                val p = player ?: return false
+                val playlist = (p.currentManifest as? HlsManifest)?.mediaPlaylist ?: return true
+                val segments = playlist.segments
+                if (segments.isEmpty()) {
+                    return true
+                }
+                val lastAdIdx = segments.indexOfLast { isAdSegment(playlist, it) }
+                val posMs = p.currentPosition
+                val posUs = posMs * 1000
+                val currentIdx = segments.indexOfLast { it.relativeStartTimeUs <= posUs }
+                val onLiveSegment = currentIdx > lastAdIdx &&
+                    currentIdx >= 0 &&
+                    !isAdSegment(playlist, segments[currentIdx]) &&
+                    (segments.none { it.title.isNotEmpty() } || segments[currentIdx].title.contains("live", true))
+                if (onLiveSegment) {
+                    p.setPlaybackSpeed(1f)
+                    if (!videoReenabled && !hidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
+                        videoReenabled = true
+                        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().apply {
+                            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
+                        }.build()
+                    }
+                    liveReadySteps++
+                    backLiveProgress = maxOf(backLiveProgress, (0.80f + liveReadySteps * 0.05f).coerceAtMost(0.95f))
+                    if (hidden || (p.playbackState == Player.STATE_READY && liveReadySteps >= 3) || liveReadySteps >= 8) {
+                        return true
+                    }
+                } else {
+                    if (lastAdIdx + 1 < segments.size) {
+                        val firstLiveStartMs = segments[lastAdIdx + 1].relativeStartTimeUs / 1000
+                        val remainingMs = (firstLiveStartMs - posMs).coerceAtLeast(0L)
+                        if (initialGapMs <= 0L && remainingMs > 0L) {
+                            initialGapMs = remainingMs
+                        }
+                        if (initialGapMs > 0L) {
+                            val drainRatio = (1f - remainingMs.toFloat() / initialGapMs.toFloat()).coerceIn(0f, 1f)
+                            backLiveProgress = maxOf(backLiveProgress, 0.08f + drainRatio * 0.70f)
+                        }
+                    }
+                }
+                delay(100)
             }
-            val positionUs = player.currentPosition * 1000
-            val segment = playlist.segments.lastOrNull { it.relativeStartTimeUs <= positionUs } ?: return
-            if (segment.title.contains("live", true)) {
-                return
-            }
-            delay(250)
+            return !playingAds && generation == streamGeneration && channelLogin == login
+        } finally {
+            player?.setPlaybackSpeed(1f)
         }
     }
 
@@ -2990,6 +3117,19 @@ class ExoPlayerService : BasePlaybackService() {
 
     fun restartPlayer() {
         if (quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
+            streamGeneration++
+            secondaryLoadJob?.cancel()
+            secondaryLoadJob = null
+            adDelayJob?.cancel()
+            adDelayJob = null
+            playingAds = false
+            backLiveFrom = 0L
+            backLiveProgress = 0f
+            resetAdPod()
+            if (hidden) {
+                hidden = false
+                player?.volume = userVolume()
+            }
             lifecycleScope.launch {
                 if (secondaryPlayer != null) {
                     stopSecondaryPlayer()
@@ -3516,43 +3656,63 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun toggleDynamicsProcessing(): Boolean {
-        if (dynamicsProcessing?.enabled == true) {
-            dynamicsProcessing?.enabled = false
-        } else {
+        val enabled = !(dynamicsProcessing?.enabled == true)
+        prefs().edit { putBoolean(C.PLAYER_AUDIO_COMPRESSOR, enabled) }
+        if (enabled) {
             if (dynamicsProcessing == null) {
-                player?.audioSessionId?.let { reinitializeDynamicsProcessing(it) }
+                player?.audioSessionId?.takeIf { it != androidx.media3.common.C.AUDIO_SESSION_ID_UNSET }?.let {
+                    reinitializeDynamicsProcessing(it)
+                }
             } else {
                 dynamicsProcessing?.enabled = true
             }
+            if (secondaryDynamicsProcessing == null) {
+                secondaryPlayer?.audioSessionId?.takeIf { it != androidx.media3.common.C.AUDIO_SESSION_ID_UNSET }?.let {
+                    secondaryDynamicsProcessing = createDynamicsProcessing(it)
+                }
+            } else {
+                secondaryDynamicsProcessing?.enabled = true
+            }
+        } else {
+            dynamicsProcessing?.enabled = false
+            secondaryDynamicsProcessing?.enabled = false
         }
-        val enabled = dynamicsProcessing?.enabled == true
-        prefs().edit { putBoolean(C.PLAYER_AUDIO_COMPRESSOR, enabled) }
         return enabled
     }
 
     private fun reinitializeDynamicsProcessing(audioSessionId: Int) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            dynamicsProcessing = DynamicsProcessing(0, audioSessionId, null).apply {
-                for (channelIdx in 0 until channelCount) {
-                    for (bandIdx in 0 until getMbcByChannelIndex(channelIdx).bandCount) {
-                        setMbcBandByChannelIndex(
-                            channelIdx,
-                            bandIdx,
-                            getMbcBandByChannelIndex(channelIdx, bandIdx).apply {
-                                attackTime = 0f
-                                releaseTime = 0.25f
-                                ratio = 1.6f
-                                threshold = -50f
-                                kneeWidth = 40f
-                                preGain = 0f
-                                postGain = 10f
-                            }
-                        )
+        dynamicsProcessing?.release()
+        dynamicsProcessing = createDynamicsProcessing(audioSessionId)
+    }
+
+    private fun createDynamicsProcessing(audioSessionId: Int): DynamicsProcessing? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && audioSessionId != androidx.media3.common.C.AUDIO_SESSION_ID_UNSET) {
+            return try {
+                DynamicsProcessing(0, audioSessionId, null).apply {
+                    for (channelIdx in 0 until channelCount) {
+                        for (bandIdx in 0 until getMbcByChannelIndex(channelIdx).bandCount) {
+                            setMbcBandByChannelIndex(
+                                channelIdx,
+                                bandIdx,
+                                getMbcBandByChannelIndex(channelIdx, bandIdx).apply {
+                                    attackTime = 0f
+                                    releaseTime = 0.25f
+                                    ratio = 1.6f
+                                    threshold = -50f
+                                    kneeWidth = 40f
+                                    preGain = 0f
+                                    postGain = 10f
+                                }
+                            )
+                        }
                     }
+                    enabled = true
                 }
-                enabled = true
+            } catch (_: Exception) {
+                null
             }
         }
+        return null
     }
 
     private fun savePosition() {
@@ -3671,6 +3831,10 @@ class ExoPlayerService : BasePlaybackService() {
     override fun onDestroy() {
         super.onDestroy()
         com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.release(this, this)
+        dynamicsProcessing?.release()
+        dynamicsProcessing = null
+        secondaryDynamicsProcessing?.release()
+        secondaryDynamicsProcessing = null
         player?.release()
         secondaryPlayer?.release()
         session?.release()
@@ -3741,7 +3905,7 @@ class ExoPlayerService : BasePlaybackService() {
         private const val AD_PROXY_PLATFORM = "xtra_custom_proxy"
         /** Time between the end of the last ad and the stream back, measured on the previous breaks (ms). */
         private const val AD_RETURN_DELAY = "tv_ad_return_delay"
-        private const val DEFAULT_AD_RETURN_DELAY = 8000L
+        private const val DEFAULT_AD_RETURN_DELAY = 2500L
 
         private val ADBLOCK_PLAYER_TYPES = listOf(
             "android" to "autoplay",

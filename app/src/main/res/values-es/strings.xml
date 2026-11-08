@@ -963,4 +963,17 @@
     <string name="tv_multistream_sound_selected_desc">Solo el stream seleccionado tiene sonido. El sonido sigue al marco cuando cambias de stream.</string>
     <string name="tv_multistream_sound_mix_desc">Todos los streams suenan a la vez, cada uno con su propio volumen. Ajústalos abajo.</string>
     <string name="tv_multistream_sound_keep">Recordar para los próximos multi-streams</string>
+    <string name="tv_backup_save_tv">Guardar en el televisor</string>
+    <string name="tv_backup_restore_tv">Restaurar desde el televisor</string>
+    <string name="tv_backup_qr_send">Enviar a un teléfono (código QR)</string>
+    <string name="tv_backup_qr_receive">Recibir desde un teléfono (código QR)</string>
+    <string name="tv_backup_qr_send_help">Escanea este código QR con tu teléfono en el mismo Wi-Fi para descargar el archivo de copia de seguridad.</string>
+    <string name="tv_backup_qr_receive_help">Escanea este código QR con tu teléfono en el mismo Wi-Fi y elige tu archivo de copia de seguridad.</string>
+    <string name="tv_backup_saved">Copia de seguridad guardada: %s</string>
+    <string name="tv_backup_restored">Ajustes restaurados</string>
+    <string name="tv_backup_not_found">No se encontró ningún archivo de copia de seguridad en el televisor</string>
+    <string name="tv_backup_no_network">Conecta primero el televisor a Wi-Fi o Ethernet</string>
+    <string name="tv_settings_section_about">Acerca de</string>
+    <string name="tv_about_github">Repositorio de GitHub (código QR)</string>
+    <string name="tv_about_device">Información del dispositivo</string>
 </resources>

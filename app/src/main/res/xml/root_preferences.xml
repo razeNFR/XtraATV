@@ -180,4 +180,11 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <Preference
+        android:key="about_app"
+        android:summary="XtraTV forked from https://github.com/crackededed/Xtra by razeN with AI"
+        android:title="@string/tv_settings_section_about"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
 </androidx.preference.PreferenceScreen>

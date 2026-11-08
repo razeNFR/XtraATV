@@ -42,6 +42,9 @@ object TvSettingIcons {
         "backup_settings" to R.drawable.tv_ic_cloud,
         "restore_settings" to R.drawable.tv_ic_history,
         "download_settings" to R.drawable.tv_ic_download,
+        "about_app" to R.drawable.tv_ic_info,
+        "about_github" to R.drawable.tv_ic_share,
+        "about_device" to R.drawable.tv_ic_tv_small,
         // Xtra TV
         "player_frame_rate_matching" to R.drawable.tv_ic_hd,
         "tv_player_clock" to R.drawable.tv_ic_schedule,
