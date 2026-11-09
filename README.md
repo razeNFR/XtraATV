@@ -3,7 +3,7 @@
 <img src="docs/icon.png" align="left" width="110"/>
 
 **Xtra TV** is a Twitch player and browser made for **Android TV**, built on top of [Xtra](https://github.com/crackededed/Xtra).
-It brings a full TV interface designed for the remote, a built-in ad blocker (Proxy & VAFT), streams up to **4K / 1440p60**, multi-stream up to 4 channels, a live DVR timeline, and much more.
+It brings a full TV interface designed for the remote, a built-in ad blocker (Proxy & VAFT), streams up to **1440p60**, multi-stream up to 4 channels, a live DVR timeline, and much more.
 
 <br clear="left"/>
 
@@ -24,7 +24,7 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 
 - **Made for Android TV**: Leanback side menu, rows of live channels and categories, instant ad-free live video previews right inside focused cards, voice search, and quick D-pad actions.
 - **Built-in Ad Blocker (Proxy & VAFT)**: Automatically switches to a proxy or an ad-free backup stream during pre-roll and mid-roll ads with a live progress badge, returning to the main stream with near-zero delay.
-- **Up to 4K & 1440p60 (Enhanced Broadcasting)**: Plays the highest available stream quality automatically on Wi-Fi / Ethernet, with display **frame rate matching** and **audio normalization** (including during ad breaks).
+- **Up to 1440p60 (Enhanced Broadcasting)**: Plays the highest available stream quality automatically on Wi-Fi / Ethernet, with display **frame rate matching** and **audio normalization** (including during ad breaks).
 - **Multi-stream & Picture-in-Picture**: Watch up to **4 live streams at once** (side-by-side, 2×2 grid, or Focus mode) with chats, same-category stream suggestions, live search, and per-stream audio controls, or open a second stream in a floating PiP window.
 - **Live DVR & Sub-only VODs**: Rewind any live broadcast on the timeline with live video thumbnails, and watch subscriber-only VODs.
 - **Customizable TV Chat & Quick Stream Switch**: Display chat as an overlay, side panel, or bottom ticker (with voice dictation), and switch between live channels instantly with D-pad Left / Right or Channel Up / Down.
@@ -34,10 +34,10 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 
 Two ways on TV: a **code to enter on twitch.tv/activate** from a phone or computer, or the **Twitch login page** inside the app.
 
-## 1440p & 4K (Enhanced Broadcasting)
+## 1440p (Enhanced Broadcasting)
 
-Twitch only serves 1440p and 4K streams to its website client with a logged-in account. To enable them:
-1. Log in with your Twitch account using the **Twitch login page** in the app (code login does not grant 1440p / 4K).
+Twitch only serves the 1440p streams to its website client with a logged-in account. To enable them:
+1. Log in with your Twitch account using the **Twitch login page** in the app (code login does not grant 1440p).
 2. Public proxies stop at 1080p: use the built-in ad blocker (**During ads** or **VAFT**), or your own proxy.
 3. Keep **"Include token for streams"** enabled (default).
 4. Your TV must support **H.265 (HEVC)** or **AV1** hardware decoding.

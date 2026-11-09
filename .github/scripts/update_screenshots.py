@@ -29,11 +29,15 @@ def convert_png_to_jpg(src_png: str, dst_jpg: str) -> bool:
     except Exception:
         pass
 
-    res = subprocess.run(
-        ["ffmpeg", "-y", "-i", src_png, "-vf", "scale=1280:720", "-q:v", "3", dst_jpg],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        res = subprocess.run(
+            ["ffmpeg", "-y", "-i", src_png, "-vf", "scale=1280:720", "-q:v", "3", dst_jpg],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        print("Neither Pillow nor ffmpeg is available, cannot convert " + src_png)
+        return False
     return res.returncode == 0
 
 

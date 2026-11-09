@@ -66,6 +66,7 @@ jobs:
     - name: Update README screenshots
       if: contains(github.event.head_commit.message, '[readme]') || github.event.inputs.steps == 'readme_steps.txt'
       run: |
+        pip install --quiet pillow
         python3 .github/scripts/update_screenshots.py tv-out docs/screenshots
         if [ -n "${GITHUB_REF_NAME:-}" ] && ! git diff --quiet docs/screenshots; then
           git config user.name "github-actions[bot]"
