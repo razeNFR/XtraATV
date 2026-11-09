@@ -3,8 +3,7 @@
 <img src="docs/icon.png" align="left" width="110"/>
 
 **Xtra TV** is a Twitch player and browser made for **Android TV**, built on top of [Xtra](https://github.com/crackededed/Xtra).
-It brings a full TV interface designed for the remote, an ad blocker based on video swap, 1440p streams, multi-stream,
-a DVR timeline on live streams and much more.
+It brings a full TV interface designed for the remote, a built-in ad blocker (Proxy & VAFT), streams up to **4K / 1440p60**, multi-stream up to 4 channels, a live DVR timeline, and much more.
 
 <br clear="left"/>
 
@@ -17,72 +16,31 @@ a DVR timeline on live streams and much more.
 
 Get the latest APK from the [Releases](https://github.com/razeNFR/XtraATV/releases/latest) page.
 
-On a TV, the easiest way is the **Downloader** app (or any file manager): download the APK and install it
-(allow the installation of unknown apps for that app). From a computer: `adb install XtraTV.apk`.
+On a TV, the easiest way is the **Downloader** app (or any file manager): download the APK and install it (allow the installation of unknown apps for that app). From a computer: `adb install XtraTV.apk`.
 
 Xtra TV has its own package name, so it installs next to the original Xtra.
 
 ## Features
 
-### TV interface
-- **Home** with rows: followed channels live, popular streams and categories, with "See all" tiles and a refresh button.
-- **Language filter** for the Popular row of the home.
-- **Leanback side menu**: Search, Home, Games, Popular, Following, Saved, Settings and Account.
-- **Live preview** of the focused stream, right inside its card: it starts right away in 360p, ad-free, with sound (option).
-- **Big TV cards** with viewers, uptime, channel avatar and category.
-- **Google TV like navigation**: the focused row stays in place with the rows before and after always in sight.
-- **Long press OK** on a stream card (home and lists): open the channel, its videos, the category, follow / unfollow.
-- **Card size**: stream cards per row on the home, and 2 to 6 stream columns in the lists.
-- **Fresh lists**: the home refresh loads new thumbnails, the stream lists load again when you come back to them.
-- **Follow button** on the channel page.
-- **TV header** on every list with refresh, sections and sort.
-- **Sort and filter side panels**.
-- **Voice search**: a search bar with a mic built in, the words show up while you speak and the search starts right away.
-- **Channel page** made for TV.
-- **Settings** fully usable with the D-pad, with up / down buttons to reorder lists.
-- **Xtra TV settings**: every option added by Xtra TV in one screen.
-- **TV banner and icon**.
-
-### Player
-- **TV controls** reachable with the D-pad, with tooltips and a badge with the quality being played.
-- **Go back in time in a live stream**: the timeline covers the whole broadcast, going back plays the VOD being recorded, going to the end comes back to live.
-- **Thumbnails on the timeline** while seeking, in VODs and in the past of a live stream (taken from the video itself while the broadcast is still going, Twitch makes its thumbnails only at the end).
-- **Fast D-pad seeking** that speeds up while the key is held.
-- **Back button** (option): stop the stream, keep it in a **mini player**, or keep **only the sound** while you browse, with a **Now playing** card at the top of the side menu to come back to it or stop it.
-- **Up / down shortcuts** (option): while the controls are hidden, up shows the other streams and down shows or hides the chat.
-- **Player buttons**: the TV buttons (other streams, multi-stream, write in the chat, chat layout, stats) can be hidden.
-- **Sub-only VODs** playback.
-- **Chat** over the stream, next to it or under it (down to a single line that scrolls from right to left), with a **chat layout panel** whose settings follow the display: position, text size, width, height or number of lines, distance from the edge and opacity.
-- **Write in the chat** with the remote, with **voice dictation**.
-- **Stream switcher**: a banner in the player with the other streams of the category you came from, with live previews.
-- **Streamer switch shortcut** (option): left / right change streamer while the controls are hidden, channel up / down too. The previous and next streamers show on the sides of the screen for a few seconds, and the streamers that went offline leave the list.
-- **Multi-stream**: up to 4 streams on screen at once.
-- **Stats for nerds**: resolution, frame rate, codec, bitrate, buffer, latency, dropped frames.
-- **Frame rate matching** (option): the TV switches to the refresh rate of the stream and keeps it matched while playing.
-- **1440p streams** (Enhanced Broadcasting) on the channels that have it, see below.
-- **Highest quality in Auto** on Wi-Fi / Ethernet.
-
-### Ad blocker (video swap, like VAFT)
-- When an ad starts, the player switches to the **ad-free stream of another player type** (embed, popout, autoplay), like the VAFT userscript, and comes back to the main stream when the ad is over.
-- A **"Blocking ads" box** shows at the top right while it works.
-- It **works with the proxies**: when a proxy lets an ad through, the ad blocker takes over.
-- The **live previews** and every stream of the **multi-stream** are ad-free too.
-- On by default, with its own **Ad blocker** screen in the Xtra TV settings.
-
-### Languages
-Everything added is translated into the 13 languages of the app.
+- **Made for Android TV**: Leanback side menu, rows of live channels and categories, instant ad-free live video previews right inside focused cards, voice search, and quick D-pad actions.
+- **Built-in Ad Blocker (Proxy & VAFT)**: Automatically switches to a proxy or an ad-free backup stream during pre-roll and mid-roll ads with a live progress badge, returning to the main stream with near-zero delay.
+- **Up to 4K & 1440p60 (Enhanced Broadcasting)**: Plays the highest available stream quality automatically on Wi-Fi / Ethernet, with display **frame rate matching** and **audio normalization** (including during ad breaks).
+- **Multi-stream & Picture-in-Picture**: Watch up to **4 live streams at once** (side-by-side, 2×2 grid, or Focus mode) with chats, same-category stream suggestions, live search, and per-stream audio controls, or open a second stream in a floating PiP window.
+- **Live DVR & Sub-only VODs**: Rewind any live broadcast on the timeline with live video thumbnails, and watch subscriber-only VODs.
+- **Customizable TV Chat & Quick Stream Switch**: Display chat as an overlay, side panel, or bottom ticker (with voice dictation), and switch between live channels instantly with D-pad Left / Right or Channel Up / Down.
+- **QR Code Settings Backup**: Save and restore your settings directly on the TV, or transfer them to and from your phone over Wi-Fi by scanning a QR code.
 
 ## Log in
 
-Two ways on TV: a **code to type on twitch.tv/activate** from a phone or a computer, or the **Twitch login page** in the app.
+Two ways on TV: a **code to enter on twitch.tv/activate** from a phone or computer, or the **Twitch login page** inside the app.
 
-## 1440p (Enhanced Broadcasting)
+## 1440p & 4K (Enhanced Broadcasting)
 
-Twitch only gives the 1440p qualities to its website client with a logged in account. To get them:
-1. Log in with your Twitch account in the app with the **Twitch login page** (the code login does not give 1440p).
-1. Public proxies (Luminous and others) stop at 1080p: turn the custom proxy off and use the ad blocker, or use your own proxy.
-2. Keep **"Include token for streams"** on (default).
-3. Your TV must decode **H.265 (HEVC) or AV1** in hardware.
+Twitch only serves 1440p and 4K streams to its website client with a logged-in account. To enable them:
+1. Log in with your Twitch account using the **Twitch login page** in the app (code login does not grant 1440p / 4K).
+2. Public proxies stop at 1080p: use the built-in ad blocker (**During ads** or **VAFT**), or your own proxy.
+3. Keep **"Include token for streams"** enabled (default).
+4. Your TV must support **H.265 (HEVC)** or **AV1** hardware decoding.
 
 ## Screenshots
 
@@ -90,19 +48,19 @@ Twitch only gives the 1440p qualities to its website client with a logged in acc
 |:-:|:-:|
 | ![Side menu](docs/screenshots/menu.jpg) | ![Home](docs/screenshots/home.jpg) |
 | Leanback side menu | Home with rows and live preview |
+| ![Player](docs/screenshots/player.jpg) | ![Multi-stream](docs/screenshots/multistream.jpg) |
+| Player with HUD and chat overlay | Multi-stream (up to 4 streams) |
 | ![Games](docs/screenshots/games.jpg) | ![Category](docs/screenshots/category.jpg) |
-| Games | A category with the TV header |
-| ![Sort panel](docs/screenshots/sort.jpg) | ![Player](docs/screenshots/player.jpg) |
-| Sort and filters panel | Player with the chat overlay |
-| ![Search](docs/screenshots/search.jpg) | |
-| Voice search | |
+| Games | Category with live preview |
+| ![Sort panel](docs/screenshots/sort.jpg) | ![Search](docs/screenshots/search.jpg) |
+| Sort and filters panel | Voice search |
 
 ## Building
 
-```
+```bash
 ./gradlew assembleRelease
 ```
-The APK is in `app/build/outputs/apk/release/`.
+The APK is generated in `app/build/outputs/apk/release/`.
 
 ## Credits
 
