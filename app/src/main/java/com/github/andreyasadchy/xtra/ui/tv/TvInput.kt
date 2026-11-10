@@ -395,7 +395,7 @@ fun TvSearchBar(
         }
         if (query.isNotEmpty()) {
             Spacer(Modifier.width(10.dp))
-            TvIconButton(R.drawable.tv_ic_close, LocalContext.current.getString(R.string.clear_search_history)) {
+            TvIconButton(R.drawable.tv_ic_close, LocalContext.current.getString(R.string.delete)) {
                 query = ""
                 onQueryChange("")
                 runCatching { focusRequester.requestFocus() }
@@ -445,7 +445,7 @@ fun ChatComposer(title: String, hint: String, sendLabel: String, onSend: (String
                 }
                 if (text.isNotEmpty()) {
                     Spacer(Modifier.width(10.dp))
-                    TvIconButton(R.drawable.tv_ic_close, LocalContext.current.getString(R.string.clear_search_history)) {
+                    TvIconButton(R.drawable.tv_ic_close, LocalContext.current.getString(R.string.delete)) {
                         text = ""
                         runCatching { requester.requestFocus() }
                     }
