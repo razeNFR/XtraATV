@@ -7,9 +7,6 @@
   - If the app lacked the *"Install unknown apps"* permission or the installation was interrupted, **Check for updates** in Settings now always finds the update again and lets you re-download it.
   - The *"Install unknown apps"* permission is now requested only when clicking **Update** (instead of colliding with the update dialog), and the download starts automatically once granted.
 - **Player HUD & option panels**:
-  - Opening an option panel from the HUD (Chat layout, Small window, Dimming, Proxy, Settings, Quality…) now keeps the HUD visible underneath with its auto-hide timer paused, instead of hiding and fading back in when closing the panel. The chat and small window stay properly lifted above the HUD while in a bottom corner and move back down naturally when the HUD hides.
-  - Opening the **Chat layout** panel while the chat is hidden no longer forces the chat to open; you can configure the chat layout while keeping the chat hidden.
-  - Pressing a HUD button to open an option panel now immediately hides the button's tooltip overlay so it does not remain visible behind the panel.
   - **Chat message composer & voice input**: starting voice dictation again in the chat message box now starts fresh from zero instead of appending to the previous text, and a **Clear (`✕`)** button (plus long-press Backspace support) lets you clear the text in a single click.
 - **DVR / VOD playback from a live stream**:
   - Added a **LIVE** button next to the playback controls when watching a live stream's VOD archive (DVR) to jump right back to the live broadcast; the button is hidden on regular VODs without an active live stream.
@@ -26,9 +23,6 @@
   - Removed the unnecessary **Refresh** button from the Search screen.
   - Channel search results now use the same 6-column avatar card design as **Followed Channels** (with live ring, `LIVE` badge, and favorite star).
   - Restyled recent search history items as TV pills and made the **Delete** (trash) button reachable with D-pad Right.
-- **Settings navigation & responsiveness**:
-  - Pressing D-pad Down at the bottom of the right-hand Settings lists (*Xtra TV*, *Player*, etc.) now stays at the bottom of the list instead of jumping back into the left category column.
-  - Reduced the focus-switch debounce delay from `300–400ms` to `60ms` (and removed pager transition delay on tab switch) for instant, responsive navigation across Settings categories, tabs, and the side menu when *"Change page without OK"* is enabled.
 - **Home statistics (`TvStats`)**:
   - Watch time now continues to be counted while the ad blocker's backup player is active, and is also counted in Multi-stream (once per 30s tick for the active/focused stream, never multiplied by the number of screens).
   - The streams counter is no longer incremented when restarting the same stream (toggling proxy, returning to live from DVR).
