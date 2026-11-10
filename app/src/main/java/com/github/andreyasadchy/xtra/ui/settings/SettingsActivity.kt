@@ -218,65 +218,10 @@ class SettingsActivity : AppCompatActivity() {
                         return true
                     }
                 }
-                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    if (list != null) {
-                        if (!list.canScrollVertically(1) &&
-                            android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_DOWN) == null
-                        ) {
-                            return true
-                        }
-                        val side = binding.tvSettingsSide
-                        val prevSide = side?.descendantFocusability ?: ViewGroup.FOCUS_AFTER_DESCENDANTS
-                        val prevAppBar = binding.appBar.descendantFocusability
-                        side?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                        binding.appBar.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                        try {
-                            val handled = super.dispatchKeyEvent(event)
-                            if (currentFocus === focused && list.canScrollVertically(1) &&
-                                android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_DOWN) == null
-                            ) {
-                                list.smoothScrollBy(0, (list.height * 0.25f).toInt().coerceAtLeast(1))
-                                return true
-                            }
-                            return handled
-                        } finally {
-                            side?.descendantFocusability = prevSide
-                            binding.appBar.descendantFocusability = prevAppBar
-                        }
-                    }
-                    if (focused == tvCategoryRows.lastOrNull()) {
-                        return true
-                    }
-                }
-                android.view.KeyEvent.KEYCODE_DPAD_UP -> {
-                    if (list != null) {
-                        if (!list.canScrollVertically(-1) &&
-                            android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_UP) == null
-                        ) {
-                            return true
-                        }
-                        val side = binding.tvSettingsSide
-                        val prevSide = side?.descendantFocusability ?: ViewGroup.FOCUS_AFTER_DESCENDANTS
-                        val prevAppBar = binding.appBar.descendantFocusability
-                        side?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                        binding.appBar.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                        try {
-                            val handled = super.dispatchKeyEvent(event)
-                            if (currentFocus === focused && list.canScrollVertically(-1) &&
-                                android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_UP) == null
-                            ) {
-                                list.smoothScrollBy(0, -(list.height * 0.25f).toInt().coerceAtLeast(1))
-                                return true
-                            }
-                            return handled
-                        } finally {
-                            side?.descendantFocusability = prevSide
-                            binding.appBar.descendantFocusability = prevAppBar
-                        }
-                    }
-                    if (focused == tvCategoryRows.firstOrNull()) {
-                        return true
-                    }
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (list != null && !list.canScrollVertically(1) &&
+                    android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_DOWN) == null
+                ) {
+                    return true
                 }
             }
         }
