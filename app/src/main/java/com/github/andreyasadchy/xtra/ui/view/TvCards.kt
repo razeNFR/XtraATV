@@ -14,7 +14,38 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
  */
 object TvCards {
 
+    /**
+     * Pre-blurs the category card background once in software and caches it in Coil's memory cache,
+     * avoiding 20+ concurrent per-frame GPU RenderEffect blur passes while scrolling on TV.
+     */
+    val BlurTransformation = object : coil3.transform.Transformation() {
+        override val cacheKey: String = "tv_game_bg_blur"
+
+        override suspend fun transform(input: android.graphics.Bitmap, size: coil3.size.Size): android.graphics.Bitmap {
+            val src = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+                input.config == android.graphics.Bitmap.Config.HARDWARE
+            ) {
+                input.copy(android.graphics.Bitmap.Config.ARGB_8888, false) ?: return input
+            } else {
+                input
+            }
+            val mid = android.graphics.Bitmap.createScaledBitmap(src, 24, 32, true)
+            val tiny = android.graphics.Bitmap.createScaledBitmap(mid, 8, 11, true)
+            val blurred = android.graphics.Bitmap.createScaledBitmap(tiny, 32, 44, true)
+            if (src !== input) src.recycle()
+            if (mid !== input && mid !== tiny) mid.recycle()
+            if (tiny !== blurred) tiny.recycle()
+            return blurred
+        }
+    }
+
     fun prepare(card: View) {
+        if (card.findViewById<View>(R.id.delete) != null) {
+            card.isFocusable = false
+            (card as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            card.foreground = null
+            return
+        }
         card.isFocusable = true
         (card as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
     }

@@ -231,7 +231,7 @@ class MainActivity : AppCompatActivity() {
                 android.os.SystemClock.elapsedRealtime() - tvMenuAutoNavAt < 2000L &&
                 !(lastTvKeyCode in listOf(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER) && android.os.SystemClock.elapsedRealtime() - lastTvKeyAt < 500L)
             ) {
-                binding.root.post { tvMenuState.focusSelected() }
+                binding.root.post { tvMenuState.focusCurrentOrSelected() }
                 return@listener
             }
             if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
@@ -276,7 +276,7 @@ class MainActivity : AppCompatActivity() {
                     binding.root.post {
                         // a list of streams shown again after a while: the streamers that stopped go away
                         f.view?.let { refreshStaleStreamLists(it) }
-                        if (tvInitialFocusDone && f.parentFragment is NavHostFragment && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
+                        if (tvInitialFocusDone && !isTvMenuShown && f.parentFragment is NavHostFragment && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
                             restoreTvScreenFocus()
                         }
                         if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment) {
@@ -464,44 +464,34 @@ class MainActivity : AppCompatActivity() {
                 viewModel.updateUrl.collectLatest {
                     if (it != null) {
                         val startUpdate: () -> Unit = {
-                                if (prefs.getBoolean(C.UPDATE_USE_BROWSER, false)) {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
-                                            addCategory(Intent.CATEGORY_BROWSABLE)
-                                        }
-                                        startActivity(intent)
-                                        tokenPrefs().edit {
-                                            putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
-                                        }
-                                    } catch (e: ActivityNotFoundException) {
-                                        Toast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                            if (prefs.getBoolean(C.UPDATE_USE_BROWSER, false)) {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
+                                        addCategory(Intent.CATEGORY_BROWSABLE)
                                     }
-                                } else {
-                                    val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
-                                    updateDownloadDialogBinding = binding
-                                    val size = viewModel.updateSize
-                                    if (size != null) {
-                                        binding.textView.text = getString(
-                                            R.string.downloading_update_progress,
-                                            Formatter.formatFileSize(this@MainActivity, 0),
-                                            Formatter.formatFileSize(this@MainActivity, size),
-                                        )
-                                    } else {
-                                        binding.textView.text = getString(R.string.downloading_update)
-                                        binding.progressBar.visibility = View.GONE
+                                    startActivity(intent)
+                                    tokenPrefs().edit {
+                                        putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
                                     }
-                                    viewModel.downloadUpdate(prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP), it)
-                                    val dialog = getAlertDialogBuilder()
-                                        .setView(binding.root)
-                                        .setNegativeButton(getString(android.R.string.cancel), null)
-                                        .setOnDismissListener {
-                                            viewModel.updateJob?.cancel()
-                                            updateDownloadDialogBinding = null
-                                            updateDownloadDialog = null
-                                        }
-                                        .show()
-                                    updateDownloadDialog = dialog
+                                } catch (e: ActivityNotFoundException) {
+                                    Toast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                 }
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                                pendingUpdateUrl = it
+                                try {
+                                    startActivity(
+                                        Intent(
+                                            android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                            "package:$packageName".toUri()
+                                        )
+                                    )
+                                } catch (e: ActivityNotFoundException) {
+                                    pendingUpdateUrl = null
+                                    startUpdateDownload(it)
+                                }
+                            } else {
+                                startUpdateDownload(it)
+                            }
                         }
                         val ignoreUpdate: () -> Unit = {
                             tokenPrefs().edit {
@@ -783,9 +773,45 @@ class MainActivity : AppCompatActivity() {
         setNavBarColor(newConfig.orientation == Configuration.ORIENTATION_PORTRAIT)
     }
 
+    private var pendingUpdateUrl: String? = null
+
+    private fun startUpdateDownload(url: String) {
+        val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
+        updateDownloadDialogBinding = binding
+        val size = viewModel.updateSize
+        if (size != null) {
+            binding.textView.text = getString(
+                R.string.downloading_update_progress,
+                Formatter.formatFileSize(this@MainActivity, 0),
+                Formatter.formatFileSize(this@MainActivity, size),
+            )
+        } else {
+            binding.textView.text = getString(R.string.downloading_update)
+            binding.progressBar.visibility = View.GONE
+        }
+        viewModel.downloadUpdate(prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP), url)
+        val dialog = getAlertDialogBuilder()
+            .setView(binding.root)
+            .setNegativeButton(getString(android.R.string.cancel), null)
+            .setOnDismissListener {
+                viewModel.updateJob?.cancel()
+                updateDownloadDialogBinding = null
+                updateDownloadDialog = null
+            }
+            .show()
+        updateDownloadDialog = dialog
+    }
+
     override fun onResume() {
         super.onResume()
         restorePlayerFragment()
+        val url = pendingUpdateUrl
+        if (url != null) {
+            pendingUpdateUrl = null
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()) {
+                startUpdateDownload(url)
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -878,7 +904,8 @@ class MainActivity : AppCompatActivity() {
     fun isPlayerFocusedWithoutControls(): Boolean {
         val player = playerFragment as? PlayerFragment ?: return false
         val focus = currentFocus
-        return player.isMaximizedPlayer() && !player.areControlsShown() && (focus == null || focus.isInside(binding.playerContainer))
+        return player.isMaximizedPlayer() && !player.areControlsShown() && !player.isChatFocused() &&
+                (focus == null || focus == binding.root || focus.isInside(binding.playerContainer))
     }
 
     /** A key given to the player as if the small window was not there. */
@@ -1000,6 +1027,15 @@ class MainActivity : AppCompatActivity() {
         if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             val focus = currentFocus
             if (focus != null && focus.isInside(binding.navBarContainer)) {
+                binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+                if (tvMenuPendingId != 0) {
+                    binding.root.removeCallbacks(tvMenuAutoNav)
+                    tvMenuAutoNav.run()
+                    tvMenuAutoNavAt = 0L
+                    hideTvMenu()
+                    focusContentAfterMenu(false)
+                    return true
+                }
                 // from the menu, go back to the item last selected in the screen, else to its first item
                 val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(binding.navHostFragment) }
                 if (last != null && last.requestFocus()) {
@@ -1009,9 +1045,19 @@ class MainActivity : AppCompatActivity() {
                 if (grid != null && TvUi.focusFirstItem(grid)) {
                     return true
                 }
+                val home = binding.navHostFragment.findViewById<View>(R.id.tvHome)
+                if (home != null && home.isShown) {
+                    hideTvMenu()
+                    home.requestFocus()
+                    currentTvHome()?.focusFirstCard()
+                    return true
+                }
                 if (binding.navHostFragment.requestFocus(View.FOCUS_RIGHT)) {
                     return true
                 }
+                hideTvMenu()
+                focusContentAfterMenu(false)
+                return true
             }
         }
         if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -1063,6 +1109,7 @@ class MainActivity : AppCompatActivity() {
 
     private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
     private var isTvMenuShown = true
+    fun isTvMenuOpen() = isTv && isTvMenuShown
     private var tvInitialFocusDone = false
 
     /** Back on a main screen opens the side menu, back again in the menu leaves the app. */
@@ -1104,7 +1151,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Coming back to a screen: focus the card that had the focus there (the views were recreated). */
     private fun restoreTvScreenFocus(tries: Int = 0) {
-        if (!::navController.isInitialized) {
+        if (!::navController.isInitialized || isTvMenuShown) {
             return
         }
         val position = navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] } ?: return
@@ -1215,11 +1262,12 @@ class MainActivity : AppCompatActivity() {
         // option: the page of the focused entry is shown without OK (not search, settings nor account, they open screens)
         tvMenuState.onFocusItem = { id ->
             binding.root.removeCallbacks(tvMenuAutoNav)
+            tvMenuPendingId = 0
             if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavSearch && id != R.id.tvNavSettings && id != R.id.tvNavAccount &&
                 id != tvMenuState.selected
             ) {
                 tvMenuPendingId = id
-                binding.root.postDelayed(tvMenuAutoNav, 400L)
+                binding.root.postDelayed(tvMenuAutoNav, 150L)
             }
         }
         com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
@@ -1244,6 +1292,7 @@ class MainActivity : AppCompatActivity() {
                 com.github.andreyasadchy.xtra.ui.tv.TvSideMenu(tvMenuState) { id ->
                     // OK on an entry: its page gets the focus (even right after it was shown without OK)
                     binding.root.removeCallbacks(tvMenuAutoNav)
+                    tvMenuPendingId = 0
                     tvMenuAutoNavAt = 0L
                     binding.navBar.selectedItemId = id
                     tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
@@ -1265,10 +1314,12 @@ class MainActivity : AppCompatActivity() {
     /** Option of the Xtra TV settings: the entry focused in the side menu shows its page after a short stop on it. */
     private val tvMenuAutoNav = Runnable {
         val id = tvMenuPendingId
-        if (id == 0 || !isTvMenuShown || id == binding.navBar.selectedItemId && tvMenuExtraSelected == null) {
+        tvMenuPendingId = 0
+        if (id == 0 || !isTvMenuShown || (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null)) {
             return@Runnable
         }
         tvMenuAutoNavAt = android.os.SystemClock.elapsedRealtime()
+        lastContentFocus = null
         binding.navBar.selectedItemId = id
         tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
     }
@@ -1320,9 +1371,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun focusContentAfterMenu(search: Boolean, tries: Int = 0, maxTries: Int = 15) {
+        binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         binding.root.postDelayed({
+            binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             val target = if (search) {
-                binding.navHostFragment.findViewById<View>(R.id.tvSearchBar)
+                binding.navHostFragment.findViewById<View>(R.id.tvSearchBar) ?: binding.navHostFragment.findViewById<View>(R.id.tvHeaderCompose)
             } else {
                 TvUi.findVisibleGrid(binding.navHostFragment)?.takeIf { (it.adapter?.itemCount ?: 0) > 0 && it.childCount > 0 }
                     ?: binding.navHostFragment.findViewById<View>(R.id.tvHome)
@@ -1342,6 +1395,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showTvMenu(focus: Boolean) {
         val menu = binding.navBarContainer
+        binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         if (!isTvMenuShown) {
             isTvMenuShown = true
             updateTvMenuBackCallback()
@@ -1366,6 +1420,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideTvMenu() {
+        binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         val menu = binding.navBarContainer
         if (isTvMenuShown && menu.width > 0) {
             isTvMenuShown = false
@@ -1710,9 +1765,6 @@ class MainActivity : AppCompatActivity() {
                         @Suppress("DEPRECATION")
                         extras.getParcelable(Intent.EXTRA_INTENT)
                     }?.let {
-                        tokenPrefs().edit {
-                            putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
-                        }
                         startActivity(it)
                     }
                 }
@@ -2087,7 +2139,9 @@ class MainActivity : AppCompatActivity() {
         // at once, while the player opens
         com.github.andreyasadchy.xtra.ui.player.TvLoadTimer.start()
         com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.start(this, stream.channelLogin)
-        com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
+        if (playerFragment == null || currentStreamLogin != stream.channelLogin) {
+            com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
+        }
         if (isTv && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
             // the picture of the stream instead of a black screen while it loads: the newest one there is
             // a thumbnail Twitch has not made yet is replaced by the picture of the channel (TvThumbnails)
@@ -2224,6 +2278,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false, qualities: String? = null) {
+        if (video.id != null) {
+            dvrStream = null
+            dvrChatVideoId = null
+        }
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.VIDEO,
@@ -2257,6 +2315,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startClip(clip: Clip) {
+        dvrStream = null
+        dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.CLIP,
@@ -2285,6 +2345,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startOfflineVideo(video: OfflineVideo, offset: Long? = null) {
+        dvrStream = null
+        dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.OFFLINE_VIDEO,
@@ -2338,6 +2400,10 @@ class MainActivity : AppCompatActivity() {
             val grid = lastFocusGrid
             val position = lastFocusPosition
             lastFocusGrid = null
+            currentTvHome()?.let { home ->
+                home.focusLastCard()
+                return
+            }
             if (lastFocus != null && lastFocus.isAttachedToWindow && lastFocus.isShown && lastFocus.requestFocus()) {
                 return
             }

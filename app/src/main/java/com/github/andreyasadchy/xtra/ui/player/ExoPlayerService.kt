@@ -173,7 +173,7 @@ class ExoPlayerService : BasePlaybackService() {
         lifecycleScope.launch {
             while (true) {
                 delay(30_000L)
-                if (player?.isPlaying == true && (type == STREAM || type == VIDEO)) {
+                if (visiblePlayer?.isPlaying == true && (type == STREAM || type == VIDEO)) {
                     com.github.andreyasadchy.xtra.ui.tv.TvStats.addWatchTime(this@ExoPlayerService, channelLogin, channelName, 30_000L, gameId, gameName, channelImage)
                 }
                 // the system (and the screensavers of the launchers that look at it) sees a playback going on: its state
@@ -588,6 +588,9 @@ class ExoPlayerService : BasePlaybackService() {
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) {
+                        videoStartPosition = null
+                    }
                     updatePlaybackState()
                     updateNotification()
                     onBufferingForAuto(playbackState)
@@ -882,6 +885,7 @@ class ExoPlayerService : BasePlaybackService() {
                             updateVideoInfo()
                         }
                     } else {
+                        videoStartPosition = savedPosition ?: 0
                         qualities?.let { list ->
                             qualities = list
                                 .sortedByDescending { it.bitrate }
@@ -935,7 +939,11 @@ class ExoPlayerService : BasePlaybackService() {
                                     player.playWhenReady = !restorePauseState || !paused
                                     player.seekTo(savedPosition ?: 0)
                                 }
+                            } else {
+                                videoStartPosition = null
                             }
+                        } ?: run {
+                            videoStartPosition = null
                         }
                     }
                 }
@@ -1390,8 +1398,9 @@ class ExoPlayerService : BasePlaybackService() {
                     player.playWhenReady = !restorePauseState || !paused
                     player.seekTo(playbackPosition)
                 }
+            } else {
+                videoStartPosition = null
             }
-            videoStartPosition = null
         }
     }
 
@@ -1883,11 +1892,10 @@ class ExoPlayerService : BasePlaybackService() {
             val videoSwap = if (!proxy) {
                 videoSwapList?.getOrNull(currentVideoSwapItem)
             } else null
-            // statistics of the home: proxy or backup player type used
-            com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(
-                this@ExoPlayerService,
-                streamProxy?.host ?: videoSwap?.let { if (it.platform == AD_PROXY_PLATFORM) it.playerType?.toUri()?.host?.removePrefix("www.") else it.playerType }
-            )
+            // statistics of the home: proxy or backup player type used once it actually plays without ads
+            var pendingSecondaryProxyStat: String? = streamProxy?.host ?: videoSwap?.let {
+                if (it.platform == AD_PROXY_PLATFORM) it.playerType?.toUri()?.host?.removePrefix("www.") else it.playerType
+            }
             val playerListener = object : Player.Listener {
                 override fun onAudioSessionIdChanged(audioSessionId: Int) {
                     if (generation != streamGeneration || channelLogin != login) {
@@ -1903,6 +1911,12 @@ class ExoPlayerService : BasePlaybackService() {
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (isPlaying) {
+                        pendingSecondaryProxyStat?.let {
+                            pendingSecondaryProxyStat = null
+                            com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this@ExoPlayerService, it)
+                        }
+                    }
                     // the backup player plays: the system sees the playback going on
                     updatePlaybackState()
                 }
@@ -3064,6 +3078,9 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun seekTo(position: Long) {
+        if (type == VIDEO && player?.playbackState != Player.STATE_READY) {
+            videoStartPosition = position
+        }
         if (secondaryPlayer != null) {
             secondaryPlayer?.seekTo(position)
         }

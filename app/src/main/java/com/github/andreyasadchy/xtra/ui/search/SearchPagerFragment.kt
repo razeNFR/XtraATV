@@ -107,12 +107,13 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
             }
             val adapter = SearchPagerAdapter(this@SearchPagerFragment, tabs)
             viewPager.adapter = adapter
+            val isTv = resources.getBoolean(R.bool.isTv)
             viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
                     (currentFragment as? Searchable)?.search(binding.searchView.query.toString())
                     viewPager.doOnLayout {
                         childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
-                            if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                            if (!isTv && requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
                                 fragment.view?.findViewById<RecyclerView>(R.id.recyclerView)?.let {
                                     appBar.setLiftOnScrollTargetView(it)
                                     it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -160,11 +161,6 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
             val navController = findNavController()
             val appBarConfiguration = AppBarConfiguration(setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment))
             toolbar.setupWithNavController(navController, appBarConfiguration)
-            val isTv = resources.getBoolean(R.bool.isTv)
-            if (isTv && toolbar.findViewById<View>(R.id.tvSearchBar) == null) {
-                // TV: search bar with the mic in it, the voice is listened in the app
-                com.github.andreyasadchy.xtra.ui.tv.TvDialogs.replaceSearchView(searchView, getString(R.string.search))
-            }
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     R.id.tvVoiceSearch -> {
@@ -226,9 +222,7 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                     else -> false
                 }
             }
-            if (isTv) {
-                toolbar.findViewById<View>(R.id.tvSearchBar)?.requestFocus()
-            } else {
+            if (!isTv) {
                 searchView.requestFocus()
                 WindowCompat.getInsetsController(requireActivity().window, searchView).show(WindowInsetsCompat.Type.ime())
             }

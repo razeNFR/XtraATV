@@ -180,7 +180,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (hasFocus && index != tvCategory) {
                         val pending = Runnable { if (view.hasFocus()) openTvCategory(index) }
                         tvPendingCategory = pending
-                        view.postDelayed(pending, 350L)
+                        view.postDelayed(pending, 60L)
                     }
                 }
             }
@@ -943,59 +943,35 @@ class SettingsActivity : AppCompatActivity() {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     viewModel.updateUrl.collectLatest {
                         if (it != null) {
-                            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-                                !requireContext().prefs().getBoolean(C.UPDATE_USE_BROWSER, false) &&
-                                !requireContext().packageManager.canRequestPackageInstalls()
-                            ) {
-                                try {
-                                    val intent = Intent(
-                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                        "package:${requireContext().packageName}".toUri()
-                                    )
-                                    startActivity(intent)
-                                } catch (e: ActivityNotFoundException) {
-
-                                }
-                            }
                             val startUpdate: () -> Unit = {
-                                    if (requireContext().prefs().getBoolean(C.UPDATE_USE_BROWSER, false)) {
-                                        try {
-                                            val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
-                                                addCategory(Intent.CATEGORY_BROWSABLE)
-                                            }
-                                            startActivity(intent)
-                                            requireContext().tokenPrefs().edit {
-                                                putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
-                                            }
-                                        } catch (e: ActivityNotFoundException) {
-                                            Toast.makeText(requireContext(), R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                                if (requireContext().prefs().getBoolean(C.UPDATE_USE_BROWSER, false)) {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
+                                            addCategory(Intent.CATEGORY_BROWSABLE)
                                         }
-                                    } else {
-                                        val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
-                                        updateDownloadDialogBinding = binding
-                                        val size = viewModel.updateSize
-                                        if (size != null) {
-                                            binding.textView.text = getString(
-                                                R.string.downloading_update_progress,
-                                                Formatter.formatFileSize(requireContext(), 0),
-                                                Formatter.formatFileSize(requireContext(), size),
-                                            )
-                                        } else {
-                                            binding.textView.text = getString(R.string.downloading_update)
-                                            binding.progressBar.visibility = View.GONE
+                                        startActivity(intent)
+                                        requireContext().tokenPrefs().edit {
+                                            putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
                                         }
-                                        viewModel.downloadUpdate(requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), it)
-                                        val dialog = requireActivity().getAlertDialogBuilder()
-                                            .setView(binding.root)
-                                            .setNegativeButton(getString(android.R.string.cancel), null)
-                                            .setOnDismissListener {
-                                                viewModel.updateJob?.cancel()
-                                                updateDownloadDialogBinding = null
-                                                updateDownloadDialog = null
-                                            }
-                                            .show()
-                                        updateDownloadDialog = dialog
+                                    } catch (e: ActivityNotFoundException) {
+                                        Toast.makeText(requireContext(), R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                     }
+                                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !requireContext().packageManager.canRequestPackageInstalls()) {
+                                    pendingUpdateUrl = it
+                                    try {
+                                        startActivity(
+                                            Intent(
+                                                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                                "package:${requireContext().packageName}".toUri()
+                                            )
+                                        )
+                                    } catch (e: ActivityNotFoundException) {
+                                        pendingUpdateUrl = null
+                                        startUpdateDownload(it)
+                                    }
+                                } else {
+                                    startUpdateDownload(it)
+                                }
                             }
                             if (TvUi.isTv(requireContext())) {
                                 // TV: the version and its changelog, the focus on "Update"
@@ -1039,10 +1015,47 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
+
+        private var pendingUpdateUrl: String? = null
+
+        private fun startUpdateDownload(url: String) {
+            val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
+            updateDownloadDialogBinding = binding
+            val size = viewModel.updateSize
+            if (size != null) {
+                binding.textView.text = getString(
+                    R.string.downloading_update_progress,
+                    Formatter.formatFileSize(requireContext(), 0),
+                    Formatter.formatFileSize(requireContext(), size),
+                )
+            } else {
+                binding.textView.text = getString(R.string.downloading_update)
+                binding.progressBar.visibility = View.GONE
+            }
+            viewModel.downloadUpdate(requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), url)
+            val dialog = requireActivity().getAlertDialogBuilder()
+                .setView(binding.root)
+                .setNegativeButton(getString(android.R.string.cancel), null)
+                .setOnDismissListener {
+                    viewModel.updateJob?.cancel()
+                    updateDownloadDialogBinding = null
+                    updateDownloadDialog = null
+                }
+                .show()
+            updateDownloadDialog = dialog
+        }
+
         /** TV: the row of the custom proxies says whether they are on and how many there are ("On · 3 proxies"). */
         override fun onResume() {
             super.onResume()
             updateTvProxySummary()
+            val url = pendingUpdateUrl
+            if (url != null) {
+                pendingUpdateUrl = null
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || requireContext().packageManager.canRequestPackageInstalls()) {
+                    startUpdateDownload(url)
+                }
+            }
         }
 
         fun updateTvProxySummary() {

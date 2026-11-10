@@ -75,6 +75,8 @@ object TvHeader {
     private class Snapshot(
         val image: android.graphics.Bitmap?,
         val roundImage: Boolean,
+        val isSearch: Boolean,
+        val searchQuery: String,
         val title: String?,
         val subtitle: String?,
         val stats: String?,
@@ -85,7 +87,8 @@ object TvHeader {
         val right: List<Action>,
     ) {
         fun same(other: Snapshot?): Boolean {
-            return other != null && other.image === image && other.title == title && other.subtitle == subtitle && other.stats == stats &&
+            return other != null && other.image === image && other.isSearch == isSearch && other.searchQuery == searchQuery &&
+                    other.title == title && other.subtitle == subtitle && other.stats == stats &&
                     other.left.map { it.key + it.label } == left.map { it.key + it.label } &&
                     other.tabs.map { it.label + it.selected } == tabs.map { it.label + it.selected } &&
                     other.afterTabs.map { it.key } == afterTabs.map { it.key } &&
@@ -93,14 +96,15 @@ object TvHeader {
         }
     }
 
-    private class Controller(val firstRequester: FocusRequester, val view: ComposeView)
+    private class Controller(val firstRequester: FocusRequester, val searchRequester: FocusRequester, val view: ComposeView)
 
-    /** Headers made of a toolbar with tabs, a sort bar or a title block are replaced, the search screen keeps its own. */
+    /** Headers made of a toolbar with tabs, a sort bar, a search bar or a title block are replaced by the TV Compose header. */
     fun install(appBar: AppBarLayout) {
-        if (appBar.findViewById<View>(R.id.tvHeaderCompose) != null || appBar.findViewById<View>(R.id.searchView) != null) {
+        if (appBar.findViewById<View>(R.id.tvHeaderCompose) != null) {
             return
         }
-        val hasContent = appBar.findViewById<View>(R.id.tabLayout) != null || appBar.findViewById<View>(R.id.sortBar) != null ||
+        val searchView = appBar.findViewById<androidx.appcompat.widget.SearchView>(R.id.searchView)
+        val hasContent = searchView != null || appBar.findViewById<View>(R.id.tabLayout) != null || appBar.findViewById<View>(R.id.sortBar) != null ||
                 appBar.findViewById<View>(R.id.gameName) != null || appBar.findViewById<View>(R.id.userName) != null
         if (!hasContent) {
             return
@@ -116,14 +120,15 @@ object TvHeader {
         }
         val state = mutableStateOf<Snapshot?>(null)
         val firstRequester = FocusRequester()
+        val searchRequester = FocusRequester()
         val view = TvDialogs.composeView(appBar.context) {
             val snapshot = state.value
             if (snapshot != null) {
-                Header(snapshot, firstRequester, appBar)
+                Header(snapshot, firstRequester, searchRequester, appBar)
             }
         }
         view.id = R.id.tvHeaderCompose
-        view.tag = Controller(firstRequester, view)
+        view.tag = Controller(firstRequester, searchRequester, view)
         appBar.addView(view, AppBarLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             scrollFlags = 0
         })
@@ -134,6 +139,13 @@ object TvHeader {
             }
         }
         appBar.viewTreeObserver.addOnGlobalLayoutListener { update() }
+        searchView?.findViewById<TextView>(androidx.appcompat.R.id.search_src_text)?.let { input ->
+            input.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) { update() }
+            })
+        }
         // the actions of the hidden toolbar change without a new layout (follow / unfollow): read again every second
         val ticker = object : Runnable {
             override fun run() {
@@ -159,7 +171,7 @@ object TvHeader {
         appBar.post { update() }
     }
 
-    /** Up from the first row of a list: the first action of the header of its screen. */
+    /** Up from the first row of a list: the first action of the header of its screen (or the search bar when there are no pills). */
     fun focusHeaderOf(view: View): Boolean {
         val root = screenRoot(view)
         val header = root.findViewById<ComposeView>(R.id.tvHeaderCompose) ?: return false
@@ -172,7 +184,12 @@ object TvHeader {
             controller.firstRequester.requestFocus()
             true
         } catch (e: IllegalStateException) {
-            false
+            try {
+                controller.searchRequester.requestFocus()
+                true
+            } catch (_: IllegalStateException) {
+                false
+            }
         }
     }
 
@@ -203,6 +220,9 @@ object TvHeader {
 
     private fun read(appBar: AppBarLayout): Snapshot {
         val context = appBar.context
+        val searchView = appBar.findViewById<androidx.appcompat.widget.SearchView>(R.id.searchView)
+        val isSearch = searchView != null
+        val searchQuery = searchView?.query?.toString().orEmpty()
         val isChannel = appBar.findViewById<View>(R.id.userName) != null
         val imageView: ImageView? = (appBar.findViewById<ImageView?>(R.id.userImage) ?: appBar.findViewById<ImageView?>(R.id.gameImage))?.takeIf { visible(it) }
         val image = imageView?.drawable?.takeIf { it.intrinsicWidth > 0 && it.intrinsicHeight > 0 }?.let {
@@ -216,7 +236,9 @@ object TvHeader {
             }
         }
         val toolbar = appBar.findViewById<MaterialToolbar>(R.id.toolbar)
-        val title = if (isChannel) {
+        val title = if (isSearch) {
+            null
+        } else if (isChannel) {
             text(appBar, R.id.userName)
         } else {
             text(appBar, R.id.gameName)
@@ -241,31 +263,36 @@ object TvHeader {
                 ) { toolbar.menu.performIdentifierAction(R.id.followButton, 0) })
             }
         }
-        // refresh at the right of the tabs (at the left of the screen when it has no tabs), never where the focus lands first
-        val afterTabs = if (!isChannel) {
+        // refresh at the right of the tabs (at the left of the screen when it has no tabs), never in channel or search screens
+        val afterTabs = if (!isChannel && !isSearch) {
             listOf(Action("refresh", context.getString(R.string.refresh), R.drawable.tv_ic_refresh) { TvUi.refreshVisibleList(appBar) })
         } else emptyList()
         val tabs = (appBar.findViewById<View>(R.id.tabLayout) as? TabLayout)?.takeIf { visible(it) && it.tabCount > 1 }?.let { tabLayout ->
             (0 until tabLayout.tabCount).mapNotNull { index ->
                 tabLayout.getTabAt(index)?.let { tab ->
-                    Action("tab$index", tab.text?.toString() ?: "", null, tab.isSelected) { tab.select() }
+                    Action("tab$index", tab.text?.toString() ?: "", null, tab.isSelected) {
+                        screenRoot(appBar).findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.viewPager)?.setCurrentItem(index, false)
+                        tab.select()
+                    }
                 }
             }
         } ?: emptyList()
         val right = mutableListOf<Action>()
-        toolbar?.menu?.let { menu ->
-            for (i in 0 until menu.size()) {
-                val item = menu.getItem(i)
-                if (item.isVisible && !item.title.isNullOrBlank() && item.itemId != R.id.search && item.itemId != R.id.settings && item.itemId != R.id.login && item.itemId != R.id.followButton && right.size < 3) {
-                    // channel page: notifications, share and download as icons only (a full bell when on), the row
-                    // stays on the screen with all its tabs
-                    val icon = when (item.itemId) {
-                        R.id.toggleNotifications -> if (item.title?.toString() == context.getString(R.string.disable_notifications)) R.drawable.tv_ic_bell else R.drawable.tv_ic_bell_outline
-                        R.id.share -> R.drawable.tv_ic_share
-                        R.id.download -> R.drawable.tv_ic_download
-                        else -> null
+        if (!isSearch) {
+            toolbar?.menu?.let { menu ->
+                for (i in 0 until menu.size()) {
+                    val item = menu.getItem(i)
+                    if (item.isVisible && !item.title.isNullOrBlank() && item.itemId != R.id.search && item.itemId != R.id.settings && item.itemId != R.id.login && item.itemId != R.id.followButton && right.size < 3) {
+                        // channel page: notifications, share and download as icons only (a full bell when on), the row
+                        // stays on the screen with all its tabs
+                        val icon = when (item.itemId) {
+                            R.id.toggleNotifications -> if (item.title?.toString() == context.getString(R.string.disable_notifications)) R.drawable.tv_ic_bell else R.drawable.tv_ic_bell_outline
+                            R.id.share -> R.drawable.tv_ic_share
+                            R.id.download -> R.drawable.tv_ic_download
+                            else -> null
+                        }
+                        right.add(Action("menu${item.itemId}", if (icon != null) "" else item.title.toString(), icon) { menu.performIdentifierAction(item.itemId, 0) })
                     }
-                    right.add(Action("menu${item.itemId}", if (icon != null) "" else item.title.toString(), icon) { menu.performIdentifierAction(item.itemId, 0) })
                 }
             }
         }
@@ -274,7 +301,7 @@ object TvHeader {
             val filters = sortBar.findViewById<TextView>(R.id.filtersText)?.takeIf { it.visibility == View.VISIBLE }?.text?.toString()?.takeIf { it.isNotBlank() }
             right.add(Action("sort", listOfNotNull(sortText?.let { compactSort(context, it) } ?: context.getString(R.string.sort), filters).joinToString(" · "), R.drawable.baseline_sort_black_24) { sortBar.performClick() })
         }
-        return Snapshot(image, isChannel, title, subtitle, stats, left, tabs, afterTabs, right)
+        return Snapshot(image, isChannel, isSearch, searchQuery, title, subtitle, stats, left, tabs, afterTabs, right)
     }
 
     /**
@@ -327,71 +354,104 @@ object TvHeader {
     }
 
     @Composable
-    private fun Header(snapshot: Snapshot, firstRequester: FocusRequester, appBar: AppBarLayout) {
+    private fun Header(snapshot: Snapshot, firstRequester: FocusRequester, searchRequester: FocusRequester, appBar: AppBarLayout) {
+        val all = snapshot.left + snapshot.tabs + snapshot.afterTabs + snapshot.right
+        if (snapshot.isSearch) {
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                runCatching { searchRequester.requestFocus() }
+            }
+        }
         Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                snapshot.image?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .then(if (snapshot.roundImage) Modifier.size(52.dp).clip(CircleShape) else Modifier.size(width = 40.dp, height = 53.dp).clip(RoundedCornerShape(6.dp)))
+                if (snapshot.isSearch) {
+                    val searchView = remember(appBar) { appBar.findViewById<androidx.appcompat.widget.SearchView>(R.id.searchView) }
+                    com.github.andreyasadchy.xtra.ui.tv.TvSearchBar(
+                        initialQuery = snapshot.searchQuery,
+                        hint = appBar.context.getString(R.string.search),
+                        modifier = Modifier.weight(1f),
+                        focusRequester = searchRequester,
+                        onLeft = { findActivity(appBar)?.openTvMenu() },
+                        onDown = {
+                            val movedToPills = if (all.isNotEmpty()) {
+                                runCatching { firstRequester.requestFocus(); true }.getOrDefault(false)
+                            } else false
+                            if (!movedToPills) {
+                                TvUi.findVisibleGrid(screenRoot(appBar))?.let { grid -> TvUi.focusFirstVisibleItem(grid) }
+                            }
+                        },
+                        onQueryChange = { searchView?.setQuery(it, false) },
+                        onSubmit = { searchView?.setQuery(it, true) },
                     )
-                    Spacer(Modifier.width(14.dp))
-                }
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        if (snapshot.title != null) {
-                            Text(snapshot.title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                        }
-                        if (snapshot.stats != null) {
-                            Spacer(Modifier.width(16.dp))
-                            Text(snapshot.stats, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, modifier = Modifier.padding(bottom = 4.dp))
-                        }
+                } else {
+                    snapshot.image?.let { bitmap ->
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .then(if (snapshot.roundImage) Modifier.size(52.dp).clip(CircleShape) else Modifier.size(width = 40.dp, height = 53.dp).clip(RoundedCornerShape(6.dp)))
+                        )
+                        Spacer(Modifier.width(14.dp))
                     }
-                    if (snapshot.subtitle != null) {
-                        Text(snapshot.subtitle, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            if (snapshot.title != null) {
+                                Text(snapshot.title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            }
+                            if (snapshot.stats != null) {
+                                Spacer(Modifier.width(16.dp))
+                                Text(snapshot.stats, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, modifier = Modifier.padding(bottom = 4.dp))
+                            }
+                        }
+                        if (snapshot.subtitle != null) {
+                            Text(snapshot.subtitle, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
                 // the time at the right of the title line, like on the home (the title stops before it)
                 Spacer(Modifier.width(16.dp))
                 Clock()
             }
-            Spacer(Modifier.height(10.dp))
-            val all = snapshot.left + snapshot.tabs + snapshot.afterTabs + snapshot.right
-            Row(
-                Modifier.onPreviewKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    when (event.key) {
-                        Key.DirectionDown -> {
-                            // back to the list of the screen
-                            TvUi.findVisibleGrid(screenRoot(appBar))?.let { grid -> TvUi.focusFirstVisibleItem(grid) } ?: false
-                        }
-                        Key.DirectionUp -> true
-                        else -> false
-                    }
-                },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                all.forEachIndexed { index, action ->
-                    if (index == snapshot.left.size + snapshot.tabs.size + snapshot.afterTabs.size && snapshot.right.isNotEmpty()) {
-                        Spacer(Modifier.weight(1f))
-                    }
-                    Pill(
-                        action = action,
-                        isTab = index >= snapshot.left.size && index < snapshot.left.size + snapshot.tabs.size,
-                        modifier = (if (index == 0) Modifier.focusRequester(firstRequester) else Modifier).onPreviewKeyEvent { event ->
-                            // left on the first action: the side menu
-                            if (index == 0 && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
-                                findActivity(appBar)?.openTvMenu()
+            if (all.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (event.key) {
+                            Key.DirectionDown -> {
+                                // back to the list of the screen
+                                TvUi.findVisibleGrid(screenRoot(appBar))?.let { grid -> TvUi.focusFirstVisibleItem(grid) } ?: false
+                            }
+                            Key.DirectionUp -> {
+                                if (snapshot.isSearch) {
+                                    runCatching { searchRequester.requestFocus() }
+                                }
                                 true
-                            } else if (index == all.lastIndex && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
-                                true
-                            } else false
+                            }
+                            else -> false
                         }
-                    )
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    all.forEachIndexed { index, action ->
+                        if (index == snapshot.left.size + snapshot.tabs.size + snapshot.afterTabs.size && snapshot.right.isNotEmpty()) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                        Pill(
+                            action = action,
+                            isTab = index >= snapshot.left.size && index < snapshot.left.size + snapshot.tabs.size,
+                            modifier = (if (index == 0) Modifier.focusRequester(firstRequester) else Modifier).onPreviewKeyEvent { event ->
+                                // left on the first action: the side menu
+                                if (index == 0 && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                                    findActivity(appBar)?.openTvMenu()
+                                    true
+                                } else if (index == all.lastIndex && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
+                                    true
+                                } else false
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -408,7 +468,7 @@ object TvHeader {
             if (focusSwitch) {
                 androidx.compose.runtime.LaunchedEffect(focused) {
                     if (focused) {
-                        kotlinx.coroutines.delay(300L)
+                        kotlinx.coroutines.delay(60L)
                         action.run()
                     }
                 }

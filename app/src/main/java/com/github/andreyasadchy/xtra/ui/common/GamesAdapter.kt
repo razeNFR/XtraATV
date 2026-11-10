@@ -18,6 +18,7 @@ import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.request.target
+import coil3.request.transformations
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentGamesListItemBinding
 import com.github.andreyasadchy.xtra.model.ui.Game
@@ -76,23 +77,23 @@ class GamesAdapter(
                             }
                         )
                     }
+                    val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
                     if (item.boxArt != null) {
                         gameImage.visibility = View.VISIBLE
                         fragment.requireContext().imageLoader.enqueue(
                             ImageRequest.Builder(fragment.requireContext()).apply {
                                 data(item.boxArt)
-                                crossfade(true)
+                                crossfade(!isTv)
                                 target(gameImage)
                             }.build()
                         )
-                        // TV: the box art blurred behind the texts of the wide card
+                        // TV: the box art blurred behind the texts of the wide card (cached in Coil to avoid live GPU RenderEffect lag)
                         gameBackground?.let { background ->
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                                background.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(40f, 40f, android.graphics.Shader.TileMode.CLAMP))
-                            }
                             fragment.requireContext().imageLoader.enqueue(
                                 ImageRequest.Builder(fragment.requireContext()).apply {
                                     data(item.boxArt)
+                                    crossfade(false)
+                                    transformations(com.github.andreyasadchy.xtra.ui.view.TvCards.BlurTransformation)
                                     target(background)
                                 }.build()
                             )
@@ -101,7 +102,7 @@ class GamesAdapter(
                         gameImage.visibility = View.GONE
                         gameBackground?.setImageDrawable(null)
                     }
-                    if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                    if (isTv) {
                         root.setOnFocusChangeListener { _, hasFocus -> com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(gameName, hasFocus) }
                         com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(gameName, root.hasFocus())
                     }
@@ -138,7 +139,7 @@ class GamesAdapter(
                     } else {
                         broadcastersCount.visibility = View.GONE
                     }
-                    if (!item.tags.isNullOrEmpty() && context.prefs().getBoolean(C.UI_TAGS, true)) {
+                    if (!isTv && !item.tags.isNullOrEmpty() && context.prefs().getBoolean(C.UI_TAGS, true)) {
                         tagsLayout.removeAllViews()
                         tagsLayout.visibility = View.VISIBLE
                         val tagsFlowLayout = Flow(context).apply {

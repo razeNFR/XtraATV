@@ -7,6 +7,10 @@
         <item name="android:focusable">true</item>
         <item name="cardCornerRadius">10dp</item>
         <item name="cardElevation">0dp</item>
+        <item name="cardForegroundColor">@android:color/transparent</item>
+        <item name="rippleColor">@android:color/transparent</item>
+        <item name="android:outlineAmbientShadowColor">@android:color/transparent</item>
+        <item name="android:outlineSpotShadowColor">@android:color/transparent</item>
         <item name="android:stateListAnimator">@animator/tv_card_focus</item>
         <item name="strokeColor">@color/tv_card_stroke</item>
         <item name="strokeWidth">@dimen/tv_card_focus_stroke</item>

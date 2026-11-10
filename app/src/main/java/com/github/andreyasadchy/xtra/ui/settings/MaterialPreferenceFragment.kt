@@ -22,6 +22,55 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
         }
     }
 
+    override fun onCreateView(
+        inflater: android.view.LayoutInflater,
+        container: android.view.ViewGroup?,
+        savedInstanceState: android.os.Bundle?
+    ): android.view.View {
+        val view = super.onCreateView(inflater, container, savedInstanceState)
+        if (!com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
+            return view
+        }
+        return object : android.widget.FrameLayout(requireContext()) {
+            override fun focusSearch(focused: android.view.View?, direction: Int): android.view.View? {
+                val list = listView
+                if (focused != null && list != null) {
+                    if (direction == android.view.View.FOCUS_DOWN) {
+                        return android.view.FocusFinder.getInstance().findNextFocus(list, focused, direction)
+                    }
+                    if (direction == android.view.View.FOCUS_UP) {
+                        android.view.FocusFinder.getInstance().findNextFocus(list, focused, direction)?.let {
+                            return it
+                        }
+                        val next = super.focusSearch(focused, direction)
+                        val side = activity?.findViewById<android.view.View>(com.github.andreyasadchy.xtra.R.id.tvSettingsSide)
+                        if (next != null && side is android.view.ViewGroup) {
+                            var p: android.view.ViewParent? = next.parent
+                            while (p != null) {
+                                if (p === side) return null
+                                p = p.parent
+                            }
+                        }
+                        return next
+                    }
+                }
+                return super.focusSearch(focused, direction)
+            }
+        }.apply {
+            layoutParams = view.layoutParams ?: android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            addView(
+                view,
+                android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+    }
+
     override fun onViewCreated(view: android.view.View, savedInstanceState: android.os.Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {

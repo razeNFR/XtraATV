@@ -318,17 +318,22 @@ class SettingsViewModel(
                     response["assets"]?.jsonArray?.find {
                         it.jsonObject.getValue("content_type").jsonPrimitive.contentOrNull == "application/vnd.android.package-archive"
                     }?.jsonObject?.let { obj ->
-                        obj.getValue("updated_at").jsonPrimitive.contentOrNull?.let {
+                        val version = (response["tag_name"] ?: response["name"])?.jsonPrimitive?.contentOrNull
+                        val updatedAt = obj["updated_at"]?.jsonPrimitive?.contentOrNull?.let {
                             Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 }
-                        }?.let {
-                            if (it > lastChecked) {
-                                updateSize = obj["size"]?.jsonPrimitive?.longOrNull
-                                // TV: the version and the notes of the release, shown in the dialog of the update
-                                updateVersion = (response["name"] ?: response["tag_name"])?.jsonPrimitive?.contentOrNull
-                                updateNotes = response["body"]?.jsonPrimitive?.contentOrNull
-                                obj.getValue("browser_download_url").jsonPrimitive.contentOrNull
-                            } else null
                         }
+                        val hasUpdate = if (version != null) {
+                            com.github.andreyasadchy.xtra.ui.main.MainViewModel.isNewerVersion(version)
+                        } else {
+                            updatedAt != null && updatedAt > lastChecked
+                        }
+                        if (hasUpdate) {
+                            updateSize = obj["size"]?.jsonPrimitive?.longOrNull
+                            // TV: the version and the notes of the release, shown in the dialog of the update
+                            updateVersion = (response["name"] ?: response["tag_name"])?.jsonPrimitive?.contentOrNull
+                            updateNotes = response["body"]?.jsonPrimitive?.contentOrNull
+                            obj.getValue("browser_download_url").jsonPrimitive.contentOrNull
+                        } else null
                     }
                 } catch (e: Exception) {
                     null
@@ -410,7 +415,7 @@ class SettingsViewModel(
                             Intent(applicationContext, MainActivity::class.java).apply {
                                 setAction(MainActivity.INTENT_INSTALL_UPDATE)
                             },
-                            PendingIntent.FLAG_MUTABLE
+                            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                         ).intentSender
                     )
                     session.close()

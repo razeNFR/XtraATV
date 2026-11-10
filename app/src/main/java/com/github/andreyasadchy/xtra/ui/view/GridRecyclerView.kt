@@ -222,9 +222,9 @@ class GridRecyclerView : RecyclerView {
             scheduleFocusCheck()
             val columns = when (adapter) {
                 is GamesAdapter, is FollowedGamesAdapter -> TV_COLUMNS_GAMES
-                // followed channels: big avatars, 6 a row
-                is FollowedChannelsAdapter -> TV_COLUMNS_AVATARS
-                is ChannelSearchAdapter, is StreamsCompactAdapter, is TeamMembersAdapter -> TV_COLUMNS_CHANNELS
+                // followed and searched channels: big avatars, 6 a row
+                is FollowedChannelsAdapter, is ChannelSearchAdapter -> TV_COLUMNS_AVATARS
+                is StreamsCompactAdapter, is TeamMembersAdapter -> TV_COLUMNS_CHANNELS
                 is RecentSearchAdapter, is FiltersAdapter -> TV_COLUMNS_TEXT
                 // streams, videos and clips: from 2 big cards to 6 small ones a row, from the settings
                 else -> prefs.getString(C.TV_STREAM_COLUMNS, TV_COLUMNS_MEDIA.toString())?.toIntOrNull()?.coerceIn(2, 6) ?: TV_COLUMNS_MEDIA
@@ -311,6 +311,7 @@ class GridRecyclerView : RecyclerView {
         if (event != null && isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
             val card = focusedChild
             if (card != null && card.hasFocus()) {
+                val target = card.findFocus() ?: card
                 // click on release, actions menu on long press
                 when (event.action) {
                     KeyEvent.ACTION_DOWN -> {
@@ -318,16 +319,17 @@ class GridRecyclerView : RecyclerView {
                             cancelPress()
                             pressedCard = card
                             longPressed = false
-                            card.isPressed = true
+                            target.isPressed = true
                             postDelayed(longPressAction, ViewConfiguration.getLongPressTimeout().toLong())
                         }
                     }
                     KeyEvent.ACTION_UP -> {
                         val wasLongPressed = longPressed
                         val pressed = pressedCard
+                        target.isPressed = false
                         cancelPress()
                         if (!wasLongPressed && pressed == card) {
-                            card.performClick()
+                            target.performClick()
                         }
                     }
                 }
@@ -343,6 +345,14 @@ class GridRecyclerView : RecyclerView {
             val card = focusedChild
             val position = card?.let { getChildAdapterPosition(it) } ?: NO_POSITION
             if (card != null && card.hasFocus() && position != NO_POSITION) {
+                val focusedLeaf = card.findFocus()
+                if (focusedLeaf != null && focusedLeaf !== card && card is android.view.ViewGroup) {
+                    val dir = if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) View.FOCUS_LEFT else View.FOCUS_RIGHT
+                    val nextInside = android.view.FocusFinder.getInstance().findNextFocus(card, focusedLeaf, dir)
+                    if (nextInside != null && nextInside.requestFocus()) {
+                        return true
+                    }
+                }
                 val span = gridLayoutManager.spanCount
                 val column = position % span
                 val feature = featureLayoutManager?.takeIf { usesFeatureLayout }
@@ -379,6 +389,7 @@ class GridRecyclerView : RecyclerView {
      */
     private fun moveFocusVertically(down: Boolean): Boolean {
         val card = focusedChild ?: return false
+        val focusedId = card.findFocus()?.id
         val position = getChildAdapterPosition(card)
         val count = adapter?.itemCount ?: 0
         if (position == NO_POSITION || count == 0) {
@@ -406,13 +417,19 @@ class GridRecyclerView : RecyclerView {
                 return true
             }
         }
+        fun focusTargetItem(itemView: View) {
+            if (focusedId == R.id.delete && itemView.findViewById<View>(R.id.delete)?.requestFocus() == true) {
+                return
+            }
+            itemView.requestFocus()
+        }
         val holder = findViewHolderForAdapterPosition(target)
         if (holder != null && holder.itemView.isAttachedToWindow) {
-            holder.itemView.requestFocus()
+            focusTargetItem(holder.itemView)
         } else {
             scrollToPositionWithOffset(target, paddingTop + ((height - paddingTop - paddingBottom) * 0.22f).toInt())
             post {
-                findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                findViewHolderForAdapterPosition(target)?.itemView?.let { focusTargetItem(it) }
             }
         }
         return true

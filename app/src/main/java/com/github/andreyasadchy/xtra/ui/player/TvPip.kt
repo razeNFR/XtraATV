@@ -261,6 +261,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
     private var okDown = false
     private var swapped = false
+    private var backDown = false
 
     /**
      * Keys while the small window is shown over the full screen player: OK held swaps the streams, back closes it.
@@ -269,16 +270,27 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     fun onKey(event: KeyEvent): Boolean {
         if (!isShown) {
             okDown = false
+            backDown = false
             return false
         }
         val isOk = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
         when {
             // back hides the controls first (the player does it), it closes the small window only once they are hidden
             event.keyCode == KeyEvent.KEYCODE_BACK && activity.isPlayerFocusedWithoutControls() -> {
-                if (event.action == KeyEvent.ACTION_UP) {
-                    close()
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    backDown = true
+                    return true
                 }
-                return true
+                if (event.action == KeyEvent.ACTION_UP && backDown) {
+                    backDown = false
+                    close()
+                    return true
+                }
+                return backDown
+            }
+            event.keyCode == KeyEvent.KEYCODE_BACK -> {
+                backDown = false
+                return false
             }
             isOk && activity.isPlayerFocusedWithoutControls() -> {
                 when {
