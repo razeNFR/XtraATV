@@ -58,6 +58,7 @@ class TvMenuState {
     var onNowPlayingClick: () -> Unit = {}
     var onNowPlayingClose: () -> Unit = {}
     var selected by mutableIntStateOf(0)
+    var focusedId by mutableIntStateOf(0)
     internal val requesters = mutableMapOf<Int, FocusRequester>()
     /** An entry got the focus (to show its page without OK, an option of the Xtra TV settings). */
     var onFocusItem: (Int) -> Unit = {}
@@ -65,6 +66,18 @@ class TvMenuState {
     /** Moves the focus to the screen being shown, else to the first entry. */
     fun focusSelected(): Boolean {
         val requester = requesters[selected] ?: items.firstOrNull()?.let { requesters[it.id] } ?: return false
+        return try {
+            requester.requestFocus()
+            true
+        } catch (e: IllegalStateException) {
+            false
+        }
+    }
+
+    /** Moves the focus to the entry currently hovered in the menu, else to the selected one. */
+    fun focusCurrentOrSelected(): Boolean {
+        val targetId = if (focusedId != 0 && requesters.containsKey(focusedId)) focusedId else selected
+        val requester = requesters[targetId] ?: requesters[selected] ?: items.firstOrNull()?.let { requesters[it.id] } ?: return false
         return try {
             requester.requestFocus()
             true
@@ -86,8 +99,21 @@ class TvMenuState {
  */
 @Composable
 fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
-    var focusedIndex by remember { mutableIntStateOf(-1) }
+    var focusedSlot by remember { mutableIntStateOf(-1) }
     val items = state.items
+    val playing = state.nowPlaying
+    val nowPlayingAt = items.indexOfFirst { it.group != TvMenuState.GROUP_TOP }.coerceAtLeast(0)
+    val nowPlayingOpenRequester = remember { FocusRequester() }
+    val nowPlayingCloseRequester = remember { FocusRequester() }
+    val slots = buildList {
+        items.forEachIndexed { index, item ->
+            if (index == nowPlayingAt && playing != null) {
+                add(nowPlayingOpenRequester)
+                add(nowPlayingCloseRequester)
+            }
+            add(state.requesters.getOrPut(item.id) { FocusRequester() })
+        }
+    }
     Column(
         Modifier
             .width(260.dp)
@@ -97,8 +123,18 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
-                    Key.DirectionUp -> focusedIndex <= 0
-                    Key.DirectionDown -> focusedIndex >= items.lastIndex
+                    Key.DirectionUp -> {
+                        if (focusedSlot > 0 && focusedSlot - 1 < slots.size) {
+                            runCatching { slots[focusedSlot - 1].requestFocus() }
+                        }
+                        true
+                    }
+                    Key.DirectionDown -> {
+                        if (focusedSlot in 0 until slots.lastIndex) {
+                            runCatching { slots[focusedSlot + 1].requestFocus() }
+                        }
+                        true
+                    }
                     Key.DirectionLeft -> true
                     else -> false
                 }
@@ -107,9 +143,8 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
             .padding(horizontal = 16.dp, vertical = 28.dp)
     ) {
         // "Now playing" between search and the sections
-        val nowPlayingAt = items.indexOfFirst { it.group != TvMenuState.GROUP_TOP }.coerceAtLeast(0)
+        var currentSlot = 0
         items.forEachIndexed { index, item ->
-            val playing = state.nowPlaying
             if (index == nowPlayingAt && playing != null) {
                 if (index > 0) {
                     Box(
@@ -120,7 +155,16 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             .background(Color(0x26FFFFFF))
                     )
                 }
-                NowPlayingCard(playing, state, Modifier.onFocusChanged { if (it.hasFocus) focusedIndex = index })
+                val openSlot = currentSlot++
+                val closeSlot = currentSlot++
+                NowPlayingCard(
+                    playing = playing,
+                    state = state,
+                    openRequester = nowPlayingOpenRequester,
+                    closeRequester = nowPlayingCloseRequester,
+                    onOpenFocused = { focusedSlot = openSlot },
+                    onCloseFocused = { focusedSlot = closeSlot },
+                )
             }
             if (index > 0 && items[index - 1].group != item.group) {
                 Box(
@@ -131,6 +175,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                         .background(Color(0x26FFFFFF))
                 )
             }
+            val itemSlot = currentSlot++
             val requester = state.requesters.getOrPut(item.id) { FocusRequester() }
             MenuEntry(
                 item = item,
@@ -139,7 +184,8 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                     .focusRequester(requester)
                     .onFocusChanged {
                         if (it.isFocused) {
-                            focusedIndex = index
+                            focusedSlot = itemSlot
+                            state.focusedId = item.id
                             state.onFocusItem(item.id)
                         }
                     },
@@ -152,9 +198,16 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
 
 /** "Now playing": OK goes back to the stream, the button under it stops it. */
 @Composable
-private fun NowPlayingCard(playing: TvNowPlaying, state: TvMenuState, modifier: Modifier) {
-    Column(modifier.fillMaxWidth()) {
-        NowPlayingContent(playing, state)
+private fun NowPlayingCard(
+    playing: TvNowPlaying,
+    state: TvMenuState,
+    openRequester: FocusRequester,
+    closeRequester: FocusRequester,
+    onOpenFocused: () -> Unit,
+    onCloseFocused: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        NowPlayingContent(playing, state, openRequester, onOpenFocused)
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
         Row(
@@ -163,6 +216,8 @@ private fun NowPlayingCard(playing: TvNowPlaying, state: TvMenuState, modifier: 
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+                .focusRequester(closeRequester)
+                .onFocusChanged { if (it.isFocused) onCloseFocused() }
                 .clickable(interactionSource = interaction, indication = null) { state.onNowPlayingClose() }
                 .padding(vertical = 8.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
@@ -179,7 +234,12 @@ private fun NowPlayingCard(playing: TvNowPlaying, state: TvMenuState, modifier: 
 }
 
 @Composable
-private fun NowPlayingContent(playing: TvNowPlaying, state: TvMenuState) {
+private fun NowPlayingContent(
+    playing: TvNowPlaying,
+    state: TvMenuState,
+    requester: FocusRequester,
+    onFocused: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     Column(
@@ -187,6 +247,8 @@ private fun NowPlayingContent(playing: TvNowPlaying, state: TvMenuState) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+            .focusRequester(requester)
+            .onFocusChanged { if (it.isFocused) onFocused() }
             .clickable(interactionSource = interaction, indication = null) { state.onNowPlayingClick() }
             .padding(10.dp)
     ) {

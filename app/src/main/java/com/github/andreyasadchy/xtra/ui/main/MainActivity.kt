@@ -231,7 +231,7 @@ class MainActivity : AppCompatActivity() {
                 android.os.SystemClock.elapsedRealtime() - tvMenuAutoNavAt < 2000L &&
                 !(lastTvKeyCode in listOf(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER) && android.os.SystemClock.elapsedRealtime() - lastTvKeyAt < 500L)
             ) {
-                binding.root.post { tvMenuState.focusSelected() }
+                binding.root.post { tvMenuState.focusCurrentOrSelected() }
                 return@listener
             }
             if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
@@ -276,7 +276,7 @@ class MainActivity : AppCompatActivity() {
                     binding.root.post {
                         // a list of streams shown again after a while: the streamers that stopped go away
                         f.view?.let { refreshStaleStreamLists(it) }
-                        if (tvInitialFocusDone && f.parentFragment is NavHostFragment && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
+                        if (tvInitialFocusDone && !isTvMenuShown && f.parentFragment is NavHostFragment && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
                             restoreTvScreenFocus()
                         }
                         if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment) {
@@ -1027,6 +1027,15 @@ class MainActivity : AppCompatActivity() {
         if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             val focus = currentFocus
             if (focus != null && focus.isInside(binding.navBarContainer)) {
+                binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+                if (tvMenuPendingId != 0) {
+                    binding.root.removeCallbacks(tvMenuAutoNav)
+                    tvMenuAutoNav.run()
+                    tvMenuAutoNavAt = 0L
+                    hideTvMenu()
+                    focusContentAfterMenu(false)
+                    return true
+                }
                 // from the menu, go back to the item last selected in the screen, else to its first item
                 val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(binding.navHostFragment) }
                 if (last != null && last.requestFocus()) {
@@ -1036,9 +1045,19 @@ class MainActivity : AppCompatActivity() {
                 if (grid != null && TvUi.focusFirstItem(grid)) {
                     return true
                 }
+                val home = binding.navHostFragment.findViewById<View>(R.id.tvHome)
+                if (home != null && home.isShown) {
+                    hideTvMenu()
+                    home.requestFocus()
+                    currentTvHome()?.focusFirstCard()
+                    return true
+                }
                 if (binding.navHostFragment.requestFocus(View.FOCUS_RIGHT)) {
                     return true
                 }
+                hideTvMenu()
+                focusContentAfterMenu(false)
+                return true
             }
         }
         if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -1090,6 +1109,7 @@ class MainActivity : AppCompatActivity() {
 
     private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
     private var isTvMenuShown = true
+    fun isTvMenuOpen() = isTv && isTvMenuShown
     private var tvInitialFocusDone = false
 
     /** Back on a main screen opens the side menu, back again in the menu leaves the app. */
@@ -1131,7 +1151,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Coming back to a screen: focus the card that had the focus there (the views were recreated). */
     private fun restoreTvScreenFocus(tries: Int = 0) {
-        if (!::navController.isInitialized) {
+        if (!::navController.isInitialized || isTvMenuShown) {
             return
         }
         val position = navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] } ?: return
@@ -1242,11 +1262,12 @@ class MainActivity : AppCompatActivity() {
         // option: the page of the focused entry is shown without OK (not search, settings nor account, they open screens)
         tvMenuState.onFocusItem = { id ->
             binding.root.removeCallbacks(tvMenuAutoNav)
+            tvMenuPendingId = 0
             if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavSearch && id != R.id.tvNavSettings && id != R.id.tvNavAccount &&
                 id != tvMenuState.selected
             ) {
                 tvMenuPendingId = id
-                binding.root.postDelayed(tvMenuAutoNav, 60L)
+                binding.root.postDelayed(tvMenuAutoNav, 150L)
             }
         }
         com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
@@ -1271,6 +1292,7 @@ class MainActivity : AppCompatActivity() {
                 com.github.andreyasadchy.xtra.ui.tv.TvSideMenu(tvMenuState) { id ->
                     // OK on an entry: its page gets the focus (even right after it was shown without OK)
                     binding.root.removeCallbacks(tvMenuAutoNav)
+                    tvMenuPendingId = 0
                     tvMenuAutoNavAt = 0L
                     binding.navBar.selectedItemId = id
                     tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
@@ -1292,10 +1314,12 @@ class MainActivity : AppCompatActivity() {
     /** Option of the Xtra TV settings: the entry focused in the side menu shows its page after a short stop on it. */
     private val tvMenuAutoNav = Runnable {
         val id = tvMenuPendingId
-        if (id == 0 || !isTvMenuShown || id == binding.navBar.selectedItemId && tvMenuExtraSelected == null) {
+        tvMenuPendingId = 0
+        if (id == 0 || !isTvMenuShown || (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null)) {
             return@Runnable
         }
         tvMenuAutoNavAt = android.os.SystemClock.elapsedRealtime()
+        lastContentFocus = null
         binding.navBar.selectedItemId = id
         tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
     }
@@ -1347,9 +1371,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun focusContentAfterMenu(search: Boolean, tries: Int = 0, maxTries: Int = 15) {
+        binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         binding.root.postDelayed({
+            binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             val target = if (search) {
-                binding.navHostFragment.findViewById<View>(R.id.tvSearchBar)
+                binding.navHostFragment.findViewById<View>(R.id.tvSearchBar) ?: binding.navHostFragment.findViewById<View>(R.id.tvHeaderCompose)
             } else {
                 TvUi.findVisibleGrid(binding.navHostFragment)?.takeIf { (it.adapter?.itemCount ?: 0) > 0 && it.childCount > 0 }
                     ?: binding.navHostFragment.findViewById<View>(R.id.tvHome)
@@ -1369,6 +1395,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showTvMenu(focus: Boolean) {
         val menu = binding.navBarContainer
+        binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         if (!isTvMenuShown) {
             isTvMenuShown = true
             updateTvMenuBackCallback()
@@ -1393,6 +1420,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideTvMenu() {
+        binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         val menu = binding.navBarContainer
         if (isTvMenuShown && menu.width > 0) {
             isTvMenuShown = false

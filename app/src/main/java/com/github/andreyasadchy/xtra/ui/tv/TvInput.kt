@@ -55,9 +55,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -145,6 +147,10 @@ fun TvTextField(
     onSubmit: () -> Unit,
 ) {
     var editing by remember { mutableStateOf(false) }
+    var textFieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    if (textFieldValue.text != value) {
+        textFieldValue = TextFieldValue(value, TextRange(value.length))
+    }
     val editRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val interaction = remember { MutableInteractionSource() }
@@ -159,12 +165,22 @@ fun TvTextField(
             .background(if (highlighted) TvColors.focused else Color(0x26FFFFFF))
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { event ->
-                if (!editing && onLeft != null && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
-                    onLeft()
-                    true
-                } else false
+                if (!editing && event.type == KeyEventType.KeyDown) {
+                    if (onLeft != null && event.key == Key.DirectionLeft) {
+                        onLeft()
+                        return@onPreviewKeyEvent true
+                    }
+                    if ((event.key == Key.Backspace || event.key == Key.Delete) && value.isNotEmpty()) {
+                        onValueChange(if (event.nativeKeyEvent.repeatCount >= 2) "" else value.dropLast(1))
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                false
             }
-            .clickable(interactionSource = interaction, indication = null) { editing = true }
+            .clickable(interactionSource = interaction, indication = null) {
+                textFieldValue = TextFieldValue(value, TextRange(value.length))
+                editing = true
+            }
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.CenterStart
     ) {
@@ -183,8 +199,13 @@ fun TvTextField(
                     overflow = TextOverflow.Ellipsis
                 )
                 editing -> BasicTextField(
-                    value = value,
-                    onValueChange = onValueChange,
+                    value = textFieldValue,
+                    onValueChange = { newValue ->
+                        textFieldValue = newValue
+                        if (newValue.text != value) {
+                            onValueChange(newValue.text)
+                        }
+                    },
                     singleLine = true,
                     textStyle = TextStyle(color = textColor, fontSize = 18.sp),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -204,6 +225,15 @@ fun TvTextField(
                             }
                             editFocused = it.isFocused
                         }
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown && (event.key == Key.Backspace || event.key == Key.Delete) &&
+                                event.nativeKeyEvent.repeatCount >= 2 && value.isNotEmpty()
+                            ) {
+                                textFieldValue = TextFieldValue("", TextRange.Zero)
+                                onValueChange("")
+                                true
+                            } else false
+                        }
                 )
                 else -> Text(
                     value.ifEmpty { hint },
@@ -217,6 +247,7 @@ fun TvTextField(
     }
     LaunchedEffect(editing) {
         if (editing) {
+            textFieldValue = TextFieldValue(value, TextRange(value.length))
             editRequester.requestFocus()
             keyboard?.show()
         }
@@ -276,7 +307,12 @@ fun TvIconButton(
 
 /** Mic button of a field: listens in the app and puts the words in the field. */
 @Composable
-fun VoiceButton(state: VoiceState, input: TvVoiceInput, modifier: Modifier = Modifier) {
+fun VoiceButton(
+    state: VoiceState,
+    input: TvVoiceInput,
+    modifier: Modifier = Modifier,
+    onStart: (() -> Unit)? = null,
+) {
     if (!input.isAvailable) {
         return
     }
@@ -293,6 +329,7 @@ fun VoiceButton(state: VoiceState, input: TvVoiceInput, modifier: Modifier = Mod
         } else {
             TvPermissions.withAudio(context) { granted ->
                 if (granted) {
+                    onStart?.invoke()
                     input.start()
                 }
             }
@@ -356,8 +393,21 @@ fun TvSearchBar(
         ) {
             onSubmit(query)
         }
+        if (query.isNotEmpty()) {
+            Spacer(Modifier.width(10.dp))
+            TvIconButton(R.drawable.tv_ic_close, LocalContext.current.getString(R.string.clear_search_history)) {
+                query = ""
+                onQueryChange("")
+                runCatching { focusRequester.requestFocus() }
+            }
+        }
         Spacer(Modifier.width(14.dp))
-        VoiceButton(voice, input)
+        VoiceButton(voice, input, onStart = {
+            if (query.isNotEmpty()) {
+                query = ""
+                onQueryChange("")
+            }
+        })
     }
 }
 
@@ -367,7 +417,7 @@ fun ChatComposer(title: String, hint: String, sendLabel: String, onSend: (String
     var text by remember { mutableStateOf("") }
     val voice = remember { VoiceState() }
     val input = rememberVoiceInput(voice) {
-        text = if (text.isBlank()) it else "${text.trim()} $it"
+        text = it
     }
     val requester = remember { FocusRequester() }
     Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.TopCenter) {
@@ -393,8 +443,15 @@ fun ChatComposer(title: String, hint: String, sendLabel: String, onSend: (String
                 ) {
                     onSend(text)
                 }
+                if (text.isNotEmpty()) {
+                    Spacer(Modifier.width(10.dp))
+                    TvIconButton(R.drawable.tv_ic_close, LocalContext.current.getString(R.string.clear_search_history)) {
+                        text = ""
+                        runCatching { requester.requestFocus() }
+                    }
+                }
                 Spacer(Modifier.width(14.dp))
-                VoiceButton(voice, input)
+                VoiceButton(voice, input, onStart = { text = "" })
                 Spacer(Modifier.width(10.dp))
                 TvIconButton(R.drawable.ic_send_black_24dp, sendLabel) {
                     onSend(text)

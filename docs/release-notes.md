@@ -10,6 +10,7 @@
   - Opening an option panel from the HUD (Chat layout, Small window, Dimming, Proxy, Settings, Quality…) now keeps the HUD visible underneath with its auto-hide timer paused, instead of hiding and fading back in when closing the panel. The chat and small window stay properly lifted above the HUD while in a bottom corner and move back down naturally when the HUD hides.
   - Opening the **Chat layout** panel while the chat is hidden no longer forces the chat to open; you can configure the chat layout while keeping the chat hidden.
   - Pressing a HUD button to open an option panel now immediately hides the button's tooltip overlay so it does not remain visible behind the panel.
+  - **Chat message composer & voice input**: starting voice dictation again in the chat message box now starts fresh from zero instead of appending to the previous text, and a **Clear (`✕`)** button (plus long-press Backspace support) lets you clear the text in a single click.
 - **DVR / VOD playback from a live stream**:
   - Added a **LIVE** button next to the playback controls when watching a live stream's VOD archive (DVR) to jump right back to the live broadcast; the button is hidden on regular VODs without an active live stream.
   - Fixed the progress bar jumping back to `00:00` and taking several seconds to move to the chosen position when going back in time into a live stream's VOD, and avoided waiting for the chat replay lookup when the archive video ID is already known from the live storyboard.
