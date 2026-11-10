@@ -464,44 +464,34 @@ class MainActivity : AppCompatActivity() {
                 viewModel.updateUrl.collectLatest {
                     if (it != null) {
                         val startUpdate: () -> Unit = {
-                                if (prefs.getBoolean(C.UPDATE_USE_BROWSER, false)) {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
-                                            addCategory(Intent.CATEGORY_BROWSABLE)
-                                        }
-                                        startActivity(intent)
-                                        tokenPrefs().edit {
-                                            putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
-                                        }
-                                    } catch (e: ActivityNotFoundException) {
-                                        Toast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                            if (prefs.getBoolean(C.UPDATE_USE_BROWSER, false)) {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
+                                        addCategory(Intent.CATEGORY_BROWSABLE)
                                     }
-                                } else {
-                                    val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
-                                    updateDownloadDialogBinding = binding
-                                    val size = viewModel.updateSize
-                                    if (size != null) {
-                                        binding.textView.text = getString(
-                                            R.string.downloading_update_progress,
-                                            Formatter.formatFileSize(this@MainActivity, 0),
-                                            Formatter.formatFileSize(this@MainActivity, size),
-                                        )
-                                    } else {
-                                        binding.textView.text = getString(R.string.downloading_update)
-                                        binding.progressBar.visibility = View.GONE
+                                    startActivity(intent)
+                                    tokenPrefs().edit {
+                                        putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
                                     }
-                                    viewModel.downloadUpdate(prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP), it)
-                                    val dialog = getAlertDialogBuilder()
-                                        .setView(binding.root)
-                                        .setNegativeButton(getString(android.R.string.cancel), null)
-                                        .setOnDismissListener {
-                                            viewModel.updateJob?.cancel()
-                                            updateDownloadDialogBinding = null
-                                            updateDownloadDialog = null
-                                        }
-                                        .show()
-                                    updateDownloadDialog = dialog
+                                } catch (e: ActivityNotFoundException) {
+                                    Toast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                 }
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                                pendingUpdateUrl = it
+                                try {
+                                    startActivity(
+                                        Intent(
+                                            android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                            "package:$packageName".toUri()
+                                        )
+                                    )
+                                } catch (e: ActivityNotFoundException) {
+                                    pendingUpdateUrl = null
+                                    startUpdateDownload(it)
+                                }
+                            } else {
+                                startUpdateDownload(it)
+                            }
                         }
                         val ignoreUpdate: () -> Unit = {
                             tokenPrefs().edit {
@@ -783,9 +773,45 @@ class MainActivity : AppCompatActivity() {
         setNavBarColor(newConfig.orientation == Configuration.ORIENTATION_PORTRAIT)
     }
 
+    private var pendingUpdateUrl: String? = null
+
+    private fun startUpdateDownload(url: String) {
+        val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
+        updateDownloadDialogBinding = binding
+        val size = viewModel.updateSize
+        if (size != null) {
+            binding.textView.text = getString(
+                R.string.downloading_update_progress,
+                Formatter.formatFileSize(this@MainActivity, 0),
+                Formatter.formatFileSize(this@MainActivity, size),
+            )
+        } else {
+            binding.textView.text = getString(R.string.downloading_update)
+            binding.progressBar.visibility = View.GONE
+        }
+        viewModel.downloadUpdate(prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP), url)
+        val dialog = getAlertDialogBuilder()
+            .setView(binding.root)
+            .setNegativeButton(getString(android.R.string.cancel), null)
+            .setOnDismissListener {
+                viewModel.updateJob?.cancel()
+                updateDownloadDialogBinding = null
+                updateDownloadDialog = null
+            }
+            .show()
+        updateDownloadDialog = dialog
+    }
+
     override fun onResume() {
         super.onResume()
         restorePlayerFragment()
+        val url = pendingUpdateUrl
+        if (url != null) {
+            pendingUpdateUrl = null
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()) {
+                startUpdateDownload(url)
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -878,7 +904,8 @@ class MainActivity : AppCompatActivity() {
     fun isPlayerFocusedWithoutControls(): Boolean {
         val player = playerFragment as? PlayerFragment ?: return false
         val focus = currentFocus
-        return player.isMaximizedPlayer() && !player.areControlsShown() && (focus == null || focus.isInside(binding.playerContainer))
+        return player.isMaximizedPlayer() && !player.areControlsShown() && !player.isChatFocused() &&
+                (focus == null || focus == binding.root || focus.isInside(binding.playerContainer))
     }
 
     /** A key given to the player as if the small window was not there. */
@@ -1710,9 +1737,6 @@ class MainActivity : AppCompatActivity() {
                         @Suppress("DEPRECATION")
                         extras.getParcelable(Intent.EXTRA_INTENT)
                     }?.let {
-                        tokenPrefs().edit {
-                            putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
-                        }
                         startActivity(it)
                     }
                 }

@@ -1,18 +1,11 @@
-# Xtra TV 1.2.13
-
-### New
-- **Stream details on the selected multi-stream frame**: the selected stream now shows its viewers, video quality, live duration and a scrolling single-line title over a soft bottom gradient, fading out after 5 seconds with the frame and controls.
-- **Same-category suggestions and search in the multi-stream picker**: **Suggested** now lists live streams from the same category sorted by viewers, and a **Search** tab lets you find any live channel directly.
-- **Scrolling category titles**: long game and category names now scroll smoothly on the focused card instead of being cut off.
-- **Settings backup by file or QR code**: settings can now be saved directly to the TV and transferred to or from a phone over Wi-Fi by scanning a QR code (without the Twitch account).
-- **About section in Settings**: new **About** (`À propos`) menu showing the app version, credits (`XtraTV forked from https://github.com/crackededed/Xtra by razeN with AI`), device information, update check, and a QR code to the GitHub repository.
+# Xtra TV 1.2.14
 
 ### Fixes
-- **Audio normalization during ad-blocking**: audio normalization (`DynamicsProcessing`) now stays active when switching to the backup player (Proxy / VAFT) during an ad break.
-- **Faster ad-block transitions & reliable "Back to live…" progress bar**: synced the background main player directly to the clean live edge before switching back so there is no old frame, no lag, and the "Back to live…" badge never gets stuck.
-- **Geo-blocked streams on proxies (HTTP 403)**: proxies returning HTTP 403 on a geo-blocked channel are now skipped immediately for that channel only (falling back to direct connection / VAFT without delay) without marking the proxy as offline for other channels.
-- **Twitch WebView login on TV**: removed the unreachable *"Having trouble logging in?"* button on TV during WebView sign-in and added automatic scrolling/focus + D-pad scrolling so the **Authorize** button can always be reached.
-- **Settings backup on TVs without a file picker**: backing up or restoring settings no longer fails with "No supported app installed".
+- **Back button with the small window (PiP)**: pressing Back on the remote while the small window is open now always hides the player controls first (if shown) and then closes only the small window while keeping the full-screen main stream open, instead of closing both streams and returning to the home screen (including on Android 13 / 14+ devices).
+- **In-app update detection, manual updates & install permission**:
+  - Comparing the GitHub release version with the installed version (`BuildConfig.VERSION_NAME`) so the update pop-up no longer appears if you already updated the app manually.
+  - If the app lacked the *"Install unknown apps"* permission or the installation was interrupted, **Check for updates** in Settings now always finds the update again and lets you re-download it.
+  - The *"Install unknown apps"* permission is now requested only when clicking **Update** (instead of colliding with the update dialog), and the download starts automatically once granted.
 
 ### Install
-Download `XtraTV-1.2.13-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.2.14-tv.apk` below and install it over the previous version, your settings and account are kept.

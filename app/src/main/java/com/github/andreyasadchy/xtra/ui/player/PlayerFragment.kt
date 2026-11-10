@@ -233,20 +233,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         _binding?.root?.removeCallbacks(hudPeekHideAction)
     }
     private var controllerIsAnimating = false
+    private var controllerHiding = false
     private var controllerAnimation: ViewPropertyAnimator? = null
     private var backgroundColor: Int? = null
     private var backgroundVisible = false
 
     private val backPressedCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-            if (_binding != null && hudPeek && binding.playerControls.root.isVisible) {
+            if (_binding != null && hudPeek && areControlsShown()) {
                 // the info of the stream shown after a switch: back only hides it (and the streamers left and right)
                 TvSwitchOverlay.hide(activity, force = true)
                 hideController()
-            } else if (_binding != null && controllerAutoHide && controllerHideOnTouch && binding.playerControls.root.isVisible && binding.playerControls.root.hasFocus()) {
+            } else if (_binding != null && controllerAutoHide && controllerHideOnTouch && areControlsShown() && (isTv || binding.playerControls.root.hasFocus())) {
                 hideController()
             } else if (_binding != null && binding.chatLayout.hasFocus()) {
                 binding.dragView.requestFocus()
+            } else if ((activity as? MainActivity)?.isTvPipOpen() == true) {
+                // TV: once the HUD is hidden, back closes the small window first and keeps the main stream
+                (activity as? MainActivity)?.closeTvPip()
             } else if (isTv) {
                 // TV: back stops the stream, or keeps it in the mini player or as audio only (setting)
                 leaveForBrowsing()
@@ -2000,7 +2004,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun isMaximizedPlayer() = _binding != null && isMaximized
 
     /** TV: the controls (buttons, timeline) are on screen. */
-    fun areControlsShown() = _binding?.playerControls?.root?.isVisible == true
+    fun areControlsShown() = _binding?.playerControls?.root?.isVisible == true && !controllerHiding
+
+    fun isChatFocused() = _binding?.chatLayout?.hasFocus() == true
 
     fun isPlayingStreamMaximized() = _binding != null && isMaximized && playbackService?.type == BasePlaybackService.STREAM
 
@@ -2658,8 +2664,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val button = _binding?.playerControls?.tvPipSettings ?: return
         val hadFocus = button.hasFocus()
         button.visibility = View.GONE
-        if (hadFocus && binding.playerControls.root.isVisible) {
+        if (hadFocus && areControlsShown()) {
             focusPrimaryControl()
+        } else if (isTv && isMaximized && !areControlsShown() && !binding.chatLayout.hasFocus()) {
+            binding.dragView.requestFocus()
         }
     }
 
@@ -3584,6 +3592,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     protected fun showController(show: Boolean = true, force: Boolean = false) {
+        if (show) {
+            controllerHiding = false
+        }
         if (show && isTv && !hudPeek) {
             // the whole HUD again (after the info only of a switch)
             setHudInfoOnly(false)
@@ -3628,6 +3639,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         } else {
             if (force) {
                 controllerAnimation?.cancel()
+                controllerIsAnimating = false
                 binding.playerControls.root.removeCallbacks(controllerHideAction)
                 binding.playerControls.root.alpha = 1f
                 binding.playerControls.root.visibility = View.VISIBLE
@@ -3642,10 +3654,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         hudOpenedByUser = false
         endHudPeek()
         onTvControllerVisibility(false)
-        if (binding.playerControls.root.hasFocus() && (force || !controllerIsAnimating)) {
+        if (binding.playerControls.root.hasFocus()) {
             binding.dragView.requestFocus()
         }
+        if (controllerIsAnimating && !controllerHiding && !force) {
+            controllerAnimation?.cancel()
+            controllerIsAnimating = false
+        }
         if (!controllerIsAnimating && binding.playerControls.root.isVisible) {
+            controllerHiding = true
             controllerAnimation = binding.playerControls.root.animate().apply {
                 alpha(0f)
                 setDuration(250L)
@@ -3657,8 +3674,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
                         override fun onAnimationEnd(animation: Animator) {
                             controllerIsAnimating = false
+                            controllerHiding = false
                             setListener(null)
                             if (view != null) {
+                                if (binding.playerControls.root.hasFocus()) {
+                                    binding.dragView.requestFocus()
+                                }
                                 binding.playerControls.root.visibility = View.GONE
                             }
                         }
@@ -3669,6 +3690,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         } else {
             if (force) {
                 controllerAnimation?.cancel()
+                controllerIsAnimating = false
+                controllerHiding = false
                 binding.playerControls.root.alpha = 0f
                 binding.playerControls.root.visibility = View.GONE
             }
