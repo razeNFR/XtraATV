@@ -180,7 +180,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (hasFocus && index != tvCategory) {
                         val pending = Runnable { if (view.hasFocus()) openTvCategory(index) }
                         tvPendingCategory = pending
-                        view.postDelayed(pending, 350L)
+                        view.postDelayed(pending, 60L)
                     }
                 }
             }
@@ -218,10 +218,35 @@ class SettingsActivity : AppCompatActivity() {
                         return true
                     }
                 }
-                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (list != null && !list.canScrollVertically(1) &&
-                    android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_DOWN) == null
-                ) {
-                    return true
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    if (list != null) {
+                        val next = android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_DOWN)
+                        if (next != null) {
+                            next.requestFocus()
+                        } else if (list.canScrollVertically(1)) {
+                            list.scrollBy(0, (list.height * 0.35f).toInt().coerceAtLeast(1))
+                            android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_DOWN)?.requestFocus()
+                        }
+                        return true
+                    }
+                    if (focused == tvCategoryRows.lastOrNull()) {
+                        return true
+                    }
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                    if (list != null) {
+                        val next = android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_UP)
+                        if (next != null) {
+                            next.requestFocus()
+                        } else if (list.canScrollVertically(-1)) {
+                            list.scrollBy(0, -(list.height * 0.35f).toInt().coerceAtLeast(1))
+                            android.view.FocusFinder.getInstance().findNextFocus(list, focused, View.FOCUS_UP)?.requestFocus()
+                        }
+                        return true
+                    }
+                    if (focused == tvCategoryRows.firstOrNull()) {
+                        return true
+                    }
                 }
             }
         }

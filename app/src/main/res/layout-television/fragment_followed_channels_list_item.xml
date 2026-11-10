@@ -6,8 +6,12 @@
     style="?attr/cardStyle"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardBackgroundColor="#0DFFFFFF"
-    app:cardCornerRadius="18dp">
+    android:outlineProvider="none"
+    app:cardBackgroundColor="#1E1D24"
+    app:cardCornerRadius="18dp"
+    app:cardElevation="0dp"
+    app:cardForegroundColor="@android:color/transparent"
+    app:rippleColor="@android:color/transparent">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"

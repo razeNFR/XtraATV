@@ -2292,9 +2292,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             // corners 0..3, middle of a side 4..7 (right, left, top, bottom)
             val left = position == 2 || position == 3 || position == 5
             val top = position == 1 || position == 3 || position == 6
-            when (mode) {
+            when {
+                !isChatOpen -> {
+                    playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = ViewGroup.LayoutParams.MATCH_PARENT
+                        height = ViewGroup.LayoutParams.MATCH_PARENT
+                        gravity = Gravity.NO_GRAVITY
+                        marginEnd = 0
+                    }
+                }
                 // next to the stream: the picture gets smaller and the chat takes a column
-                1 -> {
+                mode == 1 -> {
                     playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
                         width = screenWidth - chatWidth
                         height = ViewGroup.LayoutParams.MATCH_PARENT
@@ -2311,7 +2319,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
                 // under (or above) the stream: the chat takes a band the whole width of the screen
-                2 -> {
+                mode == 2 -> {
                     // as many lines of chat as chosen: the height of a line follows the size of the text and of the emotes
                     val sizeModifier = prefs.getInt(C.CHAT_SIZE_MODIFIER, 100) / 100f
                     val textHeight = android.util.TypedValue.applyDimension(
@@ -2399,9 +2407,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private fun showChatLayoutPanel() {
         val context = requireContext()
         val prefs = context.prefs()
-        if (!binding.chatLayout.isVisible) {
-            showChatLayout()
-        }
         val corners = listOf(
             getString(R.string.tv_chat_bottom_right),
             getString(R.string.tv_chat_top_right),
@@ -2897,7 +2902,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.contentDescription = getString(label)
                 }
                 button
-            } + listOfNotNull(streamList, statsForNerds, chatMessage, multiStream, tvDim, tvProxy, tvPipSettings, chatLayoutSettings)
+            } + listOfNotNull(tvGoLive, streamList, statsForNerds, chatMessage, multiStream, tvDim, tvProxy, tvPipSettings, chatLayoutSettings)
             buttons.forEach { button ->
                 button.setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
@@ -2912,6 +2917,26 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             // the TV buttons can be hidden in the settings (player buttons)
             val prefs = requireContext().prefs()
+            tvGoLive?.let { button ->
+                val dvrStream = getTvDvrStream()
+                if (dvrStream != null) {
+                    val density = resources.displayMetrics.density
+                    val dot = requireContext().getDrawable(R.drawable.baseline_circle_24)?.mutate()?.apply {
+                        setTint(requireContext().getColor(R.color.liveStreamRed))
+                        val size = (8 * density).toInt()
+                        setBounds(0, 0, size, size)
+                    }
+                    button.setCompoundDrawablesRelative(dot, null, null, null)
+                    button.compoundDrawablePadding = (6 * density).toInt()
+                    button.visibility = View.VISIBLE
+                    button.setOnClickListener {
+                        hideTooltip()
+                        (activity as? MainActivity)?.startStream(dvrStream)
+                    }
+                } else {
+                    button.visibility = View.GONE
+                }
+            }
             statsForNerds?.visibility = if (prefs.getBoolean(C.TV_BUTTON_STATS, true)) View.VISIBLE else View.GONE
             statsForNerds?.setOnClickListener {
                 showController(force = true)
@@ -3022,6 +3047,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             v.foregroundTintList = android.content.res.ColorStateList.valueOf(if (hasFocus) focusedIcon else Color.WHITE)
                             v.setTextColor(if (hasFocus) focusedIcon else Color.WHITE)
                         }
+                        is android.widget.TextView -> {
+                            v.setTextColor(if (hasFocus) focusedIcon else Color.WHITE)
+                        }
                     }
                 }
             }
@@ -3073,7 +3101,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private fun showTooltipNow() {
         val tooltip = _binding?.playerControls?.tvTooltip ?: return
         val anchor = tooltipAnchor ?: return
-        if (!anchor.hasFocus() || anchor.contentDescription.isNullOrBlank()) {
+        if (!anchor.hasFocus() || activity?.hasWindowFocus() == false || anchor.contentDescription.isNullOrBlank()) {
             return
         }
         val root = binding.playerControls.root
@@ -3477,6 +3505,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (isTv && isSelect && event.repeatCount == 0 && focus != null &&
                 (focus.parent == binding.playerControls.bottomLeftLayout || focus.parent == binding.playerControls.bottomRightLayout || focus == binding.playerControls.playPause)
             ) {
+                hideTooltip()
                 hudOptionPressedAt = android.os.SystemClock.elapsedRealtime()
             }
         }
@@ -3496,6 +3525,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             return
         }
         if (!hasFocus) {
+            hideTooltip()
             if ((areControlsShown() && !hudPeek) || android.os.SystemClock.elapsedRealtime() - hudOptionPressedAt < 2000L) {
                 reopenHudAfterOption = true
                 binding.playerControls.root.removeCallbacks(controllerHideAction)

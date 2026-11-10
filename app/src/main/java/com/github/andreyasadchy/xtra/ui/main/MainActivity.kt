@@ -1246,7 +1246,7 @@ class MainActivity : AppCompatActivity() {
                 id != tvMenuState.selected
             ) {
                 tvMenuPendingId = id
-                binding.root.postDelayed(tvMenuAutoNav, 400L)
+                binding.root.postDelayed(tvMenuAutoNav, 60L)
             }
         }
         com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
@@ -2250,6 +2250,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false, qualities: String? = null) {
+        if (video.id != null) {
+            dvrStream = null
+            dvrChatVideoId = null
+        }
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.VIDEO,
@@ -2283,6 +2287,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startClip(clip: Clip) {
+        dvrStream = null
+        dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.CLIP,
@@ -2311,6 +2317,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startOfflineVideo(video: OfflineVideo, offset: Long? = null) {
+        dvrStream = null
+        dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
             type = BasePlaybackService.OFFLINE_VIDEO,
@@ -2364,6 +2372,10 @@ class MainActivity : AppCompatActivity() {
             val grid = lastFocusGrid
             val position = lastFocusPosition
             lastFocusGrid = null
+            currentTvHome()?.let { home ->
+                home.focusLastCard()
+                return
+            }
             if (lastFocus != null && lastFocus.isAttachedToWindow && lastFocus.isShown && lastFocus.requestFocus()) {
                 return
             }

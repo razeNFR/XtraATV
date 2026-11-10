@@ -142,7 +142,7 @@ object TvUi {
                 val select = Runnable { if (tab.hasFocus() && !tab.isSelected) tab.performClick() }
                 tab.setOnFocusChangeListener { _, hasFocus ->
                     tab.removeCallbacks(select)
-                    if (hasFocus) tab.postDelayed(select, 300L)
+                    if (hasFocus) tab.postDelayed(select, 60L)
                 }
             }
         }
@@ -267,14 +267,14 @@ object TvUi {
 
     /**
      * "Refresh" pill next to the sort pill, in the header of every list (games, popular, following...):
-     * reloads the list shown. It stays when the list has no sort.
+     * reloads the list shown. It stays when the list has no sort, except on the search screen.
      */
     private fun addRefreshButton(sortBar: View) {
         val parent = sortBar.parent as? ViewGroup ?: return
         var ancestor: View? = parent
         while (ancestor != null) {
-            if (ancestor is AppBarLayout && ancestor.findViewById<View>(R.id.tvHeaderCompose) != null) {
-                // the Compose header already has its refresh button
+            if (ancestor is AppBarLayout && (ancestor.findViewById<View>(R.id.tvHeaderCompose) != null || ancestor.findViewById<View>(R.id.searchView) != null)) {
+                // the Compose header already has its refresh button, and the search screen has none
                 return
             }
             ancestor = ancestor.parent as? View
@@ -420,7 +420,7 @@ object TvUi {
         recyclerView.setTag(R.id.tvRowsHighlighted, true)
         recyclerView.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
             override fun onChildViewAttachedToWindow(view: View) {
-                if (view.foreground == null) {
+                if (view.foreground == null && view.findViewById<View>(R.id.delete) == null) {
                     view.foreground = view.context.getDrawable(R.drawable.tv_row_focus)
                 }
             }

@@ -110,8 +110,10 @@ class TvHomeActions(
     val openVideo: (com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item) -> Unit = {},
     val showVideoActions: (com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item) -> Unit = {},
     val formatDuration: (Long) -> String = { "" },
-    /** Row of the latest videos of the followed channels: OK plays the video. */
+    /** Row of the latest videos of the followed channels: OK plays the video, OK held down opens its actions. */
     val openFollowedVideo: (com.github.andreyasadchy.xtra.model.ui.Video) -> Unit = {},
+    val showFollowedVideoActions: (com.github.andreyasadchy.xtra.model.ui.Video) -> Unit = {},
+    val videoPosition: (com.github.andreyasadchy.xtra.model.ui.Video) -> Long? = { null },
     val formatVideoDuration: (Int) -> String = { "" },
     /** Goes up at each refresh with the button once the rows came: a light sweeps over them. */
     val sweepCount: () -> Int = { 0 },
@@ -124,6 +126,8 @@ class TvHomeActions(
 )
 
 class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int, val icon: Int? = null)
+
+private class HomeRowInfo(val rowIndex: Int, val key: String, val itemKeys: List<String>)
 
 /**
  * Rows: the focus moves over the cards on screen and the row only slides when the focused card gets near an edge,
@@ -196,14 +200,43 @@ fun TvHomeScreen(
     // a key was pressed since: the focus is where the user put it, nothing moves it any more (an automatic move of the
     // focus, a grey card leaving the screen, does not count)
     var userMoved by remember { mutableStateOf(false) }
-    val hasCards = rows.isNotEmpty() || resume?.items?.isNotEmpty() == true || videos?.items?.isNotEmpty() == true || games?.items?.isNotEmpty() == true
+    val hasResume = resume != null && resume.items.isNotEmpty()
+    val hasVideos = videos != null && videos.items.isNotEmpty()
+    val hasGames = games != null && games.items.isNotEmpty()
+    val hasCards = rows.isNotEmpty() || hasResume || hasVideos || hasGames
+    val resumeIndex = slots.size
+    val videosIndex = resumeIndex + if (hasResume) 1 else 0
+    val statsIndex = videosIndex + if (hasVideos) 1 else 0
+    val gamesIndex = statsIndex + if (stats != null) 1 else 0
+    val allRows = buildList {
+        slots.forEachIndexed { rowIndex, (key, row) ->
+            if (row != null && row.items.isNotEmpty()) {
+                val keys = row.items.mapIndexed { idx, s -> s.channelLogin ?: "stream_$idx" } +
+                    if (row.seeAllId != 0) listOf("seeAll") else emptyList()
+                add(HomeRowInfo(rowIndex, key, keys))
+            }
+        }
+        if (hasResume) {
+            add(HomeRowInfo(resumeIndex, "resume", resume!!.items.map { it.id }))
+        }
+        if (hasVideos) {
+            add(HomeRowInfo(videosIndex, "followed_videos", videos!!.items.mapIndexed { idx, v -> v.id ?: "video$idx" }))
+        }
+        if (stats != null) {
+            add(HomeRowInfo(statsIndex, "stats", listOf("stats")))
+        }
+        if (hasGames) {
+            val keys = games!!.items.mapIndexed { idx, g -> g.id ?: g.name ?: "game_$idx" } + listOf("seeAll")
+            add(HomeRowInfo(gamesIndex, "games", keys))
+        }
+    }
     // "refresh" only takes the focus with up from the first row (or while nothing is loaded): coming into the home,
     // the focus never lands on it
     val refreshRequester = remember { FocusRequester() }
     var refreshAllowed by remember { mutableStateOf(false) }
     // item of the list that has the focus (0: the first row)
     var focusedItem by remember { androidx.compose.runtime.mutableIntStateOf(-1) }
-    // state of each row of streams and its cards, to put the focus back on a card
+    // state of each row and its cards, to put the focus back on a card
     val rowStates = remember { mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
     val cardRequesters = remember { mutableMapOf<String, FocusRequester>() }
     var refreshFocused by remember { mutableStateOf(false) }
@@ -246,11 +279,11 @@ fun TvHomeScreen(
         }
     }
     val request = focus.request
-    LaunchedEffect(request, hasCards, firstIsGhost) {
+    LaunchedEffect(request, hasCards, firstIsGhost, allRows.size) {
         if (request == null || (!hasCards && !firstIsGhost)) {
             return@LaunchedEffect
         }
-        if (firstIsGhost) {
+        if (firstIsGhost && (!request.toLast || focus.lastRow == null)) {
             // the first row is loading: on its first grey card until it comes
             listState.scrollToItem(0)
             androidx.compose.runtime.withFrameNanos { }
@@ -266,26 +299,44 @@ fun TvHomeScreen(
         // the request is cleared once the focus is placed: clearing it first restarted this effect and stopped it
         // before the focus moved (stuck on "refresh")
         val done = { if (focus.request === request) focus.request = null }
-        // the card of the stream watched last (same row first, else any row), else the first stream
-        val login = if (request.toLast) focus.lastLogin else null
-        val target = login?.let {
-            val preferred = rows.indexOfFirst { (key, row) -> key == focus.lastRow && row.items.any { s -> s.channelLogin == it } }
-            val rowIndex = if (preferred >= 0) preferred else rows.indexOfFirst { (_, row) -> row.items.any { s -> s.channelLogin == it } }
-            rows.getOrNull(rowIndex)?.let { (key, row) -> Triple(rowIndex, key, row.items.indexOfFirst { s -> s.channelLogin == it }) }
-        }
+        val target = if (request.toLast) {
+            val wantedRow = focus.lastRow
+            val wantedKey = focus.lastItemKey
+            val exactInWanted = wantedRow?.let { rk ->
+                allRows.find { it.key == rk }?.let { r ->
+                    val idx = if (wantedKey != null) r.itemKeys.indexOf(wantedKey) else -1
+                    if (idx >= 0) Triple(r, idx, r.itemKeys[idx]) else null
+                }
+            }
+            val exactInAny = if (exactInWanted == null && wantedKey != null) {
+                allRows.firstNotNullOfOrNull { r ->
+                    val idx = r.itemKeys.indexOf(wantedKey)
+                    if (idx >= 0) Triple(r, idx, r.itemKeys[idx]) else null
+                }
+            } else null
+            val fallbackInWanted = if (exactInWanted == null && exactInAny == null && wantedRow != null) {
+                allRows.find { it.key == wantedRow && it.itemKeys.isNotEmpty() }?.let { r ->
+                    val idx = focus.lastItemIndex.coerceIn(0, r.itemKeys.lastIndex)
+                    Triple(r, idx, r.itemKeys[idx])
+                }
+            } else null
+            exactInWanted ?: exactInAny ?: fallbackInWanted
+        } else null
         if (target != null) {
-            val (rowIndex, key, cardIndex) = target
-            listState.scrollToItem(rowIndex, if (rowIndex <= 0) 0 else -peek)
-            rowStates[key]?.scrollToItem(cardIndex)
-            androidx.compose.runtime.withFrameNanos { }
-            androidx.compose.runtime.withFrameNanos { }
-            if (runCatching { cardRequesters["$key/$login"]?.requestFocus() }.getOrNull() == true) {
-                done()
-                return@LaunchedEffect
+            val (rowInfo, cardIndex, itemKey) = target
+            listState.scrollToItem(rowInfo.rowIndex, if (rowInfo.rowIndex <= 0) 0 else -peek)
+            rowStates[rowInfo.key]?.scrollToItem(cardIndex)
+            repeat(10) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (runCatching { cardRequesters["${rowInfo.key}/$itemKey"]?.requestFocus() }.getOrNull() == true) {
+                    focusedItem = rowInfo.rowIndex
+                    done()
+                    return@LaunchedEffect
+                }
             }
         }
         listState.scrollToItem(0)
-        rows.firstOrNull()?.let { (key, _) -> rowStates[key]?.scrollToItem(0) }
+        allRows.firstOrNull()?.let { rowStates[it.key]?.scrollToItem(0) }
         androidx.compose.runtime.withFrameNanos { }
         androidx.compose.runtime.withFrameNanos { }
         runCatching { firstCard.requestFocus() }
@@ -400,56 +451,95 @@ fun TvHomeScreen(
                         StreamRow(
                             row, previewLogin, previewPlayer, actions, if (rowIndex == 0) firstCard else null,
                             state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
-                            cardModifier = { stream ->
-                                val login = stream.channelLogin
-                                if (login != null) {
-                                    Modifier
-                                        .focusRequester(cardRequesters.getOrPut("$key/$login") { FocusRequester() })
-                                        .onFocusChanged {
-                                            if (it.hasFocus) {
-                                                focus.lastLogin = login
-                                                focus.lastRow = key
-                                            }
+                            cardModifier = { idx, itemKey ->
+                                Modifier
+                                    .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
+                                    .onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focus.rememberCard(key, itemKey, idx)
                                         }
-                                } else Modifier
+                                    }
                             },
+                            onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
                         )
                     }
                 }
             }
             // continue watching, then the statistics, over the categories
-            val resumeIndex = slots.size
-            val hasResume = resume != null && resume.items.isNotEmpty()
             if (hasResume) {
                 item(key = "resume") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = resumeIndex; bringRow(resumeIndex) } }) {
-                        ResumeRow(resume!!, actions, if (slots.isEmpty()) firstCard else null)
+                        ResumeRow(
+                            resume!!, actions, if (slots.isEmpty()) firstCard else null,
+                            state = rowStates.getOrPut("resume") { androidx.compose.foundation.lazy.LazyListState() },
+                            cardModifier = { idx, itemKey ->
+                                Modifier
+                                    .focusRequester(cardRequesters.getOrPut("resume/$itemKey") { FocusRequester() })
+                                    .onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focus.rememberCard("resume", itemKey, idx)
+                                        }
+                                    }
+                            },
+                            onCardSelected = { idx, itemKey -> focus.rememberCard("resume", itemKey, idx, force = true) },
+                        )
                     }
                 }
             }
             // the latest videos of the followed channels, under "Continue watching"
-            val videosIndex = resumeIndex + if (hasResume) 1 else 0
-            val hasVideos = videos != null && videos.items.isNotEmpty()
             if (hasVideos) {
                 item(key = "followed_videos") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = videosIndex; bringRow(videosIndex) } }) {
-                        VideoRow(videos!!, actions, if (slots.isEmpty() && !hasResume) firstCard else null)
+                        VideoRow(
+                            videos!!, actions, if (slots.isEmpty() && !hasResume) firstCard else null,
+                            state = rowStates.getOrPut("followed_videos") { androidx.compose.foundation.lazy.LazyListState() },
+                            cardModifier = { idx, itemKey ->
+                                Modifier
+                                    .focusRequester(cardRequesters.getOrPut("followed_videos/$itemKey") { FocusRequester() })
+                                    .onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focus.rememberCard("followed_videos", itemKey, idx)
+                                        }
+                                    }
+                            },
+                            onCardSelected = { idx, itemKey -> focus.rememberCard("followed_videos", itemKey, idx, force = true) },
+                        )
                     }
                 }
             }
-            val statsIndex = videosIndex + if (hasVideos) 1 else 0
             if (stats != null) {
                 item(key = "stats") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = statsIndex; bringRow(statsIndex) } }) {
-                        StatsCard(stats, actions)
+                        StatsCard(
+                            stats, actions,
+                            modifier = Modifier
+                                .focusRequester(cardRequesters.getOrPut("stats/stats") { FocusRequester() })
+                                .onFocusChanged {
+                                    if (it.hasFocus) {
+                                        focus.rememberCard("stats", "stats", 0)
+                                    }
+                                },
+                        )
                     }
                 }
             }
-            val gamesIndex = statsIndex + if (stats != null) 1 else 0
-            if (games != null && games.items.isNotEmpty()) {
+            if (hasGames) {
                 item(key = "games") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = gamesIndex; bringRow(gamesIndex) } }) {
-                        GameRow(games, actions, if (slots.isEmpty() && !hasResume && !hasVideos) firstCard else null)
+                        GameRow(
+                            games!!, actions, if (slots.isEmpty() && !hasResume && !hasVideos) firstCard else null,
+                            state = rowStates.getOrPut("games") { androidx.compose.foundation.lazy.LazyListState() },
+                            cardModifier = { idx, itemKey ->
+                                Modifier
+                                    .focusRequester(cardRequesters.getOrPut("games/$itemKey") { FocusRequester() })
+                                    .onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focus.rememberCard("games", itemKey, idx)
+                                        }
+                                    }
+                            },
+                            onCardSelected = { idx, itemKey -> focus.rememberCard("games", itemKey, idx, force = true) },
+                        )
                     }
                 }
             }
@@ -460,14 +550,23 @@ fun TvHomeScreen(
 
 /**
  * Where the focus goes in the home: [focusFirst] the first stream of the first row (coming from the side menu),
- * [focusLast] the card of the stream watched last, else the first stream (the player closed).
+ * [focusLast] the card watched or opened last, else the first card (the player closed or back from a page).
  */
 class TvHomeFocus {
     class Request(val toLast: Boolean)
 
     var request by mutableStateOf<Request?>(null)
-    var lastLogin: String? = null
     var lastRow: String? = null
+    var lastItemKey: String? = null
+    var lastItemIndex: Int = 0
+
+    fun rememberCard(row: String, itemKey: String, index: Int, force: Boolean = false) {
+        if (force || request == null) {
+            lastRow = row
+            lastItemKey = itemKey
+            lastItemIndex = index
+        }
+    }
 
     fun focusFirst() {
         request = Request(false)
@@ -699,7 +798,8 @@ private fun StreamRow(
     actions: TvHomeActions,
     firstRequester: FocusRequester?,
     state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
-    cardModifier: (Stream) -> Modifier = { Modifier },
+    cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
+    onCardSelected: (Int, String) -> Unit = { _, _ -> },
 ) {
     Column {
         RowTitle(row.title, row.icon)
@@ -715,19 +815,31 @@ private fun StreamRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(row.items, key = { index, item -> item.channelId ?: index }) { index, stream ->
+                val itemKey = stream.channelLogin ?: "stream_$index"
                 StreamCard(
                     width = cardWidth,
                     stream = stream,
                     previewLogin = previewLogin,
                     previewPlayer = previewPlayer,
                     actions = actions,
-                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(stream)),
-                    onClick = { actions.openStream(stream, row.items) },
+                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey)),
+                    onClick = {
+                        onCardSelected(index, itemKey)
+                        actions.openStream(stream, row.items)
+                    },
+                    onLongClick = {
+                        onCardSelected(index, itemKey)
+                        actions.showActions(stream)
+                    },
                 )
             }
             if (row.seeAllId != 0) {
                 item(key = "seeAll") {
-                    SeeAllCard(width = 220.dp, aspect = 16f / 9f) { actions.seeAll(row.seeAllId) }
+                    val seeAllIndex = row.items.size
+                    SeeAllCard(width = 220.dp, aspect = 16f / 9f, modifier = cardModifier(seeAllIndex, "seeAll")) {
+                        onCardSelected(seeAllIndex, "seeAll")
+                        actions.seeAll(row.seeAllId)
+                    }
                 }
             }
         }
@@ -737,20 +849,41 @@ private fun StreamRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GameRow(row: TvHomeRow<Game>, actions: TvHomeActions, firstRequester: FocusRequester?) {
+private fun GameRow(
+    row: TvHomeRow<Game>,
+    actions: TvHomeActions,
+    firstRequester: FocusRequester?,
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
+    onCardSelected: (Int, String) -> Unit = { _, _ -> },
+) {
     Column {
         RowTitle(row.title, row.icon)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
+            state = state,
             modifier = Modifier.focusRestorer(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(row.items, key = { index, item -> item.id ?: index }) { index, game ->
-                GameCard(game, actions, Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier))
+                val itemKey = game.id ?: game.name ?: "game_$index"
+                GameCard(
+                    game = game,
+                    actions = actions,
+                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey)),
+                    onClick = {
+                        onCardSelected(index, itemKey)
+                        actions.openGame(game)
+                    },
+                )
             }
             item(key = "seeAll") {
-                SeeAllCard(width = 120.dp, aspect = 3f / 4f) { actions.seeAll(row.seeAllId) }
+                val seeAllIndex = row.items.size
+                SeeAllCard(width = 120.dp, aspect = 3f / 4f, modifier = cardModifier(seeAllIndex, "seeAll")) {
+                    onCardSelected(seeAllIndex, "seeAll")
+                    actions.seeAll(row.seeAllId)
+                }
             }
         }
         }
@@ -838,6 +971,7 @@ private fun StreamCard(
     actions: TvHomeActions,
     modifier: Modifier,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = { actions.showActions(stream) },
 ) {
     // many cards a row: smaller texts, the count alone in the badge
     val small = width < 230.dp
@@ -847,7 +981,7 @@ private fun StreamCard(
         width = width,
         modifier = modifier,
         onClick = onClick,
-        onLongClick = { actions.showActions(stream) },
+        onLongClick = onLongClick,
         onFocus = { if (it) actions.onStreamFocused(stream) else actions.onStreamUnfocused(stream) },
         grown = { previewing && previewPlayer() != null },
         // 2 cards a row: already big, they do not grow; 3: half bigger, 4 and more: twice as big
@@ -1003,7 +1137,14 @@ class TvHomeStats(val title: String, val subtitle: String?, val items: List<TvHo
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ResumeRow(row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>, actions: TvHomeActions, firstRequester: FocusRequester?) {
+private fun ResumeRow(
+    row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>,
+    actions: TvHomeActions,
+    firstRequester: FocusRequester?,
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
+    onCardSelected: (Int, String) -> Unit = { _, _ -> },
+) {
     Column {
         RowTitle(row.title, row.icon)
         val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
@@ -1011,6 +1152,7 @@ private fun ResumeRow(row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResum
         val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
             LazyRow(
+                state = state,
                 modifier = Modifier.focusRestorer(),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -1020,7 +1162,8 @@ private fun ResumeRow(row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResum
                         width = cardWidth,
                         item = item,
                         actions = actions,
-                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier),
+                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, item.id)),
+                        onSelected = { onCardSelected(index, item.id) },
                     )
                 }
             }
@@ -1031,7 +1174,14 @@ private fun ResumeRow(row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResum
 /** Latest videos of the followed channels. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun VideoRow(row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video>, actions: TvHomeActions, firstRequester: FocusRequester?) {
+private fun VideoRow(
+    row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video>,
+    actions: TvHomeActions,
+    firstRequester: FocusRequester?,
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
+    onCardSelected: (Int, String) -> Unit = { _, _ -> },
+) {
     Column {
         RowTitle(row.title, row.icon)
         val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
@@ -1039,16 +1189,19 @@ private fun VideoRow(row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video
         val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
             LazyRow(
+                state = state,
                 modifier = Modifier.focusRestorer(),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(row.items, key = { index, item -> item.id ?: "video$index" }) { index, item ->
+                    val itemKey = item.id ?: "video$index"
                     FollowedVideoCard(
                         width = cardWidth,
                         video = item,
                         actions = actions,
-                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier),
+                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey)),
+                        onSelected = { onCardSelected(index, itemKey) },
                     )
                 }
             }
@@ -1097,13 +1250,49 @@ private fun androidx.compose.foundation.layout.BoxScope.VideoThumbnail(thumbnail
     }
 }
 
+/** Watch progress bar inset from the bottom edge with rounded corners so it stays visible inside the focus border. */
 @Composable
-private fun FollowedVideoCard(width: Dp, video: com.github.andreyasadchy.xtra.model.ui.Video, actions: TvHomeActions, modifier: Modifier) {
+private fun androidx.compose.foundation.layout.BoxScope.VideoProgressBar(progress: Float) {
+    Box(
+        Modifier
+            .align(Alignment.BottomStart)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .height(4.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(Color(0x66FFFFFF))
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        )
+    }
+}
+
+@Composable
+private fun FollowedVideoCard(
+    width: Dp,
+    video: com.github.andreyasadchy.xtra.model.ui.Video,
+    actions: TvHomeActions,
+    modifier: Modifier,
+    onSelected: () -> Unit = {},
+) {
     val small = width < 230.dp
+    val positionMs = actions.videoPosition(video)
     FocusCard(
         width = width,
         modifier = modifier,
-        onClick = { actions.openFollowedVideo(video) },
+        onClick = {
+            onSelected()
+            actions.openFollowedVideo(video)
+        },
+        onLongClick = {
+            onSelected()
+            actions.showFollowedVideoActions(video)
+        },
     ) { focused ->
         Box(
             Modifier
@@ -1129,6 +1318,10 @@ private fun FollowedVideoCard(width: Dp, video: com.github.andreyasadchy.xtra.mo
                         .background(Color(0xCC000000))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
+                val durationMs = seconds * 1000L
+                if (positionMs != null && positionMs > 0L) {
+                    VideoProgressBar(positionMs.toFloat() / durationMs)
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -1152,13 +1345,25 @@ private fun FollowedVideoCard(width: Dp, video: com.github.andreyasadchy.xtra.mo
 }
 
 @Composable
-private fun ResumeCard(width: Dp, item: com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item, actions: TvHomeActions, modifier: Modifier) {
+private fun ResumeCard(
+    width: Dp,
+    item: com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item,
+    actions: TvHomeActions,
+    modifier: Modifier,
+    onSelected: () -> Unit = {},
+) {
     val small = width < 230.dp
     FocusCard(
         width = width,
         modifier = modifier,
-        onClick = { actions.openVideo(item) },
-        onLongClick = { actions.showVideoActions(item) },
+        onClick = {
+            onSelected()
+            actions.openVideo(item)
+        },
+        onLongClick = {
+            onSelected()
+            actions.showVideoActions(item)
+        },
     ) { focused ->
         Box(
             Modifier
@@ -1185,20 +1390,7 @@ private fun ResumeCard(width: Dp, item: com.github.andreyasadchy.xtra.ui.tv.TvRe
                         .background(Color(0xB3000000))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
-                Box(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .background(Color(0x66FFFFFF))
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth((item.positionMs.toFloat() / durationMs).coerceIn(0f, 1f))
-                            .fillMaxHeight()
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-                }
+                VideoProgressBar(item.positionMs.toFloat() / durationMs)
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -1241,13 +1433,13 @@ private fun ResumeCard(width: Dp, item: com.github.andreyasadchy.xtra.ui.tv.TvRe
 
 /** Card of statistics: the D-pad stops on it as a whole, it has no action. */
 @Composable
-private fun StatsCard(stats: TvHomeStats, actions: TvHomeActions) {
+private fun StatsCard(stats: TvHomeStats, actions: TvHomeActions, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
         RowTitle(stats.title, R.drawable.tv_ic_bar_chart)
         Column(
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .leftEdge(0, actions.openMenu)
                 .clip(RoundedCornerShape(16.dp))
@@ -1292,8 +1484,8 @@ private fun StatsCard(stats: TvHomeStats, actions: TvHomeActions) {
 }
 
 @Composable
-private fun GameCard(game: Game, actions: TvHomeActions, modifier: Modifier) {
-    FocusCard(width = 120.dp, modifier = modifier, onClick = { actions.openGame(game) }) { focused ->
+private fun GameCard(game: Game, actions: TvHomeActions, modifier: Modifier, onClick: () -> Unit = { actions.openGame(game) }) {
+    FocusCard(width = 120.dp, modifier = modifier, onClick = onClick) { focused ->
         Box(
             Modifier
                 .fillMaxWidth()
@@ -1328,8 +1520,8 @@ private fun GameCard(game: Game, actions: TvHomeActions, modifier: Modifier) {
 }
 
 @Composable
-private fun SeeAllCard(width: Dp, aspect: Float, onClick: () -> Unit) {
-    FocusCard(width = width, onClick = onClick) { focused ->
+private fun SeeAllCard(width: Dp, aspect: Float, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    FocusCard(width = width, modifier = modifier, onClick = onClick) { focused ->
         Box(
             Modifier
                 .fillMaxWidth()

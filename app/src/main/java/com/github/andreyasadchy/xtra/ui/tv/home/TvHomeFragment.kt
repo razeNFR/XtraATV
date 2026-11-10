@@ -48,6 +48,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private var refreshClickedAt = 0L
     private val homeSweep = androidx.compose.runtime.mutableIntStateOf(0)
     private val resumeItems = mutableStateOf<List<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>>(emptyList())
+    private val videoPositions = mutableStateOf<Map<String, Long>>(emptyMap())
     private val statsState = mutableStateOf<TvHomeStats?>(null)
     private val homeFocus = TvHomeFocus()
 
@@ -68,8 +69,16 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val context = requireContext()
+        if (homeFocus.lastRow != null) {
+            homeFocus.focusLast()
+        }
         val accent = MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, 0xFF9147FF.toInt())
         val truncate = context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true)
+        val positionOf: (com.github.andreyasadchy.xtra.model.ui.Video) -> Long? = { video ->
+            val id = video.id
+            if (id.isNullOrBlank()) null
+            else (resumeItems.value.find { it.id == id }?.positionMs ?: videoPositions.value[id])?.takeIf { it > 0L }
+        }
         val actions = TvHomeActions(
             openStream = { stream, list ->
                 stopPreview()
@@ -138,13 +147,25 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             showVideoActions = { item -> showVideoActions(item) },
             openFollowedVideo = { video ->
                 stopPreview()
-                (activity as? MainActivity)?.startVideo(video, null)
+                val pos = positionOf(video)
+                val durationMs = (video.durationSeconds ?: 0) * 1000L
+                val startFromBeginning = pos != null && durationMs > 0L && pos >= durationMs
+                (activity as? MainActivity)?.startVideo(video, if (startFromBeginning) 0L else pos, startFromBeginning)
             },
+            showFollowedVideoActions = { video ->
+                showVideoActions(video.toResumeItem(positionOf(video) ?: 0L))
+            },
+            videoPosition = positionOf,
             formatVideoDuration = { seconds -> android.text.format.DateUtils.formatElapsedTime(seconds.toLong()) },
             formatDuration = { ms -> getString(R.string.tv_time_left, android.text.format.DateUtils.formatElapsedTime(ms / 1000)) },
         )
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.stamp.collect { homeStamp.longValue = it }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            (requireActivity().application as XtraApp).xtraModule.playerRepository.loadVideoPositions().collect { list ->
+                videoPositions.value = list.associate { it.id.toString() to it.position }
+            }
         }
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.refreshing.collect { refreshing ->
@@ -303,36 +324,67 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         type = type,
     )
 
-    /** OK held down on a video of "Continue watching": resume, watch from the start, remove from the history. */
+    private fun com.github.andreyasadchy.xtra.model.ui.Video.toResumeItem(positionMs: Long) = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item(
+        id = id.orEmpty(),
+        title = title,
+        channelId = channelId,
+        channelLogin = channelLogin,
+        channelName = channelName,
+        channelImage = channelImage,
+        gameId = gameId,
+        gameName = gameName,
+        thumbnail = thumbnail,
+        createdAt = createdAt,
+        durationSeconds = durationSeconds,
+        positionMs = positionMs,
+        type = type,
+    )
+
+    /** OK held down on a video of "Continue watching" or "Followed videos": resume, watch from the start, remove from the history, open channel. */
     private fun showVideoActions(item: com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item) {
         stopPreview()
         val activity = activity as? MainActivity ?: return
-        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
-            activity,
-            item.title?.trim()?.takeIf { it.isNotEmpty() } ?: item.channelName ?: "",
-            listOf(
-                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_resume), R.drawable.tv_ic_play) {
-                    activity.startVideo(item.toVideo(), item.positionMs)
-                },
-                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_watch_from_start), R.drawable.tv_ic_replay) {
-                    activity.startVideo(item.toVideo(), 0, ignoreSavedPosition = true)
-                },
-                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_remove_from_history), R.drawable.tv_ic_delete) {
-                    com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.remove(activity, item.id)
-                    item.id.toLongOrNull()?.let { id ->
-                        activity.lifecycleScope.launch {
-                            try {
-                                (activity.application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository.saveVideoPosition(
-                                    com.github.andreyasadchy.xtra.model.VideoPosition(id, 0)
-                                )
-                            } catch (e: Exception) {
+        val name = item.channelName ?: item.channelLogin ?: ""
+        val actions = buildList {
+            add(com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_resume), R.drawable.tv_ic_play) {
+                activity.startVideo(item.toVideo(), item.positionMs)
+            })
+            add(com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_watch_from_start), R.drawable.tv_ic_replay) {
+                activity.startVideo(item.toVideo(), 0, ignoreSavedPosition = true)
+            })
+            add(com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_remove_from_history), R.drawable.tv_ic_delete) {
+                com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.remove(activity, item.id)
+                item.id.toLongOrNull()?.let { id ->
+                    activity.lifecycleScope.launch {
+                        try {
+                            (activity.application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository.saveVideoPosition(
+                                com.github.andreyasadchy.xtra.model.VideoPosition(id, 0)
+                            )
+                        } catch (e: Exception) {
 
-                            }
                         }
                     }
-                    loadLocalRows()
-                },
-            )
+                }
+                loadLocalRows()
+            })
+            if (!item.channelLogin.isNullOrBlank() || !item.channelId.isNullOrBlank()) {
+                add(com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(getString(R.string.tv_open_channel, name), R.drawable.tv_ic_person) {
+                    activity.openTvChannel(
+                        Stream(
+                            channelId = item.channelId,
+                            channelLogin = item.channelLogin,
+                            channelName = item.channelName,
+                            channelImageURL = item.channelImage,
+                        ),
+                        null
+                    )
+                })
+            }
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+            activity,
+            item.title?.trim()?.takeIf { it.isNotEmpty() } ?: name,
+            actions
         )
     }
 

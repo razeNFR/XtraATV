@@ -40,6 +40,9 @@ class RecentSearchAdapter(
                     root.setOnClickListener {
                         select(item)
                     }
+                    text.setOnClickListener {
+                        select(item)
+                    }
                     text.text = item.query
                     delete.setOnClickListener {
                         delete(item)

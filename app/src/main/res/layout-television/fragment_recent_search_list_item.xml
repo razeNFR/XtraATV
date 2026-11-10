@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="8dp"
+    android:layout_marginTop="6dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginBottom="6dp"
+    android:focusable="false"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <TextView
+        android:id="@+id/text"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:layout_weight="1"
+        android:background="@drawable/tv_pill_background"
+        android:clickable="true"
+        android:drawablePadding="12dp"
+        android:ellipsize="end"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:textColor="@color/tv_pill_text"
+        android:textSize="15sp"
+        app:drawableStartCompat="@drawable/baseline_history_black_24"
+        app:drawableTint="@color/tv_pill_text"
+        tools:text="Recent search item" />
+
+    <ImageButton
+        android:id="@+id/delete"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/tv_pill_background"
+        android:clickable="true"
+        android:contentDescription="@string/delete"
+        android:focusable="true"
+        android:scaleType="centerInside"
+        android:src="@drawable/baseline_delete_black_24"
+        app:tint="@color/tv_pill_text" />
+
+</LinearLayout>

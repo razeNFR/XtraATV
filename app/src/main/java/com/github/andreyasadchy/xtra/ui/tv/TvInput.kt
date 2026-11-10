@@ -136,6 +136,7 @@ fun TvTextField(
     imeAction: ImeAction = ImeAction.Search,
     leadingIcon: Int? = R.drawable.baseline_search_black_24,
     focusRequester: FocusRequester = remember { FocusRequester() },
+    onLeft: (() -> Unit)? = null,
     onSubmit: () -> Unit,
 ) {
     var editing by remember { mutableStateOf(false) }
@@ -152,6 +153,12 @@ fun TvTextField(
             .clip(RoundedCornerShape(28.dp))
             .background(if (highlighted) TvColors.focused else Color(0x26FFFFFF))
             .focusRequester(focusRequester)
+            .onPreviewKeyEvent { event ->
+                if (!editing && onLeft != null && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                    onLeft()
+                    true
+                } else false
+            }
             .clickable(interactionSource = interaction, indication = null) { editing = true }
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.CenterStart
@@ -293,11 +300,19 @@ fun VoiceButton(state: VoiceState, input: TvVoiceInput, modifier: Modifier = Mod
 fun TvSearchBar(
     initialQuery: String,
     hint: String,
+    modifier: Modifier = Modifier,
     focusRequester: FocusRequester = remember { FocusRequester() },
+    onLeft: (() -> Unit)? = null,
+    onDown: (() -> Unit)? = null,
     onQueryChange: (String) -> Unit,
     onSubmit: (String) -> Unit,
 ) {
     var query by remember { mutableStateOf(initialQuery) }
+    LaunchedEffect(initialQuery) {
+        if (query != initialQuery) {
+            query = initialQuery
+        }
+    }
     val voice = remember { VoiceState() }
     val input = rememberVoiceInput(voice) {
         // like YouTube: what was said is searched right away
@@ -305,7 +320,23 @@ fun TvSearchBar(
         onQueryChange(it)
         onSubmit(it)
     }
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (event.key) {
+                    Key.DirectionDown -> if (onDown != null) {
+                        onDown()
+                        true
+                    } else false
+                    Key.DirectionUp -> true
+                    else -> false
+                }
+            },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         TvTextField(
             value = query,
             onValueChange = {
@@ -315,6 +346,7 @@ fun TvSearchBar(
             hint = hint,
             voice = voice,
             focusRequester = focusRequester,
+            onLeft = onLeft,
             modifier = Modifier.weight(1f),
         ) {
             onSubmit(query)

@@ -105,6 +105,16 @@ class ChannelSearchAdapter(
                     } else {
                         typeText.visibility = View.GONE
                     }
+                    if (liveBadge != null) {
+                        val live = item.isLive == true || item.liveViewers != null
+                        userRing?.visibility = if (live) View.VISIBLE else View.INVISIBLE
+                        liveBadge.visibility = if (live) View.VISIBLE else View.GONE
+                        favoriteStar?.visibility = if (com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.login)) View.VISIBLE else View.GONE
+                        typeText.visibility = View.GONE
+                        item.name?.let { userName.text = it }
+                        root.setOnFocusChangeListener { _, hasFocus -> com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(userName, hasFocus) }
+                        com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(userName, root.hasFocus())
+                    }
                 }
             }
         }
