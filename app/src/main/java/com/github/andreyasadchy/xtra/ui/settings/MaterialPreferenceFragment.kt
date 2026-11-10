@@ -63,7 +63,7 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
             )
             addView(
                 view,
-                LayoutParams(
+                android.widget.FrameLayout.LayoutParams(
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT
                 )
