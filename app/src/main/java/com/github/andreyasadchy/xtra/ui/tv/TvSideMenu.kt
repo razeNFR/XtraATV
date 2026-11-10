@@ -59,6 +59,7 @@ class TvMenuState {
     var onNowPlayingClose: () -> Unit = {}
     var selected by mutableIntStateOf(0)
     var focusedId by mutableIntStateOf(0)
+    var collapsed by mutableStateOf(false)
     internal val requesters = mutableMapOf<Int, FocusRequester>()
     /** An entry got the focus (to show its page without OK, an option of the Xtra TV settings). */
     var onFocusItem: (Int) -> Unit = {}
@@ -96,9 +97,16 @@ class TvMenuState {
 /**
  * Leanback side menu: search at the top, the sections, then account and settings.
  * It scrolls with the focus, up and down stop at its ends, right goes back to the screen (handled by the activity).
+ * When [TvMenuState.collapsed] is true, folds into a clean 68dp icon rail instead of disappearing completely.
  */
 @Composable
 fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
+    val collapsed = state.collapsed
+    val menuWidth by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (collapsed) 68.dp else 260.dp,
+        animationSpec = androidx.compose.animation.core.tween(180),
+        label = "railWidth"
+    )
     var focusedSlot by remember { mutableIntStateOf(-1) }
     val items = state.items
     val playing = state.nowPlaying
@@ -116,10 +124,10 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     }
     Column(
         Modifier
-            .width(260.dp)
+            .width(menuWidth)
             .fillMaxHeight()
             // opaque: the texts of the screen behind no longer show through the entries
-            .background(Color(0xFF141318))
+            .background(if (collapsed) Color(0xD9141318) else Color(0xFF141318))
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
@@ -140,8 +148,47 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 }
             }
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 28.dp)
+            .padding(horizontal = if (collapsed) 10.dp else 16.dp, vertical = 28.dp),
+        horizontalAlignment = if (collapsed) Alignment.CenterHorizontally else Alignment.Start
     ) {
+        if (collapsed) {
+            val activeParentId = items.find { it.id == state.selected }?.let { chosen ->
+                if (chosen.sub) items.take(items.indexOf(chosen)).lastOrNull { !it.sub }?.id else chosen.id
+            } ?: state.selected
+            items.filter { !it.sub }.forEachIndexed { index, item ->
+                if (index == 1 && playing != null) {
+                    Box(
+                        Modifier
+                            .padding(vertical = 4.dp)
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x2EE91916)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painterResource(
+                                if (playing.audioOnly) com.github.andreyasadchy.xtra.R.drawable.baseline_audiotrack_black_24
+                                else com.github.andreyasadchy.xtra.R.drawable.tv_ic_live
+                            ),
+                            contentDescription = null,
+                            tint = Color(0xFFE91916),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                if (index > 0 && items.filter { !it.sub }[index - 1].group != item.group) {
+                    Box(
+                        Modifier
+                            .padding(horizontal = 8.dp, vertical = 8.dp)
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Color(0x22FFFFFF))
+                    )
+                }
+                CollapsedRailEntry(item = item, selected = item.id == activeParentId)
+            }
+            return@Column
+        }
         // "Now playing" between search and the sections
         var currentSlot = 0
         items.forEachIndexed { index, item ->
@@ -192,6 +239,38 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
             ) {
                 onClick(item.id)
             }
+        }
+    }
+}
+
+@Composable
+private fun CollapsedRailEntry(item: TvMenuItem, selected: Boolean) {
+    val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
+    Box(
+        Modifier
+            .padding(vertical = 3.dp)
+            .size(46.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) accent.copy(alpha = 0.26f) else Color.Transparent),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .width(3.dp)
+                    .height(20.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(accent)
+            )
+        }
+        if (item.icon != null) {
+            Icon(
+                painterResource(item.icon),
+                contentDescription = null,
+                tint = if (selected) accent else Color(0x99FFFFFF),
+                modifier = Modifier.size(23.dp)
+            )
         }
     }
 }

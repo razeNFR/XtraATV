@@ -1318,6 +1318,7 @@ class SettingsActivity : AppCompatActivity() {
                             "2" -> getString(R.string.clips)
                             "3" -> getString(R.string.chat)
                             "4" -> getString(R.string.about)
+                            "5" -> getString(R.string.tv_schedule)
                             else -> getString(R.string.videos)
                         },
                         default = split[1] != "0",
@@ -1944,6 +1945,12 @@ class SettingsActivity : AppCompatActivity() {
                         .show()
                 }
                 true
+            }
+            listOf(C.TV_HOME_HERO, C.TV_COMPACT_RAIL).forEach { key ->
+                findPreference<Preference>(key)?.setOnPreferenceChangeListener { _, _ ->
+                    (requireActivity() as? SettingsActivity)?.setResult()
+                    true
+                }
             }
             findPreference<Preference>("adblock_settings")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)

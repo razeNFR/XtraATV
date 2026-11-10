@@ -252,7 +252,22 @@ class MainActivity : AppCompatActivity() {
         if (isTv) {
             // soft glow of the ambiance color behind the screens (Xtra TV settings)
             (binding.root.background as? android.graphics.drawable.ColorDrawable)?.color?.let { base ->
+                tvBaseBackgroundColor = base
                 binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
+            }
+            com.github.andreyasadchy.xtra.ui.tv.TvAmbient.setDynamicListener { color ->
+                tvBaseBackgroundColor?.let { base ->
+                    com.github.andreyasadchy.xtra.ui.tv.TvAmbient.applyDynamicToView(binding.root, base, color)
+                }
+            }
+            if (isCompactRailEnabled()) {
+                val railStart = (84 * resources.displayMetrics.density).toInt()
+                binding.navHostFragment.setPaddingRelative(
+                    railStart,
+                    binding.navHostFragment.paddingTop,
+                    binding.navHostFragment.paddingEnd,
+                    binding.navHostFragment.paddingBottom,
+                )
             }
             supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
@@ -815,6 +830,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        if (isTv) {
+            com.github.andreyasadchy.xtra.ui.tv.TvAmbient.setDynamicListener(null)
+        }
         networkCallback?.let {
             val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
             connectivityManager.unregisterNetworkCallback(it)
@@ -977,6 +995,9 @@ class MainActivity : AppCompatActivity() {
             lastTvKeyCode = event.keyCode
             lastTvKeyAt = android.os.SystemClock.elapsedRealtime()
         }
+        if (isTv && !dispatchingPlayerKey && tvLiveAlerts.onKey(event)) {
+            return true
+        }
         if (isTv && !dispatchingPlayerKey && tvPip.onKey(event)) {
             return true
         }
@@ -1090,6 +1111,11 @@ class MainActivity : AppCompatActivity() {
                             switchStream(if (event.keyCode == KeyEvent.KEYCODE_CHANNEL_UP) 1 else -1)
                         }
                         return true
+                    } else if ((playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true && currentClipId != null && clipQueue.size > 1) {
+                        if (event.repeatCount == 0) {
+                            playNextClip(if (event.keyCode == KeyEvent.KEYCODE_CHANNEL_UP) 1 else -1, wrap = true)
+                        }
+                        return true
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
@@ -1108,8 +1134,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
+    private var tvBaseBackgroundColor: Int? = null
     private var isTvMenuShown = true
     fun isTvMenuOpen() = isTv && isTvMenuShown
+    private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, false)
     private var tvInitialFocusDone = false
 
     /** Back on a main screen opens the side menu, back again in the menu leaves the app. */
@@ -1144,6 +1172,29 @@ class MainActivity : AppCompatActivity() {
         if (grid != null && position != RecyclerView.NO_POSITION && ::navController.isInitialized) {
             navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] = position }
         }
+        if (child != null && grid != null && com.github.andreyasadchy.xtra.ui.tv.TvAmbient.isDynamic(this)) {
+            extractCardAmbient(child, "${grid.hashCode()}:$position")
+        }
+    }
+
+    private fun extractCardAmbient(card: View, key: String) {
+        var best: android.widget.ImageView? = null
+        var bestArea = 0
+        fun scan(v: View) {
+            if (v is android.widget.ImageView && v.isShown && v.drawable != null) {
+                val area = v.width * v.height
+                if (area > bestArea) {
+                    bestArea = area
+                    best = v
+                }
+            } else if (v is ViewGroup) {
+                for (i in 0 until v.childCount) scan(v.getChildAt(i))
+            }
+        }
+        scan(card)
+        val drawable = best?.drawable ?: return
+        val bmp = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap ?: return
+        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromBitmap(this, key, bmp, lifecycleScope)
     }
 
     /** Position of the focused card of each screen, to give it back when coming back to the screen. */
@@ -1396,6 +1447,13 @@ class MainActivity : AppCompatActivity() {
     private fun showTvMenu(focus: Boolean) {
         val menu = binding.navBarContainer
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        menu.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        tvMenuState.collapsed = false
+        binding.root.findViewById<View>(R.id.tvMenuShade)?.apply {
+            animate().cancel()
+            visibility = View.VISIBLE
+            animate().alpha(1f).setDuration(180L).start()
+        }
         if (!isTvMenuShown) {
             isTvMenuShown = true
             updateTvMenuBackCallback()
@@ -1422,7 +1480,26 @@ class MainActivity : AppCompatActivity() {
     private fun hideTvMenu() {
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         val menu = binding.navBarContainer
-        if (isTvMenuShown && menu.width > 0) {
+        if (isCompactRailEnabled()) {
+            if (isTvMenuShown) {
+                isTvMenuShown = false
+                updateTvMenuBackCallback()
+            }
+            tvMenuState.collapsed = true
+            menu.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            menu.animate().cancel()
+            menu.translationX = 0f
+            menu.alpha = 1f
+            menu.visibility = View.VISIBLE
+            binding.root.findViewById<View>(R.id.tvMenuShade)?.let { shade ->
+                shade.animate().cancel()
+                shade.animate().alpha(0f).setDuration(150L).withEndAction {
+                    if (!isTvMenuShown) {
+                        shade.visibility = View.GONE
+                    }
+                }.start()
+            }
+        } else if (isTvMenuShown && menu.width > 0) {
             isTvMenuShown = false
             updateTvMenuBackCallback()
             menu.animate().cancel()
@@ -1742,15 +1819,30 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                         else -> {
+                            val uri = intent.data
                             val login = url.substringAfter("twitch.tv/").takeIf { it.isNotBlank() }?.let { it.substringBefore("?", it.substringBefore("/")) }
                             if (!login.isNullOrBlank()) {
-                                viewModel.loadUser(
-                                    login,
-                                    prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                                    TwitchApiHelper.getGQLHeaders(this),
-                                    TwitchApiHelper.getHelixHeaders(this),
-                                    prefs.getBoolean(C.ENABLE_INTEGRITY, false),
-                                )
+                                if (uri?.getQueryParameter("xtratv_play") == "1") {
+                                    startStream(
+                                        Stream(
+                                            id = uri.getQueryParameter("id"),
+                                            channelId = uri.getQueryParameter("cid"),
+                                            channelLogin = login,
+                                            channelName = uri.getQueryParameter("name") ?: login,
+                                            channelImageURL = uri.getQueryParameter("img"),
+                                            title = uri.getQueryParameter("title"),
+                                            gameName = uri.getQueryParameter("game"),
+                                        )
+                                    )
+                                } else {
+                                    viewModel.loadUser(
+                                        login,
+                                        prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                                        TwitchApiHelper.getGQLHeaders(this),
+                                        TwitchApiHelper.getHelixHeaders(this),
+                                        prefs.getBoolean(C.ENABLE_INTEGRITY, false),
+                                    )
+                                }
                             }
                         }
                     }
@@ -2111,6 +2203,13 @@ class MainActivity : AppCompatActivity() {
         return loadLiveStreams(listOf(id))?.containsKey(id)
     }
 
+    fun isMultiStreamOpen() = supportFragmentManager.findFragmentByTag(MULTI_STREAM_TAG) != null
+
+    fun addStreamToMultiStream(stream: Stream): Boolean {
+        val multi = supportFragmentManager.findFragmentByTag(MULTI_STREAM_TAG) as? com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment ?: return false
+        return multi.addStreamFromAlert(stream)
+    }
+
     fun closeMultiStream() {
         supportFragmentManager.findFragmentByTag(MULTI_STREAM_TAG)?.let {
             supportFragmentManager.beginTransaction().remove(it).commitNow()
@@ -2133,6 +2232,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null, peekHud: Boolean = false) {
+        currentClipId = null
         // TV: the info of the stream for a moment each time a stream starts (from the home, a list, a switch...)
         com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = isTv
         // the time of the start of the stream counts from here (debug builds), and its access of Twitch is asked
@@ -2278,6 +2378,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false, qualities: String? = null) {
+        currentClipId = null
         if (video.id != null) {
             dvrStream = null
             dvrChatVideoId = null
@@ -2314,7 +2415,31 @@ class MainActivity : AppCompatActivity() {
         startPlayer(fragment)
     }
 
-    fun startClip(clip: Clip) {
+    /** Queue of clips from the grid the current clip was opened from, for TV autoplay and channel up/down. */
+    var clipQueue: List<Clip> = emptyList()
+        private set
+    private var currentClipId: String? = null
+
+    fun playNextClip(offset: Int = 1, wrap: Boolean = false): Boolean {
+        val queue = clipQueue
+        val id = currentClipId ?: return false
+        if (queue.size < 2) return false
+        val index = queue.indexOfFirst { it.id == id }
+        if (index < 0) return false
+        val nextIndex = if (wrap) Math.floorMod(index + offset, queue.size) else index + offset
+        val next = queue.getOrNull(nextIndex) ?: return false
+        startClip(next)
+        return true
+    }
+
+    fun startClip(clip: Clip, queue: List<Clip>? = null) {
+        if (queue != null) {
+            clipQueue = queue
+        }
+        currentClipId = clip.id
+        if (isTv) {
+            com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = true
+        }
         dvrStream = null
         dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
@@ -2345,6 +2470,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startOfflineVideo(video: OfflineVideo, offset: Long? = null) {
+        currentClipId = null
         dvrStream = null
         dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
@@ -2394,7 +2520,11 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-            binding.navBarContainer.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            binding.navBarContainer.descendantFocusability = if (isTvMenuShown || !isCompactRailEnabled()) {
+                ViewGroup.FOCUS_AFTER_DESCENDANTS
+            } else {
+                ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            }
             val lastFocus = lastContentFocus
             lastContentFocus = null
             val grid = lastFocusGrid
@@ -2552,6 +2682,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closePlayer(focusHome: Boolean = true) {
+        currentClipId = null
         neighborJob?.cancel()
         com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.clear()
         closeTvPip()
@@ -2767,12 +2898,23 @@ class MainActivity : AppCompatActivity() {
             if (isTv) {
                 setupTvSideMenu()
                 if (prefs.getBoolean(C.TV_HIDE_MENU_ON_LAUNCH, false)) {
-                    // the side menu stays closed when the app starts: folded away before anything is drawn, no animation
                     val sideMenu = binding.navBarContainer
                     isTvMenuShown = false
-                    sideMenu.alpha = 0f
-                    sideMenu.visibility = View.INVISIBLE
-                    sideMenu.doOnLayout { if (!isTvMenuShown) it.translationX = -it.width.toFloat() }
+                    if (isCompactRailEnabled()) {
+                        tvMenuState.collapsed = true
+                        sideMenu.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                        sideMenu.alpha = 1f
+                        sideMenu.visibility = View.VISIBLE
+                        binding.root.findViewById<View>(R.id.tvMenuShade)?.apply {
+                            alpha = 0f
+                            visibility = View.GONE
+                        }
+                    } else {
+                        // the side menu stays closed when the app starts: folded away before anything is drawn, no animation
+                        sideMenu.alpha = 0f
+                        sideMenu.visibility = View.INVISIBLE
+                        sideMenu.doOnLayout { if (!isTvMenuShown) it.translationX = -it.width.toFloat() }
+                    }
                 }
             }
             setOnItemSelectedListener {

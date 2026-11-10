@@ -64,11 +64,95 @@ class ClipsAdapter(
             with(binding) {
                 if (item != null) {
                     val context = fragment.requireContext()
+                    val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
                     root.setOnClickListener {
-                        (fragment.activity as MainActivity).startClip(item)
+                        (fragment.activity as MainActivity).startClip(item, snapshot().items.filterNotNull())
                     }
                     root.setOnLongClickListener {
-                        showDownloadDialog(item)
+                        if (isTv) {
+                            val activity = fragment.activity as? MainActivity ?: return@setOnLongClickListener true
+                            val channelLabel = item.channelName ?: item.channelLogin.orEmpty()
+                            val actions = buildList {
+                                add(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                        context.getString(R.string.tv_multistream_watch),
+                                        R.drawable.tv_ic_play,
+                                    ) {
+                                        activity.startClip(item, snapshot().items.filterNotNull())
+                                    }
+                                )
+                                if (!item.videoId.isNullOrBlank()) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.watch_video),
+                                            R.drawable.tv_ic_video_library,
+                                        ) {
+                                            val offsetMs = item.videoOffsetSeconds?.toLong()?.times(1000L)
+                                            activity.startVideo(
+                                                com.github.andreyasadchy.xtra.model.ui.Video(
+                                                    id = item.videoId,
+                                                    channelId = item.channelId,
+                                                    channelLogin = item.channelLogin,
+                                                    channelName = item.channelName,
+                                                    channelImageURL = item.channelImageURL,
+                                                    gameId = item.gameId,
+                                                    gameSlug = item.gameSlug,
+                                                    gameName = item.gameName,
+                                                    title = item.title,
+                                                    createdAt = item.videoCreatedAt ?: item.createdAt,
+                                                    animatedPreviewURL = item.videoAnimatedPreviewURL,
+                                                ),
+                                                offset = offsetMs,
+                                                ignoreSavedPosition = offsetMs != null,
+                                            )
+                                        }
+                                    )
+                                }
+                                if (showChannel && (!item.channelLogin.isNullOrBlank() || !item.channelId.isNullOrBlank())) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.tv_open_channel, channelLabel),
+                                            R.drawable.tv_ic_person,
+                                        ) {
+                                            activity.openTvChannel(
+                                                com.github.andreyasadchy.xtra.model.ui.Stream(
+                                                    channelId = item.channelId,
+                                                    channelLogin = item.channelLogin,
+                                                    channelName = item.channelName,
+                                                    channelImageURL = item.channelImageURL,
+                                                ),
+                                                null,
+                                            )
+                                        }
+                                    )
+                                }
+                                if (showGame && !item.gameName.isNullOrBlank()) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.tv_open_category, item.gameName),
+                                            R.drawable.tv_ic_gamepad,
+                                        ) {
+                                            activity.openTvGame(item.gameId, item.gameSlug, item.gameName)
+                                        }
+                                    )
+                                }
+                                add(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                        context.getString(R.string.download),
+                                        R.drawable.tv_ic_download,
+                                    ) {
+                                        showDownloadDialog(item)
+                                    }
+                                )
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+                                activity,
+                                item.title?.trim()?.takeIf { it.isNotEmpty() } ?: channelLabel,
+                                actions,
+                            )
+                        } else {
+                            showDownloadDialog(item)
+                        }
                         true
                     }
                     fragment.requireContext().imageLoader.enqueue(

@@ -551,6 +551,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                     "2" -> getString(R.string.clips)
                     "3" -> getString(R.string.chat)
                     "4" -> getString(R.string.about)
+                    "5" -> getString(R.string.tv_schedule)
                     else -> getString(R.string.videos)
                 }
             }.attach()
@@ -748,6 +749,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                 requireArguments().putString(C.CHANNEL_IMAGE, user.profileImage)
             }
             if (user.bannerImageURL != null) {
+                bannerImage.setTag(R.id.bannerImage, user.bannerImageURL)
                 bannerImage.visibility = View.VISIBLE
                 requireContext().imageLoader.enqueue(
                     ImageRequest.Builder(requireContext()).apply {
@@ -761,6 +763,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                     userName.setShadowLayer(4f, 0f, 0f, Color.BLACK)
                 }
             } else {
+                bannerImage.setTag(R.id.bannerImage, null)
                 bannerImage.visibility = View.GONE
             }
             if (user.createdAt != null) {

@@ -492,6 +492,25 @@ class MultiStreamFragment : Fragment() {
         actions += TvActionPanel.Action(getString(R.string.tv_multistream_sound), R.drawable.tv_ic_volume) {
             showSoundPanel()
         }
+        if (tiles.size >= 2) {
+            val currentStreams = tiles.map { it.stream }
+            val groupId = com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.idOf(currentStreams)
+            if (groupId.isNotEmpty()) {
+                val saved = com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.isSaved(requireContext(), currentStreams)
+                actions += TvActionPanel.Action(
+                    getString(if (saved) R.string.tv_multistream_remove_group else R.string.tv_multistream_save_group),
+                    if (saved) R.drawable.tv_ic_delete else R.drawable.tv_ic_star,
+                ) {
+                    if (saved) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(requireContext(), groupId)
+                        android.widget.Toast.makeText(requireContext(), R.string.tv_multistream_group_removed, android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.save(requireContext(), currentStreams)
+                        android.widget.Toast.makeText(requireContext(), R.string.tv_multistream_group_saved, android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
         if (tiles.size > 2) {
             actions += TvActionPanel.Action(getString(R.string.tv_multistream_remove), R.drawable.tv_ic_delete) {
                 if (view != null && tiles.size > 2) {
@@ -514,6 +533,21 @@ class MultiStreamFragment : Fragment() {
             }
         } else null
         TvActionPanel.show(requireContext(), name, actions, slider)
+    }
+
+    /** Live alert shortcut: adds [stream] directly to the active multi-stream when a slot is free. */
+    fun addStreamFromAlert(stream: Stream): Boolean {
+        if (view == null || tiles.size >= MAX || stream.channelLogin.isNullOrBlank()) {
+            return false
+        }
+        if (tiles.any { it.stream.channelLogin.equals(stream.channelLogin, ignoreCase = true) }) {
+            return false
+        }
+        val added = addTile(stream)
+        updateChats()
+        updateCellChat()
+        added.view.requestFocus()
+        return true
     }
 
     /** 3 or 4 streams: a stream leaves, the others take the screen (back to 2: both chats with their streams). */

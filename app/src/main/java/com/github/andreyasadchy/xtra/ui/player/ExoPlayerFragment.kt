@@ -73,6 +73,15 @@ class ExoPlayerFragment : PlayerFragment() {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED && playbackService?.type == BasePlaybackService.STREAM) {
                     onTvStreamEnded()
+                } else if (
+                    playbackState == Player.STATE_ENDED &&
+                    playbackService?.type == BasePlaybackService.CLIP &&
+                    com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext()) &&
+                    requireContext().prefs().getBoolean(C.TV_CLIPS_AUTOPLAY, true)
+                ) {
+                    if ((activity as? com.github.andreyasadchy.xtra.ui.main.MainActivity)?.playNextClip(1) == true) {
+                        return
+                    }
                 }
                 binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING
                 val showPlayButton = Util.shouldShowPlayButton(playbackService?.player)

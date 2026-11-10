@@ -5,15 +5,18 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,17 +26,24 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -41,6 +51,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,14 +59,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.tv.material3.Icon
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.animation.core.animateFloat
 import androidx.tv.material3.Text
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.github.andreyasadchy.xtra.R
-import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import com.github.andreyasadchy.xtra.ui.tv.TvAmbient
 import com.github.andreyasadchy.xtra.ui.tv.TvColors
 import com.github.andreyasadchy.xtra.ui.tv.TvDialogs
+import com.github.andreyasadchy.xtra.util.prefs
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.tabs.TabLayout
@@ -74,6 +87,7 @@ object TvHeader {
 
     private class Snapshot(
         val image: android.graphics.Bitmap?,
+        val bannerUrl: String?,
         val roundImage: Boolean,
         val isSearch: Boolean,
         val searchQuery: String,
@@ -87,8 +101,8 @@ object TvHeader {
         val right: List<Action>,
     ) {
         fun same(other: Snapshot?): Boolean {
-            return other != null && other.image === image && other.isSearch == isSearch && other.searchQuery == searchQuery &&
-                    other.title == title && other.subtitle == subtitle && other.stats == stats &&
+            return other != null && other.image === image && other.bannerUrl == bannerUrl && other.isSearch == isSearch &&
+                    other.searchQuery == searchQuery && other.title == title && other.subtitle == subtitle && other.stats == stats &&
                     other.left.map { it.key + it.label } == left.map { it.key + it.label } &&
                     other.tabs.map { it.label + it.selected } == tabs.map { it.label + it.selected } &&
                     other.afterTabs.map { it.key } == afterTabs.map { it.key } &&
@@ -193,6 +207,34 @@ object TvHeader {
         }
     }
 
+    /** Registers a focus-entry callback on a Compose tab root so D-pad Down from [TvHeader] enters it cleanly. */
+    fun registerTabContentFocus(composeView: ComposeView, onFocusFirst: () -> Boolean) {
+        composeView.setTag(R.id.tvHeaderCompose, onFocusFirst)
+    }
+
+    private fun focusVisibleTabContent(root: View): Boolean {
+        TvUi.findVisibleGrid(root)?.let { grid ->
+            if (TvUi.focusFirstVisibleItem(grid)) return true
+        }
+        var focused = false
+        fun scan(v: View) {
+            if (focused || !v.isShown || v.id == R.id.tvHeaderCompose) return
+            val callback = v.getTag(R.id.tvHeaderCompose)
+            if (callback is Function0<*>) {
+                v.requestFocus()
+                if (callback.invoke() == true) {
+                    focused = true
+                    return
+                }
+            }
+            if (v is ViewGroup) {
+                for (i in 0 until v.childCount) scan(v.getChildAt(i))
+            }
+        }
+        scan(root)
+        return focused
+    }
+
     private fun screenRoot(view: View): View {
         var root: View = view
         while (true) {
@@ -224,6 +266,9 @@ object TvHeader {
         val isSearch = searchView != null
         val searchQuery = searchView?.query?.toString().orEmpty()
         val isChannel = appBar.findViewById<View>(R.id.userName) != null
+        val bannerUrl = if (isChannel) {
+            appBar.findViewById<View>(R.id.bannerImage)?.takeIf { visible(it) }?.getTag(R.id.bannerImage) as? String
+        } else null
         val imageView: ImageView? = (appBar.findViewById<ImageView?>(R.id.userImage) ?: appBar.findViewById<ImageView?>(R.id.gameImage))?.takeIf { visible(it) }
         val image = imageView?.drawable?.takeIf { it.intrinsicWidth > 0 && it.intrinsicHeight > 0 }?.let {
             try {
@@ -301,7 +346,7 @@ object TvHeader {
             val filters = sortBar.findViewById<TextView>(R.id.filtersText)?.takeIf { it.visibility == View.VISIBLE }?.text?.toString()?.takeIf { it.isNotBlank() }
             right.add(Action("sort", listOfNotNull(sortText?.let { compactSort(context, it) } ?: context.getString(R.string.sort), filters).joinToString(" · "), R.drawable.baseline_sort_black_24) { sortBar.performClick() })
         }
-        return Snapshot(image, isChannel, isSearch, searchQuery, title, subtitle, stats, left, tabs, afterTabs, right)
+        return Snapshot(image, bannerUrl, isChannel, isSearch, searchQuery, title, subtitle, stats, left, tabs, afterTabs, right)
     }
 
     /**
@@ -316,12 +361,12 @@ object TvHeader {
             order.trim().equals(ascending, true) -> "↑"
             else -> null
         }
-        fun match(res: Int): MatchResult? {
+        fun match(res: Int): MatchResult? = runCatching {
             val format = Regex.escape(context.getString(res))
                 .replace("%1\$s", "\\E(.+?)\\Q")
                 .replace("%2\$s", "\\E(.+?)\\Q")
-            return runCatching { Regex("^$format$").find(text.trim()) }.getOrNull()
-        }
+            Regex("^$format$").find(text.trim())
+        }.getOrNull()
         // "Viewers (descending)" -> "Viewers ↓"
         fun criterion(value: String): String {
             val inBrackets = Regex("^(.+?)\\s*\\((.+)\\)$").find(value.trim())
@@ -336,9 +381,9 @@ object TvHeader {
 
     @Composable
     private fun Clock() {
-        val context = androidx.compose.ui.platform.LocalContext.current
+        val context = LocalContext.current
         var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
-        androidx.compose.runtime.LaunchedEffect(Unit) {
+        LaunchedEffect(Unit) {
             while (true) {
                 kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L)
                 now = System.currentTimeMillis()
@@ -355,102 +400,160 @@ object TvHeader {
 
     @Composable
     private fun Header(snapshot: Snapshot, firstRequester: FocusRequester, searchRequester: FocusRequester, appBar: AppBarLayout) {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
         val all = snapshot.left + snapshot.tabs + snapshot.afterTabs + snapshot.right
         if (snapshot.isSearch) {
-            androidx.compose.runtime.LaunchedEffect(Unit) {
+            LaunchedEffect(Unit) {
                 runCatching { searchRequester.requestFocus() }
             }
         }
-        Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (snapshot.isSearch) {
-                    val searchView = remember(appBar) { appBar.findViewById<androidx.appcompat.widget.SearchView>(R.id.searchView) }
-                    com.github.andreyasadchy.xtra.ui.tv.TvSearchBar(
-                        initialQuery = snapshot.searchQuery,
-                        hint = appBar.context.getString(R.string.search),
-                        modifier = Modifier.weight(1f),
-                        focusRequester = searchRequester,
-                        onLeft = { findActivity(appBar)?.openTvMenu() },
-                        onDown = {
-                            val movedToPills = if (all.isNotEmpty()) {
-                                runCatching { firstRequester.requestFocus(); true }.getOrDefault(false)
-                            } else false
-                            if (!movedToPills) {
-                                TvUi.findVisibleGrid(screenRoot(appBar))?.let { grid -> TvUi.focusFirstVisibleItem(grid) }
+        LaunchedEffect(snapshot.bannerUrl, snapshot.image) {
+            when {
+                !snapshot.bannerUrl.isNullOrBlank() -> TvAmbient.updateFromUrl(context, snapshot.bannerUrl, scope)
+                snapshot.image != null -> TvAmbient.updateFromBitmap(context, snapshot.title, snapshot.image, scope)
+            }
+        }
+        Box(Modifier.fillMaxWidth()) {
+            if (!snapshot.bannerUrl.isNullOrBlank()) {
+                // Feathered channel banner: dissolves softly on all 4 edges into any ambient background
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    0.0f to Color.Transparent,
+                                    0.15f to Color.Black,
+                                    0.85f to Color.Black,
+                                    1.0f to Color.Transparent,
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    0.0f to Color.Transparent,
+                                    0.14f to Color.Black,
+                                    0.58f to Color.Black,
+                                    1.0f to Color.Transparent,
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        }
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(snapshot.bannerUrl)
+                            .crossfade(300)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.38f,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.horizontalGradient(
+                                    0.0f to Color(0xBF0E0E10),
+                                    0.55f to Color(0x590E0E10),
+                                    1.0f to Color.Transparent,
+                                )
+                            )
+                    )
+                }
+            }
+            Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (snapshot.isSearch) {
+                        val searchView = remember(appBar) { appBar.findViewById<androidx.appcompat.widget.SearchView>(R.id.searchView) }
+                        com.github.andreyasadchy.xtra.ui.tv.TvSearchBar(
+                            initialQuery = snapshot.searchQuery,
+                            hint = appBar.context.getString(R.string.search),
+                            modifier = Modifier.weight(1f),
+                            focusRequester = searchRequester,
+                            onLeft = { findActivity(appBar)?.openTvMenu() },
+                            onDown = {
+                                val movedToPills = if (all.isNotEmpty()) {
+                                    runCatching { firstRequester.requestFocus(); true }.getOrDefault(false)
+                                } else false
+                                if (!movedToPills) {
+                                    focusVisibleTabContent(screenRoot(appBar))
+                                }
+                            },
+                            onQueryChange = { searchView?.setQuery(it, false) },
+                            onSubmit = { searchView?.setQuery(it, true) },
+                        )
+                    } else {
+                        snapshot.image?.let { bitmap ->
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .then(if (snapshot.roundImage) Modifier.size(52.dp).clip(CircleShape) else Modifier.size(width = 40.dp, height = 53.dp).clip(RoundedCornerShape(6.dp)))
+                            )
+                            Spacer(Modifier.width(14.dp))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                if (snapshot.title != null) {
+                                    Text(snapshot.title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                }
+                                if (snapshot.stats != null) {
+                                    Spacer(Modifier.width(16.dp))
+                                    Text(snapshot.stats, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, modifier = Modifier.padding(bottom = 4.dp))
+                                }
+                            }
+                            if (snapshot.subtitle != null) {
+                                Text(snapshot.subtitle, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                    // the time at the right of the title line, like on the home (the title stops before it)
+                    Spacer(Modifier.width(16.dp))
+                    Clock()
+                }
+                if (all.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        Modifier.onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (event.key) {
+                                Key.DirectionDown -> focusVisibleTabContent(screenRoot(appBar))
+                                Key.DirectionUp -> {
+                                    if (snapshot.isSearch) {
+                                        runCatching { searchRequester.requestFocus() }
+                                    }
+                                    true
+                                }
+                                else -> false
                             }
                         },
-                        onQueryChange = { searchView?.setQuery(it, false) },
-                        onSubmit = { searchView?.setQuery(it, true) },
-                    )
-                } else {
-                    snapshot.image?.let { bitmap ->
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .then(if (snapshot.roundImage) Modifier.size(52.dp).clip(CircleShape) else Modifier.size(width = 40.dp, height = 53.dp).clip(RoundedCornerShape(6.dp)))
-                        )
-                        Spacer(Modifier.width(14.dp))
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            if (snapshot.title != null) {
-                                Text(snapshot.title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        all.forEachIndexed { index, action ->
+                            if (index == snapshot.left.size + snapshot.tabs.size + snapshot.afterTabs.size && snapshot.right.isNotEmpty()) {
+                                Spacer(Modifier.weight(1f))
                             }
-                            if (snapshot.stats != null) {
-                                Spacer(Modifier.width(16.dp))
-                                Text(snapshot.stats, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, modifier = Modifier.padding(bottom = 4.dp))
-                            }
-                        }
-                        if (snapshot.subtitle != null) {
-                            Text(snapshot.subtitle, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-                // the time at the right of the title line, like on the home (the title stops before it)
-                Spacer(Modifier.width(16.dp))
-                Clock()
-            }
-            if (all.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    Modifier.onPreviewKeyEvent { event ->
-                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (event.key) {
-                            Key.DirectionDown -> {
-                                // back to the list of the screen
-                                TvUi.findVisibleGrid(screenRoot(appBar))?.let { grid -> TvUi.focusFirstVisibleItem(grid) } ?: false
-                            }
-                            Key.DirectionUp -> {
-                                if (snapshot.isSearch) {
-                                    runCatching { searchRequester.requestFocus() }
+                            Pill(
+                                action = action,
+                                isTab = index >= snapshot.left.size && index < snapshot.left.size + snapshot.tabs.size,
+                                modifier = (if (index == 0) Modifier.focusRequester(firstRequester) else Modifier).onPreviewKeyEvent { event ->
+                                    // left on the first action: the side menu
+                                    if (index == 0 && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                                        findActivity(appBar)?.openTvMenu()
+                                        true
+                                    } else if (index == all.lastIndex && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
+                                        true
+                                    } else false
                                 }
-                                true
-                            }
-                            else -> false
+                            )
                         }
-                    },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    all.forEachIndexed { index, action ->
-                        if (index == snapshot.left.size + snapshot.tabs.size + snapshot.afterTabs.size && snapshot.right.isNotEmpty()) {
-                            Spacer(Modifier.weight(1f))
-                        }
-                        Pill(
-                            action = action,
-                            isTab = index >= snapshot.left.size && index < snapshot.left.size + snapshot.tabs.size,
-                            modifier = (if (index == 0) Modifier.focusRequester(firstRequester) else Modifier).onPreviewKeyEvent { event ->
-                                // left on the first action: the side menu
-                                if (index == 0 && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
-                                    findActivity(appBar)?.openTvMenu()
-                                    true
-                                } else if (index == all.lastIndex && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
-                                    true
-                                } else false
-                            }
-                        )
                     }
                 }
             }
@@ -463,10 +566,10 @@ object TvHeader {
         val focused by interaction.collectIsFocusedAsState()
         // option of the Xtra TV settings: a tab shows its page after a short stop on it, without OK
         if (isTab && !action.selected) {
-            val context = androidx.compose.ui.platform.LocalContext.current
+            val context = LocalContext.current
             val focusSwitch = remember { context.prefs().getBoolean(com.github.andreyasadchy.xtra.util.C.TV_FOCUS_SWITCH, false) }
             if (focusSwitch) {
-                androidx.compose.runtime.LaunchedEffect(focused) {
+                LaunchedEffect(focused) {
                     if (focused) {
                         kotlinx.coroutines.delay(60L)
                         action.run()

@@ -971,4 +971,25 @@
     <string name="tv_settings_section_about">關於</string>
     <string name="tv_about_github">GitHub 儲存庫（QR 碼）</string>
     <string name="tv_about_device">裝置資訊</string>
+    <string name="tv_color_dynamic">動態（跟隨直播或橫幅色彩）</string>
+    <string name="tv_home_hero">首頁精選直播橫幅</string>
+    <string name="tv_home_hero_summary">在主畫面頂部顯示精選直播大圖橫幅</string>
+    <string name="tv_compact_rail">精簡側邊欄</string>
+    <string name="tv_compact_rail_summary">在左側保留窄圖示列，而不是完全隱藏側邊選單</string>
+    <string name="tv_clips_autoplay">自動播放下一個剪輯</string>
+    <string name="tv_clips_autoplay_summary">剪輯結束時自動播放清單中的下一個剪輯，頻道 + / − 切換剪輯</string>
+    <string name="tv_featured_live">精選</string>
+    <string name="tv_channel_page">頻道</string>
+    <string name="tv_schedule">直播時間表</string>
+    <string name="tv_schedule_empty">目前沒有已排程的直播</string>
+    <string name="tv_scan_qr_link">使用手機掃碼開啟此連結</string>
+    <string name="tv_live_alert_action_hint">長按 ▲</string>
+    <string name="tv_watch_live">觀看直播</string>
+    <string name="tv_pip_open">在小視窗中開啟</string>
+    <string name="tv_multistream_new">新增多路同看…</string>
+    <string name="tv_multistream_save_group">儲存此組合</string>
+    <string name="tv_multistream_remove_group">刪除已儲存組合</string>
+    <string name="tv_multistream_group_saved">多路同看組合已儲存</string>
+    <string name="tv_multistream_group_removed">已儲存的組合已刪除</string>
+    <string name="tv_multistream_group_offline">此組合中的實況主目前皆未開台</string>
 </resources>

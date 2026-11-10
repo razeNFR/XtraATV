@@ -976,4 +976,25 @@
     <string name="tv_settings_section_about">Acerca de</string>
     <string name="tv_about_github">Repositorio de GitHub (código QR)</string>
     <string name="tv_about_device">Información del dispositivo</string>
+    <string name="tv_color_dynamic">Dinámico (sigue al directo o al banner)</string>
+    <string name="tv_home_hero">Banner destacado en inicio</string>
+    <string name="tv_home_hero_summary">Muestra un banner de directo destacado en la parte superior de la pantalla de inicio</string>
+    <string name="tv_compact_rail">Barra lateral compacta</string>
+    <string name="tv_compact_rail_summary">Mantiene una barra fina de iconos a la izquierda en lugar de ocultar todo el menú</string>
+    <string name="tv_clips_autoplay">Reproducir siguiente clip automáticamente</string>
+    <string name="tv_clips_autoplay_summary">Reproduce automáticamente el siguiente clip de la lista al terminar, Canal + / − cambia de clip</string>
+    <string name="tv_featured_live">Destacado</string>
+    <string name="tv_channel_page">Canal</string>
+    <string name="tv_schedule">Horario</string>
+    <string name="tv_schedule_empty">No hay próximos directos programados</string>
+    <string name="tv_scan_qr_link">Escanea con tu teléfono para abrir este enlace</string>
+    <string name="tv_live_alert_action_hint">Mantén ▲</string>
+    <string name="tv_watch_live">Ver en directo</string>
+    <string name="tv_pip_open">Abrir en ventana pequeña</string>
+    <string name="tv_multistream_new">Nuevo multi-stream…</string>
+    <string name="tv_multistream_save_group">Guardar este grupo</string>
+    <string name="tv_multistream_remove_group">Eliminar grupo guardado</string>
+    <string name="tv_multistream_group_saved">Grupo multi-stream guardado</string>
+    <string name="tv_multistream_group_removed">Grupo guardado eliminado</string>
+    <string name="tv_multistream_group_offline">Ninguno de los streamers de este grupo está en directo ahora</string>
 </resources>

@@ -87,6 +87,7 @@ class VideosAdapter(
                     val position = item.id?.toLongOrNull()?.let { id -> positions?.find { it.id == id }?.position }
                     val startFromBeginning = position != null && item.durationSeconds != null && item.durationSeconds > 0 && position >= (item.durationSeconds * 1000)
                             && item.thumbnail.let { it != null && !it.startsWith("https://vod-secure.twitch.tv/_404/404_processing") }
+                    val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
                     root.setOnClickListener {
                         (fragment.activity as MainActivity).startVideo(
                             item,
@@ -99,7 +100,85 @@ class VideosAdapter(
                         )
                     }
                     root.setOnLongClickListener {
-                        showDownloadDialog(item)
+                        if (isTv) {
+                            val activity = fragment.activity as? MainActivity ?: return@setOnLongClickListener true
+                            val hasProgress = position != null && position > 0L && !startFromBeginning
+                            val channelLabel = item.channelName ?: item.channelLogin.orEmpty()
+                            val actions = buildList {
+                                add(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                        context.getString(if (hasProgress) R.string.tv_resume else R.string.tv_multistream_watch),
+                                        R.drawable.tv_ic_play,
+                                    ) {
+                                        activity.startVideo(item, if (startFromBeginning) 0 else position, startFromBeginning)
+                                    }
+                                )
+                                if (hasProgress) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.tv_watch_from_start),
+                                            R.drawable.tv_ic_replay,
+                                        ) {
+                                            activity.startVideo(item, 0, ignoreSavedPosition = true)
+                                        }
+                                    )
+                                }
+                                if (!item.id.isNullOrBlank()) {
+                                    val bookmarked = bookmarks?.any { it.videoId == item.id } == true
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(if (bookmarked) R.string.remove_bookmark else R.string.add_bookmark),
+                                            R.drawable.tv_ic_pin,
+                                        ) {
+                                            saveBookmark(item)
+                                        }
+                                    )
+                                }
+                                if (showChannel && (!item.channelLogin.isNullOrBlank() || !item.channelId.isNullOrBlank())) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.tv_open_channel, channelLabel),
+                                            R.drawable.tv_ic_person,
+                                        ) {
+                                            activity.openTvChannel(
+                                                com.github.andreyasadchy.xtra.model.ui.Stream(
+                                                    channelId = item.channelId,
+                                                    channelLogin = item.channelLogin,
+                                                    channelName = item.channelName,
+                                                    channelImageURL = item.channelImageURL,
+                                                ),
+                                                null,
+                                            )
+                                        }
+                                    )
+                                }
+                                if (showGame && !item.gameName.isNullOrBlank()) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.tv_open_category, item.gameName),
+                                            R.drawable.tv_ic_gamepad,
+                                        ) {
+                                            activity.openTvGame(item.gameId, item.gameSlug, item.gameName)
+                                        }
+                                    )
+                                }
+                                add(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                        context.getString(R.string.download),
+                                        R.drawable.tv_ic_download,
+                                    ) {
+                                        showDownloadDialog(item)
+                                    }
+                                )
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+                                activity,
+                                item.title?.trim()?.takeIf { it.isNotEmpty() } ?: channelLabel,
+                                actions,
+                            )
+                        } else {
+                            showDownloadDialog(item)
+                        }
                         true
                     }
                     // TV: a video without picture yet ("?" of Twitch): the avatar of the streamer, over its blurred copy

@@ -40,6 +40,14 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_clips_autoplay"
+            android:summary="@string/tv_clips_autoplay_summary"
+            android:title="@string/tv_clips_autoplay"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -111,6 +119,22 @@
             android:key="tv_hide_menu_on_launch"
             android:summary="@string/tv_hide_menu_on_launch_summary"
             android:title="@string/tv_hide_menu_on_launch"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_compact_rail"
+            android:summary="@string/tv_compact_rail_summary"
+            android:title="@string/tv_compact_rail"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_home_hero"
+            android:summary="@string/tv_home_hero_summary"
+            android:title="@string/tv_home_hero"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 

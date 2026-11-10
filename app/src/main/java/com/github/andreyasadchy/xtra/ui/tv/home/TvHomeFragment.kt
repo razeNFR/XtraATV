@@ -118,8 +118,31 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     stopPreview()
                 }
             },
-            onStreamFocused = {
-                schedulePreview(it)
+            onStreamFocused = { stream ->
+                schedulePreview(stream)
+                stream?.let { s ->
+                    context?.let { ctx ->
+                        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromUrl(
+                            ctx,
+                            s.thumbnail?.takeUnless { s.thumbnailURL.isNullOrBlank() } ?: s.channelImage,
+                            viewLifecycleOwner.lifecycleScope,
+                        )
+                    }
+                }
+            },
+            openChannel = { stream ->
+                stopPreview()
+                (activity as? MainActivity)?.openTvChannel(stream, null)
+            },
+            onHeroFocused = { stream ->
+                stopPreview()
+                context?.let { ctx ->
+                    com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromUrl(
+                        ctx,
+                        stream.thumbnail?.takeUnless { stream.thumbnailURL.isNullOrBlank() } ?: stream.channelImage,
+                        viewLifecycleOwner.lifecycleScope,
+                    )
+                }
             },
             formatViewers = { count -> resources.getQuantityString(R.plurals.viewers, count, TwitchApiHelper.formatCount(count, truncate)) },
             formatCount = { count -> TwitchApiHelper.formatCount(count, true) },
@@ -195,6 +218,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             com.github.andreyasadchy.xtra.ui.tv.TvStats.changes.collect { loadStats() }
         }
         val followedId = if (context.prefs().getBoolean(C.UI_FOLLOW_PAGER, true)) R.id.followPagerFragment else R.id.followMediaFragment
+        val showHero = context.prefs().getBoolean(C.TV_HOME_HERO, true)
         return ComposeView(context).apply {
             id = R.id.tvHome
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
@@ -205,6 +229,24 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val games by viewModel.games.collectAsState()
                 val languageRows by viewModel.languageRows.collectAsState()
                 val accountImage by viewModel.accountImage.collectAsState()
+                val heroQueue = if (showHero) {
+                    followed?.takeIf { it.isNotEmpty() } ?: popular?.takeIf { it.isNotEmpty() } ?: emptyList()
+                } else emptyList()
+                val heroStream = heroQueue.firstOrNull()
+                androidx.compose.runtime.LaunchedEffect(heroStream?.channelLogin) {
+                    if (heroStream != null) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromUrl(
+                            context,
+                            heroStream.thumbnail?.takeUnless { heroStream.thumbnailURL.isNullOrBlank() } ?: heroStream.channelImage,
+                            viewLifecycleOwner.lifecycleScope,
+                        )
+                    }
+                }
+                androidx.compose.runtime.LaunchedEffect(followed) {
+                    followed?.let { list ->
+                        com.github.andreyasadchy.xtra.ui.tv.TvLauncherChannels.syncFollowedLive(context, list)
+                    }
+                }
                 TvTheme(accent) {
                     TvHomeScreen(
                         followed = followed?.let { TvHomeRow(getString(R.string.tv_followed_live), it, followedId, R.drawable.tv_ic_heart) },
@@ -213,6 +255,8 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         previewLogin = { previewLogin.value },
                         previewPlayer = { previewPlayer.value },
                         actions = actions,
+                        hero = heroStream,
+                        heroQueue = heroQueue,
                         resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
                         // the videos still recording (the live of a channel live now) are left out: the live is in the row above
                         videos = followedVideos?.takeIf { context.prefs().getBoolean(C.TV_HOME_FOLLOWED_VIDEOS, true) }
@@ -250,6 +294,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private fun loadLocalRows() {
         val context = context ?: return
         resumeItems.value = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.list(context)
+        com.github.andreyasadchy.xtra.ui.tv.TvLauncherChannels.syncWatchNext(context)
         loadStats()
     }
 

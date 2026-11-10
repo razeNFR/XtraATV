@@ -971,4 +971,25 @@
     <string name="tv_settings_section_about">Sobre</string>
     <string name="tv_about_github">Repositório no GitHub (QR code)</string>
     <string name="tv_about_device">Informações do dispositivo</string>
+    <string name="tv_color_dynamic">Dinâmica (segue a live ou o banner)</string>
+    <string name="tv_home_hero">Banner em destaque no início</string>
+    <string name="tv_home_hero_summary">Mostra um banner de live em destaque no topo da tela inicial</string>
+    <string name="tv_compact_rail">Barra lateral compacta</string>
+    <string name="tv_compact_rail_summary">Mantém uma barra fina de ícones à esquerda em vez de ocultar o menu completamente</string>
+    <string name="tv_clips_autoplay">Reproduzir próximo clipe automaticamente</string>
+    <string name="tv_clips_autoplay_summary">Reproduz automaticamente o próximo clipe da lista quando um termina, Canal + / − pula clipes</string>
+    <string name="tv_featured_live">Em destaque</string>
+    <string name="tv_channel_page">Canal</string>
+    <string name="tv_schedule">Agenda</string>
+    <string name="tv_schedule_empty">Nenhuma próxima live agendada</string>
+    <string name="tv_scan_qr_link">Escaneie com o celular para abrir este link</string>
+    <string name="tv_live_alert_action_hint">Segure ▲</string>
+    <string name="tv_watch_live">Assistir ao vivo</string>
+    <string name="tv_pip_open">Abrir em janela pequena</string>
+    <string name="tv_multistream_new">Novo multi-stream…</string>
+    <string name="tv_multistream_save_group">Salvar este grupo</string>
+    <string name="tv_multistream_remove_group">Remover grupo salvo</string>
+    <string name="tv_multistream_group_saved">Grupo de multi-stream salvo</string>
+    <string name="tv_multistream_group_removed">Grupo salvo removido</string>
+    <string name="tv_multistream_group_offline">Nenhum streamer deste grupo está ao vivo no momento</string>
 </resources>
