@@ -19,6 +19,7 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.request.target
+import coil3.request.transformations
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentFollowedGamesListItemBinding
 import com.github.andreyasadchy.xtra.model.ui.Game
@@ -94,7 +95,7 @@ class FollowedGamesAdapter(
                                 ImageRequest.Builder(fragment.requireContext()).apply {
                                     data(item.boxArt)
                                     crossfade(false)
-                                    coil3.request.transformations(com.github.andreyasadchy.xtra.ui.view.TvCards.BlurTransformation)
+                                    transformations(com.github.andreyasadchy.xtra.ui.view.TvCards.BlurTransformation)
                                     target(background)
                                 }.build()
                             )
