@@ -128,9 +128,10 @@ class ExoPlayerFragment : PlayerFragment() {
                         binding.playerControls.playPause.visibility = View.GONE
                     }
                 }
-                val duration = playbackService?.player?.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET } ?: 0
-                binding.playerControls.progressBar.setDuration(duration)
-                binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
+                    binding.playerControls.progressBar.setDuration(duration)
+                    binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                }
                 updateProgress()
             }
 
@@ -146,9 +147,10 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
-                val duration = playbackService?.player?.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET } ?: 0
-                binding.playerControls.progressBar.setDuration(duration)
-                binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
+                    binding.playerControls.progressBar.setDuration(duration)
+                    binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                }
                 updateProgress()
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                     if (chatFragment?.context != null) { // TODO
@@ -178,9 +180,10 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-                val duration = playbackService?.player?.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET } ?: 0
-                binding.playerControls.progressBar.setDuration(duration)
-                binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
+                    binding.playerControls.progressBar.setDuration(duration)
+                    binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                }
                 updateProgress()
             }
 
@@ -459,7 +462,7 @@ class ExoPlayerFragment : PlayerFragment() {
         return lines.joinToString("\n")
     }
 
-    override fun getCurrentPosition() = playbackService?.player?.currentPosition
+    override fun getCurrentPosition() = playbackService?.videoStartPosition ?: playbackService?.player?.currentPosition
 
     override fun getLivePictureTime(): Long? {
         val service = playbackService ?: return null
@@ -482,7 +485,16 @@ class ExoPlayerFragment : PlayerFragment() {
         playbackService?.refreshVolume()
     }
 
-    override fun getTotalDuration() = (playbackService?.player?.currentManifest as? HlsManifest)?.mediaPlaylist?.durationUs?.div(1000)
+    override fun getTotalDuration(): Long? {
+        val manifestDuration = (playbackService?.player?.currentManifest as? HlsManifest)?.mediaPlaylist?.durationUs?.div(1000)?.takeIf { it > 0 }
+        if (manifestDuration != null) return manifestDuration
+        val service = playbackService ?: return null
+        if (service.type == BasePlaybackService.VIDEO) {
+            return service.durationSeconds?.takeIf { it > 0 }?.let { it * 1000L }
+                ?: service.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.takeIf { service.videoId == null }?.let { System.currentTimeMillis() - it }?.takeIf { it > 0 }
+        }
+        return null
+    }
 
     override fun playPause() {
         playbackService?.togglePause()
@@ -518,21 +530,17 @@ class ExoPlayerFragment : PlayerFragment() {
             return
         }
         with(binding.playerControls) {
-            if (root.isVisible && !progressBar.isPressed) {
+            if (!progressBar.isPressed) {
                 val service = playbackService
                 val isVideo = service?.type == BasePlaybackService.VIDEO
                 // a video still loading (its playlist, or its first segments): the position it starts at, not 00:00
-                val startPosition = if (isVideo && service.player?.currentMediaItem == null) {
+                val startPosition = if (isVideo && (service.player?.currentMediaItem == null || service.player?.playbackState != Player.STATE_READY)) {
                     service.videoStartPosition ?: service.savedPosition
                 } else {
                     service?.videoStartPosition
                 }
                 val currentPosition = startPosition ?: service?.player?.currentPosition ?: 0
-                val totalDuration = getTotalDuration()?.takeIf { it > 0 } ?: if (isVideo) {
-                    // length of the video known before its playlist: from its details, else (VOD of a live found by its address) since the stream started
-                    service.durationSeconds?.takeIf { it > 0 }?.let { it * 1000L }
-                        ?: service.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.takeIf { service.videoId == null }?.let { System.currentTimeMillis() - it }?.takeIf { it > 0 }
-                } else null
+                val totalDuration = getTotalDuration()?.takeIf { it > 0 }
                 totalDuration?.let { maxOf(it, currentPosition) }?.let {
                     progressBar.setDuration(it)
                     duration.text = DateUtils.formatElapsedTime(it / 1000)
@@ -541,15 +549,17 @@ class ExoPlayerFragment : PlayerFragment() {
                 progressBar.setPosition(currentPosition)
                 progressBar.setBufferedPosition(playbackService?.player?.bufferedPosition ?: 0)
                 root.removeCallbacks(updateProgressAction)
-                val player = playbackService?.player
-                val delay = if (player != null && player.isPlaying) {
-                    val speed = player.playbackParameters.speed
-                    if (speed > 0f) (progressBar.preferredUpdateDelay / speed).toLong().coerceIn(200L..1000L) else 1000L
-                } else {
-                    // paused or still loading (a VOD opened at an offset is not ready yet): keep the timeline up to date anyway
-                    500L
+                if (root.isVisible) {
+                    val player = playbackService?.player
+                    val delay = if (player != null && player.isPlaying) {
+                        val speed = player.playbackParameters.speed
+                        if (speed > 0f) (progressBar.preferredUpdateDelay / speed).toLong().coerceIn(200L..1000L) else 1000L
+                    } else {
+                        // paused or still loading (a VOD opened at an offset is not ready yet): keep the timeline up to date anyway
+                        500L
+                    }
+                    root.postDelayed(updateProgressAction, delay)
                 }
-                root.postDelayed(updateProgressAction, delay)
             }
         }
     }

@@ -1103,14 +1103,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                             // the VOD being recorded gives the chat of the broadcast (its replay), found
                                             // while the video opens; none when the channel keeps no VOD
                                             val activity = requireActivity() as MainActivity
-                                            activity.dvrChatVideoId = withTimeoutOrNull(2500L) {
-                                                viewModel.findArchiveVideoId(
-                                                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                                                    TwitchApiHelper.getGQLHeaders(requireContext()),
-                                                    playbackService?.channelId,
-                                                    playbackService?.channelLogin,
-                                                    playbackService?.createdAt,
-                                                )
+                                            if (activity.dvrChatVideoId == null) {
+                                                activity.dvrChatVideoId = withTimeoutOrNull(2500L) {
+                                                    viewModel.findArchiveVideoId(
+                                                        requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                                                        TwitchApiHelper.getGQLHeaders(requireContext()),
+                                                        playbackService?.channelId,
+                                                        playbackService?.channelLogin,
+                                                        playbackService?.createdAt,
+                                                    )
+                                                }
                                             }
                                             activity.startVideo(video, offset, qualities = qualities)
                                         } else {
@@ -1119,6 +1121,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                     } else {
                                         pendingDvr = false
                                         (activity as? MainActivity)?.dvrStream = null
+                                        if (isTvLiveTimeline()) {
+                                            updateTvLiveTimeline()
+                                        }
                                         Toast.makeText(requireContext(), R.string.video_not_found, Toast.LENGTH_SHORT).show()
                                     }
                                     viewModel.unlistedVideoQualities.value = null
@@ -2067,9 +2072,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             position.visibility = View.VISIBLE
             duration.visibility = View.VISIBLE
             progressBar.setDuration(uptime)
-            progressBar.setPosition(uptime)
-            progressBar.setBufferedPosition(uptime)
-            position.text = getString(R.string.tv_live)
+            if (pendingDvr) {
+                val target = pendingDvrPosition.coerceIn(0L, uptime)
+                progressBar.setPosition(target)
+                progressBar.setBufferedPosition(target)
+                position.text = DateUtils.formatElapsedTime(target / 1000)
+            } else {
+                progressBar.setPosition(uptime)
+                progressBar.setBufferedPosition(uptime)
+                position.text = getString(R.string.tv_live)
+            }
             duration.text = DateUtils.formatElapsedTime(uptime / 1000)
         }
     }
@@ -2138,6 +2150,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             isLive -> {
                                 if (newPosition < duration - LIVE_EDGE_MS) {
                                     startTvDvr(newPosition)
+                                    updateTvLiveTimeline()
+                                    showController()
                                 } else {
                                     updateTvLiveTimeline()
                                     showController()
@@ -2219,6 +2233,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (video?.id == null || view == null || (streamStart != null && videoStart != null && kotlin.math.abs(videoStart - streamStart) > 15 * 60_000L)) {
             return null
         }
+        (activity as? MainActivity)?.dvrChatVideoId = video.id
         val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
         if (BuildConfig.DEBUG) {
             android.util.Log.d("XtraTv", "seekPreview live storyboard=$url")
@@ -2351,7 +2366,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             chatFragment?.setSingleLine(mode == 2 && prefs.getInt(C.TV_CHAT_LINES, 3) == 1)
-            chatLayout.translationY = if (playerControls.root.isVisible) getTvChatLift() else 0f
+            chatLayout.animate().cancel()
+            chatLayout.translationY = if (playerControls.root.isVisible && !controllerHiding && !hudPeek) getTvChatLift() else 0f
             // both backgrounds are opaque: the opacity chosen is the only one applied (the rounded one was already see-through,
             // 100 % gave 55 % as soon as the chat left the edges)
             chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_rounded)
@@ -2904,7 +2920,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (!prefs.getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO && prefs.getBoolean(C.TV_BUTTON_CHAT_LAYOUT, true)) {
                 chatLayoutSettings?.visibility = View.VISIBLE
                 chatLayoutSettings?.setOnClickListener {
-                    hideController()
+                    showController(force = true)
                     showChatLayoutPanel()
                 }
             }
@@ -2932,7 +2948,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     com.github.andreyasadchy.xtra.ui.tv.TvDim.setActive(!com.github.andreyasadchy.xtra.ui.tv.TvDim.active)
                 }
                 button.setOnLongClickListener {
-                    hideController()
+                    showController(force = true)
                     showTvDimPanel()
                     true
                 }
@@ -2959,14 +2975,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     (activity as? MainActivity)?.restartCurrentStream()
                 }
                 button.setOnLongClickListener {
-                    hideController()
+                    showController(force = true)
                     showTvProxyPanel()
                     true
                 }
             }
             // the small window: its button is there while it is open (see onTvControllerVisibility)
             tvPipSettings?.setOnClickListener {
-                hideController()
+                showController(force = true)
                 showTvPipPanel()
             }
             val isLoggedIn = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
@@ -2974,7 +2990,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (playbackService?.type == BasePlaybackService.STREAM && isLoggedIn && !prefs.getBoolean(C.CHAT_DISABLE, false) && prefs.getBoolean(C.TV_BUTTON_CHAT_MESSAGE, true)) {
                 chatMessage?.visibility = View.VISIBLE
                 chatMessage?.setOnClickListener {
-                    hideController()
+                    showController(force = true)
                     showChatComposer()
                 }
             }
@@ -3480,21 +3496,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             return
         }
         if (!hasFocus) {
-            if (android.os.SystemClock.elapsedRealtime() - hudOptionPressedAt < 2000L) {
+            if ((areControlsShown() && !hudPeek) || android.os.SystemClock.elapsedRealtime() - hudOptionPressedAt < 2000L) {
                 reopenHudAfterOption = true
+                binding.playerControls.root.removeCallbacks(controllerHideAction)
             }
             return
         }
         if (reopenHudAfterOption) {
             reopenHudAfterOption = false
             hudOptionPressedAt = 0L
-            binding.root.postDelayed({
-                if (view != null && isAdded && !isRemoving && isMaximized && activity?.hasWindowFocus() == true) {
-                    endHudPeek()
-                    showController(force = true)
-                    binding.playerControls.root.post { if (view != null && !binding.playerControls.root.hasFocus()) focusPrimaryControl() }
+            if (view != null && isAdded && !isRemoving && isMaximized) {
+                endHudPeek()
+                showController(force = true)
+                binding.playerControls.root.post {
+                    if (view != null && isAdded && !isRemoving && isMaximized && activity?.hasWindowFocus() == true && !binding.playerControls.root.hasFocus()) {
+                        focusPrimaryControl()
+                    }
                 }
-            }, 200L)
+            }
         }
     }
 
@@ -3615,6 +3634,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                     controllerIsAnimating = true
                                     if (view != null) {
                                         binding.playerControls.root.visibility = View.VISIBLE
+                                        updateProgress()
                                     }
                                 }
 
@@ -3632,6 +3652,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             } else {
                 binding.playerControls.root.removeCallbacks(controllerHideAction)
+                if (show) {
+                    updateProgress()
+                }
                 if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
                     binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                 }
@@ -3643,6 +3666,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 binding.playerControls.root.removeCallbacks(controllerHideAction)
                 binding.playerControls.root.alpha = 1f
                 binding.playerControls.root.visibility = View.VISIBLE
+                updateProgress()
                 if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
                     binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                 }

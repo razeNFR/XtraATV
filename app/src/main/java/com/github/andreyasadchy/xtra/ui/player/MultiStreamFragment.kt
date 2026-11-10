@@ -186,6 +186,28 @@ class MultiStreamFragment : Fragment() {
             layoutTiles()
             tiles.firstOrNull()?.view?.requestFocus()
         }
+        // statistics of the home: counted once (not multiplied by the number of tiles) for the main / focused stream
+        viewLifecycleOwner.lifecycleScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(30_000L)
+                val playing = tiles.filter { it.player.isPlaying }
+                val active = playing.find { isFocusLayout() && it.stream.channelLogin == bigLogin }
+                    ?: playing.find { it === selectedTile || it.view.hasFocus() }
+                    ?: playing.firstOrNull()
+                if (active != null) {
+                    val s = active.stream
+                    com.github.andreyasadchy.xtra.ui.tv.TvStats.addWatchTime(
+                        requireContext(),
+                        s.channelLogin,
+                        s.channelName,
+                        30_000L,
+                        s.gameId,
+                        s.gameName,
+                        s.channelImage,
+                    )
+                }
+            }
+        }
     }
 
     private fun addTile(stream: Stream): Tile {

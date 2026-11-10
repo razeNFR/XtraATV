@@ -2111,7 +2111,9 @@ class MainActivity : AppCompatActivity() {
         // at once, while the player opens
         com.github.andreyasadchy.xtra.ui.player.TvLoadTimer.start()
         com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.start(this, stream.channelLogin)
-        com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
+        if (playerFragment == null || currentStreamLogin != stream.channelLogin) {
+            com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
+        }
         if (isTv && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
             // the picture of the stream instead of a black screen while it loads: the newest one there is
             // a thumbnail Twitch has not made yet is replaced by the picture of the channel (TvThumbnails)
