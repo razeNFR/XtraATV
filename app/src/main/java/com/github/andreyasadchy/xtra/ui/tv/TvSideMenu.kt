@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -60,6 +62,10 @@ class TvMenuState {
     var selected by mutableIntStateOf(0)
     var focusedId by mutableIntStateOf(0)
     var collapsed by mutableStateOf(false)
+    /** The entry of the account, shown at the top of the menu with the picture and the name of the account logged in. */
+    var accountId by mutableIntStateOf(0)
+    var accountName by mutableStateOf<String?>(null)
+    var accountImage by mutableStateOf<String?>(null)
     internal val requesters = mutableMapOf<Int, FocusRequester>()
     /** An entry got the focus (to show its page without OK, an option of the Xtra TV settings). */
     var onFocusItem: (Int) -> Unit = {}
@@ -92,18 +98,21 @@ class TvMenuState {
 }
 
 /**
- * Leanback side menu: search at the top, the sections, then account and settings.
+ * Leanback side menu: the account at the top, search, the sections, then the settings.
  * It scrolls with the focus, up and down stop at its ends, right goes back to the screen (handled by the activity).
- * When [TvMenuState.collapsed] is true, folds into a clean 68dp icon rail instead of disappearing completely.
+ * With the icon rail of the Xtra TV settings ([TvMenuState.collapsed]) it folds into a rail of icons: the same entries,
+ * their icons stay where they are and their names slide out when it opens.
  */
 @Composable
 fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     val collapsed = state.collapsed
-    val menuWidth by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (collapsed) 68.dp else 260.dp,
-        animationSpec = androidx.compose.animation.core.tween(180),
-        label = "railWidth"
+    // 0: the rail of icons, 1: the menu open
+    val open by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (collapsed) 0f else 1f,
+        animationSpec = androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "menuOpen"
     )
+    val menuWidth = RAIL_WIDTH + (MENU_WIDTH - RAIL_WIDTH) * open
     var focusedSlot by remember { mutableIntStateOf(-1) }
     if (state.pendingFocus && !collapsed) {
         // the entries were just put back (rail unfolded): the focus as soon as one of them can take it
@@ -118,126 +127,115 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
             state.pendingFocus = false
         }
     }
-    val items = state.items
+    // the account first (its picture and its name at the top), then the entries in their order; the shortcuts under an
+    // entry only in the menu open
+    val account = state.items.find { it.id == state.accountId }
+    val items = listOfNotNull(account) + state.items.filter { it !== account && (!collapsed || !it.sub) }
     val playing = state.nowPlaying
-    val nowPlayingAt = items.indexOfFirst { it.group != TvMenuState.GROUP_TOP }.coerceAtLeast(0)
+    val nowPlayingAt = items.indexOfFirst { it !== account && it.group != TvMenuState.GROUP_TOP }.coerceAtLeast(0)
     val nowPlayingOpenRequester = remember { FocusRequester() }
     val nowPlayingCloseRequester = remember { FocusRequester() }
     val slots = buildList {
         items.forEachIndexed { index, item ->
-            if (index == nowPlayingAt && playing != null) {
+            if (index == nowPlayingAt && playing != null && !collapsed) {
                 add(nowPlayingOpenRequester)
                 add(nowPlayingCloseRequester)
             }
             add(state.requesters.getOrPut(item.id) { FocusRequester() })
         }
     }
-    Column(
+    // the entry of the section shown, for a shortcut hidden in the rail: its section
+    val activeId = if (collapsed) {
+        state.items.find { it.id == state.selected }?.let { chosen ->
+            if (chosen.sub) state.items.take(state.items.indexOf(chosen)).lastOrNull { !it.sub }?.id else chosen.id
+        } ?: state.selected
+    } else state.selected
+    val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
+    // a panel tinted with the color of accent, a little see-through; lighter as a rail, the screen shows more behind it
+    val top = androidx.compose.ui.graphics.lerp(Color(0xFF17161C), accent, 0.20f)
+    val bottom = androidx.compose.ui.graphics.lerp(Color(0xFF121116), accent, 0.05f)
+    val alpha = 0.78f + 0.16f * open
+    Box(
         Modifier
             .width(menuWidth)
             .fillMaxHeight()
-            // opaque: the texts of the screen behind no longer show through the entries
-            .background(if (collapsed) Color(0xD9141318) else Color(0xFF141318))
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.DirectionUp -> {
-                        if (focusedSlot > 0 && focusedSlot - 1 < slots.size) {
-                            runCatching { slots[focusedSlot - 1].requestFocus() }
-                        }
-                        true
-                    }
-                    Key.DirectionDown -> {
-                        if (focusedSlot in 0 until slots.lastIndex) {
-                            runCatching { slots[focusedSlot + 1].requestFocus() }
-                        }
-                        true
-                    }
-                    Key.DirectionLeft -> true
-                    else -> false
-                }
-            }
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = if (collapsed) 10.dp else 16.dp, vertical = 28.dp),
-        horizontalAlignment = if (collapsed) Alignment.CenterHorizontally else Alignment.Start
+            .clip(RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp))
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(top.copy(alpha = alpha), bottom.copy(alpha = alpha))))
     ) {
-        if (collapsed) {
-            val activeParentId = items.find { it.id == state.selected }?.let { chosen ->
-                if (chosen.sub) items.take(items.indexOf(chosen)).lastOrNull { !it.sub }?.id else chosen.id
-            } ?: state.selected
-            items.filter { !it.sub }.forEachIndexed { index, item ->
-                if (index == 1 && playing != null) {
-                    Box(
-                        Modifier
-                            .padding(vertical = 4.dp)
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0x2EE91916)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painterResource(
-                                if (playing.audioOnly) com.github.andreyasadchy.xtra.R.drawable.baseline_audiotrack_black_24
-                                else com.github.andreyasadchy.xtra.R.drawable.tv_ic_live
-                            ),
-                            contentDescription = null,
-                            tint = Color(0xFFE91916),
-                            modifier = Modifier.size(22.dp)
+        Column(
+            Modifier
+                // laid out at the width of the open menu whatever the width shown: nothing moves nor wraps while it opens
+                .wrapContentWidth(align = Alignment.Start, unbounded = true)
+                .width(MENU_WIDTH)
+                .fillMaxHeight()
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (event.key) {
+                        Key.DirectionUp -> {
+                            if (focusedSlot > 0 && focusedSlot - 1 < slots.size) {
+                                runCatching { slots[focusedSlot - 1].requestFocus() }
+                            }
+                            true
+                        }
+                        Key.DirectionDown -> {
+                            if (focusedSlot in 0 until slots.lastIndex) {
+                                runCatching { slots[focusedSlot + 1].requestFocus() }
+                            }
+                            true
+                        }
+                        Key.DirectionLeft -> true
+                        else -> false
+                    }
+                }
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = MENU_PADDING, vertical = 24.dp)
+        ) {
+            var currentSlot = 0
+            items.forEachIndexed { index, item ->
+                if (index == nowPlayingAt && playing != null) {
+                    Spacer(Modifier.height(10.dp))
+                    if (collapsed) {
+                        // the stream kept playing, as a red dot of the rail
+                        Box(
+                            Modifier
+                                .size(ENTRY_HEIGHT)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0x2EE91916)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painterResource(
+                                    if (playing.audioOnly) com.github.andreyasadchy.xtra.R.drawable.baseline_audiotrack_black_24
+                                    else com.github.andreyasadchy.xtra.R.drawable.tv_ic_live
+                                ),
+                                contentDescription = null,
+                                tint = Color(0xFFE91916),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    } else {
+                        val openSlot = currentSlot++
+                        val closeSlot = currentSlot++
+                        NowPlayingCard(
+                            playing = playing,
+                            state = state,
+                            openRequester = nowPlayingOpenRequester,
+                            closeRequester = nowPlayingCloseRequester,
+                            onOpenFocused = { focusedSlot = openSlot },
+                            onCloseFocused = { focusedSlot = closeSlot },
                         )
                     }
+                    Spacer(Modifier.height(10.dp))
                 }
-                if (index > 0 && items.filter { !it.sub }[index - 1].group != item.group) {
-                    Box(
-                        Modifier
-                            .padding(horizontal = 8.dp, vertical = 8.dp)
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(Color(0x22FFFFFF))
-                    )
+                // air between the groups (account, search, sections, settings), no line
+                if (index > 0 && !item.sub) {
+                    val previous = items[index - 1]
+                    val newGroup = previous === account || previous.group != item.group
+                    Spacer(Modifier.height(if (newGroup) 18.dp else 4.dp))
                 }
-                CollapsedRailEntry(item = item, selected = item.id == activeParentId)
-            }
-            return@Column
-        }
-        // "Now playing" between search and the sections
-        var currentSlot = 0
-        items.forEachIndexed { index, item ->
-            if (index == nowPlayingAt && playing != null) {
-                if (index > 0) {
-                    Box(
-                        Modifier
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(Color(0x26FFFFFF))
-                    )
-                }
-                val openSlot = currentSlot++
-                val closeSlot = currentSlot++
-                NowPlayingCard(
-                    playing = playing,
-                    state = state,
-                    openRequester = nowPlayingOpenRequester,
-                    closeRequester = nowPlayingCloseRequester,
-                    onOpenFocused = { focusedSlot = openSlot },
-                    onCloseFocused = { focusedSlot = closeSlot },
-                )
-            }
-            if (index > 0 && items[index - 1].group != item.group) {
-                Box(
-                    Modifier
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(Color(0x26FFFFFF))
-                )
-            }
-            val itemSlot = currentSlot++
-            val requester = state.requesters.getOrPut(item.id) { FocusRequester() }
-            MenuEntry(
-                item = item,
-                selected = item.id == state.selected,
-                modifier = Modifier
+                val itemSlot = currentSlot++
+                val requester = state.requesters.getOrPut(item.id) { FocusRequester() }
+                val entryModifier = Modifier
                     .focusRequester(requester)
                     .onFocusChanged {
                         if (it.isFocused) {
@@ -245,42 +243,80 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             state.focusedId = item.id
                             state.onFocusItem(item.id)
                         }
-                    },
-            ) {
-                onClick(item.id)
+                    }
+                if (item === account) {
+                    AccountEntry(item, state, open, entryModifier) { onClick(item.id) }
+                } else {
+                    MenuEntry(item, item.id == activeId, open, entryModifier) { onClick(item.id) }
+                }
             }
         }
     }
 }
 
+private val RAIL_WIDTH = 68.dp
+private val MENU_WIDTH = 276.dp
+private val MENU_PADDING = 12.dp
+/** Height of an entry, and width of the square that holds its icon (the entry itself in the rail). */
+private val ENTRY_HEIGHT = 44.dp
+
+/** The account at the top of the menu: its picture and its name, the entry that opens the account screen. */
 @Composable
-private fun CollapsedRailEntry(item: TvMenuItem, selected: Boolean) {
-    val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
-    Box(
-        Modifier
-            .padding(vertical = 3.dp)
-            .size(46.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) accent.copy(alpha = 0.26f) else Color.Transparent),
-        contentAlignment = Alignment.Center
+private fun AccountEntry(item: TvMenuItem, state: TvMenuState, open: Float, modifier: Modifier, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val name = state.accountName
+    val image = state.accountImage
+    val content = if (focused) TvColors.onFocused else Color.White
+    val full = MENU_WIDTH - MENU_PADDING * 2
+    Row(
+        modifier
+            .width(ENTRY_HEIGHT + (full - ENTRY_HEIGHT) * open)
+            .height(56.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (focused) TvColors.focused else Color.Transparent)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        if (selected) {
-            Box(
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .width(3.dp)
-                    .height(20.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(accent)
-            )
+        Box(Modifier.size(ENTRY_HEIGHT), contentAlignment = Alignment.Center) {
+            if (name != null && image != null) {
+                coil3.compose.AsyncImage(
+                    model = image,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                )
+            } else {
+                Box(
+                    Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (focused) Color(0x1F000000) else Color(0x26FFFFFF)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (item.icon != null) {
+                        Icon(painterResource(item.icon), contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
         }
-        if (item.icon != null) {
-            Icon(
-                painterResource(item.icon),
-                contentDescription = null,
-                tint = if (selected) accent else Color(0x99FFFFFF),
-                modifier = Modifier.size(23.dp)
+        Column(Modifier.padding(start = 10.dp, end = 12.dp).graphicsLayer { alpha = open }) {
+            Text(
+                name ?: item.label,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = content,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
+            if (name != null) {
+                Text(
+                    item.label,
+                    fontSize = 12.sp,
+                    color = if (focused) TvColors.onFocused else TvColors.secondaryText,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -377,44 +413,64 @@ private fun NowPlayingContent(
     }
 }
 
+
+/**
+ * An entry. [open] from 0 (the rail: only its icon, in a square) to 1 (the menu: its icon at the same place, its name
+ * next to it). The section shown: a pill of the accent color with a bar at its left, its icon in the accent color.
+ */
 @Composable
-private fun MenuEntry(item: TvMenuItem, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun MenuEntry(item: TvMenuItem, selected: Boolean, open: Float, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    // the section shown: a pill of the accent color, its icon in the accent color
     val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
     val background = when {
         focused -> TvColors.focused
-        selected -> accent.copy(alpha = 0.26f)
+        selected -> accent.copy(alpha = 0.22f)
         else -> Color.Transparent
     }
     val content = when {
         focused -> TvColors.onFocused
         selected -> Color.White
-        else -> Color(0xB3FFFFFF)
+        else -> Color(0xB8FFFFFF)
     }
     val iconTint = if (selected && !focused) accent else content
+    val indent = if (item.sub) 30.dp else 0.dp
+    val height = if (item.sub) 38.dp else ENTRY_HEIGHT
+    val full = MENU_WIDTH - MENU_PADDING * 2 - indent
     Row(
         modifier
-            .fillMaxWidth()
-            .padding(start = if (item.sub) 28.dp else 0.dp, top = if (item.sub) 1.dp else 3.dp, bottom = if (item.sub) 1.dp else 3.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(start = indent)
+            .width(ENTRY_HEIGHT + (full - ENTRY_HEIGHT) * open)
+            .height(height)
+            .clip(RoundedCornerShape(14.dp))
             .background(background)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = if (item.sub) 12.dp else 16.dp, vertical = if (item.sub) 8.dp else 12.dp),
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (item.icon != null) {
-            Icon(painterResource(item.icon), contentDescription = null, tint = iconTint, modifier = Modifier.size(if (item.sub) 18.dp else 24.dp))
-            Spacer(Modifier.width(if (item.sub) 12.dp else 16.dp))
+        Box(Modifier.size(width = ENTRY_HEIGHT, height = height), contentAlignment = Alignment.Center) {
+            if (selected && !focused) {
+                Box(
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .width(4.dp)
+                        .height(if (item.sub) 16.dp else 22.dp)
+                        .clip(RoundedCornerShape(topEnd = 3.dp, bottomEnd = 3.dp))
+                        .background(accent)
+                )
+            }
+            if (item.icon != null) {
+                Icon(painterResource(item.icon), contentDescription = null, tint = iconTint, modifier = Modifier.size(if (item.sub) 18.dp else 24.dp))
+            }
         }
         Text(
             item.label,
-            fontSize = if (item.sub) 15.sp else 18.sp,
+            fontSize = if (item.sub) 15.sp else 17.sp,
             fontWeight = if (selected || focused) FontWeight.SemiBold else FontWeight.Normal,
             color = content,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 8.dp, end = 12.dp).graphicsLayer { alpha = open }
         )
     }
 }

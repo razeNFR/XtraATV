@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -356,7 +357,12 @@ object TvHeader {
         appBar.findViewById<View>(R.id.sortBar)?.takeIf { visible(it) }?.let { sortBar ->
             val sortText = sortBar.findViewById<TextView>(R.id.sortText)?.text?.toString()?.takeIf { it.isNotBlank() }
             val filters = sortBar.findViewById<TextView>(R.id.filtersText)?.takeIf { it.visibility == View.VISIBLE }?.text?.toString()?.takeIf { it.isNotBlank() }
-            right.add(Action("sort", listOfNotNull(sortText?.let { compactSort(context, it) } ?: context.getString(R.string.sort), filters).joinToString(" · "), R.drawable.baseline_sort_black_24) { sortBar.performClick() })
+            // "Sort: viewers ↓ · language": what it does, then what the list is sorted by
+            val sortValue = listOfNotNull(sortText?.let { compactSort(context, it) }, filters).joinToString(" · ")
+            // French puts a space before the colon
+            val colon = if (context.resources.configuration.locales[0].language == "fr") " : " else ": "
+            val sortLabel = context.getString(R.string.sort).let { if (sortValue.isEmpty()) it else it + colon + sortValue }
+            right.add(Action("sort", sortLabel, R.drawable.baseline_sort_black_24) { sortBar.performClick() })
         }
         // a main screen of the side menu (no picture of its own): the icon of its entry in front of its title
         val titleIcon = if (image == null && !isChannel && !isSearch) sectionIcon?.invoke() else null
@@ -485,7 +491,9 @@ object TvHeader {
                 // title, at the left of the time. No line only for it, and it is reached with "up" from the tabs
                 val titleActions = if (snapshot.tabs.isNotEmpty() && snapshot.left.isEmpty() && !snapshot.isSearch) snapshot.right else emptyList()
                 val titleActionRequester = remember { FocusRequester() }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // always the height of a line with the sort on it: the page does not move when a tab that has a sort
+                // is shown after one that has none
+                Row(Modifier.heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (snapshot.isSearch) {
                         val searchView = remember(appBar) { appBar.findViewById<androidx.appcompat.widget.SearchView>(R.id.searchView) }
                         com.github.andreyasadchy.xtra.ui.tv.TvSearchBar(
@@ -729,32 +737,68 @@ object TvHeader {
                 label = "rotation"
             ).value
         } else 0f
+        if (isTab) {
+            // a tab: its name, a line of the color of accent under the one shown (wider with the focus). No pill: the
+            // tabs read as the parts of the screen, not as buttons of a phone app
+            val line by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (focused) 1f else if (action.selected) 0.6f else 0f,
+                animationSpec = androidx.compose.animation.core.tween(160),
+                label = "tabLine"
+            )
+            Column(
+                modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (focused) Color(0x24FFFFFF) else Color.Transparent)
+                    .clickable(interactionSource = interaction, indication = null) { action.run() }
+                    .padding(start = 14.dp, end = 14.dp, top = 7.dp, bottom = 5.dp)
+                    .width(androidx.compose.foundation.layout.IntrinsicSize.Max),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    action.label,
+                    fontSize = 17.sp,
+                    fontWeight = if (action.selected || focused) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (action.selected || focused) Color.White else TvColors.secondaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 360.dp)
+                )
+                Spacer(Modifier.height(5.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth(line.coerceAtLeast(0.01f))
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (line > 0.02f) TvColors.accent else Color.Transparent)
+                )
+            }
+            return
+        }
+        // the sort: what the list is sorted by, read as a text of the header; a button only with the focus
+        val quiet = action.key == "sort"
         val background = when {
             focused -> TvColors.focused
-            // the tab shown: a pill tinted with the color of accent, its name in white (the name in the color of accent
-            // over a grey pill could not be read with a dark color)
-            isTab && action.selected -> TvColors.accent.copy(alpha = 0.34f)
-            isTab -> Color.Transparent
+            quiet -> Color.Transparent
             else -> Color(0x26FFFFFF)
         }
         val content = when {
             focused -> TvColors.onFocused
-            isTab && !action.selected -> TvColors.secondaryText
+            quiet -> Color(0xD9FFFFFF)
             else -> Color.White
         }
         Row(
             modifier
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(if (quiet) 10.dp else 24.dp))
                 .background(background)
                 .clickable(interactionSource = interaction, indication = null) { action.run() }
-                .padding(horizontal = 18.dp, vertical = 9.dp),
+                .padding(horizontal = if (quiet) 12.dp else 18.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (action.icon != null) {
                 Icon(
                     painterResource(action.icon),
                     contentDescription = null,
-                    tint = if (turning && !focused) TvColors.accent else content,
+                    tint = if (turning && !focused) TvColors.accent else if (quiet && !focused) TvColors.accent else content,
                     modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = rotation }
                 )
                 if (action.label.isNotEmpty()) {
@@ -764,7 +808,7 @@ object TvHeader {
             if (action.label.isNotEmpty()) Text(
                 action.label,
                 fontSize = 15.sp,
-                fontWeight = if (isTab && action.selected || !isTab) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (quiet && !focused) FontWeight.Medium else FontWeight.SemiBold,
                 color = content,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
