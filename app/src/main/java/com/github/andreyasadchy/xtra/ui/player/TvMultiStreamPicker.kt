@@ -17,6 +17,50 @@ object TvMultiStreamPicker {
     private const val MAX = 4
 
     fun show(activity: MainActivity, current: Stream?) {
+        val groups = com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.list(activity)
+        if (groups.isEmpty()) {
+            openPicker(activity, current)
+            return
+        }
+        val actions = mutableListOf<com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action>()
+        actions += com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+            activity.getString(R.string.tv_multistream_new),
+            R.drawable.tv_ic_add,
+        ) {
+            openPicker(activity, current)
+        }
+        groups.forEach { group ->
+            actions += com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                group.label,
+                R.drawable.tv_ic_multistream,
+            ) {
+                com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.launchGroup(activity, group, current)
+            }
+        }
+        actions += com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+            activity.getString(R.string.tv_multistream_remove_group),
+            R.drawable.tv_ic_delete,
+        ) {
+            val deleteActions = groups.map { group ->
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(group.label, R.drawable.tv_ic_delete) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(activity, group.id)
+                    Toast.makeText(activity, R.string.tv_multistream_group_removed, Toast.LENGTH_SHORT).show()
+                }
+            }
+            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+                activity,
+                activity.getString(R.string.tv_multistream_remove_group),
+                deleteActions,
+            )
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+            activity,
+            activity.getString(R.string.tv_multistream),
+            actions,
+        )
+    }
+
+    private fun openPicker(activity: MainActivity, current: Stream?) {
         activity.lifecycleScope.launch {
             val gameSource = current?.takeIf { !it.gameName.isNullOrBlank() || !it.gameId.isNullOrBlank() || !it.gameSlug.isNullOrBlank() }?.let {
                 { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.game(activity, it.gameId, it.gameSlug, it.gameName) }

@@ -118,30 +118,119 @@ class BookmarksAdapter(
                     val durationSeconds = item.duration?.let { duration -> duration.toIntOrNull() ?: TwitchApiHelper.getDuration(duration) }
                     val position = item.videoId?.toLongOrNull()?.let { id -> positions?.find { it.id == id }?.position }
                     val ignore = ignored?.find { it.userId == item.userId } != null
+                    val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
+                    val bookmarkVideo = Video(
+                        id = item.videoId,
+                        channelId = item.userId,
+                        channelLogin = item.userLogin,
+                        channelName = item.userName,
+                        channelImageURL = item.userLogo,
+                        gameId = item.gameId,
+                        gameSlug = item.gameSlug,
+                        gameName = item.gameName,
+                        title = item.title,
+                        thumbnailURL = item.thumbnail,
+                        createdAt = item.createdAt,
+                        durationSeconds = durationSeconds,
+                        type = item.type,
+                        animatedPreviewURL = item.animatedPreviewURL,
+                    )
                     root.setOnClickListener {
                         (fragment.activity as MainActivity).startVideo(
-                            Video(
-                                id = item.videoId,
-                                channelId = item.userId,
-                                channelLogin = item.userLogin,
-                                channelName = item.userName,
-                                channelImageURL = item.userLogo,
-                                gameId = item.gameId,
-                                gameSlug = item.gameSlug,
-                                gameName = item.gameName,
-                                title = item.title,
-                                thumbnailURL = item.thumbnail,
-                                createdAt = item.createdAt,
-                                durationSeconds = durationSeconds,
-                                type = item.type,
-                                animatedPreviewURL = item.animatedPreviewURL,
-                            ),
+                            bookmarkVideo,
                             position,
                             false
                         )
                     }
                     root.setOnLongClickListener {
-                        deleteVideo(item)
+                        if (isTv) {
+                            val activity = fragment.activity as? MainActivity ?: return@setOnLongClickListener true
+                            val hasProgress = position != null && position > 0L
+                            val channelLabel = item.userName ?: item.userLogin.orEmpty()
+                            val actions = buildList {
+                                add(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                        context.getString(if (hasProgress) R.string.tv_resume else R.string.tv_multistream_watch),
+                                        R.drawable.tv_ic_play,
+                                    ) {
+                                        activity.startVideo(bookmarkVideo, position, false)
+                                    }
+                                )
+                                if (hasProgress) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.tv_watch_from_start),
+                                            R.drawable.tv_ic_replay,
+                                        ) {
+                                            activity.startVideo(bookmarkVideo, 0, ignoreSavedPosition = true)
+                                        }
+                                    )
+                                }
+                                if (!item.videoId.isNullOrBlank()) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.refresh),
+                                            R.drawable.tv_ic_refresh,
+                                        ) {
+                                            refreshVideo(item.videoId)
+                                        }
+                                    )
+                                }
+                                if (!item.userLogin.isNullOrBlank() || !item.userId.isNullOrBlank()) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.tv_open_channel, channelLabel),
+                                            R.drawable.tv_ic_person,
+                                        ) {
+                                            activity.openTvChannel(
+                                                com.github.andreyasadchy.xtra.model.ui.Stream(
+                                                    channelId = item.userId,
+                                                    channelLogin = item.userLogin,
+                                                    channelName = item.userName,
+                                                    channelImageURL = item.userLogo,
+                                                ),
+                                                null,
+                                            )
+                                        }
+                                    )
+                                }
+                                if (!item.gameName.isNullOrBlank()) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.tv_open_category, item.gameName),
+                                            R.drawable.tv_ic_gamepad,
+                                        ) {
+                                            activity.openTvGame(item.gameId, item.gameSlug, item.gameName)
+                                        }
+                                    )
+                                }
+                                if (!item.videoId.isNullOrBlank()) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(R.string.download),
+                                            R.drawable.tv_ic_download,
+                                        ) {
+                                            showDownloadDialog(bookmarkVideo)
+                                        }
+                                    )
+                                }
+                                add(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                        context.getString(R.string.remove_bookmark),
+                                        R.drawable.tv_ic_delete,
+                                    ) {
+                                        deleteVideo(item)
+                                    }
+                                )
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+                                activity,
+                                item.title?.trim()?.takeIf { it.isNotEmpty() } ?: channelLabel,
+                                actions,
+                            )
+                        } else {
+                            deleteVideo(item)
+                        }
                         true
                     }
                     fragment.requireContext().imageLoader.enqueue(
@@ -264,6 +353,11 @@ class BookmarksAdapter(
                         gameName.visibility = View.GONE
                     }
                     options.setOnClickListener { it ->
+                        if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                            // TV: the 3 dots open the panel of the actions, like OK held on the card
+                            root.performLongClick()
+                            return@setOnClickListener
+                        }
                         PopupMenu(context, it).apply {
                             inflate(R.menu.bookmark_item)
                             if (!item.videoId.isNullOrBlank()) {

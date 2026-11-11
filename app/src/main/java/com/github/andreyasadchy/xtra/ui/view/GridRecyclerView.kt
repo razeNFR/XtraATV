@@ -148,6 +148,13 @@ class GridRecyclerView : RecyclerView {
                     stream,
                     listOfNotNull(options?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(context.getString(R.string.tv_more_options), R.drawable.baseline_more_vert_black_24) { it.performClick() } })
                 )
+            } else if (adapter is com.github.andreyasadchy.xtra.ui.common.VideosAdapter || adapter is com.github.andreyasadchy.xtra.ui.common.ClipsAdapter ||
+                adapter is com.github.andreyasadchy.xtra.ui.saved.bookmarks.BookmarksAdapter
+            ) {
+                // videos, clips, bookmarks: their own panel of actions (the same as on the home), not the small menu
+                if (!card.performLongClick()) {
+                    TvCards.showMenu(card)
+                }
             } else {
                 TvCards.showMenu(card)
             }
@@ -263,6 +270,11 @@ class GridRecyclerView : RecyclerView {
     private var cardTextScale = 1f
 
     init {
+        if (isTv) {
+            // the cards that go under the header fade away, they are not cut by a straight line
+            isVerticalFadingEdgeEnabled = true
+            setFadingEdgeLength((36 * resources.displayMetrics.density).toInt())
+        }
         addOnChildAttachStateChangeListener(object : OnChildAttachStateChangeListener {
             override fun onChildViewAttachedToWindow(view: View) {
                 if (isTv) {
@@ -272,6 +284,72 @@ class GridRecyclerView : RecyclerView {
 
             override fun onChildViewDetachedFromWindow(view: View) {}
         })
+    }
+
+    /** TV: the fade under the header only once the list has scrolled, never at the bottom of the screen. */
+    override fun getTopFadingEdgeStrength(): Float {
+        return if (!isTv) super.getTopFadingEdgeStrength() else if (canScrollVertically(-1)) 1f else 0f
+    }
+
+    override fun getBottomFadingEdgeStrength(): Float {
+        return if (!isTv) super.getBottomFadingEdgeStrength() else 0f
+    }
+
+    /**
+     * TV: the fade starts at the very top of the list, right under the header. The system starts it after the top
+     * padding of the list, but the cards are drawn in that padding too (not clipped): they were cut by a straight line
+     * under the header, and the fade came lower, over the middle of the cards.
+     */
+    override fun isPaddingOffsetRequired(): Boolean {
+        return isTv || super.isPaddingOffsetRequired()
+    }
+
+    override fun getTopPaddingOffset(): Int {
+        return if (isTv) -paddingTop else super.getTopPaddingOffset()
+    }
+
+    /** Original colors of the texts of the cards, given back when a card no longer takes the color of accent. */
+    private val cardTextColors = java.util.WeakHashMap<android.widget.TextView, android.content.res.ColorStateList>()
+
+    /**
+     * TV: the name of the category of each card in the color of accent, like on the home; the name of the streamer
+     * when the card shows no category (the lists of a category). Called again when the dynamic ambiance changes color.
+     */
+    fun tintCards() {
+        if (!isTv || com.github.andreyasadchy.xtra.ui.tv.TvAccent.current == null) {
+            return
+        }
+        val accent = com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
+        for (i in 0 until childCount) {
+            val card = getChildAt(i)
+            val game = card.findViewById<android.widget.TextView>(R.id.gameName)
+            val user = card.findViewById<android.widget.TextView>(R.id.username)
+            if (game == null || user == null) {
+                // a card of a category or of a channel: its name is its title, it keeps its color
+                continue
+            }
+            val gameShown = game.visibility == View.VISIBLE && !game.text.isNullOrBlank()
+            fun tint(text: android.widget.TextView?, on: Boolean) {
+                text ?: return
+                if (on) {
+                    if (!cardTextColors.containsKey(text)) {
+                        cardTextColors[text] = text.textColors
+                    }
+                    if (text.currentTextColor != accent) {
+                        text.setTextColor(accent)
+                    }
+                } else {
+                    cardTextColors.remove(text)?.let { text.setTextColor(it) }
+                }
+            }
+            tint(game, gameShown)
+            tint(user, !gameShown)
+        }
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        super.onLayout(changed, l, t, r, b)
+        tintCards()
     }
 
     private fun scaleCardTexts(card: View) {

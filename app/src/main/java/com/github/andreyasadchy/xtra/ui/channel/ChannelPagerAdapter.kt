@@ -4,6 +4,7 @@ import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.github.andreyasadchy.xtra.ui.channel.about.ChannelAboutFragment
 import com.github.andreyasadchy.xtra.ui.channel.clips.ChannelClipsFragment
+import com.github.andreyasadchy.xtra.ui.channel.schedule.ChannelScheduleFragment
 import com.github.andreyasadchy.xtra.ui.channel.suggestions.ChannelSuggestionsFragment
 import com.github.andreyasadchy.xtra.ui.channel.videos.ChannelVideosFragment
 import com.github.andreyasadchy.xtra.ui.chat.ChatFragment
@@ -27,6 +28,7 @@ class ChannelPagerAdapter(
                 streamId = args.streamId
             )
             "4" -> ChannelAboutFragment().apply { arguments = fragment.arguments }
+            "5" -> ChannelScheduleFragment().apply { arguments = fragment.arguments }
             else -> ChannelVideosFragment().apply { arguments = fragment.arguments }
         }
     }

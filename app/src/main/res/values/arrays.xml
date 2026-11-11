@@ -418,6 +418,7 @@
         <item>disabled</item>
     </string-array>
     <string-array name="tvAmbientColorEntries">
+        <item>@string/tv_color_dynamic</item>
         <item>@string/tv_color_violet</item>
         <item>@string/tv_color_blue</item>
         <item>@string/tv_color_cyan</item>
@@ -436,6 +437,7 @@
     </string-array>
 
     <string-array name="tvAmbientColorValues" translatable="false">
+        <item>dynamic</item>
         <item>violet</item>
         <item>blue</item>
         <item>cyan</item>

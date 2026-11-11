@@ -971,4 +971,25 @@
     <string name="tv_settings_section_about">アプリについて</string>
     <string name="tv_about_github">GitHub リポジトリ (QR コード)</string>
     <string name="tv_about_device">デバイス情報</string>
+    <string name="tv_color_dynamic">ダイナミック（配信やバナーに連動）</string>
+    <string name="tv_home_hero">注目ライブバナー</string>
+    <string name="tv_home_hero_summary">ホーム画面の上部に注目ライブ配信の大型バナーを表示します</string>
+    <string name="tv_compact_rail">コンパクトなサイドバー</string>
+    <string name="tv_compact_rail_summary">サイドメニューを完全に隠さず、左側に細いアイコンバーを残します</string>
+    <string name="tv_clips_autoplay">次のクリップを自動再生</string>
+    <string name="tv_clips_autoplay_summary">クリップ終了時にリストの次のクリップを自動再生します（チャンネル + / − で切り替え）</string>
+    <string name="tv_featured_live">注目</string>
+    <string name="tv_channel_page">チャンネル</string>
+    <string name="tv_schedule">スケジュール</string>
+    <string name="tv_schedule_empty">予定されている配信はありません</string>
+    <string name="tv_scan_qr_link">スマートフォンで読み取ってリンクを開く</string>
+    <string name="tv_live_alert_action_hint">▲ 長押し</string>
+    <string name="tv_watch_live">ライブを見る</string>
+    <string name="tv_pip_open">小窓で開く</string>
+    <string name="tv_multistream_new">新しいマルチストリーム…</string>
+    <string name="tv_multistream_save_group">このグループを保存</string>
+    <string name="tv_multistream_remove_group">保存したグループを削除</string>
+    <string name="tv_multistream_group_saved">マルチストリームのグループを保存しました</string>
+    <string name="tv_multistream_group_removed">保存したグループを削除しました</string>
+    <string name="tv_multistream_group_offline">このグループで現在ライブ中の配信者はいません</string>
 </resources>

@@ -84,6 +84,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     private var isChatTouched = false
     private var showChatStatus = false
     private var hasRecentEmotes = false
+    private var latestRecentEmoteNames = emptyList<String>()
     private var messagingEnabled = false
 
     private var autoCompleteAdapter: AutoCompleteAdapter<Any>? = null
@@ -255,6 +256,13 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     }
                     if (enableMessaging) {
                         viewModel.loadRecentEmotes()
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                                viewModel.recentEmotes.collectLatest { list ->
+                                    latestRecentEmoteNames = list.mapNotNull { it.name }
+                                }
+                            }
+                        }
                         viewLifecycleOwner.lifecycleScope.launch {
                             repeatOnLifecycle(Lifecycle.State.STARTED) {
                                 viewModel.hasRecentEmotes.collectLatest {
@@ -1055,6 +1063,31 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         }
         binding.editText.setText(text)
         return sendMessage()
+    }
+
+    /** Returns grouped emotes (Recent, 7TV/BTTV/FFZ, Twitch) for the TV ChatComposer emote picker. */
+    fun getTvEmoteGroups(): List<Pair<String, List<Emote>>> {
+        val ctx = context ?: return emptyList()
+        val personal = viewModel.userSTVEmoteSetId?.let { setId ->
+            synchronized(viewModel.personalEmoteSets) {
+                viewModel.personalEmoteSets[setId]?.toList()
+            }
+        }.orEmpty()
+        val thirdParty = personal + synchronized(viewModel.thirdPartyEmotes) {
+            viewModel.thirdPartyEmotes.toList()
+        }
+        val twitch = synchronized(viewModel.userEmotes) {
+            viewModel.userEmotes.toList()
+        }
+        val combined = (twitch + thirdParty).distinctBy { it.name }
+        val recent = latestRecentEmoteNames.mapNotNull { name ->
+            combined.find { it.name == name }
+        }
+        return buildList {
+            if (recent.isNotEmpty()) add(ctx.getString(R.string.recent_emotes) to recent)
+            if (thirdParty.isNotEmpty()) add("7TV/BTTV/FFZ" to thirdParty.distinctBy { it.name })
+            if (twitch.isNotEmpty()) add("Twitch" to twitch.distinctBy { it.name })
+        }
     }
 
     private fun sendMessage(replyId: String? = null): Boolean {

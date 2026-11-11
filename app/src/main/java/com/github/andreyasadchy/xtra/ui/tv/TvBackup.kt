@@ -492,22 +492,36 @@ object TvBackup {
     }
 }
 
-/** Compact ISO/IEC 18004 QR code generator (Byte mode, Version 3, ECC Level L — up to 53 bytes). */
-internal object QrCode {
+/** Compact ISO/IEC 18004 QR code generator (Byte mode, Versions 3..6, ECC Level L — up to 134 bytes). */
+object QrCode {
 
     fun encode(text: String, sizePx: Int): Bitmap {
-        val data = text.toByteArray(Charsets.ISO_8859_1)
-        // Version 3 (29x29), ECC Level L: 55 data codewords, 15 EC codewords (total 70)
-        val version = 3
-        val dim = 17 + 4 * version // 29
-        val totalDataCodewords = 55
-        val ecCodewords = 15
+        val raw = text.toByteArray(Charsets.ISO_8859_1)
+        val trimmed = if (raw.size > 134 && text.contains('?')) {
+            text.substringBefore('?').toByteArray(Charsets.ISO_8859_1)
+        } else raw
+        val data = if (trimmed.size > 134) trimmed.copyOf(134) else trimmed
+
+        // Select smallest QR Version (3..6, ECC Level L) that fits [data] + 4-bit mode + 8-bit length
+        val version: Int
+        val numBlocks: Int
+        val blockDataLen: Int
+        val blockEcLen: Int
+        when {
+            data.size <= 53 -> { version = 3; numBlocks = 1; blockDataLen = 55; blockEcLen = 15 }
+            data.size <= 78 -> { version = 4; numBlocks = 1; blockDataLen = 80; blockEcLen = 20 }
+            data.size <= 106 -> { version = 5; numBlocks = 1; blockDataLen = 108; blockEcLen = 26 }
+            else -> { version = 6; numBlocks = 2; blockDataLen = 68; blockEcLen = 18 }
+        }
+        val dim = 17 + 4 * version
+        val totalDataCodewords = numBlocks * blockDataLen
+        val totalEcCodewords = numBlocks * blockEcLen
 
         val bits = ArrayList<Int>(totalDataCodewords * 8)
         fun pushBits(value: Int, count: Int) {
             for (i in count - 1 downTo 0) bits.add((value ushr i) and 1)
         }
-        // Byte mode (0100) + 8-bit length
+        // Byte mode (0100) + 8-bit length (valid for versions 1..9)
         pushBits(0b0100, 4)
         pushBits(data.size, 8)
         for (b in data) pushBits(b.toInt() and 0xFF, 8)
@@ -520,14 +534,30 @@ internal object QrCode {
             padIdx++
         }
 
-        val codewords = IntArray(totalDataCodewords + ecCodewords)
+        val allData = IntArray(totalDataCodewords)
         for (i in 0 until totalDataCodewords) {
             var v = 0
             for (b in 0 until 8) v = (v shl 1) or bits[i * 8 + b]
-            codewords[i] = v
+            allData[i] = v
         }
-        val ec = reedSolomon(codewords.copyOfRange(0, totalDataCodewords), ecCodewords)
-        System.arraycopy(ec, 0, codewords, totalDataCodewords, ecCodewords)
+        val codewords = IntArray(totalDataCodewords + totalEcCodewords)
+        if (numBlocks == 1) {
+            System.arraycopy(allData, 0, codewords, 0, totalDataCodewords)
+            val ec = reedSolomon(allData, blockEcLen)
+            System.arraycopy(ec, 0, codewords, totalDataCodewords, blockEcLen)
+        } else {
+            val dataBlocks = Array(numBlocks) { b ->
+                allData.copyOfRange(b * blockDataLen, (b + 1) * blockDataLen)
+            }
+            val ecBlocks = Array(numBlocks) { b -> reedSolomon(dataBlocks[b], blockEcLen) }
+            var idx = 0
+            for (i in 0 until blockDataLen) {
+                for (b in 0 until numBlocks) codewords[idx++] = dataBlocks[b][i]
+            }
+            for (i in 0 until blockEcLen) {
+                for (b in 0 until numBlocks) codewords[idx++] = ecBlocks[b][i]
+            }
+        }
 
         val modules = Array(dim) { IntArray(dim) }
         val isFunction = Array(dim) { BooleanArray(dim) }
@@ -561,8 +591,8 @@ internal object QrCode {
             setFunction(i, 6, i % 2 == 0)
         }
 
-        // Alignment pattern for Version 3 at (22, 22)
-        val alignCenter = 22
+        // Alignment pattern for Versions 2..6 at (dim - 7, dim - 7)
+        val alignCenter = dim - 7
         for (dr in -2..2) {
             for (dc in -2..2) {
                 val dark = kotlin.math.abs(dr) == 2 || kotlin.math.abs(dc) == 2 || (dr == 0 && dc == 0)

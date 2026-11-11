@@ -87,6 +87,7 @@ class VideosAdapter(
                     val position = item.id?.toLongOrNull()?.let { id -> positions?.find { it.id == id }?.position }
                     val startFromBeginning = position != null && item.durationSeconds != null && item.durationSeconds > 0 && position >= (item.durationSeconds * 1000)
                             && item.thumbnail.let { it != null && !it.startsWith("https://vod-secure.twitch.tv/_404/404_processing") }
+                    val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
                     root.setOnClickListener {
                         (fragment.activity as MainActivity).startVideo(
                             item,
@@ -99,7 +100,38 @@ class VideosAdapter(
                         )
                     }
                     root.setOnLongClickListener {
-                        showDownloadDialog(item)
+                        if (isTv) {
+                            // the same panel as on the home, with the bookmark and the download of the lists
+                            val activity = fragment.activity as? MainActivity ?: return@setOnLongClickListener true
+                            com.github.andreyasadchy.xtra.ui.tv.TvVideoActions.show(
+                                activity,
+                                item,
+                                position,
+                                finished = startFromBeginning,
+                                showChannel = showChannel,
+                                showGame = showGame,
+                                extras = buildList {
+                                    if (!item.id.isNullOrBlank()) {
+                                        val bookmarked = bookmarks?.any { it.videoId == item.id } == true
+                                        add(
+                                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                                context.getString(if (bookmarked) R.string.remove_bookmark else R.string.add_bookmark),
+                                                R.drawable.tv_ic_pin,
+                                            ) {
+                                                saveBookmark(item)
+                                            }
+                                        )
+                                    }
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(context.getString(R.string.download), R.drawable.tv_ic_download) {
+                                            showDownloadDialog(item)
+                                        }
+                                    )
+                                },
+                            )
+                        } else {
+                            showDownloadDialog(item)
+                        }
                         true
                     }
                     // TV: a video without picture yet ("?" of Twitch): the avatar of the streamer, over its blurred copy
@@ -252,6 +284,11 @@ class VideosAdapter(
                         gameName.visibility = View.GONE
                     }
                     options.setOnClickListener { it ->
+                        if (isTv) {
+                            // TV: the 3 dots open the panel of the actions of the video, like OK held on the card
+                            root.performLongClick()
+                            return@setOnClickListener
+                        }
                         PopupMenu(context, it).apply {
                             inflate(R.menu.media_item)
                             if (!item.id.isNullOrBlank()) {

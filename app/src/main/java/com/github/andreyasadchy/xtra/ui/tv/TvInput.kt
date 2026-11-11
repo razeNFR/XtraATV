@@ -411,15 +411,26 @@ fun TvSearchBar(
     }
 }
 
-/** Chat message box at the top of the screen: field, mic and send. */
+/** Chat message box at the top of the screen: field, emotes, mic and send. */
 @Composable
-fun ChatComposer(title: String, hint: String, sendLabel: String, onSend: (String) -> Unit) {
+fun ChatComposer(
+    title: String,
+    hint: String,
+    sendLabel: String,
+    emoteGroups: List<Pair<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>> = emptyList(),
+    onSend: (String) -> Unit,
+) {
     var text by remember { mutableStateOf("") }
+    var showEmotes by remember { mutableStateOf(false) }
+    var selectedTab by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var hoveredEmote by remember { mutableStateOf<String?>(null) }
     val voice = remember { VoiceState() }
     val input = rememberVoiceInput(voice) {
         text = it
     }
     val requester = remember { FocusRequester() }
+    val emoteBtnRequester = remember { FocusRequester() }
+    val context = LocalContext.current
     Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.TopCenter) {
         androidx.compose.foundation.layout.Column(
             Modifier
@@ -445,16 +456,142 @@ fun ChatComposer(title: String, hint: String, sendLabel: String, onSend: (String
                 }
                 if (text.isNotEmpty()) {
                     Spacer(Modifier.width(10.dp))
-                    TvIconButton(R.drawable.tv_ic_close, LocalContext.current.getString(R.string.delete)) {
+                    TvIconButton(R.drawable.tv_ic_close, context.getString(R.string.delete)) {
                         text = ""
                         runCatching { requester.requestFocus() }
                     }
                 }
-                Spacer(Modifier.width(14.dp))
+                if (emoteGroups.isNotEmpty()) {
+                    Spacer(Modifier.width(10.dp))
+                    TvIconButton(
+                        icon = R.drawable.tv_ic_mood,
+                        contentDescription = context.getString(R.string.room_emote),
+                        modifier = Modifier.focusRequester(emoteBtnRequester),
+                        active = showEmotes,
+                    ) {
+                        showEmotes = !showEmotes
+                        if (!showEmotes) hoveredEmote = null
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
                 VoiceButton(voice, input, onStart = { text = "" })
                 Spacer(Modifier.width(10.dp))
                 TvIconButton(R.drawable.ic_send_black_24dp, sendLabel) {
                     onSend(text)
+                }
+            }
+            if (showEmotes && emoteGroups.isNotEmpty()) {
+                val safeTab = selectedTab.coerceIn(0, emoteGroups.lastIndex)
+                val activeEmotes = emoteGroups[safeTab].second
+                val rows = remember(activeEmotes) { activeEmotes.chunked(9) }
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                ) {
+                    Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                        emoteGroups.forEachIndexed { idx, (tabLabel, _) ->
+                            val tabInteraction = remember { MutableInteractionSource() }
+                            val tabFocused by tabInteraction.collectIsFocusedAsState()
+                            val isSelected = idx == safeTab
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        when {
+                                            tabFocused -> TvColors.focused
+                                            isSelected -> MaterialTheme.colorScheme.primary
+                                            else -> Color(0x26FFFFFF)
+                                        }
+                                    )
+                                    .clickable(interactionSource = tabInteraction, indication = null) {
+                                        selectedTab = idx
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = tabLabel,
+                                    fontSize = 13.sp,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                    color = if (tabFocused) TvColors.onFocused else Color.White,
+                                )
+                            }
+                        }
+                    }
+                    if (!hoveredEmote.isNullOrBlank()) {
+                        Text(
+                            text = hoveredEmote!!,
+                            fontSize = 13.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            color = TvColors.secondaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(216.dp),
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                ) {
+                    items(rows.size, key = { "emote_row_${safeTab}_$it" }) { rowIdx ->
+                        val row = rows[rowIdx]
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                        ) {
+                            row.forEach { emote ->
+                                val code = emote.name ?: return@forEach
+                                val url = emote.url2x ?: emote.url1x ?: emote.url3x ?: emote.url4x
+                                val cellInteraction = remember { MutableInteractionSource() }
+                                val cellFocused by cellInteraction.collectIsFocusedAsState()
+                                LaunchedEffect(cellFocused) {
+                                    if (cellFocused) hoveredEmote = code
+                                }
+                                val scale by animateFloatAsState(if (cellFocused) 1.12f else 1f, label = "emoteScale")
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp)
+                                        .graphicsLayer { scaleX = scale; scaleY = scale }
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (cellFocused) TvColors.focused else Color(0x18FFFFFF))
+                                        .clickable(interactionSource = cellInteraction, indication = null) {
+                                            val prefix = if (text.isEmpty() || text.endsWith(" ")) "" else " "
+                                            text = "$text$prefix$code "
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (!url.isNullOrBlank()) {
+                                        coil3.compose.AsyncImage(
+                                            model = remember(url) {
+                                                coil3.request.ImageRequest.Builder(context)
+                                                    .data(url)
+                                                    .build()
+                                            },
+                                            contentDescription = code,
+                                            modifier = Modifier.size(34.dp),
+                                        )
+                                    } else {
+                                        Text(
+                                            text = code,
+                                            fontSize = 11.sp,
+                                            color = if (cellFocused) TvColors.onFocused else Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                            repeat(9 - row.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -1,25 +1,70 @@
 package com.github.andreyasadchy.xtra.ui.player
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
+import android.text.format.DateUtils
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.TextView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import androidx.tv.material3.Text
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.github.andreyasadchy.xtra.model.ui.Game
+import com.github.andreyasadchy.xtra.ui.tv.FocusRow
+import com.github.andreyasadchy.xtra.ui.tv.SidePanel
+import com.github.andreyasadchy.xtra.ui.tv.TvColors
+import com.github.andreyasadchy.xtra.ui.tv.TvDialogs
+import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
+import androidx.compose.ui.graphics.Color as ComposeColor
 
 /**
  * TV: thumbnail shown above the timeline while seeking, cut from the storyboard sprite sheets Twitch generates for every video.
@@ -36,6 +81,7 @@ class TvSeekPreview(
     private class Board(val width: Int, val height: Int, val cols: Int, val rows: Int, val interval: Double, val images: List<String>)
 
     private var board: Board? = null
+    private var chapters: List<Game> = emptyList()
     private val sprites = HashMap<String, Bitmap>()
     private val loading = HashSet<String>()
     private var lastPosition = -1L
@@ -55,6 +101,23 @@ class TvSeekPreview(
     private val imageView = ImageView(container.context).apply {
         scaleType = ImageView.ScaleType.FIT_XY
     }
+    private val chapterLabel = TextView(container.context).apply {
+        background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(Color.TRANSPARENT, 0xE0000000.toInt()),
+        )
+        setTextColor(Color.WHITE)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        typeface = Typeface.DEFAULT_BOLD
+        maxLines = 1
+        ellipsize = TextUtils.TruncateAt.END
+        val hPad = (8 * density).toInt()
+        val topPad = (10 * density).toInt()
+        val botPad = (5 * density).toInt()
+        setPadding(hPad, topPad, hPad, botPad)
+        elevation = 2 * density
+        visibility = View.GONE
+    }
     private val previewWidth = (240 * density).toInt()
     private val previewHeight = (135 * density).toInt()
     private val hideAction = Runnable { hide() }
@@ -64,7 +127,15 @@ class TvSeekPreview(
 
     init {
         frame.addView(imageView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        frame.addView(
+            chapterLabel,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
+        )
         container.addView(frame, ViewGroup.LayoutParams(previewWidth, previewHeight))
+    }
+
+    fun setChapters(list: List<Game>?) {
+        chapters = list?.filter { (it.vodPosition ?: -1) >= 0 }?.sortedBy { it.vodPosition } ?: emptyList()
     }
 
     private var infoUrl: String? = null
@@ -269,6 +340,13 @@ class TvSeekPreview(
 
     /** Above the timeline, following the scrubber. */
     private fun place(position: Long, duration: Long) {
+        val activeChapter = chapters.lastOrNull { (it.vodPosition ?: 0).toLong() <= position }?.name?.takeIf { it.isNotBlank() }
+        if (activeChapter != null) {
+            chapterLabel.text = activeChapter
+            chapterLabel.visibility = View.VISIBLE
+        } else {
+            chapterLabel.visibility = View.GONE
+        }
         val barLocation = IntArray(2)
         val containerLocation = IntArray(2)
         timeBar.getLocationInWindow(barLocation)
@@ -307,5 +385,93 @@ class TvSeekPreview(
         container.removeCallbacks(hideAction)
         container.removeCallbacks(releaseAction)
         releaseVideo()
+    }
+
+    companion object {
+        fun showChaptersPanel(
+            context: Context,
+            title: String,
+            chapters: List<Game>,
+            currentPositionMs: Long,
+            onSeek: (Long) -> Unit,
+        ) {
+            if (chapters.isEmpty()) return
+            val activeIndex = chapters.indexOfLast { (it.vodPosition ?: 0).toLong() <= currentPositionMs }.coerceAtLeast(0)
+            TvDialogs.show(context) { dismiss ->
+                SidePanel(title = title, width = 460.dp) {
+                    val focusRequester = remember { FocusRequester() }
+                    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (activeIndex - 2).coerceAtLeast(0))
+                    val localCtx = LocalContext.current
+                    LazyColumn(state = listState) {
+                        itemsIndexed(chapters) { index, game ->
+                            val isActive = index == activeIndex
+                            val startSec = (game.vodPosition ?: 0).toLong() / 1000L
+                            val timeText = DateUtils.formatElapsedTime(startSec)
+                            val durText = game.vodDuration?.div(1000)?.takeIf { it > 0 }?.toString()?.let {
+                                TwitchApiHelper.getDurationFromSeconds(localCtx, it)
+                            }
+                            FocusRow(
+                                modifier = if (index == activeIndex) Modifier.focusRequester(focusRequester) else Modifier,
+                                onClick = {
+                                    dismiss()
+                                    onSeek((game.vodPosition ?: 0).toLong())
+                                },
+                            ) { focused ->
+                                val titleColor = if (focused) TvColors.onFocused else ComposeColor.White
+                                val subColor = if (focused) TvColors.onFocused.copy(alpha = 0.78f) else TvColors.secondaryText
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (!game.boxArt.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = remember(game.boxArt) {
+                                                ImageRequest.Builder(localCtx)
+                                                    .data(game.boxArt)
+                                                    .crossfade(true)
+                                                    .build()
+                                            },
+                                            contentDescription = game.name,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .width(38.dp)
+                                                .height(50.dp)
+                                                .clip(RoundedCornerShape(6.dp)),
+                                        )
+                                        Spacer(Modifier.width(14.dp))
+                                    }
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            text = game.name ?: title,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = titleColor,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            text = if (!durText.isNullOrBlank()) "$timeText · $durText" else timeText,
+                                            fontSize = 13.sp,
+                                            color = subColor,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    if (isActive) {
+                                        Spacer(Modifier.width(10.dp))
+                                        Box(
+                                            Modifier
+                                                .size(9.dp)
+                                                .background(if (focused) TvColors.onFocused else TvColors.accent, CircleShape)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    LaunchedEffect(Unit) {
+                        runCatching { focusRequester.requestFocus() }
+                    }
+                }
+            }
+        }
     }
 }

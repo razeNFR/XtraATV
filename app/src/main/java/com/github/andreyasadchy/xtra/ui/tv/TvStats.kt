@@ -416,5 +416,6 @@ object TvResumeHistory {
         }
         prefs(context).edit { putString(ITEMS, array.toString()) }
         changes.value = System.nanoTime()
+        TvLauncherChannels.syncWatchNext(context)
     }
 }

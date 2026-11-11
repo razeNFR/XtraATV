@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -52,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
@@ -61,7 +63,10 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.input.key.Key
@@ -77,6 +82,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.github.andreyasadchy.xtra.ui.tv.tvTopFade
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -97,6 +103,11 @@ class TvHomeActions(
     val onStreamFocused: (Stream?) -> Unit,
     /** The card of a stream lost the focus: its preview stops (the focus may go to a card without preview). */
     val onStreamUnfocused: (Stream) -> Unit = {},
+    val openChannel: (Stream) -> Unit = {},
+    val onHeroFocused: (Stream) -> Unit = {},
+    val onHeroUnfocused: (Stream) -> Unit = {},
+    /** A card with a picture that is not a stream got the focus (a video, a category), for the dynamic ambiance. */
+    val onPictureFocused: (Any) -> Unit = {},
     val formatViewers: (Int) -> String,
     /** The count alone ("7.1K"), for the small cards. */
     val formatCount: (Int) -> String = { it.toString() },
@@ -161,6 +172,8 @@ fun TvHomeScreen(
     previewLogin: () -> String?,
     previewPlayer: () -> ExoPlayer?,
     actions: TvHomeActions,
+    hero: Stream? = null,
+    heroQueue: List<Stream> = emptyList(),
     resume: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>? = null,
     /** Latest videos of the followed channels, under "Continue watching". */
     videos: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video>? = null,
@@ -193,27 +206,32 @@ fun TvHomeScreen(
     ) + rows.filter { it.first.startsWith("language_") }
     // the first row is still loading: the focus waits on its first grey card, then goes to its first stream (or to the
     // first stream of the next row when it has none)
-    val firstIsGhost = slots.firstOrNull()?.second == null && slots.isNotEmpty()
+    val firstIsGhost = hero == null && slots.firstOrNull()?.second == null && slots.isNotEmpty()
     val ghostCard = remember { FocusRequester() }
     // the focus was put on a grey card by the home (not by a key): it follows the rows as they come
     var onGhost by remember { mutableStateOf(false) }
     // a key was pressed since: the focus is where the user put it, nothing moves it any more (an automatic move of the
     // focus, a grey card leaving the screen, does not count)
     var userMoved by remember { mutableStateOf(false) }
+    val hasHero = hero != null
+    val heroOffset = if (hasHero) 1 else 0
     val hasResume = resume != null && resume.items.isNotEmpty()
     val hasVideos = videos != null && videos.items.isNotEmpty()
     val hasGames = games != null && games.items.isNotEmpty()
-    val hasCards = rows.isNotEmpty() || hasResume || hasVideos || hasGames
-    val resumeIndex = slots.size
+    val hasCards = hasHero || rows.isNotEmpty() || hasResume || hasVideos || hasGames
+    val resumeIndex = heroOffset + slots.size
     val videosIndex = resumeIndex + if (hasResume) 1 else 0
     val statsIndex = videosIndex + if (hasVideos) 1 else 0
     val gamesIndex = statsIndex + if (stats != null) 1 else 0
     val allRows = buildList {
+        if (hasHero) {
+            add(HomeRowInfo(0, "hero", listOf("watch", "channel")))
+        }
         slots.forEachIndexed { rowIndex, (key, row) ->
             if (row != null && row.items.isNotEmpty()) {
                 val keys = row.items.mapIndexed { idx, s -> s.channelLogin ?: "stream_$idx" } +
                     if (row.seeAllId != 0) listOf("seeAll") else emptyList()
-                add(HomeRowInfo(rowIndex, key, keys))
+                add(HomeRowInfo(heroOffset + rowIndex, key, keys))
             }
         }
         if (hasResume) {
@@ -334,6 +352,20 @@ fun TvHomeScreen(
                     return@LaunchedEffect
                 }
             }
+            // the card could not take the focus (too far in its row, the row changed): the first card of the same row,
+            // the focus stays on the row it was on and is never lost
+            val firstKey = rowInfo.itemKeys.firstOrNull()
+            if (firstKey != null && firstKey != itemKey) {
+                runCatching { rowStates[rowInfo.key]?.scrollToItem(0) }
+                repeat(10) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (runCatching { cardRequesters["${rowInfo.key}/$firstKey"]?.requestFocus() }.getOrNull() == true) {
+                        focusedItem = rowInfo.rowIndex
+                        done()
+                        return@LaunchedEffect
+                    }
+                }
+            }
         }
         listState.scrollToItem(0)
         allRows.firstOrNull()?.let { rowStates[it.key]?.scrollToItem(0) }
@@ -399,6 +431,8 @@ fun TvHomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                // the rows that go under the bar of the top fade away
+                .tvTopFade { listState.canScrollBackward }
                 .drawWithContent {
                     drawContent()
                     val progress = sweep.value
@@ -406,7 +440,7 @@ fun TvHomeScreen(
                         val band = size.width * 0.35f
                         val x = -band + progress * (size.width + band * 2)
                         drawRect(
-                            androidx.compose.ui.graphics.Brush.linearGradient(
+                            Brush.linearGradient(
                                 listOf(Color.Transparent, Color.White.copy(alpha = 0.27f), Color.Transparent),
                                 start = androidx.compose.ui.geometry.Offset(x, 0f),
                                 end = androidx.compose.ui.geometry.Offset(x + band, 0f),
@@ -430,26 +464,45 @@ fun TvHomeScreen(
             contentPadding = PaddingValues(top = 0.dp, bottom = 240.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            if (hasHero) {
+                item(key = "hero") {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = 0; bringRow(0) } }) {
+                        HeroBanner(
+                            stream = hero!!,
+                            queue = heroQueue,
+                            actions = actions,
+                            previewLogin = previewLogin,
+                            previewPlayer = previewPlayer,
+                            firstRequester = firstCard,
+                            watchRequester = cardRequesters.getOrPut("hero/watch") { FocusRequester() },
+                            channelRequester = cardRequesters.getOrPut("hero/channel") { FocusRequester() },
+                            onFocusedPill = { idx, itemKey -> focus.rememberCard("hero", itemKey, idx) },
+                            onSelectedPill = { idx, itemKey -> focus.rememberCard("hero", itemKey, idx, force = true) },
+                        )
+                    }
+                }
+            }
             slots.forEachIndexed { rowIndex, (key, row) ->
+                val listIndex = heroOffset + rowIndex
                 if (row == null) {
                     // still loading: grey cards in its place, like YouTube; the first one takes the focus when this row
                     // is the first of the home
                     item(key = "${key}_skeleton") {
                         SkeletonRow(
                             actions,
-                            if (rowIndex == 0) {
+                            if (listIndex == 0) {
                                 Modifier
                                     .focusRequester(ghostCard)
-                                    .onFocusChanged { if (it.hasFocus) { if (!userMoved) onGhost = true; focusedItem = rowIndex } }
+                                    .onFocusChanged { if (it.hasFocus) { if (!userMoved) onGhost = true; focusedItem = listIndex } }
                             } else null,
                         )
                     }
                     return@forEachIndexed
                 }
                 item(key = key) {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = rowIndex; bringRow(rowIndex) } }) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
                         StreamRow(
-                            row, previewLogin, previewPlayer, actions, if (rowIndex == 0) firstCard else null,
+                            row, previewLogin, previewPlayer, actions, if (listIndex == 0) firstCard else null,
                             state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
                             cardModifier = { idx, itemKey ->
                                 Modifier
@@ -470,7 +523,7 @@ fun TvHomeScreen(
                 item(key = "resume") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = resumeIndex; bringRow(resumeIndex) } }) {
                         ResumeRow(
-                            resume!!, actions, if (slots.isEmpty()) firstCard else null,
+                            resume!!, actions, if (!hasHero && slots.isEmpty()) firstCard else null,
                             state = rowStates.getOrPut("resume") { androidx.compose.foundation.lazy.LazyListState() },
                             cardModifier = { idx, itemKey ->
                                 Modifier
@@ -491,7 +544,7 @@ fun TvHomeScreen(
                 item(key = "followed_videos") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = videosIndex; bringRow(videosIndex) } }) {
                         VideoRow(
-                            videos!!, actions, if (slots.isEmpty() && !hasResume) firstCard else null,
+                            videos!!, actions, if (!hasHero && slots.isEmpty() && !hasResume) firstCard else null,
                             state = rowStates.getOrPut("followed_videos") { androidx.compose.foundation.lazy.LazyListState() },
                             cardModifier = { idx, itemKey ->
                                 Modifier
@@ -527,7 +580,7 @@ fun TvHomeScreen(
                 item(key = "games") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = gamesIndex; bringRow(gamesIndex) } }) {
                         GameRow(
-                            games!!, actions, if (slots.isEmpty() && !hasResume && !hasVideos) firstCard else null,
+                            games!!, actions, if (!hasHero && slots.isEmpty() && !hasResume && !hasVideos) firstCard else null,
                             state = rowStates.getOrPut("games") { androidx.compose.foundation.lazy.LazyListState() },
                             cardModifier = { idx, itemKey ->
                                 Modifier
@@ -545,6 +598,296 @@ fun TvHomeScreen(
             }
         }
     }
+    }
+}
+
+/**
+ * Top spotlight ("À la une") blended seamlessly into the ambient background via multi-edge DstIn alpha feathering
+ * (zero hard edges or dark cutout boxes).
+ */
+@Composable
+private fun HeroBanner(
+    stream: Stream,
+    queue: List<Stream>,
+    actions: TvHomeActions,
+    previewLogin: () -> String?,
+    previewPlayer: () -> ExoPlayer?,
+    firstRequester: FocusRequester,
+    watchRequester: FocusRequester,
+    channelRequester: FocusRequester,
+    onFocusedPill: (Int, String) -> Unit,
+    onSelectedPill: (Int, String) -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
+    val isFavorite = favorites.any { it.login == stream.channelLogin }
+    var heroFocused by remember { mutableStateOf(false) }
+    // the focus as the banner reports it: going from one of its buttons to the other may report it lost for an instant,
+    // the video must not start again for that
+    var heroHasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(heroHasFocus) {
+        if (heroHasFocus) {
+            if (!heroFocused) {
+                // not for a focus that only goes through the banner (coming back from the side menu to a card)
+                kotlinx.coroutines.delay(120L)
+                heroFocused = true
+                actions.onHeroFocused(stream)
+            }
+        } else if (heroFocused) {
+            kotlinx.coroutines.delay(200L)
+            heroFocused = false
+            actions.onHeroUnfocused(stream)
+        }
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(256.dp)
+            .onFocusChanged { heroHasFocus = it.hasFocus }
+    ) {
+        // High-res backdrop on the right, alpha-feathered on all four edges so it melts into any ambient background
+        Box(
+            Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxWidth(0.72f)
+                .fillMaxHeight()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            0.00f to Color.Transparent,
+                            0.20f to Color(0x45FFFFFF),
+                            0.46f to Color(0xD9FFFFFF),
+                            0.70f to Color.White,
+                            0.90f to Color(0xD9FFFFFF),
+                            1.00f to Color.Transparent,
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0.00f to Color.Transparent,
+                            0.14f to Color(0xCCFFFFFF),
+                            0.34f to Color.White,
+                            0.64f to Color(0xD9FFFFFF),
+                            0.88f to Color(0x40FFFFFF),
+                            1.00f to Color.Transparent,
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
+                }
+        ) {
+            AsyncImage(
+                model = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.90f }
+            )
+            // the stream itself over its picture while the banner has the focus (no sound), cropped like the picture
+            val player = previewPlayer()
+            if (heroFocused && player != null && previewLogin() != null && previewLogin() == stream.channelLogin) {
+                Box(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
+                    AndroidView(
+                        factory = { context -> TextureView(context) },
+                        update = { player.setVideoTextureView(it) },
+                        onRelease = { player.clearVideoTextureView(it) },
+                        modifier = Modifier
+                            .wrapContentHeight(unbounded = true)
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .graphicsLayer { alpha = 0.90f }
+                    )
+                }
+            }
+        }
+
+        // Stream metadata and action pills on the left
+        Column(
+            Modifier
+                .align(Alignment.CenterStart)
+                .fillMaxWidth(0.60f)
+                .padding(start = 14.dp, end = 20.dp, top = 8.dp, bottom = 10.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFFE91916))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(Modifier.size(6.dp).background(Color.White, CircleShape))
+                    Spacer(Modifier.width(5.dp))
+                    Text("LIVE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                }
+                Text(
+                    context.getString(R.string.tv_featured_live),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                )
+                stream.viewerCount?.let { count ->
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0x33000000))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(painterResource(R.drawable.tv_ic_eye), contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(actions.formatViewers(count), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xEBFFFFFF), maxLines = 1)
+                    }
+                }
+                actions.uptime(stream)?.let { up ->
+                    Text(
+                        up,
+                        fontSize = 12.sp,
+                        color = TvColors.secondaryText,
+                        maxLines = 1,
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(
+                    model = stream.channelImage,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF26252C))
+                )
+                Spacer(Modifier.width(12.dp))
+                if (isFavorite) {
+                    Icon(
+                        painterResource(R.drawable.tv_ic_star),
+                        contentDescription = null,
+                        tint = Color(0xFFFACC15),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(
+                    stream.channelName ?: stream.channelLogin ?: "",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (!stream.title.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stream.title?.trim().orEmpty(),
+                    fontSize = 15.sp,
+                    color = Color(0xE6FFFFFF),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (!stream.gameName.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stream.gameName.orEmpty(),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                HeroActionPill(
+                    icon = R.drawable.tv_ic_play,
+                    label = context.getString(R.string.watch_live),
+                    primary = true,
+                    modifier = Modifier
+                        .leftEdge(0, actions.openMenu)
+                        .focusRequester(firstRequester)
+                        .focusRequester(watchRequester)
+                        .onFocusChanged { if (it.isFocused) onFocusedPill(0, "watch") },
+                    onClick = {
+                        onSelectedPill(0, "watch")
+                        actions.openStream(stream, queue.ifEmpty { listOf(stream) })
+                    },
+                    onLongClick = {
+                        onSelectedPill(0, "watch")
+                        actions.showActions(stream)
+                    },
+                )
+                HeroActionPill(
+                    icon = R.drawable.tv_ic_person,
+                    label = context.getString(R.string.tv_channel_page),
+                    primary = false,
+                    modifier = Modifier
+                        .focusRequester(channelRequester)
+                        .onFocusChanged { if (it.isFocused) onFocusedPill(1, "channel") }
+                        .onPreviewKeyEvent { event ->
+                            event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight
+                        },
+                    onClick = {
+                        onSelectedPill(1, "channel")
+                        actions.openChannel(stream)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroActionPill(
+    icon: Int,
+    label: String,
+    primary: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    var longPressed by remember { mutableStateOf(false) }
+    val bg = when {
+        focused -> TvColors.focused
+        primary -> MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)
+        else -> Color(0x26FFFFFF)
+    }
+    val fg = if (focused) TvColors.onFocused else Color.White
+    Row(
+        modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(bg)
+            .onPreviewKeyEvent { event ->
+                val isSelect = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                if (!isSelect || onLongClick == null) return@onPreviewKeyEvent false
+                when {
+                    event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 1 -> {
+                        longPressed = true
+                        onLongClick()
+                        true
+                    }
+                    event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount > 1 -> true
+                    event.type == KeyEventType.KeyUp && longPressed -> {
+                        longPressed = false
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(icon), contentDescription = null, tint = fg, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1)
     }
 }
 
@@ -871,7 +1214,8 @@ private fun GameRow(
                 GameCard(
                     game = game,
                     actions = actions,
-                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey)),
+                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey))
+                        .onFocusChanged { if (it.hasFocus) actions.onPictureFocused(game) },
                     onClick = {
                         onCardSelected(index, itemKey)
                         actions.openGame(game)
@@ -1162,7 +1506,8 @@ private fun ResumeRow(
                         width = cardWidth,
                         item = item,
                         actions = actions,
-                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, item.id)),
+                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, item.id))
+                            .onFocusChanged { if (it.hasFocus) actions.onPictureFocused(item) },
                         onSelected = { onCardSelected(index, item.id) },
                     )
                 }
@@ -1200,7 +1545,8 @@ private fun VideoRow(
                         width = cardWidth,
                         video = item,
                         actions = actions,
-                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey)),
+                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey))
+                            .onFocusChanged { if (it.hasFocus) actions.onPictureFocused(item) },
                         onSelected = { onCardSelected(index, itemKey) },
                     )
                 }

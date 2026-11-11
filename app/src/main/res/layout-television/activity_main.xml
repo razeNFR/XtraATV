@@ -47,6 +47,7 @@
             android:layout_height="match_parent" />
 
         <View
+            android:id="@+id/tvMenuShade"
             android:layout_width="96dp"
             android:layout_height="match_parent"
             android:background="@drawable/tv_menu_shade" />

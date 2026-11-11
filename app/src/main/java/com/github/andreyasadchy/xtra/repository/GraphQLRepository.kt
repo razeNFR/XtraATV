@@ -105,8 +105,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -1847,5 +1852,68 @@ class GraphQLRepository(
             }
         }.toString()
         json.decodeFromString<ErrorResponse>(sendPersistedQuery(networkLibrary, headers, body))
+    }
+
+    data class ScheduleSegmentItem(
+        val id: String,
+        val startAt: String?,
+        val endAt: String?,
+        val title: String?,
+        val categoryId: String?,
+        val categorySlug: String?,
+        val categoryName: String?,
+        val boxArtUrl: String?,
+    )
+
+    suspend fun loadChannelSchedule(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        channelId: String?,
+        channelLogin: String?,
+    ): List<ScheduleSegmentItem> = withContext(Dispatchers.IO) {
+        val useId = !channelId.isNullOrBlank()
+        if (!useId && channelLogin.isNullOrBlank()) return@withContext emptyList()
+        val body = buildJsonObject {
+            put(
+                "query",
+                if (useId) {
+                    "query(\$id: ID!) { user(id: \$id, lookupType: ALL) { channel { schedule { segments { id startAt endAt title categories { id slug displayName boxArtURL(width: 144, height: 192) } } } } } }"
+                } else {
+                    "query(\$login: String!) { user(login: \$login, lookupType: ALL) { channel { schedule { segments { id startAt endAt title categories { id slug displayName boxArtURL(width: 144, height: 192) } } } } } }"
+                }
+            )
+            putJsonObject("variables") {
+                if (useId) put("id", channelId) else put("login", channelLogin)
+            }
+        }.toString()
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val segments = json.parseToJsonElement(raw).obj()
+                ?.get("data").obj()
+                ?.get("user").obj()
+                ?.get("channel").obj()
+                ?.get("schedule").obj()
+                ?.get("segments").arr()
+                ?: return@runCatching emptyList()
+            segments.mapNotNull { el ->
+                val seg = el.obj() ?: return@mapNotNull null
+                val id = seg["id"].str() ?: return@mapNotNull null
+                val cat = seg["categories"].arr()?.firstOrNull().obj()
+                ScheduleSegmentItem(
+                    id = id,
+                    startAt = seg["startAt"].str(),
+                    endAt = seg["endAt"].str(),
+                    title = seg["title"].str(),
+                    categoryId = cat?.get("id").str(),
+                    categorySlug = cat?.get("slug").str(),
+                    categoryName = cat?.get("displayName").str(),
+                    boxArtUrl = cat?.get("boxArtURL").str(),
+                )
+            }
+        }.getOrDefault(emptyList())
     }
 }

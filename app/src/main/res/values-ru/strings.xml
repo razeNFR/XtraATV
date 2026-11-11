@@ -971,4 +971,25 @@
     <string name="tv_settings_section_about">О приложении</string>
     <string name="tv_about_github">Репозиторий GitHub (QR-код)</string>
     <string name="tv_about_device">Информация об устройстве</string>
+    <string name="tv_color_dynamic">Динамический (по стриму или баннеру)</string>
+    <string name="tv_home_hero">Рекомендуемый баннер на главной</string>
+    <string name="tv_home_hero_summary">Показывает большой баннер со стримом в верхней части главного экрана</string>
+    <string name="tv_compact_rail">Компактная боковая панель</string>
+    <string name="tv_compact_rail_summary">Оставляет узкую панель со значками слева вместо полного скрытия бокового меню</string>
+    <string name="tv_clips_autoplay">Автовоспроизведение следующего клипа</string>
+    <string name="tv_clips_autoplay_summary">Автоматически включает следующий клип из списка по окончании текущего, Канал + / − переключает клипы</string>
+    <string name="tv_featured_live">В центре внимания</string>
+    <string name="tv_channel_page">Канал</string>
+    <string name="tv_schedule">Расписание</string>
+    <string name="tv_schedule_empty">Запланированных трансляций нет</string>
+    <string name="tv_scan_qr_link">Отсканируйте телефоном, чтобы открыть ссылку</string>
+    <string name="tv_live_alert_action_hint">Удерж. ▲</string>
+    <string name="tv_watch_live">Смотреть эфир</string>
+    <string name="tv_pip_open">Открыть в малом окне</string>
+    <string name="tv_multistream_new">Новый мультистрим…</string>
+    <string name="tv_multistream_save_group">Сохранить эту группу</string>
+    <string name="tv_multistream_remove_group">Удалить сохранённую группу</string>
+    <string name="tv_multistream_group_saved">Группа мультистрима сохранена</string>
+    <string name="tv_multistream_group_removed">Сохранённая группа удалена</string>
+    <string name="tv_multistream_group_offline">Сейчас никто из стримеров этой группы не в эфире</string>
 </resources>

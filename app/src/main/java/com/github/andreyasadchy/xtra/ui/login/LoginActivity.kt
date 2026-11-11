@@ -78,6 +78,145 @@ class LoginActivity : AppCompatActivity() {
     private var startPageLogin: (() -> Unit)? = null
 
     companion object {
+
+        /**
+         * TV: the remote on the page where Twitch asks to authorize the app. Up / down scroll the page like a finger
+         * would, whatever part of it scrolls; a link or button that is on the screen is selected on the way (a frame
+         * drawn over it), OK presses it. Nothing here depends on the names Twitch gives to its buttons, nor on what
+         * the page does with the focus.
+         */
+        private val TV_AUTHORIZE_JS = """
+            (function() {
+                if (window.__xtraTv) return;
+                var frame = document.createElement('div');
+                frame.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;display:none;border:4px solid #9147ff;' +
+                    'border-radius:8px;box-shadow:0 0 0 5px rgba(145,71,255,.35);box-sizing:border-box';
+                document.documentElement.appendChild(frame);
+                var current = null;
+                var lastFocused = null;
+                function shown(e) {
+                    var r = e.getBoundingClientRect();
+                    var c = getComputedStyle(e);
+                    return r.width > 0 && r.height > 0 && c.visibility !== 'hidden' && c.display !== 'none';
+                }
+                function onScreen(e) {
+                    var r = e.getBoundingClientRect();
+                    return r.top >= 0 && r.bottom <= window.innerHeight;
+                }
+                function items() {
+                    var all = document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[role=button]');
+                    var list = [];
+                    for (var i = 0; i < all.length; i++) {
+                        var e = all[i];
+                        if (!e.disabled && shown(e)) list.push(e);
+                    }
+                    return list;
+                }
+                function scrollers(step) {
+                    var list = [];
+                    var all = document.querySelectorAll('*');
+                    for (var i = 0; i < all.length; i++) {
+                        var e = all[i];
+                        // the blocks of the page that scroll by themselves (the page as a whole is the window, below)
+                        if (e !== document.documentElement && e !== document.body && e.scrollHeight > e.clientHeight + 8) {
+                            var o = getComputedStyle(e).overflowY;
+                            if (o === 'auto' || o === 'scroll') {
+                                var room = step > 0 ? e.scrollTop + e.clientHeight < e.scrollHeight - 2 : e.scrollTop > 0;
+                                if (room) list.push(e);
+                            }
+                        }
+                    }
+                    var height = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0);
+                    var y = window.pageYOffset || 0;
+                    if (step > 0 ? y + window.innerHeight < height - 2 : y > 0) list.push(window);
+                    return list;
+                }
+                function place() {
+                    if (current && current.isConnected && shown(current)) {
+                        var r = current.getBoundingClientRect();
+                        frame.style.display = 'block';
+                        frame.style.left = (r.left - 6) + 'px';
+                        frame.style.top = (r.top - 6) + 'px';
+                        frame.style.width = (r.width + 12) + 'px';
+                        frame.style.height = (r.height + 12) + 'px';
+                    } else {
+                        frame.style.display = 'none';
+                    }
+                }
+                setInterval(place, 60);
+                function select(e, bring) {
+                    current = e;
+                    lastFocused = e;
+                    try { e.focus({preventScroll: true}); } catch (x) {}
+                    if (bring) e.scrollIntoView({block: 'center', inline: 'nearest'});
+                    place();
+                }
+                window.__xtraTv = {
+                    move: function(step) {
+                        var list = items();
+                        // the page (or left / right) moved the focus itself: from there
+                        var active = document.activeElement;
+                        if (active && active !== lastFocused && list.indexOf(active) >= 0) {
+                            current = active;
+                            lastFocused = active;
+                        }
+                        var index = current ? list.indexOf(current) : -1;
+                        var next = null;
+                        if (index >= 0) {
+                            next = list[index + step] || null;
+                        } else {
+                            // nothing selected yet: the first one on the screen, in the direction asked
+                            for (var i = step > 0 ? 0 : list.length - 1; i >= 0 && i < list.length; i += step) {
+                                var r = list[i].getBoundingClientRect();
+                                if (step > 0 ? r.top >= 0 : r.bottom <= window.innerHeight) { next = list[i]; break; }
+                            }
+                        }
+                        if (next && onScreen(next)) {
+                            select(next, false);
+                            return;
+                        }
+                        var s = scrollers(step);
+                        if (s.length) {
+                            var dy = step * Math.round(window.innerHeight * 0.4);
+                            for (var j = 0; j < s.length; j++) {
+                                try { s[j].scrollBy({top: dy, behavior: 'smooth'}); } catch (x) {
+                                    if (s[j] === window) window.scrollBy(0, dy); else s[j].scrollTop += dy;
+                                }
+                            }
+                            return;
+                        }
+                        // the end of what scrolls: the next one all the same, brought on the screen
+                        if (next) select(next, true);
+                    },
+                    /** The page has a field to type in: its keys are left to it. */
+                    form: function() {
+                        var all = document.querySelectorAll('input,textarea');
+                        for (var i = 0; i < all.length; i++) {
+                            var e = all[i];
+                            var type = (e.type || 'text').toLowerCase();
+                            if (['hidden', 'submit', 'button', 'checkbox', 'radio', 'image', 'reset'].indexOf(type) < 0 && !e.disabled && shown(e)) return true;
+                        }
+                        // a captcha (shown in a frame of its own, out of reach from here) too
+                        var frames = document.querySelectorAll('iframe');
+                        for (var j = 0; j < frames.length; j++) {
+                            var r = frames[j].getBoundingClientRect();
+                            if (r.width > 60 && r.height > 60 && shown(frames[j])) return true;
+                        }
+                        return false;
+                    },
+                    click: function() {
+                        var e = current && current.isConnected ? current : document.activeElement;
+                        if (!e || e === document.body) return;
+                        var tag = (e.tagName || '').toLowerCase();
+                        if (tag === 'input' && ['submit', 'button', 'checkbox', 'radio'].indexOf(e.type) < 0 || tag === 'textarea' || tag === 'select') {
+                            e.focus();
+                        } else {
+                            e.click();
+                        }
+                    }
+                };
+            })();
+        """.trimIndent()
         /** The tokens were refused by Twitch: all of them are removed before the page opens. */
         const val EXTRA_EXPIRED = "tv_login_expired"
     }
@@ -313,44 +452,19 @@ class LoginActivity : AppCompatActivity() {
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    if (isTv && url?.contains("/oauth2/authorize") == true) {
-                        view?.evaluateJavascript(
-                            """
-                            (function() {
-                                function focusAuthorize() {
-                                    var btn = document.querySelector('button[data-a-target="passport-authorize-button"], button.js-authorize-button');
-                                    if (btn && !document.querySelector('input[type="password"]')) {
-                                        btn.scrollIntoView({block: 'center'});
-                                        btn.focus();
-                                        return true;
-                                    }
-                                    return false;
-                                }
-                                if (!focusAuthorize()) {
-                                    setTimeout(focusAuthorize, 400);
-                                    setTimeout(focusAuthorize, 1200);
-                                }
-                            })();
-                            """.trimIndent(),
-                            null
-                        )
+                    if (isTv && view != null) {
+                        // the page is made after it is loaded: looked at a few times
+                        checkTvRemotePage(view)
+                        view.postDelayed({ checkTvRemotePage(view) }, 600L)
+                        view.postDelayed({ checkTvRemotePage(view) }, 1800L)
                     }
                 }
             }
             if (isTv) {
-                webView.setOnKeyListener { v, keyCode, event ->
-                    if (event.action == android.view.KeyEvent.ACTION_DOWN &&
-                        (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN || keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) &&
-                        webView.url?.contains("/oauth2/authorize") == true
-                    ) {
-                        val dy = if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) 240 else -240
-                        v.scrollBy(0, dy)
-                        webView.evaluateJavascript(
-                            "window.scrollBy(0, $dy); var b = document.querySelector('button[data-a-target=\"passport-authorize-button\"], button.js-authorize-button'); if (b && $dy > 0) b.focus();",
-                            null
-                        )
-                    }
-                    false
+                // no frame of the system around the whole page when it takes the focus
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    webView.defaultFocusHighlightEnabled = false
+                    secondaryWebView.defaultFocusHighlightEnabled = false
                 }
             }
             startPageLogin = {
@@ -982,6 +1096,51 @@ class LoginActivity : AppCompatActivity() {
             ).show()
         }
         showTvScreen()
+    }
+
+    /** TV: the web page shown has nothing to type in (the page that asks to authorize the app...): the remote scrolls it. */
+    private var tvRemotePage = false
+    private var tvRemotePageView: WebView? = null
+
+    private fun checkTvRemotePage(view: WebView) {
+        view.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.form();") { result ->
+            tvRemotePageView = view
+            tvRemotePage = result == "false"
+        }
+    }
+
+    /**
+     * TV, a web page without anything to type in ("Xtra wants to access your account"): up / down scroll the page
+     * (whatever part of it scrolls) and select the links and buttons that come on the screen, OK presses the one
+     * selected. Done here and not with a key listener on the web view: the web view sends the keys of the remote
+     * straight to the page, its listener never gets them (so the page showed a frame and only moved once left or
+     * right had put the focus on a link). The pages with fields to type in (the login itself) keep their own keys.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val view = currentFocus as? WebView
+        if (isTv && view != null && view.isShown) {
+            val upDown = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP
+            val ok = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
+                    event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+            if (upDown || ok) {
+                if (tvRemotePage && tvRemotePageView === view) {
+                    if (upDown && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                        val step = if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+                        view.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.move($step);", null)
+                    } else if (ok && event.action == android.view.KeyEvent.ACTION_UP) {
+                        view.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.click();", null)
+                        // the page may change after it (authorized, another page): looked at again
+                        view.postDelayed({ checkTvRemotePage(view) }, 800L)
+                    }
+                    return true
+                }
+                // the page may have changed by itself since it was loaded
+                if (event.action == android.view.KeyEvent.ACTION_UP) {
+                    checkTvRemotePage(view)
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onDestroy() {

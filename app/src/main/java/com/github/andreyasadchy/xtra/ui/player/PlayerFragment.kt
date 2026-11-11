@@ -877,7 +877,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                     BasePlaybackService.VIDEO -> {
                         val videoId = playbackService?.videoId
-                        if (!videoId.isNullOrBlank() && (requireContext().prefs().getBoolean(C.PLAYER_GAMES_BUTTON, true) || requireContext().prefs().getBoolean(C.PLAYER_MENU_GAMES, false))) {
+                        if (!videoId.isNullOrBlank() && (isTv || requireContext().prefs().getBoolean(C.PLAYER_GAMES_BUTTON, true) || requireContext().prefs().getBoolean(C.PLAYER_MENU_GAMES, false))) {
                             viewModel.loadGamesList(
                                 videoId,
                                 requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
@@ -1192,6 +1192,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                 }
+                progressBar.setAdGroupTimesMs(null, null, 0)
+                seekPreview?.setChapters(null)
                 if (playbackService?.type == BasePlaybackService.VIDEO) {
                     if (requireContext().prefs().getBoolean(C.PLAYER_MENU_BOOKMARK, true)) {
                         viewLifecycleOwner.lifecycleScope.launch {
@@ -1205,11 +1207,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             }
                         }
                     }
-                    if (!playbackService?.videoId.isNullOrBlank() && (requireContext().prefs().getBoolean(C.PLAYER_GAMES_BUTTON, true) || requireContext().prefs().getBoolean(C.PLAYER_MENU_GAMES, false))) {
+                    if (!playbackService?.videoId.isNullOrBlank() && (isTv || requireContext().prefs().getBoolean(C.PLAYER_GAMES_BUTTON, true) || requireContext().prefs().getBoolean(C.PLAYER_MENU_GAMES, false))) {
                         viewLifecycleOwner.lifecycleScope.launch {
                             repeatOnLifecycle(Lifecycle.State.STARTED) {
                                 viewModel.gamesList.collectLatest { list ->
                                     if (!list.isNullOrEmpty()) {
+                                        if (isTv) {
+                                            val markers = list.mapNotNull { it.vodPosition?.toLong()?.takeIf { pos -> pos > 0L } }
+                                                .distinct()
+                                                .sorted()
+                                                .toLongArray()
+                                            if (markers.isNotEmpty()) {
+                                                progressBar.setAdGroupTimesMs(markers, BooleanArray(markers.size), markers.size)
+                                            }
+                                            seekPreview?.setChapters(list)
+                                        }
                                         if (requireContext().prefs().getBoolean(C.PLAYER_GAMES_BUTTON, true)) {
                                             vodGames.visibility = View.VISIBLE
                                             vodGames.setOnClickListener {
@@ -1879,8 +1891,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun showVodGames() {
-        viewModel.gamesList.value?.let {
-            PlayerGamesDialog.newInstance(it).show(childFragmentManager, "closeOnPip")
+        viewModel.gamesList.value?.let { list ->
+            if (isTv) {
+                TvSeekPreview.showChaptersPanel(
+                    context = requireContext(),
+                    title = getString(R.string.games),
+                    chapters = list,
+                    currentPositionMs = getCurrentPosition() ?: 0L,
+                ) { targetMs ->
+                    seek(targetMs)
+                }
+            } else {
+                PlayerGamesDialog.newInstance(list).show(childFragmentManager, "closeOnPip")
+            }
         }
     }
 
@@ -2205,7 +2228,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.okHttpClient.value,
             binding.playerControls.root,
             binding.playerControls.progressBar,
-        ).also { seekPreview = it }
+        ).also {
+            it.setChapters(viewModel.gamesList.value)
+            seekPreview = it
+        }
     }
 
     /** Storyboards of the VOD being recorded of a live stream: the last archive of the channel, started with the stream. */
@@ -2784,13 +2810,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    /** TV: write a chat message, with voice input in the field (no system popup). */
+    /** TV: write a chat message, with voice input and visual emote picker in the field (no system popup). */
     private fun showChatComposer() {
+        val groups = chatFragment?.getTvEmoteGroups().orEmpty()
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
             com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
                 title = getString(R.string.tv_write_message),
                 hint = getString(R.string.tv_message_hint),
                 sendLabel = getString(R.string.tv_send),
+                emoteGroups = groups,
             ) { text ->
                 if (text.isNotBlank()) {
                     chatFragment?.sendExternalMessage(text)
@@ -4422,7 +4450,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     TwitchApiHelper.getGQLHeaders(requireContext(), true),
                     TwitchApiHelper.getHelixHeaders(requireContext()),
                 )
-                if (!videoId.isNullOrBlank() && (requireContext().prefs().getBoolean(C.PLAYER_GAMES_BUTTON, true) || requireContext().prefs().getBoolean(C.PLAYER_MENU_GAMES, false))) {
+                if (!videoId.isNullOrBlank() && (isTv || requireContext().prefs().getBoolean(C.PLAYER_GAMES_BUTTON, true) || requireContext().prefs().getBoolean(C.PLAYER_MENU_GAMES, false))) {
                     viewModel.loadGamesList(
                         videoId,
                         requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
