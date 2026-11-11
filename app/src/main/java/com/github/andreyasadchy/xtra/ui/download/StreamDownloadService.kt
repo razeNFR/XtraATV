@@ -206,7 +206,7 @@ class StreamDownloadService : LifecycleService() {
         val platform = prefs().getString(C.TOKEN_PLATFORM, "web")
         val playerType = prefs().getString(C.TOKEN_PLAYER_TYPE, "site")
         val supportedCodecs = prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264")
-        val useCustomProxy = prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+        val useCustomProxy = prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
         val customProxyList = if (useCustomProxy) {
             xtraModule.playerRepository.getCustomProxies().filter {
                 it.enabled && !it.url.isNullOrBlank()

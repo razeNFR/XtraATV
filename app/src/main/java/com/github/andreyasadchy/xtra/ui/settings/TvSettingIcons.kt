@@ -76,6 +76,7 @@ object TvSettingIcons {
         "proxy_timeout" to R.drawable.tv_ic_timer,
         "token_supported_codecs" to R.drawable.tv_ic_hd,
         // chat
+        "chat_slow_rate" to R.drawable.tv_ic_timer,
         "chat_show_replies" to R.drawable.tv_ic_chat_message,
         "chat_highlight_mentions" to R.drawable.tv_ic_chat_message,
         "chat_show_usernotice" to R.drawable.tv_ic_campaign,

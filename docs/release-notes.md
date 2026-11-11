@@ -1,12 +1,14 @@
-# Xtra TV 1.3.1
+# Xtra TV 1.3.2
 
 ### What's new
-- **New side menu**: a panel tinted with the ambiance color, slightly see-through, with the picture and the name of the account at the top. More room between the entries, no separator lines, a bar of the accent color on the section shown. With the icon rail, the icons stay in place while the menu opens and the names slide out.
-- **Tabs as text**: the tabs of the screens (Following, a channel, a category, search) are plain names with a line of the accent color under the one shown, instead of pills.
-- **Quieter sort**: the sort reads as a text of the header (*Sort: Viewers ↓*), a button only when it has the focus.
+- **Slow chat**: limit fast chats to **1, 2, 4 or 6 msg/s** from the player chat panel (right under *Position*) or Chat settings, while always keeping broadcaster, moderator, VIP, staff, redeem/bits and own/reply messages.
+- **Chat panel**: *Chat delay* is now right below *Slow chat* with a concise latency line, and *Reset* also resets *Slow chat*.
+- **Player defaults**: custom proxies are now off by default (VAFT handles ads out of the box), the *Proxy* button is enabled by default in the player, and *Dimming* is off by default.
+- **Ad-block badge**: VAFT sources now show their resolution in the badge (e.g. `autoplay (360p)`).
 
 ### Fixes
-- **Following**: the page no longer moves when a tab that has a sort is shown after one that has none.
+- **Multi-stream & switcher**: local followed channels now appear in *Followed live* and *Suggested* without logging in, and followed live channels are listed before category streams in *Suggested* (#53).
+- **Ad-block fallback**: check all segments of the backup player's first playlist and fall back to hiding the ad if every backup source fails.
 
 ### Install
-Download `XtraTV-1.3.1-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.3.2-tv.apk` below and install it over the previous version, your settings and account are kept.

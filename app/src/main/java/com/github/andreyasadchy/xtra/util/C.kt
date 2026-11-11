@@ -237,6 +237,7 @@ object C {
     const val VIDEO_SWAP_DEFAULTS_ENABLED = "video_swap_defaults_enabled"
     const val VIDEO_SWAP_AUTOPLAY_FIRST = "video_swap_autoplay_first"
     const val TV_DEFAULTS_QUALITY = "tv_defaults_quality"
+    const val TV_DEFAULTS_PROXIES_AND_BUTTONS = "tv_defaults_proxies_and_buttons"
     const val TV_DPAD_SWITCH_STREAM = "tv_dpad_switch_stream"
     const val TV_DPAD_UP_DOWN = "tv_dpad_up_down"
     const val TV_BUTTON_STREAM_LIST = "tv_button_stream_list"
@@ -245,7 +246,7 @@ object C {
     const val TV_BUTTON_MULTI_STREAM = "tv_button_multi_stream"
     const val TV_BUTTON_CHAT_LAYOUT = "tv_button_chat_layout"
     const val TV_BUTTON_DIM = "tv_button_dim"
-    /** TV: button of the custom proxy in the player (hidden at first). */
+    /** TV: button of the custom proxy in the player. */
     const val TV_BUTTON_PROXY = "tv_button_proxy"
     /** TV: how dark the dimming of the streams is, 10 to 90 % (50 % at first). */
     const val TV_DIM_LEVEL = "tv_dim_level"
@@ -282,6 +283,7 @@ object C {
     const val CHAT_THEME_ADAPTED_USERNAME_COLOR = "chat_theme_adapted_username_color"
     const val CHAT_BOLD_NAMES = "chat_boldnames"
     const val CHAT_LIMIT = "chat_limit"
+    const val CHAT_SLOW_RATE = "chat_slow_rate"
     const val CHAT_DELAY_MODE = "chat_delay_mode"
     const val CHAT_DELAY_SECONDS = "chat_delay_seconds"
     const val CHAT_SHOW_REPLIES = "chat_show_replies"

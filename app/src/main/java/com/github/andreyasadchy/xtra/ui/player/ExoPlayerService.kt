@@ -817,7 +817,7 @@ class ExoPlayerService : BasePlaybackService() {
                             }
                         }
                     } else {
-                        useCustomProxy = prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+                        useCustomProxy = prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                         if (!useCustomProxy) {
                             useStreamProxy = prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
                         }
@@ -1806,6 +1806,8 @@ class ExoPlayerService : BasePlaybackService() {
         }
         backLiveFrom = 0L
         backLiveProgress = 0f
+        stopVideoSwap = false
+        currentVideoSwapItem = 0
         resetAdPod()
     }
 
@@ -1896,6 +1898,7 @@ class ExoPlayerService : BasePlaybackService() {
             var pendingSecondaryProxyStat: String? = streamProxy?.host ?: videoSwap?.let {
                 if (it.platform == AD_PROXY_PLATFORM) it.playerType?.toUri()?.host?.removePrefix("www.") else it.playerType
             }
+            var checkFirstSecondaryPlaylist = true
             val playerListener = object : Player.Listener {
                 override fun onAudioSessionIdChanged(audioSessionId: Int) {
                     if (generation != streamGeneration || channelLogin != login) {
@@ -1948,8 +1951,13 @@ class ExoPlayerService : BasePlaybackService() {
                 }
 
                 override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-                    val playlist = (secondaryPlayer?.currentManifest as? HlsManifest)?.mediaPlaylist
-                    val ads = checkPlaylist(playlist)
+                    val playlist = (secondaryPlayer?.currentManifest as? HlsManifest)?.mediaPlaylist ?: return
+                    val ads = if (checkFirstSecondaryPlaylist) {
+                        checkFirstSecondaryPlaylist = false
+                        playlist.segments.any { isAdSegment(playlist, it) }
+                    } else {
+                        checkPlaylist(playlist)
+                    }
                     if (ads) {
                         when {
                             proxyMediaPlaylist -> {
@@ -1970,6 +1978,8 @@ class ExoPlayerService : BasePlaybackService() {
                                     stopSecondaryPlayer()
                                     if (useVideoSwap && !stopVideoSwap) {
                                         startVideoSwap()
+                                    } else {
+                                        hideAdFallback()
                                     }
                                 }
                             }
@@ -2422,8 +2432,9 @@ class ExoPlayerService : BasePlaybackService() {
     private fun startVideoSwap() {
         skipFailedAdProxies()
         if (videoSwapList?.getOrNull(currentVideoSwapItem) == null) {
-            // every backup tried (custom proxies offline...): the ad plays
+            // every backup tried (custom proxies offline...): hide and mute the ad
             stopVideoSwap = true
+            hideAdFallback()
             return
         }
         videoSwapActive = true
@@ -2466,6 +2477,24 @@ class ExoPlayerService : BasePlaybackService() {
             stopVideoSwap = true
             serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
             stopSecondaryPlayer()
+            hideAdFallback()
+        }
+    }
+
+    /** Hides and silences the main player when no ad-free backup stream is available while an ad break plays. */
+    private fun hideAdFallback() {
+        val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || prefs().getBoolean(C.PLAYER_ADBLOCK, true)
+        if (playingAds && !hidden && hideAds) {
+            hidden = true
+            serviceListener?.toast(R.string.waiting_ads, Toast.LENGTH_LONG)
+            player?.let { player ->
+                if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                        setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                    }.build()
+                }
+                player.volume = 0f
+            }
         }
     }
 
@@ -2549,7 +2578,15 @@ class ExoPlayerService : BasePlaybackService() {
     fun getAdblockInfo(): AdblockInfo? {
         val source = when {
             videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
-                adProxyHost(swap)?.let { TvProxyStatus.displayName(it) } ?: swap.playerType
+                val host = adProxyHost(swap)?.let { TvProxyStatus.displayName(it) }
+                if (host != null) {
+                    host
+                } else {
+                    val base = swap.playerType ?: "backup"
+                    val height = secondaryPlayer?.videoFormat?.height?.takeIf { it > 0 }
+                        ?: if (swap.playerType == "autoplay" && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) 360 else null
+                    if (height != null) "$base (${height}p)" else base
+                }
             } ?: "backup"
             proxyMediaPlaylist -> "proxy"
             else -> null

@@ -3,12 +3,8 @@ package com.github.andreyasadchy.xtra.ui.player
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.github.andreyasadchy.xtra.R
-import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
-import com.github.andreyasadchy.xtra.util.C
-import com.github.andreyasadchy.xtra.util.TwitchApiHelper
-import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.launch
 
 /** TV: choice of up to 4 streams (followed channels live and streams of the list) for the multi-stream view, in the row of the other streams. */
@@ -65,10 +61,11 @@ object TvMultiStreamPicker {
             val gameSource = current?.takeIf { !it.gameName.isNullOrBlank() || !it.gameId.isNullOrBlank() || !it.gameSlug.isNullOrBlank() }?.let {
                 { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.game(activity, it.gameId, it.gameSlug, it.gameName) }
             }
+            val followed = loadFollowed(activity)
             val sameGame = gameSource?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.load(it()) }.orEmpty()
                 .sortedByDescending { it.viewerCount ?: 0 }
-            // Suggested: streams of the same category sorted by viewers first, then followed channels live and the list of the stream
-            val candidates = (listOfNotNull(current) + sameGame + loadFollowed(activity) + activity.liveStreamsOnly(activity.streamQueue))
+            // Suggested: followed channels live first (account and local), then streams of the same category sorted by viewers and the list of the stream
+            val candidates = (listOfNotNull(current) + followed + sameGame + activity.liveStreamsOnly(activity.streamQueue))
                 .filter { !it.channelLogin.isNullOrBlank() }
                 .distinctBy { it.channelLogin }
             if (candidates.isEmpty()) {
@@ -86,8 +83,7 @@ object TvMultiStreamPicker {
                     onValidate = { selected -> activity.startMultiStream(selected, current) },
                 ),
                 // streams can be picked in the other lists too, the checked ones are kept from one tab to the other
-                rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(activity, current)
-                    .filterNot { sameGame.isNotEmpty() && it.kind?.startsWith("game:") == true },
+                rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(activity, current),
                 source = gameSource,
             )
         }
@@ -99,10 +95,11 @@ object TvMultiStreamPicker {
             val gameSource = current?.takeIf { !it.gameName.isNullOrBlank() || !it.gameId.isNullOrBlank() || !it.gameSlug.isNullOrBlank() }?.let {
                 { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.game(activity, it.gameId, it.gameSlug, it.gameName) }
             }
+            val followed = loadFollowed(activity)
             val sameGame = gameSource?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.load(it()) }.orEmpty()
                 .sortedByDescending { it.viewerCount ?: 0 }
             // the list of the stream may be old (not loaded again during a multi-stream): only the streamers still live
-            var candidates = (sameGame + loadFollowed(activity) + activity.liveStreamsOnly(activity.streamQueue))
+            var candidates = (followed + sameGame + activity.liveStreamsOnly(activity.streamQueue))
                 .filter { !it.channelLogin.isNullOrBlank() && it.channelLogin !in exclude }
                 .distinctBy { it.channelLogin }
             if (candidates.isEmpty()) {
@@ -120,42 +117,16 @@ object TvMultiStreamPicker {
                 candidates,
                 null,
                 TvStreamSwitcher.Selection(title = title, preselected = emptySet(), max = 1, onValidate = { it.firstOrNull()?.let(onPicked) }, exclude = exclude),
-                rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(activity, current)
-                    .filterNot { sameGame.isNotEmpty() && it.kind?.startsWith("game:") == true },
+                rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(activity, current),
                 source = gameSource,
             )
         }
     }
 
     private suspend fun loadFollowed(activity: MainActivity): List<Stream> {
-        return try {
-            val headers = TwitchApiHelper.getGQLHeaders(activity, true)
-            if (headers[C.HEADER_TOKEN].isNullOrBlank()) {
-                emptyList()
-            } else {
-                (activity.applicationContext as XtraApp).xtraModule.graphQLRepository.loadQueryUserFollowedStreams(
-                    activity.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), headers, 100, null
-                ).data?.user?.followedLiveUsers?.edges?.mapNotNull { edge ->
-                    edge?.node?.let {
-                        Stream(
-                            id = it.stream?.id,
-                            channelId = it.id,
-                            channelLogin = it.login,
-                            channelName = it.displayName,
-                            channelImageURL = it.profileImageURL,
-                            gameId = it.stream?.game?.id,
-                            gameSlug = it.stream?.game?.slug,
-                            gameName = it.stream?.game?.displayName,
-                            title = it.stream?.broadcaster?.broadcastSettings?.title,
-                            thumbnailURL = it.stream?.previewImageURL,
-                            createdAt = it.stream?.createdAt?.toString(),
-                            viewerCount = it.stream?.viewersCount,
-                        )
-                    }
-                }.orEmpty().sortedByDescending { it.viewerCount }.let { com.github.andreyasadchy.xtra.ui.tv.TvFavorites.sort(it) }
-            }
-        } catch (e: Exception) {
-            emptyList()
-        }
+        return com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.loadPages(
+            { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.followed(activity) },
+            100,
+        ).orEmpty()
     }
 }

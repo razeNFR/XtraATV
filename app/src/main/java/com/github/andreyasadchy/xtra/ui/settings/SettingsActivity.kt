@@ -1067,7 +1067,7 @@ class SettingsActivity : AppCompatActivity() {
             viewLifecycleOwner.lifecycleScope.launch {
                 val count = repository.getCustomProxies().size
                 if (!isAdded) return@launch
-                val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+                val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                 val adsOnly = requireContext().prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1"
                 // on / off, when (whole stream or ads only), how many; then what they change for the 1440p
                 preference.summary = listOfNotNull(

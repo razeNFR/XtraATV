@@ -34,15 +34,16 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="false"
+        android:defaultValue="true"
         android:key="tv_button_proxy"
         android:summary="@string/tv_proxy_button_summary"
         android:title="@string/tv_proxy_button"
+        app:iconSpaceReserved="false"
         app:isPreferenceVisible="@bool/isTv"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="true"
+        android:defaultValue="false"
         android:key="tv_button_dim"
         android:summary="@string/tv_dim_button_summary"
         android:title="@string/tv_dim"

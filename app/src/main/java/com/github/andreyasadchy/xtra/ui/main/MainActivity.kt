@@ -208,6 +208,15 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_PROXIES_AND_BUTTONS, false)) {
+            // custom proxies off at first (VAFT handles ads out of the box), proxy button shown and dimming button hidden
+            prefs.edit {
+                putBoolean(C.TV_DEFAULTS_PROXIES_AND_BUTTONS, true)
+                putBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+                putBoolean(C.TV_BUTTON_PROXY, true)
+                putBoolean(C.TV_BUTTON_DIM, false)
+            }
+        }
         if (tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) <= 0L) {
             tokenPrefs().edit {
                 putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
@@ -2386,15 +2395,18 @@ class MainActivity : AppCompatActivity() {
     fun showStreamSwitcher() {
         // shown at once with the list in memory, it fills in by itself if a newer list comes; tabs above it for the
         // other lists (followed, popular, languages, category), OK held opens a stream in a small window
-        TvStreamSwitcher.show(
-            this,
-            streamQueue,
-            currentStreamLogin,
-            rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(this, currentPlayingStream()),
-            onPip = { openTvPip(it) },
-            source = streamQueueSource,
-        )
-        refreshQueueIfOld()
+        lifecycleScope.launch {
+            val rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(this@MainActivity, currentPlayingStream())
+            TvStreamSwitcher.show(
+                this@MainActivity,
+                streamQueue,
+                currentStreamLogin,
+                rows = rows,
+                onPip = { openTvPip(it) },
+                source = streamQueueSource,
+            )
+            refreshQueueIfOld()
+        }
     }
 
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null, peekHud: Boolean = false) {

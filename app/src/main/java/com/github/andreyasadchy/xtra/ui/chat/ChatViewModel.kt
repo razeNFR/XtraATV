@@ -1017,11 +1017,113 @@ class ChatViewModel(
     private val delayedMessages = ArrayDeque<Pair<ChatMessage, Long>>()
     private var delayJob: Job? = null
     private var ownUserId: String? = null
+    private var ownUserLogin: String? = null
+    private var activeChannelLogin: String? = null
+    private val slowChatLock = Any()
+    private var slowChatTokens = 1.6
+    private var slowChatLastRefillAt = 0L
+    private var lastSlowChatTarget: ChatMessage? = null
+    private var lastSlowChatAllowed = true
+    private val slowChatPriorityBadges = setOf(
+        "broadcaster", "moderator", "lead_moderator", "vip", "staff", "admin", "global_mod"
+    )
 
     /** The live chat waits for the stream: "chat_delay_mode" 0 off, 1 auto, 2 manual ("chat_delay_seconds"). */
     private fun delayMode() = applicationContext.prefs().getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull() ?: 1
 
+    /** Slow chat rate ("chat_slow_rate"): 0 off, or max normal messages per second (1, 2, 4, 6). */
+    private fun slowChatRate() = applicationContext.prefs().getString(C.CHAT_SLOW_RATE, "0")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+
+    private fun resetSlowChat() {
+        synchronized(slowChatLock) {
+            slowChatLastRefillAt = 0L
+            lastSlowChatTarget = null
+        }
+    }
+
+    private fun bodyMentionsUsername(bodyLower: String, uname: String): Boolean {
+        if (uname.length < 2 || bodyLower.isEmpty()) return false
+        var idx = bodyLower.indexOf(uname)
+        while (idx != -1) {
+            val prev = if (idx > 0) bodyLower[idx - 1] else ' '
+            val end = idx + uname.length
+            val next = if (end < bodyLower.length) bodyLower[end] else ' '
+            val validStart = idx == 0 || prev == '@' || !(prev in 'a'..'z' || prev in '0'..'9' || prev == '_')
+            val validEnd = end == bodyLower.length || !(next in 'a'..'z' || next in '0'..'9' || next == '_')
+            if (validStart && validEnd) return true
+            idx = bodyLower.indexOf(uname, idx + 1)
+        }
+        return false
+    }
+
+    private fun isExemptPriorityChatMessage(msg: ChatMessage): Boolean {
+        if (msg.type != ChatMessage.USER_MESSAGE) return true
+        if (!msg.systemMsg.isNullOrBlank() || msg.noticeIcon != null) return true
+        if (msg.reward != null || (msg.bits ?: 0) > 0 || msg.msgId == "highlighted-message") return true
+        if (!ownUserId.isNullOrBlank() && msg.userId == ownUserId) return true
+        val chan = activeChannelLogin
+        if (!chan.isNullOrBlank() && msg.userLogin?.equals(chan, ignoreCase = true) == true) return true
+        if (msg.badges?.any { it.setId in slowChatPriorityBadges } == true) return true
+        val myLogin = ownUserLogin?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        if (myLogin != null) {
+            if (msg.userLogin?.equals(myLogin, ignoreCase = true) == true || msg.userName?.equals(myLogin, ignoreCase = true) == true) {
+                return true
+            }
+            if (msg.reply?.userLogin?.equals(myLogin, ignoreCase = true) == true || msg.reply?.userName?.equals(myLogin, ignoreCase = true) == true) {
+                return true
+            }
+            val bodyLower = msg.message?.lowercase()
+            if (!bodyLower.isNullOrEmpty() && bodyMentionsUsername(bodyLower, myLogin)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun consumeSlowChatSlot(rate: Int): Boolean {
+        val now = System.currentTimeMillis()
+        val maxTokens = if (rate <= 1) 1.0 else 1.6
+        if (slowChatLastRefillAt <= 0L || now < slowChatLastRefillAt) {
+            slowChatLastRefillAt = now
+            slowChatTokens = maxTokens
+        } else {
+            val elapsedMs = now - slowChatLastRefillAt
+            slowChatLastRefillAt = now
+            slowChatTokens = minOf(maxTokens, slowChatTokens + (elapsedMs * rate) / 1000.0)
+        }
+        return if (slowChatTokens >= 1.0) {
+            slowChatTokens -= 1.0
+            true
+        } else {
+            false
+        }
+    }
+
+    private fun shouldAllowSlowChat(message: ChatMessage): Boolean {
+        if (!started && chatReplayManager == null && chatReplayManagerLocal == null) return true
+        val rate = slowChatRate()
+        if (rate <= 0) return true
+        val target = if (message.type == ChatMessage.REPLY_MESSAGE) message.replyParent ?: return true else message
+        synchronized(slowChatLock) {
+            if (target === lastSlowChatTarget) {
+                lastSlowChatTarget = null
+                return lastSlowChatAllowed
+            }
+            val allowed = isExemptPriorityChatMessage(target) || consumeSlowChatSlot(rate)
+            if (message.type == ChatMessage.REPLY_MESSAGE) {
+                lastSlowChatTarget = target
+                lastSlowChatAllowed = allowed
+            } else {
+                lastSlowChatTarget = null
+            }
+            return allowed
+        }
+    }
+
     suspend fun onMessage(message: ChatMessage) {
+        if (!shouldAllowSlowChat(message)) {
+            return
+        }
         // a message of the live chat (with its time of Twitch), not one of ours: shown when the stream gets there
         if (started && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && delayMode() != 0) {
             synchronized(delayedMessages) {
@@ -1114,6 +1216,8 @@ class ChatViewModel(
         stopLiveChat()
         started = true
         ownUserId = applicationContext.tokenPrefs().getString(C.USER_ID, null)
+        ownUserLogin = applicationContext.tokenPrefs().getString(C.USERNAME, null)
+        activeChannelLogin = channelLogin
         val gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true)
         val helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext)
         val networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
@@ -1222,6 +1326,7 @@ class ChatViewModel(
 
     fun stopLiveChat() {
         clearDelayedMessages()
+        resetSlowChat()
         autoDelayMs = 0L
         if (started) {
             started = false
@@ -2702,6 +2807,9 @@ class ChatViewModel(
 
     fun startReplayChat(videoId: String?, createdAt: String?, startTime: Int, chatUrl: String?, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?, channelId: String?, channelLogin: String?) {
         stopReplayChat()
+        ownUserId = applicationContext.tokenPrefs().getString(C.USER_ID, null)
+        ownUserLogin = applicationContext.tokenPrefs().getString(C.USERNAME, null)
+        activeChannelLogin = channelLogin
         if (!chatUrl.isNullOrBlank()) {
             chatReplayManagerLocal = ChatReplayManagerLocal(
                 createdAt = createdAt?.toLongOrNull() ?: createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } },
@@ -2736,6 +2844,7 @@ class ChatViewModel(
     }
 
     fun stopReplayChat() {
+        resetSlowChat()
         chatReplayManager?.stop() ?: chatReplayManagerLocal?.stop()
     }
 

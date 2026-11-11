@@ -454,6 +454,20 @@
         <item>white</item>
         <item>none</item>
     </string-array>
+    <string-array name="chatSlowEntries">
+        <item>@string/tv_chat_delay_off</item>
+        <item>1 msg/s</item>
+        <item>2 msg/s</item>
+        <item>4 msg/s</item>
+        <item>6 msg/s</item>
+    </string-array>
+    <string-array name="chatSlowValues" translatable="false">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>4</item>
+        <item>6</item>
+    </string-array>
     <string-array name="chatDelayEntries">
         <item>@string/tv_chat_delay_off</item>
         <item>@string/tv_chat_delay_auto</item>

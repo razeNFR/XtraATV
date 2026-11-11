@@ -141,6 +141,16 @@
         app:singleLineTitle="false" />
 
     <ListPreference
+        android:defaultValue="0"
+        android:entries="@array/chatSlowEntries"
+        android:entryValues="@array/chatSlowValues"
+        android:key="chat_slow_rate"
+        android:summary="%s"
+        android:title="@string/tv_chat_slow"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
         android:defaultValue="1"
         android:entries="@array/chatDelayEntries"
         android:entryValues="@array/chatDelayValues"

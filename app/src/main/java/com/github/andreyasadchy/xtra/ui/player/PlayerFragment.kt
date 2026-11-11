@@ -2477,10 +2477,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 position.intValue = if (it == 1) 2 else 0
                                 update(C.TV_CHAT_POSITION, position.intValue)
                             }
-                            textSizeRow(prefs)
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 5..60, valueText = { "$it %" }) {
-                                update(C.TV_CHAT_WIDTH, it)
-                            }
                         }
                         2 -> {
                             val top = position.intValue == 1 || position.intValue == 3 || position.intValue == 6
@@ -2488,47 +2484,30 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 position.intValue = if (it == 1) 1 else 0
                                 update(C.TV_CHAT_POSITION, position.intValue)
                             }
-                            // the band apart (the picture a bit smaller) or over the stream (the picture full screen)
-                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                                getString(R.string.tv_chat_band),
-                                listOf(getString(R.string.tv_chat_band_separate), getString(R.string.tv_chat_band_overlay)),
-                                if (prefs.getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) 1 else 0,
-                            ) {
-                                prefs.edit { putBoolean(C.TV_CHAT_BAND_OVERLAY, it == 1) }
-                                if (_binding != null) {
-                                    applyTvChatLayout()
-                                }
-                            }
-                            textSizeRow(prefs)
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
-                                getString(R.string.tv_chat_height),
-                                prefs.getInt(C.TV_CHAT_LINES, 3),
-                                1..12,
-                                valueText = { if (it == 1) getString(R.string.tv_chat_one_line) else getString(R.string.tv_chat_lines, it) }
-                            ) {
-                                update(C.TV_CHAT_LINES, it)
-                            }
                         }
                         else -> {
-                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), corners, position.intValue) {
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), corners, position.intValue.coerceIn(0, corners.lastIndex)) {
                                 position.intValue = it
                                 update(C.TV_CHAT_POSITION, it)
-                            }
-                            textSizeRow(prefs)
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 5..60, valueText = { "$it %" }) {
-                                update(C.TV_CHAT_WIDTH, it)
-                            }
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
-                                update(C.TV_CHAT_HEIGHT, it)
-                            }
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_margin), prefs.getInt(C.TV_CHAT_MARGIN, 0), 0..64, step = 4, valueText = { "$it dp" }) {
-                                update(C.TV_CHAT_MARGIN, it)
                             }
                         }
                     }
                 }
-                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_opacity), prefs.getInt(C.TV_CHAT_OPACITY, 55), 0..100, step = 5, valueText = { "$it %" }) {
-                    update(C.TV_CHAT_OPACITY, it)
+                // slow chat: off or max normal messages per second (1, 2, 4, 6), priority messages stay shown
+                val slowRateValues = listOf("0", "1", "2", "4", "6")
+                val slowRateLabels = listOf(
+                    getString(R.string.tv_chat_delay_off),
+                    getString(R.string.tv_chat_slow_rate, 1),
+                    getString(R.string.tv_chat_slow_rate, 2),
+                    getString(R.string.tv_chat_slow_rate, 4),
+                    getString(R.string.tv_chat_slow_rate, 6),
+                )
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                    getString(R.string.tv_chat_slow),
+                    slowRateLabels,
+                    slowRateValues.indexOf(prefs.getString(C.CHAT_SLOW_RATE, "0")).coerceAtLeast(0),
+                ) {
+                    prefs.edit { putString(C.CHAT_SLOW_RATE, slowRateValues[it]) }
                 }
                 // delay of the live chat: off, auto (the latency of the stream) or 1 to 60 s
                 val delayMode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull()?.coerceIn(0, 2) ?: 1) }
@@ -2555,7 +2534,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 getString(R.string.tv_chat_delay_auto_measuring)
                             }
                             androidx.tv.material3.Text(
-                                getString(R.string.tv_chat_delay_auto_info) + "\n" + now,
+                                getString(R.string.tv_chat_delay_auto_info, now),
                                 fontSize = 13.sp,
                                 lineHeight = 18.sp,
                                 color = com.github.andreyasadchy.xtra.ui.tv.TvColors.secondaryText,
@@ -2569,6 +2548,53 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                 }
+                androidx.compose.runtime.key("size_${mode.intValue}") {
+                    when (mode.intValue) {
+                        1 -> {
+                            textSizeRow(prefs)
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 5..60, valueText = { "$it %" }) {
+                                update(C.TV_CHAT_WIDTH, it)
+                            }
+                        }
+                        2 -> {
+                            // the band apart (the picture a bit smaller) or over the stream (the picture full screen)
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                                getString(R.string.tv_chat_band),
+                                listOf(getString(R.string.tv_chat_band_separate), getString(R.string.tv_chat_band_overlay)),
+                                if (prefs.getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) 1 else 0,
+                            ) {
+                                prefs.edit { putBoolean(C.TV_CHAT_BAND_OVERLAY, it == 1) }
+                                if (_binding != null) {
+                                    applyTvChatLayout()
+                                }
+                            }
+                            textSizeRow(prefs)
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                getString(R.string.tv_chat_height),
+                                prefs.getInt(C.TV_CHAT_LINES, 3),
+                                1..12,
+                                valueText = { if (it == 1) getString(R.string.tv_chat_one_line) else getString(R.string.tv_chat_lines, it) }
+                            ) {
+                                update(C.TV_CHAT_LINES, it)
+                            }
+                        }
+                        else -> {
+                            textSizeRow(prefs)
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 5..60, valueText = { "$it %" }) {
+                                update(C.TV_CHAT_WIDTH, it)
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
+                                update(C.TV_CHAT_HEIGHT, it)
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_margin), prefs.getInt(C.TV_CHAT_MARGIN, 0), 0..64, step = 4, valueText = { "$it dp" }) {
+                                update(C.TV_CHAT_MARGIN, it)
+                            }
+                        }
+                    }
+                }
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_opacity), prefs.getInt(C.TV_CHAT_OPACITY, 55), 0..100, step = 5, valueText = { "$it %" }) {
+                    update(C.TV_CHAT_OPACITY, it)
+                }
                 androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
                 com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_reset)) {
                     prefs.edit {
@@ -2580,6 +2606,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         remove(C.TV_CHAT_MODE)
                         remove(C.TV_CHAT_LINES)
                         remove(C.CHAT_SIZE_MODIFIER)
+                        remove(C.CHAT_SLOW_RATE)
                         remove(C.CHAT_DELAY_MODE)
                         remove(C.TV_CHAT_BAND_OVERLAY)
                         remove(C.CHAT_DELAY_SECONDS)
@@ -2647,7 +2674,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** TV: the icon of the proxy button says if the custom proxy is on. */
     private fun updateTvProxyIcon() {
-        val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+        val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
         _binding?.playerControls?.tvProxy?.setImageResource(if (on) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
     }
 
@@ -2660,16 +2687,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (_binding == null) {
                 return@launch
             }
+            val useBefore = activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
             com.github.andreyasadchy.xtra.ui.tv.TvProxyPanel.show(
                 activity,
                 proxies,
                 openSettings = { activity.openCustomProxySettings() },
             ) { changed ->
+                if (_binding != null) {
+                    updateTvProxyIcon()
+                }
                 if (changed != null) {
                     activity.lifecycleScope.launch {
                         repository.updateCustomProxies(changed)
-                        // the stream plays through the proxies: it starts again with the new list
-                        if (activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)) {
+                        // the stream plays through the proxies or custom proxies were turned on/off: it starts again
+                        val useNow = activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+                        if (useNow || useNow != useBefore) {
                             activity.restartCurrentStream()
                         }
                     }
@@ -2995,7 +3027,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             // dimming of the stream: OK turns it on / off, OK held opens its level
             tvDim?.let { button ->
-                button.visibility = if (prefs.getBoolean(C.TV_BUTTON_DIM, true)) View.VISIBLE else View.GONE
+                button.visibility = if (prefs.getBoolean(C.TV_BUTTON_DIM, false)) View.VISIBLE else View.GONE
                 button.setOnClickListener {
                     showController(force = true)
                     com.github.andreyasadchy.xtra.ui.tv.TvDim.setActive(!com.github.andreyasadchy.xtra.ui.tv.TvDim.active)
@@ -3006,22 +3038,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     true
                 }
             }
-            // custom proxy: OK turns it on / off (the stream starts again with it), OK held opens the list of the proxies.
-            // Hidden at first (player buttons), and only there when a proxy is turned on in the list
+            // custom proxy: OK turns it on / off (the stream starts again with it), OK held opens the list of the proxies
             tvProxy?.let { button ->
-                button.visibility = View.GONE
-                if (playbackService?.type == BasePlaybackService.STREAM && prefs.getBoolean(C.TV_BUTTON_PROXY, false)) {
-                    val repository = (requireActivity().application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        val any = repository.getCustomProxies().any { it.enabled && !it.url.isNullOrBlank() }
-                        if (_binding != null) {
-                            button.visibility = if (any) View.VISIBLE else View.GONE
-                            updateTvProxyIcon()
-                        }
-                    }
+                if (playbackService?.type == BasePlaybackService.STREAM && prefs.getBoolean(C.TV_BUTTON_PROXY, true)) {
+                    button.visibility = View.VISIBLE
+                    updateTvProxyIcon()
+                } else {
+                    button.visibility = View.GONE
                 }
                 button.setOnClickListener {
-                    val on = !requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+                    val on = !requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                     requireContext().prefs().edit { putBoolean(C.PLAYER_USE_CUSTOM_PROXY, on) }
                     updateTvProxyIcon()
                     android.widget.Toast.makeText(requireContext(), if (on) R.string.tv_proxy_on else R.string.tv_proxy_off, android.widget.Toast.LENGTH_SHORT).show()
