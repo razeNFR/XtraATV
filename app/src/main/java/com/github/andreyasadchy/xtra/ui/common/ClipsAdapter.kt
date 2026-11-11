@@ -270,6 +270,11 @@ class ClipsAdapter(
                         gameName.visibility = View.GONE
                     }
                     options.setOnClickListener { it ->
+                        if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                            // TV: the 3 dots open the panel of the actions, like OK held on the card
+                            root.performLongClick()
+                            return@setOnClickListener
+                        }
                         PopupMenu(context, it).apply {
                             inflate(R.menu.media_item)
                             setOnMenuItemClickListener {

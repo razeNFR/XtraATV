@@ -51,19 +51,41 @@ object TvAmbient {
         "white" to 0xFFE5E7EB.toInt(),
     )
 
+    /**
+     * Color of the "dynamic" ambiance: the one of the picture focused last (hero, card, banner of a channel). It stays
+     * everywhere after that (side menu, settings, screens without pictures) and is saved, the app starts again with it;
+     * the violet of Twitch only until a first picture was seen.
+     */
     @Volatile
     private var dynamicColor: Int = DEFAULT_DYNAMIC
+    private var dynamicLoaded = false
+
+    /** A picture already gave its color since the app started. */
+    var hasSessionColor = false
+        private set
 
     private val colorCache = LruCache<String, Int>(80)
     private var dynamicListener: ((Int) -> Unit)? = null
     private var loadJob: Job? = null
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pendingPublish: Runnable? = null
+
+    private fun loadDynamic(context: Context) {
+        if (!dynamicLoaded) {
+            dynamicLoaded = true
+            dynamicColor = context.prefs().getInt(C.TV_AMBIENT_DYNAMIC_LAST, DEFAULT_DYNAMIC)
+        }
+    }
 
     fun isDynamic(context: Context): Boolean =
         context.prefs().getString(C.TV_AMBIENT_COLOR, "violet") == "dynamic"
 
     fun color(context: Context): Int? {
         val key = context.prefs().getString(C.TV_AMBIENT_COLOR, "violet") ?: "violet"
-        return if (key == "dynamic") dynamicColor else COLORS[key]
+        return if (key == "dynamic") {
+            loadDynamic(context)
+            dynamicColor
+        } else COLORS[key]
     }
 
     /** Color of a value of the setting (the dot in front of it in the list), null for "none". */
@@ -119,7 +141,8 @@ object TvAmbient {
         if (!isDynamic(context) || bitmap == null) return
         if (cacheKey != null) {
             colorCache.get(cacheKey)?.let { cached ->
-                publishDynamic(cached)
+                loadJob?.cancel()
+                publishDynamic(context, cached)
                 return
             }
         }
@@ -131,14 +154,15 @@ object TvAmbient {
             if (cacheKey != null) {
                 colorCache.put(cacheKey, extracted)
             }
-            publishDynamic(extracted)
+            publishDynamic(context, extracted)
         }
     }
 
     fun updateFromUrl(context: Context, url: String?, scope: CoroutineScope) {
         if (!isDynamic(context) || url.isNullOrBlank()) return
         colorCache.get(url)?.let { cached ->
-            publishDynamic(cached)
+            loadJob?.cancel()
+            publishDynamic(context, cached)
             return
         }
         loadJob?.cancel()
@@ -159,14 +183,32 @@ object TvAmbient {
                 }.getOrNull()
             } ?: return@launch
             colorCache.put(url, extracted)
-            publishDynamic(extracted)
+            publishDynamic(context, extracted)
         }
     }
 
-    private fun publishDynamic(color: Int) {
-        if (dynamicColor == color) return
-        dynamicColor = color
-        dynamicListener?.invoke(color)
+    /**
+     * The new color, for the glow of the background and the accent of the app at once. After a short stop only: moving
+     * fast over a row of cards does not make the whole screen flash from one color to the next.
+     */
+    private fun publishDynamic(context: Context, color: Int) {
+        val app = context.applicationContext
+        handler.post {
+            pendingPublish?.let { handler.removeCallbacks(it) }
+            hasSessionColor = true
+            val publish = Runnable {
+                pendingPublish = null
+                if (dynamicColor != color || TvAccent.current != color) {
+                    dynamicColor = color
+                    dynamicLoaded = true
+                    app.prefs().edit().putInt(C.TV_AMBIENT_DYNAMIC_LAST, color).apply()
+                    TvAccent.update(color)
+                    dynamicListener?.invoke(color)
+                }
+            }
+            pendingPublish = publish
+            handler.postDelayed(publish, 220L)
+        }
     }
 
     /** Fast hue-bucketed vibrant color extraction suitable for dark TV backgrounds. */

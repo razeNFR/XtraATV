@@ -153,7 +153,8 @@ fun TvTheme(accent: Int, content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
             // the ambiance color of the Xtra TV settings when one is chosen
-            primary = ComposeColor(if (TvAccent.current != null) TvAccent.color else accent),
+            // read here: the theme (and all that uses its primary color) follows the dynamic ambiance
+            primary = ComposeColor(if (TvAccent.current != null) TvAccent.onDark else accent),
             onPrimary = ComposeColor(if (TvAccent.current != null) TvAccent.onAccent else android.graphics.Color.WHITE),
             surface = ComposeColor(0xFF1C1B22),
             onSurface = ComposeColor.White,
@@ -169,7 +170,7 @@ object TvColors {
     /** Text and icons of a focused (white) item: the ambiance color, dark enough to read. */
     val onFocused get() = ComposeColor(TvAccent.onLight)
     /** The ambiance color (violet of Twitch without one). */
-    val accent get() = ComposeColor(TvAccent.color)
+    val accent get() = ComposeColor(TvAccent.onDark)
     val secondaryText = ComposeColor(0xB3FFFFFF)
 }
 

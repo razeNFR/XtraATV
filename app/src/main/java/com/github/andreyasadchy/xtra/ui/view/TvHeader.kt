@@ -50,6 +50,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -110,7 +112,7 @@ object TvHeader {
         }
     }
 
-    private class Controller(val firstRequester: FocusRequester, val searchRequester: FocusRequester, val view: ComposeView)
+    private class Controller(val firstRequester: FocusRequester, val tabRequester: FocusRequester, val searchRequester: FocusRequester, val view: ComposeView)
 
     /** Headers made of a toolbar with tabs, a sort bar, a search bar or a title block are replaced by the TV Compose header. */
     fun install(appBar: AppBarLayout) {
@@ -134,15 +136,16 @@ object TvHeader {
         }
         val state = mutableStateOf<Snapshot?>(null)
         val firstRequester = FocusRequester()
+        val tabRequester = FocusRequester()
         val searchRequester = FocusRequester()
         val view = TvDialogs.composeView(appBar.context) {
             val snapshot = state.value
             if (snapshot != null) {
-                Header(snapshot, firstRequester, searchRequester, appBar)
+                Header(snapshot, firstRequester, tabRequester, searchRequester, appBar)
             }
         }
         view.id = R.id.tvHeaderCompose
-        view.tag = Controller(firstRequester, searchRequester, view)
+        view.tag = Controller(firstRequester, tabRequester, searchRequester, view)
         appBar.addView(view, AppBarLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             scrollFlags = 0
         })
@@ -185,7 +188,10 @@ object TvHeader {
         appBar.post { update() }
     }
 
-    /** Up from the first row of a list: the first action of the header of its screen (or the search bar when there are no pills). */
+    /**
+     * Up from the first row of a list: the tab shown of the header of its screen (never another tab: with "pages without
+     * OK" it would change the page), else its first action (or the search bar when there are no pills).
+     */
     fun focusHeaderOf(view: View): Boolean {
         val root = screenRoot(view)
         val header = root.findViewById<ComposeView>(R.id.tvHeaderCompose) ?: return false
@@ -194,6 +200,9 @@ object TvHeader {
             return false
         }
         header.requestFocus()
+        if (runCatching { controller.tabRequester.requestFocus() }.getOrDefault(false)) {
+            return true
+        }
         return try {
             controller.firstRequester.requestFocus()
             true
@@ -327,7 +336,7 @@ object TvHeader {
             toolbar?.menu?.let { menu ->
                 for (i in 0 until menu.size()) {
                     val item = menu.getItem(i)
-                    if (item.isVisible && !item.title.isNullOrBlank() && item.itemId != R.id.search && item.itemId != R.id.settings && item.itemId != R.id.login && item.itemId != R.id.followButton && right.size < 3) {
+                    if (item.isVisible && !item.title.isNullOrBlank() && item.itemId != R.id.search && item.itemId != R.id.settings && item.itemId != R.id.login && item.itemId != R.id.followButton && right.size < 6) {
                         // channel page: notifications, share and download as icons only (a full bell when on), the row
                         // stays on the screen with all its tabs
                         val icon = when (item.itemId) {
@@ -399,7 +408,7 @@ object TvHeader {
     }
 
     @Composable
-    private fun Header(snapshot: Snapshot, firstRequester: FocusRequester, searchRequester: FocusRequester, appBar: AppBarLayout) {
+    private fun Header(snapshot: Snapshot, firstRequester: FocusRequester, tabRequester: FocusRequester, searchRequester: FocusRequester, appBar: AppBarLayout) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
         val all = snapshot.left + snapshot.tabs + snapshot.afterTabs + snapshot.right
@@ -519,40 +528,126 @@ object TvHeader {
                 }
                 if (all.isNotEmpty()) {
                     Spacer(Modifier.height(10.dp))
-                    Row(
-                        Modifier.onPreviewKeyEvent { event ->
-                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                            when (event.key) {
-                                Key.DirectionDown -> focusVisibleTabContent(screenRoot(appBar))
-                                Key.DirectionUp -> {
-                                    if (snapshot.isSearch) {
-                                        runCatching { searchRequester.requestFocus() }
+                    // 2 lines when the screen has tabs: its actions first (they go to the next line when they do not fit,
+                    // the sort at the end of the line), then the tabs alone. The sort is reached without crossing a tab:
+                    // with "pages without OK" crossing one changed the page, and the sort of the page went away with it
+                    val tabsLine = snapshot.tabs + snapshot.afterTabs
+                    val hasTabs = snapshot.tabs.isNotEmpty()
+                    val actionsLine = if (hasTabs) snapshot.left + snapshot.right else all
+                    val firstKey = (actionsLine.firstOrNull() ?: tabsLine.firstOrNull())?.key
+                    val tabTarget = snapshot.tabs.firstOrNull { it.selected } ?: snapshot.tabs.firstOrNull()
+                    // top of each action on the screen: the ones of the last line go down to the tab shown
+                    val tops = remember { androidx.compose.runtime.mutableStateMapOf<String, Int>() }
+                    if (actionsLine.isNotEmpty()) {
+                        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                        androidx.compose.foundation.layout.FlowRow(
+                            Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when (event.key) {
+                                    Key.DirectionUp -> {
+                                        if (snapshot.isSearch) {
+                                            runCatching { searchRequester.requestFocus() }
+                                            true
+                                        } else false
                                     }
-                                    true
+                                    else -> false
                                 }
-                                else -> false
-                            }
-                        },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        all.forEachIndexed { index, action ->
-                            if (index == snapshot.left.size + snapshot.tabs.size + snapshot.afterTabs.size && snapshot.right.isNotEmpty()) {
-                                Spacer(Modifier.weight(1f))
-                            }
-                            Pill(
-                                action = action,
-                                isTab = index >= snapshot.left.size && index < snapshot.left.size + snapshot.tabs.size,
-                                modifier = (if (index == 0) Modifier.focusRequester(firstRequester) else Modifier).onPreviewKeyEvent { event ->
-                                    // left on the first action: the side menu
-                                    if (index == 0 && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
-                                        findActivity(appBar)?.openTvMenu()
-                                        true
-                                    } else if (index == all.lastIndex && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
-                                        true
-                                    } else false
+                            },
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            itemVerticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // with tabs: bell, share... follow the actions, only the sort goes to the end of the line
+                            val rightStart = if (hasTabs) {
+                                actionsLine.indexOfFirst { it.key == "sort" }
+                            } else snapshot.left.size + snapshot.tabs.size + snapshot.afterTabs.size
+                            actionsLine.forEachIndexed { index, action ->
+                                if (index == rightStart && snapshot.right.isNotEmpty()) {
+                                    Spacer(Modifier.weight(1f))
                                 }
-                            )
+                                val isTab = !hasTabs && index >= snapshot.left.size && index < snapshot.left.size + snapshot.tabs.size
+                                Pill(
+                                    action = action,
+                                    isTab = isTab,
+                                    modifier = (if (action.key == firstKey) Modifier.focusRequester(firstRequester) else Modifier)
+                                        .onGloballyPositioned { tops[action.key] = it.positionInRoot().y.toInt() }
+                                        .onPreviewKeyEvent { event ->
+                                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                            when (event.key) {
+                                                // left on the first action: the side menu
+                                                Key.DirectionLeft -> if (index == 0) {
+                                                    findActivity(appBar)?.openTvMenu()
+                                                    true
+                                                } else false
+                                                Key.DirectionRight -> index == actionsLine.lastIndex
+                                                Key.DirectionUp -> {
+                                                    // the first line of actions: nothing above it (but the search bar)
+                                                    val top = tops[action.key]
+                                                    val first = actionsLine.mapNotNull { tops[it.key] }.minOrNull()
+                                                    !snapshot.isSearch && (top == null || first == null || top <= first)
+                                                }
+                                                Key.DirectionDown -> {
+                                                    val top = tops[action.key]
+                                                    val last = actionsLine.mapNotNull { tops[it.key] }.maxOrNull()
+                                                    if (top == null || last == null || top >= last) {
+                                                        // the last line of actions: the tab shown, else the page
+                                                        if (!hasTabs || tabTarget == null || runCatching { tabRequester.requestFocus() }.getOrDefault(false) != true) {
+                                                            focusVisibleTabContent(screenRoot(appBar))
+                                                        }
+                                                        true
+                                                    } else false
+                                                }
+                                                else -> false
+                                            }
+                                        }
+                                )
+                            }
+                        }
+                    }
+                    if (hasTabs) {
+                        if (actionsLine.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        Row(
+                            Modifier.onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when (event.key) {
+                                    Key.DirectionDown -> focusVisibleTabContent(screenRoot(appBar))
+                                    Key.DirectionUp -> {
+                                        when {
+                                            // the actions above: the nearest one
+                                            actionsLine.isNotEmpty() -> false
+                                            snapshot.isSearch -> {
+                                                runCatching { searchRequester.requestFocus() }
+                                                true
+                                            }
+                                            else -> true
+                                        }
+                                    }
+                                    else -> false
+                                }
+                            },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            tabsLine.forEachIndexed { index, action ->
+                                val isTab = index < snapshot.tabs.size
+                                var modifier: Modifier = Modifier
+                                if (action.key == firstKey) modifier = modifier.focusRequester(firstRequester)
+                                if (action === tabTarget) modifier = modifier.focusRequester(tabRequester)
+                                Pill(
+                                    action = action,
+                                    isTab = isTab,
+                                    modifier = modifier.onPreviewKeyEvent { event ->
+                                        if (index == 0 && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                                            findActivity(appBar)?.openTvMenu()
+                                            true
+                                        } else if (index == tabsLine.lastIndex && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
+                                            true
+                                        } else false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -571,7 +666,8 @@ object TvHeader {
             if (focusSwitch) {
                 LaunchedEffect(focused) {
                     if (focused) {
-                        kotlinx.coroutines.delay(60L)
+                        // a short stop on the tab: going over it to another one does not load its page
+                        kotlinx.coroutines.delay(250L)
                         action.run()
                     }
                 }
@@ -589,15 +685,15 @@ object TvHeader {
         } else 0f
         val background = when {
             focused -> TvColors.focused
-            isTab && action.selected -> Color(0x40FFFFFF)
+            // the tab shown: a pill tinted with the color of accent, its name in white (the name in the color of accent
+            // over a grey pill could not be read with a dark color)
+            isTab && action.selected -> TvColors.accent.copy(alpha = 0.34f)
             isTab -> Color.Transparent
             else -> Color(0x26FFFFFF)
         }
         val content = when {
             focused -> TvColors.onFocused
             isTab && !action.selected -> TvColors.secondaryText
-            // the tab shown, in the color of accent (ambiance color of the Xtra TV settings)
-            isTab && com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null -> TvColors.accent
             else -> Color.White
         }
         Row(

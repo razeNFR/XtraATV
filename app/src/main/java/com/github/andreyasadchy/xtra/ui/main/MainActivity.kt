@@ -61,6 +61,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.NavigationUI
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.ui.setupWithNavController
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -232,6 +233,11 @@ class MainActivity : AppCompatActivity() {
                 !(lastTvKeyCode in listOf(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER) && android.os.SystemClock.elapsedRealtime() - lastTvKeyAt < 500L)
             ) {
                 binding.root.post { tvMenuState.focusCurrentOrSelected() }
+                return@listener
+            }
+            if (isTv && tvMultiStreamShown && newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
+                // something behind the multi-stream took the focus (a list that loaded, the home): back on the streams
+                binding.root.post { keepFocusInMultiStream() }
                 return@listener
             }
             if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
@@ -995,6 +1001,12 @@ class MainActivity : AppCompatActivity() {
             lastTvKeyCode = event.keyCode
             lastTvKeyAt = android.os.SystemClock.elapsedRealtime()
         }
+        if (isTv && tvMultiStreamShown && event.action == KeyEvent.ACTION_DOWN && event.keyCode != KeyEvent.KEYCODE_BACK &&
+            keepFocusInMultiStream() && currentFocus?.isInside(binding.playerContainer) == true
+        ) {
+            // the focus was not on a stream: this key put it back there
+            return true
+        }
         if (isTv && !dispatchingPlayerKey && tvLiveAlerts.onKey(event)) {
             return true
         }
@@ -1063,14 +1075,15 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
                 val grid = TvUi.findVisibleGrid(binding.navHostFragment)
-                if (grid != null && TvUi.focusFirstItem(grid)) {
+                if (grid != null && focusRememberedItem(grid)) {
                     return true
                 }
                 val home = binding.navHostFragment.findViewById<View>(R.id.tvHome)
                 if (home != null && home.isShown) {
+                    // the card that had the focus on the home (its first card when it is gone)
                     hideTvMenu()
                     home.requestFocus()
-                    currentTvHome()?.focusFirstCard()
+                    currentTvHome()?.focusLastCard()
                     return true
                 }
                 if (binding.navHostFragment.requestFocus(View.FOCUS_RIGHT)) {
@@ -1170,14 +1183,15 @@ class MainActivity : AppCompatActivity() {
         val span = grid?.columnCount ?: 1
         tvGridBackCallback.isEnabled = grid != null && position >= span * 2
         if (grid != null && position != RecyclerView.NO_POSITION && ::navController.isInitialized) {
-            navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] = position }
+            tvFocusKey()?.let { tvFocusMemory[it] = position }
         }
         if (child != null && grid != null && com.github.andreyasadchy.xtra.ui.tv.TvAmbient.isDynamic(this)) {
-            extractCardAmbient(child, "${grid.hashCode()}:$position")
+            extractCardAmbient(child)
         }
     }
 
-    private fun extractCardAmbient(card: View, key: String) {
+    /** Dynamic ambiance: the color of the picture of the focused card (not kept by position, the lists change). */
+    private fun extractCardAmbient(card: View) {
         var best: android.widget.ImageView? = null
         var bestArea = 0
         fun scan(v: View) {
@@ -1194,18 +1208,47 @@ class MainActivity : AppCompatActivity() {
         scan(card)
         val drawable = best?.drawable ?: return
         val bmp = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap ?: return
-        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromBitmap(this, key, bmp, lifecycleScope)
+        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromBitmap(this, null, bmp, lifecycleScope)
     }
 
     /** Position of the focused card of each screen, to give it back when coming back to the screen. */
     private val tvFocusMemory = HashMap<String, Int>()
+
+    /**
+     * Key of the screen shown in [tvFocusMemory]: its section for a screen of the side menu (opened again from its root
+     * each time, the card is still remembered), else its place in the back stack.
+     */
+    private fun tvFocusKey(): String? {
+        if (!::navController.isInitialized) {
+            return null
+        }
+        val entry = navController.currentBackStackEntry ?: return null
+        return if (binding.navBar.menu.findItem(entry.destination.id) != null) "section:${entry.destination.id}" else entry.id
+    }
+
+    /** From the side menu into a list: the card that had the focus there, else its first card. */
+    private fun focusRememberedItem(grid: com.github.andreyasadchy.xtra.ui.view.GridRecyclerView): Boolean {
+        val count = grid.adapter?.itemCount ?: 0
+        val position = tvFocusKey()?.let { tvFocusMemory[it] }?.takeIf { it in 1 until count } ?: return TvUi.focusFirstItem(grid)
+        val holder = grid.findViewHolderForAdapterPosition(position)
+        if (holder != null && holder.itemView.requestFocus()) {
+            return true
+        }
+        grid.scrollToPosition(position)
+        grid.post {
+            if (grid.findViewHolderForAdapterPosition(position)?.itemView?.requestFocus() != true) {
+                TvUi.focusFirstItem(grid)
+            }
+        }
+        return true
+    }
 
     /** Coming back to a screen: focus the card that had the focus there (the views were recreated). */
     private fun restoreTvScreenFocus(tries: Int = 0) {
         if (!::navController.isInitialized || isTvMenuShown) {
             return
         }
-        val position = navController.currentBackStackEntry?.id?.let { tvFocusMemory[it] } ?: return
+        val position = tvFocusKey()?.let { tvFocusMemory[it] } ?: return
         val focus = currentFocus
         if (focus != null && focus.isShown && focus.parent is RecyclerView) {
             return
@@ -1397,8 +1440,24 @@ class MainActivity : AppCompatActivity() {
             // the tab is hidden on the screen open: the screen again, with that tab
             navController.navigate(R.id.followPagerFragment)
         } else {
-            binding.navBar.menu.findItem(R.id.followPagerFragment)?.let { NavigationUI.onNavDestinationSelected(it, navController) }
-                ?: navController.navigate(R.id.followPagerFragment)
+            openTvSectionRoot(R.id.followPagerFragment)
+        }
+    }
+
+    /**
+     * TV: a section of the side menu opens at its root. The screens opened in another section (a channel, a category)
+     * are not kept behind it: coming back to that section shows the section, not the channel left there.
+     */
+    private fun openTvSectionRoot(id: Int): Boolean {
+        return try {
+            navController.navigate(id, null, androidx.navigation.navOptions {
+                launchSingleTop = true
+                restoreState = false
+                popUpTo(navController.graph.findStartDestination().id) { saveState = false }
+            })
+            true
+        } catch (e: IllegalArgumentException) {
+            false
         }
     }
 
@@ -1432,11 +1491,11 @@ class MainActivity : AppCompatActivity() {
                     ?: binding.navHostFragment.findViewById<View>(R.id.tvHome)
             }
             when {
-                target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> TvUi.focusFirstItem(target)
+                target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> focusRememberedItem(target)
                 target != null && target.id == R.id.tvHome -> {
-                    // the home: the first stream of the first row, never "refresh"
+                    // the home: the card that had the focus (else the first stream of the first row), never "refresh"
                     target.requestFocus()
-                    currentTvHome()?.focusFirstCard()
+                    currentTvHome()?.focusLastCard()
                 }
                 target != null -> target.requestFocus()
                 tries < maxTries -> focusContentAfterMenu(search, tries + 1, maxTries)
@@ -1445,6 +1504,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showTvMenu(focus: Boolean) {
+        if (tvMultiStreamShown) {
+            // never over a multi-stream
+            keepFocusInMultiStream()
+            return
+        }
         val menu = binding.navBarContainer
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         menu.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
@@ -1465,8 +1529,9 @@ class MainActivity : AppCompatActivity() {
             val sideMenu = binding.tvSideMenu
             if (sideMenu != null) {
                 if (!tvMenuState.focusSelected()) {
+                    // the entries are not shown yet (the icon rail unfolds): they take the focus once they are
                     sideMenu.requestFocus()
-                    sideMenu.post { tvMenuState.focusSelected() }
+                    tvMenuState.pendingFocus = true
                 }
             } else {
                 val selected = binding.navBar.findViewById<View>(binding.navBar.selectedItemId)
@@ -1478,7 +1543,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideTvMenu() {
-        binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        tvMenuState.pendingFocus = false
+        // a player or a multi-stream is over the screens: they stay out of reach of the focus
+        if (!isTvPlayerOverContent()) {
+            binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        }
         val menu = binding.navBarContainer
         if (isCompactRailEnabled()) {
             if (isTvMenuShown) {
@@ -1537,6 +1606,11 @@ class MainActivity : AppCompatActivity() {
         }
         if (isTv && player != null && player.isMaximizedScreen()) {
             // the player screen is being made (a switch): the focus waits for it, it never goes behind the player
+            return true
+        }
+        if (isTv && tvMultiStreamShown) {
+            // a multi-stream: the focus on one of its streams, never behind them
+            keepFocusInMultiStream()
             return true
         }
         if (isTv && isTvMenuShown && (focus == null || !focus.isShown)) {
@@ -2162,15 +2236,52 @@ class MainActivity : AppCompatActivity() {
 
     /** TV multi-stream: replaces the player with up to 4 streams shown together. */
     fun startMultiStream(streams: List<Stream>, origin: Stream? = null) {
+        // from here the focus belongs to the streams: nothing behind them (home, lists, side menu) may take it
+        tvMultiStreamShown = true
+        hideTvMenu()
         closeTvPip()
         (playerFragment as? PlayerFragment)?.let {
             it.close()
             closePlayer(focusHome = false)
         }
         setMainContentFocusable(false)
+        binding.navBarContainer.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         supportFragmentManager.beginTransaction()
             .replace(R.id.playerContainer, com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment.newInstance(streams, origin), MULTI_STREAM_TAG)
             .commit()
+    }
+
+    /** A multi-stream is shown (set before its screen is made, so that the focus waits for it). */
+    private var tvMultiStreamShown = false
+
+    /** The screen of a multi-stream went away, however it was closed (a stream opened over it, back...). */
+    fun onMultiStreamDestroyed() {
+        binding.root.post {
+            if (tvMultiStreamShown && supportFragmentManager.findFragmentByTag(MULTI_STREAM_TAG) == null) {
+                tvMultiStreamShown = false
+                if (playerFragment == null) {
+                    setMainContentFocusable(true)
+                }
+            }
+        }
+    }
+
+    /** A full screen player or a multi-stream covers the screens. */
+    private fun isTvPlayerOverContent() = tvMultiStreamShown || (playerFragment as? PlayerFragment)?.isMaximizedScreen() == true
+
+    /** The focus on a stream of the multi-stream when it is anywhere else in this window. True when it was moved or waits for the streams. */
+    private fun keepFocusInMultiStream(): Boolean {
+        if (!tvMultiStreamShown) {
+            return false
+        }
+        val focus = currentFocus
+        val behind = focus == null || !focus.isShown || focus === binding.root || focus === binding.playerContainer ||
+                focus.isInside(binding.navHostFragment) || focus.isInside(binding.navBarContainer)
+        if (!behind) {
+            return false
+        }
+        (supportFragmentManager.findFragmentByTag(MULTI_STREAM_TAG) as? com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment)?.requestTileFocus()
+        return true
     }
 
     /** Back from a multi-stream: the next streams to start when the one started ends at once (20 s). */
@@ -2214,6 +2325,7 @@ class MainActivity : AppCompatActivity() {
         supportFragmentManager.findFragmentByTag(MULTI_STREAM_TAG)?.let {
             supportFragmentManager.beginTransaction().remove(it).commitNow()
         }
+        tvMultiStreamShown = false
         setMainContentFocusable(true)
     }
 
@@ -2514,7 +2626,11 @@ class MainActivity : AppCompatActivity() {
      */
     fun setMainContentFocusable(focusable: Boolean) {
         // the previews of the lists behind a player stop, with their sound
-        com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended = !focusable
+        com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended = !focusable || tvMultiStreamShown
+        if (focusable && tvMultiStreamShown) {
+            // the player closed for a multi-stream: the screens behind stay out of reach, the streams keep the focus
+            return
+        }
         if (focusable) {
             if (binding.navHostFragment.descendantFocusability != ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
                 return
@@ -2944,6 +3060,9 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 tvMenuExtraSelected = null
+                if (isTv) {
+                    return@setOnItemSelectedListener openTvSectionRoot(it.itemId)
+                }
                 NavigationUI.onNavDestinationSelected(it, navController)
                 return@setOnItemSelectedListener true
             }

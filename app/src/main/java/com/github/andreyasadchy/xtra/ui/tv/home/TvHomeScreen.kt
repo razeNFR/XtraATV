@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -52,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
@@ -102,6 +104,7 @@ class TvHomeActions(
     val onStreamUnfocused: (Stream) -> Unit = {},
     val openChannel: (Stream) -> Unit = {},
     val onHeroFocused: (Stream) -> Unit = {},
+    val onHeroUnfocused: (Stream) -> Unit = {},
     val formatViewers: (Int) -> String,
     /** The count alone ("7.1K"), for the small cards. */
     val formatCount: (Int) -> String = { it.toString() },
@@ -449,6 +452,8 @@ fun TvHomeScreen(
                             stream = hero!!,
                             queue = heroQueue,
                             actions = actions,
+                            previewLogin = previewLogin,
+                            previewPlayer = previewPlayer,
                             firstRequester = firstCard,
                             watchRequester = cardRequesters.getOrPut("hero/watch") { FocusRequester() },
                             channelRequester = cardRequesters.getOrPut("hero/channel") { FocusRequester() },
@@ -586,6 +591,8 @@ private fun HeroBanner(
     stream: Stream,
     queue: List<Stream>,
     actions: TvHomeActions,
+    previewLogin: () -> String?,
+    previewPlayer: () -> ExoPlayer?,
     firstRequester: FocusRequester,
     watchRequester: FocusRequester,
     channelRequester: FocusRequester,
@@ -595,11 +602,17 @@ private fun HeroBanner(
     val context = androidx.compose.ui.platform.LocalContext.current
     val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
     val isFavorite = favorites.any { it.login == stream.channelLogin }
+    var heroFocused by remember { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxWidth()
             .height(256.dp)
-            .onFocusChanged { if (it.hasFocus) actions.onHeroFocused(stream) }
+            .onFocusChanged {
+                if (it.hasFocus != heroFocused) {
+                    heroFocused = it.hasFocus
+                    if (it.hasFocus) actions.onHeroFocused(stream) else actions.onHeroUnfocused(stream)
+                }
+            }
     ) {
         // High-res backdrop on the right, alpha-feathered on all four edges so it melts into any ambient background
         Box(
@@ -640,6 +653,22 @@ private fun HeroBanner(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.90f }
             )
+            // the stream itself over its picture while the banner has the focus (no sound), cropped like the picture
+            val player = previewPlayer()
+            if (heroFocused && player != null && previewLogin() != null && previewLogin() == stream.channelLogin) {
+                Box(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
+                    AndroidView(
+                        factory = { context -> TextureView(context) },
+                        update = { player.setVideoTextureView(it) },
+                        onRelease = { player.clearVideoTextureView(it) },
+                        modifier = Modifier
+                            .wrapContentHeight(unbounded = true)
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .graphicsLayer { alpha = 0.90f }
+                    )
+                }
+            }
         }
 
         // Stream metadata and action pills on the left

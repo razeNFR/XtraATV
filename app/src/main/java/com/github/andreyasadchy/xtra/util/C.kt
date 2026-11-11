@@ -289,6 +289,7 @@ object C {
     const val TV_HOME_FOLLOWED_VIDEOS = "tv_home_followed_videos"
     const val TV_HOME_HERO = "tv_home_hero"
     const val TV_COMPACT_RAIL = "tv_compact_rail"
+    const val TV_AMBIENT_DYNAMIC_LAST = "tv_ambient_dynamic_last"
     const val TV_CLIPS_AUTOPLAY = "tv_clips_autoplay"
     const val TV_MULTISTREAM_GROUPS = "tv_multistream_groups"
     const val TV_CHAT_BAND_OVERLAY = "tv_chat_band_overlay"

@@ -64,27 +64,24 @@ class TvMenuState {
     /** An entry got the focus (to show its page without OK, an option of the Xtra TV settings). */
     var onFocusItem: (Int) -> Unit = {}
 
-    /** Moves the focus to the screen being shown, else to the first entry. */
+    /**
+     * The focus is wanted in the menu while its entries are not there yet (the icon rail is unfolding): they take it
+     * as soon as they are shown. Without it the first "left" opened the menu and a second one was needed to enter it.
+     */
+    var pendingFocus by mutableStateOf(false)
+
+    /** Moves the focus to the screen being shown, else to the first entry. False when no entry could take it. */
     fun focusSelected(): Boolean {
+        if (collapsed) return false
         val requester = requesters[selected] ?: items.firstOrNull()?.let { requesters[it.id] } ?: return false
-        return try {
-            requester.requestFocus()
-            true
-        } catch (e: IllegalStateException) {
-            false
-        }
+        return runCatching { requester.requestFocus() }.getOrDefault(false)
     }
 
     /** Moves the focus to the entry currently hovered in the menu, else to the selected one. */
     fun focusCurrentOrSelected(): Boolean {
         val targetId = if (focusedId != 0 && requesters.containsKey(focusedId)) focusedId else selected
         val requester = requesters[targetId] ?: requesters[selected] ?: items.firstOrNull()?.let { requesters[it.id] } ?: return false
-        return try {
-            requester.requestFocus()
-            true
-        } catch (e: IllegalStateException) {
-            false
-        }
+        return runCatching { requester.requestFocus() }.getOrDefault(false)
     }
 
     companion object {
@@ -108,6 +105,19 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         label = "railWidth"
     )
     var focusedSlot by remember { mutableIntStateOf(-1) }
+    if (state.pendingFocus && !collapsed) {
+        // the entries were just put back (rail unfolded): the focus as soon as one of them can take it
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            repeat(20) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (!state.pendingFocus || state.focusSelected()) {
+                    state.pendingFocus = false
+                    return@LaunchedEffect
+                }
+            }
+            state.pendingFocus = false
+        }
+    }
     val items = state.items
     val playing = state.nowPlaying
     val nowPlayingAt = items.indexOfFirst { it.group != TvMenuState.GROUP_TOP }.coerceAtLeast(0)

@@ -579,6 +579,15 @@ class MultiStreamFragment : Fragment() {
         tiles.firstOrNull()?.view?.requestFocus()
     }
 
+    /** The focus back on the stream selected last (else the first one), when it went anywhere else. */
+    fun requestTileFocus(): Boolean {
+        if (view == null) {
+            return false
+        }
+        val tile = selectedTile?.takeIf { it in tiles } ?: tiles.firstOrNull() ?: return false
+        return tile.view.requestFocus()
+    }
+
     /** 2 streams: the chats of both streams are shown with them. */
     private fun showBothChats() {
         if (tiles.size == 2 && !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
@@ -1199,6 +1208,7 @@ class MultiStreamFragment : Fragment() {
         tiles.forEach { it.player.release() }
         tiles.clear()
         releasePlaybackSignals()
+        (activity as? MainActivity)?.onMultiStreamDestroyed()
         super.onDestroyView()
     }
 
