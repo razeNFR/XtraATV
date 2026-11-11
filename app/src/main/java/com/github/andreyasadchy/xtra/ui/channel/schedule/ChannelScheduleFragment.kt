@@ -1,5 +1,6 @@
 package com.github.andreyasadchy.xtra.ui.channel.schedule
 
+import com.github.andreyasadchy.xtra.ui.tv.tvTopFade
 import android.os.Bundle
 import android.text.format.DateFormat
 import android.view.LayoutInflater
@@ -208,8 +209,11 @@ private fun ChannelScheduleContent(
     val context = LocalContext.current
     val horizontalPad = if (isTv) 36.dp else 16.dp
 
+    val tvListState = androidx.compose.foundation.lazy.rememberLazyListState()
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        state = tvListState,
+        // what goes under the header fades away
+        modifier = Modifier.fillMaxSize().tvTopFade { tvListState.canScrollBackward },
         contentPadding = PaddingValues(start = horizontalPad, end = horizontalPad, top = 14.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

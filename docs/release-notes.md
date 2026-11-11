@@ -6,7 +6,8 @@
 - **Compact side rail**: optional slim icon rail on the left when the side menu closes instead of hiding it completely.
 - **Channel page redesign & Schedule tab**: soft-feathered channel header banner, TV-friendly *About* tab with bio, Twitch panels, QR codes for social links, and a new *Schedule* tab for upcoming streams.
 - **Unified TV long-press menus**: long-pressing OK on VODs, Clips, and Bookmarks opens the same TV action panel as on Home, on every list (*Resume*, *Watch from the start*, *Remove from history*, *Channel*, *Category*, *Bookmark*, *Download*).
-- **Channel page actions on two lines**: the actions (with the sort at the end) above the tabs, wrapped to the next line when there are many; the sort is reached without crossing a tab.
+- **Channel page actions on two lines**: the actions (with the sort at the end) above the tabs, wrapped to the next line when there are many; the sort is reached without crossing a tab. On the other screens with tabs the sort sits on the line of the title.
+- **Softer headers**: the cards that scroll under a header fade away instead of being cut by a straight line, and the main screens show the icon of their section in front of their title.
 - **Side menu sections open at their root**: coming back to a section no longer shows the channel left open there, and the card that had the focus is given back.
 - **VOD chapters**: chapter markers on the timeline, chapter name in the seek preview, and a TV side panel to jump between categories/chapters.
 - **Clips autoplay & Channel +/−**: optional automatic playback of the next clip in the list when a clip ends, plus instant clip skipping with Channel + / −.
@@ -16,7 +17,8 @@
 - **Android TV Home channels**: publishes *Followed Live* and *Watch Next* (unfinished VODs) directly to the Android TV / Google TV home launcher.
 
 ### Fixes
-- **Twitch page login on Fire TV**: on the page "Xtra wants to access your account", up / down now go from one button of the page to the next and the page follows, *Authorize* can be reached and pressed with the remote.
+- **Twitch page login on Fire TV**: on the page "Xtra wants to access your account", up / down scroll the page and select its buttons as they come on the screen, *Authorize* can be reached and pressed with the remote.
+- **Search history**: a search removed from the history is removed in every tab of the search.
 
 ### Install
 Download `XtraTV-1.3.0-tv.apk` below and install it over the previous version, your settings and account are kept.

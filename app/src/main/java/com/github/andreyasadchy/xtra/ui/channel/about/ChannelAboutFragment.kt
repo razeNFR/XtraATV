@@ -1,5 +1,6 @@
 package com.github.andreyasadchy.xtra.ui.channel.about
 
+import com.github.andreyasadchy.xtra.ui.tv.tvTopFade
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Typeface
@@ -419,8 +420,11 @@ private fun TvAboutContent(
         else -> 3
     }
 
+    val tvListState = androidx.compose.foundation.lazy.rememberLazyListState()
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        state = tvListState,
+        // what goes under the header fades away
+        modifier = Modifier.fillMaxSize().tvTopFade { tvListState.canScrollBackward },
         contentPadding = PaddingValues(start = 36.dp, end = 36.dp, top = 14.dp, bottom = 36.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {

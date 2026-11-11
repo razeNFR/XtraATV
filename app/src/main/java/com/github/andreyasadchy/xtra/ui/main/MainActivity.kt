@@ -1069,6 +1069,15 @@ class MainActivity : AppCompatActivity() {
                     focusContentAfterMenu(false)
                     return true
                 }
+                // the home first: giving the focus back to its view would put it on its banner. The card that had the
+                // focus is asked before the view takes the focus (the banner focused meanwhile is not remembered)
+                val home = binding.navHostFragment.findViewById<View>(R.id.tvHome)
+                if (home != null && home.isShown) {
+                    hideTvMenu()
+                    currentTvHome()?.focusLastCard()
+                    home.requestFocus()
+                    return true
+                }
                 // from the menu, go back to the item last selected in the screen, else to its first item
                 val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(binding.navHostFragment) }
                 if (last != null && last.requestFocus()) {
@@ -1076,14 +1085,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 val grid = TvUi.findVisibleGrid(binding.navHostFragment)
                 if (grid != null && focusRememberedItem(grid)) {
-                    return true
-                }
-                val home = binding.navHostFragment.findViewById<View>(R.id.tvHome)
-                if (home != null && home.isShown) {
-                    // the card that had the focus on the home (its first card when it is gone)
-                    hideTvMenu()
-                    home.requestFocus()
-                    currentTvHome()?.focusLastCard()
                     return true
                 }
                 if (binding.navHostFragment.requestFocus(View.FOCUS_RIGHT)) {
@@ -1367,6 +1368,12 @@ class MainActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
             tvMenuState.items.find { it.id == tvMenuState.selected }?.title
         }
+        com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionIcon = {
+            // only on the screen of the section itself, not on a category or another screen opened from it
+            if (::navController.isInitialized && navController.currentBackStackEntry?.destination?.id?.let { binding.navBar.menu.findItem(it) } != null) {
+                tvMenuState.items.find { it.id == tvMenuState.selected }?.icon
+            } else null
+        }
         // "Now playing": the stream kept in the mini player or as audio only
         tvMenuState.onNowPlayingClick = {
             hideTvMenu()
@@ -1494,8 +1501,8 @@ class MainActivity : AppCompatActivity() {
                 target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> focusRememberedItem(target)
                 target != null && target.id == R.id.tvHome -> {
                     // the home: the card that had the focus (else the first stream of the first row), never "refresh"
-                    target.requestFocus()
                     currentTvHome()?.focusLastCard()
+                    target.requestFocus()
                 }
                 target != null -> target.requestFocus()
                 tries < maxTries -> focusContentAfterMenu(search, tries + 1, maxTries)

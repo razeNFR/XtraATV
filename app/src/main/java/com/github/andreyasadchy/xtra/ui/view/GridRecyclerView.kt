@@ -270,6 +270,11 @@ class GridRecyclerView : RecyclerView {
     private var cardTextScale = 1f
 
     init {
+        if (isTv) {
+            // the cards that go under the header fade away, they are not cut by a straight line
+            isVerticalFadingEdgeEnabled = true
+            setFadingEdgeLength((36 * resources.displayMetrics.density).toInt())
+        }
         addOnChildAttachStateChangeListener(object : OnChildAttachStateChangeListener {
             override fun onChildViewAttachedToWindow(view: View) {
                 if (isTv) {
@@ -279,6 +284,15 @@ class GridRecyclerView : RecyclerView {
 
             override fun onChildViewDetachedFromWindow(view: View) {}
         })
+    }
+
+    /** TV: the fade under the header only once the list has scrolled, never at the bottom of the screen. */
+    override fun getTopFadingEdgeStrength(): Float {
+        return if (!isTv) super.getTopFadingEdgeStrength() else if (canScrollVertically(-1)) 1f else 0f
+    }
+
+    override fun getBottomFadingEdgeStrength(): Float {
+        return if (!isTv) super.getBottomFadingEdgeStrength() else 0f
     }
 
     private fun scaleCardTexts(card: View) {

@@ -80,88 +80,123 @@ class LoginActivity : AppCompatActivity() {
     companion object {
 
         /**
-         * TV: the remote on the page where Twitch asks to authorize the app. Nothing here depends on the names Twitch
-         * gives to its buttons: the links and buttons are taken in the order of the page.
+         * TV: the remote on the page where Twitch asks to authorize the app. Up / down scroll the page like a finger
+         * would, whatever part of it scrolls; a link or button that is on the screen is selected on the way (a frame
+         * drawn over it), OK presses it. Nothing here depends on the names Twitch gives to its buttons, nor on what
+         * the page does with the focus.
          */
         private val TV_AUTHORIZE_JS = """
             (function() {
                 if (window.__xtraTv) return;
-                var style = document.createElement('style');
-                style.textContent = 'html,body{height:auto!important;min-height:100%!important;overflow-y:auto!important}' +
-                    '.xtra-tv-focus,.xtra-tv-focus:focus{outline:4px solid #9147ff!important;outline-offset:3px!important;box-shadow:0 0 0 7px rgba(145,71,255,.35)!important}';
-                (document.head || document.documentElement).appendChild(style);
-                function visible(e) {
+                var frame = document.createElement('div');
+                frame.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;display:none;border:4px solid #9147ff;' +
+                    'border-radius:8px;box-shadow:0 0 0 5px rgba(145,71,255,.35);box-sizing:border-box';
+                document.documentElement.appendChild(frame);
+                var current = null;
+                var lastFocused = null;
+                function shown(e) {
                     var r = e.getBoundingClientRect();
                     var c = getComputedStyle(e);
                     return r.width > 0 && r.height > 0 && c.visibility !== 'hidden' && c.display !== 'none';
                 }
+                function onScreen(e) {
+                    var r = e.getBoundingClientRect();
+                    return r.top >= 0 && r.bottom <= window.innerHeight;
+                }
                 function items() {
-                    var all = document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[role=button],[tabindex]');
+                    var all = document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[role=button]');
                     var list = [];
                     for (var i = 0; i < all.length; i++) {
                         var e = all[i];
-                        if (!e.disabled && e.getAttribute('tabindex') !== '-1' && visible(e)) list.push(e);
+                        if (!e.disabled && shown(e)) list.push(e);
                     }
                     return list;
                 }
-                function scrollers() {
+                function scrollers(step) {
                     var list = [];
                     var all = document.querySelectorAll('*');
                     for (var i = 0; i < all.length; i++) {
                         var e = all[i];
-                        if (e.scrollHeight > e.clientHeight + 8) {
+                        // the blocks of the page that scroll by themselves (the page as a whole is the window, below)
+                        if (e !== document.documentElement && e !== document.body && e.scrollHeight > e.clientHeight + 8) {
                             var o = getComputedStyle(e).overflowY;
-                            if (o === 'auto' || o === 'scroll' || e === document.scrollingElement) list.push(e);
+                            if (o === 'auto' || o === 'scroll') {
+                                var room = step > 0 ? e.scrollTop + e.clientHeight < e.scrollHeight - 2 : e.scrollTop > 0;
+                                if (room) list.push(e);
+                            }
                         }
                     }
+                    var height = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0);
+                    var y = window.pageYOffset || 0;
+                    if (step > 0 ? y + window.innerHeight < height - 2 : y > 0) list.push(window);
                     return list;
                 }
-                function select(e) {
-                    var old = document.querySelectorAll('.xtra-tv-focus');
-                    for (var i = 0; i < old.length; i++) old[i].classList.remove('xtra-tv-focus');
-                    e.classList.add('xtra-tv-focus');
-                    try { e.focus({preventScroll: true}); } catch (x) { e.focus(); }
-                    e.scrollIntoView({block: 'center', inline: 'nearest'});
-                }
-                function submit() {
-                    var list = items();
-                    var named = null, sub = null;
-                    for (var i = 0; i < list.length; i++) {
-                        var e = list[i];
-                        var id = ((e.getAttribute('data-a-target') || '') + ' ' + (e.className || '') + ' ' + (e.id || '') + ' ' + (e.name || '')).toLowerCase();
-                        if (!named && id.indexOf('authorize') >= 0 && id.indexOf('cancel') < 0 && id.indexOf('deny') < 0) named = e;
-                        if (!sub && (e.type === 'submit') && id.indexOf('cancel') < 0 && id.indexOf('deny') < 0) sub = e;
+                function place() {
+                    if (current && current.isConnected && shown(current)) {
+                        var r = current.getBoundingClientRect();
+                        frame.style.display = 'block';
+                        frame.style.left = (r.left - 6) + 'px';
+                        frame.style.top = (r.top - 6) + 'px';
+                        frame.style.width = (r.width + 12) + 'px';
+                        frame.style.height = (r.height + 12) + 'px';
+                    } else {
+                        frame.style.display = 'none';
                     }
-                    return named || sub;
+                }
+                setInterval(place, 60);
+                function select(e, bring) {
+                    current = e;
+                    lastFocused = e;
+                    try { e.focus({preventScroll: true}); } catch (x) {}
+                    if (bring) e.scrollIntoView({block: 'center', inline: 'nearest'});
+                    place();
                 }
                 window.__xtraTv = {
                     move: function(step) {
                         var list = items();
-                        if (!list.length) {
-                            var s = scrollers();
-                            for (var i = 0; i < s.length; i++) s[i].scrollTop += step * 240;
-                            window.scrollBy(0, step * 240);
+                        // the page (or left / right) moved the focus itself: from there
+                        var active = document.activeElement;
+                        if (active && active !== lastFocused && list.indexOf(active) >= 0) {
+                            current = active;
+                            lastFocused = active;
+                        }
+                        var index = current ? list.indexOf(current) : -1;
+                        var next = null;
+                        if (index >= 0) {
+                            next = list[index + step] || null;
+                        } else {
+                            // nothing selected yet: the first one on the screen, in the direction asked
+                            for (var i = step > 0 ? 0 : list.length - 1; i >= 0 && i < list.length; i += step) {
+                                var r = list[i].getBoundingClientRect();
+                                if (step > 0 ? r.top >= 0 : r.bottom <= window.innerHeight) { next = list[i]; break; }
+                            }
+                        }
+                        if (next && onScreen(next)) {
+                            select(next, false);
                             return;
                         }
-                        var index = list.indexOf(document.querySelector('.xtra-tv-focus'));
-                        if (index < 0) index = list.indexOf(document.activeElement);
-                        var next = index < 0 ? (step > 0 ? 0 : list.length - 1) : index + step;
-                        if (next < 0 || next >= list.length) {
-                            // the end of the page: all the way, what is under the last button too
-                            var s = scrollers();
-                            for (var i = 0; i < s.length; i++) s[i].scrollTop = step > 0 ? s[i].scrollHeight : 0;
+                        var s = scrollers(step);
+                        if (s.length) {
+                            var dy = step * Math.round(window.innerHeight * 0.4);
+                            for (var j = 0; j < s.length; j++) {
+                                try { s[j].scrollBy({top: dy, behavior: 'smooth'}); } catch (x) {
+                                    if (s[j] === window) window.scrollBy(0, dy); else s[j].scrollTop += dy;
+                                }
+                            }
                             return;
                         }
-                        select(list[next]);
+                        // the end of what scrolls: the next one all the same, brought on the screen
+                        if (next) select(next, true);
                     },
-                    start: function() {
-                        var tries = 0;
-                        (function attempt() {
-                            if (document.querySelector('input[type=password]')) return;
-                            var b = submit();
-                            if (b) { select(b); return; }
-                            if (++tries < 12) setTimeout(attempt, 400);
-                        })();
+                    click: function() {
+                        var e = current && current.isConnected ? current : document.activeElement;
+                        if (!e || e === document.body) return;
+                        var tag = (e.tagName || '').toLowerCase();
+                        if (tag === 'input' && ['submit', 'button', 'checkbox', 'radio'].indexOf(e.type) < 0 || tag === 'textarea' || tag === 'select') {
+                            e.focus();
+                        } else {
+                            e.click();
+                        }
                     }
                 };
             })();
@@ -402,26 +437,36 @@ class LoginActivity : AppCompatActivity() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     if (isTv && url?.contains("/oauth2/authorize") == true) {
-                        // the page is made after it is loaded: tried a few times
-                        view?.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.start();", null)
+                        view?.evaluateJavascript(TV_AUTHORIZE_JS, null)
                     }
                 }
             }
             if (isTv) {
-                // TV, page "Xtra wants to access your account": up / down go from one link or button of the page to the
-                // next one, the page follows (whatever part of it scrolls), OK presses the one selected. The remote could
-                // not reach "Authorize" on Fire OS: the page scrolls inside one of its blocks, not as a whole, so
-                // scrolling the view or the window moved nothing.
+                // TV, page "Xtra wants to access your account": up / down scroll the page (whatever part of it scrolls) and
+                // select the links and buttons that come on the screen, OK presses the one selected. The remote could not
+                // reach "Authorize" on Fire OS: the page scrolls inside one of its blocks, not as a whole, so scrolling
+                // the view or the window moved nothing.
                 webView.setOnKeyListener { _, keyCode, event ->
-                    val upDown = keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN || keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP
-                    if (upDown && webView.url?.contains("/oauth2/authorize") == true) {
-                        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
-                            val step = if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
-                            webView.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.move($step);", null)
+                    if (webView.url?.contains("/oauth2/authorize") != true) {
+                        return@setOnKeyListener false
+                    }
+                    when (keyCode) {
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                                val step = if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+                                webView.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.move($step);", null)
+                            }
+                            // the web view does not move the focus by itself too
+                            true
                         }
-                        // the web view does not move the focus by itself too
-                        true
-                    } else false
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            if (event.action == android.view.KeyEvent.ACTION_UP) {
+                                webView.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.click();", null)
+                            }
+                            true
+                        }
+                        else -> false
+                    }
                 }
             }
             startPageLogin = {

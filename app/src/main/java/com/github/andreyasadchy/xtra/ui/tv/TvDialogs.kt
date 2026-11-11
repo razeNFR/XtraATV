@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -416,3 +417,21 @@ fun ButtonRow(label: String, modifier: Modifier = Modifier, onClick: () -> Unit)
         Text(label, fontSize = 17.sp, color = if (focused) TvColors.onFocused else ComposeColor.White, modifier = Modifier.align(Alignment.Center))
     }
 }
+
+/**
+ * A list under a header: what goes under the header fades away, it is not cut by a straight line. Only once the list
+ * has scrolled ([scrolled], read when drawing), so its first row is whole at the top.
+ */
+fun Modifier.tvTopFade(height: Dp = 36.dp, scrolled: () -> Boolean): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        if (scrolled()) {
+            val edge = height.toPx()
+            drawRect(
+                brush = Brush.verticalGradient(0f to ComposeColor.Transparent, 1f to ComposeColor.Black, startY = 0f, endY = edge),
+                size = androidx.compose.ui.geometry.Size(size.width, edge),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+            )
+        }
+    }

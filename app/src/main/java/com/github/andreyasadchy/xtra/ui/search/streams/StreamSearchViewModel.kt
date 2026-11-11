@@ -75,7 +75,8 @@ class StreamSearchViewModel(
 
     fun deleteRecentSearch(item: RecentSearch) {
         viewModelScope.launch {
-            recentSearchesRepository.delete(item)
+            // in every tab of the search at once
+            recentSearchesRepository.deleteQuery(item.query)
         }
     }
 

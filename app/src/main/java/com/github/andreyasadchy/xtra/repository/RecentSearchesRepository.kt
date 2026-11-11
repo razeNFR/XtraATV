@@ -23,6 +23,11 @@ class RecentSearchesRepository(
         recentSearchesDao.delete(item)
     }
 
+    /** The search is removed from the history of every tab, not only the one it was removed in. */
+    suspend fun deleteQuery(query: String) = withContext(Dispatchers.IO) {
+        recentSearchesDao.deleteQuery(query)
+    }
+
     suspend fun deleteAll() = withContext(Dispatchers.IO) {
         recentSearchesDao.deleteAll()
     }

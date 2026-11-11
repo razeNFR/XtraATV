@@ -418,6 +418,10 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         if (login == previewLogin.value && login != null && muted == previewMuted) {
             return
         }
+        if (login != null && login == scheduledLogin && muted == scheduledMuted) {
+            // already loading
+            return
+        }
         stopPreview()
         scheduledLogin = login
         scheduledMuted = muted

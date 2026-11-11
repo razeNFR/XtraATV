@@ -32,6 +32,10 @@ interface RecentSearchesDao {
         deleteOld(item.type)
     }
 
+    /** A search removed from the history, in every tab of the search (channels, streams, videos, categories). */
+    @Query("DELETE FROM recent_search WHERE `query` = :query")
+    fun deleteQuery(query: String)
+
     @Query("DELETE FROM recent_search")
     fun deleteAll()
 }

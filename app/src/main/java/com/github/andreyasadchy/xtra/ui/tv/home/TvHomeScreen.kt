@@ -82,6 +82,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.github.andreyasadchy.xtra.ui.tv.tvTopFade
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -349,6 +350,20 @@ fun TvHomeScreen(
                     return@LaunchedEffect
                 }
             }
+            // the card could not take the focus (too far in its row, the row changed): the first card of the same row,
+            // the focus stays on the row it was on and is never lost
+            val firstKey = rowInfo.itemKeys.firstOrNull()
+            if (firstKey != null && firstKey != itemKey) {
+                runCatching { rowStates[rowInfo.key]?.scrollToItem(0) }
+                repeat(10) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (runCatching { cardRequesters["${rowInfo.key}/$firstKey"]?.requestFocus() }.getOrNull() == true) {
+                        focusedItem = rowInfo.rowIndex
+                        done()
+                        return@LaunchedEffect
+                    }
+                }
+            }
         }
         listState.scrollToItem(0)
         allRows.firstOrNull()?.let { rowStates[it.key]?.scrollToItem(0) }
@@ -414,6 +429,8 @@ fun TvHomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                // the rows that go under the bar of the top fade away
+                .tvTopFade { listState.canScrollBackward }
                 .drawWithContent {
                     drawContent()
                     val progress = sweep.value
@@ -603,16 +620,28 @@ private fun HeroBanner(
     val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
     val isFavorite = favorites.any { it.login == stream.channelLogin }
     var heroFocused by remember { mutableStateOf(false) }
+    // the focus as the banner reports it: going from one of its buttons to the other may report it lost for an instant,
+    // the video must not start again for that
+    var heroHasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(heroHasFocus) {
+        if (heroHasFocus) {
+            if (!heroFocused) {
+                // not for a focus that only goes through the banner (coming back from the side menu to a card)
+                kotlinx.coroutines.delay(120L)
+                heroFocused = true
+                actions.onHeroFocused(stream)
+            }
+        } else if (heroFocused) {
+            kotlinx.coroutines.delay(200L)
+            heroFocused = false
+            actions.onHeroUnfocused(stream)
+        }
+    }
     Box(
         Modifier
             .fillMaxWidth()
             .height(256.dp)
-            .onFocusChanged {
-                if (it.hasFocus != heroFocused) {
-                    heroFocused = it.hasFocus
-                    if (it.hasFocus) actions.onHeroFocused(stream) else actions.onHeroUnfocused(stream)
-                }
-            }
+            .onFocusChanged { heroHasFocus = it.hasFocus }
     ) {
         // High-res backdrop on the right, alpha-feathered on all four edges so it melts into any ambient background
         Box(

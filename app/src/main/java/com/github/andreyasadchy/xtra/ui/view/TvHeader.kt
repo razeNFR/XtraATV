@@ -84,6 +84,8 @@ object TvHeader {
 
     /** Title of the screen when it has no title of its own (the section of the side menu). */
     var sectionTitle: (() -> String?)? = null
+    /** Icon of the section of the side menu shown, in front of the title of its screen (null on the screens opened from it). */
+    var sectionIcon: (() -> Int?)? = null
 
     private class Action(val key: String, val label: String, val icon: Int?, val selected: Boolean = false, val run: () -> Unit)
 
@@ -94,6 +96,7 @@ object TvHeader {
         val isSearch: Boolean,
         val searchQuery: String,
         val title: String?,
+        val titleIcon: Int?,
         val subtitle: String?,
         val stats: String?,
         val left: List<Action>,
@@ -104,7 +107,7 @@ object TvHeader {
     ) {
         fun same(other: Snapshot?): Boolean {
             return other != null && other.image === image && other.bannerUrl == bannerUrl && other.isSearch == isSearch &&
-                    other.searchQuery == searchQuery && other.title == title && other.subtitle == subtitle && other.stats == stats &&
+                    other.searchQuery == searchQuery && other.title == title && other.titleIcon == titleIcon && other.subtitle == subtitle && other.stats == stats &&
                     other.left.map { it.key + it.label } == left.map { it.key + it.label } &&
                     other.tabs.map { it.label + it.selected } == tabs.map { it.label + it.selected } &&
                     other.afterTabs.map { it.key } == afterTabs.map { it.key } &&
@@ -355,7 +358,9 @@ object TvHeader {
             val filters = sortBar.findViewById<TextView>(R.id.filtersText)?.takeIf { it.visibility == View.VISIBLE }?.text?.toString()?.takeIf { it.isNotBlank() }
             right.add(Action("sort", listOfNotNull(sortText?.let { compactSort(context, it) } ?: context.getString(R.string.sort), filters).joinToString(" · "), R.drawable.baseline_sort_black_24) { sortBar.performClick() })
         }
-        return Snapshot(image, bannerUrl, isChannel, isSearch, searchQuery, title, subtitle, stats, left, tabs, afterTabs, right)
+        // a main screen of the side menu (no picture of its own): the icon of its entry in front of its title
+        val titleIcon = if (image == null && !isChannel && !isSearch) sectionIcon?.invoke() else null
+        return Snapshot(image, bannerUrl, isChannel, isSearch, searchQuery, title, titleIcon, subtitle, stats, left, tabs, afterTabs, right)
     }
 
     /**
@@ -476,6 +481,10 @@ object TvHeader {
                 }
             }
             Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp)) {
+                // a screen with tabs and no action of its own (followed, categories...): its sort goes on the line of the
+                // title, at the left of the time. No line only for it, and it is reached with "up" from the tabs
+                val titleActions = if (snapshot.tabs.isNotEmpty() && snapshot.left.isEmpty() && !snapshot.isSearch) snapshot.right else emptyList()
+                val titleActionRequester = remember { FocusRequester() }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (snapshot.isSearch) {
                         val searchView = remember(appBar) { appBar.findViewById<androidx.appcompat.widget.SearchView>(R.id.searchView) }
@@ -507,6 +516,10 @@ object TvHeader {
                             )
                             Spacer(Modifier.width(14.dp))
                         }
+                        if (snapshot.titleIcon != null && snapshot.title != null) {
+                            Icon(painterResource(snapshot.titleIcon), contentDescription = null, tint = TvColors.accent, modifier = Modifier.size(28.dp))
+                            Spacer(Modifier.width(12.dp))
+                        }
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.Bottom) {
                                 if (snapshot.title != null) {
@@ -522,6 +535,30 @@ object TvHeader {
                             }
                         }
                     }
+                    titleActions.forEachIndexed { index, action ->
+                        Spacer(Modifier.width(10.dp))
+                        Pill(
+                            action = action,
+                            isTab = false,
+                            modifier = (if (index == titleActions.lastIndex) Modifier.focusRequester(titleActionRequester) else Modifier)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                    when (event.key) {
+                                        Key.DirectionUp -> true
+                                        Key.DirectionLeft -> index == 0
+                                        Key.DirectionRight -> index == titleActions.lastIndex
+                                        Key.DirectionDown -> {
+                                            // back on the tab shown, else in the page
+                                            if (runCatching { tabRequester.requestFocus() }.getOrDefault(false) != true) {
+                                                focusVisibleTabContent(screenRoot(appBar))
+                                            }
+                                            true
+                                        }
+                                        else -> false
+                                    }
+                                }
+                        )
+                    }
                     // the time at the right of the title line, like on the home (the title stops before it)
                     Spacer(Modifier.width(16.dp))
                     Clock()
@@ -533,7 +570,11 @@ object TvHeader {
                     // with "pages without OK" crossing one changed the page, and the sort of the page went away with it
                     val tabsLine = snapshot.tabs + snapshot.afterTabs
                     val hasTabs = snapshot.tabs.isNotEmpty()
-                    val actionsLine = if (hasTabs) snapshot.left + snapshot.right else all
+                    val actionsLine = when {
+                        titleActions.isNotEmpty() -> emptyList()
+                        hasTabs -> snapshot.left + snapshot.right
+                        else -> all
+                    }
                     val firstKey = (actionsLine.firstOrNull() ?: tabsLine.firstOrNull())?.key
                     val tabTarget = snapshot.tabs.firstOrNull { it.selected } ?: snapshot.tabs.firstOrNull()
                     // top of each action on the screen: the ones of the last line go down to the tab shown
@@ -615,6 +656,11 @@ object TvHeader {
                                     Key.DirectionDown -> focusVisibleTabContent(screenRoot(appBar))
                                     Key.DirectionUp -> {
                                         when {
+                                            // the sort on the line of the title
+                                            titleActions.isNotEmpty() -> {
+                                                runCatching { titleActionRequester.requestFocus() }
+                                                true
+                                            }
                                             // the actions above: the nearest one
                                             actionsLine.isNotEmpty() -> false
                                             snapshot.isSearch -> {
