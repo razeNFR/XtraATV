@@ -106,6 +106,8 @@ class TvHomeActions(
     val openChannel: (Stream) -> Unit = {},
     val onHeroFocused: (Stream) -> Unit = {},
     val onHeroUnfocused: (Stream) -> Unit = {},
+    /** A card with a picture that is not a stream got the focus (a video, a category), for the dynamic ambiance. */
+    val onPictureFocused: (Any) -> Unit = {},
     val formatViewers: (Int) -> String,
     /** The count alone ("7.1K"), for the small cards. */
     val formatCount: (Int) -> String = { it.toString() },
@@ -1212,7 +1214,8 @@ private fun GameRow(
                 GameCard(
                     game = game,
                     actions = actions,
-                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey)),
+                    modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey))
+                        .onFocusChanged { if (it.hasFocus) actions.onPictureFocused(game) },
                     onClick = {
                         onCardSelected(index, itemKey)
                         actions.openGame(game)
@@ -1503,7 +1506,8 @@ private fun ResumeRow(
                         width = cardWidth,
                         item = item,
                         actions = actions,
-                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, item.id)),
+                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, item.id))
+                            .onFocusChanged { if (it.hasFocus) actions.onPictureFocused(item) },
                         onSelected = { onCardSelected(index, item.id) },
                     )
                 }
@@ -1541,7 +1545,8 @@ private fun VideoRow(
                         width = cardWidth,
                         video = item,
                         actions = actions,
-                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey)),
+                        modifier = Modifier.leftEdge(index, actions.openMenu).then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier).then(cardModifier(index, itemKey))
+                            .onFocusChanged { if (it.hasFocus) actions.onPictureFocused(item) },
                         onSelected = { onCardSelected(index, itemKey) },
                     )
                 }

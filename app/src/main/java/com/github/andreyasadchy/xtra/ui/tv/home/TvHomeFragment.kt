@@ -127,17 +127,17 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 schedulePreview(stream)
                 stream?.let { s ->
                     context?.let { ctx ->
-                        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromUrl(
-                            ctx,
-                            s.thumbnail?.takeUnless { s.thumbnailURL.isNullOrBlank() } ?: s.channelImage,
-                            viewLifecycleOwner.lifecycleScope,
-                        )
+                        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromItem(ctx, s, viewLifecycleOwner.lifecycleScope)
                     }
                 }
             },
             openChannel = { stream ->
                 stopPreview()
                 (activity as? MainActivity)?.openTvChannel(stream, null)
+            },
+            onPictureFocused = { item ->
+                // the other cards of the home (videos, categories): the same dynamic ambiance as the streams
+                context?.let { ctx -> com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromItem(ctx, item, viewLifecycleOwner.lifecycleScope) }
             },
             onHeroUnfocused = {
                 // only the video of the banner: the focus may already be on a card, with its own preview
@@ -149,11 +149,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 // the stream plays in the banner while it has the focus, always without sound
                 schedulePreview(stream, muted = true)
                 context?.let { ctx ->
-                    com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromUrl(
-                        ctx,
-                        stream.thumbnail?.takeUnless { stream.thumbnailURL.isNullOrBlank() } ?: stream.channelImage,
-                        viewLifecycleOwner.lifecycleScope,
-                    )
+                    com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromItem(ctx, stream, viewLifecycleOwner.lifecycleScope)
                 }
             },
             formatViewers = { count -> resources.getQuantityString(R.plurals.viewers, count, TwitchApiHelper.formatCount(count, truncate)) },
@@ -249,11 +245,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     // only until a first picture got the focus: after that the color follows the focus, a row that
                     // loads again does not change it under a card
                     if (heroStream != null && !com.github.andreyasadchy.xtra.ui.tv.TvAmbient.hasSessionColor) {
-                        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromUrl(
-                            context,
-                            heroStream.thumbnail?.takeUnless { heroStream.thumbnailURL.isNullOrBlank() } ?: heroStream.channelImage,
-                            viewLifecycleOwner.lifecycleScope,
-                        )
+                        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromItem(context, heroStream, viewLifecycleOwner.lifecycleScope)
                     }
                 }
                 androidx.compose.runtime.LaunchedEffect(followed) {

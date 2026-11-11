@@ -1200,11 +1200,24 @@ class MainActivity : AppCompatActivity() {
             tvFocusKey()?.let { tvFocusMemory[it] = position }
         }
         if (child != null && grid != null && com.github.andreyasadchy.xtra.ui.tv.TvAmbient.isDynamic(this)) {
-            extractCardAmbient(child)
+            // dynamic ambiance: the pictures of the item of the card (thumbnail, then avatar), the same way on every
+            // list; the picture drawn in the card only for a list whose items are not known
+            val item = try {
+                when (val adapter = grid.adapter) {
+                    is androidx.paging.PagingDataAdapter<*, *> -> position.takeIf { it in 0 until adapter.itemCount }?.let { adapter.peek(it) }
+                    is androidx.recyclerview.widget.ListAdapter<*, *> -> adapter.currentList.getOrNull(position)
+                    else -> null
+                }
+            } catch (e: Exception) {
+                null
+            }
+            if (!com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromItem(this, item, lifecycleScope)) {
+                extractCardAmbient(child)
+            }
         }
     }
 
-    /** Dynamic ambiance: the color of the picture of the focused card (not kept by position, the lists change). */
+    /** Dynamic ambiance, a list whose items are not known: the color of the picture drawn in the focused card. */
     private fun extractCardAmbient(card: View) {
         var best: android.widget.ImageView? = null
         var bestArea = 0
