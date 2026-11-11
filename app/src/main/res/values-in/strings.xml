@@ -995,4 +995,16 @@
     <string name="tv_multistream_group_saved">Grup multi-stream disimpan</string>
     <string name="tv_multistream_group_removed">Grup tersimpan dihapus</string>
     <string name="tv_multistream_group_offline">Tidak ada streamer di grup ini yang sedang siaran langsung saat ini</string>
+    <string name="tv_about_discord">Server Discord (kode QR)</string>
+    <string name="tv_chat_restricted_followers">Anda harus mengikuti saluran ini untuk mengirim pesan</string>
+    <string name="tv_chat_restricted_followers_duration">Anda harus mengikuti saluran ini selama %1$s untuk mengirim pesan</string>
+    <string name="tv_chat_restricted_followers_wait">Obrolan khusus pengikut: tunggu %1$s sebelum mengirim pesan</string>
+    <string name="tv_chat_restricted_subs">Obrolan khusus pelanggan</string>
+    <string name="tv_chat_restricted_emote_only">Obrolan khusus emote</string>
+    <string name="tv_chat_restricted_slow_mode">Mode lambat aktif, harap tunggu sebelum mengirim pesan lagi</string>
+    <string name="tv_chat_restricted_unique">Mode pesan unik: pesan duplikat tidak diizinkan</string>
+    <string name="tv_chat_restricted_verified">Akun terverifikasi (email atau telepon) diperlukan di saluran ini</string>
+    <string name="tv_chat_restricted_banned">Anda diblokir dari obrolan saluran ini</string>
+    <string name="tv_chat_restricted_timed_out">Anda sedang terkena pembatasan sementara di saluran ini</string>
+    <string name="tv_chat_restricted_generic">Pesan ditolak karena pembatasan saluran</string>
 </resources>

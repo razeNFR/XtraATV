@@ -75,8 +75,16 @@ object TvAmbient {
     private fun loadDynamic(context: Context) {
         if (!dynamicLoaded) {
             dynamicLoaded = true
-            dynamicColor = context.prefs().getInt(C.TV_AMBIENT_DYNAMIC_LAST, DEFAULT_DYNAMIC)
+            val saved = context.prefs().getInt(C.TV_AMBIENT_DYNAMIC_LAST, DEFAULT_DYNAMIC)
+            dynamicColor = sanitizeDynamicColor(saved)
         }
+    }
+
+    /** Replaces dull brown/tan hues persisted by older builds with the default dynamic color. */
+    private fun sanitizeDynamicColor(color: Int): Int {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(color, hsv)
+        return if (hsv[0] in 10f..46f && (hsv[1] < 0.72f || hsv[2] < 0.80f)) DEFAULT_DYNAMIC else color
     }
 
     fun isDynamic(context: Context): Boolean =
@@ -117,9 +125,9 @@ object TvAmbient {
         val size = maxOf(metrics.widthPixels, metrics.heightPixels).toFloat()
         val glow = GradientDrawable().apply {
             gradientType = GradientDrawable.RADIAL_GRADIENT
-            setGradientCenter(0.12f, 0f)
-            gradientRadius = size * 0.75f
-            colors = intArrayOf(withAlpha(color, alpha(0x4D)), withAlpha(color, alpha(0x14)), Color.TRANSPARENT)
+            setGradientCenter(0.04f, 0f)
+            gradientRadius = size * 0.80f
+            colors = intArrayOf(withAlpha(color, alpha(0x52)), withAlpha(color, alpha(0x16)), Color.TRANSPARENT)
         }
         val corner = GradientDrawable().apply {
             gradientType = GradientDrawable.RADIAL_GRADIENT
@@ -322,11 +330,16 @@ object TvAmbient {
             Color.colorToHSV(pixel, hsv)
             val s = hsv[1]
             val v = hsv[2]
-            if (s < 0.18f || v < 0.14f) continue
+            if (s < 0.26f || v < 0.22f || s * v < 0.10f) continue
             colored++
-            val bin = ((hsv[0] / (360f / bins)).toInt()).coerceIn(0, bins - 1)
-            // the surface first: each pixel counts for 1, up to 1.35 for the most vivid
-            val weight = 1f + 0.35f * s
+            val hue = hsv[0]
+            val bin = ((hue / (360f / bins)).toInt()).coerceIn(0, bins - 1)
+            var weight = (0.35f + 0.65f * s) * (0.40f + 0.60f * v)
+            // skin tones, tungsten room lighting, wood and dust maps sit in 10°..46° with moderate saturation:
+            // penalize unless genuinely vivid orange/amber so thumbnails stop turning muddy brown
+            if (hue in 10f..46f && (s < 0.68f || v < 0.55f)) {
+                weight *= 0.18f
+            }
             weights[bin] += weight
             sumR[bin] += Color.red(pixel) * weight
             sumG[bin] += Color.green(pixel) * weight
@@ -343,7 +356,7 @@ object TvAmbient {
                 best = i
             }
         }
-        if (best < 0) return null
+        if (best < 0 || bestWeight < total * 0.035f) return null
         var r = 0f
         var g = 0f
         var b = 0f
@@ -357,10 +370,16 @@ object TvAmbient {
         }
         if (weight <= 0f) return null
         val average = Color.rgb((r / weight).toInt().coerceIn(0, 255), (g / weight).toInt().coerceIn(0, 255), (b / weight).toInt().coerceIn(0, 255))
-        // the same hue, bright and vivid enough for a glow and an accent over the dark screens
+        // the same hue, bright and vivid enough for a glow and an accent over the dark screens;
+        // orange/amber hues stay bright and saturated so they never look muddy brown at low glow alpha
         Color.colorToHSV(average, hsv)
-        hsv[1] = hsv[1].coerceIn(0.45f, 0.85f)
-        hsv[2] = hsv[2].coerceIn(0.58f, 0.92f)
+        if (hsv[0] in 10f..46f) {
+            hsv[1] = hsv[1].coerceIn(0.74f, 0.92f)
+            hsv[2] = hsv[2].coerceIn(0.84f, 0.96f)
+        } else {
+            hsv[1] = hsv[1].coerceIn(0.52f, 0.88f)
+            hsv[2] = hsv[2].coerceIn(0.68f, 0.94f)
+        }
         return Color.HSVToColor(hsv)
     }
 

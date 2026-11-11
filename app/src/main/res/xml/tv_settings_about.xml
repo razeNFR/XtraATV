@@ -18,6 +18,13 @@
         app:singleLineTitle="false" />
 
     <Preference
+        android:key="about_discord"
+        android:summary="https://discord.gg/SgKqrW73P4"
+        android:title="@string/tv_about_discord"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
         android:key="about_device"
         android:title="@string/tv_about_device"
         app:iconSpaceReserved="false"

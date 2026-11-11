@@ -903,6 +903,10 @@ class SettingsActivity : AppCompatActivity() {
                 com.github.andreyasadchy.xtra.ui.tv.TvAbout.show(requireContext())
                 true
             }
+            findPreference<Preference>("about_discord")?.setOnPreferenceClickListener {
+                com.github.andreyasadchy.xtra.ui.tv.TvAbout.show(requireContext(), discord = true)
+                true
+            }
             findPreference<Preference>("about_device")?.apply {
                 summary = com.github.andreyasadchy.xtra.ui.tv.TvAbout.deviceSummary()
                 setOnPreferenceClickListener {

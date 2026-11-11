@@ -994,4 +994,16 @@
     <string name="tv_multistream_group_saved">Grupo de multi-stream salvo</string>
     <string name="tv_multistream_group_removed">Grupo salvo removido</string>
     <string name="tv_multistream_group_offline">Nenhum streamer deste grupo está ao vivo no momento</string>
+    <string name="tv_about_discord">Servidor do Discord (QR code)</string>
+    <string name="tv_chat_restricted_followers">Você precisa seguir este canal para enviar uma mensagem</string>
+    <string name="tv_chat_restricted_followers_duration">Você precisa seguir este canal há %1$s para enviar uma mensagem</string>
+    <string name="tv_chat_restricted_followers_wait">Chat apenas para seguidores: aguarde %1$s para enviar uma mensagem</string>
+    <string name="tv_chat_restricted_subs">Chat exclusivo para inscritos</string>
+    <string name="tv_chat_restricted_emote_only">Chat apenas com emotes</string>
+    <string name="tv_chat_restricted_slow_mode">Modo lento ativo, aguarde antes de enviar outra mensagem</string>
+    <string name="tv_chat_restricted_unique">Modo de mensagens únicas: mensagens repetidas não são permitidas</string>
+    <string name="tv_chat_restricted_verified">É necessária uma conta verificada (e-mail ou telefone) neste canal</string>
+    <string name="tv_chat_restricted_banned">Você está banido do chat deste canal</string>
+    <string name="tv_chat_restricted_timed_out">Você está temporariamente silenciado neste canal</string>
+    <string name="tv_chat_restricted_generic">Mensagem recusada pelas restrições do canal</string>
 </resources>

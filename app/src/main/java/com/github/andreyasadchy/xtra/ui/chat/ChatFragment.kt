@@ -121,6 +121,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 else -> null
             }
         }
+        (parentFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment)?.onChatFragmentReady(this)
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.integrity.collect {
@@ -410,6 +411,15 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                         }
                                     }
                                     viewModel.roomState.value = null
+                                }
+                            }
+                        }
+                    }
+                    if (resources.getBoolean(R.bool.isTv)) {
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                                viewModel.chatRestrictionToast.collect { reason ->
+                                    android.widget.Toast.makeText(requireContext(), reason, android.widget.Toast.LENGTH_LONG).show()
                                 }
                             }
                         }
@@ -1064,6 +1074,12 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         binding.editText.setText(text)
         return sendMessage()
     }
+
+    fun getEffectiveRoomState(): kotlinx.coroutines.flow.StateFlow<com.github.andreyasadchy.xtra.model.chat.RoomState>? =
+        if (isAdded) viewModel.effectiveRoomState else null
+
+    fun getUserRoomBadges(): kotlinx.coroutines.flow.StateFlow<Set<String>?>? =
+        if (isAdded) viewModel.userRoomBadges else null
 
     /** Returns grouped emotes (Recent, 7TV/BTTV/FFZ, Twitch) for the TV ChatComposer emote picker. */
     fun getTvEmoteGroups(): List<Pair<String, List<Emote>>> {

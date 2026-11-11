@@ -994,4 +994,16 @@
     <string name="tv_multistream_group_saved">Группа мультистрима сохранена</string>
     <string name="tv_multistream_group_removed">Сохранённая группа удалена</string>
     <string name="tv_multistream_group_offline">Сейчас никто из стримеров этой группы не в эфире</string>
+    <string name="tv_about_discord">Сервер Discord (QR-код)</string>
+    <string name="tv_chat_restricted_followers">Чтобы отправить сообщение, нужно отслеживать этот канал</string>
+    <string name="tv_chat_restricted_followers_duration">Нужно отслеживать этот канал %1$s, чтобы отправить сообщение</string>
+    <string name="tv_chat_restricted_followers_wait">Чат только для фолловеров: подождите ещё %1$s</string>
+    <string name="tv_chat_restricted_subs">Чат только для подписчиков</string>
+    <string name="tv_chat_restricted_emote_only">Чат в режиме только смайлов</string>
+    <string name="tv_chat_restricted_slow_mode">Включён медленный режим, подождите перед отправкой следующего сообщения</string>
+    <string name="tv_chat_restricted_unique">Режим уникальных сообщений: повторы не допускаются</string>
+    <string name="tv_chat_restricted_verified">На этом канале требуется подтверждённый аккаунт (почта или телефон)</string>
+    <string name="tv_chat_restricted_banned">Вы заблокированы в чате этого канала</string>
+    <string name="tv_chat_restricted_timed_out">Вы временно отстранены от чата этого канала</string>
+    <string name="tv_chat_restricted_generic">Сообщение отклонено из-за ограничений канала</string>
 </resources>

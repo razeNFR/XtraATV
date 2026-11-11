@@ -271,15 +271,7 @@ class MainActivity : AppCompatActivity() {
                 binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
             }
             com.github.andreyasadchy.xtra.ui.tv.TvAmbient.setDynamicListener(tvAmbientListener)
-            if (isCompactRailEnabled()) {
-                val railStart = (84 * resources.displayMetrics.density).toInt()
-                binding.navHostFragment.setPaddingRelative(
-                    railStart,
-                    binding.navHostFragment.paddingTop,
-                    binding.navHostFragment.paddingEnd,
-                    binding.navHostFragment.paddingBottom,
-                )
-            }
+            applyTvNavHostPadding(false)
             supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
                     TvUi.adapt(v, hideToolbarActions = true)
@@ -1177,6 +1169,27 @@ class MainActivity : AppCompatActivity() {
     private var isTvMenuShown = true
     fun isTvMenuOpen() = isTv && isTvMenuShown
     private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, false)
+
+    private fun applyTvNavHostPadding(isHome: Boolean) {
+        if (!isTv) return
+        val density = resources.displayMetrics.density
+        val overscan = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+        val start = when {
+            isHome && isCompactRailEnabled() -> (68 * density).toInt()
+            isHome -> 0
+            isCompactRailEnabled() -> (84 * density).toInt()
+            else -> overscan
+        }
+        val end = if (isHome) 0 else overscan
+        if (binding.navHostFragment.paddingStart != start || binding.navHostFragment.paddingEnd != end) {
+            binding.navHostFragment.setPaddingRelative(
+                start,
+                binding.navHostFragment.paddingTop,
+                end,
+                binding.navHostFragment.paddingBottom,
+            )
+        }
+    }
     private var tvInitialFocusDone = false
 
     /** Back on a main screen opens the side menu, back again in the menu leaves the app. */
@@ -2968,6 +2981,7 @@ class MainActivity : AppCompatActivity() {
             onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
             onBackPressedDispatcher.addCallback(this, tvGridBackCallback)
             navController.addOnDestinationChangedListener { _, destination, _ ->
+                applyTvNavHostPadding(destination.id == R.id.tvHomeFragment)
                 updateTvMenuBackCallback()
                 if (destination.id != R.id.followPagerFragment) {
                     tvMenuExtraSelected = null

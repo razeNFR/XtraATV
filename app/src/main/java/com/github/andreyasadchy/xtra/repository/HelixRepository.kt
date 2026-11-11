@@ -1085,6 +1085,22 @@ class HelixRepository(
         }
     }
 
+    private fun parseSendMessageResponse(statusCode: Int, rawBody: String): String? {
+        if (statusCode in 200..299) {
+            val root = runCatching { org.json.JSONObject(rawBody) }.getOrNull() ?: return null
+            val item = root.optJSONArray("data")?.optJSONObject(0) ?: return null
+            if (!item.optBoolean("is_sent", true)) {
+                val drop = item.optJSONObject("drop_reason")
+                val code = drop?.optString("code").orEmpty()
+                val msg = drop?.optString("message").orEmpty()
+                return "DROP:$code|$msg"
+            }
+            return null
+        }
+        val msg = runCatching { org.json.JSONObject(rawBody).optString("message") }.getOrNull()?.takeIf { it.isNotBlank() }
+        return msg ?: rawBody
+    }
+
     suspend fun sendMessage(networkLibrary: String?, headers: Map<String, String>, userId: String?, channelId: String?, message: String?, replyId: String?): String? = withContext(Dispatchers.IO) {
         val url = "https://api.twitch.tv/helix/chat/messages"
         val body = buildJsonObject {
@@ -1113,11 +1129,7 @@ class HelixRepository(
                         timeout.stop()
                     }
                 }
-                if (response.info.httpStatusCode in 200..299) {
-                    null
-                } else {
-                    response.body.decodeToString()
-                }
+                parseSendMessageResponse(response.info.httpStatusCode, response.body.decodeToString())
             }
             networkLibrary == C.CRONET && cronetEngine.value != null -> {
                 val response = suspendCancellableCoroutine { continuation ->
@@ -1138,11 +1150,7 @@ class HelixRepository(
                         timeout.stop()
                     }
                 }
-                if (response.info.httpStatusCode in 200..299) {
-                    null
-                } else {
-                    response.body.decodeToString()
-                }
+                parseSendMessageResponse(response.info.httpStatusCode, response.body.decodeToString())
             }
             else -> {
                 okHttpClient.value.newCall(Request.Builder().apply {
@@ -1151,11 +1159,7 @@ class HelixRepository(
                     header("Content-Type", "application/json")
                     post(body.toRequestBody())
                 }.build()).executeAsync().use { response ->
-                    if (response.isSuccessful) {
-                        null
-                    } else {
-                        response.body.string()
-                    }
+                    parseSendMessageResponse(response.code, response.body.string())
                 }
             }
         }

@@ -148,6 +148,81 @@ object TvChatNotices {
         }
     }
 
+    /** True when an IRC NOTICE msg-id indicates that a sent chat message was rejected by channel restrictions. */
+    fun isRestrictionNoticeId(msgId: String?): Boolean {
+        if (msgId.isNullOrBlank()) return false
+        return msgId in setOf(
+            "msg_followersonly",
+            "msg_followersonly_zero",
+            "msg_followersonly_followed",
+            "msg_subsonly",
+            "msg_emoteonly",
+            "msg_slowmode",
+            "msg_r9k",
+            "msg_duplicate",
+            "msg_verified_email",
+            "msg_requires_verified_phone_number",
+            "msg_banned",
+            "msg_timedout",
+            "msg_ratelimit",
+            "msg_rejected",
+            "msg_rejected_mandatory",
+            "no_permission",
+        )
+    }
+
+    /** Localized explanation for a Twitch chat restriction or message drop (for Toasts and locked chat button). */
+    fun restrictionMessage(
+        context: Context,
+        code: String?,
+        fallbackMessage: String? = null,
+        followersMinutes: Int? = null,
+        remainingSeconds: Long? = null,
+    ): String {
+        if (remainingSeconds != null && remainingSeconds > 0L) {
+            val waitText = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getDurationFromSeconds(
+                context,
+                remainingSeconds.coerceAtLeast(1L).toString()
+            )
+            return context.getString(R.string.tv_chat_restricted_followers_wait, waitText)
+        }
+        return when (code?.trim()) {
+            "FOLLOWERS_ONLY", "msg_followersonly", "msg_followersonly_zero" -> {
+                if (followersMinutes != null && followersMinutes > 0) {
+                    val duration = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getDurationFromSeconds(
+                        context,
+                        (followersMinutes * 60).toString()
+                    )
+                    context.getString(R.string.tv_chat_restricted_followers_duration, duration)
+                } else {
+                    context.getString(R.string.tv_chat_restricted_followers)
+                }
+            }
+            "msg_followersonly_followed" -> {
+                if (followersMinutes != null && followersMinutes > 0) {
+                    val duration = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getDurationFromSeconds(
+                        context,
+                        (followersMinutes * 60).toString()
+                    )
+                    context.getString(R.string.tv_chat_restricted_followers_wait, duration)
+                } else {
+                    fallbackMessage?.takeIf { it.isNotBlank() }
+                        ?: context.getString(R.string.tv_chat_restricted_followers)
+                }
+            }
+            "SUBSCRIBERS_ONLY", "msg_subsonly" -> context.getString(R.string.tv_chat_restricted_subs)
+            "EMOTE_ONLY", "msg_emoteonly" -> context.getString(R.string.tv_chat_restricted_emote_only)
+            "SLOW_MODE", "msg_slowmode" -> context.getString(R.string.tv_chat_restricted_slow_mode)
+            "R9K", "UNIQUE_CHAT_MODE", "DUPLICATE", "msg_r9k", "msg_duplicate" -> context.getString(R.string.tv_chat_restricted_unique)
+            "VERIFIED_ACCOUNT", "VERIFIED_EMAIL", "VERIFIED_PHONE", "msg_verified_email", "msg_requires_verified_phone_number" ->
+                context.getString(R.string.tv_chat_restricted_verified)
+            "BANNED", "msg_banned" -> context.getString(R.string.tv_chat_restricted_banned)
+            "TIMED_OUT", "msg_timedout" -> context.getString(R.string.tv_chat_restricted_timed_out)
+            else -> fallbackMessage?.takeIf { it.isNotBlank() }
+                ?: context.getString(R.string.tv_chat_restricted_generic)
+        }
+    }
+
     /** An icon in a line of text, centered on the text (ImageSpan centers only from Android 10). */
     private class CenteredIconSpan(private val drawable: Drawable) : ReplacementSpan() {
         override fun getSize(paint: Paint, text: CharSequence?, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int {

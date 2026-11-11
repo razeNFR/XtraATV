@@ -994,4 +994,16 @@
     <string name="tv_multistream_group_saved">多路同看組合已儲存</string>
     <string name="tv_multistream_group_removed">已儲存的組合已刪除</string>
     <string name="tv_multistream_group_offline">此組合中的實況主目前皆未開台</string>
+    <string name="tv_about_discord">Discord 伺服器（QR 碼）</string>
+    <string name="tv_chat_restricted_followers">追隨此頻道後才能傳送訊息</string>
+    <string name="tv_chat_restricted_followers_duration">需追隨此頻道滿 %1$s 才能傳送訊息</string>
+    <string name="tv_chat_restricted_followers_wait">僅限追隨者聊天：請再等待 %1$s 後傳送訊息</string>
+    <string name="tv_chat_restricted_subs">僅限訂閱者聊天</string>
+    <string name="tv_chat_restricted_emote_only">僅限表情符號聊天</string>
+    <string name="tv_chat_restricted_slow_mode">慢速模式已開啟，請稍後再傳送訊息</string>
+    <string name="tv_chat_restricted_unique">不重複訊息模式：無法傳送重複內容</string>
+    <string name="tv_chat_restricted_verified">此頻道需要已驗證帳號（信箱或手機號碼）才能發言</string>
+    <string name="tv_chat_restricted_banned">您已被此頻道聊天室封鎖</string>
+    <string name="tv_chat_restricted_timed_out">您在此頻道聊天室被暫時禁言</string>
+    <string name="tv_chat_restricted_generic">訊息因頻道限制被拒絕</string>
 </resources>

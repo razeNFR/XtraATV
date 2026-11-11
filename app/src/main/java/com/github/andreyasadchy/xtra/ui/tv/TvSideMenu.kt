@@ -172,10 +172,13 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         } ?: state.selected
     } else state.selected
     val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
-    // a panel tinted with the color of accent, a little see-through; lighter as a rail, the screen shows more behind it
-    val top = androidx.compose.ui.graphics.lerp(Color(0xFF17161C), accent, 0.20f)
-    val bottom = androidx.compose.ui.graphics.lerp(Color(0xFF121116), accent, 0.05f)
-    val alpha = 0.78f + 0.16f * open
+    val hasAmbient = TvAccent.current != null
+    val ambient = if (hasAmbient) Color(TvAccent.color) else accent
+    // 100% transparent as an icon rail (open == 0f) so the ambiance glow passes directly under the icons;
+    // tinted with the ambiance color when unfolded so labels stay readable over the content
+    val top = androidx.compose.ui.graphics.lerp(Color(0xFF15141B), ambient, if (hasAmbient) 0.32f else 0.15f)
+    val bottom = androidx.compose.ui.graphics.lerp(Color(0xFF100F15), ambient, if (hasAmbient) 0.14f else 0.05f)
+    val alpha = 0.92f * open
     Box(
         Modifier
             .width(menuWidth)

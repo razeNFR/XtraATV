@@ -82,6 +82,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.github.andreyasadchy.xtra.ui.tv.tvHorizontalFade
 import com.github.andreyasadchy.xtra.ui.tv.tvTopFade
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.tv.material3.Icon
@@ -374,11 +375,15 @@ fun TvHomeScreen(
         runCatching { firstCard.requestFocus() }
         done()
     }
+    val homeContext = androidx.compose.ui.platform.LocalContext.current
+    val compactRail = remember { homeContext.prefs().getBoolean(C.TV_COMPACT_RAIL, false) }
+    val startInset = if (compactRail) 16.dp else 48.dp
+    val endInset = 48.dp
     Column(Modifier.fillMaxSize()) {
         // always on screen above the rows: refresh, then the greeting, the picture of the account and the time (only
         // to read, the focus never stops there)
         Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            Modifier.fillMaxWidth().padding(start = startInset + 12.dp, end = endInset + 12.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             RefreshPill(
@@ -466,7 +471,7 @@ fun TvHomeScreen(
         ) {
             if (hasHero) {
                 item(key = "hero") {
-                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = 0; bringRow(0) } }) {
+                    Box(Modifier.padding(start = startInset, end = endInset).onFocusChanged { if (it.hasFocus) { focusedItem = 0; bringRow(0) } }) {
                         HeroBanner(
                             stream = hero!!,
                             queue = heroQueue,
@@ -490,7 +495,8 @@ fun TvHomeScreen(
                     item(key = "${key}_skeleton") {
                         SkeletonRow(
                             actions,
-                            if (listIndex == 0) {
+                            startInset = startInset,
+                            firstCardModifier = if (listIndex == 0) {
                                 Modifier
                                     .focusRequester(ghostCard)
                                     .onFocusChanged { if (it.hasFocus) { if (!userMoved) onGhost = true; focusedItem = listIndex } }
@@ -503,6 +509,8 @@ fun TvHomeScreen(
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
                         StreamRow(
                             row, previewLogin, previewPlayer, actions, if (listIndex == 0) firstCard else null,
+                            startInset = startInset,
+                            endInset = endInset,
                             state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
                             cardModifier = { idx, itemKey ->
                                 Modifier
@@ -524,6 +532,8 @@ fun TvHomeScreen(
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = resumeIndex; bringRow(resumeIndex) } }) {
                         ResumeRow(
                             resume!!, actions, if (!hasHero && slots.isEmpty()) firstCard else null,
+                            startInset = startInset,
+                            endInset = endInset,
                             state = rowStates.getOrPut("resume") { androidx.compose.foundation.lazy.LazyListState() },
                             cardModifier = { idx, itemKey ->
                                 Modifier
@@ -545,6 +555,8 @@ fun TvHomeScreen(
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = videosIndex; bringRow(videosIndex) } }) {
                         VideoRow(
                             videos!!, actions, if (!hasHero && slots.isEmpty() && !hasResume) firstCard else null,
+                            startInset = startInset,
+                            endInset = endInset,
                             state = rowStates.getOrPut("followed_videos") { androidx.compose.foundation.lazy.LazyListState() },
                             cardModifier = { idx, itemKey ->
                                 Modifier
@@ -565,6 +577,8 @@ fun TvHomeScreen(
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = statsIndex; bringRow(statsIndex) } }) {
                         StatsCard(
                             stats, actions,
+                            startInset = startInset,
+                            endInset = endInset,
                             modifier = Modifier
                                 .focusRequester(cardRequesters.getOrPut("stats/stats") { FocusRequester() })
                                 .onFocusChanged {
@@ -581,6 +595,8 @@ fun TvHomeScreen(
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = gamesIndex; bringRow(gamesIndex) } }) {
                         GameRow(
                             games!!, actions, if (!hasHero && slots.isEmpty() && !hasResume && !hasVideos) firstCard else null,
+                            startInset = startInset,
+                            endInset = endInset,
                             state = rowStates.getOrPut("games") { androidx.compose.foundation.lazy.LazyListState() },
                             cardModifier = { idx, itemKey ->
                                 Modifier
@@ -976,7 +992,7 @@ private fun Greeting(account: TvHomeAccount?) {
  * the first card can take the focus (the first row of the home), it shows it with a white border.
  */
 @Composable
-private fun SkeletonRow(actions: TvHomeActions, firstCardModifier: Modifier? = null) {
+private fun SkeletonRow(actions: TvHomeActions, startInset: Dp = 0.dp, firstCardModifier: Modifier? = null) {
     val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
     val count = actions.cardsPerRow.coerceIn(2, 6)
     val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
@@ -1003,9 +1019,9 @@ private fun SkeletonRow(actions: TvHomeActions, firstCardModifier: Modifier? = n
             end = androidx.compose.ui.geometry.Offset(lightX - left + bandPx, 0f),
         )
     }
-    val startPx = with(density) { 12.dp.toPx() }
+    val startPx = with(density) { (startInset + 12.dp).toPx() }
     val stepPx = with(density) { (cardWidth + 16.dp).toPx() }
-    Column(Modifier.padding(start = 12.dp, top = 14.dp, bottom = 8.dp)) {
+    Column(Modifier.padding(start = startInset + 12.dp, top = 14.dp, bottom = 8.dp)) {
         Box(Modifier.width(220.dp).height(22.dp).clip(RoundedCornerShape(6.dp)).background(shimmer(startPx)))
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1101,9 +1117,9 @@ private fun RefreshPill(actions: TvHomeActions, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun RowTitle(title: String, icon: Int? = null) {
+private fun RowTitle(title: String, icon: Int? = null, startPadding: Dp = 12.dp) {
     Row(
-        modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 8.dp),
+        modifier = Modifier.padding(start = startPadding, top = 10.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
@@ -1140,12 +1156,14 @@ private fun StreamRow(
     previewPlayer: () -> ExoPlayer?,
     actions: TvHomeActions,
     firstRequester: FocusRequester?,
+    startInset: Dp = 0.dp,
+    endInset: Dp = 0.dp,
     state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
     cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
     onCardSelected: (Int, String) -> Unit = { _, _ -> },
 ) {
     Column {
-        RowTitle(row.title, row.icon)
+        RowTitle(row.title, row.icon, startPadding = startInset + 12.dp)
         // the cards fill the width of the screen, with a part of the next one in sight
         val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
         val count = actions.cardsPerRow.coerceIn(2, 6)
@@ -1153,8 +1171,16 @@ private fun StreamRow(
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
             state = state,
-            modifier = Modifier.focusRestorer(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvHorizontalFade(
+                    startWidth = 56.dp,
+                    endWidth = 56.dp,
+                    scrolledStart = { state.canScrollBackward },
+                    scrolledEnd = { state.canScrollForward },
+                )
+                .focusRestorer(),
+            contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(row.items, key = { index, item -> item.channelId ?: index }) { index, stream ->
@@ -1196,17 +1222,27 @@ private fun GameRow(
     row: TvHomeRow<Game>,
     actions: TvHomeActions,
     firstRequester: FocusRequester?,
+    startInset: Dp = 0.dp,
+    endInset: Dp = 0.dp,
     state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
     cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
     onCardSelected: (Int, String) -> Unit = { _, _ -> },
 ) {
     Column {
-        RowTitle(row.title, row.icon)
+        RowTitle(row.title, row.icon, startPadding = startInset + 12.dp)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
         LazyRow(
             state = state,
-            modifier = Modifier.focusRestorer(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvHorizontalFade(
+                    startWidth = 56.dp,
+                    endWidth = 56.dp,
+                    scrolledStart = { state.canScrollBackward },
+                    scrolledEnd = { state.canScrollForward },
+                )
+                .focusRestorer(),
+            contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(row.items, key = { index, item -> item.id ?: index }) { index, game ->
@@ -1485,20 +1521,30 @@ private fun ResumeRow(
     row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>,
     actions: TvHomeActions,
     firstRequester: FocusRequester?,
+    startInset: Dp = 0.dp,
+    endInset: Dp = 0.dp,
     state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
     cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
     onCardSelected: (Int, String) -> Unit = { _, _ -> },
 ) {
     Column {
-        RowTitle(row.title, row.icon)
+        RowTitle(row.title, row.icon, startPadding = startInset + 12.dp)
         val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
         val count = actions.cardsPerRow.coerceIn(2, 6)
         val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
             LazyRow(
                 state = state,
-                modifier = Modifier.focusRestorer(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvHorizontalFade(
+                        startWidth = 56.dp,
+                        endWidth = 56.dp,
+                        scrolledStart = { state.canScrollBackward },
+                        scrolledEnd = { state.canScrollForward },
+                    )
+                    .focusRestorer(),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(row.items, key = { _, item -> item.id }) { index, item ->
@@ -1523,20 +1569,30 @@ private fun VideoRow(
     row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video>,
     actions: TvHomeActions,
     firstRequester: FocusRequester?,
+    startInset: Dp = 0.dp,
+    endInset: Dp = 0.dp,
     state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
     cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
     onCardSelected: (Int, String) -> Unit = { _, _ -> },
 ) {
     Column {
-        RowTitle(row.title, row.icon)
+        RowTitle(row.title, row.icon, startPadding = startInset + 12.dp)
         val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
         val count = actions.cardsPerRow.coerceIn(2, 6)
         val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
         CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
             LazyRow(
                 state = state,
-                modifier = Modifier.focusRestorer(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvHorizontalFade(
+                        startWidth = 56.dp,
+                        endWidth = 56.dp,
+                        scrolledStart = { state.canScrollBackward },
+                        scrolledEnd = { state.canScrollForward },
+                    )
+                    .focusRestorer(),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(row.items, key = { index, item -> item.id ?: "video$index" }) { index, item ->
@@ -1779,10 +1835,16 @@ private fun ResumeCard(
 
 /** Card of statistics: the D-pad stops on it as a whole, it has no action. */
 @Composable
-private fun StatsCard(stats: TvHomeStats, actions: TvHomeActions, modifier: Modifier = Modifier) {
+private fun StatsCard(
+    stats: TvHomeStats,
+    actions: TvHomeActions,
+    startInset: Dp = 0.dp,
+    endInset: Dp = 0.dp,
+    modifier: Modifier = Modifier,
+) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Column(Modifier.padding(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp)) {
         RowTitle(stats.title, R.drawable.tv_ic_bar_chart)
         Column(
             modifier

@@ -205,6 +205,8 @@ object TvStreamSwitcher {
             tabViews.getOrNull(originTab)?.isSelected = true
             root.addView(android.widget.HorizontalScrollView(activity).apply {
                 isHorizontalScrollBarEnabled = false
+                isHorizontalFadingEdgeEnabled = true
+                setFadingEdgeLength((36 * density).toInt())
                 isFocusable = false
                 addView(tabsLayout)
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -212,6 +214,8 @@ object TvStreamSwitcher {
         val recyclerView = RecyclerView(activity).apply {
             clipToPadding = false
             clipChildren = false
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength((48 * density).toInt())
             setPadding(horizontalPadding, (8 * density).toInt(), horizontalPadding, (8 * density).toInt())
         }
         // card the focus goes to once it is shown (left / right pressed faster than the row scrolls)

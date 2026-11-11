@@ -119,6 +119,20 @@ class ChatViewModel(
     val cheerEmotes = mutableListOf<CheerEmote>()
 
     val roomState = MutableStateFlow<RoomState?>(null)
+    val effectiveRoomState = MutableStateFlow(RoomState("0", "-1", "0", "0", "0"))
+    val userRoomBadges = MutableStateFlow<Set<String>?>(null)
+    val chatRestrictionToast = MutableSharedFlow<String>(extraBufferCapacity = 4)
+
+    private fun mergeRoomState(update: RoomState) {
+        val prev = effectiveRoomState.value
+        effectiveRoomState.value = RoomState(
+            emote = update.emote ?: prev.emote,
+            followers = update.followers ?: prev.followers,
+            unique = update.unique ?: prev.unique,
+            slow = update.slow ?: prev.slow,
+            subs = update.subs ?: prev.subs,
+        )
+    }
     val raid = MutableStateFlow<Raid?>(null)
     val raidClicked = MutableStateFlow<Raid?>(null)
     var raidClosed = false
@@ -1241,7 +1255,7 @@ class ChatViewModel(
             if (applicationContext.prefs().getBoolean(C.CHAT_USE_WEBSOCKET, true)) {
                 chatReadWebSocket = ChatReadWebSocket(channelLogin, ChatReadListener(channelLogin, nameDisplay, showUserNotice, showClearMsg, showClearChat, usePubSub, networkLibrary, isLoggedIn, accountId, channelId))
                 chatReadJob = chatReadWebSocket?.connect(viewModelScope)
-                if (isLoggedIn && (!gqlToken.isNullOrBlank() || !helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && !useApiChatMessages)) {
+                if (isLoggedIn && (!gqlToken.isNullOrBlank() || !helixToken.isNullOrBlank())) {
                     chatWriteWebSocket = ChatWriteWebSocket(
                         userLogin = accountLogin,
                         userToken = gqlToken?.takeIf { it.isNotBlank() } ?: helixToken,
@@ -1256,7 +1270,7 @@ class ChatViewModel(
                 chatReadJob = viewModelScope.launch(Dispatchers.IO) {
                     chatReadIRCSocket?.start()
                 }
-                if (isLoggedIn && (!gqlToken.isNullOrBlank() || !helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && !useApiChatMessages)) {
+                if (isLoggedIn && (!gqlToken.isNullOrBlank() || !helixToken.isNullOrBlank())) {
                     chatWriteIRCSocket = ChatWriteIRCSocket(
                         useSSL = useSSL,
                         userLogin = accountLogin,
@@ -1328,6 +1342,8 @@ class ChatViewModel(
         clearDelayedMessages()
         resetSlowChat()
         autoDelayMs = 0L
+        effectiveRoomState.value = RoomState("0", "-1", "0", "0", "0")
+        userRoomBadges.value = null
         if (started) {
             started = false
             if (chatReadIRCSocket != null) {
@@ -1427,6 +1443,18 @@ class ChatViewModel(
         }
 
         override suspend fun onChatMessage(message: ChatUtils.IRCMessage, userNotice: Boolean) {
+            if (userNotice && isLoggedIn) {
+                val msgId = message.tags["msg-id"]
+                val isSelfSub = msgId in setOf("sub", "resub", "giftpaidupgrade", "anongiftpaidupgrade", "primepaidupgrade") &&
+                    ((!accountId.isNullOrBlank() && message.tags["user-id"] == accountId) ||
+                        (!ownUserLogin.isNullOrBlank() && message.tags["login"].equals(ownUserLogin, true)))
+                val isSelfGiftRecipient = msgId in setOf("subgift", "anonsubgift") &&
+                    ((!accountId.isNullOrBlank() && message.tags["msg-param-recipient-id"] == accountId) ||
+                        (!ownUserLogin.isNullOrBlank() && message.tags["msg-param-recipient-user-name"].equals(ownUserLogin, true)))
+                if (isSelfSub || isSelfGiftRecipient) {
+                    userRoomBadges.value = (userRoomBadges.value ?: emptySet()) + "subscriber"
+                }
+            }
             if (!userNotice || showUserNotice) {
                 val chatMessage = ChatUtils.parseChatMessage(message, if (userNotice) TvChatNotices.build(applicationContext, message.tags) else null)
                 if (chatMessage.reply?.message != null) {
@@ -1472,13 +1500,15 @@ class ChatViewModel(
         }
 
         override suspend fun onRoomState(message: ChatUtils.IRCMessage) {
-            roomState.value = RoomState(
+            val state = RoomState(
                 emote = message.tags["emote-only"],
                 followers = message.tags["followers-only"],
                 unique = message.tags["r9k"],
                 slow = message.tags["slow"],
                 subs = message.tags["subs-only"]
             )
+            roomState.value = state
+            mergeRoomState(state)
         }
 
         override suspend fun onDisconnect(message: String, fullMsg: String?) {
@@ -1500,10 +1530,30 @@ class ChatViewModel(
         }
 
         override suspend fun onNotice(message: ChatUtils.IRCMessage) {
-            onMessage(ChatUtils.parseNotice(message))
+            val parsed = ChatUtils.parseNotice(message)
+            onMessage(parsed)
+            val msgId = message.tags["msg-id"]
+            if (TvChatNotices.isRestrictionNoticeId(msgId)) {
+                if (msgId == "msg_subsonly" && userRoomBadges.value == null) {
+                    userRoomBadges.value = emptySet()
+                }
+                val followersMin = effectiveRoomState.value.followers?.toIntOrNull()?.takeIf { it > 0 }
+                chatRestrictionToast.tryEmit(
+                    TvChatNotices.restrictionMessage(applicationContext, msgId, parsed.systemMsg, followersMin)
+                )
+            }
         }
 
         override suspend fun onUserState(message: ChatUtils.IRCMessage) {
+            val badgeSet = message.tags["badges"]
+                ?.split(',')
+                ?.mapNotNull { it.substringBefore('/').takeIf(String::isNotBlank) }
+                ?.toMutableSet()
+                ?: mutableSetOf()
+            if (message.tags["mod"] == "1") badgeSet.add("moderator")
+            if (message.tags["subscriber"] == "1") badgeSet.add("subscriber")
+            if (!message.tags["vip"].isNullOrBlank() && message.tags["vip"] != "0") badgeSet.add("vip")
+            userRoomBadges.value = badgeSet
             val emoteSets = message.tags["emote-sets"]?.split(",")
             if (emoteSets != null && savedEmoteSets != emoteSets) {
                 savedEmoteSets = emoteSets
@@ -1567,6 +1617,16 @@ class ChatViewModel(
         }
 
         override suspend fun onUserNotice(event: JSONObject, timestamp: String?) {
+            if (isLoggedIn && !accountId.isNullOrBlank()) {
+                val noticeType = event.optString("notice_type")
+                val isSelfSub = noticeType in setOf("sub", "resub", "gift_paid_upgrade", "prime_paid_upgrade") &&
+                    event.optString("chatter_user_id") == accountId
+                val isSelfGift = noticeType == "sub_gift" &&
+                    event.optJSONObject("sub_gift")?.optString("recipient_user_id") == accountId
+                if (isSelfSub || isSelfGift) {
+                    userRoomBadges.value = (userRoomBadges.value ?: emptySet()) + "subscriber"
+                }
+            }
             if (showUserNotice) {
                 onChatMessage(EventSubUtils.parseUserNotice(event, timestamp, TvChatNotices.build(applicationContext, event)), networkLibrary, isLoggedIn, accountId, channelId)
             }
@@ -1579,7 +1639,9 @@ class ChatViewModel(
         }
 
         override suspend fun onRoomState(event: JSONObject, timestamp: String?) {
-            roomState.value = EventSubUtils.parseRoomState(event)
+            val state = EventSubUtils.parseRoomState(event)
+            roomState.value = state
+            mergeRoomState(state)
         }
 
         override suspend fun onDisconnect(message: String, fullMsg: String?) {
@@ -1990,6 +2052,9 @@ class ChatViewModel(
         onMessage(message)
         addChatter(message.userName)
         if (isLoggedIn && !accountId.isNullOrBlank() && message.userId == accountId) {
+            message.badges?.let { badges ->
+                userRoomBadges.value = badges.mapNotNull { it.setId.takeIf(String::isNotBlank) }.toSet()
+            }
             onUpdatePresence(networkLibrary, null, channelId, false)
         }
     }
@@ -2170,17 +2235,57 @@ class ChatViewModel(
     private suspend fun sendMessage(message: CharSequence, networkLibrary: String?, gqlHeaders: Map<String, String>, helixHeaders: Map<String, String>, accountId: String?, channelId: String?, useApiChatMessages: Boolean, enableIntegrity: Boolean, replyId: String? = null) {
         if (useApiChatMessages) {
             if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
-                graphQLRepository.sendMessage(networkLibrary, gqlHeaders, channelId, message.toString(), replyId).also { response ->
-                    if (enableIntegrity) {
-                        response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
-                            integrity.emit("refresh")
-                            return
-                        }
+                val response = graphQLRepository.sendMessage(networkLibrary, gqlHeaders, channelId, message.toString(), replyId)
+                if (enableIntegrity) {
+                    response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                        integrity.emit("refresh")
+                        return
                     }
-                }.takeIf { !it.errors.isNullOrEmpty() }?.toString()
+                }
+                val dropReason = response.data?.sendChatMessage?.dropReason
+                val dropMessage = response.data?.sendChatMessage?.dropReasonMessage
+                when {
+                    !dropReason.isNullOrBlank() -> {
+                        if (dropReason == "SUBSCRIBERS_ONLY" && userRoomBadges.value == null) {
+                            userRoomBadges.value = emptySet()
+                        }
+                        val followersMin = effectiveRoomState.value.followers?.toIntOrNull()?.takeIf { it > 0 }
+                        val toastMsg = TvChatNotices.restrictionMessage(applicationContext, dropReason, dropMessage, followersMin)
+                        chatRestrictionToast.emit(toastMsg)
+                        dropMessage?.takeIf { it.isNotBlank() } ?: toastMsg
+                    }
+                    !response.errors.isNullOrEmpty() -> {
+                        val errMsg = response.errors
+                            .mapNotNull { it.message?.takeIf(String::isNotBlank) }
+                            .joinToString("; ")
+                            .ifBlank { applicationContext.getString(R.string.tv_chat_restricted_generic) }
+                        chatRestrictionToast.emit(TvChatNotices.restrictionMessage(applicationContext, null, errMsg))
+                        errMsg
+                    }
+                    else -> null
+                }
             } else {
                 if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
-                    helixRepository.sendMessage(networkLibrary, helixHeaders, accountId, channelId, message.toString(), replyId)
+                    val raw = helixRepository.sendMessage(networkLibrary, helixHeaders, accountId, channelId, message.toString(), replyId)
+                    when {
+                        raw != null && raw.startsWith("DROP:") -> {
+                            val payload = raw.removePrefix("DROP:")
+                            val code = payload.substringBefore('|')
+                            val msg = payload.substringAfter('|', "")
+                            if (code == "msg_subsonly" && userRoomBadges.value == null) {
+                                userRoomBadges.value = emptySet()
+                            }
+                            val followersMin = effectiveRoomState.value.followers?.toIntOrNull()?.takeIf { it > 0 }
+                            val toastMsg = TvChatNotices.restrictionMessage(applicationContext, code, msg, followersMin)
+                            chatRestrictionToast.emit(toastMsg)
+                            msg.ifBlank { toastMsg }
+                        }
+                        !raw.isNullOrBlank() -> {
+                            chatRestrictionToast.emit(TvChatNotices.restrictionMessage(applicationContext, null, raw))
+                            raw
+                        }
+                        else -> null
+                    }
                 } else null
             }?.let {
                 onMessage(ChatMessage(systemMsg = it))

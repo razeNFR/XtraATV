@@ -20,6 +20,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,9 +28,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -55,8 +59,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
@@ -142,6 +149,7 @@ fun TvTextField(
     voice: VoiceState? = null,
     imeAction: ImeAction = ImeAction.Search,
     leadingIcon: Int? = R.drawable.baseline_search_black_24,
+    emotes: Map<String, String> = emptyMap(),
     focusRequester: FocusRequester = remember { FocusRequester() },
     onLeft: (() -> Unit)? = null,
     onSubmit: () -> Unit,
@@ -171,7 +179,20 @@ fun TvTextField(
                         return@onPreviewKeyEvent true
                     }
                     if ((event.key == Key.Backspace || event.key == Key.Delete) && value.isNotEmpty()) {
-                        onValueChange(if (event.nativeKeyEvent.repeatCount >= 2) "" else value.dropLast(1))
+                        if (event.nativeKeyEvent.repeatCount >= 2) {
+                            onValueChange("")
+                        } else if (emotes.isNotEmpty()) {
+                            val trimmed = value.trimEnd(' ')
+                            val lastSpace = trimmed.lastIndexOf(' ')
+                            val lastToken = if (lastSpace >= 0) trimmed.substring(lastSpace + 1) else trimmed
+                            if (trimmed.isNotEmpty() && emotes.containsKey(lastToken)) {
+                                onValueChange(if (lastSpace >= 0) trimmed.substring(0, lastSpace + 1) else "")
+                            } else {
+                                onValueChange(value.dropLast(1))
+                            }
+                        } else {
+                            onValueChange(value.dropLast(1))
+                        }
                         return@onPreviewKeyEvent true
                     }
                 }
@@ -235,6 +256,58 @@ fun TvTextField(
                             } else false
                         }
                 )
+                value.isNotEmpty() && emotes.isNotEmpty() -> {
+                    val context = LocalContext.current
+                    val (annotated, inlineContent) = remember(value, emotes) {
+                        val contentMap = mutableMapOf<String, InlineTextContent>()
+                        val str = buildAnnotatedString {
+                            var start = 0
+                            while (start < value.length) {
+                                val spaceIdx = value.indexOf(' ', start)
+                                if (spaceIdx == start) {
+                                    append(' ')
+                                    start++
+                                } else {
+                                    val end = if (spaceIdx < 0) value.length else spaceIdx
+                                    val token = value.substring(start, end)
+                                    val url = emotes[token]
+                                    if (!url.isNullOrBlank()) {
+                                        val inlineId = "emote_$token"
+                                        if (!contentMap.containsKey(inlineId)) {
+                                            contentMap[inlineId] = InlineTextContent(
+                                                Placeholder(
+                                                    width = 24.sp,
+                                                    height = 24.sp,
+                                                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
+                                                )
+                                            ) {
+                                                coil3.compose.AsyncImage(
+                                                    model = coil3.request.ImageRequest.Builder(context)
+                                                        .data(url)
+                                                        .build(),
+                                                    contentDescription = token,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                )
+                                            }
+                                        }
+                                        appendInlineContent(inlineId, token)
+                                    } else {
+                                        append(token)
+                                    }
+                                    start = end
+                                }
+                            }
+                        }
+                        str to contentMap
+                    }
+                    BasicText(
+                        text = annotated,
+                        style = TextStyle(fontSize = 18.sp, color = textColor),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        inlineContent = inlineContent,
+                    )
+                }
                 else -> Text(
                     value.ifEmpty { hint },
                     fontSize = 18.sp,
@@ -431,6 +504,19 @@ fun ChatComposer(
     val requester = remember { FocusRequester() }
     val emoteBtnRequester = remember { FocusRequester() }
     val context = LocalContext.current
+    val emoteMap = remember(emoteGroups) {
+        buildMap {
+            emoteGroups.forEach { (_, list) ->
+                list.forEach { emote ->
+                    val code = emote.name
+                    val url = emote.url2x ?: emote.url1x ?: emote.url3x ?: emote.url4x
+                    if (!code.isNullOrBlank() && !url.isNullOrBlank() && !containsKey(code)) {
+                        put(code, url)
+                    }
+                }
+            }
+        }
+    }
     Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.TopCenter) {
         androidx.compose.foundation.layout.Column(
             Modifier
@@ -449,6 +535,7 @@ fun ChatComposer(
                     voice = voice,
                     imeAction = ImeAction.Send,
                     leadingIcon = null,
+                    emotes = emoteMap,
                     focusRequester = requester,
                     modifier = Modifier.weight(1f),
                 ) {

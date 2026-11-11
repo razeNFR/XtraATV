@@ -35,6 +35,7 @@ object TvAbout {
 
     const val CREDIT_TEXT = "XtraTV forked from https://github.com/crackededed/Xtra by razeN with AI"
     const val GITHUB_URL = "https://github.com/razeNFR/XtraATV"
+    const val DISCORD_URL = "https://discord.gg/SgKqrW73P4"
 
     fun deviceSummary(): String {
         val manufacturer = Build.MANUFACTURER.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
@@ -43,50 +44,52 @@ object TvAbout {
             if (abi.isNotEmpty()) " · $abi" else ""
     }
 
-    fun show(context: Context) {
-        val qrBitmap = QrCode.encode(GITHUB_URL, 520)
+    fun show(context: Context, discord: Boolean = false) {
+        val targetUrl = if (discord) DISCORD_URL else GITHUB_URL
+        val qrBitmap = QrCode.encode(targetUrl, 520)
         val versionTitle = "${context.getString(R.string.app_name)} ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
         val deviceInfo = deviceSummary()
+        val panelTitle = context.getString(if (discord) R.string.tv_about_discord else R.string.tv_settings_section_about)
         TvDialogs.show(context) { dismiss ->
-            SidePanel(title = context.getString(R.string.tv_settings_section_about)) {
+            SidePanel(title = panelTitle, scrollable = true) {
                 val closeRequester = remember { FocusRequester() }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         versionTitle,
-                        fontSize = 18.sp,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = ComposeColor.White,
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         CREDIT_TEXT,
-                        fontSize = 14.sp,
-                        color = TvColors.secondaryText,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        deviceInfo,
                         fontSize = 13.sp,
                         color = TvColors.secondaryText,
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        deviceInfo,
+                        fontSize = 12.sp,
+                        color = TvColors.secondaryText,
+                    )
+                    Spacer(Modifier.height(12.dp))
                     Box(
                         Modifier
-                            .size(210.dp)
+                            .size(168.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(ComposeColor.White)
-                            .padding(10.dp),
+                            .padding(9.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
                             bitmap = qrBitmap.asImageBitmap(),
-                            contentDescription = GITHUB_URL,
-                            modifier = Modifier.size(190.dp)
+                            contentDescription = targetUrl,
+                            modifier = Modifier.size(150.dp)
                         )
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Text(GITHUB_URL, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = ComposeColor.White)
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text(targetUrl, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = ComposeColor.White)
+                    Spacer(Modifier.height(12.dp))
                     ButtonRow(
                         label = context.getString(R.string.close_player),
                         modifier = Modifier.focusRequester(closeRequester),

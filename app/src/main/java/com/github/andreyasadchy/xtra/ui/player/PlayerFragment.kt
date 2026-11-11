@@ -849,6 +849,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
             }
+            if (isTv && playbackService?.type == BasePlaybackService.STREAM) {
+                viewLifecycleOwner.lifecycleScope.launch {
+                    repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        launch {
+                            viewModel.accountFollowedAtMs.collect { updateTvChatLockUi() }
+                        }
+                        launch {
+                            viewModel.accountFollowKnown.collect { updateTvChatLockUi() }
+                        }
+                    }
+                }
+            }
             if (playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
                 viewModel.isFollowingChannel(
                     requireContext().tokenPrefs().getString(C.USER_ID, null),
@@ -1371,6 +1383,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val currentChatFragment = (childFragmentManager.findFragmentById(R.id.chatFragmentContainer) as? ChatFragment)
             if (currentChatFragment != null) {
                 chatFragment = currentChatFragment
+                onChatFragmentReady(currentChatFragment)
             } else {
                 val fragment = when (playbackService?.type) {
                     BasePlaybackService.STREAM -> ChatFragment.newInstance(
@@ -3070,7 +3083,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatMessage?.visibility = View.VISIBLE
                 chatMessage?.setOnClickListener {
                     showController(force = true)
-                    showChatComposer()
+                    val lock = computeTvChatLockState()
+                    if (lock != null) {
+                        Toast.makeText(requireContext(), lock.message, Toast.LENGTH_SHORT).show()
+                    } else {
+                        showChatComposer()
+                    }
                 }
             }
             // the time of day at the top right, it can be turned off in the Xtra TV settings
@@ -3108,6 +3126,109 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             updateTvAvatars()
+            updateTvChatLockUi()
+        }
+    }
+
+    private class TvChatLock(val message: String, val unlockAtMs: Long? = null)
+    private var chatUnlockTimerJob: kotlinx.coroutines.Job? = null
+    private var isTvChatLocked: Boolean? = null
+    private var chatLockObservedFragment: ChatFragment? = null
+
+    fun onChatFragmentReady(fragment: ChatFragment) {
+        if (!isTv || playbackService?.type != BasePlaybackService.STREAM) return
+        chatFragment = fragment
+        if (chatLockObservedFragment === fragment || fragment.view == null) {
+            updateTvChatLockUi()
+            return
+        }
+        chatLockObservedFragment = fragment
+        fragment.viewLifecycleOwner.lifecycleScope.launch {
+            fragment.viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    fragment.getEffectiveRoomState()?.collect { updateTvChatLockUi() }
+                }
+                launch {
+                    fragment.getUserRoomBadges()?.collect { updateTvChatLockUi() }
+                }
+            }
+        }
+        updateTvChatLockUi()
+    }
+
+    private fun computeTvChatLockState(): TvChatLock? {
+        if (!isTv || playbackService?.type != BasePlaybackService.STREAM) return null
+        val ctx = context ?: return null
+        val userId = ctx.tokenPrefs().getString(C.USER_ID, null)
+        if (!userId.isNullOrBlank() && userId == playbackService?.channelId) return null
+        val badges = chatFragment?.getUserRoomBadges()?.value
+        if (badges != null && badges.any {
+                it == "broadcaster" || it == "moderator" || it == "lead_moderator" ||
+                    it == "vip" || it == "staff" || it == "admin" || it == "global_mod"
+            }) {
+            return null
+        }
+        val roomState = chatFragment?.getEffectiveRoomState()?.value ?: return null
+        if (roomState.subs == "1" && badges != null && "subscriber" !in badges && "founder" !in badges) {
+            return TvChatLock(com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(ctx, "SUBSCRIBERS_ONLY"))
+        }
+        val followersMin = roomState.followers?.toIntOrNull()
+        if (followersMin != null && followersMin >= 0 && viewModel.accountFollowKnown.value) {
+            val followedAt = viewModel.accountFollowedAtMs.value
+            if (followedAt == null) {
+                return TvChatLock(
+                    com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(
+                        ctx,
+                        "FOLLOWERS_ONLY",
+                        followersMinutes = followersMin
+                    )
+                )
+            }
+            if (followersMin > 0) {
+                val unlockAt = followedAt + followersMin * 60_000L
+                val now = System.currentTimeMillis()
+                if (now < unlockAt) {
+                    val remSec = (unlockAt - now + 999L) / 1000L
+                    return TvChatLock(
+                        com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(
+                            ctx,
+                            "msg_followersonly_followed",
+                            followersMinutes = followersMin,
+                            remainingSeconds = remSec
+                        ),
+                        unlockAtMs = unlockAt
+                    )
+                }
+            }
+        }
+        return null
+    }
+
+    private fun updateTvChatLockUi() {
+        if (!isTv || _binding == null) return
+        val lock = computeTvChatLockState()
+        val locked = lock != null
+        if (isTvChatLocked != locked) {
+            isTvChatLocked = locked
+            binding.playerControls.chatMessage?.let { button ->
+                button.setImageResource(if (locked) R.drawable.tv_ic_chat_send_locked else R.drawable.tv_ic_chat_send)
+                button.setColorFilter(
+                    when {
+                        button.hasFocus() -> com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight
+                        button.isEnabled -> Color.WHITE
+                        else -> Color.GRAY
+                    }
+                )
+            }
+        }
+        chatUnlockTimerJob?.cancel()
+        chatUnlockTimerJob = if (lock?.unlockAtMs != null && view != null) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                delay((lock.unlockAtMs - System.currentTimeMillis() + 50L).coerceAtLeast(50L))
+                updateTvChatLockUi()
+            }
+        } else {
+            null
         }
     }
 
@@ -4526,6 +4647,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        chatUnlockTimerJob?.cancel()
+        chatUnlockTimerJob = null
+        isTvChatLocked = null
+        chatLockObservedFragment = null
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(tvDimListener)
         _binding?.root?.removeCallbacks(tvHudTicker)
         _binding?.root?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnGlobalFocusChangeListener(hudFocusListener)
