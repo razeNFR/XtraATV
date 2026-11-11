@@ -295,6 +295,63 @@ class GridRecyclerView : RecyclerView {
         return if (!isTv) super.getBottomFadingEdgeStrength() else 0f
     }
 
+    /**
+     * TV: the fade starts at the very top of the list, right under the header. The system starts it after the top
+     * padding of the list, but the cards are drawn in that padding too (not clipped): they were cut by a straight line
+     * under the header, and the fade came lower, over the middle of the cards.
+     */
+    override fun isPaddingOffsetRequired(): Boolean {
+        return isTv || super.isPaddingOffsetRequired()
+    }
+
+    override fun getTopPaddingOffset(): Int {
+        return if (isTv) -paddingTop else super.getTopPaddingOffset()
+    }
+
+    /** Original colors of the texts of the cards, given back when a card no longer takes the color of accent. */
+    private val cardTextColors = java.util.WeakHashMap<android.widget.TextView, android.content.res.ColorStateList>()
+
+    /**
+     * TV: the name of the category of each card in the color of accent, like on the home; the name of the streamer
+     * when the card shows no category (the lists of a category). Called again when the dynamic ambiance changes color.
+     */
+    fun tintCards() {
+        if (!isTv || com.github.andreyasadchy.xtra.ui.tv.TvAccent.current == null) {
+            return
+        }
+        val accent = com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
+        for (i in 0 until childCount) {
+            val card = getChildAt(i)
+            val game = card.findViewById<android.widget.TextView>(R.id.gameName)
+            val user = card.findViewById<android.widget.TextView>(R.id.username)
+            if (game == null || user == null) {
+                // a card of a category or of a channel: its name is its title, it keeps its color
+                continue
+            }
+            val gameShown = game.visibility == View.VISIBLE && !game.text.isNullOrBlank()
+            fun tint(text: android.widget.TextView?, on: Boolean) {
+                text ?: return
+                if (on) {
+                    if (!cardTextColors.containsKey(text)) {
+                        cardTextColors[text] = text.textColors
+                    }
+                    if (text.currentTextColor != accent) {
+                        text.setTextColor(accent)
+                    }
+                } else {
+                    cardTextColors.remove(text)?.let { text.setTextColor(it) }
+                }
+            }
+            tint(game, gameShown)
+            tint(user, !gameShown)
+        }
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        super.onLayout(changed, l, t, r, b)
+        tintCards()
+    }
+
     private fun scaleCardTexts(card: View) {
         for (id in intArrayOf(R.id.viewers, R.id.uptime, R.id.title, R.id.username, R.id.gameName)) {
             val text = card.findViewById<android.widget.TextView>(id) ?: continue

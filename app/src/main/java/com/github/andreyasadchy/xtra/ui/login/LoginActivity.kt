@@ -188,6 +188,22 @@ class LoginActivity : AppCompatActivity() {
                         // the end of what scrolls: the next one all the same, brought on the screen
                         if (next) select(next, true);
                     },
+                    /** The page has a field to type in: its keys are left to it. */
+                    form: function() {
+                        var all = document.querySelectorAll('input,textarea');
+                        for (var i = 0; i < all.length; i++) {
+                            var e = all[i];
+                            var type = (e.type || 'text').toLowerCase();
+                            if (['hidden', 'submit', 'button', 'checkbox', 'radio', 'image', 'reset'].indexOf(type) < 0 && !e.disabled && shown(e)) return true;
+                        }
+                        // a captcha (shown in a frame of its own, out of reach from here) too
+                        var frames = document.querySelectorAll('iframe');
+                        for (var j = 0; j < frames.length; j++) {
+                            var r = frames[j].getBoundingClientRect();
+                            if (r.width > 60 && r.height > 60 && shown(frames[j])) return true;
+                        }
+                        return false;
+                    },
                     click: function() {
                         var e = current && current.isConnected ? current : document.activeElement;
                         if (!e || e === document.body) return;
@@ -436,37 +452,19 @@ class LoginActivity : AppCompatActivity() {
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    if (isTv && url?.contains("/oauth2/authorize") == true) {
-                        view?.evaluateJavascript(TV_AUTHORIZE_JS, null)
+                    if (isTv && view != null) {
+                        // the page is made after it is loaded: looked at a few times
+                        checkTvRemotePage(view)
+                        view.postDelayed({ checkTvRemotePage(view) }, 600L)
+                        view.postDelayed({ checkTvRemotePage(view) }, 1800L)
                     }
                 }
             }
             if (isTv) {
-                // TV, page "Xtra wants to access your account": up / down scroll the page (whatever part of it scrolls) and
-                // select the links and buttons that come on the screen, OK presses the one selected. The remote could not
-                // reach "Authorize" on Fire OS: the page scrolls inside one of its blocks, not as a whole, so scrolling
-                // the view or the window moved nothing.
-                webView.setOnKeyListener { _, keyCode, event ->
-                    if (webView.url?.contains("/oauth2/authorize") != true) {
-                        return@setOnKeyListener false
-                    }
-                    when (keyCode) {
-                        android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_UP -> {
-                            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
-                                val step = if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
-                                webView.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.move($step);", null)
-                            }
-                            // the web view does not move the focus by itself too
-                            true
-                        }
-                        android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            if (event.action == android.view.KeyEvent.ACTION_UP) {
-                                webView.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.click();", null)
-                            }
-                            true
-                        }
-                        else -> false
-                    }
+                // no frame of the system around the whole page when it takes the focus
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    webView.defaultFocusHighlightEnabled = false
+                    secondaryWebView.defaultFocusHighlightEnabled = false
                 }
             }
             startPageLogin = {
@@ -1098,6 +1096,51 @@ class LoginActivity : AppCompatActivity() {
             ).show()
         }
         showTvScreen()
+    }
+
+    /** TV: the web page shown has nothing to type in (the page that asks to authorize the app...): the remote scrolls it. */
+    private var tvRemotePage = false
+    private var tvRemotePageView: WebView? = null
+
+    private fun checkTvRemotePage(view: WebView) {
+        view.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.form();") { result ->
+            tvRemotePageView = view
+            tvRemotePage = result == "false"
+        }
+    }
+
+    /**
+     * TV, a web page without anything to type in ("Xtra wants to access your account"): up / down scroll the page
+     * (whatever part of it scrolls) and select the links and buttons that come on the screen, OK presses the one
+     * selected. Done here and not with a key listener on the web view: the web view sends the keys of the remote
+     * straight to the page, its listener never gets them (so the page showed a frame and only moved once left or
+     * right had put the focus on a link). The pages with fields to type in (the login itself) keep their own keys.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val view = currentFocus as? WebView
+        if (isTv && view != null && view.isShown) {
+            val upDown = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP
+            val ok = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
+                    event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+            if (upDown || ok) {
+                if (tvRemotePage && tvRemotePageView === view) {
+                    if (upDown && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                        val step = if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+                        view.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.move($step);", null)
+                    } else if (ok && event.action == android.view.KeyEvent.ACTION_UP) {
+                        view.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.click();", null)
+                        // the page may change after it (authorized, another page): looked at again
+                        view.postDelayed({ checkTvRemotePage(view) }, 800L)
+                    }
+                    return true
+                }
+                // the page may have changed by itself since it was loaded
+                if (event.action == android.view.KeyEvent.ACTION_UP) {
+                    checkTvRemotePage(view)
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onDestroy() {

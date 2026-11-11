@@ -95,6 +95,17 @@ object TvAmbient {
         dynamicListener = listener
     }
 
+    /**
+     * A screen that goes away stops listening, only if it is still the one listening: a screen made again (after the
+     * settings...) is created before the old one is destroyed, the old one took the listener of the new one away and
+     * the background never changed color again.
+     */
+    fun removeDynamicListener(listener: (Int) -> Unit) {
+        if (dynamicListener === listener) {
+            dynamicListener = null
+        }
+    }
+
     fun background(context: Context, base: Int, overrideColor: Int? = null): Drawable {
         val color = overrideColor ?: color(context) ?: return ColorDrawable(base)
         // a light shade glows less, the background stays dark

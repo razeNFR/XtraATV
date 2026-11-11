@@ -261,11 +261,7 @@ class MainActivity : AppCompatActivity() {
                 tvBaseBackgroundColor = base
                 binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
             }
-            com.github.andreyasadchy.xtra.ui.tv.TvAmbient.setDynamicListener { color ->
-                tvBaseBackgroundColor?.let { base ->
-                    com.github.andreyasadchy.xtra.ui.tv.TvAmbient.applyDynamicToView(binding.root, base, color)
-                }
-            }
+            com.github.andreyasadchy.xtra.ui.tv.TvAmbient.setDynamicListener(tvAmbientListener)
             if (isCompactRailEnabled()) {
                 val railStart = (84 * resources.displayMetrics.density).toInt()
                 binding.navHostFragment.setPaddingRelative(
@@ -837,7 +833,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         if (isTv) {
-            com.github.andreyasadchy.xtra.ui.tv.TvAmbient.setDynamicListener(null)
+            com.github.andreyasadchy.xtra.ui.tv.TvAmbient.removeDynamicListener(tvAmbientListener)
         }
         networkCallback?.let {
             val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -1149,6 +1145,23 @@ class MainActivity : AppCompatActivity() {
 
     private val isTv by lazy { resources.getBoolean(R.bool.isTv) }
     private var tvBaseBackgroundColor: Int? = null
+
+    /** The dynamic ambiance changed color: the glow of the background, and the texts of the cards in the color of accent. */
+    private val tvAmbientListener: (Int) -> Unit = { color ->
+        if (!isDestroyed) {
+            tvBaseBackgroundColor?.let { base ->
+                com.github.andreyasadchy.xtra.ui.tv.TvAmbient.applyDynamicToView(binding.root, base, color)
+            }
+            tintTvCards(binding.navHostFragment)
+        }
+    }
+
+    private fun tintTvCards(view: View) {
+        when (view) {
+            is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> view.tintCards()
+            is ViewGroup -> for (i in 0 until view.childCount) tintTvCards(view.getChildAt(i))
+        }
+    }
     private var isTvMenuShown = true
     fun isTvMenuOpen() = isTv && isTvMenuShown
     private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, false)
