@@ -822,6 +822,9 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         restorePlayerFragment()
+        if (isTv) {
+            updateTvMenuAccount()
+        }
         val url = pendingUpdateUrl
         if (url != null) {
             pendingUpdateUrl = null
@@ -1380,6 +1383,8 @@ class MainActivity : AppCompatActivity() {
             entries.filter { !it.sub }.flatMap { if (it.id == R.id.followPagerFragment) listOf(it) + subs else listOf(it) }
         } else entries
         tvMenuState.selected = binding.navBar.selectedItemId
+        tvMenuState.accountId = R.id.tvNavAccount
+        updateTvMenuAccount()
         // option: the page of the focused entry is shown without OK (not search, settings nor account, they open screens)
         tvMenuState.onFocusItem = { id ->
             binding.root.removeCallbacks(tvMenuAutoNav)
@@ -1492,6 +1497,22 @@ class MainActivity : AppCompatActivity() {
         } catch (e: IllegalArgumentException) {
             false
         }
+    }
+
+    /** The account at the top of the side menu: its name, read again when the app comes back (logged in or out since). */
+    private fun updateTvMenuAccount() {
+        val name = tokenPrefs().getString(C.USERNAME, null)?.takeIf { it.isNotBlank() }
+        if (name != tvMenuState.accountName) {
+            tvMenuState.accountName = name
+            if (name == null) {
+                tvMenuState.accountImage = null
+            }
+        }
+    }
+
+    /** The picture of the account, loaded by the home. */
+    fun setTvAccountImage(image: String?) {
+        tvMenuState.accountImage = image
     }
 
     /** Opens the side menu from a Compose screen (left on its first card). */

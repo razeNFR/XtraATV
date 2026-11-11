@@ -237,6 +237,10 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val games by viewModel.games.collectAsState()
                 val languageRows by viewModel.languageRows.collectAsState()
                 val accountImage by viewModel.accountImage.collectAsState()
+                // the same picture at the top of the side menu
+                androidx.compose.runtime.LaunchedEffect(accountImage) {
+                    (activity as? MainActivity)?.setTvAccountImage(accountImage)
+                }
                 val heroQueue = if (showHero) {
                     followed?.takeIf { it.isNotEmpty() } ?: popular?.takeIf { it.isNotEmpty() } ?: emptyList()
                 } else emptyList()
