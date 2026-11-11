@@ -51,6 +51,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.ComposeView
@@ -548,7 +549,14 @@ object TvHeader {
                         Pill(
                             action = action,
                             isTab = false,
-                            modifier = (if (index == titleActions.lastIndex) Modifier.focusRequester(titleActionRequester) else Modifier)
+                            // it takes no height in the line of the title (drawn centered on it): the line, and the
+                            // page under it, are exactly the same with or without the sort
+                            modifier = Modifier
+                                .layout { measurable, constraints ->
+                                    val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+                                    layout(placeable.width, 0) { placeable.place(0, -placeable.height / 2) }
+                                }
+                                .then(if (index == titleActions.lastIndex) Modifier.focusRequester(titleActionRequester) else Modifier)
                                 .onPreviewKeyEvent { event ->
                                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                     when (event.key) {

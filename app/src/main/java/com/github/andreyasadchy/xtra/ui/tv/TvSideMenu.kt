@@ -112,8 +112,29 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         animationSpec = androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
         label = "menuOpen"
     )
-    val menuWidth = RAIL_WIDTH + (MENU_WIDTH - RAIL_WIDTH) * open
-    var focusedSlot by remember { mutableIntStateOf(-1) }
+    // as wide as its longest name needs, no more (the names differ with the language and the shortcuts shown)
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val fullWidth = remember(state.items, state.accountName, density) {
+        fun width(text: String, size: Int) = with(density) {
+            measurer.measure(text, androidx.compose.ui.text.TextStyle(fontSize = size.sp, fontWeight = FontWeight.SemiBold), maxLines = 1).size.width.toDp()
+        }
+        var widest = 0.dp
+        state.items.forEach { item ->
+            val needed = if (item.id == state.accountId) {
+                ENTRY_HEIGHT + 10.dp + maxOf(width(state.accountName ?: item.label, 17), if (state.accountName != null) width(item.label, 12) else 0.dp) + 14.dp
+            } else {
+                (if (item.sub) 30.dp else 0.dp) + ENTRY_HEIGHT + 8.dp + width(item.label, if (item.sub) 15 else 17) + 16.dp
+            }
+            if (needed > widest) widest = needed
+        }
+        (widest + MENU_PADDING * 2).coerceIn(176.dp, 300.dp)
+    }
+    val menuWidth = RAIL_WIDTH + (fullWidth - RAIL_WIDTH) * open
+    // the entry that has the focus, by its requester: its place among the entries is looked up when a key comes. A place
+    // kept as a number went wrong when the menu opened with a stream kept playing: the focus came before the "now
+    // playing" card was put in, the number was 2 short and up / down jumped over entries
+    var focusedRequester by remember { mutableStateOf<FocusRequester?>(null) }
     if (state.pendingFocus && !collapsed) {
         // the entries were just put back (rail unfolded): the focus as soon as one of them can take it
         androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -166,20 +187,22 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
             Modifier
                 // laid out at the width of the open menu whatever the width shown: nothing moves nor wraps while it opens
                 .wrapContentWidth(align = Alignment.Start, unbounded = true)
-                .width(MENU_WIDTH)
+                .width(fullWidth)
                 .fillMaxHeight()
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when (event.key) {
                         Key.DirectionUp -> {
-                            if (focusedSlot > 0 && focusedSlot - 1 < slots.size) {
-                                runCatching { slots[focusedSlot - 1].requestFocus() }
+                            val slot = slots.indexOf(focusedRequester)
+                            if (slot > 0) {
+                                runCatching { slots[slot - 1].requestFocus() }
                             }
                             true
                         }
                         Key.DirectionDown -> {
-                            if (focusedSlot in 0 until slots.lastIndex) {
-                                runCatching { slots[focusedSlot + 1].requestFocus() }
+                            val slot = slots.indexOf(focusedRequester)
+                            if (slot in 0 until slots.lastIndex) {
+                                runCatching { slots[slot + 1].requestFocus() }
                             }
                             true
                         }
@@ -190,7 +213,6 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = MENU_PADDING, vertical = 24.dp)
         ) {
-            var currentSlot = 0
             items.forEachIndexed { index, item ->
                 if (index == nowPlayingAt && playing != null) {
                     Spacer(Modifier.height(10.dp))
@@ -214,15 +236,13 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             )
                         }
                     } else {
-                        val openSlot = currentSlot++
-                        val closeSlot = currentSlot++
                         NowPlayingCard(
                             playing = playing,
                             state = state,
                             openRequester = nowPlayingOpenRequester,
                             closeRequester = nowPlayingCloseRequester,
-                            onOpenFocused = { focusedSlot = openSlot },
-                            onCloseFocused = { focusedSlot = closeSlot },
+                            onOpenFocused = { focusedRequester = nowPlayingOpenRequester },
+                            onCloseFocused = { focusedRequester = nowPlayingCloseRequester },
                         )
                     }
                     Spacer(Modifier.height(10.dp))
@@ -233,21 +253,20 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                     val newGroup = previous === account || previous.group != item.group
                     Spacer(Modifier.height(if (newGroup) 18.dp else 4.dp))
                 }
-                val itemSlot = currentSlot++
                 val requester = state.requesters.getOrPut(item.id) { FocusRequester() }
                 val entryModifier = Modifier
                     .focusRequester(requester)
                     .onFocusChanged {
                         if (it.isFocused) {
-                            focusedSlot = itemSlot
+                            focusedRequester = requester
                             state.focusedId = item.id
                             state.onFocusItem(item.id)
                         }
                     }
                 if (item === account) {
-                    AccountEntry(item, state, open, entryModifier) { onClick(item.id) }
+                    AccountEntry(item, state, open, fullWidth, entryModifier) { onClick(item.id) }
                 } else {
-                    MenuEntry(item, item.id == activeId, open, entryModifier) { onClick(item.id) }
+                    MenuEntry(item, item.id == activeId, open, fullWidth, entryModifier) { onClick(item.id) }
                 }
             }
         }
@@ -255,20 +274,19 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
 }
 
 private val RAIL_WIDTH = 68.dp
-private val MENU_WIDTH = 276.dp
 private val MENU_PADDING = 12.dp
 /** Height of an entry, and width of the square that holds its icon (the entry itself in the rail). */
 private val ENTRY_HEIGHT = 44.dp
 
 /** The account at the top of the menu: its picture and its name, the entry that opens the account screen. */
 @Composable
-private fun AccountEntry(item: TvMenuItem, state: TvMenuState, open: Float, modifier: Modifier, onClick: () -> Unit) {
+private fun AccountEntry(item: TvMenuItem, state: TvMenuState, open: Float, menuWidth: androidx.compose.ui.unit.Dp, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val name = state.accountName
     val image = state.accountImage
     val content = if (focused) TvColors.onFocused else Color.White
-    val full = MENU_WIDTH - MENU_PADDING * 2
+    val full = menuWidth - MENU_PADDING * 2
     Row(
         modifier
             .width(ENTRY_HEIGHT + (full - ENTRY_HEIGHT) * open)
@@ -419,7 +437,7 @@ private fun NowPlayingContent(
  * next to it). The section shown: a pill of the accent color with a bar at its left, its icon in the accent color.
  */
 @Composable
-private fun MenuEntry(item: TvMenuItem, selected: Boolean, open: Float, modifier: Modifier, onClick: () -> Unit) {
+private fun MenuEntry(item: TvMenuItem, selected: Boolean, open: Float, menuWidth: androidx.compose.ui.unit.Dp, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
@@ -436,7 +454,7 @@ private fun MenuEntry(item: TvMenuItem, selected: Boolean, open: Float, modifier
     val iconTint = if (selected && !focused) accent else content
     val indent = if (item.sub) 30.dp else 0.dp
     val height = if (item.sub) 38.dp else ENTRY_HEIGHT
-    val full = MENU_WIDTH - MENU_PADDING * 2 - indent
+    val full = menuWidth - MENU_PADDING * 2 - indent
     Row(
         modifier
             .padding(start = indent)
