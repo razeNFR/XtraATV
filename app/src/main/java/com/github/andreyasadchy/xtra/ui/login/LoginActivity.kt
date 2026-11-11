@@ -78,6 +78,94 @@ class LoginActivity : AppCompatActivity() {
     private var startPageLogin: (() -> Unit)? = null
 
     companion object {
+
+        /**
+         * TV: the remote on the page where Twitch asks to authorize the app. Nothing here depends on the names Twitch
+         * gives to its buttons: the links and buttons are taken in the order of the page.
+         */
+        private val TV_AUTHORIZE_JS = """
+            (function() {
+                if (window.__xtraTv) return;
+                var style = document.createElement('style');
+                style.textContent = 'html,body{height:auto!important;min-height:100%!important;overflow-y:auto!important}' +
+                    '.xtra-tv-focus,.xtra-tv-focus:focus{outline:4px solid #9147ff!important;outline-offset:3px!important;box-shadow:0 0 0 7px rgba(145,71,255,.35)!important}';
+                (document.head || document.documentElement).appendChild(style);
+                function visible(e) {
+                    var r = e.getBoundingClientRect();
+                    var c = getComputedStyle(e);
+                    return r.width > 0 && r.height > 0 && c.visibility !== 'hidden' && c.display !== 'none';
+                }
+                function items() {
+                    var all = document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[role=button],[tabindex]');
+                    var list = [];
+                    for (var i = 0; i < all.length; i++) {
+                        var e = all[i];
+                        if (!e.disabled && e.getAttribute('tabindex') !== '-1' && visible(e)) list.push(e);
+                    }
+                    return list;
+                }
+                function scrollers() {
+                    var list = [];
+                    var all = document.querySelectorAll('*');
+                    for (var i = 0; i < all.length; i++) {
+                        var e = all[i];
+                        if (e.scrollHeight > e.clientHeight + 8) {
+                            var o = getComputedStyle(e).overflowY;
+                            if (o === 'auto' || o === 'scroll' || e === document.scrollingElement) list.push(e);
+                        }
+                    }
+                    return list;
+                }
+                function select(e) {
+                    var old = document.querySelectorAll('.xtra-tv-focus');
+                    for (var i = 0; i < old.length; i++) old[i].classList.remove('xtra-tv-focus');
+                    e.classList.add('xtra-tv-focus');
+                    try { e.focus({preventScroll: true}); } catch (x) { e.focus(); }
+                    e.scrollIntoView({block: 'center', inline: 'nearest'});
+                }
+                function submit() {
+                    var list = items();
+                    var named = null, sub = null;
+                    for (var i = 0; i < list.length; i++) {
+                        var e = list[i];
+                        var id = ((e.getAttribute('data-a-target') || '') + ' ' + (e.className || '') + ' ' + (e.id || '') + ' ' + (e.name || '')).toLowerCase();
+                        if (!named && id.indexOf('authorize') >= 0 && id.indexOf('cancel') < 0 && id.indexOf('deny') < 0) named = e;
+                        if (!sub && (e.type === 'submit') && id.indexOf('cancel') < 0 && id.indexOf('deny') < 0) sub = e;
+                    }
+                    return named || sub;
+                }
+                window.__xtraTv = {
+                    move: function(step) {
+                        var list = items();
+                        if (!list.length) {
+                            var s = scrollers();
+                            for (var i = 0; i < s.length; i++) s[i].scrollTop += step * 240;
+                            window.scrollBy(0, step * 240);
+                            return;
+                        }
+                        var index = list.indexOf(document.querySelector('.xtra-tv-focus'));
+                        if (index < 0) index = list.indexOf(document.activeElement);
+                        var next = index < 0 ? (step > 0 ? 0 : list.length - 1) : index + step;
+                        if (next < 0 || next >= list.length) {
+                            // the end of the page: all the way, what is under the last button too
+                            var s = scrollers();
+                            for (var i = 0; i < s.length; i++) s[i].scrollTop = step > 0 ? s[i].scrollHeight : 0;
+                            return;
+                        }
+                        select(list[next]);
+                    },
+                    start: function() {
+                        var tries = 0;
+                        (function attempt() {
+                            if (document.querySelector('input[type=password]')) return;
+                            var b = submit();
+                            if (b) { select(b); return; }
+                            if (++tries < 12) setTimeout(attempt, 400);
+                        })();
+                    }
+                };
+            })();
+        """.trimIndent()
         /** The tokens were refused by Twitch: all of them are removed before the page opens. */
         const val EXTRA_EXPIRED = "tv_login_expired"
     }
@@ -314,43 +402,26 @@ class LoginActivity : AppCompatActivity() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     if (isTv && url?.contains("/oauth2/authorize") == true) {
-                        view?.evaluateJavascript(
-                            """
-                            (function() {
-                                function focusAuthorize() {
-                                    var btn = document.querySelector('button[data-a-target="passport-authorize-button"], button.js-authorize-button');
-                                    if (btn && !document.querySelector('input[type="password"]')) {
-                                        btn.scrollIntoView({block: 'center'});
-                                        btn.focus();
-                                        return true;
-                                    }
-                                    return false;
-                                }
-                                if (!focusAuthorize()) {
-                                    setTimeout(focusAuthorize, 400);
-                                    setTimeout(focusAuthorize, 1200);
-                                }
-                            })();
-                            """.trimIndent(),
-                            null
-                        )
+                        // the page is made after it is loaded: tried a few times
+                        view?.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.start();", null)
                     }
                 }
             }
             if (isTv) {
-                webView.setOnKeyListener { v, keyCode, event ->
-                    if (event.action == android.view.KeyEvent.ACTION_DOWN &&
-                        (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN || keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) &&
-                        webView.url?.contains("/oauth2/authorize") == true
-                    ) {
-                        val dy = if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) 240 else -240
-                        v.scrollBy(0, dy)
-                        webView.evaluateJavascript(
-                            "window.scrollBy(0, $dy); var b = document.querySelector('button[data-a-target=\"passport-authorize-button\"], button.js-authorize-button'); if (b && $dy > 0) b.focus();",
-                            null
-                        )
-                    }
-                    false
+                // TV, page "Xtra wants to access your account": up / down go from one link or button of the page to the
+                // next one, the page follows (whatever part of it scrolls), OK presses the one selected. The remote could
+                // not reach "Authorize" on Fire OS: the page scrolls inside one of its blocks, not as a whole, so
+                // scrolling the view or the window moved nothing.
+                webView.setOnKeyListener { _, keyCode, event ->
+                    val upDown = keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN || keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP
+                    if (upDown && webView.url?.contains("/oauth2/authorize") == true) {
+                        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                            val step = if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+                            webView.evaluateJavascript("$TV_AUTHORIZE_JS window.__xtraTv.move($step);", null)
+                        }
+                        // the web view does not move the focus by itself too
+                        true
+                    } else false
                 }
             }
             startPageLogin = {

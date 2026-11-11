@@ -15,5 +15,8 @@
 - **Saved multi-stream groups**: save 2–4 streamer combinations from a multi-stream and relaunch the live ones in one click.
 - **Android TV Home channels**: publishes *Followed Live* and *Watch Next* (unfinished VODs) directly to the Android TV / Google TV home launcher.
 
+### Fixes
+- **Twitch page login on Fire TV**: on the page "Xtra wants to access your account", up / down now go from one button of the page to the next and the page follows, *Authorize* can be reached and pressed with the remote.
+
 ### Install
 Download `XtraTV-1.3.0-tv.apk` below and install it over the previous version, your settings and account are kept.
