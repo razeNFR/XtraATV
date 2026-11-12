@@ -13,9 +13,9 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
+        <Preference
             android:key="tv_player_clock"
+            android:persistent="false"
             android:summary="@string/tv_player_clock_summary"
             android:title="@string/tv_player_clock"
             app:iconSpaceReserved="false"
@@ -55,10 +55,26 @@
         app:iconSpaceReserved="false">
 
         <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="tv_dpad_switch_stream"
-            android:summary="@string/tv_dpad_switch_stream_summary"
-            android:title="@string/tv_dpad_switch_stream"
+            android:defaultValue="true"
+            android:key="tv_confirm_exit"
+            android:summary="@string/tv_confirm_exit_summary"
+            android:title="@string/tv_confirm_exit"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:key="tv_dpad_shortcuts"
+            android:persistent="false"
+            android:summary="@string/tv_dpad_shortcuts_summary"
+            android:title="@string/tv_dpad_shortcuts"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:key="tv_custom_keys"
+            android:persistent="false"
+            android:summary="@string/tv_custom_keys_summary"
+            android:title="@string/tv_custom_keys"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
@@ -67,14 +83,6 @@
             android:key="tv_focus_switch"
             android:summary="@string/tv_focus_switch_summary"
             android:title="@string/tv_focus_switch"
-            app:iconSpaceReserved="false"
-            app:singleLineTitle="false" />
-
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="tv_dpad_up_down"
-            android:summary="@string/tv_dpad_up_down_summary"
-            android:title="@string/tv_dpad_up_down"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
@@ -138,19 +146,11 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="tv_home_multistream"
-            android:summary="@string/tv_home_multistream_summary"
-            android:title="@string/tv_home_multistream"
-            app:iconSpaceReserved="false"
-            app:singleLineTitle="false" />
-
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="tv_home_followed_videos"
-            android:summary="@string/tv_home_followed_videos_summary"
-            android:title="@string/tv_home_followed_videos"
+        <Preference
+            android:key="tv_home_rows"
+            android:persistent="false"
+            android:summary="@string/tv_home_rows_summary"
+            android:title="@string/tv_home_rows"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 

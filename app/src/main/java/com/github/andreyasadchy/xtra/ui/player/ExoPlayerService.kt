@@ -216,7 +216,10 @@ class ExoPlayerService : BasePlaybackService() {
                             serviceListener?.loaded()
                             toggleSubtitles(prefs().getBoolean(C.PLAYER_SUBTITLES_ENABLED, false))
                         }
-                        if (qualities?.find { it.name == VideoQuality.AUTO_QUALITY } != null && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
+                        if (qualities?.find { it.name == VideoQuality.AUTO_QUALITY } != null &&
+                            quality?.name != VideoQuality.AUDIO_ONLY_QUALITY &&
+                            !playingAds && !isSwapping && !hidden && adDelayJob?.isActive != true
+                        ) {
                             changeQuality(quality)
                         }
                     }
@@ -2050,11 +2053,12 @@ class ExoPlayerService : BasePlaybackService() {
                 setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
-                setBandwidthMeter(getBandwidthMeter(this@ExoPlayerService))
+                setBandwidthMeter(createSecondaryBandwidthMeter(this@ExoPlayerService))
                 setTrackSelector(createTrackSelector())
             }.build()
             player.addListener(playerListener)
             matchSecondaryQuality(player)
+            startAdMainWatch()
             var playlistStatusCode = 0
             val url = if (streamProxy != null) {
                 quality?.url
@@ -2536,6 +2540,7 @@ class ExoPlayerService : BasePlaybackService() {
                 }
                 player.volume = 0f
             }
+            startAdMainWatch()
         }
     }
 
@@ -2711,6 +2716,11 @@ class ExoPlayerService : BasePlaybackService() {
      */
     private fun onBufferingForAuto(playbackState: Int) {
         val player = player ?: return
+        if (playingAds || isSwapping || hidden || adDelayJob?.isActive == true) {
+            playingSince = 0L
+            rebufferTimes.clear()
+            return
+        }
         val now = android.os.SystemClock.elapsedRealtime()
         if (playbackState == Player.STATE_READY) {
             if (playingSince == 0L) {
@@ -2780,13 +2790,111 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
+    private var adMainWatchJob: Job? = null
+
+    /**
+     * While an ad break is covered by a backup player or hidden, keeps the muted background main player alive if it
+     * stalls on an ad discontinuity so it stays near live and restores clean quality immediately after the break.
+     */
+    private fun startAdMainWatch() {
+        if (type != STREAM) {
+            return
+        }
+        val generation = streamGeneration
+        val login = channelLogin
+        adMainWatchJob?.cancel()
+        adMainWatchJob = lifecycleScope.launch {
+            var lastPos = -1L
+            var stuckSteps = 0
+            while (playingAds && (videoSwapActive || proxyMediaPlaylist || hidden) && generation == streamGeneration && channelLogin == login) {
+                delay(2000L)
+                if (!playingAds || !(videoSwapActive || proxyMediaPlaylist || hidden) || generation != streamGeneration || channelLogin != login) {
+                    break
+                }
+                val p = player ?: break
+                val pos = p.currentPosition
+                val stalled = when (p.playbackState) {
+                    Player.STATE_IDLE, Player.STATE_ENDED -> true
+                    Player.STATE_BUFFERING -> {
+                        stuckSteps = if (pos == lastPos) stuckSteps + 1 else 1
+                        stuckSteps >= 4
+                    }
+                    else -> {
+                        stuckSteps = 0
+                        false
+                    }
+                }
+                lastPos = pos
+                if (stalled) {
+                    stuckSteps = 0
+                    p.volume = 0f
+                    if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
+                        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                            .build()
+                    }
+                    p.seekToDefaultPosition()
+                    p.prepare()
+                    p.play()
+                }
+            }
+        }
+    }
+
+    /**
+     * Restores the user's chosen quality (or full-bitrate Auto) on the main player when returning from an ad break,
+     * clearing any bandwidth/cap degradation accumulated while muted behind an ad without re-preparing the stream.
+     */
+    private fun restoreMainPlayerQualityAfterAd(player: ExoPlayer) {
+        autoRaiseJob?.cancel()
+        autoRaiseJob = null
+        autoCapHeight = null
+        rebufferTimes.clear()
+        playingSince = 0L
+        autoHighest = isUnmeteredNetwork()
+        val q = quality
+        if (q?.name == VideoQuality.AUDIO_ONLY_QUALITY || q?.name == VideoQuality.CHAT_ONLY_QUALITY) {
+            return
+        }
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
+            setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
+            if (q == null || q.name == VideoQuality.AUTO_QUALITY) {
+                clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_VIDEO)
+                setForceHighestSupportedBitrate(autoHighest)
+            } else if (qualities?.find { it.name == VideoQuality.AUTO_QUALITY } != null && !player.currentTracks.isEmpty) {
+                player.currentTracks.groups.find { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }?.let { trackGroup ->
+                    if (trackGroup.mediaTrackGroup.length > 0) {
+                        if (q.resolution != null) {
+                            val formats = mutableListOf<Pair<Int, Format>>()
+                            for (i in 0 until trackGroup.mediaTrackGroup.length) {
+                                formats.add(i to trackGroup.mediaTrackGroup.getFormat(i))
+                            }
+                            val list = formats
+                                .sortedByDescending { it.second.bitrate }
+                                .sortedByDescending { it.second.frameRate }
+                                .sortedByDescending { it.second.height }
+                            list.find {
+                                (q.resolution == it.second.height
+                                        && (q.frameRate?.let { fps -> floor(fps) } ?: 30f) >= floor(it.second.frameRate)
+                                        && (q.bitrate == null || q.bitrate >= it.second.bitrate))
+                                        || q.resolution > it.second.height
+                                        || it == list.last()
+                            }?.first?.let { index ->
+                                setOverrideForType(TrackSelectionOverride(trackGroup.mediaTrackGroup, index))
+                            }
+                        } else {
+                            setOverrideForType(TrackSelectionOverride(trackGroup.mediaTrackGroup, 0))
+                        }
+                    }
+                }
+            }
+        }.build()
+    }
+
     /** The website client for the web platform (1440p), the client of the app for the others. */
 
-    private fun isUnmeteredNetwork(): Boolean {
-        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-        val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork) ?: return false
-        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-    }
+    private fun isUnmeteredNetwork(): Boolean = isUnmetered(this)
 
     private fun createTrackSelector(): DefaultTrackSelector {
         // Twitch segments are short: with the default settings the estimate stays low and Auto keeps a lower quality than the connection allows
@@ -2828,6 +2936,8 @@ class ExoPlayerService : BasePlaybackService() {
         streamGeneration++
         freezeWatchJob?.cancel()
         freezeWatchJob = null
+        adMainWatchJob?.cancel()
+        adMainWatchJob = null
         secondaryLoadJob?.cancel()
         secondaryLoadJob = null
         adDelayJob?.cancel()
@@ -2925,6 +3035,8 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     private fun stopSecondaryPlayer2() {
+        adMainWatchJob?.cancel()
+        adMainWatchJob = null
         secondaryDynamicsProcessing?.let {
             runCatching { it.release() }
             secondaryDynamicsProcessing = null
@@ -2933,11 +3045,7 @@ class ExoPlayerService : BasePlaybackService() {
         serviceListener?.setPlayerSurface(false)
         player?.let { player ->
             player.setPlaybackSpeed(1f)
-            if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
-                }.build()
-            }
+            restoreMainPlayerQualityAfterAd(player)
             player.volume = userVolume()
         }
         secondaryPlayer?.release()
@@ -2951,6 +3059,8 @@ class ExoPlayerService : BasePlaybackService() {
         if (playingAds || !(proxyMediaPlaylist || videoSwapActive || hidden)) {
             return
         }
+        adMainWatchJob?.cancel()
+        adMainWatchJob = null
         if (backLiveFrom == 0L) {
             backLiveFrom = System.currentTimeMillis()
         }
@@ -2977,11 +3087,7 @@ class ExoPlayerService : BasePlaybackService() {
                             hidden = false
                             player?.let { player ->
                                 player.setPlaybackSpeed(1f)
-                                if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
-                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                        setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
-                                    }.build()
-                                }
+                                restoreMainPlayerQualityAfterAd(player)
                                 player.volume = userVolume()
                             }
                             startFreezeWatch()
@@ -3037,9 +3143,7 @@ class ExoPlayerService : BasePlaybackService() {
                     p.setPlaybackSpeed(1f)
                     if (!videoReenabled && !hidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
                         videoReenabled = true
-                        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().apply {
-                            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, videoHidden)
-                        }.build()
+                        restoreMainPlayerQualityAfterAd(p)
                     }
                     liveReadySteps++
                     backLiveProgress = maxOf(backLiveProgress, (0.80f + liveReadySteps * 0.05f).coerceAtMost(0.95f))
@@ -3218,6 +3322,8 @@ class ExoPlayerService : BasePlaybackService() {
     fun restartPlayer() {
         if (quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
             streamGeneration++
+            adMainWatchJob?.cancel()
+            adMainWatchJob = null
             secondaryLoadJob?.cancel()
             secondaryLoadJob = null
             adDelayJob?.cancel()
@@ -3933,6 +4039,8 @@ class ExoPlayerService : BasePlaybackService() {
         streamGeneration++
         freezeWatchJob?.cancel()
         freezeWatchJob = null
+        adMainWatchJob?.cancel()
+        adMainWatchJob = null
         secondaryLoadJob?.cancel()
         secondaryLoadJob = null
         adDelayJob?.cancel()
@@ -4025,15 +4133,36 @@ class ExoPlayerService : BasePlaybackService() {
         /** Player types whose playlists usually come without ads (same idea as the VAFT userscript). */
         private var bandwidthMeter: DefaultBandwidthMeter? = null
 
-        /** Shared by all players so a backup player starts at the bandwidth already measured. */
+        private fun isUnmetered(context: android.content.Context): Boolean {
+            val connectivityManager = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork) ?: return false
+            return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                (!capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED))
+        }
+
+        /** Shared by main players across stream switches. */
         fun getBandwidthMeter(context: android.content.Context): DefaultBandwidthMeter {
             return bandwidthMeter ?: DefaultBandwidthMeter.Builder(context.applicationContext).apply {
-                val connectivityManager = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-                if (capabilities != null && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))) {
+                if (isUnmetered(context)) {
                     setInitialBitrateEstimate(20_000_000L)
                 }
             }.build().also { bandwidthMeter = it }
+        }
+
+        /**
+         * Isolated bandwidth meter for the ad-blocker backup player so slow or throttled proxy segments never pollute
+         * the main player's bandwidth estimate when returning to live after an ad break.
+         */
+        fun createSecondaryBandwidthMeter(context: android.content.Context): DefaultBandwidthMeter {
+            return DefaultBandwidthMeter.Builder(context.applicationContext).apply {
+                if (isUnmetered(context)) {
+                    setInitialBitrateEstimate(20_000_000L)
+                } else {
+                    bandwidthMeter?.bitrateEstimate?.takeIf { it > 0L }?.let { setInitialBitrateEstimate(it) }
+                }
+            }.build()
         }
 
         // autoplay first, like the default video swap list

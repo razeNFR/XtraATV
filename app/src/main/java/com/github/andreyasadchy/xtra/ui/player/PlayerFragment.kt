@@ -185,23 +185,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** Live broadcast or live-rewind DVR broadcast (where left/right and channel +/- switch streamers). */
     fun isLiveOrDvrScreen(): Boolean = isStreamScreen() || isDvrScreen()
 
-    /** TV: left / right change the streamer (option on, a live stream or live-rewind DVR, a HUD not opened on purpose). */
-    private fun dpadSwitchesStreams(): Boolean {
-        // the settings of the app: also for a new player screen not attached yet
-        return isTv && isLiveOrDvrScreen() && !hudOpenedByUser && com.github.andreyasadchy.xtra.XtraApp.INSTANCE.prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
-    }
-
     /**
-     * TV: left / right of the remote are handled by the activity before Android looks for the view that gets them: a
-     * switch replaces the player screen, and the keys pressed meanwhile (queued while the new screen is made) found no
-     * focused view and went to a button of the HUD (seek) or behind the player (focus lost). True also while the new
-     * screen has no view yet. Not when the chat has the focus nor in a HUD opened on purpose.
+     * TV: returns -1 or +1 when [keyCode] is configured to switch to the previous/next streamer while controls are
+     * hidden on a live or live-rewind DVR screen (also before the new player view is inflated during quick switches).
      */
-    fun handlesDpadSwitch(): Boolean {
-        if (!isTv || !isMaximized || !dpadSwitchesStreams()) {
-            return false
+    fun handlesDpadSwitchDirection(keyCode: Int): Int? {
+        if (!isTv || !isMaximized || !isLiveOrDvrScreen() || hudOpenedByUser) {
+            return null
         }
-        return _binding == null || !binding.chatLayout.hasFocus()
+        if (_binding != null && binding.chatLayout.hasFocus()) {
+            return null
+        }
+        val appCtx = com.github.andreyasadchy.xtra.XtraApp.INSTANCE
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
+            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.downLongAction(appCtx) != com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_DEFAULT
+        ) {
+            // let onPlayerKey distinguish short vs long press on Down
+            return null
+        }
+        return when (com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.dpadForKeyCode(appCtx, keyCode)) {
+            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_SWITCH_PREV -> -1
+            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_SWITCH_NEXT -> 1
+            else -> null
+        }
     }
 
     /** The player screen is in full screen (also before its view is made). */
@@ -2934,6 +2940,129 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     open fun getStatsForNerds(): String? = null
 
+    private var unmutedVolume = 100
+
+    private fun updateTvClockVisibility(hudVisible: Boolean = _binding?.let { it.playerControls.root.isVisible && !controllerHiding } == true) {
+        if (!isTv || _binding == null) {
+            return
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvClockSettings.apply(
+            context = requireContext(),
+            hudClock = binding.playerControls.tvClock,
+            alwaysClock = binding.tvAlwaysClock,
+            isMaximized = isMaximized,
+            fullHudVisible = hudVisible,
+        )
+    }
+
+    private fun cycleTvChatPosition(delta: Int) {
+        val ctx = context ?: return
+        val prefs = ctx.prefs()
+        if (prefs.getBoolean(C.CHAT_DISABLE, false) || playbackService?.type == BasePlaybackService.OFFLINE_VIDEO) {
+            return
+        }
+        if (!isChatOpen) {
+            showChat()
+            return
+        }
+        val mode = prefs.getInt(C.TV_CHAT_MODE, 0)
+        val pos = prefs.getInt(C.TV_CHAT_POSITION, 0)
+        val next = when (mode) {
+            1 -> if (pos == 2 || pos == 3 || pos == 5) 0 else 2
+            2 -> if (pos == 1 || pos == 3 || pos == 6) 0 else 1
+            else -> {
+                val ring = listOf(0, 2, 3, 1)
+                val idx = ring.indexOf(pos)
+                if (idx >= 0) ring[(idx + delta + ring.size) % ring.size] else 0
+            }
+        }
+        prefs.edit { putInt(C.TV_CHAT_POSITION, next) }
+        if (_binding != null) {
+            applyTvChatLayout()
+        }
+    }
+
+    private fun togglePlayerMute() {
+        val ctx = context ?: return
+        val prefs = ctx.prefs()
+        val current = ((getCurrentVolume() ?: 1f) * 100).toInt()
+        if (current > 0) {
+            unmutedVolume = current
+            prefs.edit { putInt(C.PLAYER_VOLUME, 0) }
+            changeVolume(0f)
+            Toast.makeText(ctx, R.string.tv_muted, Toast.LENGTH_SHORT).show()
+        } else {
+            val restored = unmutedVolume.takeIf { it > 0 } ?: 100
+            prefs.edit { putInt(C.PLAYER_VOLUME, restored) }
+            changeVolume(restored / 100f)
+            Toast.makeText(ctx, getString(R.string.tv_unmuted, restored), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun executeTvRemoteAction(action: String): Boolean {
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        if (hudPeek && action != Keys.ACTION_SWITCH_PREV && action != Keys.ACTION_SWITCH_NEXT) {
+            endHudPeek()
+            hideController()
+        }
+        when (action) {
+            Keys.ACTION_SWITCH_PREV, Keys.ACTION_SWITCH_NEXT -> {
+                val delta = if (action == Keys.ACTION_SWITCH_NEXT) 1 else -1
+                val main = activity as? MainActivity
+                if (isLiveOrDvrScreen() && (main?.streamQueue?.size ?: 0) > 1) {
+                    if (_binding?.playerControls?.root?.hasFocus() == true) {
+                        binding.dragView.requestFocus()
+                    }
+                    main?.switchStream(delta)
+                } else {
+                    openHudFromDpad()
+                }
+            }
+            Keys.ACTION_CYCLE_CHAT_NEXT -> cycleTvChatPosition(1)
+            Keys.ACTION_CYCLE_CHAT_PREV -> cycleTvChatPosition(-1)
+            Keys.ACTION_TOGGLE_CHAT -> {
+                if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
+                    if (isChatOpen) hideChat() else showChat()
+                }
+            }
+            Keys.ACTION_CHAT_PANEL -> {
+                if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
+                    showChatLayoutPanel()
+                }
+            }
+            Keys.ACTION_STREAM_SWITCHER -> (activity as? MainActivity)?.showStreamSwitcher()
+            Keys.ACTION_PLAY_PAUSE -> playPause()
+            Keys.ACTION_MUTE -> togglePlayerMute()
+            Keys.ACTION_QUALITY -> showQualityDialog()
+            Keys.ACTION_STATS -> toggleStatsForNerds()
+            else -> return false
+        }
+        return true
+    }
+
+    fun dispatchCustomRemoteKey(event: KeyEvent): Boolean {
+        if (!isTv || !isMaximized || _binding == null || binding.chatLayout.hasFocus()) {
+            return false
+        }
+        val action = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.customActionForKey(requireContext(), event.keyCode)
+            ?: return false
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            executeTvRemoteAction(action)
+        }
+        return true
+    }
+
+    private fun openHudFromDpad() {
+        hudOpenedByUser = true
+        endHudPeek()
+        showController(force = true)
+        binding.playerControls.root.post {
+            if (view != null && isMaximized && binding.playerControls.root.isVisible && !binding.playerControls.root.hasFocus()) {
+                focusPrimaryControl()
+            }
+        }
+    }
+
     private fun onTvControllerVisibility(visible: Boolean) {
         if (!isTv || _binding == null) {
             return
@@ -2942,6 +3071,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         // switch: no bar of buttons to make room for)
         val lift = visible && !hudPeek
         (activity as? MainActivity)?.onTvControlsVisibility(lift)
+        updateTvClockVisibility(visible)
         with(binding) {
             if (chatLayout.isVisible) {
                 chatLayout.animate().translationY(if (lift) getTvChatLift() else 0f).setDuration(200L).start()
@@ -3125,8 +3255,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
             }
-            // the time of day at the top right, it can be turned off in the Xtra TV settings
-            tvClock?.visibility = if (prefs.getBoolean(C.TV_PLAYER_CLOCK, true)) View.VISIBLE else View.GONE
+            // player clock (#61): hidden, with controls only, or always shown on stream
+            updateTvClockVisibility()
+            tvClockObserverJob?.cancel()
+            tvClockObserverJob = viewLifecycleOwner.lifecycleScope.launch {
+                com.github.andreyasadchy.xtra.ui.tv.TvClockSettings.changes.collect {
+                    updateTvClockVisibility()
+                }
+            }
             // "position / duration": the slash only when both are shown
             tvTimeSeparator?.let { separator ->
                 val updateSeparator = {
@@ -3756,6 +3892,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var tvClockObserverJob: Job? = null
+    private var dpadDownLongHandled = false
+
     /** Handles D-pad keys while the player itself (and not one of its controls) has focus. */
     private fun onPlayerKey(keyCode: Int, event: KeyEvent): Boolean {
         if (BuildConfig.DEBUG) {
@@ -3777,27 +3916,25 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (!useController) {
             return false
         }
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        val hudHiddenOrPeek = !binding.playerControls.root.isVisible || hudPeek
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                val queueSize = (activity as? MainActivity)?.streamQueue?.size ?: 0
-                if (dpadSwitchesStreams()) {
-                    // option: HUD hidden, left / right go to the previous / next streamer of the list the stream comes from,
-                    // the timeline is only used once the D-pad is on it (the HUD opened with OK or down has the focus; the info
-                    // of a switch going away does not, left / right still change the streamer then)
-                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                        if (queueSize > 1) {
-                            // a HUD the user did not open never keeps the focus nor its buttons: the next presses switch too
-                            if (binding.playerControls.root.hasFocus()) {
-                                binding.dragView.requestFocus()
+                if (isTv && hudHiddenOrPeek) {
+                    val action = Keys.dpadForKeyCode(requireContext(), keyCode)
+                    if (action == Keys.ACTION_SWITCH_PREV || action == Keys.ACTION_SWITCH_NEXT) {
+                        if (isLiveOrDvrScreen()) {
+                            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                                executeTvRemoteAction(action)
                             }
-                            (activity as? MainActivity)?.switchStream(if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
-                        } else {
-                            hudOpenedByUser = true
-                            showController(force = true)
-                            binding.playerControls.root.post { if (view != null) focusPrimaryControl() }
+                            return true
                         }
+                    } else if (action != Keys.ACTION_DEFAULT) {
+                        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                            executeTvRemoteAction(action)
+                        }
+                        return true
                     }
-                    return true
                 }
                 if (binding.playerControls.progressBar.isVisible) {
                     // seek with the timeline: the following key events go to the focused time bar
@@ -3811,37 +3948,63 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     false
                 }
             }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                if (!isSelect && isTv && (isStreamScreen() || isVodScreen()) && (!binding.playerControls.root.isVisible || hudPeek) &&
-                    requireContext().prefs().getBoolean(C.TV_DPAD_UP_DOWN, false)
-                ) {
-                    if (hudPeek) {
-                        endHudPeek()
-                        hideController()
-                    }
-                    // option: HUD hidden, up shows the other streams, down shows or hides the chat
-                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                            (activity as? MainActivity)?.showStreamSwitcher()
-                        } else if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
-                            if (isChatOpen) hideChat() else showChat()
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                if (isTv && hudHiddenOrPeek) {
+                    val action = Keys.upAction(requireContext())
+                    if (action != Keys.ACTION_DEFAULT) {
+                        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                            executeTvRemoteAction(action)
                         }
+                        return true
                     }
-                    return true
                 }
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                    // the HUD shown after a switch takes the focus now
-                    hudOpenedByUser = true
-                    endHudPeek()
-                    showController(force = true)
-                    binding.playerControls.root.post {
-                        if (view != null && isMaximized && binding.playerControls.root.isVisible && !binding.playerControls.root.hasFocus()) {
-                            focusPrimaryControl()
+                    openHudFromDpad()
+                }
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (isTv && hudHiddenOrPeek) {
+                    val shortAction = Keys.downAction(requireContext())
+                    val longAction = Keys.downLongAction(requireContext())
+                    if (longAction != Keys.ACTION_DEFAULT) {
+                        when (event.action) {
+                            KeyEvent.ACTION_DOWN -> {
+                                if (event.repeatCount == 0) {
+                                    dpadDownLongHandled = false
+                                } else if (!dpadDownLongHandled && event.repeatCount >= 1) {
+                                    dpadDownLongHandled = true
+                                    executeTvRemoteAction(longAction)
+                                }
+                            }
+                            KeyEvent.ACTION_UP -> {
+                                if (!dpadDownLongHandled && !event.isCanceled) {
+                                    if (shortAction != Keys.ACTION_DEFAULT) {
+                                        executeTvRemoteAction(shortAction)
+                                    } else {
+                                        openHudFromDpad()
+                                    }
+                                }
+                                dpadDownLongHandled = false
+                            }
                         }
-                        if (BuildConfig.DEBUG && view != null) {
-                            android.util.Log.d("XtraTv", "controls visible=${binding.playerControls.root.isVisible} alpha=${binding.playerControls.root.alpha} hasFocus=${binding.playerControls.root.hasFocus()} playPause visible=${binding.playerControls.playPause.isShown} focusable=${binding.playerControls.playPause.isFocusable}")
-                        }
+                        return true
                     }
+                    if (shortAction != Keys.ACTION_DEFAULT) {
+                        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                            executeTvRemoteAction(shortAction)
+                        }
+                        return true
+                    }
+                }
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    openHudFromDpad()
+                }
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    openHudFromDpad()
                 }
                 true
             }
@@ -4309,6 +4472,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (isTv) {
                 // the mini player is not reached with the D-pad, "Now playing" in the side menu brings it back
                 dragView.isFocusable = false
+                updateTvClockVisibility(false)
                 (activity as? MainActivity)?.updateTvNowPlaying()
             }
             if (playbackService?.type == BasePlaybackService.STREAM && chatFragment?.emoteMenuIsVisible() == true) {
@@ -4410,6 +4574,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (!controllerHideOnTouch) {
                 showController(force = true)
                 updateProgress()
+            } else if (isTv) {
+                updateTvClockVisibility()
             }
             if (isPortrait) {
                 chatLayout.visibility = View.VISIBLE
