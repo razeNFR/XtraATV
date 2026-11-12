@@ -238,6 +238,7 @@ object C {
     const val VIDEO_SWAP_AUTOPLAY_FIRST = "video_swap_autoplay_first"
     const val TV_DEFAULTS_QUALITY = "tv_defaults_quality"
     const val TV_DEFAULTS_PROXIES_AND_BUTTONS = "tv_defaults_proxies_and_buttons"
+    const val TV_DEFAULTS_COMPACT_RAIL = "tv_defaults_compact_rail"
     const val TV_DPAD_SWITCH_STREAM = "tv_dpad_switch_stream"
     const val TV_DPAD_UP_DOWN = "tv_dpad_up_down"
     const val TV_BUTTON_STREAM_LIST = "tv_button_stream_list"

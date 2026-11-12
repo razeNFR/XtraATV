@@ -399,7 +399,7 @@ fun TvHomeScreen(
         done()
     }
     val homeContext = androidx.compose.ui.platform.LocalContext.current
-    val compactRail = remember { homeContext.prefs().getBoolean(C.TV_COMPACT_RAIL, false) }
+    val compactRail = remember { homeContext.prefs().getBoolean(C.TV_COMPACT_RAIL, true) }
     val startInset = if (compactRail) 16.dp else 48.dp
     val endInset = 48.dp
     Column(Modifier.fillMaxSize()) {

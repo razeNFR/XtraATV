@@ -123,7 +123,7 @@
             app:singleLineTitle="false" />
 
         <SwitchPreferenceCompat
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="tv_compact_rail"
             android:summary="@string/tv_compact_rail_summary"
             android:title="@string/tv_compact_rail"

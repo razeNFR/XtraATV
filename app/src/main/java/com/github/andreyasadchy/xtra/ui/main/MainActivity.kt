@@ -218,6 +218,13 @@ class MainActivity : AppCompatActivity() {
                 putBoolean(C.TV_BUTTON_DIM, false)
             }
         }
+        if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_COMPACT_RAIL, false)) {
+            // compact side rail enabled once by default (can still be turned off afterwards in Xtra TV settings)
+            prefs.edit {
+                putBoolean(C.TV_DEFAULTS_COMPACT_RAIL, true)
+                putBoolean(C.TV_COMPACT_RAIL, true)
+            }
+        }
         if (tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) <= 0L) {
             tokenPrefs().edit {
                 putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
@@ -1192,7 +1199,7 @@ class MainActivity : AppCompatActivity() {
     }
     private var isTvMenuShown = true
     fun isTvMenuOpen() = isTv && isTvMenuShown
-    private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, false)
+    private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, true)
 
     private fun applyTvNavHostPadding(isHome: Boolean) {
         if (!isTv) return
