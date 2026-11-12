@@ -803,6 +803,12 @@
     <string name="tv_pip_corner_tr">右上</string>
     <string name="tv_pip_corner_bl">左下</string>
     <string name="tv_pip_corner_br">右下</string>
+    <string name="tv_pip_pos_tc">中央上</string>
+    <string name="tv_pip_pos_ml">中央左</string>
+    <string name="tv_pip_pos_c">中央</string>
+    <string name="tv_pip_pos_mr">中央右</string>
+    <string name="tv_pip_pos_bc">中央下</string>
+    <string name="tv_enable_unknown_sources">不明なアプリのインストールで Xtra TV を許可してから、戻るを押して更新を開始してください</string>
     <string name="tv_pip_size">サイズ</string>
     <string name="tv_pip_size_small">小</string>
     <string name="tv_pip_size_medium">中</string>

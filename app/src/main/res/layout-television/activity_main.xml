@@ -26,8 +26,11 @@
         android:id="@+id/navBarContainer"
         android:layout_width="wrap_content"
         android:layout_height="0dp"
+        android:background="@android:color/transparent"
+        android:defaultFocusHighlightEnabled="false"
         android:elevation="8dp"
         android:orientation="horizontal"
+        android:outlineProvider="none"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
@@ -44,13 +47,9 @@
         <androidx.compose.ui.platform.ComposeView
             android:id="@+id/tvSideMenu"
             android:layout_width="wrap_content"
-            android:layout_height="match_parent" />
-
-        <View
-            android:id="@+id/tvMenuShade"
-            android:layout_width="96dp"
             android:layout_height="match_parent"
-            android:background="@drawable/tv_menu_shade" />
+            android:background="@android:color/transparent"
+            android:defaultFocusHighlightEnabled="false" />
     </LinearLayout>
 
     <FrameLayout

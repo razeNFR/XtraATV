@@ -105,6 +105,7 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.applyTheme
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
+import com.github.andreyasadchy.xtra.util.openUnknownAppSourcesSettings
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.google.android.material.color.MaterialColors
@@ -496,14 +497,8 @@ class MainActivity : AppCompatActivity() {
                                 }
                             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
                                 pendingUpdateUrl = it
-                                try {
-                                    startActivity(
-                                        Intent(
-                                            android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                            "package:$packageName".toUri()
-                                        )
-                                    )
-                                } catch (e: ActivityNotFoundException) {
+                                pendingUpdateAt = android.os.SystemClock.elapsedRealtime()
+                                if (!openUnknownAppSourcesSettings()) {
                                     pendingUpdateUrl = null
                                     startUpdateDownload(it)
                                 }
@@ -792,6 +787,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var pendingUpdateUrl: String? = null
+    private var pendingUpdateAt: Long = 0L
 
     private fun startUpdateDownload(url: String) {
         val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
@@ -828,9 +824,11 @@ class MainActivity : AppCompatActivity() {
         }
         val url = pendingUpdateUrl
         if (url != null) {
-            pendingUpdateUrl = null
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()) {
+                pendingUpdateUrl = null
                 startUpdateDownload(url)
+            } else if (android.os.SystemClock.elapsedRealtime() - pendingUpdateAt > 5 * 60_000L) {
+                pendingUpdateUrl = null
             }
         }
     }
@@ -1356,6 +1354,10 @@ class MainActivity : AppCompatActivity() {
     /** The leanback menu, drawn with Compose from the entries of the navigation bar. */
     private fun setupTvSideMenu() {
         val composeView = binding.tvSideMenu ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            composeView.defaultFocusHighlightEnabled = false
+            binding.navBarContainer.defaultFocusHighlightEnabled = false
+        }
         val icons = mapOf(
             R.id.tvNavSearch to R.drawable.baseline_search_black_24,
             R.id.tvHomeFragment to R.drawable.baseline_home_black_24,
@@ -1589,11 +1591,6 @@ class MainActivity : AppCompatActivity() {
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         menu.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         tvMenuState.collapsed = false
-        binding.root.findViewById<View>(R.id.tvMenuShade)?.apply {
-            animate().cancel()
-            visibility = View.VISIBLE
-            animate().alpha(1f).setDuration(180L).start()
-        }
         if (!isTvMenuShown) {
             isTvMenuShown = true
             updateTvMenuBackCallback()
@@ -1636,14 +1633,6 @@ class MainActivity : AppCompatActivity() {
             menu.translationX = 0f
             menu.alpha = 1f
             menu.visibility = View.VISIBLE
-            binding.root.findViewById<View>(R.id.tvMenuShade)?.let { shade ->
-                shade.animate().cancel()
-                shade.animate().alpha(0f).setDuration(150L).withEndAction {
-                    if (!isTvMenuShown) {
-                        shade.visibility = View.GONE
-                    }
-                }.start()
-            }
         } else if (isTvMenuShown && menu.width > 0) {
             isTvMenuShown = false
             updateTvMenuBackCallback()
@@ -3101,10 +3090,6 @@ class MainActivity : AppCompatActivity() {
                         sideMenu.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                         sideMenu.alpha = 1f
                         sideMenu.visibility = View.VISIBLE
-                        binding.root.findViewById<View>(R.id.tvMenuShade)?.apply {
-                            alpha = 0f
-                            visibility = View.GONE
-                        }
                     } else {
                         // the side menu stays closed when the app starts: folded away before anything is drawn, no animation
                         sideMenu.alpha = 0f

@@ -2773,11 +2773,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             return
         }
         val prefs = activity.prefs()
-        val cornerValues = listOf("tl", "tr", "bl", "br")
+        val cornerValues = listOf("tl", "tc", "tr", "ml", "c", "mr", "bl", "bc", "br")
         val corners = listOf(
             getString(R.string.tv_pip_corner_tl),
+            getString(R.string.tv_pip_pos_tc),
             getString(R.string.tv_pip_corner_tr),
+            getString(R.string.tv_pip_pos_ml),
+            getString(R.string.tv_pip_pos_c),
+            getString(R.string.tv_pip_pos_mr),
             getString(R.string.tv_pip_corner_bl),
+            getString(R.string.tv_pip_pos_bc),
             getString(R.string.tv_pip_corner_br),
         )
         val sizes = listOf(getString(R.string.tv_pip_size_small), getString(R.string.tv_pip_size_medium), getString(R.string.tv_pip_size_large))
@@ -2785,13 +2790,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val sounds = listOf(getString(R.string.tv_pip_sound_main), getString(R.string.tv_pip_sound_pip), getString(R.string.tv_pip_sound_both))
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(activity) { dismiss ->
             val corner = androidx.compose.runtime.remember {
-                androidx.compose.runtime.mutableIntStateOf(cornerValues.indexOf(prefs.getString(C.TV_PIP_CORNER, "tr")).coerceAtLeast(0))
+                val idx = cornerValues.indexOf(prefs.getString(C.TV_PIP_CORNER, "tr"))
+                androidx.compose.runtime.mutableIntStateOf(if (idx >= 0) idx else 2)
             }
             val sound = androidx.compose.runtime.remember {
                 androidx.compose.runtime.mutableIntStateOf(soundValues.indexOf(prefs.getString(C.TV_PIP_SOUND, "main")).coerceAtLeast(0))
             }
             // the panel on the other side of the screen, the small window stays in sight
-            val pipOnLeft = corner.intValue == 0 || corner.intValue == 2
+            val selectedPos = cornerValues.getOrElse(corner.intValue) { "tr" }
+            val pipOnLeft = selectedPos == "tl" || selectedPos == "ml" || selectedPos == "bl"
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_pip_settings),
                 alignEnd = pipOnLeft,

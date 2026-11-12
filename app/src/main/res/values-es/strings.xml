@@ -808,6 +808,12 @@
     <string name="tv_pip_corner_tr">Arriba a la derecha</string>
     <string name="tv_pip_corner_bl">Abajo a la izquierda</string>
     <string name="tv_pip_corner_br">Abajo a la derecha</string>
+    <string name="tv_pip_pos_tc">Arriba en el centro</string>
+    <string name="tv_pip_pos_ml">Centro a la izquierda</string>
+    <string name="tv_pip_pos_c">Centro</string>
+    <string name="tv_pip_pos_mr">Centro a la derecha</string>
+    <string name="tv_pip_pos_bc">Abajo en el centro</string>
+    <string name="tv_enable_unknown_sources">Autoriza Xtra TV en Instalar aplicaciones desconocidas y pulsa Atrás para iniciar la actualización</string>
     <string name="tv_pip_size">Tamaño</string>
     <string name="tv_pip_size_small">Pequeña</string>
     <string name="tv_pip_size_medium">Mediana</string>

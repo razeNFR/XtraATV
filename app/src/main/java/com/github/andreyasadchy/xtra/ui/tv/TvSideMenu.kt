@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.tv
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -115,20 +116,25 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     // as wide as its longest name needs, no more (the names differ with the language and the shortcuts shown)
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val fullWidth = remember(state.items, state.accountName, density) {
+    val baseStyle = androidx.tv.material3.LocalTextStyle.current
+    val fullWidth = remember(state.items, state.accountName, density, baseStyle) {
         fun width(text: String, size: Int) = with(density) {
-            measurer.measure(text, androidx.compose.ui.text.TextStyle(fontSize = size.sp, fontWeight = FontWeight.SemiBold), maxLines = 1).size.width.toDp()
+            measurer.measure(
+                text,
+                baseStyle.merge(androidx.compose.ui.text.TextStyle(fontSize = size.sp, fontWeight = FontWeight.SemiBold)),
+                maxLines = 1,
+            ).size.width.toDp()
         }
         var widest = 0.dp
         state.items.forEach { item ->
             val needed = if (item.id == state.accountId) {
-                ENTRY_HEIGHT + 10.dp + maxOf(width(state.accountName ?: item.label, 17), if (state.accountName != null) width(item.label, 12) else 0.dp) + 14.dp
+                ENTRY_HEIGHT + 10.dp + maxOf(width(state.accountName ?: item.label, 17), if (state.accountName != null) width(item.label, 12) else 0.dp) + 26.dp
             } else {
-                (if (item.sub) 30.dp else 0.dp) + ENTRY_HEIGHT + 8.dp + width(item.label, if (item.sub) 15 else 17) + 16.dp
+                (if (item.sub) 30.dp else 0.dp) + ENTRY_HEIGHT + 8.dp + width(item.label, if (item.sub) 15 else 17) + 30.dp
             }
             if (needed > widest) widest = needed
         }
-        (widest + MENU_PADDING * 2).coerceIn(176.dp, 300.dp)
+        (widest + MENU_PADDING * 2).coerceIn(212.dp, 320.dp)
     }
     val menuWidth = RAIL_WIDTH + (fullWidth - RAIL_WIDTH) * open
     // the entry that has the focus, by its requester: its place among the entries is looked up when a key comes. A place
@@ -179,12 +185,14 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     val top = androidx.compose.ui.graphics.lerp(Color(0xFF15141B), ambient, if (hasAmbient) 0.32f else 0.15f)
     val bottom = androidx.compose.ui.graphics.lerp(Color(0xFF100F15), ambient, if (hasAmbient) 0.14f else 0.05f)
     val alpha = 0.92f * open
+    val menuShape = RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp)
     Box(
         Modifier
             .width(menuWidth)
             .fillMaxHeight()
-            .clip(RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp))
+            .clip(menuShape)
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(top.copy(alpha = alpha), bottom.copy(alpha = alpha))))
+            .border(1.dp, Color.White.copy(alpha = 0.07f * open), menuShape)
     ) {
         Column(
             Modifier

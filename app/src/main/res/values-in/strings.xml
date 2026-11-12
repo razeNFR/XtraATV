@@ -804,6 +804,12 @@
     <string name="tv_pip_corner_tr">Kanan atas</string>
     <string name="tv_pip_corner_bl">Kiri bawah</string>
     <string name="tv_pip_corner_br">Kanan bawah</string>
+    <string name="tv_pip_pos_tc">Tengah atas</string>
+    <string name="tv_pip_pos_ml">Kiri tengah</string>
+    <string name="tv_pip_pos_c">Tengah</string>
+    <string name="tv_pip_pos_mr">Kanan tengah</string>
+    <string name="tv_pip_pos_bc">Tengah bawah</string>
+    <string name="tv_enable_unknown_sources">Izinkan Xtra TV di Instal aplikasi tidak dikenal, lalu tekan Kembali untuk memulai pembaruan</string>
     <string name="tv_pip_size">Ukuran</string>
     <string name="tv_pip_size_small">Kecil</string>
     <string name="tv_pip_size_medium">Sedang</string>

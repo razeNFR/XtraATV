@@ -36,7 +36,7 @@ class TvStreamPreview(
         }
     }
 
-    override fun stopPreview() = stop()
+    override fun stopPreview() = if (TvPreviewSource.suspended) release() else stop()
 
     private var player: ExoPlayer? = null
     private var textureView: TextureView? = null

@@ -804,6 +804,12 @@
     <string name="tv_pip_corner_tr">Sağ üst</string>
     <string name="tv_pip_corner_bl">Sol alt</string>
     <string name="tv_pip_corner_br">Sağ alt</string>
+    <string name="tv_pip_pos_tc">Üst orta</string>
+    <string name="tv_pip_pos_ml">Sol orta</string>
+    <string name="tv_pip_pos_c">Orta</string>
+    <string name="tv_pip_pos_mr">Sağ orta</string>
+    <string name="tv_pip_pos_bc">Alt orta</string>
+    <string name="tv_enable_unknown_sources">Bilinmeyen uygulamaları yükle bölümünden Xtra TV iznini açın, ardından güncellemeyi başlatmak için Geri tuşuna basın</string>
     <string name="tv_pip_size">Boyut</string>
     <string name="tv_pip_size_small">Küçük</string>
     <string name="tv_pip_size_medium">Orta</string>

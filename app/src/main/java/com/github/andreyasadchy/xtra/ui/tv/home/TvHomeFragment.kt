@@ -461,7 +461,13 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             context?.let { com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.notifyPreviewSound(it, false) }
         }
         previewLogin.value = null
-        previewPlayer.value?.stop()
+        if (com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended || !isResumed) {
+            previewPlayer.value?.release()
+            previewPlayer.value = null
+        } else {
+            previewPlayer.value?.stop()
+            previewPlayer.value?.clearMediaItems()
+        }
     }
 
     override fun onDestroyView() {

@@ -822,6 +822,12 @@
     <string name="tv_pip_corner_tr">Top right</string>
     <string name="tv_pip_corner_bl">Bottom left</string>
     <string name="tv_pip_corner_br">Bottom right</string>
+    <string name="tv_pip_pos_tc">Top center</string>
+    <string name="tv_pip_pos_ml">Middle left</string>
+    <string name="tv_pip_pos_c">Center</string>
+    <string name="tv_pip_pos_mr">Middle right</string>
+    <string name="tv_pip_pos_bc">Bottom center</string>
+    <string name="tv_enable_unknown_sources">Allow Xtra TV in Install unknown apps, then press Back to start the update</string>
     <string name="tv_pip_size">Size</string>
     <string name="tv_pip_size_small">Small</string>
     <string name="tv_pip_size_medium">Medium</string>

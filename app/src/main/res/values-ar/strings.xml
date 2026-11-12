@@ -803,6 +803,12 @@
     <string name="tv_pip_corner_tr">أعلى اليمين</string>
     <string name="tv_pip_corner_bl">أسفل اليسار</string>
     <string name="tv_pip_corner_br">أسفل اليمين</string>
+    <string name="tv_pip_pos_tc">أعلى الوسط</string>
+    <string name="tv_pip_pos_ml">وسط اليسار</string>
+    <string name="tv_pip_pos_c">الوسط</string>
+    <string name="tv_pip_pos_mr">وسط اليمين</string>
+    <string name="tv_pip_pos_bc">أسفل الوسط</string>
+    <string name="tv_enable_unknown_sources">اسمح لتطبيق Xtra TV بتثبيت التطبيقات غير المعروفة، ثم اضغط على رجوع لبدء التحديث</string>
     <string name="tv_pip_size">الحجم</string>
     <string name="tv_pip_size_small">صغيرة</string>
     <string name="tv_pip_size_medium">متوسطة</string>

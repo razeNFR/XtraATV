@@ -803,6 +803,12 @@
     <string name="tv_pip_corner_tr">Сверху справа</string>
     <string name="tv_pip_corner_bl">Снизу слева</string>
     <string name="tv_pip_corner_br">Снизу справа</string>
+    <string name="tv_pip_pos_tc">Сверху по центру</string>
+    <string name="tv_pip_pos_ml">Посередине слева</string>
+    <string name="tv_pip_pos_c">По центру</string>
+    <string name="tv_pip_pos_mr">Посередине справа</string>
+    <string name="tv_pip_pos_bc">Снизу по центру</string>
+    <string name="tv_enable_unknown_sources">Разрешите Xtra TV установку неизвестных приложений, затем нажмите Назад, чтобы начать обновление</string>
     <string name="tv_pip_size">Размер</string>
     <string name="tv_pip_size_small">Маленькое</string>
     <string name="tv_pip_size_medium">Среднее</string>

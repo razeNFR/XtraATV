@@ -707,7 +707,7 @@ private fun HeroBanner(
                     AndroidView(
                         factory = { context -> TextureView(context) },
                         update = { player.setVideoTextureView(it) },
-                        onRelease = { player.clearVideoTextureView(it) },
+                        onRelease = { runCatching { player.clearVideoTextureView(it) } },
                         modifier = Modifier
                             .wrapContentHeight(unbounded = true)
                             .fillMaxWidth()
@@ -1396,7 +1396,7 @@ private fun StreamCard(
                     onRelease = {
                         // the last picture of the preview, shown while the stream opens
                         com.github.andreyasadchy.xtra.ui.tv.TvPreviewFrames.capture(stream.channelLogin, it)
-                        player.clearVideoTextureView(it)
+                        runCatching { player.clearVideoTextureView(it) }
                     },
                     modifier = Modifier.fillMaxSize()
                 )

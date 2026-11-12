@@ -803,6 +803,12 @@
     <string name="tv_pip_corner_tr">En haut à droite</string>
     <string name="tv_pip_corner_bl">En bas à gauche</string>
     <string name="tv_pip_corner_br">En bas à droite</string>
+    <string name="tv_pip_pos_tc">Milieu haut</string>
+    <string name="tv_pip_pos_ml">Milieu gauche</string>
+    <string name="tv_pip_pos_c">Milieu</string>
+    <string name="tv_pip_pos_mr">Milieu droite</string>
+    <string name="tv_pip_pos_bc">Milieu bas</string>
+    <string name="tv_enable_unknown_sources">Autorisez Xtra TV dans les sources inconnues, puis appuyez sur Retour pour lancer la mise à jour</string>
     <string name="tv_pip_size">Taille</string>
     <string name="tv_pip_size_small">Petite</string>
     <string name="tv_pip_size_medium">Moyenne</string>

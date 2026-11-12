@@ -723,13 +723,15 @@ class ExoPlayerFragment : PlayerFragment() {
             return null
         }
         // this screen lets go of both players first: what the stream that ends does while it stops (the backup player
-        // of the ad blocker going away) no longer reaches this screen
+        // of the ad blocker going away) no longer reaches this screen, and the old SurfaceView is detached before it is destroyed
         playerListener?.let {
             service.player?.removeListener(it)
             service.secondaryPlayer?.removeListener(it)
         }
         playerListener = null
         service.serviceListener = null
+        service.player?.clearVideoSurfaceView(binding.playerSurface)
+        service.secondaryPlayer?.clearVideoSurfaceView(binding.playerSurface)
         service.prepareStreamSwitch()
         serviceConnection?.let { requireContext().unbindService(it) }
         serviceConnection = null
@@ -746,8 +748,14 @@ class ExoPlayerFragment : PlayerFragment() {
         playerListener?.let { (playbackService?.secondaryPlayer ?: playbackService?.player)?.removeListener(it) }
         playerListener = null
         playbackService?.serviceListener = null
+        if (view != null) {
+            val surface = binding.playerSurface
+            playbackService?.player?.clearVideoSurfaceView(surface)
+            playbackService?.secondaryPlayer?.clearVideoSurfaceView(surface)
+        }
         serviceConnection?.let { requireContext().unbindService(it) }
         serviceConnection = null
+        playbackService?.releaseNow()
         playbackService?.stopSelf()
         playbackService = null
     }
