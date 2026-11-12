@@ -549,7 +549,7 @@ object ChatBlocklist {
             .setPositiveButton(R.string.chat_block_add) { _, _ ->
                 showMobileAddDialog(context, onChanged)
             }
-            .setNegativeButton(R.string.cancel, null)
+            .setNegativeButton(android.R.string.cancel, null)
         if (users.isEmpty()) {
             builder.setMessage(R.string.chat_blocked_users_none)
         } else {
@@ -595,7 +595,7 @@ object ChatBlocklist {
                     ).show()
                 }
             }
-            .setNegativeButton(R.string.cancel, null)
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 

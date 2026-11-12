@@ -118,7 +118,7 @@ abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.Listen
 
     /** Refreshes the list silently when stale, without disrupting active scrolling or deep focus on TV. */
     fun refreshIfStale(maxAgeMs: Long = 60_000L) {
-        if (!isAdded || this is Searchable) return
+        if (!isAdded || this is com.github.andreyasadchy.xtra.ui.search.Searchable) return
         if ((activity as? MainActivity)?.isTvPlayerOverContent() == true) return
         val adapter = boundAdapter ?: return
         if (adapter.itemCount == 0 || lastRefreshedAt == 0L) return
