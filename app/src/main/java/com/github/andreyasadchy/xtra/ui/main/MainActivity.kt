@@ -105,6 +105,7 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.applyTheme
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
+import com.github.andreyasadchy.xtra.util.openUnknownAppSourcesSettings
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.google.android.material.color.MaterialColors
@@ -208,6 +209,15 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_PROXIES_AND_BUTTONS, false)) {
+            // custom proxies off at first (VAFT handles ads out of the box), proxy button shown and dimming button hidden
+            prefs.edit {
+                putBoolean(C.TV_DEFAULTS_PROXIES_AND_BUTTONS, true)
+                putBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+                putBoolean(C.TV_BUTTON_PROXY, true)
+                putBoolean(C.TV_BUTTON_DIM, false)
+            }
+        }
         if (tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) <= 0L) {
             tokenPrefs().edit {
                 putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
@@ -262,15 +272,7 @@ class MainActivity : AppCompatActivity() {
                 binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
             }
             com.github.andreyasadchy.xtra.ui.tv.TvAmbient.setDynamicListener(tvAmbientListener)
-            if (isCompactRailEnabled()) {
-                val railStart = (84 * resources.displayMetrics.density).toInt()
-                binding.navHostFragment.setPaddingRelative(
-                    railStart,
-                    binding.navHostFragment.paddingTop,
-                    binding.navHostFragment.paddingEnd,
-                    binding.navHostFragment.paddingBottom,
-                )
-            }
+            applyTvNavHostPadding(false)
             supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
                     TvUi.adapt(v, hideToolbarActions = true)
@@ -495,14 +497,8 @@ class MainActivity : AppCompatActivity() {
                                 }
                             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
                                 pendingUpdateUrl = it
-                                try {
-                                    startActivity(
-                                        Intent(
-                                            android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                            "package:$packageName".toUri()
-                                        )
-                                    )
-                                } catch (e: ActivityNotFoundException) {
+                                pendingUpdateAt = android.os.SystemClock.elapsedRealtime()
+                                if (!openUnknownAppSourcesSettings()) {
                                     pendingUpdateUrl = null
                                     startUpdateDownload(it)
                                 }
@@ -791,6 +787,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var pendingUpdateUrl: String? = null
+    private var pendingUpdateAt: Long = 0L
 
     private fun startUpdateDownload(url: String) {
         val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
@@ -827,9 +824,11 @@ class MainActivity : AppCompatActivity() {
         }
         val url = pendingUpdateUrl
         if (url != null) {
-            pendingUpdateUrl = null
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()) {
+                pendingUpdateUrl = null
                 startUpdateDownload(url)
+            } else if (android.os.SystemClock.elapsedRealtime() - pendingUpdateAt > 5 * 60_000L) {
+                pendingUpdateUrl = null
             }
         }
     }
@@ -1168,6 +1167,27 @@ class MainActivity : AppCompatActivity() {
     private var isTvMenuShown = true
     fun isTvMenuOpen() = isTv && isTvMenuShown
     private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, false)
+
+    private fun applyTvNavHostPadding(isHome: Boolean) {
+        if (!isTv) return
+        val density = resources.displayMetrics.density
+        val overscan = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+        val start = when {
+            isHome && isCompactRailEnabled() -> (68 * density).toInt()
+            isHome -> 0
+            isCompactRailEnabled() -> (84 * density).toInt()
+            else -> overscan
+        }
+        val end = if (isHome) 0 else overscan
+        if (binding.navHostFragment.paddingStart != start || binding.navHostFragment.paddingEnd != end) {
+            binding.navHostFragment.setPaddingRelative(
+                start,
+                binding.navHostFragment.paddingTop,
+                end,
+                binding.navHostFragment.paddingBottom,
+            )
+        }
+    }
     private var tvInitialFocusDone = false
 
     /** Back on a main screen opens the side menu, back again in the menu leaves the app. */
@@ -1334,6 +1354,10 @@ class MainActivity : AppCompatActivity() {
     /** The leanback menu, drawn with Compose from the entries of the navigation bar. */
     private fun setupTvSideMenu() {
         val composeView = binding.tvSideMenu ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            composeView.defaultFocusHighlightEnabled = false
+            binding.navBarContainer.defaultFocusHighlightEnabled = false
+        }
         val icons = mapOf(
             R.id.tvNavSearch to R.drawable.baseline_search_black_24,
             R.id.tvHomeFragment to R.drawable.baseline_home_black_24,
@@ -1567,11 +1591,6 @@ class MainActivity : AppCompatActivity() {
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         menu.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         tvMenuState.collapsed = false
-        binding.root.findViewById<View>(R.id.tvMenuShade)?.apply {
-            animate().cancel()
-            visibility = View.VISIBLE
-            animate().alpha(1f).setDuration(180L).start()
-        }
         if (!isTvMenuShown) {
             isTvMenuShown = true
             updateTvMenuBackCallback()
@@ -1614,14 +1633,6 @@ class MainActivity : AppCompatActivity() {
             menu.translationX = 0f
             menu.alpha = 1f
             menu.visibility = View.VISIBLE
-            binding.root.findViewById<View>(R.id.tvMenuShade)?.let { shade ->
-                shade.animate().cancel()
-                shade.animate().alpha(0f).setDuration(150L).withEndAction {
-                    if (!isTvMenuShown) {
-                        shade.visibility = View.GONE
-                    }
-                }.start()
-            }
         } else if (isTvMenuShown && menu.width > 0) {
             isTvMenuShown = false
             updateTvMenuBackCallback()
@@ -2386,15 +2397,18 @@ class MainActivity : AppCompatActivity() {
     fun showStreamSwitcher() {
         // shown at once with the list in memory, it fills in by itself if a newer list comes; tabs above it for the
         // other lists (followed, popular, languages, category), OK held opens a stream in a small window
-        TvStreamSwitcher.show(
-            this,
-            streamQueue,
-            currentStreamLogin,
-            rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(this, currentPlayingStream()),
-            onPip = { openTvPip(it) },
-            source = streamQueueSource,
-        )
-        refreshQueueIfOld()
+        lifecycleScope.launch {
+            val rows = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.rows(this@MainActivity, currentPlayingStream())
+            TvStreamSwitcher.show(
+                this@MainActivity,
+                streamQueue,
+                currentStreamLogin,
+                rows = rows,
+                onPip = { openTvPip(it) },
+                source = streamQueueSource,
+            )
+            refreshQueueIfOld()
+        }
     }
 
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null, peekHud: Boolean = false) {
@@ -2956,6 +2970,7 @@ class MainActivity : AppCompatActivity() {
             onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
             onBackPressedDispatcher.addCallback(this, tvGridBackCallback)
             navController.addOnDestinationChangedListener { _, destination, _ ->
+                applyTvNavHostPadding(destination.id == R.id.tvHomeFragment)
                 updateTvMenuBackCallback()
                 if (destination.id != R.id.followPagerFragment) {
                     tvMenuExtraSelected = null
@@ -3075,10 +3090,6 @@ class MainActivity : AppCompatActivity() {
                         sideMenu.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                         sideMenu.alpha = 1f
                         sideMenu.visibility = View.VISIBLE
-                        binding.root.findViewById<View>(R.id.tvMenuShade)?.apply {
-                            alpha = 0f
-                            visibility = View.GONE
-                        }
                     } else {
                         // the side menu stays closed when the app starts: folded away before anything is drawn, no animation
                         sideMenu.alpha = 0f

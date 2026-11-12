@@ -435,3 +435,36 @@ fun Modifier.tvTopFade(height: Dp = 36.dp, scrolled: () -> Boolean): Modifier = 
             )
         }
     }
+
+/**
+ * Horizontal row of cards: cards sliding off the start or end edge dissolve smoothly into the background
+ * instead of being cut by a straight vertical line, while keeping the first/last card whole at rest.
+ */
+fun Modifier.tvHorizontalFade(
+    startWidth: Dp = 56.dp,
+    endWidth: Dp = 56.dp,
+    scrolledStart: () -> Boolean,
+    scrolledEnd: () -> Boolean = { false },
+): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        if (scrolledStart()) {
+            val edge = startWidth.toPx().coerceAtMost(size.width * 0.35f)
+            drawRect(
+                brush = Brush.horizontalGradient(0f to ComposeColor.Transparent, 1f to ComposeColor.Black, startX = 0f, endX = edge),
+                size = androidx.compose.ui.geometry.Size(edge, size.height),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+            )
+        }
+        if (scrolledEnd()) {
+            val edge = endWidth.toPx().coerceAtMost(size.width * 0.35f)
+            val startX = size.width - edge
+            drawRect(
+                brush = Brush.horizontalGradient(0f to ComposeColor.Black, 1f to ComposeColor.Transparent, startX = startX, endX = size.width),
+                topLeft = androidx.compose.ui.geometry.Offset(startX, 0f),
+                size = androidx.compose.ui.geometry.Size(edge, size.height),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+            )
+        }
+    }

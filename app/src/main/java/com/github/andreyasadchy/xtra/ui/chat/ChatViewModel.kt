@@ -119,6 +119,20 @@ class ChatViewModel(
     val cheerEmotes = mutableListOf<CheerEmote>()
 
     val roomState = MutableStateFlow<RoomState?>(null)
+    val effectiveRoomState = MutableStateFlow(RoomState("0", "-1", "0", "0", "0"))
+    val userRoomBadges = MutableStateFlow<Set<String>?>(null)
+    val chatRestrictionToast = MutableSharedFlow<String>(extraBufferCapacity = 4)
+
+    private fun mergeRoomState(update: RoomState) {
+        val prev = effectiveRoomState.value
+        effectiveRoomState.value = RoomState(
+            emote = update.emote ?: prev.emote,
+            followers = update.followers ?: prev.followers,
+            unique = update.unique ?: prev.unique,
+            slow = update.slow ?: prev.slow,
+            subs = update.subs ?: prev.subs,
+        )
+    }
     val raid = MutableStateFlow<Raid?>(null)
     val raidClicked = MutableStateFlow<Raid?>(null)
     var raidClosed = false
@@ -1017,11 +1031,113 @@ class ChatViewModel(
     private val delayedMessages = ArrayDeque<Pair<ChatMessage, Long>>()
     private var delayJob: Job? = null
     private var ownUserId: String? = null
+    private var ownUserLogin: String? = null
+    private var activeChannelLogin: String? = null
+    private val slowChatLock = Any()
+    private var slowChatTokens = 1.6
+    private var slowChatLastRefillAt = 0L
+    private var lastSlowChatTarget: ChatMessage? = null
+    private var lastSlowChatAllowed = true
+    private val slowChatPriorityBadges = setOf(
+        "broadcaster", "moderator", "lead_moderator", "vip", "staff", "admin", "global_mod"
+    )
 
     /** The live chat waits for the stream: "chat_delay_mode" 0 off, 1 auto, 2 manual ("chat_delay_seconds"). */
     private fun delayMode() = applicationContext.prefs().getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull() ?: 1
 
+    /** Slow chat rate ("chat_slow_rate"): 0 off, or max normal messages per second (1, 2, 4, 6). */
+    private fun slowChatRate() = applicationContext.prefs().getString(C.CHAT_SLOW_RATE, "0")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+
+    private fun resetSlowChat() {
+        synchronized(slowChatLock) {
+            slowChatLastRefillAt = 0L
+            lastSlowChatTarget = null
+        }
+    }
+
+    private fun bodyMentionsUsername(bodyLower: String, uname: String): Boolean {
+        if (uname.length < 2 || bodyLower.isEmpty()) return false
+        var idx = bodyLower.indexOf(uname)
+        while (idx != -1) {
+            val prev = if (idx > 0) bodyLower[idx - 1] else ' '
+            val end = idx + uname.length
+            val next = if (end < bodyLower.length) bodyLower[end] else ' '
+            val validStart = idx == 0 || prev == '@' || !(prev in 'a'..'z' || prev in '0'..'9' || prev == '_')
+            val validEnd = end == bodyLower.length || !(next in 'a'..'z' || next in '0'..'9' || next == '_')
+            if (validStart && validEnd) return true
+            idx = bodyLower.indexOf(uname, idx + 1)
+        }
+        return false
+    }
+
+    private fun isExemptPriorityChatMessage(msg: ChatMessage): Boolean {
+        if (msg.type != ChatMessage.USER_MESSAGE) return true
+        if (!msg.systemMsg.isNullOrBlank() || msg.noticeIcon != null) return true
+        if (msg.reward != null || (msg.bits ?: 0) > 0 || msg.msgId == "highlighted-message") return true
+        if (!ownUserId.isNullOrBlank() && msg.userId == ownUserId) return true
+        val chan = activeChannelLogin
+        if (!chan.isNullOrBlank() && msg.userLogin?.equals(chan, ignoreCase = true) == true) return true
+        if (msg.badges?.any { it.setId in slowChatPriorityBadges } == true) return true
+        val myLogin = ownUserLogin?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        if (myLogin != null) {
+            if (msg.userLogin?.equals(myLogin, ignoreCase = true) == true || msg.userName?.equals(myLogin, ignoreCase = true) == true) {
+                return true
+            }
+            if (msg.reply?.userLogin?.equals(myLogin, ignoreCase = true) == true || msg.reply?.userName?.equals(myLogin, ignoreCase = true) == true) {
+                return true
+            }
+            val bodyLower = msg.message?.lowercase()
+            if (!bodyLower.isNullOrEmpty() && bodyMentionsUsername(bodyLower, myLogin)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun consumeSlowChatSlot(rate: Int): Boolean {
+        val now = System.currentTimeMillis()
+        val maxTokens = if (rate <= 1) 1.0 else 1.6
+        if (slowChatLastRefillAt <= 0L || now < slowChatLastRefillAt) {
+            slowChatLastRefillAt = now
+            slowChatTokens = maxTokens
+        } else {
+            val elapsedMs = now - slowChatLastRefillAt
+            slowChatLastRefillAt = now
+            slowChatTokens = minOf(maxTokens, slowChatTokens + (elapsedMs * rate) / 1000.0)
+        }
+        return if (slowChatTokens >= 1.0) {
+            slowChatTokens -= 1.0
+            true
+        } else {
+            false
+        }
+    }
+
+    private fun shouldAllowSlowChat(message: ChatMessage): Boolean {
+        if (!started && chatReplayManager == null && chatReplayManagerLocal == null) return true
+        val rate = slowChatRate()
+        if (rate <= 0) return true
+        val target = if (message.type == ChatMessage.REPLY_MESSAGE) message.replyParent ?: return true else message
+        synchronized(slowChatLock) {
+            if (target === lastSlowChatTarget) {
+                lastSlowChatTarget = null
+                return lastSlowChatAllowed
+            }
+            val allowed = isExemptPriorityChatMessage(target) || consumeSlowChatSlot(rate)
+            if (message.type == ChatMessage.REPLY_MESSAGE) {
+                lastSlowChatTarget = target
+                lastSlowChatAllowed = allowed
+            } else {
+                lastSlowChatTarget = null
+            }
+            return allowed
+        }
+    }
+
     suspend fun onMessage(message: ChatMessage) {
+        if (!shouldAllowSlowChat(message)) {
+            return
+        }
         // a message of the live chat (with its time of Twitch), not one of ours: shown when the stream gets there
         if (started && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && delayMode() != 0) {
             synchronized(delayedMessages) {
@@ -1114,6 +1230,8 @@ class ChatViewModel(
         stopLiveChat()
         started = true
         ownUserId = applicationContext.tokenPrefs().getString(C.USER_ID, null)
+        ownUserLogin = applicationContext.tokenPrefs().getString(C.USERNAME, null)
+        activeChannelLogin = channelLogin
         val gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true)
         val helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext)
         val networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
@@ -1137,7 +1255,7 @@ class ChatViewModel(
             if (applicationContext.prefs().getBoolean(C.CHAT_USE_WEBSOCKET, true)) {
                 chatReadWebSocket = ChatReadWebSocket(channelLogin, ChatReadListener(channelLogin, nameDisplay, showUserNotice, showClearMsg, showClearChat, usePubSub, networkLibrary, isLoggedIn, accountId, channelId))
                 chatReadJob = chatReadWebSocket?.connect(viewModelScope)
-                if (isLoggedIn && (!gqlToken.isNullOrBlank() || !helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && !useApiChatMessages)) {
+                if (isLoggedIn && (!gqlToken.isNullOrBlank() || !helixToken.isNullOrBlank())) {
                     chatWriteWebSocket = ChatWriteWebSocket(
                         userLogin = accountLogin,
                         userToken = gqlToken?.takeIf { it.isNotBlank() } ?: helixToken,
@@ -1152,7 +1270,7 @@ class ChatViewModel(
                 chatReadJob = viewModelScope.launch(Dispatchers.IO) {
                     chatReadIRCSocket?.start()
                 }
-                if (isLoggedIn && (!gqlToken.isNullOrBlank() || !helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && !useApiChatMessages)) {
+                if (isLoggedIn && (!gqlToken.isNullOrBlank() || !helixToken.isNullOrBlank())) {
                     chatWriteIRCSocket = ChatWriteIRCSocket(
                         useSSL = useSSL,
                         userLogin = accountLogin,
@@ -1222,7 +1340,10 @@ class ChatViewModel(
 
     fun stopLiveChat() {
         clearDelayedMessages()
+        resetSlowChat()
         autoDelayMs = 0L
+        effectiveRoomState.value = RoomState("0", "-1", "0", "0", "0")
+        userRoomBadges.value = null
         if (started) {
             started = false
             if (chatReadIRCSocket != null) {
@@ -1322,6 +1443,18 @@ class ChatViewModel(
         }
 
         override suspend fun onChatMessage(message: ChatUtils.IRCMessage, userNotice: Boolean) {
+            if (userNotice && isLoggedIn) {
+                val msgId = message.tags["msg-id"]
+                val isSelfSub = msgId in setOf("sub", "resub", "giftpaidupgrade", "anongiftpaidupgrade", "primepaidupgrade") &&
+                    ((!accountId.isNullOrBlank() && message.tags["user-id"] == accountId) ||
+                        (!ownUserLogin.isNullOrBlank() && message.tags["login"].equals(ownUserLogin, true)))
+                val isSelfGiftRecipient = msgId in setOf("subgift", "anonsubgift") &&
+                    ((!accountId.isNullOrBlank() && message.tags["msg-param-recipient-id"] == accountId) ||
+                        (!ownUserLogin.isNullOrBlank() && message.tags["msg-param-recipient-user-name"].equals(ownUserLogin, true)))
+                if (isSelfSub || isSelfGiftRecipient) {
+                    userRoomBadges.value = (userRoomBadges.value ?: emptySet()) + "subscriber"
+                }
+            }
             if (!userNotice || showUserNotice) {
                 val chatMessage = ChatUtils.parseChatMessage(message, if (userNotice) TvChatNotices.build(applicationContext, message.tags) else null)
                 if (chatMessage.reply?.message != null) {
@@ -1367,13 +1500,15 @@ class ChatViewModel(
         }
 
         override suspend fun onRoomState(message: ChatUtils.IRCMessage) {
-            roomState.value = RoomState(
+            val state = RoomState(
                 emote = message.tags["emote-only"],
                 followers = message.tags["followers-only"],
                 unique = message.tags["r9k"],
                 slow = message.tags["slow"],
                 subs = message.tags["subs-only"]
             )
+            roomState.value = state
+            mergeRoomState(state)
         }
 
         override suspend fun onDisconnect(message: String, fullMsg: String?) {
@@ -1395,10 +1530,30 @@ class ChatViewModel(
         }
 
         override suspend fun onNotice(message: ChatUtils.IRCMessage) {
-            onMessage(ChatUtils.parseNotice(message))
+            val parsed = ChatUtils.parseNotice(message)
+            onMessage(parsed)
+            val msgId = message.tags["msg-id"]
+            if (TvChatNotices.isRestrictionNoticeId(msgId)) {
+                if (msgId == "msg_subsonly" && userRoomBadges.value == null) {
+                    userRoomBadges.value = emptySet()
+                }
+                val followersMin = effectiveRoomState.value.followers?.toIntOrNull()?.takeIf { it > 0 }
+                chatRestrictionToast.tryEmit(
+                    TvChatNotices.restrictionMessage(applicationContext, msgId, parsed.systemMsg, followersMin)
+                )
+            }
         }
 
         override suspend fun onUserState(message: ChatUtils.IRCMessage) {
+            val badgeSet = message.tags["badges"]
+                ?.split(',')
+                ?.mapNotNull { it.substringBefore('/').takeIf(String::isNotBlank) }
+                ?.toMutableSet()
+                ?: mutableSetOf()
+            if (message.tags["mod"] == "1") badgeSet.add("moderator")
+            if (message.tags["subscriber"] == "1") badgeSet.add("subscriber")
+            if (!message.tags["vip"].isNullOrBlank() && message.tags["vip"] != "0") badgeSet.add("vip")
+            userRoomBadges.value = badgeSet
             val emoteSets = message.tags["emote-sets"]?.split(",")
             if (emoteSets != null && savedEmoteSets != emoteSets) {
                 savedEmoteSets = emoteSets
@@ -1462,6 +1617,16 @@ class ChatViewModel(
         }
 
         override suspend fun onUserNotice(event: JSONObject, timestamp: String?) {
+            if (isLoggedIn && !accountId.isNullOrBlank()) {
+                val noticeType = event.optString("notice_type")
+                val isSelfSub = noticeType in setOf("sub", "resub", "gift_paid_upgrade", "prime_paid_upgrade") &&
+                    event.optString("chatter_user_id") == accountId
+                val isSelfGift = noticeType == "sub_gift" &&
+                    event.optJSONObject("sub_gift")?.optString("recipient_user_id") == accountId
+                if (isSelfSub || isSelfGift) {
+                    userRoomBadges.value = (userRoomBadges.value ?: emptySet()) + "subscriber"
+                }
+            }
             if (showUserNotice) {
                 onChatMessage(EventSubUtils.parseUserNotice(event, timestamp, TvChatNotices.build(applicationContext, event)), networkLibrary, isLoggedIn, accountId, channelId)
             }
@@ -1474,7 +1639,9 @@ class ChatViewModel(
         }
 
         override suspend fun onRoomState(event: JSONObject, timestamp: String?) {
-            roomState.value = EventSubUtils.parseRoomState(event)
+            val state = EventSubUtils.parseRoomState(event)
+            roomState.value = state
+            mergeRoomState(state)
         }
 
         override suspend fun onDisconnect(message: String, fullMsg: String?) {
@@ -1885,6 +2052,9 @@ class ChatViewModel(
         onMessage(message)
         addChatter(message.userName)
         if (isLoggedIn && !accountId.isNullOrBlank() && message.userId == accountId) {
+            message.badges?.let { badges ->
+                userRoomBadges.value = badges.mapNotNull { it.setId.takeIf(String::isNotBlank) }.toSet()
+            }
             onUpdatePresence(networkLibrary, null, channelId, false)
         }
     }
@@ -2065,17 +2235,57 @@ class ChatViewModel(
     private suspend fun sendMessage(message: CharSequence, networkLibrary: String?, gqlHeaders: Map<String, String>, helixHeaders: Map<String, String>, accountId: String?, channelId: String?, useApiChatMessages: Boolean, enableIntegrity: Boolean, replyId: String? = null) {
         if (useApiChatMessages) {
             if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
-                graphQLRepository.sendMessage(networkLibrary, gqlHeaders, channelId, message.toString(), replyId).also { response ->
-                    if (enableIntegrity) {
-                        response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
-                            integrity.emit("refresh")
-                            return
-                        }
+                val response = graphQLRepository.sendMessage(networkLibrary, gqlHeaders, channelId, message.toString(), replyId)
+                if (enableIntegrity) {
+                    response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                        integrity.emit("refresh")
+                        return
                     }
-                }.takeIf { !it.errors.isNullOrEmpty() }?.toString()
+                }
+                val dropReason = response.data?.sendChatMessage?.dropReason
+                val dropMessage = response.data?.sendChatMessage?.dropReasonMessage
+                when {
+                    !dropReason.isNullOrBlank() -> {
+                        if (dropReason == "SUBSCRIBERS_ONLY" && userRoomBadges.value == null) {
+                            userRoomBadges.value = emptySet()
+                        }
+                        val followersMin = effectiveRoomState.value.followers?.toIntOrNull()?.takeIf { it > 0 }
+                        val toastMsg = TvChatNotices.restrictionMessage(applicationContext, dropReason, dropMessage, followersMin)
+                        chatRestrictionToast.emit(toastMsg)
+                        dropMessage?.takeIf { it.isNotBlank() } ?: toastMsg
+                    }
+                    !response.errors.isNullOrEmpty() -> {
+                        val errMsg = response.errors
+                            .mapNotNull { it.message?.takeIf(String::isNotBlank) }
+                            .joinToString("; ")
+                            .ifBlank { applicationContext.getString(R.string.tv_chat_restricted_generic) }
+                        chatRestrictionToast.emit(TvChatNotices.restrictionMessage(applicationContext, null, errMsg))
+                        errMsg
+                    }
+                    else -> null
+                }
             } else {
                 if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
-                    helixRepository.sendMessage(networkLibrary, helixHeaders, accountId, channelId, message.toString(), replyId)
+                    val raw = helixRepository.sendMessage(networkLibrary, helixHeaders, accountId, channelId, message.toString(), replyId)
+                    when {
+                        raw != null && raw.startsWith("DROP:") -> {
+                            val payload = raw.removePrefix("DROP:")
+                            val code = payload.substringBefore('|')
+                            val msg = payload.substringAfter('|', "")
+                            if (code == "msg_subsonly" && userRoomBadges.value == null) {
+                                userRoomBadges.value = emptySet()
+                            }
+                            val followersMin = effectiveRoomState.value.followers?.toIntOrNull()?.takeIf { it > 0 }
+                            val toastMsg = TvChatNotices.restrictionMessage(applicationContext, code, msg, followersMin)
+                            chatRestrictionToast.emit(toastMsg)
+                            msg.ifBlank { toastMsg }
+                        }
+                        !raw.isNullOrBlank() -> {
+                            chatRestrictionToast.emit(TvChatNotices.restrictionMessage(applicationContext, null, raw))
+                            raw
+                        }
+                        else -> null
+                    }
                 } else null
             }?.let {
                 onMessage(ChatMessage(systemMsg = it))
@@ -2702,6 +2912,9 @@ class ChatViewModel(
 
     fun startReplayChat(videoId: String?, createdAt: String?, startTime: Int, chatUrl: String?, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?, channelId: String?, channelLogin: String?) {
         stopReplayChat()
+        ownUserId = applicationContext.tokenPrefs().getString(C.USER_ID, null)
+        ownUserLogin = applicationContext.tokenPrefs().getString(C.USERNAME, null)
+        activeChannelLogin = channelLogin
         if (!chatUrl.isNullOrBlank()) {
             chatReplayManagerLocal = ChatReplayManagerLocal(
                 createdAt = createdAt?.toLongOrNull() ?: createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } },
@@ -2736,6 +2949,7 @@ class ChatViewModel(
     }
 
     fun stopReplayChat() {
+        resetSlowChat()
         chatReplayManager?.stop() ?: chatReplayManagerLocal?.stop()
     }
 

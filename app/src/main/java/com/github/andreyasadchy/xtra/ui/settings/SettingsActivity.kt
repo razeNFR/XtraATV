@@ -73,6 +73,7 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.applyTheme
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
+import com.github.andreyasadchy.xtra.util.openUnknownAppSourcesSettings
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.google.android.material.appbar.AppBarLayout
@@ -903,6 +904,10 @@ class SettingsActivity : AppCompatActivity() {
                 com.github.andreyasadchy.xtra.ui.tv.TvAbout.show(requireContext())
                 true
             }
+            findPreference<Preference>("about_discord")?.setOnPreferenceClickListener {
+                com.github.andreyasadchy.xtra.ui.tv.TvAbout.show(requireContext(), discord = true)
+                true
+            }
             findPreference<Preference>("about_device")?.apply {
                 summary = com.github.andreyasadchy.xtra.ui.tv.TvAbout.deviceSummary()
                 setOnPreferenceClickListener {
@@ -958,14 +963,8 @@ class SettingsActivity : AppCompatActivity() {
                                     }
                                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !requireContext().packageManager.canRequestPackageInstalls()) {
                                     pendingUpdateUrl = it
-                                    try {
-                                        startActivity(
-                                            Intent(
-                                                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                                "package:${requireContext().packageName}".toUri()
-                                            )
-                                        )
-                                    } catch (e: ActivityNotFoundException) {
+                                    pendingUpdateAt = android.os.SystemClock.elapsedRealtime()
+                                    if (!requireActivity().openUnknownAppSourcesSettings()) {
                                         pendingUpdateUrl = null
                                         startUpdateDownload(it)
                                     }
@@ -1017,6 +1016,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         private var pendingUpdateUrl: String? = null
+        private var pendingUpdateAt: Long = 0L
 
         private fun startUpdateDownload(url: String) {
             val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
@@ -1051,9 +1051,11 @@ class SettingsActivity : AppCompatActivity() {
             updateTvProxySummary()
             val url = pendingUpdateUrl
             if (url != null) {
-                pendingUpdateUrl = null
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || requireContext().packageManager.canRequestPackageInstalls()) {
+                    pendingUpdateUrl = null
                     startUpdateDownload(url)
+                } else if (android.os.SystemClock.elapsedRealtime() - pendingUpdateAt > 5 * 60_000L) {
+                    pendingUpdateUrl = null
                 }
             }
         }
@@ -1067,7 +1069,7 @@ class SettingsActivity : AppCompatActivity() {
             viewLifecycleOwner.lifecycleScope.launch {
                 val count = repository.getCustomProxies().size
                 if (!isAdded) return@launch
-                val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+                val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                 val adsOnly = requireContext().prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1"
                 // on / off, when (whole stream or ads only), how many; then what they change for the 1440p
                 preference.summary = listOfNotNull(
@@ -2173,20 +2175,12 @@ class SettingsActivity : AppCompatActivity() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.update_preferences, rootKey)
             findPreference<SwitchPreferenceCompat>("update_check_enabled")?.setOnPreferenceChangeListener { _, newValue ->
-                if (Build.VERSION.SDK_INT == Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
                     newValue == true &&
                     !requireContext().prefs().getBoolean(C.UPDATE_USE_BROWSER, false) &&
                     !requireContext().packageManager.canRequestPackageInstalls()
                 ) {
-                    try {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                            "package:${requireContext().packageName}".toUri()
-                        )
-                        startActivity(intent)
-                    } catch (e: ActivityNotFoundException) {
-
-                    }
+                    requireActivity().openUnknownAppSourcesSettings()
                 }
                 true
             }
@@ -2198,20 +2192,12 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             findPreference<SwitchPreferenceCompat>("update_use_browser")?.setOnPreferenceChangeListener { _, newValue ->
-                if (Build.VERSION.SDK_INT == Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
                     newValue == false &&
                     requireContext().prefs().getBoolean(C.UPDATE_CHECK_ENABLED, true) &&
                     !requireContext().packageManager.canRequestPackageInstalls()
                 ) {
-                    try {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                            "package:${requireContext().packageName}".toUri()
-                        )
-                        startActivity(intent)
-                    } catch (e: ActivityNotFoundException) {
-
-                    }
+                    requireActivity().openUnknownAppSourcesSettings()
                 }
                 true
             }

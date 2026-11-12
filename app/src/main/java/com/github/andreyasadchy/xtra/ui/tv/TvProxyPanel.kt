@@ -80,27 +80,26 @@ object TvProxyPanel {
     ) {
         val entries = mutableStateListOf<Entry>().apply { addAll(proxies.sortedBy { it.position }.map { Entry(it) }) }
         val original = proxies.sortedBy { it.position }.map { it.id to it.enabled }
+        val useBefore = context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
         val modeBefore = context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0")
         val dialog = TvDialogs.show(context) { dismiss ->
             SidePanel(title = context.getString(R.string.tv_proxy_panel_title), subtitle = context.getString(R.string.tv_proxy_panel_subtitle), width = if (manage != null) 500.dp else 440.dp, scrollable = true) {
                 val first = remember { FocusRequester() }
-                // settings: the custom proxies on or off, first (one row for both on the screen of the settings)
-                if (manage != null) {
-                    var useProxies by remember { mutableStateOf(context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)) }
-                    Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp).focusRequester(first), {
-                        useProxies = !useProxies
-                        context.prefs().edit { putBoolean(C.PLAYER_USE_CUSTOM_PROXY, useProxies) }
-                    }) { focused ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                context.getString(R.string.use_custom_proxies),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (focused) TvColors.onFocused else Color.White,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TvListPanel.Switch(useProxies)
-                        }
+                // the custom proxies on or off, first (shown both in the player and in the settings)
+                var useProxies by remember { mutableStateOf(context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)) }
+                Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp).focusRequester(first), {
+                    useProxies = !useProxies
+                    context.prefs().edit { putBoolean(C.PLAYER_USE_CUSTOM_PROXY, useProxies) }
+                }) { focused ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            context.getString(R.string.use_custom_proxies),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (focused) TvColors.onFocused else Color.White,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TvListPanel.Switch(useProxies)
                     }
                 }
                 // the proxies for the whole stream, or only while an ad plays (the stream itself from Twitch)
@@ -125,7 +124,7 @@ object TvProxyPanel {
                             enabled = entry.enabled,
                             canUp = index > 0,
                             canDown = index < entries.lastIndex,
-                            modifier = if (index == 0 && manage == null) Modifier.focusRequester(first) else Modifier,
+                            modifier = Modifier,
                             onToggle = {
                                 entry.enabled = !entry.enabled
                                 if (manage != null) {
@@ -184,8 +183,10 @@ object TvProxyPanel {
         }
         dialog.setOnDismissListener {
             val now = entries.map { it.proxy.id to it.enabled }
-            // the mode changed: as a change of the list (the stream starts again with it)
-            if (now == original && context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == modeBefore) {
+            val useSame = context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false) == useBefore
+            val modeSame = context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == modeBefore
+            // on/off or mode changed: as a change of the list (the stream starts again with it)
+            if (now == original && useSame && modeSame) {
                 onClosed(null)
             } else {
                 onClosed(entries.mapIndexed { index, entry ->

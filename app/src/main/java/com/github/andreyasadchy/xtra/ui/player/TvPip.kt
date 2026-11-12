@@ -181,8 +181,17 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         }
         val width = (metrics.widthPixels * fraction).toInt()
         val corner = prefs.getString(C.TV_PIP_CORNER, "tr")
-        val gravity = (if (corner == "bl" || corner == "br") Gravity.BOTTOM else Gravity.TOP) or
-                (if (corner == "tl" || corner == "bl") Gravity.START else Gravity.END)
+        val vGravity = when (corner) {
+            "bl", "bc", "br" -> Gravity.BOTTOM
+            "ml", "c", "mr" -> Gravity.CENTER_VERTICAL
+            else -> Gravity.TOP
+        }
+        val hGravity = when (corner) {
+            "tl", "ml", "bl" -> Gravity.START
+            "tc", "c", "bc" -> Gravity.CENTER_HORIZONTAL
+            else -> Gravity.END
+        }
+        val gravity = vGravity or hGravity
         val horizontal = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
         val vertical = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
         frame.layoutParams = FrameLayout.LayoutParams(width, width * 9 / 16, gravity).apply {
@@ -203,10 +212,14 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         view?.animate()?.translationY(controlsLift())?.setDuration(200L)?.start()
     }
 
-    /** In a bottom corner, the small window goes up above the bar of the controls while they are shown. */
+    /** At the bottom of the screen, the small window goes up above the bar of the controls while they are shown. */
     private fun controlsLift(): Float {
         val corner = activity.prefs().getString(C.TV_PIP_CORNER, "tr")
-        return if (controlsShown && (corner == "bl" || corner == "br")) -activity.resources.getDimension(R.dimen.tv_chat_lift) else 0f
+        return if (controlsShown && (corner == "bl" || corner == "bc" || corner == "br")) {
+            -activity.resources.getDimension(R.dimen.tv_chat_lift)
+        } else {
+            0f
+        }
     }
 
     /**

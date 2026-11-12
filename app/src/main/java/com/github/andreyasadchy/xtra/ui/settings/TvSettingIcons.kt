@@ -44,6 +44,7 @@ object TvSettingIcons {
         "download_settings" to R.drawable.tv_ic_download,
         "about_app" to R.drawable.tv_ic_info,
         "about_github" to R.drawable.tv_ic_share,
+        "about_discord" to R.drawable.tv_ic_discord,
         "about_device" to R.drawable.tv_ic_tv_small,
         // Xtra TV
         "player_frame_rate_matching" to R.drawable.tv_ic_hd,
@@ -76,6 +77,7 @@ object TvSettingIcons {
         "proxy_timeout" to R.drawable.tv_ic_timer,
         "token_supported_codecs" to R.drawable.tv_ic_hd,
         // chat
+        "chat_slow_rate" to R.drawable.tv_ic_timer,
         "chat_show_replies" to R.drawable.tv_ic_chat_message,
         "chat_highlight_mentions" to R.drawable.tv_ic_chat_message,
         "chat_show_usernotice" to R.drawable.tv_ic_campaign,

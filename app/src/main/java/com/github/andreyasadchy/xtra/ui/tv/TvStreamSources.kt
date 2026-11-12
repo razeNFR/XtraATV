@@ -214,14 +214,17 @@ object TvStreamSources {
     }
 
     /**
-     * Rows the row of the other streams can show besides its own list: followed (when logged in), popular, the rows by
-     * language of the home, the category of the stream watched.
+     * Rows the row of the other streams can show besides its own list: followed (when logged in or with local follows),
+     * popular, the rows by language of the home, the category of the stream watched.
      */
-    fun rows(context: Context, current: Stream?): List<Row> {
+    suspend fun rows(context: Context, current: Stream?): List<Row> {
         val rows = mutableListOf<Row>()
         val loggedIn = !TwitchApiHelper.getGQLHeaders(context, true)[C.HEADER_TOKEN].isNullOrBlank() ||
                 !TwitchApiHelper.getHelixHeaders(context)[C.HEADER_TOKEN].isNullOrBlank()
-        if (loggedIn) {
+        val hasFollows = loggedIn || runCatching {
+            (context.applicationContext as XtraApp).xtraModule.localChannelFollowsRepository.getAll().isNotEmpty()
+        }.getOrDefault(false)
+        if (hasFollows) {
             rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.tv_followed_live), { followed(context) }, "followed")
         }
         rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.popular), { popular(context) }, "popular")

@@ -93,6 +93,10 @@ class PlayerViewModel(
     val gamesList = MutableStateFlow<List<Game>?>(null)
     private val _isFollowing = MutableStateFlow<Boolean?>(null)
     val isFollowing: StateFlow<Boolean?> = _isFollowing
+    private val _accountFollowedAtMs = MutableStateFlow<Long?>(null)
+    val accountFollowedAtMs: StateFlow<Long?> = _accountFollowedAtMs
+    private val _accountFollowKnown = MutableStateFlow(false)
+    val accountFollowKnown: StateFlow<Boolean> = _accountFollowKnown
     val follow = MutableStateFlow<Pair<Boolean, String?>?>(null)
 
     fun deletePlaybackStates() {
@@ -586,10 +590,12 @@ class PlayerViewModel(
             viewModelScope.launch {
                 try {
                     if (!channelId.isNullOrBlank()) {
-                        val accountFollows = setting == 0 && userId != channelId &&
-                                (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() || !helixHeaders[C.HEADER_TOKEN].isNullOrBlank())
-                        _isFollowing.value = if (accountFollows) {
-                            // the follows of the account: GQL first, the Helix follow list when GQL gives no answer
+                        val hasTokens = !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() || !helixHeaders[C.HEADER_TOKEN].isNullOrBlank()
+                        val isOwnChannel = !userId.isNullOrBlank() && userId == channelId
+                        if (isOwnChannel) {
+                            _accountFollowKnown.value = true
+                        }
+                        val queryAccountFollowMs: suspend () -> Long? = {
                             val self = if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
                                 try {
                                     graphQLRepository.loadQueryFollowingUser(
@@ -603,14 +609,30 @@ class PlayerViewModel(
                                 }
                             } else null
                             when {
-                                self != null -> self.follower?.followedAt != null
-                                !helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && !userId.isNullOrBlank() -> {
-                                    helixRepository.getUserFollows(networkLibrary, helixHeaders, userId, channelId).data.isNotEmpty()
+                                self != null -> self.follower?.followedAt?.toString()?.let {
+                                    Instant.parseOrNull(it)?.toEpochMilliseconds() ?: 1L
                                 }
-                                else -> false
+                                !helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && !userId.isNullOrBlank() -> {
+                                    val first = helixRepository.getUserFollows(networkLibrary, helixHeaders, userId, channelId).data.firstOrNull()
+                                    first?.let { f -> f.followedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 1L }
+                                }
+                                else -> null
                             }
+                        }
+                        val accountFollows = setting == 0 && !isOwnChannel && hasTokens
+                        if (accountFollows) {
+                            val followedMs = queryAccountFollowMs()
+                            _accountFollowedAtMs.value = followedMs
+                            _accountFollowKnown.value = true
+                            _isFollowing.value = followedMs != null
                         } else {
-                            localChannelFollowsRepository.getById(channelId) != null
+                            _isFollowing.value = localChannelFollowsRepository.getById(channelId) != null
+                            if (!isOwnChannel && hasTokens) {
+                                runCatching {
+                                    _accountFollowedAtMs.value = queryAccountFollowMs()
+                                    _accountFollowKnown.value = true
+                                }
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -637,6 +659,8 @@ class PlayerViewModel(
                             follow.value = Pair(true, errorMessage)
                         } else {
                             _isFollowing.value = true
+                            _accountFollowedAtMs.value = System.currentTimeMillis()
+                            _accountFollowKnown.value = true
                             follow.value = Pair(true, null)
                             if (liveNotificationsEnabled) {
                                 startedAt.takeUnless { it.isNullOrBlank() }?.let {
@@ -685,6 +709,8 @@ class PlayerViewModel(
                             follow.value = Pair(false, errorMessage)
                         } else {
                             _isFollowing.value = false
+                            _accountFollowedAtMs.value = null
+                            _accountFollowKnown.value = true
                             follow.value = Pair(false, null)
                         }
                     } else {

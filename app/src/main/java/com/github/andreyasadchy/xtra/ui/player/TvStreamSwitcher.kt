@@ -543,7 +543,9 @@ object TvStreamSwitcher {
                 recyclerView.post { recyclerView.layoutManager?.findViewByPosition(index)?.requestFocus() }
             }
         }
-        updater = update
+        if (selection == null) {
+            updater = update
+        }
         dialog.setOnDismissListener {
             if (updater === update) {
                 updater = null

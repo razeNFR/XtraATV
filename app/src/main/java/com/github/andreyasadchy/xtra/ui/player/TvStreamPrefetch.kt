@@ -59,7 +59,7 @@ object TvStreamPrefetch {
             }
         }
         val app = context.applicationContext as XtraApp
-        val useCustomProxy = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+        val useCustomProxy = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
         val warm = warmUp && prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP) == C.OKHTTP
         val request = scope.async {
             // a custom proxy in use: the player goes through it, nothing is asked here

@@ -1,13 +1,18 @@
 package com.github.andreyasadchy.xtra.util
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.os.Build
+import android.provider.Settings
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.res.use
+import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.preference.PreferenceManager
@@ -288,4 +293,34 @@ private class TvMaterialDialogBuilder(context: Context) : MaterialAlertDialogBui
 
 private class TvDialogBuilder(context: Context) : AlertDialog.Builder(context) {
     override fun create(): AlertDialog = super.create().also { it.focusPositiveButtonOnShow() }
+}
+
+/**
+ * Opens "Install unknown apps" settings. On Android TV 14+, TvSettings dropped the `package:` URI filter on
+ * [Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES], so we fall back to the action without URI, then Security / Apps / main Settings.
+ */
+fun Context.openUnknownAppSourcesSettings(showHintToast: Boolean = true): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+    try {
+        startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:$packageName".toUri()))
+        return true
+    } catch (_: ActivityNotFoundException) {
+    }
+    val fallbacks = listOf(
+        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+        Settings.ACTION_SECURITY_SETTINGS,
+        Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS,
+        Settings.ACTION_SETTINGS,
+    )
+    for (action in fallbacks) {
+        try {
+            startActivity(Intent(action))
+            if (showHintToast) {
+                Toast.makeText(this, R.string.tv_enable_unknown_sources, Toast.LENGTH_LONG).show()
+            }
+            return true
+        } catch (_: ActivityNotFoundException) {
+        }
+    }
+    return false
 }

@@ -404,7 +404,7 @@ class MediaPlayerService : BasePlaybackService() {
                     started = true
                     serviceListener?.started()
                     if (qualities.isNullOrEmpty()) {
-                        useCustomProxy = prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, true)
+                        useCustomProxy = prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                         if (!useCustomProxy) {
                             useStreamProxy = prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
                         }
