@@ -140,6 +140,14 @@
 
         <SwitchPreferenceCompat
             android:defaultValue="true"
+            android:key="tv_home_multistream"
+            android:summary="@string/tv_home_multistream_summary"
+            android:title="@string/tv_home_multistream"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
             android:key="tv_home_followed_videos"
             android:summary="@string/tv_home_followed_videos_summary"
             android:title="@string/tv_home_followed_videos"

@@ -61,6 +61,7 @@ object TvSettingIcons {
         "tv_hide_menu_on_launch" to R.drawable.tv_ic_view_quilt,
         "tv_compact_rail" to R.drawable.tv_ic_view_quilt,
         "tv_home_hero" to R.drawable.tv_ic_live,
+        "tv_home_multistream" to R.drawable.tv_ic_multistream,
         "tv_home_followed_videos" to R.drawable.tv_ic_video_library,
         "tv_favorites" to R.drawable.tv_ic_star,
         "tv_ambient_color" to R.drawable.tv_ic_palette,
@@ -78,6 +79,8 @@ object TvSettingIcons {
         "token_supported_codecs" to R.drawable.tv_ic_hd,
         // chat
         "chat_slow_rate" to R.drawable.tv_ic_timer,
+        "chat_hide_bots" to R.drawable.tv_ic_block,
+        "chat_blocked_users" to R.drawable.tv_ic_person,
         "chat_show_replies" to R.drawable.tv_ic_chat_message,
         "chat_highlight_mentions" to R.drawable.tv_ic_chat_message,
         "chat_show_usernotice" to R.drawable.tv_ic_campaign,

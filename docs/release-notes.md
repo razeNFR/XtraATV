@@ -1,23 +1,10 @@
-# Xtra TV 1.3.2
+# Xtra TV 1.3.3
 
 ### What's new
-- **Slow chat**: limit fast chats to **1, 2, 4 or 6 msg/s** from the player chat panel (right under *Position*) or Chat settings, while always keeping broadcaster, moderator, VIP, staff, redeem/bits and own/reply messages.
-- **Chat panel**: *Chat delay* is now right below *Slow chat* with a concise latency line, and *Reset* also resets *Slow chat*.
-- **Chat restrictions & feedback**: the *Write a message* button now displays a small lock icon on restricted channels (*followers-only* / *subscribers-only*), unlocks automatically in real time as soon as the restriction is lifted or follow wait time expires, and shows a clear Toast whenever a message cannot be sent or is rejected by Twitch.
-- **Inline emotes in composer**: emotes inserted in the TV chat input field are now rendered directly as images instead of raw text codes, with single-press Backspace deletion.
-- **Edge-to-edge Home rows & side menu**: Home horizontal rows glide all the way to the rail and screen edge with a smooth horizontal gradient fade, and the side menu is slightly wider with clean rounded corners over the colored ambiance glow.
-- **PiP window positions**: added **Top center**, **Middle left**, **Center**, **Middle right**, and **Bottom center** positions for the small stream window alongside the 4 corners.
-- **About & Discord**: added a **Discord** entry (`discord.gg/SgKqrW73P4`) with QR code in *Settings → About*.
-- **Player defaults**: custom proxies are now off by default (VAFT handles ads out of the box), the *Proxy* button is enabled by default in the player, and *Dimming* is off by default.
-- **Ad-block badge**: VAFT sources now show their resolution in the badge (e.g. `autoplay (360p)`).
-
-### Fixes
-- **Stream playback & decoder recovery**: release previous stream and background preview decoders cleanly before opening a new stream, wait for TV surface readiness, and automatically fall back to H.264 1080p if an AV1/HEVC/1440p hardware decoder fails.
-- **Android TV 14 in-app update**: open Android TV 14's *Install unknown apps* / *Security* settings directly before downloading an update instead of triggering `PackageInstaller`'s broken *Settings* button crash.
-- **Dynamic ambiance color**: warm skin tones, tungsten lighting and neutral dark thumbnails no longer skew the dynamic ambiance background toward muddy brown.
-- **About dialog layout**: made the *About* panel scrollable with a compact QR card so the *Close* button text is never clipped on 1080p TV screens.
-- **Multi-stream & switcher**: local followed channels now appear in *Followed live* and *Suggested* without logging in, and followed live channels are listed before category streams in *Suggested* (#53).
-- **Ad-block fallback**: check all segments of the backup player's first playlist and fall back to hiding the ad if every backup source fails.
+- **Up / down & stream-switch shortcuts in VODs**: while player controls are hidden, **Up** opens the other live streams switcher and **Down** toggles chat on **all VODs** (classic VODs and live rewind), while **Left / Right** and **Channel + / −** keep switching streamers when rewinding a live stream (classic VODs keep Left / Right for timeline seek) (#57).
+- **Block chat bots & accounts**: added a **Hide bots** switch in *Settings → Chat* (filters well-known Twitch bots and verified bot badges), a **Block accounts / bots** panel in the player chat menu (between *Position* and *Slow chat*) to toggle bot hiding, block a username or block/unblock recent chatters in one click, and a **Blocked accounts** manager in *Settings → Chat* (backed up with TV settings) (#56).
+- **Saved multi-streams on Home**: saved multi-stream groups now appear automatically in a **Multi-streams** row right below *Followed channels live* whenever at least 2 channels in the group are live, with split-screen live thumbnails, live counter & total viewers badge, and long-press actions (watch, rename group, remove group, open channels); configurable in *Xtra TV settings → Home*.
+- **Smart screen refresh**: TV Home and browsing lists now refresh automatically and non-intrusively when returning from a stream or multi-stream (closing or minimizing the player, resuming the app) if data is over 1 minute old, or after 2 minutes of inactivity on a screen, without jumping scroll position or disrupting remote focus.
 
 ### Install
-Download `XtraTV-1.3.2-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.3.3-tv.apk` below and install it over the previous version, your settings and account are kept.

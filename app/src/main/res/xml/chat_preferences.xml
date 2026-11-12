@@ -150,6 +150,20 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="chat_hide_bots"
+        android:summary="@string/chat_hide_bots_summary"
+        android:title="@string/chat_hide_bots"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="chat_blocked_users"
+        android:title="@string/chat_blocked_users"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <ListPreference
         android:defaultValue="1"
         android:entries="@array/chatDelayEntries"

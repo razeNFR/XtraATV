@@ -1473,6 +1473,23 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
             }
+            findPreference<SwitchPreferenceCompat>(C.CHAT_HIDE_BOTS)?.setOnPreferenceChangeListener { _, _ ->
+                (requireActivity() as? SettingsActivity)?.setResult()
+                com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.notifyPrefsChanged()
+                true
+            }
+            findPreference<Preference>(C.CHAT_BLOCKED_USERS)?.apply {
+                summary = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.summary(requireContext())
+                setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.showSettingsDialog(requireActivity()) {
+                        if (isAdded) {
+                            summary = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.summary(requireContext())
+                            (activity as? SettingsActivity)?.setResult()
+                        }
+                    }
+                    true
+                }
+            }
             if (Build.SUPPORTED_64_BIT_ABIS.firstOrNull() == "arm64-v8a") {
                 val languages = TranslateLanguage.getAllLanguages()
                 val names = languages.map { Locale.forLanguageTag(it).displayLanguage }.toTypedArray()
@@ -1948,7 +1965,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 true
             }
-            listOf(C.TV_HOME_HERO, C.TV_COMPACT_RAIL).forEach { key ->
+            listOf(C.TV_HOME_HERO, C.TV_HOME_MULTISTREAM, C.TV_COMPACT_RAIL).forEach { key ->
                 findPreference<Preference>(key)?.setOnPreferenceChangeListener { _, _ ->
                     (requireActivity() as? SettingsActivity)?.setResult()
                     true

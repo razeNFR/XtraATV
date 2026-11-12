@@ -78,18 +78,23 @@ object TvStreamSwitcher {
         // tab shown (0: the list given), the lists already loaded, every stream shown (the checked ones of all the tabs)
         // the list of the stream has a tab of its own when it is one of the rows (followed, popular...): that tab shows it
         // and is selected, no "This list" tab next to the same list (picking streams of a multi-stream keeps it)
-        val originRow = if (selection == null) com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.originRow(activity, source, rows) else -1
-        val originTab = if (originRow >= 0) originRow else 0
+        val omitEmptyCurrentTab = selection == null && streams.isEmpty() && source == null && rows.isNotEmpty()
+        val originRow = if (selection == null && !omitEmptyCurrentTab) com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.originRow(activity, source, rows) else -1
+        val originTab = when {
+            omitEmptyCurrentTab -> -1
+            originRow >= 0 -> originRow
+            else -> 0
+        }
         // the row a tab shows, null for the list of the stream
         val rowOf: (Int) -> com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Row? = { index ->
-            if (originRow >= 0) {
-                if (index == originRow) null else rows.getOrNull(index)
-            } else {
-                rows.getOrNull(index - 1)
+            when {
+                omitEmptyCurrentTab -> rows.getOrNull(index)
+                originRow >= 0 -> if (index == originRow) null else rows.getOrNull(index)
+                else -> rows.getOrNull(index - 1)
             }
         }
-        var currentTab = originTab
-        val loadedTabs = mutableMapOf<Int, List<Stream>>(originTab to streams)
+        var currentTab = originTab.coerceAtLeast(0)
+        val loadedTabs = if (omitEmptyCurrentTab) mutableMapOf() else mutableMapOf(originTab to streams)
         val seen = LinkedHashMap<String, Stream>()
         val dialog = AppCompatDialog(activity)
         val density = activity.resources.displayMetrics.density
@@ -165,7 +170,7 @@ object TvStreamSwitcher {
         // tabs of the lists: the list of the stream first, then the other rows, and Search at the end
         val baseTitles = when {
             rows.isEmpty() -> listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current))
-            originRow >= 0 -> rows.map { it.title }
+            originRow >= 0 || omitEmptyCurrentTab -> rows.map { it.title }
             else -> listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)) + rows.map { it.title }
         }
         val tabTitles = baseTitles + activity.getString(R.string.search)
@@ -450,7 +455,7 @@ object TvStreamSwitcher {
                     }
                     return@setOnClickListener
                 }
-                if (index == currentTab) {
+                if (index == currentTab && !loadedTabs[index].isNullOrEmpty()) {
                     recyclerView.getChildAt(0)?.requestFocus()
                     return@setOnClickListener
                 }
@@ -513,10 +518,40 @@ object TvStreamSwitcher {
         val currentIndex = streams.indexOfFirst { it.channelLogin != null && it.channelLogin == currentChannelLogin }.coerceAtLeast(0)
         recyclerView.scrollToPosition(currentIndex)
         dialog.setOnShowListener {
-            recyclerView.post {
-                val view = recyclerView.layoutManager?.findViewByPosition(currentIndex)
-                if (view == null || !view.requestFocus()) {
-                    recyclerView.getChildAt(0)?.requestFocus()
+            if (omitEmptyCurrentTab) {
+                tabViews.firstOrNull()?.requestFocus()
+                tabJob?.cancel()
+                tabJob = activity.lifecycleScope.launch {
+                    var chosenTab = 0
+                    var list: List<Stream>? = null
+                    for (candidate in rows.indices) {
+                        val tabView = tabViews.getOrNull(candidate)
+                        tabView?.text = activity.getString(R.string.tv_switch_loading, tabTitles[candidate])
+                        val row = rows[candidate]
+                        val rowPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(row.source)
+                        pages[candidate] = rowPages
+                        val fetched = rowPages.next()?.distinctBy { it.channelLogin }
+                            ?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }
+                            ?.also { loadedTabs[candidate] = it }
+                        tabView?.text = tabTitles[candidate]
+                        if (!dialog.isShowing) return@launch
+                        if (!fetched.isNullOrEmpty()) {
+                            chosenTab = candidate
+                            list = fetched
+                            break
+                        }
+                    }
+                    if (!list.isNullOrEmpty()) {
+                        showTab(chosenTab, list)
+                        recyclerView.post { recyclerView.layoutManager?.findViewByPosition(0)?.requestFocus() }
+                    }
+                }
+            } else {
+                recyclerView.post {
+                    val view = recyclerView.layoutManager?.findViewByPosition(currentIndex)
+                    if (view == null || !view.requestFocus()) {
+                        recyclerView.getChildAt(0)?.requestFocus()
+                    }
                 }
             }
         }

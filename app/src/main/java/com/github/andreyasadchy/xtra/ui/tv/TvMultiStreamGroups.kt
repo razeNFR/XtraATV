@@ -20,6 +20,8 @@ object TvMultiStreamGroups {
 
     private const val MAX_GROUPS = 8
 
+    val changes = kotlinx.coroutines.flow.MutableStateFlow(0)
+
     class Group(
         val id: String,
         val label: String,
@@ -74,11 +76,28 @@ object TvMultiStreamGroups {
             .take(4)
         val id = idOf(clean)
         if (id.isEmpty()) return
-        val label = clean.joinToString(" + ") {
+        val existing = list(context).find { it.id == id }
+        val label = existing?.label?.takeIf { it.isNotBlank() } ?: clean.joinToString(" + ") {
             it.channelName?.takeIf { n -> n.isNotBlank() } ?: it.channelLogin.orEmpty()
         }
         val updated = listOf(Group(id, label, clean)) + list(context).filterNot { it.id == id }
         write(context, updated.take(MAX_GROUPS))
+    }
+
+    @Synchronized
+    fun rename(context: Context, id: String, newLabel: String) {
+        val trimmed = newLabel.trim()
+        val updated = list(context).map { group ->
+            if (group.id == id) {
+                val fallback = group.streams.joinToString(" + ") {
+                    it.channelName?.takeIf { n -> n.isNotBlank() } ?: it.channelLogin.orEmpty()
+                }
+                Group(group.id, trimmed.ifEmpty { fallback }, group.streams)
+            } else {
+                group
+            }
+        }
+        write(context, updated)
     }
 
     @Synchronized
@@ -108,6 +127,7 @@ object TvMultiStreamGroups {
             if (groups.isEmpty()) remove(C.TV_MULTISTREAM_GROUPS)
             else putString(C.TV_MULTISTREAM_GROUPS, array.toString())
         }
+        changes.value++
     }
 
     fun launchGroup(activity: MainActivity, group: Group, origin: Stream? = null) {

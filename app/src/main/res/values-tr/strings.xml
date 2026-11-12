@@ -644,7 +644,7 @@
     <string name="tv_followed_live">Takip edilen canlı kanallar</string>
     <string name="tv_see_all">Tümünü gör</string>
     <string name="tv_dpad_switch_stream">Sol / sağ yayıncı değiştirir</string>
-    <string name="tv_dpad_switch_stream_summary">Kontroller gizliyken sol ve sağ, yayının açıldığı listedeki önceki veya sonraki yayıncıya geçer</string>
+    <string name="tv_dpad_switch_stream_summary">Kontroller gizliyken (canlı yayında veya canlı geri sarmada), sol ve sağ listedeki önceki veya sonraki yayıncıya geçer</string>
     <string name="tv_home_languages">Popüler dilleri</string>
     <string name="tv_home_languages_summary">Popüler yayınlar (ana sayfa satırı ve Popüler sayfası) yalnızca bu dillerde, hiçbiri seçilmezse tüm diller</string>
     <string name="tv_home_cards">Ana sayfada kart boyutu</string>
@@ -662,7 +662,7 @@
     <string name="tv_back_stop">Yayını durdur</string>
     <string name="tv_back_mini">Mini oynatıcı</string>
     <string name="tv_back_audio">Yalnızca ses</string>
-    <string name="tv_dpad_up_down">Yayında yukarı ve aşağı kısayolları</string>
+    <string name="tv_dpad_up_down">Yayınlarda ve VOD\'larda yukarı / aşağı kısayolları</string>
     <string name="tv_dpad_up_down_summary">Kontroller gizliyken: yukarı diğer yayınları gösterir, aşağı sohbeti gösterir veya gizler</string>
     <string name="tv_1440p_warning">⚠ 1440p, 1080p ile sınırlı genel proxylerle (Luminous vb.) çalışmaz. 1440p için özel proxyyi kapatıp reklam engelleyiciyi (Xtra TV ayarları) kullanın veya 1440p destekleyen kendi proxynizi kullanın.</string>
     <string name="tv_login_with_code">twitch.tv/activate üzerinde kodla</string>
@@ -1013,4 +1013,25 @@
     <string name="tv_chat_restricted_banned">Bu kanalın sohbetinden yasaklandınız</string>
     <string name="tv_chat_restricted_timed_out">Bu kanalın sohbetinde geçici olarak susturuldunuz</string>
     <string name="tv_chat_restricted_generic">Mesaj kanal kısıtlamaları nedeniyle reddedildi</string>
+    <string name="chat_hide_bots">Botları gizle</string>
+    <string name="chat_hide_bots_summary">Bilinen sohbet botlarının (Nightbot, StreamElements, Fossabot…) ve bot rozetli hesapların mesajlarını otomatik gizle</string>
+    <string name="chat_blocked_users">Engellenen hesaplar</string>
+    <string name="chat_blocked_users_none">Engellenen hesap yok</string>
+    <string name="chat_blocked_users_one">1 engellenen hesap</string>
+    <string name="chat_blocked_users_count">%1$d engellenen hesap</string>
+    <string name="tv_chat_block_users">Hesapları / botları engelle</string>
+    <string name="chat_block_add">Kullanıcı adı engelle…</string>
+    <string name="chat_block_username_hint">Twitch kullanıcı adı</string>
+    <string name="chat_block_action">Engelle</string>
+    <string name="chat_user_blocked">%1$s engellendi</string>
+    <string name="chat_user_unblocked">%1$s engeli kaldırıldı</string>
+    <string name="chat_blocked_badge">Engellendi</string>
+    <string name="tv_chat_recent_users">Sohbetteki son kişiler (Engelle / kaldır için OK)</string>
+    <string name="tv_chat_recent_empty">Sohbette henüz yeni mesaj yok</string>
+    <string name="tv_home_multistream">Kayıtlı çoklu yayınlar</string>
+    <string name="tv_home_multistream_summary">En az 2 kanal canlı olduğunda kayıtlı çoklu yayın gruplarını ana ekranda gösterir</string>
+    <string name="tv_home_multistreams_row">Çoklu yayınlar</string>
+    <string name="tv_multistream_live_count">%1$d/%2$d LIVE</string>
+    <string name="tv_multistream_rename">Grubu yeniden adlandır</string>
+    <string name="tv_multistream_name_hint">Grup adı</string>
 </resources>

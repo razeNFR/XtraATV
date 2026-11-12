@@ -899,6 +899,8 @@ class ChatViewModel(
         if (!recentMessagesUrl.isNullOrBlank()) {
             viewModelScope.launch {
                 try {
+                    val myId = ownUserId ?: applicationContext.tokenPrefs().getString(C.USER_ID, null)
+                    val myLogin = ownUserLogin ?: applicationContext.tokenPrefs().getString(C.USERNAME, null)
                     val list = mutableListOf<ChatMessage>()
                     playerRepository.loadRecentMessages(networkLibrary, recentMessagesUrl, channelLogin, applicationContext.prefs().getInt(C.CHAT_RECENT_LIMIT, 100).toString()).messages.forEach { message ->
                         val ircMessage = ChatUtils.parseIRCMessage(message)
@@ -926,15 +928,21 @@ class ChatViewModel(
                             }
                             "NOTICE" -> ChatUtils.parseNotice(ircMessage)
                             else -> null
-                        }?.let {
-                            if (it.reply?.message != null && showReplies()) {
-                                list.add(ChatMessage(
-                                    type = ChatMessage.REPLY_MESSAGE,
-                                    reply = it.reply,
-                                    replyParent = it,
-                                ))
+                        }?.let { msg ->
+                            recordSeenChatter(msg, channelLogin, myId, myLogin)
+                            if (!com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(applicationContext, msg, channelLogin, myId, myLogin)) {
+                                if (msg.reply?.message != null && showReplies()) {
+                                    val replyLine = ChatMessage(
+                                        type = ChatMessage.REPLY_MESSAGE,
+                                        reply = msg.reply,
+                                        replyParent = msg,
+                                    )
+                                    if (!com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(applicationContext, replyLine, channelLogin, myId, myLogin)) {
+                                        list.add(replyLine)
+                                    }
+                                }
+                                list.add(msg)
                             }
-                            list.add(it)
                         }
                     }
                     if (list.isNotEmpty()) {
@@ -1033,6 +1041,9 @@ class ChatViewModel(
     private var ownUserId: String? = null
     private var ownUserLogin: String? = null
     private var activeChannelLogin: String? = null
+    private val seenChattersLock = Any()
+    private var seenChattersChannel: String? = null
+    private val seenChatters = ArrayDeque<com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.BlockedUser>()
     private val slowChatLock = Any()
     private var slowChatTokens = 1.6
     private var slowChatLastRefillAt = 0L
@@ -1134,7 +1145,98 @@ class ChatViewModel(
         }
     }
 
+    private fun recordSeenChatter(
+        message: ChatMessage,
+        channelLogin: String?,
+        myId: String?,
+        myLogin: String?,
+    ) {
+        if (message.type != ChatMessage.USER_MESSAGE || !message.systemMsg.isNullOrBlank() || message.noticeIcon != null) {
+            return
+        }
+        if (!myId.isNullOrBlank() && message.userId == myId) return
+        val norm = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.normalizeLogin(message.userLogin) ?: return
+        if (!myLogin.isNullOrBlank() && norm.equals(myLogin, ignoreCase = true)) return
+        if (!channelLogin.isNullOrBlank() && norm.equals(channelLogin, ignoreCase = true)) return
+        if (applicationContext.prefs().getBoolean(C.CHAT_HIDE_BOTS, false) &&
+            com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.isBotMessage(message) &&
+            !com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.isBlocked(applicationContext, norm)
+        ) {
+            return
+        }
+        val cleanName = message.userName?.trim()?.takeIf { it.isNotEmpty() }
+        synchronized(seenChattersLock) {
+            if (seenChattersChannel != channelLogin) {
+                seenChattersChannel = channelLogin
+                seenChatters.clear()
+            }
+            seenChatters.removeAll { it.login == norm }
+            seenChatters.addFirst(com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.BlockedUser(norm, cleanName))
+            while (seenChatters.size > 40) {
+                seenChatters.removeLast()
+            }
+        }
+    }
+
+    fun getRecentChatters(limit: Int = 40): List<com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.BlockedUser> {
+        val hideBots = applicationContext.prefs().getBoolean(C.CHAT_HIDE_BOTS, false)
+        val result = ArrayList<com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.BlockedUser>(limit)
+        val seen = HashSet<String>()
+        synchronized(chatMessages) {
+            for (i in chatMessages.lastIndex downTo 0) {
+                val msg = chatMessages[i]
+                if (msg.type != ChatMessage.USER_MESSAGE || !msg.systemMsg.isNullOrBlank() || msg.noticeIcon != null) continue
+                if (!ownUserId.isNullOrBlank() && msg.userId == ownUserId) continue
+                val norm = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.normalizeLogin(msg.userLogin) ?: continue
+                if (!ownUserLogin.isNullOrBlank() && norm.equals(ownUserLogin, ignoreCase = true)) continue
+                if (!activeChannelLogin.isNullOrBlank() && norm.equals(activeChannelLogin, ignoreCase = true)) continue
+                if (hideBots && com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.isBotMessage(msg) &&
+                    !com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.isBlocked(applicationContext, norm)
+                ) continue
+                if (seen.add(norm)) {
+                    result.add(com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.BlockedUser(norm, msg.userName?.trim()?.takeIf { it.isNotEmpty() }))
+                    if (result.size >= limit) return result
+                }
+            }
+        }
+        synchronized(seenChattersLock) {
+            if (seenChattersChannel == activeChannelLogin) {
+                for (entry in seenChatters) {
+                    if (seen.add(entry.login)) {
+                        result.add(entry)
+                        if (result.size >= limit) break
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    fun purgeFilteredMessages(): Boolean {
+        synchronized(delayedMessages) {
+            delayedMessages.removeAll { (msg, _) ->
+                com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(
+                    applicationContext, msg, activeChannelLogin, ownUserId, ownUserLogin
+                )
+            }
+        }
+        return synchronized(chatMessages) {
+            chatMessages.removeAll { msg ->
+                com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(
+                    applicationContext, msg, activeChannelLogin, ownUserId, ownUserLogin
+                )
+            }
+        }
+    }
+
     suspend fun onMessage(message: ChatMessage) {
+        recordSeenChatter(message, activeChannelLogin, ownUserId, ownUserLogin)
+        if (com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(
+                applicationContext, message, activeChannelLogin, ownUserId, ownUserLogin
+            )
+        ) {
+            return
+        }
         if (!shouldAllowSlowChat(message)) {
             return
         }

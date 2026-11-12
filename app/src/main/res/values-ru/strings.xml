@@ -643,7 +643,7 @@
     <string name="tv_followed_live">Отслеживаемые каналы в эфире</string>
     <string name="tv_see_all">Показать все</string>
     <string name="tv_dpad_switch_stream">Влево / вправо — смена стримера</string>
-    <string name="tv_dpad_switch_stream_summary">Когда элементы управления скрыты, влево и вправо переключают на предыдущего или следующего стримера из списка, откуда открыт стрим</string>
+    <string name="tv_dpad_switch_stream_summary">Когда элементы управления скрыты (на прямом эфире или перемотке эфира), влево и вправо переключают на предыдущего или следующего стримера в списке</string>
     <string name="tv_home_languages">Языки раздела «Популярное»</string>
     <string name="tv_home_languages_summary">Трансляции «Популярного» (строка главной и страница) только на этих языках, все языки если ничего не выбрано</string>
     <string name="tv_home_cards">Размер карточек на главной</string>
@@ -661,7 +661,7 @@
     <string name="tv_back_stop">Остановить трансляцию</string>
     <string name="tv_back_mini">Мини-плеер</string>
     <string name="tv_back_audio">Только звук</string>
-    <string name="tv_dpad_up_down">Кнопки вверх и вниз в трансляции</string>
+    <string name="tv_dpad_up_down">Кнопки вверх и вниз на стримах и VOD</string>
     <string name="tv_dpad_up_down_summary">Когда управление скрыто: вверх — другие трансляции, вниз — показать или скрыть чат</string>
     <string name="tv_1440p_warning">⚠ 1440p не работает с публичными прокси (Luminous и др.), они ограничены 1080p. Для 1440p отключите свой прокси и используйте блокировщик рекламы (настройки Xtra TV) или собственный прокси с поддержкой 1440p.</string>
     <string name="tv_login_with_code">С кодом на twitch.tv/activate</string>
@@ -1012,4 +1012,25 @@
     <string name="tv_chat_restricted_banned">Вы заблокированы в чате этого канала</string>
     <string name="tv_chat_restricted_timed_out">Вы временно отстранены от чата этого канала</string>
     <string name="tv_chat_restricted_generic">Сообщение отклонено из-за ограничений канала</string>
+    <string name="chat_hide_bots">Скрывать ботов</string>
+    <string name="chat_hide_bots_summary">Автоматически скрывать сообщения известных чат-ботов (Nightbot, StreamElements, Fossabot…) и аккаунтов со значком бота</string>
+    <string name="chat_blocked_users">Заблокированные аккаунты</string>
+    <string name="chat_blocked_users_none">Нет заблокированных аккаунтов</string>
+    <string name="chat_blocked_users_one">1 заблокированный аккаунт</string>
+    <string name="chat_blocked_users_count">Заблокировано аккаунтов: %1$d</string>
+    <string name="tv_chat_block_users">Блокировка аккаунтов / ботов</string>
+    <string name="chat_block_add">Заблокировать по нику…</string>
+    <string name="chat_block_username_hint">Ник на Twitch</string>
+    <string name="chat_block_action">Блокировать</string>
+    <string name="chat_user_blocked">%1$s заблокирован</string>
+    <string name="chat_user_unblocked">%1$s разблокирован</string>
+    <string name="chat_blocked_badge">Заблокирован</string>
+    <string name="tv_chat_recent_users">Недавние в чате (OK — заблокировать / разблокировать)</string>
+    <string name="tv_chat_recent_empty">В чате пока нет недавних сообщений</string>
+    <string name="tv_home_multistream">Сохранённые мультистримы</string>
+    <string name="tv_home_multistream_summary">Показывать ряд сохранённых групп мультистрима, когда хотя бы 2 канала в эфире</string>
+    <string name="tv_home_multistreams_row">Мультистримы</string>
+    <string name="tv_multistream_live_count">%1$d/%2$d LIVE</string>
+    <string name="tv_multistream_rename">Переименовать группу</string>
+    <string name="tv_multistream_name_hint">Название группы</string>
 </resources>

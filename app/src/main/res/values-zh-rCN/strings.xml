@@ -643,7 +643,7 @@
     <string name="tv_followed_live">关注的频道正在直播</string>
     <string name="tv_see_all">查看全部</string>
     <string name="tv_dpad_switch_stream">左右键切换主播</string>
-    <string name="tv_dpad_switch_stream_summary">控制栏隐藏时，按左右键切换到打开直播的列表中的上一个或下一个主播</string>
+    <string name="tv_dpad_switch_stream_summary">隐藏控制栏时（直播或直播回看中），左右键可切换到列表中的上一个或下一个主播</string>
     <string name="tv_home_languages">热门的语言</string>
     <string name="tv_home_languages_summary">热门（首页行和热门页面）的直播仅限这些语言，未勾选时为所有语言</string>
     <string name="tv_home_cards">首页卡片大小</string>
@@ -661,7 +661,7 @@
     <string name="tv_back_stop">停止直播</string>
     <string name="tv_back_mini">迷你播放器</string>
     <string name="tv_back_audio">仅音频</string>
-    <string name="tv_dpad_up_down">直播中的上下快捷键</string>
+    <string name="tv_dpad_up_down">直播与录像（VOD）中的上下快捷键</string>
     <string name="tv_dpad_up_down_summary">控件隐藏时：上键显示其他直播，下键显示或隐藏聊天</string>
     <string name="tv_1440p_warning">⚠ 1440p 无法通过公共代理 (Luminous 等，最高 1080p) 使用。要观看 1440p，请关闭自定义代理并使用广告拦截 (Xtra TV 设置)，或使用支持 1440p 的自有代理。</string>
     <string name="tv_login_with_code">在 twitch.tv/activate 输入代码</string>
@@ -1012,4 +1012,25 @@
     <string name="tv_chat_restricted_banned">您已被此频道聊天室封禁</string>
     <string name="tv_chat_restricted_timed_out">您在此频道聊天室被暂时禁言</string>
     <string name="tv_chat_restricted_generic">消息因频道限制被拒绝</string>
+    <string name="chat_hide_bots">隐藏机器人</string>
+    <string name="chat_hide_bots_summary">自动隐藏常见聊天机器人（Nightbot、StreamElements、Fossabot 等）及带有机器人徽章账号的消息</string>
+    <string name="chat_blocked_users">已屏蔽账号</string>
+    <string name="chat_blocked_users_none">暂无已屏蔽账号</string>
+    <string name="chat_blocked_users_one">已屏蔽 1 个账号</string>
+    <string name="chat_blocked_users_count">已屏蔽 %1$d 个账号</string>
+    <string name="tv_chat_block_users">屏蔽账号 / 机器人</string>
+    <string name="chat_block_add">输入用户名屏蔽…</string>
+    <string name="chat_block_username_hint">Twitch 用户名</string>
+    <string name="chat_block_action">屏蔽</string>
+    <string name="chat_user_blocked">已屏蔽 %1$s</string>
+    <string name="chat_user_unblocked">已取消屏蔽 %1$s</string>
+    <string name="chat_blocked_badge">已屏蔽</string>
+    <string name="tv_chat_recent_users">近期发言用户（按 OK 屏蔽 / 取消屏蔽）</string>
+    <string name="tv_chat_recent_empty">聊天室暂无近期消息</string>
+    <string name="tv_home_multistream">已保存的多路直播</string>
+    <string name="tv_home_multistream_summary">当已保存的多路直播组合中有至少 2 个频道正在直播时在首页显示</string>
+    <string name="tv_home_multistreams_row">多路直播</string>
+    <string name="tv_multistream_live_count">%1$d/%2$d LIVE</string>
+    <string name="tv_multistream_rename">重命名组合</string>
+    <string name="tv_multistream_name_hint">组合名称</string>
 </resources>

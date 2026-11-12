@@ -643,7 +643,7 @@
     <string name="tv_followed_live">追隨的頻道正在直播</string>
     <string name="tv_see_all">查看全部</string>
     <string name="tv_dpad_switch_stream">左右鍵切換實況主</string>
-    <string name="tv_dpad_switch_stream_summary">控制列隱藏時，按左右鍵切換到開啟直播的清單中的上一個或下一個實況主</string>
+    <string name="tv_dpad_switch_stream_summary">隱藏控制列時（直播或直播回看中），左右鍵可切換至清單中的上一個或下一個實況主</string>
     <string name="tv_home_languages">熱門的語言</string>
     <string name="tv_home_languages_summary">熱門（首頁列和熱門頁面）的直播僅限這些語言，未勾選時為所有語言</string>
     <string name="tv_home_cards">首頁卡片大小</string>
@@ -661,7 +661,7 @@
     <string name="tv_back_stop">停止直播</string>
     <string name="tv_back_mini">迷你播放器</string>
     <string name="tv_back_audio">僅音訊</string>
-    <string name="tv_dpad_up_down">直播中的上下快速鍵</string>
+    <string name="tv_dpad_up_down">直播與 VOD 中的上下快捷鍵</string>
     <string name="tv_dpad_up_down_summary">控制項隱藏時：上鍵顯示其他直播，下鍵顯示或隱藏聊天</string>
     <string name="tv_1440p_warning">⚠ 1440p 無法透過公共代理 (Luminous 等，最高 1080p) 使用。要觀看 1440p，請關閉自訂代理並使用廣告封鎖 (Xtra TV 設定)，或使用支援 1440p 的自有代理。</string>
     <string name="tv_login_with_code">在 twitch.tv/activate 輸入代碼</string>
@@ -1012,4 +1012,25 @@
     <string name="tv_chat_restricted_banned">您已被此頻道聊天室封鎖</string>
     <string name="tv_chat_restricted_timed_out">您在此頻道聊天室被暫時禁言</string>
     <string name="tv_chat_restricted_generic">訊息因頻道限制被拒絕</string>
+    <string name="chat_hide_bots">隱藏機器人</string>
+    <string name="chat_hide_bots_summary">自動隱藏常見聊天室機器人（Nightbot、StreamElements、Fossabot 等）與帶有機器人徽章帳號的訊息</string>
+    <string name="chat_blocked_users">已封鎖帳號</string>
+    <string name="chat_blocked_users_none">尚無已封鎖帳號</string>
+    <string name="chat_blocked_users_one">已封鎖 1 個帳號</string>
+    <string name="chat_blocked_users_count">已封鎖 %1$d 個帳號</string>
+    <string name="tv_chat_block_users">封鎖帳號 / 機器人</string>
+    <string name="chat_block_add">輸入使用者名稱封鎖…</string>
+    <string name="chat_block_username_hint">Twitch 使用者名稱</string>
+    <string name="chat_block_action">封鎖</string>
+    <string name="chat_user_blocked">已封鎖 %1$s</string>
+    <string name="chat_user_unblocked">已解除封鎖 %1$s</string>
+    <string name="chat_blocked_badge">已封鎖</string>
+    <string name="tv_chat_recent_users">近期發言使用者（按 OK 封鎖 / 解除封鎖）</string>
+    <string name="tv_chat_recent_empty">聊天室尚無近期訊息</string>
+    <string name="tv_home_multistream">已儲存的多重實況</string>
+    <string name="tv_home_multistream_summary">當已儲存的多重實況群組中有至少 2 個頻道正在直播時顯示於首頁</string>
+    <string name="tv_home_multistreams_row">多重實況</string>
+    <string name="tv_multistream_live_count">%1$d/%2$d LIVE</string>
+    <string name="tv_multistream_rename">重新命名群組</string>
+    <string name="tv_multistream_name_hint">群組名稱</string>
 </resources>

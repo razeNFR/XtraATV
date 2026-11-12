@@ -135,6 +135,9 @@ class TvHomeActions(
     val statsBadges: () -> List<Pair<Int, String>> = { emptyList() },
     /** How long a stream is live for its badge ("2 h 39"), null to show none. */
     val uptime: (com.github.andreyasadchy.xtra.model.ui.Stream) -> String? = { null },
+    /** Saved multi-stream groups with at least 2 channels live: OK launches the multi-stream, OK held opens its actions. */
+    val openMultiStream: (TvHomeMultiStream) -> Unit = {},
+    val showMultiStreamActions: (TvHomeMultiStream) -> Unit = {},
 )
 
 class TvHomeRow<T>(val title: String, val items: List<T>, val seeAllId: Int, val icon: Int? = null)
@@ -173,6 +176,7 @@ fun TvHomeScreen(
     previewLogin: () -> String?,
     previewPlayer: () -> ExoPlayer?,
     actions: TvHomeActions,
+    multiStreams: TvHomeRow<TvHomeMultiStream>? = null,
     hero: Stream? = null,
     heroQueue: List<Stream> = emptyList(),
     resume: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>? = null,
@@ -205,9 +209,15 @@ fun TvHomeScreen(
         if (followed == null) "followed" to null else rows.find { it.first == "followed" },
         if (popular == null) "popular" to null else rows.find { it.first == "popular" },
     ) + rows.filter { it.first.startsWith("language_") }
+    val topSlots = slots.filter { it.first == "followed" }
+    val bottomSlots = slots.filterNot { it.first == "followed" }
+    val hasMultiStreams = multiStreams != null && multiStreams.items.isNotEmpty()
     // the first row is still loading: the focus waits on its first grey card, then goes to its first stream (or to the
     // first stream of the next row when it has none)
-    val firstIsGhost = hero == null && slots.firstOrNull()?.second == null && slots.isNotEmpty()
+    val firstIsGhost = hero == null && (
+        (topSlots.isNotEmpty() && topSlots.first().second == null) ||
+        (topSlots.isEmpty() && !hasMultiStreams && bottomSlots.isNotEmpty() && bottomSlots.first().second == null)
+    )
     val ghostCard = remember { FocusRequester() }
     // the focus was put on a grey card by the home (not by a key): it follows the rows as they come
     var onGhost by remember { mutableStateOf(false) }
@@ -216,11 +226,14 @@ fun TvHomeScreen(
     var userMoved by remember { mutableStateOf(false) }
     val hasHero = hero != null
     val heroOffset = if (hasHero) 1 else 0
+    val multiStreamsIndex = heroOffset + topSlots.size
+    val multiStreamsOffset = if (hasMultiStreams) 1 else 0
+    val totalStreamAndMultiRows = topSlots.size + multiStreamsOffset + bottomSlots.size
     val hasResume = resume != null && resume.items.isNotEmpty()
     val hasVideos = videos != null && videos.items.isNotEmpty()
     val hasGames = games != null && games.items.isNotEmpty()
-    val hasCards = hasHero || rows.isNotEmpty() || hasResume || hasVideos || hasGames
-    val resumeIndex = heroOffset + slots.size
+    val hasCards = hasHero || rows.isNotEmpty() || hasMultiStreams || hasResume || hasVideos || hasGames
+    val resumeIndex = heroOffset + totalStreamAndMultiRows
     val videosIndex = resumeIndex + if (hasResume) 1 else 0
     val statsIndex = videosIndex + if (hasVideos) 1 else 0
     val gamesIndex = statsIndex + if (stats != null) 1 else 0
@@ -228,11 +241,21 @@ fun TvHomeScreen(
         if (hasHero) {
             add(HomeRowInfo(0, "hero", listOf("watch", "channel")))
         }
-        slots.forEachIndexed { rowIndex, (key, row) ->
+        topSlots.forEachIndexed { rowIndex, (key, row) ->
             if (row != null && row.items.isNotEmpty()) {
                 val keys = row.items.mapIndexed { idx, s -> s.channelLogin ?: "stream_$idx" } +
                     if (row.seeAllId != 0) listOf("seeAll") else emptyList()
                 add(HomeRowInfo(heroOffset + rowIndex, key, keys))
+            }
+        }
+        if (hasMultiStreams) {
+            add(HomeRowInfo(multiStreamsIndex, "multistreams", multiStreams!!.items.map { it.group.id }))
+        }
+        bottomSlots.forEachIndexed { rowIndex, (key, row) ->
+            if (row != null && row.items.isNotEmpty()) {
+                val keys = row.items.mapIndexed { idx, s -> s.channelLogin ?: "stream_$idx" } +
+                    if (row.seeAllId != 0) listOf("seeAll") else emptyList()
+                add(HomeRowInfo(multiStreamsIndex + multiStreamsOffset + rowIndex, key, keys))
             }
         }
         if (hasResume) {
@@ -487,11 +510,70 @@ fun TvHomeScreen(
                     }
                 }
             }
-            slots.forEachIndexed { rowIndex, (key, row) ->
+            topSlots.forEachIndexed { rowIndex, (key, row) ->
                 val listIndex = heroOffset + rowIndex
                 if (row == null) {
                     // still loading: grey cards in its place, like YouTube; the first one takes the focus when this row
                     // is the first of the home
+                    item(key = "${key}_skeleton") {
+                        SkeletonRow(
+                            actions,
+                            startInset = startInset,
+                            firstCardModifier = if (listIndex == 0) {
+                                Modifier
+                                    .focusRequester(ghostCard)
+                                    .onFocusChanged { if (it.hasFocus) { if (!userMoved) onGhost = true; focusedItem = listIndex } }
+                            } else null,
+                        )
+                    }
+                    return@forEachIndexed
+                }
+                item(key = key) {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                        StreamRow(
+                            row, previewLogin, previewPlayer, actions, if (listIndex == 0) firstCard else null,
+                            startInset = startInset,
+                            endInset = endInset,
+                            state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
+                            cardModifier = { idx, itemKey ->
+                                Modifier
+                                    .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
+                                    .onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focus.rememberCard(key, itemKey, idx)
+                                        }
+                                    }
+                            },
+                            onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                        )
+                    }
+                }
+            }
+            if (hasMultiStreams) {
+                item(key = "multistreams") {
+                    Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = multiStreamsIndex; bringRow(multiStreamsIndex) } }) {
+                        MultiStreamRow(
+                            multiStreams!!, actions, if (multiStreamsIndex == 0) firstCard else null,
+                            startInset = startInset,
+                            endInset = endInset,
+                            state = rowStates.getOrPut("multistreams") { androidx.compose.foundation.lazy.LazyListState() },
+                            cardModifier = { idx, itemKey ->
+                                Modifier
+                                    .focusRequester(cardRequesters.getOrPut("multistreams/$itemKey") { FocusRequester() })
+                                    .onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focus.rememberCard("multistreams", itemKey, idx)
+                                        }
+                                    }
+                            },
+                            onCardSelected = { idx, itemKey -> focus.rememberCard("multistreams", itemKey, idx, force = true) },
+                        )
+                    }
+                }
+            }
+            bottomSlots.forEachIndexed { rowIndex, (key, row) ->
+                val listIndex = multiStreamsIndex + multiStreamsOffset + rowIndex
+                if (row == null) {
                     item(key = "${key}_skeleton") {
                         SkeletonRow(
                             actions,
@@ -531,7 +613,7 @@ fun TvHomeScreen(
                 item(key = "resume") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = resumeIndex; bringRow(resumeIndex) } }) {
                         ResumeRow(
-                            resume!!, actions, if (!hasHero && slots.isEmpty()) firstCard else null,
+                            resume!!, actions, if (!hasHero && totalStreamAndMultiRows == 0) firstCard else null,
                             startInset = startInset,
                             endInset = endInset,
                             state = rowStates.getOrPut("resume") { androidx.compose.foundation.lazy.LazyListState() },
@@ -554,7 +636,7 @@ fun TvHomeScreen(
                 item(key = "followed_videos") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = videosIndex; bringRow(videosIndex) } }) {
                         VideoRow(
-                            videos!!, actions, if (!hasHero && slots.isEmpty() && !hasResume) firstCard else null,
+                            videos!!, actions, if (!hasHero && totalStreamAndMultiRows == 0 && !hasResume) firstCard else null,
                             startInset = startInset,
                             endInset = endInset,
                             state = rowStates.getOrPut("followed_videos") { androidx.compose.foundation.lazy.LazyListState() },
@@ -594,7 +676,7 @@ fun TvHomeScreen(
                 item(key = "games") {
                     Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = gamesIndex; bringRow(gamesIndex) } }) {
                         GameRow(
-                            games!!, actions, if (!hasHero && slots.isEmpty() && !hasResume && !hasVideos) firstCard else null,
+                            games!!, actions, if (!hasHero && totalStreamAndMultiRows == 0 && !hasResume && !hasVideos) firstCard else null,
                             startInset = startInset,
                             endInset = endInset,
                             state = rowStates.getOrPut("games") { androidx.compose.foundation.lazy.LazyListState() },
@@ -1212,6 +1294,257 @@ private fun StreamRow(
                 }
             }
         }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MultiStreamRow(
+    row: TvHomeRow<TvHomeMultiStream>,
+    actions: TvHomeActions,
+    firstRequester: FocusRequester?,
+    startInset: Dp = 0.dp,
+    endInset: Dp = 0.dp,
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
+    onCardSelected: (Int, String) -> Unit = { _, _ -> },
+) {
+    Column {
+        RowTitle(row.title, row.icon, startPadding = startInset + 12.dp)
+        val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+        val count = actions.cardsPerRow.coerceIn(2, 6)
+        val cardWidth = (screenWidth - 24.dp - 16.dp * count) / (count + 0.25f)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
+            LazyRow(
+                state = state,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvHorizontalFade(
+                        startWidth = 56.dp,
+                        endWidth = 56.dp,
+                        scrolledStart = { state.canScrollBackward },
+                        scrolledEnd = { state.canScrollForward },
+                    )
+                    .focusRestorer(),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(row.items, key = { _, item -> item.group.id }) { index, item ->
+                    val itemKey = item.group.id
+                    MultiStreamCard(
+                        width = cardWidth,
+                        item = item,
+                        actions = actions,
+                        modifier = Modifier
+                            .leftEdge(index, actions.openMenu)
+                            .then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier)
+                            .then(cardModifier(index, itemKey)),
+                        onClick = {
+                            onCardSelected(index, itemKey)
+                            actions.openMultiStream(item)
+                        },
+                        onLongClick = {
+                            onCardSelected(index, itemKey)
+                            actions.showMultiStreamActions(item)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MultiStreamTileThumb(stream: Stream, modifier: Modifier) {
+    AsyncImage(
+        model = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail?.replace("1280x720", "640x360")),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = modifier.background(Color(0xFF26252C)),
+    )
+}
+
+@Composable
+private fun MultiStreamCard(
+    width: Dp,
+    item: TvHomeMultiStream,
+    actions: TvHomeActions,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val small = width < 230.dp
+    val context = androidx.compose.ui.platform.LocalContext.current
+    FocusCard(
+        width = width,
+        modifier = modifier,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onFocus = { isFocused ->
+            if (isFocused) {
+                item.liveStreams.firstOrNull()?.let(actions.onPictureFocused)
+            }
+        },
+    ) { focused ->
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF141318))
+                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
+        ) {
+            val tiles = item.liveStreams.take(4)
+            val gap = 1.5.dp
+            when (tiles.size) {
+                0 -> Box(Modifier.fillMaxSize().background(Color(0xFF26252C)))
+                1 -> MultiStreamTileThumb(tiles[0], Modifier.fillMaxSize())
+                2 -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                    MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
+                }
+                3 -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                        MultiStreamTileThumb(tiles[1], Modifier.fillMaxWidth().weight(1f))
+                        MultiStreamTileThumb(tiles[2], Modifier.fillMaxWidth().weight(1f))
+                    }
+                }
+                else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
+                    }
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
+                    }
+                }
+            }
+            Row(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(Color(0xFFE91916))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(Modifier.size(6.dp).background(Color.White, CircleShape))
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        context.getString(R.string.tv_multistream_live_count, item.liveStreams.size, item.group.streams.size),
+                        fontSize = if (small) 10.sp else 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                    )
+                }
+                if (item.totalViewers > 0) {
+                    Spacer(Modifier.width(5.dp))
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(Color(0xB3000000))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(painterResource(R.drawable.tv_ic_eye), contentDescription = null, tint = Color.White, modifier = Modifier.size(if (small) 11.dp else 12.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(actions.formatCount(item.totalViewers), fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+                    }
+                }
+            }
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(32.dp)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x80000000))))
+            )
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(Color(0xB3000000))
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            ) {
+                Icon(
+                    painterResource(R.drawable.tv_ic_multistream),
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(if (small) 12.dp else 14.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val avatars = item.liveStreams.take(4)
+            if (avatars.isNotEmpty()) {
+                val avatarSize = if (small) 24.dp else 28.dp
+                val step = if (small) 15.dp else 18.dp
+                Box(
+                    Modifier
+                        .width(avatarSize + step * (avatars.size - 1))
+                        .height(avatarSize)
+                ) {
+                    avatars.forEachIndexed { idx, s ->
+                        AsyncImage(
+                            model = s.channelImage,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .padding(start = step * idx)
+                                .size(avatarSize)
+                                .clip(CircleShape)
+                                .background(Color(0xFF141318))
+                                .padding(1.5.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF26252C)),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(if (small) 8.dp else 10.dp))
+            }
+            Column {
+                Text(
+                    item.group.label,
+                    fontSize = if (small) 13.sp else 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                )
+                val liveNames = item.liveStreams.joinToString(" · ") { it.channelName ?: it.channelLogin.orEmpty() }
+                if (liveNames.isNotEmpty()) {
+                    Text(
+                        liveNames,
+                        fontSize = if (small) 11.sp else 13.sp,
+                        color = TvColors.secondaryText,
+                        maxLines = 1,
+                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                    )
+                }
+                if (!item.sharedGame.isNullOrBlank()) {
+                    Text(
+                        item.sharedGame,
+                        fontSize = if (small) 11.sp else 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                    )
+                }
+            }
         }
     }
 }

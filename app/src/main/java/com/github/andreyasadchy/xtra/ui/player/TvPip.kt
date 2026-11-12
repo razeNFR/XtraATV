@@ -336,7 +336,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     /** The stream of the small window goes full screen, the one that was there goes into the small window. */
     private fun swap() {
         val small = stream ?: return
-        val main = activity.currentPlayingStream()
+        val canPipMain = (activity.playerFragment as? PlayerFragment)?.isLiveOrDvrScreen() == true
+        val main = if (canPipMain) (activity.dvrStream ?: activity.currentPlayingStream()) else null
         activity.startStream(small)
         if (main?.channelLogin != null) {
             open(main)

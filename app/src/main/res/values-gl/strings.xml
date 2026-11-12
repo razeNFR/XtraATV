@@ -643,7 +643,7 @@
     <string name="tv_followed_live">Canles seguidas en directo</string>
     <string name="tv_see_all">Ver todo</string>
     <string name="tv_dpad_switch_stream">Esquerda / dereita cambia de streamer</string>
-    <string name="tv_dpad_switch_stream_summary">Cos controis ocultos, esquerda e dereita pasan ao streamer anterior ou seguinte da lista desde a que se abriu o stream</string>
+    <string name="tv_dpad_switch_stream_summary">Cando os controis están ocultos (en directo ou retroceso en vivo), esquerda e dereita cambian ao streamer anterior ou seguinte da lista</string>
     <string name="tv_home_languages">Idiomas de Populares</string>
     <string name="tv_home_languages_summary">Streams de Populares (fila do inicio e páxina Populares) só nestes idiomas, todos se non hai ningún marcado</string>
     <string name="tv_home_cards">Tamaño das tarxetas no inicio</string>
@@ -661,7 +661,7 @@
     <string name="tv_back_stop">Deter o stream</string>
     <string name="tv_back_mini">Minirreprodutor</string>
     <string name="tv_back_audio">Só audio</string>
-    <string name="tv_dpad_up_down">Atallos arriba e abaixo nun stream</string>
+    <string name="tv_dpad_up_down">Atallos arriba e abaixo en directos e VODs</string>
     <string name="tv_dpad_up_down_summary">Cos controis ocultos: arriba amosa os outros streams, abaixo amosa ou oculta o chat</string>
     <string name="tv_1440p_warning">⚠ O 1440p non funciona cos proxies públicos (Luminous, etc.), limitados a 1080p. Para 1440p desactiva o proxy personalizado e usa o bloqueador de anuncios (axustes de Xtra TV), ou usa o teu propio proxy compatible con 1440p.</string>
     <string name="tv_login_with_code">Cun código en twitch.tv/activate</string>
@@ -1012,4 +1012,25 @@
     <string name="tv_chat_restricted_banned">Estás vetado no chat desta canle</string>
     <string name="tv_chat_restricted_timed_out">Estás expulsado temporalmente do chat desta canle</string>
     <string name="tv_chat_restricted_generic">Mensaxe rexeitada polas restricións da canle</string>
+    <string name="chat_hide_bots">Ocultar bots</string>
+    <string name="chat_hide_bots_summary">Ocultar automaticamente as mensaxes de bots coñecidos (Nightbot, StreamElements, Fossabot…) e contas con insignia de bot</string>
+    <string name="chat_blocked_users">Contas bloqueadas</string>
+    <string name="chat_blocked_users_none">Ningunha conta bloqueada</string>
+    <string name="chat_blocked_users_one">1 conta bloqueada</string>
+    <string name="chat_blocked_users_count">%1$d contas bloqueadas</string>
+    <string name="tv_chat_block_users">Bloquear contas / bots</string>
+    <string name="chat_block_add">Bloquear un usuario…</string>
+    <string name="chat_block_username_hint">Usuario de Twitch</string>
+    <string name="chat_block_action">Bloquear</string>
+    <string name="chat_user_blocked">%1$s bloqueado</string>
+    <string name="chat_user_unblocked">%1$s desbloqueado</string>
+    <string name="chat_blocked_badge">Bloqueado</string>
+    <string name="tv_chat_recent_users">Recentes no chat (OK para bloquear / desbloquear)</string>
+    <string name="tv_chat_recent_empty">Aínda non hai mensaxes recentes no chat</string>
+    <string name="tv_home_multistream">Multi-streams gardados</string>
+    <string name="tv_home_multistream_summary">Mostra unha fila cos teus grupos multi-stream gardados cando polo menos 2 canles están en directo</string>
+    <string name="tv_home_multistreams_row">Multi-streams</string>
+    <string name="tv_multistream_live_count">%1$d/%2$d LIVE</string>
+    <string name="tv_multistream_rename">Renomear grupo</string>
+    <string name="tv_multistream_name_hint">Nome do grupo</string>
 </resources>	

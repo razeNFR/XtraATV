@@ -491,9 +491,10 @@ fun ChatComposer(
     hint: String,
     sendLabel: String,
     emoteGroups: List<Pair<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>> = emptyList(),
+    initialText: String = "",
     onSend: (String) -> Unit,
 ) {
-    var text by remember { mutableStateOf("") }
+    var text by remember { mutableStateOf(initialText) }
     var showEmotes by remember { mutableStateOf(false) }
     var selectedTab by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var hoveredEmote by remember { mutableStateOf<String?>(null) }
