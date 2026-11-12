@@ -1111,4 +1111,19 @@
     <string name="tv_home_category_pinned">%1$s ditambahkan ke beranda</string>
     <string name="tv_home_category_unpinned">%1$s dihapus dari beranda</string>
     <string name="tv_open_this_category">Buka kategori</string>
+    <string name="tv_multistream_quality">Kualitas multi-stream</string>
+    <string name="tv_multistream_quality_summary">Kualitas video berdasarkan jumlah stream agar TV tidak patah-patah</string>
+    <string name="tv_multistream_quality_profile">Profil</string>
+    <string name="tv_multistream_quality_potato">Sangat rendah (Potato)</string>
+    <string name="tv_multistream_quality_low">Rendah</string>
+    <string name="tv_multistream_quality_medium">Sedang</string>
+    <string name="tv_multistream_quality_high">Tinggi</string>
+    <string name="tv_multistream_quality_max">Maksimum</string>
+    <string name="tv_multistream_quality_custom">Kustom</string>
+    <string name="tv_multistream_quality_streams_2">2 stream</string>
+    <string name="tv_multistream_quality_streams_3">3 stream</string>
+    <string name="tv_multistream_quality_streams_4">4 stream</string>
+    <string name="tv_multistream_quality_cap_max">Maks</string>
+    <string name="tv_multistream_quality_this_stream">Stream ini (%1$s)</string>
+    <string name="tv_multistream_quality_follow_profile">Ikuti profil</string>
 </resources>

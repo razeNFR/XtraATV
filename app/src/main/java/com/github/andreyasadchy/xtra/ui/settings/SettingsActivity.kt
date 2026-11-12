@@ -1979,6 +1979,19 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
             }
+            findPreference<Preference>(C.TV_MULTISTREAM_QUALITY)?.let { preference ->
+                val context = requireContext()
+                val updateSummary = {
+                    preference.summary = com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamQuality.summary(context)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamQuality.showPanel(context = context) {
+                        updateSummary()
+                    }
+                    true
+                }
+            }
             findPreference<Preference>("tv_dpad_shortcuts")?.let { preference ->
                 val context = requireContext()
                 val updateSummary = {

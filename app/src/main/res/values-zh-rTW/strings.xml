@@ -1110,4 +1110,19 @@
     <string name="tv_home_category_pinned">已將 %1$s 新增至首頁</string>
     <string name="tv_home_category_unpinned">已將 %1$s 從首頁移除</string>
     <string name="tv_open_this_category">開啟分類</string>
+    <string name="tv_multistream_quality">多路直播畫質</string>
+    <string name="tv_multistream_quality_summary">依同場直播數量自動限制影片畫質，避免電視卡頓</string>
+    <string name="tv_multistream_quality_profile">設定檔</string>
+    <string name="tv_multistream_quality_potato">極低 (Potato)</string>
+    <string name="tv_multistream_quality_low">低</string>
+    <string name="tv_multistream_quality_medium">中</string>
+    <string name="tv_multistream_quality_high">高</string>
+    <string name="tv_multistream_quality_max">最高</string>
+    <string name="tv_multistream_quality_custom">自訂</string>
+    <string name="tv_multistream_quality_streams_2">2 路直播</string>
+    <string name="tv_multistream_quality_streams_3">3 路直播</string>
+    <string name="tv_multistream_quality_streams_4">4 路直播</string>
+    <string name="tv_multistream_quality_cap_max">最高</string>
+    <string name="tv_multistream_quality_this_stream">此直播 (%1$s)</string>
+    <string name="tv_multistream_quality_follow_profile">跟隨設定檔</string>
 </resources>

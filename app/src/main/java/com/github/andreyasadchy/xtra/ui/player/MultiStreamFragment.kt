@@ -25,6 +25,7 @@ import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.chat.ChatFragment
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.tv.TvActionPanel
+import com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamQuality
 import com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamSound
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
@@ -54,6 +55,8 @@ class MultiStreamFragment : Fragment() {
         /** Container of the chat under this stream (2 streams). */
         var chatContainer: FrameLayout? = null
         var adListener: Player.Listener? = null
+        /** Optional per-stream manual cap for this multi-stream session (null: follows global profile). */
+        var qualityOverrideHeight: Int? = null
         /** Steps under the quality of its place, after real stops of this stream (0: the full quality). */
         var qualityStepsDown = 0
         var playingSince = 0L
@@ -361,26 +364,44 @@ class MultiStreamFragment : Fragment() {
      * 480p, grid of 3 or 4 720p. A stream that stops for real goes one step down, and back up later.
      */
     private fun updateVideoSizes() {
+        val ctx = context ?: return
         val focus = isFocusLayout()
         val big = if (focus) bigTile() else null
+        val steps = listOf(Int.MAX_VALUE, 1080, 720, 480, 360, 160)
         tiles.forEach { tile ->
-            val steps = listOf(Int.MAX_VALUE, 1080, 720, 480, 360)
-            val base = when {
-                focus && tile === big -> Int.MAX_VALUE
-                focus -> 480
-                tiles.size <= 2 -> Int.MAX_VALUE
-                else -> 720
+            val override = tile.qualityOverrideHeight
+            val height = if (override != null) {
+                override
+            } else {
+                val base = TvMultiStreamQuality.maxHeightFor(
+                    context = ctx,
+                    streamCount = tiles.size,
+                    isFocusLayout = focus,
+                    isBigTile = focus && tile === big,
+                )
+                val available = steps.filter { it <= base }.ifEmpty { listOf(160) }
+                available.getOrElse(tile.qualityStepsDown) { available.last() }
             }
-            val height = steps.filter { it <= base }.getOrElse(tile.qualityStepsDown) { 360 }
-            tile.player.trackSelectionParameters = tile.player.trackSelectionParameters.buildUpon()
-                .setMaxVideoSize(Int.MAX_VALUE, height)
-                .setForceHighestSupportedBitrate(true)
-                .build()
+            if (tile.player.trackSelectionParameters.maxVideoHeight != height ||
+                !tile.player.trackSelectionParameters.forceHighestSupportedBitrate
+            ) {
+                tile.player.trackSelectionParameters = tile.player.trackSelectionParameters.buildUpon()
+                    .setMaxVideoSize(Int.MAX_VALUE, height)
+                    .setForceHighestSupportedBitrate(true)
+                    .build()
+            }
         }
+    }
+
+    private fun resetQualityStepDown(tile: Tile) {
+        tile.qualityStepsDown = 0
+        tile.stops.clear()
+        tile.raiseJob?.cancel()
     }
 
     /** A stream that stops twice in a minute (after 10 s of play) goes one quality down, up again after 2 min 30. */
     private fun onTileState(tile: Tile, state: Int) {
+        if (tile.qualityOverrideHeight != null) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (state == Player.STATE_READY) {
             if (tile.playingSince == 0L) {
@@ -492,6 +513,12 @@ class MultiStreamFragment : Fragment() {
         actions += TvActionPanel.Action(getString(R.string.tv_multistream_sound), R.drawable.tv_ic_volume) {
             showSoundPanel()
         }
+        val qualityLabel = tile.qualityOverrideHeight?.let { cap ->
+            "${getString(R.string.tv_remote_action_quality)} (${TvMultiStreamQuality.capLabel(requireContext(), cap)})"
+        } ?: getString(R.string.tv_remote_action_quality)
+        actions += TvActionPanel.Action(qualityLabel, R.drawable.tv_ic_hd) {
+            showQualityPanel(tile)
+        }
         if (tiles.size >= 2) {
             val currentStreams = tiles.map { it.stream }
             val groupId = com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.idOf(currentStreams)
@@ -533,6 +560,29 @@ class MultiStreamFragment : Fragment() {
             }
         } else null
         TvActionPanel.show(requireContext(), name, actions, slider)
+    }
+
+    private fun showQualityPanel(tile: Tile) {
+        val context = context ?: return
+        val name = tile.stream.channelName ?: tile.stream.channelLogin.orEmpty()
+        TvMultiStreamQuality.showPanel(
+            context = context,
+            streamTitle = name.ifBlank { null },
+            initialStreamOverride = tile.qualityOverrideHeight,
+            onStreamOverride = { overrideHeight ->
+                if (view != null && tile in tiles) {
+                    tile.qualityOverrideHeight = overrideHeight
+                    resetQualityStepDown(tile)
+                    updateVideoSizes()
+                }
+            },
+            onChanged = {
+                if (view != null) {
+                    tiles.forEach { resetQualityStepDown(it) }
+                    updateVideoSizes()
+                }
+            },
+        )
     }
 
     /** Live alert shortcut: adds [stream] directly to the active multi-stream when a slot is free. */
@@ -599,11 +649,13 @@ class MultiStreamFragment : Fragment() {
     private fun replaceStream(tile: Tile, stream: Stream) {
         val oldLogin = tile.stream.channelLogin
         tile.stream = stream
+        tile.qualityOverrideHeight = null
         tile.label.text = stream.channelName ?: stream.channelLogin
         tile.adListener?.let { tile.player.removeListener(it) }
         tile.adListener = null
         tile.player.stop()
         tile.player.clearMediaItems()
+        updateVideoSizes()
         loadStream(tile)
         updateTileInfo(tile)
         // the volume of the new stream (mix)

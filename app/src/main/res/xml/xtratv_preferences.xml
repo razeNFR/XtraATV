@@ -48,6 +48,14 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
+        <Preference
+            android:key="tv_multistream_quality"
+            android:persistent="false"
+            android:summary="@string/tv_multistream_quality_summary"
+            android:title="@string/tv_multistream_quality"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
     </PreferenceCategory>
 
     <PreferenceCategory
