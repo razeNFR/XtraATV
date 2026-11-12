@@ -1050,6 +1050,9 @@ class MainActivity : AppCompatActivity() {
         if (BuildConfig.DEBUG && isTv) {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
         }
+        if (isTv && (playerFragment as? PlayerFragment)?.consumeHeldDpadDownTail(event) == true) {
+            return true
+        }
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
         if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
                     event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {

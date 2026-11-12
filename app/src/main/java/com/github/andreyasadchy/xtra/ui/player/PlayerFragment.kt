@@ -199,7 +199,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         val appCtx = com.github.andreyasadchy.xtra.XtraApp.INSTANCE
         if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.downLongAction(appCtx) != com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_DEFAULT
+            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.downLongAction(appCtx) != com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.downAction(appCtx)
         ) {
             // let onPlayerKey distinguish short vs long press on Down
             return null
@@ -3901,6 +3901,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var tvClockObserverJob: Job? = null
     private var dpadDownLongHandled = false
 
+    /** Swallows trailing auto-repeat DOWN events and final UP event of a Down long-press that already fired. */
+    fun consumeHeldDpadDownTail(event: KeyEvent): Boolean {
+        if (!dpadDownLongHandled || event.keyCode != KeyEvent.KEYCODE_DPAD_DOWN) {
+            return false
+        }
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            dpadDownLongHandled = false
+            return false
+        }
+        if (event.action == KeyEvent.ACTION_UP || event.isCanceled) {
+            dpadDownLongHandled = false
+        }
+        return true
+    }
+
     /** Handles D-pad keys while the player itself (and not one of its controls) has focus. */
     private fun onPlayerKey(keyCode: Int, event: KeyEvent): Boolean {
         if (BuildConfig.DEBUG) {
@@ -3973,14 +3988,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (isTv && hudHiddenOrPeek) {
                     val shortAction = Keys.downAction(requireContext())
                     val longAction = Keys.downLongAction(requireContext())
-                    if (longAction != Keys.ACTION_DEFAULT) {
+                    if (shortAction != longAction) {
                         when (event.action) {
                             KeyEvent.ACTION_DOWN -> {
                                 if (event.repeatCount == 0) {
                                     dpadDownLongHandled = false
                                 } else if (!dpadDownLongHandled && event.repeatCount >= 1) {
                                     dpadDownLongHandled = true
-                                    executeTvRemoteAction(longAction)
+                                    if (longAction != Keys.ACTION_DEFAULT) {
+                                        executeTvRemoteAction(longAction)
+                                    } else {
+                                        openHudFromDpad()
+                                    }
                                 }
                             }
                             KeyEvent.ACTION_UP -> {
