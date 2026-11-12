@@ -218,6 +218,13 @@ class MainActivity : AppCompatActivity() {
                 putBoolean(C.TV_BUTTON_DIM, false)
             }
         }
+        if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_COMPACT_RAIL, false)) {
+            // compact side rail enabled once by default (can still be turned off afterwards in Xtra TV settings)
+            prefs.edit {
+                putBoolean(C.TV_DEFAULTS_COMPACT_RAIL, true)
+                putBoolean(C.TV_COMPACT_RAIL, true)
+            }
+        }
         if (tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) <= 0L) {
             tokenPrefs().edit {
                 putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
@@ -228,6 +235,18 @@ class MainActivity : AppCompatActivity() {
                 viewModel.integrity.collect {
                     if (prefs.getBoolean(C.USE_WEBVIEW_INTEGRITY, true)) {
                         getNewIntegrityToken(null, supportFragmentManager)
+                    }
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (true) {
+                    kotlinx.coroutines.delay(30_000L)
+                    if (!isTvPlayerOverContent() && hasWindowFocus() &&
+                        android.os.SystemClock.elapsedRealtime() - lastUserInteractionAt >= 2 * 60_000L
+                    ) {
+                        refreshVisibleScreensIfStale(3 * 60_000L)
                     }
                 }
             }
@@ -818,9 +837,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        lastUserInteractionAt = android.os.SystemClock.elapsedRealtime()
         restorePlayerFragment()
         if (isTv) {
             updateTvMenuAccount()
+        }
+        if (!isTvPlayerOverContent()) {
+            refreshVisibleScreensIfStale(60_000L)
         }
         val url = pendingUpdateUrl
         if (url != null) {
@@ -994,10 +1017,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var lastUserInteractionAt = android.os.SystemClock.elapsedRealtime()
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        if (ev?.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+            lastUserInteractionAt = android.os.SystemClock.elapsedRealtime()
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             lastTvKeyCode = event.keyCode
             lastTvKeyAt = android.os.SystemClock.elapsedRealtime()
+            lastUserInteractionAt = lastTvKeyAt
         }
         if (isTv && tvMultiStreamShown && event.action == KeyEvent.ACTION_DOWN && event.keyCode != KeyEvent.KEYCODE_BACK &&
             keepFocusInMultiStream() && currentFocus?.isInside(binding.playerContainer) == true
@@ -1118,7 +1151,7 @@ class MainActivity : AppCompatActivity() {
         if (isTv && event.action == KeyEvent.ACTION_DOWN) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                    if ((playerFragment as? PlayerFragment)?.isPlayingStreamMaximized() == true && streamQueue.size > 1) {
+                    if ((playerFragment as? PlayerFragment)?.let { it.isMaximizedPlayer() && it.isLiveOrDvrScreen() } == true && streamQueue.size > 1) {
                         if (event.repeatCount == 0) {
                             switchStream(if (event.keyCode == KeyEvent.KEYCODE_CHANNEL_UP) 1 else -1)
                         }
@@ -1166,7 +1199,7 @@ class MainActivity : AppCompatActivity() {
     }
     private var isTvMenuShown = true
     fun isTvMenuOpen() = isTv && isTvMenuShown
-    private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, false)
+    private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, true)
 
     private fun applyTvNavHostPadding(isHome: Boolean) {
         if (!isTv) return
@@ -2326,13 +2359,42 @@ class MainActivity : AppCompatActivity() {
                 tvMultiStreamShown = false
                 if (playerFragment == null) {
                     setMainContentFocusable(true)
+                    refreshVisibleScreensIfStale(60_000L)
                 }
             }
         }
     }
 
     /** A full screen player or a multi-stream covers the screens. */
-    private fun isTvPlayerOverContent() = tvMultiStreamShown || (playerFragment as? PlayerFragment)?.isMaximizedScreen() == true
+    fun isTvPlayerOverContent() = tvMultiStreamShown || (playerFragment as? PlayerFragment)?.isMaximizedScreen() == true
+
+    /** Called when the player transitions from full screen to mini-player over the browsing screens. */
+    fun onPlayerMinimized() {
+        if (!tvMultiStreamShown) {
+            refreshVisibleScreensIfStale(60_000L)
+        }
+    }
+
+    /**
+     * Silently refreshes the currently visible browsing screens (TV Home and paged lists) if their data is older than [maxAgeMs].
+     */
+    fun refreshVisibleScreensIfStale(maxAgeMs: Long = 60_000L) {
+        if (isFinishing || isDestroyed || !::binding.isInitialized) return
+        fun visit(fragments: List<androidx.fragment.app.Fragment>) {
+            for (fragment in fragments) {
+                if (!fragment.isAdded || !fragment.isVisible) continue
+                when (fragment) {
+                    is com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment -> fragment.refreshIfStale(maxAgeMs)
+                    is com.github.andreyasadchy.xtra.ui.common.PagedListFragment -> fragment.refreshIfStale(maxAgeMs)
+                }
+                visit(fragment.childFragmentManager.fragments)
+            }
+        }
+        supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.let { visit(it) }
+        if (isTv && maxAgeMs <= 60_000L) {
+            refreshStaleStreamLists(binding.navHostFragment)
+        }
+    }
 
     /** The focus on a stream of the multi-stream when it is anywhere else in this window. True when it was moved or waits for the streams. */
     private fun keepFocusInMultiStream(): Boolean {
@@ -2392,6 +2454,9 @@ class MainActivity : AppCompatActivity() {
         }
         tvMultiStreamShown = false
         setMainContentFocusable(true)
+        if (playerFragment == null) {
+            refreshVisibleScreensIfStale(60_000L)
+        }
     }
 
     fun showStreamSwitcher() {
@@ -2562,6 +2627,13 @@ class MainActivity : AppCompatActivity() {
         if (video.id != null) {
             dvrStream = null
             dvrChatVideoId = null
+            streamQueue = emptyList()
+            streamQueueSource = null
+            currentStreamLogin = null
+            queueCheckJob?.cancel()
+            queueRefreshJob?.cancel()
+            queueExtendJob?.cancel()
+            neighborJob?.cancel()
         }
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         viewModel.savePlaybackState(PlaybackState(
@@ -2591,6 +2663,12 @@ class MainActivity : AppCompatActivity() {
         val fragment = when (prefs.getString(C.PLAYER, C.EXOPLAYER)) {
             C.MEDIA_PLAYER -> MediaPlayerFragment()
             else -> ExoPlayerFragment()
+        }
+        fragment.arguments = (fragment.arguments ?: Bundle()).apply {
+            putBoolean(com.github.andreyasadchy.xtra.ui.player.PlayerFragment.KEY_VIDEO, true)
+            if (video.id == null && dvrStream != null) {
+                putBoolean(com.github.andreyasadchy.xtra.ui.player.PlayerFragment.KEY_DVR, true)
+            }
         }
         startPlayer(fragment)
     }
@@ -2883,6 +2961,9 @@ class MainActivity : AppCompatActivity() {
         playerFragment = null
         updateTvNowPlaying()
         viewModel.isPlayerOpened = false
+        if (!tvMultiStreamShown) {
+            refreshVisibleScreensIfStale(60_000L)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             setPictureInPictureParams(PictureInPictureParams.Builder().setAutoEnterEnabled(false).build())
         }

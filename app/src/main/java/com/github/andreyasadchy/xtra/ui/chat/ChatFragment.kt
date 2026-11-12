@@ -255,6 +255,15 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             it.visibility = View.GONE
                         }
                     }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.version.collect {
+                                if (viewModel.purgeFilteredMessages()) {
+                                    adapter?.notifyDataSetChanged()
+                                }
+                            }
+                        }
+                    }
                     if (enableMessaging) {
                         viewModel.loadRecentEmotes()
                         viewLifecycleOwner.lifecycleScope.launch {
@@ -1447,6 +1456,9 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             return "${if (text.startsWith(':')) text.substring(1) else text} "
         }
     }
+
+    fun getRecentChatters(): List<com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.BlockedUser> =
+        viewModel.getRecentChatters()
 
     companion object {
         private const val KEY_IS_LIVE = "isLive"

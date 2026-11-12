@@ -172,10 +172,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return playbackService?.type == BasePlaybackService.STREAM || (playbackService == null && arguments?.getBoolean(KEY_STREAM) == true)
     }
 
-    /** TV: left / right change the streamer (option on, a live stream, a HUD not opened on purpose). */
+    /** A VOD (classic or live-rewind DVR): from the service, or from the screen arguments before its service connects. */
+    private fun isVodScreen(): Boolean {
+        return playbackService?.type == BasePlaybackService.VIDEO || (playbackService == null && arguments?.getBoolean(KEY_VIDEO) == true)
+    }
+
+    /** Live-rewind DVR VOD opened by rewinding a live broadcast timeline (never a classic standalone VOD). */
+    private fun isDvrScreen(): Boolean {
+        return getTvDvrStream() != null || (playbackService == null && arguments?.getBoolean(KEY_DVR) == true)
+    }
+
+    /** Live broadcast or live-rewind DVR broadcast (where left/right and channel +/- switch streamers). */
+    fun isLiveOrDvrScreen(): Boolean = isStreamScreen() || isDvrScreen()
+
+    /** TV: left / right change the streamer (option on, a live stream or live-rewind DVR, a HUD not opened on purpose). */
     private fun dpadSwitchesStreams(): Boolean {
         // the settings of the app: also for a new player screen not attached yet
-        return isTv && isStreamScreen() && !hudOpenedByUser && com.github.andreyasadchy.xtra.XtraApp.INSTANCE.prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
+        return isTv && isLiveOrDvrScreen() && !hudOpenedByUser && com.github.andreyasadchy.xtra.XtraApp.INSTANCE.prefs().getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
     }
 
     /**
@@ -1207,6 +1220,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 progressBar.setAdGroupTimesMs(null, null, 0)
                 seekPreview?.setChapters(null)
                 if (playbackService?.type == BasePlaybackService.VIDEO) {
+                    if (isTv && requireContext().prefs().getBoolean(C.TV_BUTTON_STREAM_LIST, true)) {
+                        streamList?.visibility = View.VISIBLE
+                        streamList?.setOnClickListener {
+                            hideController()
+                            (activity as? MainActivity)?.showStreamSwitcher()
+                        }
+                    }
                     if (requireContext().prefs().getBoolean(C.PLAYER_MENU_BOOKMARK, true)) {
                         viewLifecycleOwner.lifecycleScope.launch {
                             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -2506,6 +2526,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                 }
+                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_chat_block_users)) {
+                    com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.showPlayerBlockPanel(
+                        context = context,
+                        alignEnd = left && mode.intValue != 2,
+                        recentChatters = chatFragment?.getRecentChatters().orEmpty(),
+                    )
+                }
                 // slow chat: off or max normal messages per second (1, 2, 4, 6), priority messages stay shown
                 val slowRateValues = listOf("0", "1", "2", "4", "6")
                 val slowRateLabels = listOf(
@@ -3785,7 +3812,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                if (!isSelect && isTv && isStreamScreen() && (!binding.playerControls.root.isVisible || hudPeek) &&
+                if (!isSelect && isTv && (isStreamScreen() || isVodScreen()) && (!binding.playerControls.root.isVisible || hudPeek) &&
                     requireContext().prefs().getBoolean(C.TV_DPAD_UP_DOWN, false)
                 ) {
                     if (hudPeek) {
@@ -4294,6 +4321,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             hideController(true)
             dragView.setBackgroundResource(R.drawable.player_minimized_focus)
             (activity as? MainActivity)?.setMainContentFocusable(true)
+            (activity as? MainActivity)?.onPlayerMinimized()
             minimizedBackPressedCallback.isEnabled = dragView.hasFocus()
             fun animate() {
                 val (minimizedScaleX, minimizedScaleY) = getScaleValues()
@@ -4691,6 +4719,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         const val KEY_OFFLINE = "offline"
         /** Set by the app when the player screen opens a live stream: known before its playback service is connected. */
         const val KEY_STREAM = "tvStream"
+        /** Set by the app when the player screen opens a VOD: known before its playback service is connected. */
+        const val KEY_VIDEO = "tvVideo"
+        /** Set by the app when the player screen opens a live-rewind DVR VOD from a live stream timeline. */
+        const val KEY_DVR = "tvDvr"
 
         /**
          * TV: picture of the stream that is opening (the picture of its card, then the latest one of Twitch), shown in place

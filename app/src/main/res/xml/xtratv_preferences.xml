@@ -123,7 +123,7 @@
             app:singleLineTitle="false" />
 
         <SwitchPreferenceCompat
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="tv_compact_rail"
             android:summary="@string/tv_compact_rail_summary"
             android:title="@string/tv_compact_rail"
@@ -135,6 +135,14 @@
             android:key="tv_home_hero"
             android:summary="@string/tv_home_hero_summary"
             android:title="@string/tv_home_hero"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_home_multistream"
+            android:summary="@string/tv_home_multistream_summary"
+            android:title="@string/tv_home_multistream"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 

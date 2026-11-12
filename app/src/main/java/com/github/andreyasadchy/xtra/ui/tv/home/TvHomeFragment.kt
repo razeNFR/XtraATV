@@ -189,6 +189,13 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             videoPosition = positionOf,
             formatVideoDuration = { seconds -> android.text.format.DateUtils.formatElapsedTime(seconds.toLong()) },
             formatDuration = { ms -> getString(R.string.tv_time_left, android.text.format.DateUtils.formatElapsedTime(ms / 1000)) },
+            openMultiStream = { item ->
+                stopPreview()
+                (activity as? MainActivity)?.let { act ->
+                    com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.launchGroup(act, item.group)
+                }
+            },
+            showMultiStreamActions = { item -> showMultiStreamActions(item) },
         )
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.stamp.collect { homeStamp.longValue = it }
@@ -232,6 +239,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 val followed by viewModel.followed.collectAsState()
+                val multiStreams by viewModel.multiStreams.collectAsState()
                 val followedVideos by viewModel.followedVideos.collectAsState()
                 val popular by viewModel.popular.collectAsState()
                 val games by viewModel.games.collectAsState()
@@ -265,11 +273,15 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         previewLogin = { previewLogin.value },
                         previewPlayer = { previewPlayer.value },
                         actions = actions,
+                        multiStreams = multiStreams
+                            .takeIf { it.isNotEmpty() && context.prefs().getBoolean(C.TV_HOME_MULTISTREAM, true) }
+                            ?.let { TvHomeRow(getString(R.string.tv_home_multistreams_row), it, 0, R.drawable.tv_ic_multistream) },
                         hero = heroStream,
                         heroQueue = heroQueue,
                         resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
-                        // the videos still recording (the live of a channel live now) are left out: the live is in the row above
+                        // only full past broadcasts (ARCHIVE), and the videos still recording are left out
                         videos = followedVideos?.takeIf { context.prefs().getBoolean(C.TV_HOME_FOLLOWED_VIDEOS, true) }
+                            ?.filter { video -> video.type == null || video.type.equals("ARCHIVE", ignoreCase = true) }
                             ?.filterNot { video -> isRecording(video, followed) }
                             ?.takeIf { it.isNotEmpty() }
                             ?.let { TvHomeRow(getString(R.string.tv_followed_videos_row), it, 0, R.drawable.tv_ic_video_library) },
@@ -292,6 +304,66 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         super.onResume()
         viewModel.load()
         loadLocalRows()
+    }
+
+    fun refreshIfStale(maxAgeMs: Long = 60_000L) {
+        viewModel.load(force = false, maxAgeMs = maxAgeMs)
+        loadLocalRows()
+    }
+
+    private fun showMultiStreamActions(item: TvHomeMultiStream) {
+        stopPreview()
+        val activity = activity as? MainActivity ?: return
+        val actions = buildList {
+            add(
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                    getString(R.string.tv_multistream_watch),
+                    R.drawable.tv_ic_multistream,
+                ) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.launchGroup(activity, item.group)
+                }
+            )
+            add(
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                    getString(R.string.tv_multistream_rename),
+                    R.drawable.tv_ic_edit,
+                ) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(activity) { dismiss ->
+                        com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
+                            title = activity.getString(R.string.tv_multistream_rename),
+                            hint = activity.getString(R.string.tv_multistream_name_hint),
+                            sendLabel = activity.getString(android.R.string.ok),
+                            initialText = item.group.label,
+                        ) { newName ->
+                            com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.rename(activity, item.group.id, newName)
+                            dismiss()
+                        }
+                    }
+                }
+            )
+            add(
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                    getString(R.string.tv_multistream_remove_group),
+                    R.drawable.tv_ic_delete,
+                ) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(activity, item.group.id)
+                    android.widget.Toast.makeText(activity, R.string.tv_multistream_group_removed, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            )
+            item.group.streams.forEach { member ->
+                val resolved = item.liveStreams.find { it.channelLogin.equals(member.channelLogin, ignoreCase = true) } ?: member
+                val name = resolved.channelName ?: resolved.channelLogin ?: return@forEach
+                add(
+                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                        getString(R.string.tv_open_channel, name),
+                        R.drawable.tv_ic_person,
+                    ) {
+                        activity.openTvChannel(resolved, null)
+                    }
+                )
+            }
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(activity, item.group.label, actions)
     }
 
     /** Name of a language in the language of the app ("fr" -> "Français"). */

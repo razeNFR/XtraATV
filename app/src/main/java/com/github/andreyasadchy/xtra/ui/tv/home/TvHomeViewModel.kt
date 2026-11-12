@@ -25,7 +25,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
-/** Rows of the TV home: followed channels live, popular streams, categories. */
+class TvHomeMultiStream(
+    val group: com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.Group,
+    val liveStreams: List<Stream>,
+    val totalViewers: Int,
+    val sharedGame: String?,
+)
+
+/** Rows of the TV home: followed channels live, saved multi-streams, popular streams, categories. */
 class TvHomeViewModel(
     private val applicationContext: Context,
     private val localChannelFollowsRepository: LocalChannelFollowsRepository,
@@ -34,6 +41,7 @@ class TvHomeViewModel(
 ) : ViewModel() {
 
     val followed = MutableStateFlow<List<Stream>?>(null)
+    val multiStreams = MutableStateFlow<List<TvHomeMultiStream>>(emptyList())
     /** Latest videos of the followed channels (logged in only: Twitch gives them to the account). */
     val followedVideos = MutableStateFlow<List<com.github.andreyasadchy.xtra.model.ui.Video>?>(null)
     val popular = MutableStateFlow<List<Stream>?>(null)
@@ -46,6 +54,7 @@ class TvHomeViewModel(
     val stamp = MutableStateFlow(0L)
     private var loadedAt = 0L
     private var loadedLanguages: Set<String>? = null
+    private var loadedMultiStreamEnabled: Boolean? = null
 
     /** Picture of the account logged in, for the greeting at the top of the home. */
     val accountImage = MutableStateFlow<String?>(null)
@@ -85,19 +94,33 @@ class TvHomeViewModel(
                 }
             }
         }
+        viewModelScope.launch {
+            var first = true
+            com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.changes.collect {
+                if (first) {
+                    first = false
+                } else {
+                    refreshMultiStreams()
+                }
+            }
+        }
     }
 
-    /** Loads the rows, again when they are older than a few minutes. */
-    fun load(force: Boolean = false) {
+    /** Loads the rows, again when they are older than [maxAgeMs]. */
+    fun load(force: Boolean = false, maxAgeMs: Long = 60_000L) {
         loadAccountImage()
-        // languages of the rows changed in the settings: loaded again at once
-        val rowLanguages = applicationContext.prefs().getStringSet(C.TV_HOME_LANGUAGE_ROWS, null).orEmpty().toSet()
-        if (!force && loadedAt != 0L && System.currentTimeMillis() - loadedAt < 3 * 60_000L && rowLanguages == loadedLanguages) {
+        val prefs = applicationContext.prefs()
+        // languages of the rows or multi-stream setting changed in the settings: loaded again at once
+        val rowLanguages = prefs.getStringSet(C.TV_HOME_LANGUAGE_ROWS, null).orEmpty().toSet()
+        val showMultiStreams = prefs.getBoolean(C.TV_HOME_MULTISTREAM, true)
+        if (!force && loadedAt != 0L && System.currentTimeMillis() - loadedAt < maxAgeMs &&
+            rowLanguages == loadedLanguages && showMultiStreams == loadedMultiStreamEnabled
+        ) {
             return
         }
         loadedLanguages = rowLanguages
+        loadedMultiStreamEnabled = showMultiStreams
         loadedAt = System.currentTimeMillis()
-        val prefs = applicationContext.prefs()
         val networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP)
         val enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false)
         val helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext)
@@ -105,6 +128,9 @@ class TvHomeViewModel(
         val jobs = mutableListOf<kotlinx.coroutines.Job>()
         jobs += viewModelScope.launch {
             followed.value = loadPage(createFollowedSource())
+        }
+        jobs += viewModelScope.launch {
+            refreshMultiStreams()
         }
         jobs += viewModelScope.launch {
             popular.value = loadPage(createPopularSource())
@@ -115,7 +141,7 @@ class TvHomeViewModel(
             jobs += viewModelScope.launch {
                 followedVideos.value = loadPage(
                     com.github.andreyasadchy.xtra.repository.datasource.FollowedVideosDataSource(
-                        gqlQueryType = null,
+                        gqlQueryType = com.github.andreyasadchy.xtra.graphql.type.BroadcastType.ARCHIVE,
                         gqlQuerySort = com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME,
                         gqlHeaders = gqlAccountHeaders,
                         graphQLRepository = graphQLRepository,
@@ -150,6 +176,67 @@ class TvHomeViewModel(
             jobs.forEach { it.join() }
             stamp.value = System.currentTimeMillis() / 1000
             refreshing.value = false
+        }
+    }
+
+    private suspend fun refreshMultiStreams() {
+        val prefs = applicationContext.prefs()
+        if (!prefs.getBoolean(C.TV_HOME_MULTISTREAM, true)) {
+            multiStreams.value = emptyList()
+            return
+        }
+        val groups = com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.list(applicationContext)
+        if (groups.isEmpty()) {
+            multiStreams.value = emptyList()
+            return
+        }
+        val allLogins = groups.flatMap { g -> g.streams.mapNotNull { it.channelLogin?.trim()?.lowercase() } }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        if (allLogins.isEmpty()) {
+            multiStreams.value = emptyList()
+            return
+        }
+        val liveByLogin = mutableMapOf<String, Stream>()
+        try {
+            val networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP)
+            val headers = TwitchApiHelper.getGQLHeaders(applicationContext)
+            allLogins.chunked(100).forEach { chunk ->
+                graphQLRepository.loadQueryUsersStream(networkLibrary, headers, logins = chunk)
+                    .data?.users?.forEach { user ->
+                        val login = user?.login ?: return@forEach
+                        val st = user.stream ?: return@forEach
+                        liveByLogin[login.lowercase()] = Stream(
+                            id = st.id,
+                            channelId = user.id,
+                            channelLogin = login,
+                            channelName = user.displayName ?: login,
+                            channelImageURL = user.profileImageURL?.toString(),
+                            gameId = st.game?.id,
+                            gameSlug = st.game?.slug,
+                            gameName = st.game?.displayName,
+                            title = st.broadcaster?.broadcastSettings?.title,
+                            thumbnailURL = st.previewImageURL?.toString(),
+                            createdAt = st.createdAt?.toString(),
+                            viewerCount = st.viewersCount,
+                            tags = st.freeformTags?.mapNotNull { it?.name },
+                        )
+                    }
+            }
+        } catch (_: Exception) {
+            return
+        }
+        multiStreams.value = groups.mapNotNull { group ->
+            val live = group.streams.mapNotNull { s -> s.channelLogin?.trim()?.lowercase()?.let { liveByLogin[it] } }
+            if (live.size < 2) return@mapNotNull null
+            val totalViewers = live.sumOf { it.viewerCount ?: 0 }
+            val sharedGame = live.mapNotNull { it.gameName?.takeIf { g -> g.isNotBlank() } }.distinct().singleOrNull()
+            TvHomeMultiStream(
+                group = group,
+                liveStreams = live,
+                totalViewers = totalViewers,
+                sharedGame = sharedGame,
+            )
         }
     }
 

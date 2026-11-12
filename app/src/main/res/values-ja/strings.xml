@@ -643,7 +643,7 @@
     <string name="tv_followed_live">フォロー中のライブ配信</string>
     <string name="tv_see_all">すべて表示</string>
     <string name="tv_dpad_switch_stream">左右キーで配信者を切り替え</string>
-    <string name="tv_dpad_switch_stream_summary">コントロールが非表示のとき、左右キーで配信を開いたリストの前または次の配信者に切り替えます</string>
+    <string name="tv_dpad_switch_stream_summary">コントロール非表示時（ライブ配信またはライブ巻き戻し中）、左右キーでリスト内の前後の配信者に切り替えます</string>
     <string name="tv_home_languages">人気の言語</string>
     <string name="tv_home_languages_summary">人気（ホームの列と人気ページ）の配信をこれらの言語のみに、未選択ならすべての言語</string>
     <string name="tv_home_cards">ホームのカードサイズ</string>
@@ -661,7 +661,7 @@
     <string name="tv_back_stop">配信を停止</string>
     <string name="tv_back_mini">ミニプレーヤー</string>
     <string name="tv_back_audio">音声のみ</string>
-    <string name="tv_dpad_up_down">配信中の上下ショートカット</string>
+    <string name="tv_dpad_up_down">ライブ配信とVODでの上下ショートカット</string>
     <string name="tv_dpad_up_down_summary">コントロール非表示時: 上で他の配信、下でチャットの表示/非表示</string>
     <string name="tv_1440p_warning">⚠ 1440p は公開プロキシ (Luminous など) では使えません (最大 1080p)。1440p にはカスタムプロキシをオフにして広告ブロック (Xtra TV の設定) を使うか、1440p 対応の自分のプロキシを使ってください。</string>
     <string name="tv_login_with_code">twitch.tv/activate でコードを入力</string>
@@ -1012,4 +1012,25 @@
     <string name="tv_chat_restricted_banned">このチャンネルのチャットから追放されています</string>
     <string name="tv_chat_restricted_timed_out">このチャンネルのチャットで一時的に発言禁止になっています</string>
     <string name="tv_chat_restricted_generic">チャンネルの制限によりメッセージが拒否されました</string>
+    <string name="chat_hide_bots">Botを非表示</string>
+    <string name="chat_hide_bots_summary">定番チャットBot（Nightbot、StreamElements、Fossabotなど）やBotバッジ付きアカウントのメッセージを自動的に非表示にします</string>
+    <string name="chat_blocked_users">ブロック中のアカウント</string>
+    <string name="chat_blocked_users_none">ブロック中のアカウントはありません</string>
+    <string name="chat_blocked_users_one">1件のアカウントをブロック中</string>
+    <string name="chat_blocked_users_count">%1$d件のアカウントをブロック中</string>
+    <string name="tv_chat_block_users">アカウント / Botをブロック</string>
+    <string name="chat_block_add">ユーザー名を指定してブロック…</string>
+    <string name="chat_block_username_hint">Twitchユーザー名</string>
+    <string name="chat_block_action">ブロック</string>
+    <string name="chat_user_blocked">%1$s をブロックしました</string>
+    <string name="chat_user_unblocked">%1$s のブロックを解除しました</string>
+    <string name="chat_blocked_badge">ブロック中</string>
+    <string name="tv_chat_recent_users">最近のチャット参加者（OKでブロック / 解除）</string>
+    <string name="tv_chat_recent_empty">最近のチャットメッセージはまだありません</string>
+    <string name="tv_home_multistream">保存済みマルチストリーム</string>
+    <string name="tv_home_multistream_summary">保存したマルチストリームグループのうち2チャンネル以上が配信中のときにホームに表示します</string>
+    <string name="tv_home_multistreams_row">マルチストリーム</string>
+    <string name="tv_multistream_live_count">%1$d/%2$d LIVE</string>
+    <string name="tv_multistream_rename">グループ名を変更</string>
+    <string name="tv_multistream_name_hint">グループ名</string>
 </resources>

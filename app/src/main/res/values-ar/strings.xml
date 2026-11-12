@@ -643,7 +643,7 @@
     <string name="tv_followed_live">القنوات المتابَعة في بث مباشر</string>
     <string name="tv_see_all">عرض الكل</string>
     <string name="tv_dpad_switch_stream">اليسار / اليمين لتبديل البث</string>
-    <string name="tv_dpad_switch_stream_summary">عند إخفاء عناصر التحكم، ينتقل اليسار واليمين إلى صاحب البث السابق أو التالي في القائمة التي فُتح منها البث</string>
+    <string name="tv_dpad_switch_stream_summary">عند إخفاء عناصر التحكم (في البث المباشر أو إرجاع البث)، ينتقل اليسار واليمين إلى الباث السابق أو التالي في القائمة</string>
     <string name="tv_home_languages">لغات الشائع</string>
     <string name="tv_home_languages_summary">بثوث الشائع (صف الصفحة الرئيسية وصفحة الشائع) بهذه اللغات فقط، كل اللغات إذا لم تحدد أي لغة</string>
     <string name="tv_home_cards">حجم البطاقات في الصفحة الرئيسية</string>
@@ -661,7 +661,7 @@
     <string name="tv_back_stop">إيقاف البث</string>
     <string name="tv_back_mini">مشغل مصغر</string>
     <string name="tv_back_audio">الصوت فقط</string>
-    <string name="tv_dpad_up_down">اختصارات أعلى وأسفل أثناء البث</string>
+    <string name="tv_dpad_up_down">اختصارات أعلى وأسفل في البث المباشر والفيديوهات</string>
     <string name="tv_dpad_up_down_summary">عند إخفاء عناصر التحكم: أعلى يعرض البثوث الأخرى، وأسفل يعرض الدردشة أو يخفيها</string>
     <string name="tv_1440p_warning">⚠ دقة 1440p لا تعمل مع البروكسيات العامة (Luminous وغيرها) المحدودة بدقة 1080p. للحصول على 1440p، عطّل البروكسي المخصص واستخدم مانع الإعلانات (إعدادات Xtra TV) أو استخدم بروكسي خاصًا بك يدعم 1440p.</string>
     <string name="tv_login_with_code">باستخدام رمز على twitch.tv/activate</string>
@@ -1012,4 +1012,25 @@
     <string name="tv_chat_restricted_banned">أنت محظور من الدردشة في هذه القناة</string>
     <string name="tv_chat_restricted_timed_out">تم إيقافك مؤقتًا عن الدردشة في هذه القناة</string>
     <string name="tv_chat_restricted_generic">تم رفض الرسالة بسبب قيود القناة</string>
+    <string name="chat_hide_bots">إخفاء البوتات</string>
+    <string name="chat_hide_bots_summary">إخفاء رسائل بوتات الدردشة المعروفة تلقائياً (Nightbot وStreamElements وFossabot…) والحسابات التي تحمل شارة بوت</string>
+    <string name="chat_blocked_users">الحسابات المحظورة</string>
+    <string name="chat_blocked_users_none">لا توجد حسابات محظورة</string>
+    <string name="chat_blocked_users_one">حساب واحد محظور</string>
+    <string name="chat_blocked_users_count">%1$d حسابات محظورة</string>
+    <string name="tv_chat_block_users">حظر الحسابات / البوتات</string>
+    <string name="chat_block_add">حظر اسم مستخدم…</string>
+    <string name="chat_block_username_hint">اسم مستخدم Twitch</string>
+    <string name="chat_block_action">حظر</string>
+    <string name="chat_user_blocked">تم حظر %1$s</string>
+    <string name="chat_user_unblocked">تم إلغاء حظر %1$s</string>
+    <string name="chat_blocked_badge">محظور</string>
+    <string name="tv_chat_recent_users">النشطون مؤخراً في الدردشة (OK للحظر / إلغاء الحظر)</string>
+    <string name="tv_chat_recent_empty">لا توجد رسائل حديثة في الدردشة بعد</string>
+    <string name="tv_home_multistream">البث المتعدد المحفوظ</string>
+    <string name="tv_home_multistream_summary">عرض صف لمجموعات البث المتعدد المحفوظة عندما تكون قناتان على الأقل في بث مباشر</string>
+    <string name="tv_home_multistreams_row">بث متعدد</string>
+    <string name="tv_multistream_live_count">%1$d/%2$d LIVE</string>
+    <string name="tv_multistream_rename">إعادة تسمية المجموعة</string>
+    <string name="tv_multistream_name_hint">اسم المجموعة</string>
 </resources>
