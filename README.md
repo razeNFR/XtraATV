@@ -34,9 +34,9 @@ Xtra TV has its own package name, so it installs next to the original Xtra.
 
 Two ways on TV: a **code to enter on twitch.tv/activate** from a phone or computer, or the **Twitch login page** inside the app.
 
-## p - 4K (Enhanced Broadcasting)
+## 1440p - 4K (Enhanced Broadcasting)
 
-Twitch only serves the p - 4K streams to its website client with a logged-in account. To enable them:
+Twitch only serves the 1440p - 4K streams to its website client with a logged-in account. To enable them:
 1. Log in with your Twitch account using the **Twitch login page** in the app (code login does not grant p).
 2. Public proxies stop at 1080p: use the built-in ad blocker (**During ads** or **VAFT**), or your own proxy.
 3. Keep **"Include token for streams"** enabled (default).
