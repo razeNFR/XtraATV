@@ -48,6 +48,7 @@ import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupWithNavController
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceManager
@@ -1965,7 +1966,72 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 true
             }
-            listOf(C.TV_HOME_HERO, C.TV_HOME_MULTISTREAM, C.TV_COMPACT_RAIL).forEach { key ->
+            findPreference<Preference>(C.TV_PLAYER_CLOCK)?.let { preference ->
+                val context = requireContext()
+                val updateSummary = {
+                    preference.summary = com.github.andreyasadchy.xtra.ui.tv.TvClockSettings.summary(context)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvClockSettings.showPanel(context) {
+                        updateSummary()
+                    }
+                    true
+                }
+            }
+            findPreference<Preference>("tv_dpad_shortcuts")?.let { preference ->
+                val context = requireContext()
+                val updateSummary = {
+                    preference.summary = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.dpadSummary(context)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.showDpadPanel(context) {
+                        updateSummary()
+                    }
+                    true
+                }
+            }
+            findPreference<Preference>(C.TV_CUSTOM_KEYS)?.let { preference ->
+                val context = requireContext()
+                val updateSummary = {
+                    preference.summary = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.customKeysSummary(context)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.showCustomKeysPanel(context) {
+                        updateSummary()
+                    }
+                    true
+                }
+            }
+            val langRowsPref = findPreference<MultiSelectListPreference>(C.TV_HOME_LANGUAGE_ROWS)
+            val homeRowsPref = findPreference<Preference>(C.TV_HOME_ROWS)
+            homeRowsPref?.let { preference ->
+                val context = requireContext()
+                val updateSummary = {
+                    preference.summary = com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.summary(context)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.showManagerPanel(context) {
+                        updateSummary()
+                        langRowsPref?.values = context.prefs().getStringSet(C.TV_HOME_LANGUAGE_ROWS, emptySet()).orEmpty()
+                        (requireActivity() as? SettingsActivity)?.setResult()
+                    }
+                    true
+                }
+            }
+            langRowsPref?.setOnPreferenceChangeListener { _, newValue ->
+                val context = requireContext()
+                @Suppress("UNCHECKED_CAST")
+                val selected = (newValue as? Set<String>).orEmpty()
+                com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.syncFromLanguageRowsPref(context, selected)
+                homeRowsPref?.summary = com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.summary(context)
+                (requireActivity() as? SettingsActivity)?.setResult()
+                true
+            }
+            listOf(C.TV_HOME_HERO, C.TV_COMPACT_RAIL).forEach { key ->
                 findPreference<Preference>(key)?.setOnPreferenceChangeListener { _, _ ->
                     (requireActivity() as? SettingsActivity)?.setResult()
                     true

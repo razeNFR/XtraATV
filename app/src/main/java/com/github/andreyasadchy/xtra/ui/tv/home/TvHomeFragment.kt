@@ -91,7 +91,18 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val source: (() -> androidx.paging.PagingSource<Int, Stream>)? = when {
                     list === viewModel.followed.value -> viewModel::createFollowedSource
                     list === viewModel.popular.value -> viewModel::createPopularSource
-                    else -> viewModel.languageRows.value.find { it.second === list }?.first?.let { language -> { viewModel.createLanguageSource(language) } }
+                    else -> {
+                        val langCode = viewModel.languageRows.value.entries.find { it.value === list }?.key
+                        if (langCode != null) {
+                            { viewModel.createLanguageSource(langCode) }
+                        } else {
+                            val catId = viewModel.categoryRows.value.entries.find { it.value === list }?.key
+                            val spec = catId?.let { TvHomeRows.parseCategory(it) }
+                            if (spec != null) {
+                                { viewModel.createCategorySource(spec) }
+                            } else null
+                        }
+                    }
                 }
                 (activity as? MainActivity)?.startStream(stream, list, source)
             },
@@ -101,13 +112,10 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             },
             openGame = { game ->
                 stopPreview()
-                findNavController().navigate(
-                    if (context.prefs().getBoolean(C.UI_GAME_PAGER, true)) {
-                        GamePagerFragmentDirections.actionGlobalGamePagerFragment(gameId = game.id, gameSlug = game.slug, gameName = game.name)
-                    } else {
-                        GameMediaFragmentDirections.actionGlobalGameMediaFragment(gameId = game.id, gameSlug = game.slug, gameName = game.name)
-                    }
-                )
+                navigateToGame(game)
+            },
+            showGameActions = { game ->
+                showGameActions(game)
             },
             seeAll = { id ->
                 stopPreview()
@@ -136,7 +144,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 (activity as? MainActivity)?.openTvChannel(stream, null)
             },
             onPictureFocused = { item ->
-                // the other cards of the home (videos, categories): the same dynamic ambiance as the streams
+                // the other cards of the home (videos, clips, categories): the same dynamic ambiance as the streams
                 context?.let { ctx -> com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromItem(ctx, item, viewLifecycleOwner.lifecycleScope) }
             },
             onHeroUnfocused = {
@@ -189,6 +197,13 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             videoPosition = positionOf,
             formatVideoDuration = { seconds -> android.text.format.DateUtils.formatElapsedTime(seconds.toLong()) },
             formatDuration = { ms -> getString(R.string.tv_time_left, android.text.format.DateUtils.formatElapsedTime(ms / 1000)) },
+            openClip = { clip, queue ->
+                stopPreview()
+                (activity as? MainActivity)?.startClip(clip, queue)
+            },
+            showClipActions = { clip, queue ->
+                showClipActions(clip, queue)
+            },
             openMultiStream = { item ->
                 stopPreview()
                 (activity as? MainActivity)?.let { act ->
@@ -239,12 +254,22 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 val followed by viewModel.followed.collectAsState()
+                val favorites by viewModel.favorites.collectAsState()
                 val multiStreams by viewModel.multiStreams.collectAsState()
                 val followedVideos by viewModel.followedVideos.collectAsState()
+                val followedClips by viewModel.followedClips.collectAsState()
                 val popular by viewModel.popular.collectAsState()
+                val recommended by viewModel.recommended.collectAsState()
+                val followedGames by viewModel.followedGames.collectAsState()
                 val games by viewModel.games.collectAsState()
                 val languageRows by viewModel.languageRows.collectAsState()
+                val categoryRows by viewModel.categoryRows.collectAsState()
+                val isRefreshing by viewModel.refreshing.collectAsState()
                 val accountImage by viewModel.accountImage.collectAsState()
+                val rowsTick by TvHomeRows.changes.collectAsState()
+                val activeEntries = androidx.compose.runtime.remember(rowsTick) {
+                    TvHomeRows.load(context).filter { it.enabled }
+                }
                 // the same picture at the top of the side menu
                 androidx.compose.runtime.LaunchedEffect(accountImage) {
                     (activity as? MainActivity)?.setTvAccountImage(accountImage)
@@ -265,30 +290,133 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         com.github.andreyasadchy.xtra.ui.tv.TvLauncherChannels.syncFollowedLive(context, list)
                     }
                 }
+                val sections = buildList {
+                    activeEntries.forEach { entry ->
+                        when (entry.id) {
+                            TvHomeRows.ROW_FOLLOWED -> {
+                                val list = followed
+                                if (list == null) {
+                                    add(TvHomeSection.Skeleton(entry.id))
+                                } else if (list.isNotEmpty()) {
+                                    add(TvHomeSection.Streams(entry.id, TvHomeRow(getString(R.string.tv_followed_live), list, followedId, R.drawable.tv_ic_heart)))
+                                }
+                            }
+                            TvHomeRows.ROW_FAVORITES -> {
+                                val list = favorites
+                                if (list == null) {
+                                    add(TvHomeSection.Skeleton(entry.id))
+                                } else if (list.isNotEmpty()) {
+                                    add(TvHomeSection.Streams(entry.id, TvHomeRow(getString(R.string.tv_home_row_favorites), list, 0, R.drawable.tv_ic_star)))
+                                }
+                            }
+                            TvHomeRows.ROW_MULTISTREAMS -> {
+                                if (multiStreams.isNotEmpty()) {
+                                    add(TvHomeSection.MultiStreams(entry.id, TvHomeRow(getString(R.string.tv_home_multistreams_row), multiStreams, 0, R.drawable.tv_ic_multistream)))
+                                }
+                            }
+                            TvHomeRows.ROW_POPULAR -> {
+                                val list = popular
+                                if (list == null) {
+                                    add(TvHomeSection.Skeleton(entry.id))
+                                } else if (list.isNotEmpty()) {
+                                    add(TvHomeSection.Streams(entry.id, TvHomeRow(getString(R.string.popular), list, R.id.rootTopFragment, R.drawable.tv_ic_trending)))
+                                }
+                            }
+                            TvHomeRows.ROW_RECOMMENDED -> {
+                                val list = recommended
+                                if (list == null) {
+                                    add(TvHomeSection.Skeleton(entry.id))
+                                } else if (list.isNotEmpty()) {
+                                    add(TvHomeSection.Streams(entry.id, TvHomeRow(getString(R.string.tv_home_row_recommended), list, 0, R.drawable.tv_ic_streamers)))
+                                }
+                            }
+                            TvHomeRows.ROW_RESUME -> {
+                                resumeItems.value.takeIf { it.isNotEmpty() }?.let { list ->
+                                    add(TvHomeSection.Resume(entry.id, TvHomeRow(getString(R.string.tv_continue_watching), list, 0, R.drawable.tv_ic_history)))
+                                }
+                            }
+                            TvHomeRows.ROW_FOLLOWED_VIDEOS -> {
+                                // only full past broadcasts (ARCHIVE), and the videos still recording are left out
+                                followedVideos
+                                    ?.filter { video -> video.type == null || video.type.equals("ARCHIVE", ignoreCase = true) }
+                                    ?.filterNot { video -> isRecording(video, followed) }
+                                    ?.takeIf { it.isNotEmpty() }
+                                    ?.let { list ->
+                                        add(TvHomeSection.Videos(entry.id, TvHomeRow(getString(R.string.tv_followed_videos_row), list, 0, R.drawable.tv_ic_video_library)))
+                                    }
+                            }
+                            TvHomeRows.ROW_FOLLOWED_CLIPS -> {
+                                followedClips?.takeIf { it.isNotEmpty() }?.let { list ->
+                                    add(TvHomeSection.Clips(entry.id, TvHomeRow(getString(R.string.tv_home_row_clips), list, 0, R.drawable.tv_ic_play)))
+                                }
+                            }
+                            TvHomeRows.ROW_FOLLOWED_GAMES -> {
+                                followedGames?.takeIf { it.isNotEmpty() }?.let { list ->
+                                    add(TvHomeSection.Games(entry.id, TvHomeRow(getString(R.string.tv_home_row_followed_games), list, followedId, R.drawable.tv_ic_heart)))
+                                }
+                            }
+                            TvHomeRows.ROW_STATS -> {
+                                statsState.value?.let { stats ->
+                                    add(TvHomeSection.Stats(entry.id, stats))
+                                }
+                            }
+                            TvHomeRows.ROW_GAMES -> {
+                                games?.takeIf { it.isNotEmpty() }?.let { list ->
+                                    add(TvHomeSection.Games(entry.id, TvHomeRow(getString(R.string.games), list, R.id.rootGamesFragment, R.drawable.tv_ic_gamepad)))
+                                }
+                            }
+                            else -> {
+                                val langCode = TvHomeRows.parseLanguage(entry.id)
+                                if (langCode != null) {
+                                    val streams = languageRows[langCode]
+                                    if (!streams.isNullOrEmpty()) {
+                                        add(TvHomeSection.Streams(entry.id, TvHomeRow(getString(R.string.tv_popular_in, languageName(langCode)), streams, 0, R.drawable.tv_ic_globe)))
+                                    } else if (isRefreshing && streams == null) {
+                                        add(TvHomeSection.Skeleton(entry.id))
+                                    }
+                                } else {
+                                    val spec = TvHomeRows.parseCategory(entry.id)
+                                    if (spec != null) {
+                                        val streams = categoryRows[spec.id]
+                                        if (!streams.isNullOrEmpty()) {
+                                            add(
+                                                TvHomeSection.Streams(
+                                                    entry.id,
+                                                    TvHomeRow(
+                                                        title = spec.name,
+                                                        items = streams,
+                                                        seeAllId = 0,
+                                                        icon = R.drawable.tv_ic_gamepad,
+                                                        onSeeAll = {
+                                                            stopPreview()
+                                                            navigateToGame(
+                                                                com.github.andreyasadchy.xtra.model.ui.Game(
+                                                                    id = spec.gameId,
+                                                                    slug = spec.slug.ifBlank { null },
+                                                                    name = spec.name,
+                                                                )
+                                                            )
+                                                        },
+                                                    )
+                                                )
+                                            )
+                                        } else if (isRefreshing && streams == null) {
+                                            add(TvHomeSection.Skeleton(entry.id))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 TvTheme(accent) {
                     TvHomeScreen(
-                        followed = followed?.let { TvHomeRow(getString(R.string.tv_followed_live), it, followedId, R.drawable.tv_ic_heart) },
-                        popular = popular?.let { TvHomeRow(getString(R.string.popular), it, R.id.rootTopFragment, R.drawable.tv_ic_trending) },
-                        games = games?.let { TvHomeRow(getString(R.string.games), it, R.id.rootGamesFragment, R.drawable.tv_ic_gamepad) },
+                        sections = sections,
                         previewLogin = { previewLogin.value },
                         previewPlayer = { previewPlayer.value },
                         actions = actions,
-                        multiStreams = multiStreams
-                            .takeIf { it.isNotEmpty() && context.prefs().getBoolean(C.TV_HOME_MULTISTREAM, true) }
-                            ?.let { TvHomeRow(getString(R.string.tv_home_multistreams_row), it, 0, R.drawable.tv_ic_multistream) },
                         hero = heroStream,
                         heroQueue = heroQueue,
-                        resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
-                        // only full past broadcasts (ARCHIVE), and the videos still recording are left out
-                        videos = followedVideos?.takeIf { context.prefs().getBoolean(C.TV_HOME_FOLLOWED_VIDEOS, true) }
-                            ?.filter { video -> video.type == null || video.type.equals("ARCHIVE", ignoreCase = true) }
-                            ?.filterNot { video -> isRecording(video, followed) }
-                            ?.takeIf { it.isNotEmpty() }
-                            ?.let { TvHomeRow(getString(R.string.tv_followed_videos_row), it, 0, R.drawable.tv_ic_video_library) },
-                        stats = statsState.value,
-                        languageRows = languageRows.map { (language, streams) ->
-                            TvHomeRow(getString(R.string.tv_popular_in, languageName(language)), streams, 0, R.drawable.tv_ic_globe)
-                        },
                         focus = homeFocus,
                         account = TvHomeAccount(
                             name = context.tokenPrefs().getString(C.USERNAME, null)?.takeIf { it.isNotBlank() },
@@ -298,6 +426,114 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 }
             }
         }
+    }
+
+    private fun navigateToGame(game: com.github.andreyasadchy.xtra.model.ui.Game) {
+        val ctx = context ?: return
+        findNavController().navigate(
+            if (ctx.prefs().getBoolean(C.UI_GAME_PAGER, true)) {
+                GamePagerFragmentDirections.actionGlobalGamePagerFragment(gameId = game.id, gameSlug = game.slug, gameName = game.name, boxArt = game.boxArt)
+            } else {
+                GameMediaFragmentDirections.actionGlobalGameMediaFragment(gameId = game.id, gameSlug = game.slug, gameName = game.name, boxArt = game.boxArt)
+            }
+        )
+    }
+
+    private fun showGameActions(game: com.github.andreyasadchy.xtra.model.ui.Game) {
+        stopPreview()
+        val activity = activity as? MainActivity ?: return
+        val pinned = TvHomeRows.isCategoryPinned(activity, game.id)
+        val actions = buildList {
+            add(
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                    getString(R.string.tv_open_this_category),
+                    R.drawable.tv_ic_gamepad,
+                ) {
+                    navigateToGame(game)
+                }
+            )
+            if (!game.id.isNullOrBlank()) {
+                add(
+                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                        getString(if (pinned) R.string.tv_home_unpin_category else R.string.tv_home_pin_category),
+                        if (pinned) R.drawable.tv_ic_delete else R.drawable.tv_ic_pin,
+                    ) {
+                        val nowPinned = TvHomeRows.togglePinCategory(activity, game)
+                        android.widget.Toast.makeText(
+                            activity,
+                            getString(
+                                if (nowPinned) R.string.tv_home_category_pinned else R.string.tv_home_category_unpinned,
+                                game.name ?: "",
+                            ),
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                )
+            }
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(activity, game.name ?: "", actions)
+    }
+
+    private fun showClipActions(clip: com.github.andreyasadchy.xtra.model.ui.Clip, queue: List<com.github.andreyasadchy.xtra.model.ui.Clip>) {
+        stopPreview()
+        val activity = activity as? MainActivity ?: return
+        val channelLabel = clip.channelName ?: clip.channelLogin.orEmpty()
+        val actions = buildList {
+            add(
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                    getString(R.string.tv_multistream_watch),
+                    R.drawable.tv_ic_play,
+                ) {
+                    activity.startClip(clip, queue)
+                }
+            )
+            if (!clip.videoId.isNullOrBlank()) {
+                add(
+                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                        getString(R.string.watch_video),
+                        R.drawable.tv_ic_video_library,
+                    ) {
+                        val offsetMs = clip.videoOffsetSeconds?.toLong()?.times(1000L)
+                        activity.startVideo(
+                            com.github.andreyasadchy.xtra.model.ui.Video(
+                                id = clip.videoId,
+                                channelId = clip.channelId,
+                                channelLogin = clip.channelLogin,
+                                channelName = clip.channelName,
+                                channelImageURL = clip.channelImageURL,
+                                gameId = clip.gameId,
+                                gameSlug = clip.gameSlug,
+                                gameName = clip.gameName,
+                                title = clip.title,
+                                createdAt = clip.videoCreatedAt ?: clip.createdAt,
+                                animatedPreviewURL = clip.videoAnimatedPreviewURL,
+                            ),
+                            offset = offsetMs,
+                            ignoreSavedPosition = offsetMs != null,
+                        )
+                    }
+                )
+            }
+            if (!clip.channelLogin.isNullOrBlank() || !clip.channelId.isNullOrBlank()) {
+                add(
+                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                        getString(R.string.tv_open_channel, channelLabel),
+                        R.drawable.tv_ic_person,
+                    ) {
+                        activity.openTvChannel(
+                            Stream(
+                                channelId = clip.channelId,
+                                channelLogin = clip.channelLogin,
+                                channelName = clip.channelName,
+                                channelImageURL = clip.channelImageURL,
+                            ),
+                            null,
+                        )
+                    }
+                )
+            }
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(activity, clip.title ?: channelLabel, actions)
     }
 
     override fun onResume() {

@@ -1031,6 +1031,9 @@ class MainActivity : AppCompatActivity() {
             lastTvKeyCode = event.keyCode
             lastTvKeyAt = android.os.SystemClock.elapsedRealtime()
             lastUserInteractionAt = lastTvKeyAt
+            if (event.keyCode != KeyEvent.KEYCODE_BACK) {
+                lastExitBackAt = 0L
+            }
         }
         if (isTv && tvMultiStreamShown && event.action == KeyEvent.ACTION_DOWN && event.keyCode != KeyEvent.KEYCODE_BACK &&
             keepFocusInMultiStream() && currentFocus?.isInside(binding.playerContainer) == true
@@ -1047,14 +1050,19 @@ class MainActivity : AppCompatActivity() {
         if (BuildConfig.DEBUG && isTv) {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
         }
+        if (isTv && (playerFragment as? PlayerFragment)?.consumeHeldDpadDownTail(event) == true) {
+            return true
+        }
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
-        if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+        if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
             val player = playerFragment as? PlayerFragment
-            if (player != null && player.handlesDpadSwitch()) {
-                // left / right change the streamer whatever has the focus: the keys pressed while a switch makes the new
-                // player screen never reach the HUD (seek) nor the screens behind the player (focus lost)
+            val switchDelta = player?.handlesDpadSwitchDirection(event.keyCode)
+            if (player != null && switchDelta != null) {
+                // configured D-pad direction changes the streamer whatever has the focus: keys pressed while a switch makes
+                // the new player screen never reach the HUD (seek) nor the screens behind the player (focus lost)
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && streamQueue.size > 1) {
-                    switchStream(if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+                    switchStream(switchDelta)
                 }
                 val focus = currentFocus
                 if (focus == null || !focus.isShown || !focus.isInside(binding.playerContainer)) {
@@ -1063,10 +1071,14 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         }
-        if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot()) {
-            // back on a main screen opens the menu, back again in the menu leaves the app
-            if (event.action == KeyEvent.ACTION_UP) {
-                showTvMenu(true)
+        if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot() && !tvGridBackCallback.isEnabled) {
+            if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+                val onHome = ::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment
+                if (onHome && prefs.getBoolean(C.TV_CONFIRM_EXIT, true)) {
+                    confirmOrExitTvApp()
+                } else {
+                    showTvMenu(true)
+                }
             }
             return true
         }
@@ -1147,6 +1159,9 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
             }
+        }
+        if (isTv && !tvMultiStreamShown && (playerFragment as? PlayerFragment)?.dispatchCustomRemoteKey(event) == true) {
+            return true
         }
         if (isTv && event.action == KeyEvent.ACTION_DOWN) {
             when (event.keyCode) {
@@ -1356,13 +1371,39 @@ class MainActivity : AppCompatActivity() {
      * Back in the side menu of the first screen leaves the app: like Home, the stream of the mini player or of the sound
      * only mode keeps playing behind when the Xtra TV settings keep the sound (else the app closes as before).
      */
+    private var lastExitBackAt = 0L
+
+    private fun exitTvApp() {
+        lastExitBackAt = 0L
+        val player = playerFragment as? PlayerFragment
+        if (player?.keepsPlayingWhenAppLeft() == true) {
+            moveTaskToBack(true)
+        } else {
+            finish()
+        }
+    }
+
+    private fun confirmOrExitTvApp() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastExitBackAt <= 2000L) {
+            exitTvApp()
+        } else {
+            lastExitBackAt = now
+            Toast.makeText(this, R.string.tv_press_back_again_to_exit, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private val tvLeaveBackCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
             val player = playerFragment as? PlayerFragment
-            val leavesApp = isTvMenuShown && ::navController.isInitialized && navController.previousBackStackEntry == null &&
-                    player?.isMaximizedPlayer() != true
-            if (leavesApp && player?.keepsPlayingWhenAppLeft() == true) {
-                moveTaskToBack(true)
+            val leavesApp = isTvMenuShown && !tvMultiStreamShown && ::navController.isInitialized &&
+                    navController.previousBackStackEntry == null && player?.isMaximizedPlayer() != true
+            if (leavesApp) {
+                if (prefs.getBoolean(C.TV_CONFIRM_EXIT, true)) {
+                    confirmOrExitTvApp()
+                } else {
+                    exitTvApp()
+                }
             } else {
                 // anything else: the back of before
                 isEnabled = false
@@ -1374,7 +1415,12 @@ class MainActivity : AppCompatActivity() {
 
     private val tvMenuBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
-            showTvMenu(true)
+            val onHome = ::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment
+            if (onHome && prefs.getBoolean(C.TV_CONFIRM_EXIT, true)) {
+                confirmOrExitTvApp()
+            } else {
+                showTvMenu(true)
+            }
         }
     }
 
@@ -1679,7 +1725,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isBrowsingRoot(): Boolean {
-        if ((playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true) {
+        if (tvMultiStreamShown || (playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true) {
             return false
         }
         val focus = currentFocus

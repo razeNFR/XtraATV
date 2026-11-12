@@ -58,7 +58,7 @@ class GamesAdapter(
             with(binding) {
                 if (item != null) {
                     val context = fragment.requireContext()
-                    root.setOnClickListener {
+                    val openCategory = {
                         fragment.findNavController().navigate(
                             if (context.prefs().getBoolean(C.UI_GAME_PAGER, true)) {
                                 GamePagerFragmentDirections.actionGlobalGamePagerFragment(
@@ -77,7 +77,45 @@ class GamesAdapter(
                             }
                         )
                     }
+                    root.setOnClickListener { openCategory() }
                     val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
+                    if (isTv) {
+                        root.setOnLongClickListener {
+                            val pinned = com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.isCategoryPinned(context, item.id)
+                            val actions = buildList {
+                                add(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                        context.getString(R.string.tv_open_this_category),
+                                        R.drawable.tv_ic_gamepad,
+                                    ) {
+                                        openCategory()
+                                    }
+                                )
+                                if (!item.id.isNullOrBlank()) {
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(if (pinned) R.string.tv_home_unpin_category else R.string.tv_home_pin_category),
+                                            if (pinned) R.drawable.tv_ic_delete else R.drawable.tv_ic_pin,
+                                        ) {
+                                            val nowPinned = com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.togglePinCategory(context, item)
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                context.getString(
+                                                    if (nowPinned) R.string.tv_home_category_pinned else R.string.tv_home_category_unpinned,
+                                                    item.name ?: "",
+                                                ),
+                                                android.widget.Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                    )
+                                }
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(context, item.name ?: "", actions)
+                            true
+                        }
+                    } else {
+                        root.setOnLongClickListener(null)
+                    }
                     if (item.boxArt != null) {
                         gameImage.visibility = View.VISIBLE
                         fragment.requireContext().imageLoader.enqueue(
