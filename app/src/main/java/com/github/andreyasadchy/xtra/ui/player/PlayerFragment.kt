@@ -95,6 +95,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.timepicker.MaterialTimePicker
 import com.google.android.material.timepicker.TimeFormat
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -786,13 +787,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (isTv) {
                     progressBar.isFocusable = hudOpenedByUser
                     progressBar.setOnKeyListener { _, keyCode, event ->
-                        // the timeline focused without a HUD opened on purpose: left / right still change the streamer
-                        if ((keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) && _binding != null && dpadSwitchesStreams()) {
-                            binding.dragView.requestFocus()
-                            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && ((activity as? MainActivity)?.streamQueue?.size ?: 0) > 1) {
-                                (activity as? MainActivity)?.switchStream(if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+                        // the timeline focused without a HUD opened on purpose: left / right still run their hidden-HUD shortcut
+                        if ((keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) && _binding != null && !hudOpenedByUser) {
+                            val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+                            val dpadAction = Keys.dpadForKeyCode(requireContext(), keyCode)
+                            val isSwitch = dpadAction == Keys.ACTION_SWITCH_PREV || dpadAction == Keys.ACTION_SWITCH_NEXT
+                            if ((isSwitch && isLiveOrDvrScreen()) || (!isSwitch && dpadAction != Keys.ACTION_DEFAULT)) {
+                                binding.dragView.requestFocus()
+                                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                                    executeTvRemoteAction(dpadAction)
+                                }
+                                return@setOnKeyListener true
                             }
-                            return@setOnKeyListener true
                         }
                         // down from the timeline: back to the button the focus was on, not the nearest one
                         if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN && _binding != null) {
