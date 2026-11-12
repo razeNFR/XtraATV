@@ -37,7 +37,7 @@ Two ways on TV: a **code to enter on twitch.tv/activate** from a phone or comput
 ## 1440p - 4K (Enhanced Broadcasting)
 
 Twitch only serves the 1440p - 4K streams to its website client with a logged-in account. To enable them:
-1. Log in with your Twitch account using the **Twitch login page** in the app (code login does not grant p).
+1. Log in with your Twitch account using the **Twitch login page** in the app (code login does not grant 1440p - 4K).
 2. Public proxies stop at 1080p: use the built-in ad blocker (**During ads** or **VAFT**), or your own proxy.
 3. Keep **"Include token for streams"** enabled (default).
 4. Your TV must support **H.265 (HEVC)** or **AV1** hardware decoding.
