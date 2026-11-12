@@ -279,8 +279,9 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         hero = heroStream,
                         heroQueue = heroQueue,
                         resume = resumeItems.value.takeIf { it.isNotEmpty() }?.let { TvHomeRow(getString(R.string.tv_continue_watching), it, 0, R.drawable.tv_ic_history) },
-                        // the videos still recording (the live of a channel live now) are left out: the live is in the row above
+                        // only full past broadcasts (ARCHIVE), and the videos still recording are left out
                         videos = followedVideos?.takeIf { context.prefs().getBoolean(C.TV_HOME_FOLLOWED_VIDEOS, true) }
+                            ?.filter { video -> video.type == null || video.type.equals("ARCHIVE", ignoreCase = true) }
                             ?.filterNot { video -> isRecording(video, followed) }
                             ?.takeIf { it.isNotEmpty() }
                             ?.let { TvHomeRow(getString(R.string.tv_followed_videos_row), it, 0, R.drawable.tv_ic_video_library) },

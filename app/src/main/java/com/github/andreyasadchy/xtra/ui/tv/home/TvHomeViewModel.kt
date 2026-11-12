@@ -141,7 +141,7 @@ class TvHomeViewModel(
             jobs += viewModelScope.launch {
                 followedVideos.value = loadPage(
                     com.github.andreyasadchy.xtra.repository.datasource.FollowedVideosDataSource(
-                        gqlQueryType = null,
+                        gqlQueryType = com.github.andreyasadchy.xtra.graphql.type.BroadcastType.ARCHIVE,
                         gqlQuerySort = com.github.andreyasadchy.xtra.graphql.type.VideoSort.TIME,
                         gqlHeaders = gqlAccountHeaders,
                         graphQLRepository = graphQLRepository,
