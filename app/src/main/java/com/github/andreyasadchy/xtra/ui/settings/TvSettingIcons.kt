@@ -52,6 +52,7 @@ object TvSettingIcons {
         "tv_back_action" to R.drawable.tv_ic_replay,
         "tv_keep_sound_on_leave" to R.drawable.tv_ic_volume,
         "tv_clips_autoplay" to R.drawable.tv_ic_play,
+        "tv_multistream_quality" to R.drawable.tv_ic_multistream,
         "tv_confirm_exit" to R.drawable.tv_ic_replay,
         "tv_dpad_shortcuts" to R.drawable.tv_ic_gamepad,
         "tv_custom_keys" to R.drawable.tv_ic_key,

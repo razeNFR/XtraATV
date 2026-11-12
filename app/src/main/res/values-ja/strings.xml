@@ -1110,4 +1110,19 @@
     <string name="tv_home_category_pinned">%1$s をホームに追加しました</string>
     <string name="tv_home_category_unpinned">%1$s をホームから削除しました</string>
     <string name="tv_open_this_category">カテゴリーを開く</string>
+    <string name="tv_multistream_quality">マルチストリーム画質</string>
+    <string name="tv_multistream_quality_summary">テレビのカクつきを防ぐため配信数に応じて画質を自動調整します</string>
+    <string name="tv_multistream_quality_profile">プロファイル</string>
+    <string name="tv_multistream_quality_potato">超低画質 (Potato)</string>
+    <string name="tv_multistream_quality_low">低</string>
+    <string name="tv_multistream_quality_medium">中</string>
+    <string name="tv_multistream_quality_high">高</string>
+    <string name="tv_multistream_quality_max">最高</string>
+    <string name="tv_multistream_quality_custom">カスタム</string>
+    <string name="tv_multistream_quality_streams_2">2配信</string>
+    <string name="tv_multistream_quality_streams_3">3配信</string>
+    <string name="tv_multistream_quality_streams_4">4配信</string>
+    <string name="tv_multistream_quality_cap_max">最大</string>
+    <string name="tv_multistream_quality_this_stream">この配信 (%1$s)</string>
+    <string name="tv_multistream_quality_follow_profile">プロファイルに従う</string>
 </resources>

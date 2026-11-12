@@ -1111,4 +1111,19 @@
     <string name="tv_home_category_pinned">%1$s ana ekrana eklendi</string>
     <string name="tv_home_category_unpinned">%1$s ana ekrandan kaldırıldı</string>
     <string name="tv_open_this_category">Kategoriyi aç</string>
+    <string name="tv_multistream_quality">Çoklu yayın kalitesi</string>
+    <string name="tv_multistream_quality_summary">TV\'de takılmaları önlemek için yayın sayısına göre video kalitesi</string>
+    <string name="tv_multistream_quality_profile">Profil</string>
+    <string name="tv_multistream_quality_potato">Çok düşük (Potato)</string>
+    <string name="tv_multistream_quality_low">Düşük</string>
+    <string name="tv_multistream_quality_medium">Orta</string>
+    <string name="tv_multistream_quality_high">Yüksek</string>
+    <string name="tv_multistream_quality_max">Maksimum</string>
+    <string name="tv_multistream_quality_custom">Özel</string>
+    <string name="tv_multistream_quality_streams_2">2 yayın</string>
+    <string name="tv_multistream_quality_streams_3">3 yayın</string>
+    <string name="tv_multistream_quality_streams_4">4 yayın</string>
+    <string name="tv_multistream_quality_cap_max">Maks</string>
+    <string name="tv_multistream_quality_this_stream">Bu yayın (%1$s)</string>
+    <string name="tv_multistream_quality_follow_profile">Profili izle</string>
 </resources>

@@ -1129,4 +1129,19 @@
     <string name="tv_home_category_pinned">%1$s added to home</string>
     <string name="tv_home_category_unpinned">%1$s removed from home</string>
     <string name="tv_open_this_category">Open category</string>
+    <string name="tv_multistream_quality">Multi-stream quality</string>
+    <string name="tv_multistream_quality_summary">Video quality by number of streams to prevent lag on the TV</string>
+    <string name="tv_multistream_quality_profile">Profile</string>
+    <string name="tv_multistream_quality_potato">Potato</string>
+    <string name="tv_multistream_quality_low">Low</string>
+    <string name="tv_multistream_quality_medium">Medium</string>
+    <string name="tv_multistream_quality_high">High</string>
+    <string name="tv_multistream_quality_max">Maximum</string>
+    <string name="tv_multistream_quality_custom">Custom</string>
+    <string name="tv_multistream_quality_streams_2">2 streams</string>
+    <string name="tv_multistream_quality_streams_3">3 streams</string>
+    <string name="tv_multistream_quality_streams_4">4 streams</string>
+    <string name="tv_multistream_quality_cap_max">Max</string>
+    <string name="tv_multistream_quality_this_stream">This stream (%1$s)</string>
+    <string name="tv_multistream_quality_follow_profile">Follow profile</string>
 </resources>
