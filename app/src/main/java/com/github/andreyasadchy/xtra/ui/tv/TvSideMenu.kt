@@ -445,7 +445,7 @@ private fun NowPlayingContent(
 
 /**
  * An entry. [open] from 0 (the rail: only its icon, in a square) to 1 (the menu: its icon at the same place, its name
- * next to it). The section shown: a pill of the accent color with a bar at its left, its icon in the accent color.
+ * next to it). The section shown: a pill of the accent color, its icon in the accent color.
  */
 @Composable
 private fun MenuEntry(item: TvMenuItem, selected: Boolean, open: Float, menuWidth: androidx.compose.ui.unit.Dp, modifier: Modifier, onClick: () -> Unit) {
@@ -477,16 +477,6 @@ private fun MenuEntry(item: TvMenuItem, selected: Boolean, open: Float, menuWidt
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(width = ENTRY_HEIGHT, height = height), contentAlignment = Alignment.Center) {
-            if (selected && !focused) {
-                Box(
-                    Modifier
-                        .align(Alignment.CenterStart)
-                        .width(4.dp)
-                        .height(if (item.sub) 16.dp else 22.dp)
-                        .clip(RoundedCornerShape(topEnd = 3.dp, bottomEnd = 3.dp))
-                        .background(accent)
-                )
-            }
             if (item.icon != null) {
                 Icon(painterResource(item.icon), contentDescription = null, tint = iconTint, modifier = Modifier.size(if (item.sub) 18.dp else 24.dp))
             }

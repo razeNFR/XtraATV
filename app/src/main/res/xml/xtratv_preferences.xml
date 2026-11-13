@@ -154,6 +154,22 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_home_greeting"
+            android:summary="@string/tv_home_greeting_summary"
+            android:title="@string/tv_home_greeting"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_home_stats_badge"
+            android:summary="@string/tv_home_stats_badge_summary"
+            android:title="@string/tv_home_stats_badge"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
         <Preference
             android:key="tv_home_rows"
             android:persistent="false"

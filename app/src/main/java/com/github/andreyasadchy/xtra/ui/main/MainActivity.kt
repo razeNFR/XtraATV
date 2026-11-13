@@ -1446,6 +1446,7 @@ class MainActivity : AppCompatActivity() {
             R.id.followMediaFragment to R.drawable.ic_favorite_black_24dp,
             R.id.savedPagerFragment to R.drawable.ic_file_download_black_24dp,
             R.id.savedMediaFragment to R.drawable.ic_file_download_black_24dp,
+            R.id.tvNavStats to R.drawable.tv_ic_bar_chart,
             R.id.tvNavSettings to R.drawable.baseline_settings_black_24,
             R.id.tvNavAccount to R.drawable.baseline_person_black_24,
             R.id.tvNavFollowedVideos to R.drawable.tv_ic_video_library,
@@ -1464,7 +1465,7 @@ class MainActivity : AppCompatActivity() {
                 icon = icons[item.itemId],
                 group = when (item.itemId) {
                     R.id.tvNavSearch -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_TOP
-                    R.id.tvNavSettings, R.id.tvNavAccount -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_BOTTOM
+                    R.id.tvNavStats, R.id.tvNavSettings, R.id.tvNavAccount -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_BOTTOM
                     else -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_MAIN
                 },
                 sub = sub,
@@ -1488,11 +1489,11 @@ class MainActivity : AppCompatActivity() {
         tvMenuState.selected = binding.navBar.selectedItemId
         tvMenuState.accountId = R.id.tvNavAccount
         updateTvMenuAccount()
-        // option: the page of the focused entry is shown without OK (not search, settings nor account, they open screens)
+        // option: the page of the focused entry is shown without OK (not search, stats, settings nor account, they open screens)
         tvMenuState.onFocusItem = { id ->
             binding.root.removeCallbacks(tvMenuAutoNav)
             tvMenuPendingId = 0
-            if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavSearch && id != R.id.tvNavSettings && id != R.id.tvNavAccount &&
+            if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavSearch && id != R.id.tvNavStats && id != R.id.tvNavSettings && id != R.id.tvNavAccount &&
                 id != tvMenuState.selected
             ) {
                 tvMenuPendingId = id
@@ -1531,7 +1532,7 @@ class MainActivity : AppCompatActivity() {
                     tvMenuAutoNavAt = 0L
                     binding.navBar.selectedItemId = id
                     tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
-                    if (id != R.id.tvNavSettings && id != R.id.tvNavAccount) {
+                    if (id != R.id.tvNavStats && id != R.id.tvNavSettings && id != R.id.tvNavAccount) {
                         // the chosen screen gets the focus, the menu folds away
                         focusContentAfterMenu(id == R.id.tvNavSearch)
                     }
@@ -3203,6 +3204,7 @@ class MainActivity : AppCompatActivity() {
                 if ("games" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedGames, Menu.NONE, R.string.tv_menu_followed_games).setIcon(R.drawable.tv_ic_gamepad)
             }
             if (isTv) {
+                menu.add(Menu.NONE, R.id.tvNavStats, Menu.NONE, R.string.tv_nav_stats).setIcon(R.drawable.tv_ic_bar_chart)
                 menu.add(Menu.NONE, R.id.tvNavSettings, Menu.NONE, R.string.settings).setIcon(R.drawable.baseline_settings_black_24)
                 menu.add(Menu.NONE, R.id.tvNavAccount, Menu.NONE, R.string.tv_account).setIcon(R.drawable.baseline_person_black_24)
             }
@@ -3229,6 +3231,10 @@ class MainActivity : AppCompatActivity() {
                 when (it.itemId) {
                     R.id.tvNavSearch -> {
                         navController.navigate(SearchPagerFragmentDirections.actionGlobalSearchPagerFragment())
+                        return@setOnItemSelectedListener false
+                    }
+                    R.id.tvNavStats -> {
+                        com.github.andreyasadchy.xtra.ui.tv.TvStatsPage.show(this@MainActivity) {}
                         return@setOnItemSelectedListener false
                     }
                     R.id.tvNavSettings -> {

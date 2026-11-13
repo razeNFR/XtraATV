@@ -65,6 +65,8 @@ object TvSettingIcons {
         "tv_hide_menu_on_launch" to R.drawable.tv_ic_view_quilt,
         "tv_compact_rail" to R.drawable.tv_ic_view_quilt,
         "tv_home_hero" to R.drawable.tv_ic_live,
+        "tv_home_greeting" to R.drawable.tv_ic_person,
+        "tv_home_stats_badge" to R.drawable.tv_ic_bar_chart,
         "tv_home_rows" to R.drawable.tv_ic_list,
         "tv_home_multistream" to R.drawable.tv_ic_multistream,
         "tv_home_followed_videos" to R.drawable.tv_ic_video_library,

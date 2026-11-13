@@ -1126,4 +1126,9 @@
     <string name="tv_multistream_quality_this_stream">هذا البث (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">اتّباع الملف</string>
     <string name="tv_multistream_quality_balanced">متوازنة</string>
+    <string name="tv_nav_stats">الإحصائيات</string>
+    <string name="tv_home_greeting">رسالة الترحيب</string>
+    <string name="tv_home_greeting_summary">إظهار مرحبًا / مساء الخير بجانب الساعة في الشاشة الرئيسية</string>
+    <string name="tv_home_stats_badge">شارة الإحصائيات في الأعلى</string>
+    <string name="tv_home_stats_badge_summary">إظهار شارة إحصائيات متبدلة في أعلى يمين الشاشة الرئيسية</string>
 </resources>

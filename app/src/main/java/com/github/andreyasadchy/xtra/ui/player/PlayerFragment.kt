@@ -2687,7 +2687,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             putSwitchFrame(it)
             return
         }
-        val surface = _binding?.playerSurface ?: return
+        val binding = _binding ?: return
+        val surface = binding.secondaryPlayerSurface.takeIf {
+            it.visibility == View.VISIBLE && it.holder.surface.isValid && it.width > 0 && it.height > 0
+        } ?: binding.playerSurface
         if (!surface.holder.surface.isValid || surface.width <= 0 || surface.height <= 0) {
             return
         }

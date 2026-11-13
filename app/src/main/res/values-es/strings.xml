@@ -1131,4 +1131,9 @@
     <string name="tv_multistream_quality_this_stream">Este stream (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">Seguir el perfil</string>
     <string name="tv_multistream_quality_balanced">Equilibrada</string>
+    <string name="tv_nav_stats">Estadísticas</string>
+    <string name="tv_home_greeting">Mensaje de bienvenida</string>
+    <string name="tv_home_greeting_summary">Muestra Hola / Buenas noches junto al reloj en la pantalla de inicio</string>
+    <string name="tv_home_stats_badge">Píldora de estadísticas arriba</string>
+    <string name="tv_home_stats_badge_summary">Muestra una píldora de estadísticas rotativa arriba a la derecha en la pantalla de inicio</string>
 </resources>

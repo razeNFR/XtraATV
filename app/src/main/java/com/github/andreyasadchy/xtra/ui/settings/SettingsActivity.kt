@@ -373,11 +373,45 @@ class SettingsActivity : AppCompatActivity() {
         })
     }
 
+    private fun createCenteredToolbarDisc(): android.graphics.drawable.Drawable {
+        val radius = 21f * resources.displayMetrics.density
+        fun disc(color: Int) = object : android.graphics.drawable.Drawable() {
+            private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+            }
+
+            override fun draw(canvas: android.graphics.Canvas) {
+                if (color != android.graphics.Color.TRANSPARENT) {
+                    canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
+                }
+            }
+
+            override fun setAlpha(alpha: Int) {
+                paint.alpha = alpha
+            }
+
+            override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {
+                paint.colorFilter = colorFilter
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+        }
+        return android.graphics.drawable.StateListDrawable().apply {
+            setEnterFadeDuration(120)
+            setExitFadeDuration(120)
+            addState(intArrayOf(android.R.attr.state_focused), disc(android.graphics.Color.WHITE))
+            addState(intArrayOf(android.R.attr.state_pressed), disc(0xCCFFFFFF.toInt()))
+            addState(intArrayOf(), disc(android.graphics.Color.TRANSPARENT))
+        }
+    }
+
     /**
-     * TV: back and search of the toolbar like the buttons of the player, a white disc when focused with the icon in
-     * the ambiance color.
+     * TV: back and search of the toolbar like the buttons of the player, a centered circular white disc when focused
+     * with the icon in the ambiance color.
      */
     private fun styleTvToolbarButtons() {
+        val size = (44 * resources.displayMetrics.density).toInt()
         val tint = android.content.res.ColorStateList(
             arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()),
             intArrayOf(com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight, android.graphics.Color.WHITE)
@@ -385,13 +419,33 @@ class SettingsActivity : AppCompatActivity() {
         fun style(view: View) {
             when (view) {
                 is android.widget.ImageButton -> {
-                    view.setBackgroundResource(R.drawable.tv_player_button_background)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        view.defaultFocusHighlightEnabled = false
+                    }
+                    view.minimumWidth = size
+                    view.minimumHeight = size
+                    view.setPadding(0, 0, 0, 0)
+                    view.scaleType = android.widget.ImageView.ScaleType.CENTER
+                    (view.layoutParams as? androidx.appcompat.widget.Toolbar.LayoutParams)?.let { lp ->
+                        if (lp.width != size || lp.height != size) {
+                            lp.width = size
+                            lp.height = size
+                            lp.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                            view.layoutParams = lp
+                        }
+                    }
+                    view.background = createCenteredToolbarDisc()
                     view.imageTintList = tint
                 }
                 is androidx.appcompat.widget.ActionMenuView -> {
                     for (i in 0 until view.childCount) {
                         val item = view.getChildAt(i)
-                        item.setBackgroundResource(R.drawable.tv_player_button_background)
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            item.defaultFocusHighlightEnabled = false
+                        }
+                        item.minimumWidth = size
+                        item.minimumHeight = size
+                        item.background = createCenteredToolbarDisc()
                         if (item is android.widget.TextView) {
                             androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(item, tint)
                         }
@@ -2044,7 +2098,7 @@ class SettingsActivity : AppCompatActivity() {
                 (requireActivity() as? SettingsActivity)?.setResult()
                 true
             }
-            listOf(C.TV_HOME_HERO, C.TV_COMPACT_RAIL).forEach { key ->
+            listOf(C.TV_HOME_HERO, C.TV_HOME_GREETING, C.TV_HOME_STATS_BADGE, C.TV_COMPACT_RAIL).forEach { key ->
                 findPreference<Preference>(key)?.setOnPreferenceChangeListener { _, _ ->
                     (requireActivity() as? SettingsActivity)?.setResult()
                     true

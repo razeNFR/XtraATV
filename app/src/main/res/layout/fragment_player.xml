@@ -27,6 +27,19 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent" />
 
+                <SurfaceView
+                    android:id="@+id/secondaryPlayerSurface"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone" />
+
+                <View
+                    android:id="@+id/adHideOverlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@android:color/black"
+                    android:visibility="gone" />
+
             </androidx.media3.ui.AspectRatioFrameLayout>
 
             <androidx.media3.ui.SubtitleView

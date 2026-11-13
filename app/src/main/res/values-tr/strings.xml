@@ -1127,4 +1127,9 @@
     <string name="tv_multistream_quality_this_stream">Bu yayın (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">Profili izle</string>
     <string name="tv_multistream_quality_balanced">Dengeli</string>
+    <string name="tv_nav_stats">İstatistikler</string>
+    <string name="tv_home_greeting">Karşılama mesajı</string>
+    <string name="tv_home_greeting_summary">Ana ekranda saatin yanında Merhaba / İyi akşamlar mesajını gösterir</string>
+    <string name="tv_home_stats_badge">Üstteki istatistik kapsülü</string>
+    <string name="tv_home_stats_badge_summary">Ana ekranın sağ üst köşesinde dönüşümlü bir istatistik kapsülü gösterir</string>
 </resources>
