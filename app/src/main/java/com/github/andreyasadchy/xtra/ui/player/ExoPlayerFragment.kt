@@ -64,6 +64,17 @@ class ExoPlayerFragment : PlayerFragment() {
         super.onStart()
         if (keptAcrossStop && playbackService != null && serviceConnection != null) {
             keptAcrossStop = false
+            playbackService?.let { service ->
+                val hideMain = service.shouldHidePlayerSurface()
+                binding.playerSurface.visibility = if (hideMain) View.GONE else View.VISIBLE
+                if (!hideMain) {
+                    service.player?.setVideoSurfaceView(binding.playerSurface)
+                }
+                if (service.isSwapping && !hideMain) {
+                    binding.secondaryPlayerSurface.visibility = View.VISIBLE
+                    service.secondaryPlayer?.setVideoSurfaceView(binding.secondaryPlayerSurface)
+                }
+            }
             updateProgress()
             return
         }
@@ -822,10 +833,14 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun onNetworkRestored() {
         if (isResumed) {
-            if (playbackService?.type == BasePlaybackService.STREAM) {
+            val service = playbackService ?: return
+            if (service.isIntentionallyPausedOrStopped || service.visiblePlayer?.isPlaying == true) {
+                return
+            }
+            if (service.type == BasePlaybackService.STREAM) {
                 restartPlayer()
-            } else {
-                playbackService?.player?.prepare()
+            } else if (service.player?.playbackState == Player.STATE_IDLE) {
+                service.player?.prepare()
             }
         }
     }
