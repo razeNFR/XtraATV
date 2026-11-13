@@ -29,6 +29,7 @@ import com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamQuality
 import com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamSound
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
+import com.github.andreyasadchy.xtra.util.tokenPrefs
 import kotlinx.coroutines.launch
 
 /**
@@ -71,10 +72,15 @@ class MultiStreamFragment : Fragment() {
         var adPulseAnimator: android.animation.ValueAnimator? = null
         var backJob: kotlinx.coroutines.Job? = null
         var infoJob: kotlinx.coroutines.Job? = null
+        var chatProbeJob: kotlinx.coroutines.Job? = null
     }
 
     private val tiles = mutableListOf<Tile>()
     private lateinit var root: FrameLayout
+    private val followCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Boolean, Long?>>()
+    private val roomStateCache = java.util.concurrent.ConcurrentHashMap<String, com.github.andreyasadchy.xtra.model.chat.RoomState>()
+    private val userBadgesCache = java.util.concurrent.ConcurrentHashMap<String, Set<String>>()
+    private val twitchEmotesCache = java.util.concurrent.ConcurrentHashMap<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>()
 
     /** 2 streams: logins whose chat is shown with their stream. */
     private val chatsShown = mutableSetOf<String>()
@@ -485,6 +491,15 @@ class MultiStreamFragment : Fragment() {
             activity.startStream(tile.stream)
         }
         if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
+            if (isTileChatLoggedIn(requireContext())) {
+                val lockMsg = computeTileChatLockMessage(tile)
+                actions += TvActionPanel.Action(
+                    getString(R.string.tv_write_message),
+                    if (lockMsg != null) R.drawable.tv_ic_chat_send_locked else R.drawable.tv_ic_chat_send,
+                ) {
+                    openTileChatComposer(tile)
+                }
+            }
             when (tiles.size) {
                 2 -> {
                     val shown = login in chatsShown
@@ -598,6 +613,409 @@ class MultiStreamFragment : Fragment() {
         TvActionPanel.show(requireContext(), name, actions, slider)
     }
 
+    private fun isTileChatLoggedIn(context: android.content.Context): Boolean {
+        return !com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(context, true)[C.HEADER_TOKEN].isNullOrBlank() ||
+            !com.github.andreyasadchy.xtra.util.TwitchApiHelper.getHelixHeaders(context)[C.HEADER_TOKEN].isNullOrBlank()
+    }
+
+    private fun findChatFragment(login: String?): ChatFragment? {
+        if (login.isNullOrBlank() || !isAdded) return null
+        tiles.find { it.stream.channelLogin.equals(login, ignoreCase = true) }?.chatContainer?.id?.let { id ->
+            (childFragmentManager.findFragmentById(id) as? ChatFragment)?.takeIf { it.isAdded && it.view != null }?.let { return it }
+        }
+        if (cellChatLogin != null && cellChatLogin.equals(login, ignoreCase = true)) {
+            cellChat?.id?.let { id ->
+                (childFragmentManager.findFragmentById(id) as? ChatFragment)?.takeIf { it.isAdded && it.view != null }?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun computeTileChatLockMessage(tile: Tile): String? {
+        val ctx = context ?: return null
+        val login = tile.stream.channelLogin ?: return null
+        val loginKey = login.lowercase()
+        val channelId = tile.stream.channelId
+        val userId = ctx.tokenPrefs().getString(C.USER_ID, null)
+        if (!userId.isNullOrBlank() && !channelId.isNullOrBlank() && userId == channelId) {
+            return null
+        }
+        val chat = findChatFragment(login)
+        val badges = chat?.getUserRoomBadges()?.value ?: userBadgesCache[loginKey]
+        if (badges != null && badges.any {
+                it == "broadcaster" || it == "moderator" || it == "lead_moderator" ||
+                    it == "vip" || it == "staff" || it == "admin" || it == "global_mod"
+            }
+        ) {
+            return null
+        }
+        val roomState = chat?.getEffectiveRoomState()?.value ?: roomStateCache[loginKey] ?: return null
+        if (roomState.subs == "1" && badges != null && "subscriber" !in badges && "founder" !in badges) {
+            return com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(ctx, "SUBSCRIBERS_ONLY")
+        }
+        val followersMin = roomState.followers?.toIntOrNull()
+        val followEntry = channelId?.takeIf { it.isNotBlank() }?.let { followCache[it] }
+        if (followersMin != null && followersMin >= 0 && followEntry?.first == true) {
+            val followedAt = followEntry.second
+            if (followedAt == null) {
+                return com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(
+                    ctx,
+                    "FOLLOWERS_ONLY",
+                    followersMinutes = followersMin,
+                )
+            }
+            if (followersMin > 0) {
+                val unlockAt = followedAt + followersMin * 60_000L
+                val now = System.currentTimeMillis()
+                if (now < unlockAt) {
+                    val remSec = (unlockAt - now + 999L) / 1000L
+                    return com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(
+                        ctx,
+                        "msg_followersonly_followed",
+                        followersMinutes = followersMin,
+                        remainingSeconds = remSec,
+                    )
+                }
+            }
+        }
+        return null
+    }
+
+    private fun prefetchTileChatState(tile: Tile) {
+        val ctx = context ?: return
+        if (ctx.prefs().getBoolean(C.CHAT_DISABLE, false) || !isTileChatLoggedIn(ctx)) {
+            return
+        }
+        val login = tile.stream.channelLogin ?: return
+        tile.chatProbeJob?.cancel()
+        tile.chatProbeJob = viewLifecycleOwner.lifecycleScope.launch {
+            ensureTileChatState(tile)
+        }
+    }
+
+    private suspend fun ensureTileChatState(tile: Tile) {
+        val ctx = context ?: return
+        val login = tile.stream.channelLogin?.takeIf { it.isNotBlank() } ?: return
+        val loginKey = login.lowercase()
+        val app = ctx.applicationContext as com.github.andreyasadchy.xtra.XtraApp
+        val networkLibrary = ctx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+        val gqlHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(ctx, true)
+        val helixHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getHelixHeaders(ctx)
+        val userId = ctx.tokenPrefs().getString(C.USER_ID, null)
+        var channelId = tile.stream.channelId
+        if (channelId.isNullOrBlank()) {
+            val user = runCatching {
+                app.xtraModule.graphQLRepository.loadQueryUsersStream(
+                    networkLibrary,
+                    com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(ctx),
+                    ids = null,
+                    logins = listOf(login),
+                ).data?.users?.firstOrNull()
+            }.getOrNull()
+            if (!user?.id.isNullOrBlank()) {
+                channelId = user!!.id
+                tile.stream.channelId = channelId
+            }
+        }
+        if (!channelId.isNullOrBlank() && !followCache.containsKey(channelId)) {
+            if (!userId.isNullOrBlank() && userId == channelId) {
+                followCache[channelId] = true to 1L
+            } else {
+                var known = false
+                val followedMs = runCatching {
+                    val self = if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+                        runCatching {
+                            app.xtraModule.graphQLRepository.loadQueryFollowingUser(
+                                networkLibrary = networkLibrary,
+                                headers = gqlHeaders,
+                                id = channelId,
+                                login = null,
+                            ).data?.user?.self
+                        }.getOrNull()
+                    } else null
+                    when {
+                        self != null -> {
+                            known = true
+                            self.follower?.followedAt?.toString()?.let {
+                                kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() ?: 1L
+                            }
+                        }
+                        !helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && !userId.isNullOrBlank() -> {
+                            val first = app.xtraModule.helixRepository.getUserFollows(networkLibrary, helixHeaders, userId, channelId).data.firstOrNull()
+                            known = true
+                            first?.let { f -> f.followedAt?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 1L }
+                        }
+                        else -> null
+                    }
+                }.getOrNull()
+                if (known) {
+                    followCache[channelId] = true to followedMs
+                }
+            }
+        }
+        if (findChatFragment(login) == null && !roomStateCache.containsKey(loginKey)) {
+            val accountLogin = ctx.tokenPrefs().getString(C.USERNAME, null)
+            val gqlToken = gqlHeaders[C.HEADER_TOKEN]?.removePrefix("OAuth ")?.takeIf { it.isNotBlank() }
+            val helixToken = helixHeaders[C.HEADER_TOKEN]?.removePrefix("Bearer ")?.takeIf { it.isNotBlank() }
+            val oauthToken = gqlToken ?: helixToken
+            val gotRoom = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val gotUser = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val useAuthSocket = !accountLogin.isNullOrBlank() && !oauthToken.isNullOrBlank()
+            if (!useAuthSocket) {
+                gotUser.complete(Unit)
+            }
+            val listener = object : com.github.andreyasadchy.xtra.util.chat.ChatReadWebSocket.Listener {
+                override suspend fun onRoomState(message: com.github.andreyasadchy.xtra.util.chat.ChatUtils.IRCMessage) {
+                    roomStateCache[loginKey] = com.github.andreyasadchy.xtra.model.chat.RoomState(
+                        emote = message.tags["emote-only"],
+                        followers = message.tags["followers-only"],
+                        unique = message.tags["r9k"],
+                        slow = message.tags["slow"],
+                        subs = message.tags["subs-only"],
+                    )
+                    gotRoom.complete(Unit)
+                }
+
+                override suspend fun onUserState(message: com.github.andreyasadchy.xtra.util.chat.ChatUtils.IRCMessage) {
+                    val badgeSet = message.tags["badges"]
+                        ?.split(',')
+                        ?.mapNotNull { it.substringBefore('/').takeIf(String::isNotBlank) }
+                        ?.toMutableSet()
+                        ?: mutableSetOf()
+                    if (message.tags["mod"] == "1") badgeSet.add("moderator")
+                    if (message.tags["subscriber"] == "1") badgeSet.add("subscriber")
+                    if (!message.tags["vip"].isNullOrBlank() && message.tags["vip"] != "0") badgeSet.add("vip")
+                    userBadgesCache[loginKey] = badgeSet
+                    gotUser.complete(Unit)
+                }
+
+                override suspend fun onDisconnect(message: String, fullMsg: String?) {
+                    gotRoom.complete(Unit)
+                    gotUser.complete(Unit)
+                }
+            }
+            kotlinx.coroutines.supervisorScope {
+                var writeSocket: com.github.andreyasadchy.xtra.util.chat.ChatWriteWebSocket? = null
+                var readSocket: com.github.andreyasadchy.xtra.util.chat.ChatReadWebSocket? = null
+                var job: kotlinx.coroutines.Job? = null
+                try {
+                    if (useAuthSocket) {
+                        writeSocket = com.github.andreyasadchy.xtra.util.chat.ChatWriteWebSocket(accountLogin, oauthToken, login, listener)
+                        job = writeSocket.connect(this)
+                    } else {
+                        readSocket = com.github.andreyasadchy.xtra.util.chat.ChatReadWebSocket(login, listener)
+                        job = readSocket.connect(this)
+                    }
+                    kotlinx.coroutines.withTimeoutOrNull(2000L) {
+                        gotRoom.await()
+                        gotUser.await()
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    runCatching { writeSocket?.disconnect(job) }
+                    runCatching { readSocket?.disconnect(job) }
+                }
+            }
+        }
+    }
+
+    private fun openTileChatComposer(tile: Tile) {
+        val ctx = context ?: return
+        val immediateLock = computeTileChatLockMessage(tile)
+        if (immediateLock != null) {
+            android.widget.Toast.makeText(ctx, immediateLock, android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val login = tile.stream.channelLogin ?: return
+        val loginKey = login.lowercase()
+        val channelId = tile.stream.channelId
+        val chat = findChatFragment(login)
+        val stateReady = !channelId.isNullOrBlank() && followCache.containsKey(channelId) &&
+            (chat?.getEffectiveRoomState()?.value != null || roomStateCache.containsKey(loginKey))
+        if (!stateReady) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                kotlinx.coroutines.withTimeoutOrNull(1800L) {
+                    ensureTileChatState(tile)
+                }
+                if (view == null || !isAdded || tile !in tiles) return@launch
+                val lockAfterCheck = computeTileChatLockMessage(tile)
+                if (lockAfterCheck != null) {
+                    android.widget.Toast.makeText(requireContext(), lockAfterCheck, android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    showTileChatComposerDialog(tile)
+                }
+            }
+            return
+        }
+        showTileChatComposerDialog(tile)
+    }
+
+    private fun showTileChatComposerDialog(tile: Tile) {
+        val ctx = context ?: return
+        val login = tile.stream.channelLogin ?: return
+        val name = tile.stream.channelName?.takeIf { it.isNotBlank() } ?: login
+        val chat = findChatFragment(login)
+        val emoteGroupsState = androidx.compose.runtime.mutableStateOf(
+            chat?.getTvEmoteGroups() ?: buildFallbackTileEmoteGroups(tile.stream.channelId)
+        )
+        if (chat == null) {
+            loadFallbackTileEmotes(tile, emoteGroupsState)
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(ctx) { dismiss ->
+            com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
+                title = "${getString(R.string.tv_write_message)} · $name",
+                hint = getString(R.string.tv_message_hint),
+                sendLabel = getString(R.string.tv_send),
+                emoteGroups = emoteGroupsState.value,
+            ) { text ->
+                if (text.isNotBlank()) {
+                    val activeChat = findChatFragment(login)
+                    if (activeChat != null) {
+                        activeChat.sendExternalMessage(text)
+                    } else {
+                        sendDirectTileChatMessage(tile, text)
+                    }
+                }
+                dismiss()
+            }
+        }
+    }
+
+    private fun buildFallbackTileEmoteGroups(channelId: String?): List<Pair<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>> {
+        val twitch = channelId?.let { twitchEmotesCache[it] }.orEmpty()
+        if (twitch.isNotEmpty()) {
+            return listOf("Twitch" to twitch)
+        }
+        val anyMounted = childFragmentManager.fragments.filterIsInstance<ChatFragment>().firstOrNull { it.isAdded && it.view != null }
+        return anyMounted?.getTvEmoteGroups()?.filter { it.first == "Twitch" }.orEmpty()
+    }
+
+    private fun loadFallbackTileEmotes(
+        tile: Tile,
+        state: androidx.compose.runtime.MutableState<List<Pair<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>>>,
+    ) {
+        val ctx = context ?: return
+        val channelId = tile.stream.channelId?.takeIf { it.isNotBlank() } ?: return
+        if (twitchEmotesCache.containsKey(channelId)) {
+            state.value = buildFallbackTileEmoteGroups(channelId)
+            return
+        }
+        val app = ctx.applicationContext as com.github.andreyasadchy.xtra.XtraApp
+        val networkLibrary = ctx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+        val gqlHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(ctx, true)
+        val helixHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getHelixHeaders(ctx)
+        val userId = ctx.tokenPrefs().getString(C.USER_ID, null)
+        val animateGifs = ctx.prefs().getBoolean(C.ANIMATED_EMOTES, true)
+        val enableIntegrity = ctx.prefs().getBoolean(C.ENABLE_INTEGRITY, false)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val loaded = runCatching {
+                app.xtraModule.playerRepository.loadUserEmotes(
+                    networkLibrary = networkLibrary,
+                    helixHeaders = helixHeaders,
+                    gqlHeaders = gqlHeaders,
+                    channelId = channelId,
+                    userId = userId,
+                    animateGifs = animateGifs,
+                    enableIntegrity = enableIntegrity,
+                ).sortedByDescending { it.setId }
+                    .sortedByDescending { it.ownerId == channelId }
+                    .map {
+                        com.github.andreyasadchy.xtra.model.chat.Emote(
+                            name = it.name,
+                            url1x = it.url1x,
+                            url2x = it.url2x,
+                            url3x = it.url3x,
+                            url4x = it.url4x,
+                            format = it.format,
+                        )
+                    }
+                    .distinctBy { it.name }
+            }.getOrNull()
+            if (!loaded.isNullOrEmpty()) {
+                twitchEmotesCache[channelId] = loaded
+                state.value = listOf("Twitch" to loaded)
+            }
+        }
+    }
+
+    private fun sendDirectTileChatMessage(tile: Tile, rawMessage: String) {
+        val ctx = context ?: return
+        val trimmed = rawMessage.trim()
+        if (trimmed.isEmpty()) return
+        val appCtx = ctx.applicationContext
+        val app = appCtx as com.github.andreyasadchy.xtra.XtraApp
+        val login = tile.stream.channelLogin ?: return
+        val loginKey = login.lowercase()
+        val initialChannelId = tile.stream.channelId
+        val networkLibrary = appCtx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+        val gqlHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(appCtx, true)
+        val helixHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getHelixHeaders(appCtx)
+        val accountId = appCtx.tokenPrefs().getString(C.USER_ID, null)
+        if (!trimmed.startsWith("/")) {
+            com.github.andreyasadchy.xtra.ui.tv.TvStats.addMessage(appCtx)
+        }
+        kotlinx.coroutines.MainScope().launch {
+            try {
+                var channelId = initialChannelId
+                if (channelId.isNullOrBlank()) {
+                    channelId = runCatching {
+                        app.xtraModule.graphQLRepository.loadQueryUsersStream(
+                            networkLibrary,
+                            com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(appCtx),
+                            ids = null,
+                            logins = listOf(login),
+                        ).data?.users?.firstOrNull()?.id
+                    }.getOrNull()
+                    if (!channelId.isNullOrBlank()) {
+                        tile.stream.channelId = channelId
+                    }
+                }
+                if (channelId.isNullOrBlank()) return@launch
+                val followersMin = roomStateCache[loginKey]?.followers?.toIntOrNull()?.takeIf { it > 0 }
+                val toastMsg: String? = if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+                    val response = app.xtraModule.graphQLRepository.sendMessage(networkLibrary, gqlHeaders, channelId, trimmed, null)
+                    val dropReason = response.data?.sendChatMessage?.dropReason
+                    val dropMessage = response.data?.sendChatMessage?.dropReasonMessage
+                    when {
+                        !dropReason.isNullOrBlank() -> {
+                            if (dropReason == "SUBSCRIBERS_ONLY" && !userBadgesCache.containsKey(loginKey)) {
+                                userBadgesCache[loginKey] = emptySet()
+                            }
+                            com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, dropReason, dropMessage, followersMin)
+                        }
+                        !response.errors.isNullOrEmpty() -> {
+                            val errMsg = response.errors
+                                .mapNotNull { it.message?.takeIf(String::isNotBlank) }
+                                .joinToString("; ")
+                                .ifBlank { appCtx.getString(R.string.tv_chat_restricted_generic) }
+                            com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, null, errMsg)
+                        }
+                        else -> null
+                    }
+                } else if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+                    val raw = app.xtraModule.helixRepository.sendMessage(networkLibrary, helixHeaders, accountId, channelId, trimmed, null)
+                    when {
+                        raw != null && raw.startsWith("DROP:") -> {
+                            val payload = raw.removePrefix("DROP:")
+                            val code = payload.substringBefore('|')
+                            val msg = payload.substringAfter('|', "")
+                            if (code == "msg_subsonly" && !userBadgesCache.containsKey(loginKey)) {
+                                userBadgesCache[loginKey] = emptySet()
+                            }
+                            com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, code, msg, followersMin)
+                        }
+                        !raw.isNullOrBlank() -> com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, null, raw)
+                        else -> null
+                    }
+                } else null
+                if (!toastMsg.isNullOrBlank()) {
+                    android.widget.Toast.makeText(appCtx, toastMsg, android.widget.Toast.LENGTH_LONG).show()
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     private fun showQualityPanel(tile: Tile) {
         val context = context ?: return
         val name = tile.stream.channelName ?: tile.stream.channelLogin.orEmpty()
@@ -643,6 +1061,7 @@ class MultiStreamFragment : Fragment() {
         tile.adPulseAnimator = null
         tile.adListener?.let { tile.player.removeListener(it) }
         tile.infoJob?.cancel()
+        tile.chatProbeJob?.cancel()
         tile.player.release()
         tile.chatContainer?.let { removeChat(it) }
         tile.chatContainer = null
@@ -914,7 +1333,8 @@ class MultiStreamFragment : Fragment() {
         tile.stops.clear()
         tile.raiseJob?.cancel()
         tile.infoJob?.cancel()
-        if (tile.stream.createdAt.isNullOrBlank() || tile.stream.title.isNullOrBlank() || tile.stream.viewerCount == null) {
+        tile.chatProbeJob?.cancel()
+        if (tile.stream.channelId.isNullOrBlank() || tile.stream.createdAt.isNullOrBlank() || tile.stream.title.isNullOrBlank() || tile.stream.viewerCount == null) {
             tile.infoJob = viewLifecycleOwner.lifecycleScope.launch {
                 val context = context ?: return@launch
                 val app = context.applicationContext as com.github.andreyasadchy.xtra.XtraApp
@@ -922,12 +1342,15 @@ class MultiStreamFragment : Fragment() {
                     app.xtraModule.graphQLRepository.loadQueryUsersStream(
                         context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                         com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(context),
-                        ids = tile.stream.channelId?.let { listOf(it) },
+                        ids = tile.stream.channelId?.takeIf { it.isNotBlank() }?.let { listOf(it) },
                         logins = if (tile.stream.channelId.isNullOrBlank()) listOf(login) else null,
                     ).data?.users?.firstOrNull()
                 }.getOrNull() ?: return@launch
                 if (view == null || tile !in tiles || tile.stream.channelLogin != login) {
                     return@launch
+                }
+                if (tile.stream.channelId.isNullOrBlank() && !user.id.isNullOrBlank()) {
+                    tile.stream.channelId = user.id
                 }
                 user.stream?.let { s ->
                     if (tile.stream.createdAt.isNullOrBlank()) tile.stream.createdAt = s.createdAt?.toString()
@@ -938,7 +1361,10 @@ class MultiStreamFragment : Fragment() {
                     if (tile.stream.gameName.isNullOrBlank()) tile.stream.gameName = s.game?.displayName
                     updateTileInfo(tile)
                 }
+                prefetchTileChatState(tile)
             }
+        } else {
+            prefetchTileChatState(tile)
         }
         playStream(login, player, tile)
         // the stream ended (no more playlist, or the end of it): it leaves the multi-stream after a few seconds
@@ -1325,6 +1751,10 @@ class MultiStreamFragment : Fragment() {
         root.removeCallbacks(hideChrome)
         chromeAnimator?.cancel()
         tiles.forEach {
+            it.chatProbeJob?.cancel()
+            it.infoJob?.cancel()
+            it.backJob?.cancel()
+            it.raiseJob?.cancel()
             it.adPulseAnimator?.cancel()
             it.player.release()
         }

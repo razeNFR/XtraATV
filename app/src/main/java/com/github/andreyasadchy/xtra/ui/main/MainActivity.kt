@@ -269,6 +269,21 @@ class MainActivity : AppCompatActivity() {
                 binding.root.post { keepFocusInMultiStream() }
                 return@listener
             }
+            if (isTv && !tvMultiStreamShown && !restoringPlayerFocus && hasWindowFocus() && !hasOpenDialogFragment() &&
+                binding.navHostFragment.descendantFocusability == ViewGroup.FOCUS_BLOCK_DESCENDANTS &&
+                newFocus != null && (playerFragment as? PlayerFragment)?.let {
+                    it.isMaximizedPlayer() && !it.isRemoving && !it.isDetached && (
+                        newFocus === binding.root || newFocus === binding.playerContainer ||
+                            newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer) ||
+                            !it.hasValidTvFocus()
+                        )
+                } == true
+            ) {
+                // something behind or outside the maximized player took focus: bring it back to the player
+                binding.root.removeCallbacks(keepFocusInPlayerAction)
+                binding.root.post(keepFocusInPlayerAction)
+                return@listener
+            }
             if (newFocus != null && (newFocus.isInside(binding.navHostFragment) || newFocus.isInside(binding.navBarContainer))) {
                 lastContentFocus = newFocus
             }
@@ -314,10 +329,10 @@ class MainActivity : AppCompatActivity() {
                     binding.root.post {
                         // a list of streams shown again after a while: the streamers that stopped go away
                         f.view?.let { refreshStaleStreamLists(it) }
-                        if (tvInitialFocusDone && !isTvMenuShown && f.parentFragment is NavHostFragment && (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true) {
+                        if (tvInitialFocusDone && !isTvMenuShown && f.parentFragment is NavHostFragment && !isTvPlayerOverContent()) {
                             restoreTvScreenFocus()
                         }
-                        if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment) {
+                        if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment && !isTvPlayerOverContent()) {
                             tvInitialFocusDone = true
                             if (!prefs.getBoolean(C.TV_HIDE_MENU_ON_LAUNCH, false)) {
                                 // browsing starts in the side menu
@@ -1046,6 +1061,19 @@ class MainActivity : AppCompatActivity() {
         }
         if (isTv && !dispatchingPlayerKey && tvPip.onKey(event)) {
             return true
+        }
+        if (isTv && !tvMultiStreamShown && event.action == KeyEvent.ACTION_DOWN && event.keyCode != KeyEvent.KEYCODE_BACK &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER ||
+                event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)
+        ) {
+            val player = playerFragment as? PlayerFragment
+            val controlsWereShown = player?.let { it.isMaximizedPlayer() && it.areControlsShown() } == true
+            if (keepFocusInPlayer() && controlsWereShown) {
+                // HUD was already shown without focus: land the focus disc on its primary control first
+                return true
+            }
         }
         if (BuildConfig.DEBUG && isTv) {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
@@ -2458,6 +2486,50 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
+    private var restoringPlayerFocus = false
+    private val keepFocusInPlayerAction = Runnable {
+        if (!isFinishing && !isDestroyed) {
+            keepFocusInPlayer()
+        }
+    }
+
+    private fun hasOpenDialogFragment(): Boolean {
+        fun anyDialog(fm: FragmentManager): Boolean {
+            return fm.fragments.any { f ->
+                f.isAdded && ((f is androidx.fragment.app.DialogFragment && f.showsDialog && f.dialog?.isShowing == true) || anyDialog(f.childFragmentManager))
+            }
+        }
+        return anyDialog(supportFragmentManager)
+    }
+
+    /** Keeps focus inside the maximized TV player when focus drifted behind onto browsing screens or containers. */
+    private fun keepFocusInPlayer(): Boolean {
+        if (!isTv || tvMultiStreamShown || restoringPlayerFocus || !hasWindowFocus() || hasOpenDialogFragment()) {
+            return false
+        }
+        if (binding.navHostFragment.descendantFocusability != ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
+            return false
+        }
+        val player = playerFragment as? PlayerFragment ?: return false
+        if (!player.isMaximizedPlayer() || player.isRemoving || player.isDetached) {
+            return false
+        }
+        val focus = currentFocus
+        val lostOrBehind = focus == null || !focus.isShown ||
+            focus === binding.root || focus === binding.playerContainer ||
+            focus.isInside(binding.navHostFragment) || focus.isInside(binding.navBarContainer) ||
+            !focus.isInside(binding.playerContainer)
+        if (!lostOrBehind && player.hasValidTvFocus()) {
+            return false
+        }
+        restoringPlayerFocus = true
+        return try {
+            player.restoreTvFocusIfLost()
+        } finally {
+            restoringPlayerFocus = false
+        }
+    }
+
     /** Back from a multi-stream: the next streams to start when the one started ends at once (20 s). */
     private var multiStreamFallback: List<Stream> = emptyList()
     private var multiStreamFallbackLogin: String? = null
@@ -2991,21 +3063,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closePlayer(focusHome: Boolean = true) {
+        binding.root.removeCallbacks(keepFocusInPlayerAction)
         currentClipId = null
         neighborJob?.cancel()
         com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.clear()
         closeTvPip()
+        val fragmentToRemove = supportFragmentManager.findFragmentById(R.id.playerContainer)
+        playerFragment = null
         setMainContentFocusable(true)
         // back on the home: the card of the stream that was watched, else the first stream (not when a multi-stream
         // takes the place of the player: its streams keep the focus)
         if (focusHome) {
             currentTvHome()?.focusLastCard()
         }
-        supportFragmentManager.beginTransaction()
-            .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
-            .remove(supportFragmentManager.findFragmentById(R.id.playerContainer)!!)
-            .commit()
-        playerFragment = null
+        if (fragmentToRemove != null) {
+            supportFragmentManager.beginTransaction()
+                .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
+                .remove(fragmentToRemove)
+                .commit()
+        }
         updateTvNowPlaying()
         viewModel.isPlayerOpened = false
         if (!tvMultiStreamShown) {

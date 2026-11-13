@@ -2083,6 +2083,48 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     fun isPlayingStreamMaximized() = _binding != null && isMaximized && playbackService?.type == BasePlaybackService.STREAM
 
+    /** True when a valid target inside the maximized TV player currently holds focus. */
+    fun hasValidTvFocus(): Boolean {
+        val b = _binding ?: return false
+        if (!isMaximized || !isAdded || isRemoving || isDetached) {
+            return false
+        }
+        if (b.dragView.hasFocus()) {
+            return true
+        }
+        if (areControlsShown() && !hudPeek && b.playerControls.root.hasFocus()) {
+            return true
+        }
+        if (b.chatLayout.isVisible && b.chatLayout.hasFocus()) {
+            return true
+        }
+        return false
+    }
+
+    /** Restores focus inside the maximized TV player when focus drifted behind or was cleared. */
+    fun restoreTvFocusIfLost(): Boolean {
+        val b = _binding ?: return false
+        if (!isTv || !isAdded || isRemoving || isDetached || !isMaximized || isAnimating) {
+            return false
+        }
+        if (hasValidTvFocus()) {
+            return false
+        }
+        if (areControlsShown() && !hudPeek) {
+            if (b.playerControls.root.alpha < 1f) {
+                b.playerControls.root.alpha = 1f
+            }
+            focusPrimaryControl()
+            if (b.playerControls.root.hasFocus()) {
+                return true
+            }
+        }
+        if (!b.dragView.isFocusable) {
+            b.dragView.isFocusable = true
+        }
+        return b.dragView.isAttachedToWindow && b.dragView.isShown && b.dragView.requestFocus()
+    }
+
     /** Gives the focus to the player when it is maximized, returns false if it is not. */
     fun requestPlayerFocus(): Boolean {
         if (_binding == null || !isMaximized) {
@@ -3899,6 +3941,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
             }
+        } else if (view != null && isAdded && !isRemoving && isMaximized) {
+            binding.dragView.post {
+                if (view != null && isAdded && !isRemoving && isMaximized && activity?.hasWindowFocus() == true) {
+                    restoreTvFocusIfLost()
+                    if (areControlsShown() && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
+                        binding.playerControls.root.removeCallbacks(controllerHideAction)
+                        binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                    }
+                }
+            }
         }
     }
 
@@ -4043,6 +4095,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     protected fun showController(show: Boolean = true, force: Boolean = false) {
         if (show) {
+            if (controllerIsAnimating && controllerHiding && !force) {
+                controllerAnimation?.cancel()
+                controllerIsAnimating = false
+            }
             controllerHiding = false
         }
         if (show && isTv && !hudPeek) {
@@ -4052,10 +4108,25 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (show) {
             onTvControllerVisibility(true)
         }
+        if (show && force) {
+            controllerAnimation?.cancel()
+            controllerIsAnimating = false
+            binding.playerControls.root.removeCallbacks(controllerHideAction)
+            binding.playerControls.root.alpha = 1f
+            binding.playerControls.root.visibility = View.VISIBLE
+            updateProgress()
+            if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
+                binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+            }
+            return
+        }
         if (!controllerIsAnimating) {
             if (!binding.playerControls.root.isVisible) {
                 binding.playerControls.root.removeCallbacks(controllerHideAction)
                 if (show) {
+                    binding.playerControls.root.alpha = 0f
+                    binding.playerControls.root.visibility = View.VISIBLE
+                    updateProgress()
                     controllerAnimation = binding.playerControls.root.animate().apply {
                         alpha(1f)
                         setDuration(250L)
@@ -4063,15 +4134,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             object : AnimatorListenerAdapter() {
                                 override fun onAnimationStart(animation: Animator) {
                                     controllerIsAnimating = true
-                                    if (view != null) {
-                                        binding.playerControls.root.visibility = View.VISIBLE
-                                        updateProgress()
-                                    }
                                 }
 
                                 override fun onAnimationEnd(animation: Animator) {
                                     controllerIsAnimating = false
                                     setListener(null)
+                                    if (view != null && binding.playerControls.root.isVisible && !controllerHiding) {
+                                        binding.playerControls.root.alpha = 1f
+                                    }
                                     if (view != null && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
                                         binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                                     }
@@ -4084,20 +4154,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             } else {
                 binding.playerControls.root.removeCallbacks(controllerHideAction)
                 if (show) {
+                    if (binding.playerControls.root.alpha < 1f) {
+                        binding.playerControls.root.alpha = 1f
+                    }
                     updateProgress()
                 }
-                if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
-                }
-            }
-        } else {
-            if (force) {
-                controllerAnimation?.cancel()
-                controllerIsAnimating = false
-                binding.playerControls.root.removeCallbacks(controllerHideAction)
-                binding.playerControls.root.alpha = 1f
-                binding.playerControls.root.visibility = View.VISIBLE
-                updateProgress()
                 if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
                     binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
                 }
@@ -4312,6 +4373,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 hideChatLayout()
             }
             useController = false
+        } else if (isTv && _binding != null && isMaximized) {
+            binding.dragView.post {
+                if (view != null && isAdded && !isRemoving && isMaximized && activity?.hasWindowFocus() == true) {
+                    restoreTvFocusIfLost()
+                }
+            }
         }
     }
 
@@ -4382,7 +4449,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     override fun onStop() {
         super.onStop()
-        binding.playerControls.root.removeCallbacks(controllerHideAction)
+        _binding?.let { b ->
+            b.playerControls.root.removeCallbacks(controllerHideAction)
+            if (controllerIsAnimating) {
+                val wasHiding = controllerHiding
+                controllerAnimation?.cancel()
+                controllerAnimation = null
+                controllerIsAnimating = false
+                controllerHiding = false
+                if (wasHiding) {
+                    b.playerControls.root.alpha = 0f
+                    b.playerControls.root.visibility = View.GONE
+                } else {
+                    b.playerControls.root.alpha = 1f
+                    b.playerControls.root.visibility = View.VISIBLE
+                }
+            }
+        }
     }
 
     /** TV: what back does with the stream: "stop", "mini" (mini player) or "audio" (sound only). */
