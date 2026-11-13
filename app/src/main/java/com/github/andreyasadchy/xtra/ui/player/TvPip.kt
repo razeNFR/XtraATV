@@ -18,12 +18,15 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock
 import com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -41,6 +44,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     private var view: FrameLayout? = null
     private var player: ExoPlayer? = null
     private var loadJob: Job? = null
+    private var expUpgradeJob: Job? = null
+    private var experimentalVodActive = false
     private var noPlayerChecks = 0
     private val followPlayer = object : Runnable {
         override fun run() {
@@ -119,11 +124,12 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                     }
 
                     override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                        if (experimentalVodActive) return
                         // ad blocker like the multi-stream: an ad started, the stream of another player type
                         val playlist = (currentManifest as? androidx.media3.exoplayer.hls.HlsManifest)?.mediaPlaylist ?: return
                         val ads = playlist.tags.any { it.contains("stitched-ad", true) || it.contains("X-TV-TWITCH-AD", true) }
                         val now = System.currentTimeMillis()
-                        if (ads && now - lastSwitch > 20_000L && activity.prefs().getBoolean(com.github.andreyasadchy.xtra.util.C.PLAYER_ADBLOCK, true)) {
+                        if (ads && now - lastSwitch > 20_000L && TvExperimentalAdblock.isSwapAdblockEnabled(activity)) {
                             lastSwitch = now
                             this@TvPip.stream?.channelLogin?.let { load(it) }
                         }
@@ -158,13 +164,79 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
     private fun load(login: String) {
         loadJob?.cancel()
+        expUpgradeJob?.cancel()
+        expUpgradeJob = null
+        experimentalVodActive = false
         loadJob = activity.lifecycleScope.launch {
+            val app = activity.applicationContext as XtraApp
+            if (TvExperimentalAdblock.isExperimentalEnabled(activity)) {
+                val currentStream = stream
+                val outcome = TvExperimentalAdblock.resolveLiveVod(
+                    context = activity,
+                    xtraModule = app.xtraModule,
+                    channelLogin = login,
+                    streamIdHint = currentStream?.id,
+                    createdAtHint = currentStream?.createdAt,
+                )
+                val vod = outcome.vod
+                if (vod != null && vod.vodDurationMs >= TvExperimentalAdblock.MIN_INITIAL_VOD_DURATION_MS) {
+                    val activePlayer = player
+                    if (activePlayer != null && stream?.channelLogin == login) {
+                        experimentalVodActive = true
+                        activePlayer.setMediaSource(TvExperimentalAdblock.buildMediaSource(activity, app.xtraModule, vod.masterUri))
+                        activePlayer.prepare()
+                        activePlayer.playWhenReady = true
+                    }
+                    return@launch
+                }
+                if (outcome.channelIsLive &&
+                    (outcome.streamUptimeMs == null || outcome.streamUptimeMs < TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS)
+                ) {
+                    scheduleExperimentalUpgrade(login, outcome.streamId, outcome.createdAtIso)
+                }
+            }
             val url = TvPreviewSource.getPlaylistUrl(activity, login)
-            val player = player
-            if (url != null && player != null && stream?.channelLogin == login) {
-                player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
-                player.prepare()
-                player.playWhenReady = true
+            val activePlayer = player
+            if (url != null && activePlayer != null && stream?.channelLogin == login) {
+                experimentalVodActive = false
+                activePlayer.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+                activePlayer.prepare()
+                activePlayer.playWhenReady = true
+            }
+        }
+    }
+
+    private fun scheduleExperimentalUpgrade(login: String, streamIdHint: String?, createdAtHint: String?) {
+        expUpgradeJob?.cancel()
+        expUpgradeJob = activity.lifecycleScope.launch {
+            val app = activity.applicationContext as XtraApp
+            for (attempt in 1..TvExperimentalAdblock.UPGRADE_MAX_ATTEMPTS) {
+                delay(TvExperimentalAdblock.UPGRADE_POLL_INTERVAL_MS)
+                if (stream?.channelLogin != login || experimentalVodActive || !TvExperimentalAdblock.isExperimentalEnabled(activity)) {
+                    return@launch
+                }
+                val next = TvExperimentalAdblock.resolveLiveVod(
+                    context = activity,
+                    xtraModule = app.xtraModule,
+                    channelLogin = login,
+                    streamIdHint = streamIdHint ?: stream?.id,
+                    createdAtHint = createdAtHint ?: stream?.createdAt,
+                )
+                if (!next.channelIsLive) return@launch
+                val vod = next.vod
+                if (vod != null && vod.vodDurationMs >= TvExperimentalAdblock.UPGRADE_MIN_VOD_DURATION_MS) {
+                    val activePlayer = player
+                    if (activePlayer != null && stream?.channelLogin == login && !experimentalVodActive) {
+                        experimentalVodActive = true
+                        activePlayer.setMediaSource(TvExperimentalAdblock.buildMediaSource(activity, app.xtraModule, vod.masterUri))
+                        activePlayer.prepare()
+                        activePlayer.playWhenReady = true
+                    }
+                    return@launch
+                }
+                if (vod == null && next.streamUptimeMs != null && next.streamUptimeMs >= TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS) {
+                    return@launch
+                }
             }
         }
     }
@@ -265,6 +337,9 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         }
         loadJob?.cancel()
         loadJob = null
+        expUpgradeJob?.cancel()
+        expUpgradeJob = null
+        experimentalVodActive = false
         container.removeCallbacks(followPlayer)
         player?.release()
         player = null

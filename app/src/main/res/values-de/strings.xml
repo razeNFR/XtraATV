@@ -1131,4 +1131,14 @@
     <string name="tv_home_greeting_summary">Zeigt Hallo / Guten Abend neben der Uhr auf der Startseite an</string>
     <string name="tv_home_stats_badge">Statistik-Pille oben</string>
     <string name="tv_home_stats_badge_summary">Zeigt oben rechts auf der Startseite eine wechselnde Statistik-Pille an</string>
+    <string name="tv_adblock_swap_title">Werbeblocker (Swap)</string>
+    <string name="tv_adblock_swap_locked_hint">Standardmäßig aktiviert. Aktiviere einen benutzerdefinierten oder HTTP-Proxy, um ihn auszuschalten.</string>
+    <string name="tv_adblock_swap_locked_exp_hint">Bleibt als automatischer Rückfall aktiv, solange der experimentelle Werbeblocker eingeschaltet ist.</string>
+    <string name="tv_adblock_exp_title">Werbeblocker (Experimentell)</string>
+    <string name="tv_adblock_exp_summary">Spielt den Livestream über das laufende VOD mit ~30 Sek. Verzögerung ab, um jede Werbung ohne Hintergrund-Liveplayer zu vermeiden (Kanalpunkte und Zurückspulen bleiben erhalten, Chat automatisch synchronisiert). Funktioniert nur, wenn der Streamer ein aktives VOD hat (sonst Rückfall auf Swap). Frisch gestartete Streams beginnen mit Swap und wechseln automatisch, sobald das VOD bereit ist. Nicht mit Proxys kompatibel.</string>
+    <string name="tv_adblock_exp_switched">Experimenteller Werbeblocker: auf werbefreies VOD gewechselt</string>
+    <string name="tv_adblock_exp_proxies_disabled">Proxys können nicht aktiviert werden, solange der experimentelle Werbeblocker aktiv ist.</string>
+    <string name="tv_adblock_exp_disabled_by_proxy">Deaktiviere zuerst benutzerdefinierte und HTTP-Proxys, um den experimentellen Werbeblocker zu nutzen.</string>
+    <string name="tv_adblock_exp_chat_auto_locked">Chat-Verzögerung ist beim experimentellen Werbeblocker fest auf Auto eingestellt.</string>
+    <string name="tv_adblock_exp_chat_auto_info">Für experimentelles VOD auf Auto gesperrt (%1$s)</string>
 </resources>

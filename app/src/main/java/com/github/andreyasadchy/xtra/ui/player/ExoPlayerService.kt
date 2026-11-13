@@ -72,6 +72,7 @@ import com.github.andreyasadchy.xtra.model.ui.CustomProxy
 import com.github.andreyasadchy.xtra.model.ui.StreamProxy
 import com.github.andreyasadchy.xtra.model.ui.Video
 import com.github.andreyasadchy.xtra.model.ui.VideoSwap
+import com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock
 import com.github.andreyasadchy.xtra.ui.tv.TvProxyStatus
 import com.github.andreyasadchy.xtra.player.lowlatency.CronetDataSource
 import com.github.andreyasadchy.xtra.player.lowlatency.HlsPlaylistParser
@@ -192,6 +193,41 @@ class ExoPlayerService : BasePlaybackService() {
         startLiveWatchdog()
     }
 
+    /** True while a live broadcast (`type == STREAM`) plays via Twitch's ongoing CDN VOD (`index-dvr.m3u8`) at `-32s`. */
+    var experimentalVodActive = false
+        private set
+    private var experimentalVodCreatedAtMs: Long? = null
+    private var experimentalVodUpgradeJob: Job? = null
+
+    /** Ad-free live edge inside the ongoing VOD (`max(0, vodDuration - 32s)`). */
+    fun getExperimentalLiveEdgeMs(): Long {
+        val p = player ?: return 0L
+        val dur = p.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0L } ?: return 0L
+        return (dur - TvExperimentalAdblock.TARGET_OFFSET_MS).coerceAtLeast(0L)
+    }
+
+    /** Epoch timestamp (ms) of the video frame currently rendered on screen, for both standard live and Experimental VOD. */
+    fun getStreamPictureEpochMs(): Long? {
+        val active = if (videoSwapActive || proxyMediaPlaylist) secondaryPlayer else player
+        active ?: return null
+        val timeline = active.currentTimeline
+        if (timeline.isEmpty || active.currentMediaItemIndex !in 0 until timeline.windowCount) return null
+        val window = Timeline.Window()
+        timeline.getWindow(active.currentMediaItemIndex, window)
+        val pos = active.currentPosition.coerceAtLeast(0L)
+        if (window.windowStartTimeMs != androidx.media3.common.C.TIME_UNSET) {
+            return window.windowStartTimeMs + pos
+        }
+        if (experimentalVodActive && active === player) {
+            val baseMs = experimentalVodCreatedAtMs
+                ?: TvExperimentalAdblock.parseEpochMs(createdAt)?.also { experimentalVodCreatedAtMs = it }
+            if (baseMs != null) {
+                return baseMs + pos
+            }
+        }
+        return null
+    }
+
     private fun create(restorePauseState: Boolean) {
         if (!created) {
             created = true
@@ -289,10 +325,15 @@ class ExoPlayerService : BasePlaybackService() {
                             updateQualities = false
                         }
                     }
-                    if (type == STREAM) {
+                    if (type == STREAM && experimentalVodActive) {
+                        if ((player?.currentManifest as? HlsManifest)?.mediaPlaylist != null) {
+                            checkFirstPlaylist = false
+                            checkStreamPictureShown()
+                        }
+                    } else if (type == STREAM) {
                         val useProxy = useStreamProxy && !stopProxy && streamProxyList?.getOrNull(currentStreamProxy)?.proxyMediaPlaylist == true
                         val useVideoSwap = useVideoSwap && !stopVideoSwap
-                        val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || prefs().getBoolean(C.PLAYER_ADBLOCK, true)
+                        val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || TvExperimentalAdblock.isSwapAdblockEnabled(this@ExoPlayerService)
                         if (!(useProxy || useVideoSwap || hideAds) && (player?.currentManifest as? HlsManifest)?.mediaPlaylist != null) {
                             // nothing looks for ads: the first playlist has nothing to wait for
                             checkFirstPlaylist = false
@@ -850,6 +891,18 @@ class ExoPlayerService : BasePlaybackService() {
             restorePlaybackState()
             when (type) {
                 STREAM -> {
+                    TvExperimentalAdblock.normalizePrefs(this@ExoPlayerService)
+                    val expEnabled = TvExperimentalAdblock.isExperimentalEnabled(this@ExoPlayerService)
+                    val wasExpUrl = playlistUrl?.contains("/tv_exp_vod/") == true
+                    if (expEnabled || wasExpUrl) {
+                        qualities = null
+                        playlistUrl = null
+                        restorePlaylist = false
+                    }
+                    experimentalVodActive = false
+                    experimentalVodCreatedAtMs = null
+                    experimentalVodUpgradeJob?.cancel()
+                    experimentalVodUpgradeJob = null
                     intentionalStopOrPause = (restorePauseState && paused) || quality?.name == VideoQuality.CHAT_ONLY_QUALITY
                     streamEnded = false
                     liveRecoveryAttempt = 0
@@ -866,6 +919,9 @@ class ExoPlayerService : BasePlaybackService() {
                                 }.build()
                             }
                         }
+                    } else if (expEnabled) {
+                        useCustomProxy = false
+                        useStreamProxy = false
                     } else {
                         useCustomProxy = prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                         if (!useCustomProxy) {
@@ -896,7 +952,7 @@ class ExoPlayerService : BasePlaybackService() {
                                     && (it.proxyPlaybackAccessToken || it.proxyMultivariantPlaylist || it.proxyMediaPlaylist)
                         }.sortedBy { it.position }
                     }
-                    val adblock = prefs().getBoolean(C.PLAYER_ADBLOCK, true)
+                    val adblock = TvExperimentalAdblock.isSwapAdblockEnabled(this@ExoPlayerService)
                     // the ad blocker also backs up the proxies: if an ad still comes through them, the playlist of another player type is used
                     useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, true)) || adblock || adsOnlyProxies.isNotEmpty()
                     if (useVideoSwap) {
@@ -1048,9 +1104,90 @@ class ExoPlayerService : BasePlaybackService() {
 
     private var loadingStreamCount = 0
 
+    private fun scheduleExperimentalVodUpgrade(generation: Int, login: String) {
+        experimentalVodUpgradeJob?.cancel()
+        experimentalVodUpgradeJob = lifecycleScope.launch {
+            repeat(TvExperimentalAdblock.UPGRADE_MAX_ATTEMPTS) {
+                delay(TvExperimentalAdblock.UPGRADE_POLL_INTERVAL_MS)
+                if (generation != streamGeneration || !created || !started || type != STREAM ||
+                    intentionalStopOrPause || streamEnded || experimentalVodActive ||
+                    !TvExperimentalAdblock.isExperimentalEnabled(this@ExoPlayerService) ||
+                    channelLogin != login || quality?.name == VideoQuality.CHAT_ONLY_QUALITY
+                ) {
+                    return@launch
+                }
+                val outcome = TvExperimentalAdblock.resolveLiveVod(
+                    context = this@ExoPlayerService,
+                    xtraModule = xtraModule,
+                    channelLogin = login,
+                    streamIdHint = streamId,
+                    createdAtHint = createdAt,
+                    fallbackH264 = fallbackH264ForStream,
+                )
+                if (!outcome.channelIsLive) {
+                    return@launch
+                }
+                val vod = outcome.vod
+                if (vod != null && vod.vodDurationMs >= TvExperimentalAdblock.UPGRADE_MIN_VOD_DURATION_MS) {
+                    if (generation != streamGeneration || !created || !started || type != STREAM ||
+                        intentionalStopOrPause || streamEnded || experimentalVodActive ||
+                        !TvExperimentalAdblock.isExperimentalEnabled(this@ExoPlayerService)
+                    ) {
+                        return@launch
+                    }
+                    // Completely tear down any live VAFT secondary player and ad state before switching onto VOD
+                    freezeWatchJob?.cancel()
+                    freezeWatchJob = null
+                    adMainWatchJob?.cancel()
+                    adMainWatchJob = null
+                    secondaryLoadJob?.cancel()
+                    secondaryLoadJob = null
+                    adDelayJob?.cancel()
+                    adDelayJob = null
+                    if (secondaryPlayer != null || videoSwapActive || proxyMediaPlaylist) {
+                        stopSecondaryPlayer()
+                    }
+                    playingAds = false
+                    backLiveFrom = 0L
+                    backLiveProgress = 0f
+                    resetAdPod()
+                    if (hidden) {
+                        hidden = false
+                    }
+                    if (streamId.isNullOrBlank()) streamId = outcome.streamId
+                    if (createdAt.isNullOrBlank()) createdAt = outcome.createdAtIso
+                    experimentalVodCreatedAtMs = outcome.createdAtMs
+                    experimentalVodActive = true
+                    qualities = null
+                    restorePlaylist = false
+                    playlistUrl = vod.masterUri.toString()
+                    checkFirstPlaylist = false
+                    player?.let { p ->
+                        val isAudioOnly = quality?.name == VideoQuality.AUDIO_ONLY_QUALITY || videoHidden
+                        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().apply {
+                            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, isAudioOnly)
+                        }.build()
+                        p.setMediaSource(TvExperimentalAdblock.buildMediaSource(this@ExoPlayerService, xtraModule, vod.masterUri))
+                        p.volume = userVolume()
+                        p.setPlaybackSpeed(1f)
+                        p.prepare()
+                        p.playWhenReady = !paused
+                    }
+                    serviceListener?.toast(R.string.tv_adblock_exp_switched, Toast.LENGTH_SHORT)
+                    return@launch
+                } else if (vod == null && outcome.streamUptimeMs != null && outcome.streamUptimeMs >= TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS) {
+                    // Streamer has VOD archiving disabled: keep Swap Adblock active without further polling
+                    return@launch
+                }
+            }
+        }
+    }
+
     private suspend fun loadStream(restorePauseState: Boolean = false, restart: Boolean = false) {
         loadingStreamCount++
         try {
+        experimentalVodUpgradeJob?.cancel()
+        experimentalVodUpgradeJob = null
         // the stream loads (again): its first seconds are not counted as stops for the quality of Auto
         playingSince = 0L
         if (!restart) {
@@ -1067,6 +1204,68 @@ class ExoPlayerService : BasePlaybackService() {
             channelLogin?.let { TvStreamPrefetch.forget(it) }
         }
         channelLogin?.let { channelLogin ->
+            if (TvExperimentalAdblock.isExperimentalEnabled(this@ExoPlayerService) && quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
+                val outcome = TvExperimentalAdblock.resolveLiveVod(
+                    context = this@ExoPlayerService,
+                    xtraModule = xtraModule,
+                    channelLogin = channelLogin,
+                    streamIdHint = streamId,
+                    createdAtHint = createdAt,
+                    fallbackH264 = fallbackH264ForStream,
+                )
+                if (streamId.isNullOrBlank() && !outcome.streamId.isNullOrBlank()) {
+                    streamId = outcome.streamId
+                }
+                if (createdAt.isNullOrBlank() && !outcome.createdAtIso.isNullOrBlank()) {
+                    createdAt = outcome.createdAtIso
+                }
+                experimentalVodCreatedAtMs = outcome.createdAtMs
+                val vod = outcome.vod
+                if (vod != null && vod.vodDurationMs >= TvExperimentalAdblock.MIN_INITIAL_VOD_DURATION_MS) {
+                    experimentalVodActive = true
+                    qualities = null
+                    restorePlaylist = false
+                    playlistUrl = vod.masterUri.toString()
+                    pendingProxyStat = null
+                    checkFirstPlaylist = false
+                    val isTvDevice = resources.getBoolean(R.bool.isTv)
+                    if (isTvDevice && !videoHidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY && serviceListener == null) {
+                        kotlinx.coroutines.withTimeoutOrNull(400L) {
+                            while (serviceListener == null) delay(10L)
+                        }
+                    }
+                    player?.let { player ->
+                        player.setMediaSource(TvExperimentalAdblock.buildMediaSource(this@ExoPlayerService, xtraModule, vod.masterUri))
+                        if (fallbackH264ForStream) {
+                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                                .setMaxVideoSize(1920, 1080)
+                                .setForceHighestSupportedBitrate(false)
+                                .build()
+                        }
+                        player.volume = userVolume()
+                        player.setPlaybackSpeed(1f)
+                        player.prepare()
+                        player.playWhenReady = !restorePauseState || !paused
+                    }
+                    return
+                } else {
+                    experimentalVodActive = false
+                    if (playlistUrl?.contains("/tv_exp_vod/") == true) {
+                        playlistUrl = null
+                        qualities = null
+                    }
+                    if (outcome.channelIsLive && (outcome.streamUptimeMs == null || outcome.streamUptimeMs < TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS)) {
+                        scheduleExperimentalVodUpgrade(streamGeneration, channelLogin)
+                    }
+                }
+            } else {
+                experimentalVodActive = false
+                experimentalVodCreatedAtMs = null
+                if (playlistUrl?.contains("/tv_exp_vod/") == true) {
+                    playlistUrl = null
+                    qualities = null
+                }
+            }
             var streamProxy = if (useStreamProxy) {
                 streamProxyList?.getOrNull(currentStreamProxy).also {
                     if (it == null) {
@@ -1667,6 +1866,17 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
+    private fun setStreamMediaUri(player: ExoPlayer, mediaItem: MediaItem, uriString: String, seekPositionMs: Long) {
+        if (experimentalVodActive) {
+            player.setMediaSource(TvExperimentalAdblock.buildMediaSource(this, xtraModule, uriString.toUri()), seekPositionMs)
+            player.prepare()
+        } else {
+            player.setMediaItem(mediaItem.buildUpon().setUri(uriString).build())
+            player.prepare()
+            player.seekTo(seekPositionMs)
+        }
+    }
+
     fun changeQuality(selectedQuality: VideoQuality?) {
         val wasChatOnly = quality?.name == VideoQuality.CHAT_ONLY_QUALITY
         previousQuality = quality
@@ -1674,6 +1884,10 @@ class ExoPlayerService : BasePlaybackService() {
         quality?.let { quality ->
             if (wasChatOnly && quality.name != VideoQuality.CHAT_ONLY_QUALITY) {
                 intentionalStopOrPause = false
+                if (player?.currentMediaItem == null && type == STREAM) {
+                    restartPlayer()
+                    return
+                }
             }
             player?.let { player ->
                 player.currentMediaItem?.let { mediaItem ->
@@ -1685,9 +1899,7 @@ class ExoPlayerService : BasePlaybackService() {
                                     if (mediaItem.localConfiguration?.uri != uri.toUri()) {
                                         ignorePlaylistUpdate = true
                                         val position = player.currentPosition
-                                        player.setMediaItem(mediaItem.buildUpon().setUri(uri).build())
-                                        player.prepare()
-                                        player.seekTo(position)
+                                        setStreamMediaUri(player, mediaItem, uri, position)
                                     }
                                 }
                             } else {
@@ -1708,15 +1920,15 @@ class ExoPlayerService : BasePlaybackService() {
                                     restorePlaylist = true
                                     ignorePlaylistUpdate = true
                                 }
-                                player.setMediaItem(mediaItem.buildUpon().setUri(it).build())
-                                player.prepare()
-                                player.seekTo(position)
+                                setStreamMediaUri(player, mediaItem, it, position)
                             }
                         }
                         VideoQuality.CHAT_ONLY_QUALITY -> {
                             intentionalStopOrPause = true
                             liveRecoveryJob?.cancel()
                             liveRecoveryJob = null
+                            experimentalVodUpgradeJob?.cancel()
+                            experimentalVodUpgradeJob = null
                             player.stop()
                         }
                         else -> {
@@ -1726,9 +1938,7 @@ class ExoPlayerService : BasePlaybackService() {
                                     playlistUrl?.let { uri ->
                                         ignorePlaylistUpdate = true
                                         val position = player.currentPosition
-                                        player.setMediaItem(mediaItem.buildUpon().setUri(uri).build())
-                                        player.prepare()
-                                        player.seekTo(position)
+                                        setStreamMediaUri(player, mediaItem, uri, position)
                                     }
                                 } else {
                                     player.prepare()
@@ -1738,24 +1948,27 @@ class ExoPlayerService : BasePlaybackService() {
                                     if (!player.currentTracks.isEmpty) {
                                         player.currentTracks.groups.find { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }?.let { trackGroup ->
                                             if (trackGroup.mediaTrackGroup.length > 0) {
-                                                if (quality.resolution != null) {
-                                                    val formats = mutableListOf<Pair<Int, Format>>()
-                                                    for (i in 0 until trackGroup.mediaTrackGroup.length) {
-                                                        formats.add(i to trackGroup.mediaTrackGroup.getFormat(i))
-                                                    }
-                                                    val list = formats
-                                                        .sortedByDescending { it.second.bitrate }
-                                                        .sortedByDescending { it.second.frameRate }
-                                                        .sortedByDescending { it.second.height }
+                                                val formats = mutableListOf<Pair<Int, Format>>()
+                                                for (i in 0 until trackGroup.mediaTrackGroup.length) {
+                                                    formats.add(i to trackGroup.mediaTrackGroup.getFormat(i))
+                                                }
+                                                val list = formats
+                                                    .sortedByDescending { it.second.bitrate }
+                                                    .sortedByDescending { it.second.frameRate }
+                                                    .sortedByDescending { it.second.height }
+                                                val chosen = if (quality.name == VideoQuality.SOURCE_QUALITY) {
+                                                    list.firstOrNull()
+                                                } else if (quality.resolution != null) {
                                                     list.find {
                                                         (quality.resolution == it.second.height
                                                                 && (quality.frameRate?.let { fps -> floor(fps) } ?: 30f) >= floor(it.second.frameRate)
                                                                 && (quality.bitrate == null || quality.bitrate >= it.second.bitrate))
                                                                 || quality.resolution > it.second.height
                                                                 || it == list.last()
-                                                    }?.first?.let { index ->
-                                                        setOverrideForType(TrackSelectionOverride(trackGroup.mediaTrackGroup, index))
                                                     }
+                                                } else null
+                                                if (chosen != null) {
+                                                    setOverrideForType(TrackSelectionOverride(trackGroup.mediaTrackGroup, chosen.first))
                                                 } else {
                                                     setOverrideForType(TrackSelectionOverride(trackGroup.mediaTrackGroup, 0))
                                                 }
@@ -1765,11 +1978,10 @@ class ExoPlayerService : BasePlaybackService() {
                                 }.build()
                             } else {
                                 player.currentMediaItem?.let {
-                                    if (it.localConfiguration?.uri?.toString() != quality.url) {
+                                    val targetUrl = quality.url
+                                    if (targetUrl != null && it.localConfiguration?.uri?.toString() != targetUrl) {
                                         val position = player.currentPosition
-                                        player.setMediaItem(it.buildUpon().setUri(quality.url).build())
-                                        player.prepare()
-                                        player.seekTo(position)
+                                        setStreamMediaUri(player, it, targetUrl, position)
                                     }
                                 }
                                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
@@ -2583,7 +2795,7 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** Hides and silences the main player when no ad-free backup stream is available while an ad break plays. */
     private fun hideAdFallback() {
-        val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || prefs().getBoolean(C.PLAYER_ADBLOCK, true)
+        val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || TvExperimentalAdblock.isSwapAdblockEnabled(this)
         if (playingAds && !hidden && hideAds) {
             hidden = true
             serviceListener?.toast(R.string.waiting_ads, Toast.LENGTH_LONG)
@@ -3004,6 +3216,10 @@ class ExoPlayerService : BasePlaybackService() {
         waitingIntegrity = false
         liveRecoveryJob?.cancel()
         liveRecoveryJob = null
+        experimentalVodUpgradeJob?.cancel()
+        experimentalVodUpgradeJob = null
+        experimentalVodActive = false
+        experimentalVodCreatedAtMs = null
         // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
         // no sound), it must not come back on the screen for a moment when the backup player goes
         player?.setPlaybackSpeed(1f)
@@ -3065,6 +3281,10 @@ class ExoPlayerService : BasePlaybackService() {
         waitingIntegrity = false
         liveRecoveryJob?.cancel()
         liveRecoveryJob = null
+        experimentalVodUpgradeJob?.cancel()
+        experimentalVodUpgradeJob = null
+        experimentalVodActive = false
+        experimentalVodCreatedAtMs = null
         playingAds = false
         backLiveFrom = 0L
         backLiveProgress = 0f
@@ -3457,6 +3677,8 @@ class ExoPlayerService : BasePlaybackService() {
                 liveRecoveryJob = null
             }
             streamGeneration++
+            experimentalVodUpgradeJob?.cancel()
+            experimentalVodUpgradeJob = null
             adMainWatchJob?.cancel()
             adMainWatchJob = null
             secondaryLoadJob?.cancel()
@@ -3625,7 +3847,10 @@ class ExoPlayerService : BasePlaybackService() {
                         if (p.currentMediaItem == null) {
                             scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
                         } else {
-                            p.seekToDefaultPosition()
+                            val preserveRewind = experimentalVodActive && (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L
+                            if (!preserveRewind) {
+                                p.seekToDefaultPosition()
+                            }
                             if (p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED) {
                                 p.prepare()
                             }
@@ -3633,6 +3858,14 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                     }
                     continue
+                }
+                fun softKick(p: ExoPlayer) {
+                    val preserveRewind = experimentalVodActive && (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L
+                    if (!preserveRewind) {
+                        p.seekToDefaultPosition()
+                    }
+                    p.prepare()
+                    p.play()
                 }
                 when (p.playbackState) {
                     Player.STATE_IDLE -> {
@@ -3644,9 +3877,7 @@ class ExoPlayerService : BasePlaybackService() {
                             idleOrPausedSec = 0
                             if (!softKickUsed && p.currentMediaItem != null) {
                                 softKickUsed = true
-                                p.seekToDefaultPosition()
-                                p.prepare()
-                                p.play()
+                                softKick(p)
                             } else {
                                 softKickUsed = false
                                 scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
@@ -3671,9 +3902,7 @@ class ExoPlayerService : BasePlaybackService() {
                                 frozenReadySec = 0
                                 if (!softKickUsed) {
                                     softKickUsed = true
-                                    p.seekToDefaultPosition()
-                                    p.prepare()
-                                    p.play()
+                                    softKick(p)
                                 } else {
                                     softKickUsed = false
                                     scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
@@ -3695,9 +3924,7 @@ class ExoPlayerService : BasePlaybackService() {
                                 stuckBufferingSec = 0
                                 if (!softKickUsed) {
                                     softKickUsed = true
-                                    p.seekToDefaultPosition()
-                                    p.prepare()
-                                    p.play()
+                                    softKick(p)
                                 } else {
                                     softKickUsed = false
                                     scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
@@ -3735,9 +3962,7 @@ class ExoPlayerService : BasePlaybackService() {
                                     restorePlaylist = true
                                     ignorePlaylistUpdate = true
                                 }
-                                player.setMediaItem(mediaItem.buildUpon().setUri(url).build())
-                                player.prepare()
-                                player.seekTo(position)
+                                setStreamMediaUri(player, mediaItem, url, position)
                             }
                         }
                     }
@@ -3771,9 +3996,7 @@ class ExoPlayerService : BasePlaybackService() {
                                         restorePlaylist = true
                                         ignorePlaylistUpdate = true
                                     }
-                                    player.setMediaItem(mediaItem.buildUpon().setUri(url).build())
-                                    player.prepare()
-                                    player.seekTo(position)
+                                    setStreamMediaUri(player, mediaItem, url, position)
                                 }
                             }
                         }
@@ -4404,6 +4627,8 @@ class ExoPlayerService : BasePlaybackService() {
         intentionalStopOrPause = true
         liveRecoveryJob?.cancel()
         liveRecoveryJob = null
+        experimentalVodUpgradeJob?.cancel()
+        experimentalVodUpgradeJob = null
         savePosition()
         player?.playWhenReady = false
         secondaryPlayer?.playWhenReady = false
@@ -4419,6 +4644,10 @@ class ExoPlayerService : BasePlaybackService() {
         waitingIntegrity = false
         liveRecoveryJob?.cancel()
         liveRecoveryJob = null
+        experimentalVodUpgradeJob?.cancel()
+        experimentalVodUpgradeJob = null
+        experimentalVodActive = false
+        experimentalVodCreatedAtMs = null
         freezeWatchJob?.cancel()
         freezeWatchJob = null
         adMainWatchJob?.cancel()
@@ -4499,7 +4728,7 @@ class ExoPlayerService : BasePlaybackService() {
                 platform = prefs.getString(C.TOKEN_PLATFORM, "web"),
                 playerType = prefs.getString(C.TOKEN_PLAYER_TYPE, "site").let {
                     // like VAFT, the "popout" player type gets fewer ads than the default "site" one
-                    if (prefs.getBoolean(C.PLAYER_ADBLOCK, true) && (it.isNullOrBlank() || it == "site")) "popout" else it
+                    if (TvExperimentalAdblock.isSwapAdblockEnabled(context) && (it.isNullOrBlank() || it == "site")) "popout" else it
                 },
                 supportedCodecs = supportedCodecsOverride ?: prefs.getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                 proxyPlaybackAccessToken = streamProxy != null,

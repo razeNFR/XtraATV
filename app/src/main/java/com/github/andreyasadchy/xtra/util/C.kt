@@ -319,6 +319,7 @@ object C {
     const val TV_CUSTOM_KEYS = "tv_custom_keys"
     const val TV_DEFAULTS_REMOTE_MIGRATED = "tv_defaults_remote_migrated"
     const val TV_HOME_ROWS = "tv_home_rows"
+    const val TV_EXPERIMENTAL_ADBLOCK = "tv_experimental_adblock"
     /** Custom proxies: "0" for the whole stream, "1" only while an ad plays. */
     const val PLAYER_CUSTOM_PROXY_MODE = "custom_proxy_mode"
     const val CHAT_ZERO_WIDTH = "chat_zerowidth"

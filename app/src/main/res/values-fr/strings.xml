@@ -1131,4 +1131,14 @@
     <string name="tv_home_greeting_summary">Affiche Bonjour / Bonsoir à côté de l\'heure en haut de l\'accueil</string>
     <string name="tv_home_stats_badge">Pilule de statistiques en haut</string>
     <string name="tv_home_stats_badge_summary">Affiche un résumé tournant de tes statistiques en haut à droite de l\'accueil</string>
+    <string name="tv_adblock_swap_title">Bloqueur de pub (Swap)</string>
+    <string name="tv_adblock_swap_locked_hint">Activé par défaut. Active un proxy personnalisé ou HTTP pour pouvoir le désactiver.</string>
+    <string name="tv_adblock_swap_locked_exp_hint">Reste actif en secours automatique tant que le bloqueur de pub expérimental est activé.</string>
+    <string name="tv_adblock_exp_title">Bloqueur de pub (Expérimental)</string>
+    <string name="tv_adblock_exp_summary">Lit le stream via la VOD en cours avec ~30 s de décalage pour éviter toute publicité, sans lecteur direct en arrière-plan (points de chaîne et retour VOD conservés, chat synchronisé en Auto). Ne fonctionne que si le streamer a une VOD en cours (sinon bascule sur le bloqueur Swap). Si le live vient de démarrer, commence en Swap puis bascule automatiquement dès que la VOD est prête. Incompatible avec les proxys.</string>
+    <string name="tv_adblock_exp_switched">Bloqueur expérimental : basculé sur la VOD sans pub</string>
+    <string name="tv_adblock_exp_proxies_disabled">Les proxys ne peuvent pas être activés avec le bloqueur de pub expérimental.</string>
+    <string name="tv_adblock_exp_disabled_by_proxy">Désactive d\'abord les proxys personnalisés et HTTP pour activer le bloqueur de pub expérimental.</string>
+    <string name="tv_adblock_exp_chat_auto_locked">Retard du chat verrouillé sur Auto avec le bloqueur de pub expérimental.</string>
+    <string name="tv_adblock_exp_chat_auto_info">Verrouillé sur Auto pour la VOD expérimentale (%1$s)</string>
 </resources>

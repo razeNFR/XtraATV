@@ -71,6 +71,10 @@ class MultiStreamFragment : Fragment() {
         /** Playing a backup player type for the time of an ad, back to the normal one once it is over. */
         var onBackup = false
         var adPulseAnimator: android.animation.ValueAnimator? = null
+        var playJob: kotlinx.coroutines.Job? = null
+        var expUpgradeJob: kotlinx.coroutines.Job? = null
+        var experimentalVodActive = false
+        var experimentalCreatedAtMs: Long? = null
         var backJob: kotlinx.coroutines.Job? = null
         var recoveryJob: kotlinx.coroutines.Job? = null
         var recoveryAttempt = 0
@@ -1072,6 +1076,10 @@ class MultiStreamFragment : Fragment() {
         tile.adListener?.let { tile.player.removeListener(it) }
         tile.adListener = null
         tile.recoveryJob?.cancel()
+        tile.playJob?.cancel()
+        tile.expUpgradeJob?.cancel()
+        tile.experimentalVodActive = false
+        tile.experimentalCreatedAtMs = null
         tile.backJob?.cancel()
         tile.raiseJob?.cancel()
         tile.infoJob?.cancel()
@@ -1123,6 +1131,12 @@ class MultiStreamFragment : Fragment() {
         tile.resolvedChannelId = null
         tile.qualityOverrideHeight = null
         tile.onBackup = false
+        tile.experimentalVodActive = false
+        tile.experimentalCreatedAtMs = null
+        tile.playJob?.cancel()
+        tile.playJob = null
+        tile.expUpgradeJob?.cancel()
+        tile.expUpgradeJob = null
         tile.recoveryAttempt = 0
         tile.recoveryJob?.cancel()
         tile.recoveryJob = null
@@ -1302,13 +1316,27 @@ class MultiStreamFragment : Fragment() {
         }
     }
 
+    fun isExperimentalVodActive(channelLogin: String?): Boolean =
+        tiles.find { it.stream.channelLogin == channelLogin }?.experimentalVodActive == true
+
     /** The chat of a stream with its delay in Auto: the time of Twitch of the picture of its tile (null when not known). */
     fun getLivePictureTime(channelLogin: String?): Long? {
-        val player = tiles.find { it.stream.channelLogin == channelLogin }?.player ?: return null
+        val tile = tiles.find { it.stream.channelLogin == channelLogin } ?: return null
+        val player = tile.player
         val timeline = player.currentTimeline
         if (timeline.isEmpty || player.currentMediaItemIndex !in 0 until timeline.windowCount) return null
         val start = timeline.getWindow(player.currentMediaItemIndex, androidx.media3.common.Timeline.Window()).windowStartTimeMs
-        return if (start != androidx.media3.common.C.TIME_UNSET) start + player.currentPosition else null
+        if (start != androidx.media3.common.C.TIME_UNSET) {
+            return start + player.currentPosition
+        }
+        if (tile.experimentalVodActive) {
+            val baseMs = tile.experimentalCreatedAtMs
+                ?: com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.parseEpochMs(tile.stream.createdAt)
+            if (baseMs != null) {
+                return baseMs + player.currentPosition.coerceAtLeast(0L)
+            }
+        }
+        return null
     }
 
     private fun addChat(stream: Stream): FrameLayout {
@@ -1355,6 +1383,10 @@ class MultiStreamFragment : Fragment() {
         tile.raiseJob?.cancel()
         tile.infoJob?.cancel()
         tile.chatProbeJob?.cancel()
+        tile.expUpgradeJob?.cancel()
+        tile.expUpgradeJob = null
+        tile.experimentalVodActive = false
+        tile.experimentalCreatedAtMs = null
         if (tile.effectiveChannelId.isNullOrBlank() || tile.stream.createdAt.isNullOrBlank() || tile.stream.title.isNullOrBlank() || tile.stream.viewerCount == null) {
             tile.infoJob = viewLifecycleOwner.lifecycleScope.launch {
                 val context = context ?: return@launch
@@ -1389,6 +1421,8 @@ class MultiStreamFragment : Fragment() {
         }
         tile.stateListener?.let { player.removeListener(it) }
         tile.stateListener = null
+        tile.adListener?.let { player.removeListener(it) }
+        tile.adListener = null
         tile.recoveryJob?.cancel()
         tile.recoveryJob = null
         tile.recoveryAttempt = 0
@@ -1416,10 +1450,11 @@ class MultiStreamFragment : Fragment() {
         }
         tile.stateListener = stateListener
         player.addListener(stateListener)
-        if (requireContext().prefs().getBoolean(C.PLAYER_ADBLOCK, true)) {
+        if (com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(requireContext())) {
             var lastSwitch = 0L
             val listener = object : Player.Listener {
                 override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                    if (tile.experimentalVodActive) return
                     val playlist = (player.currentManifest as? androidx.media3.exoplayer.hls.HlsManifest)?.mediaPlaylist ?: return
                     val ads = playlist.tags.any { it.contains("stitched-ad", true) || it.contains("X-TV-TWITCH-AD", true) }
                     val now = System.currentTimeMillis()
@@ -1509,14 +1544,67 @@ class MultiStreamFragment : Fragment() {
     /**
      * Ad blocker on every stream, like the video swap of the player: the normal player type (all the qualities), a
      * backup type (autoplay first) only while an ad plays, then back to the normal one once its playlist has no ad.
+     * When Experimental VOD Adblock is enabled, resolves the streamer's ongoing `index-dvr.m3u8` at ~30 s behind live,
+     * falling back automatically to Swap (VAFT) when the channel has no VOD or while a brand-new live builds its VOD.
      */
     private fun playStream(login: String, player: ExoPlayer, tile: Tile, backup: Boolean = false) {
         // a new playlist (start, ad blocker): its first seconds do not count as stops
         tile.playingSince = 0L
+        tile.playJob?.cancel()
         tile.backJob?.cancel()
-        viewLifecycleOwner.lifecycleScope.launch {
+        if (!backup) {
+            tile.expUpgradeJob?.cancel()
+            tile.expUpgradeJob = null
+        }
+        tile.playJob = viewLifecycleOwner.lifecycleScope.launch {
             val context = context ?: return@launch
             val app = context.applicationContext as com.github.andreyasadchy.xtra.XtraApp
+            if (!backup && com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(context)) {
+                val outcome = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.resolveLiveVod(
+                    context = context,
+                    xtraModule = app.xtraModule,
+                    channelLogin = login,
+                    streamIdHint = tile.stream.id,
+                    createdAtHint = tile.stream.createdAt,
+                )
+                if (view == null || tile !in tiles || tile.stream.channelLogin != login) {
+                    return@launch
+                }
+                if (tile.stream.id.isNullOrBlank() && !outcome.streamId.isNullOrBlank()) {
+                    tile.stream.id = outcome.streamId
+                }
+                if (tile.stream.createdAt.isNullOrBlank() && !outcome.createdAtIso.isNullOrBlank()) {
+                    tile.stream.createdAt = outcome.createdAtIso
+                }
+                val vod = outcome.vod
+                if (vod != null && vod.vodDurationMs >= com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.MIN_INITIAL_VOD_DURATION_MS) {
+                    tile.experimentalVodActive = true
+                    tile.experimentalCreatedAtMs = vod.createdAtMs
+                    tile.onBackup = false
+                    updateAdBadge(tile)
+                    player.setMediaSource(
+                        com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.buildMediaSource(
+                            context,
+                            app.xtraModule,
+                            vod.masterUri,
+                        )
+                    )
+                    player.repeatMode = Player.REPEAT_MODE_OFF
+                    player.prepare()
+                    player.playWhenReady = true
+                    return@launch
+                }
+                tile.experimentalVodActive = false
+                tile.experimentalCreatedAtMs = null
+                if (outcome.channelIsLive &&
+                    (outcome.streamUptimeMs == null || outcome.streamUptimeMs < com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS)
+                ) {
+                    scheduleTileExperimentalUpgrade(tile, login, outcome.streamId, outcome.createdAtIso)
+                }
+            } else if (!backup) {
+                tile.experimentalVodActive = false
+                tile.experimentalCreatedAtMs = null
+            }
             val normal = if (!backup) {
                 try {
                     ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, login)
@@ -1526,6 +1614,7 @@ class MultiStreamFragment : Fragment() {
             } else null
             val url = normal ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getBackupPlaylistUrl(app, login)
             if (url != null && view != null && tile in tiles && tile.stream.channelLogin == login) {
+                tile.experimentalVodActive = false
                 tile.onBackup = normal == null
                 updateAdBadge(tile)
                 player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
@@ -1537,6 +1626,66 @@ class MultiStreamFragment : Fragment() {
                 }
             } else if (url == null && view != null && tile in tiles && tile.stream.channelLogin == login && !pausedByAudioFocus && !leaveMuted) {
                 scheduleTileRecovery(tile, login)
+            }
+        }
+    }
+
+    private fun scheduleTileExperimentalUpgrade(
+        tile: Tile,
+        login: String,
+        streamIdHint: String?,
+        createdAtHint: String?,
+    ) {
+        tile.expUpgradeJob?.cancel()
+        tile.expUpgradeJob = viewLifecycleOwner.lifecycleScope.launch {
+            for (attempt in 1..com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.UPGRADE_MAX_ATTEMPTS) {
+                kotlinx.coroutines.delay(com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.UPGRADE_POLL_INTERVAL_MS)
+                val ctx = context ?: return@launch
+                if (view == null || tile !in tiles || tile.stream.channelLogin != login || tile.experimentalVodActive) {
+                    return@launch
+                }
+                if (!com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(ctx)) {
+                    return@launch
+                }
+                val app = ctx.applicationContext as com.github.andreyasadchy.xtra.XtraApp
+                val next = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.resolveLiveVod(
+                    context = ctx,
+                    xtraModule = app.xtraModule,
+                    channelLogin = login,
+                    streamIdHint = streamIdHint ?: tile.stream.id,
+                    createdAtHint = createdAtHint ?: tile.stream.createdAt,
+                )
+                if (!next.channelIsLive) {
+                    return@launch
+                }
+                val vod = next.vod
+                if (vod != null && vod.vodDurationMs >= com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.UPGRADE_MIN_VOD_DURATION_MS) {
+                    if (view != null && tile in tiles && tile.stream.channelLogin == login && !tile.experimentalVodActive) {
+                        tile.backJob?.cancel()
+                        tile.onBackup = false
+                        tile.experimentalVodActive = true
+                        tile.experimentalCreatedAtMs = vod.createdAtMs
+                        tile.playingSince = 0L
+                        updateAdBadge(tile)
+                        tile.player.setMediaSource(
+                            com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.buildMediaSource(
+                                ctx,
+                                app.xtraModule,
+                                vod.masterUri,
+                            )
+                        )
+                        tile.player.repeatMode = Player.REPEAT_MODE_OFF
+                        tile.player.prepare()
+                        tile.player.playWhenReady = true
+                        android.widget.Toast.makeText(ctx, R.string.tv_adblock_exp_switched, android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+                if (vod == null && next.streamUptimeMs != null &&
+                    next.streamUptimeMs >= com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS
+                ) {
+                    return@launch
+                }
             }
         }
     }
@@ -1854,6 +2003,8 @@ class MultiStreamFragment : Fragment() {
             it.stateListener?.let { l -> it.player.removeListener(l) }
             it.adListener?.let { l -> it.player.removeListener(l) }
             it.recoveryJob?.cancel()
+            it.playJob?.cancel()
+            it.expUpgradeJob?.cancel()
             it.chatProbeJob?.cancel()
             it.infoJob?.cancel()
             it.backJob?.cancel()

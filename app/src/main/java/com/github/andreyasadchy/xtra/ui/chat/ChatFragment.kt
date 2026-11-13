@@ -75,9 +75,12 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     private val binding get() = _binding!!
     private val viewModel: ChatViewModel by viewModels { ChatViewModelFactory }
 
+    private var raidAutoSwitchJob: kotlinx.coroutines.Job? = null
+
     /** A raid was announced and its stream will be opened (switch to raids on): the player waits for it. */
     fun isRaidPending(): Boolean {
-        return context?.prefs()?.getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) == true && viewModel.raid.value != null && !viewModel.raidClosed
+        return context?.prefs()?.getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) == true &&
+            ((viewModel.raid.value != null && !viewModel.raidClosed) || raidAutoSwitchJob?.isActive == true)
     }
     private var adapter: ChatAdapter? = null
 
@@ -119,6 +122,13 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 // multi-stream: each chat with the picture of its own stream
                 is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment -> parent.getLivePictureTime(delayLogin)
                 else -> null
+            }
+        }
+        viewModel.forceAutoDelay = {
+            when (val parent = parentFragment) {
+                is com.github.andreyasadchy.xtra.ui.player.PlayerFragment -> parent.isExperimentalVodActive()
+                is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment -> parent.isExperimentalVodActive(delayLogin)
+                else -> false
             }
         }
         (parentFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment)?.onChatFragmentReady(this)
@@ -464,8 +474,14 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.hideRaid.collectLatest {
                                 if (it) {
-                                    raidLayout.visibility = View.GONE
-                                    viewModel.raidClosed = true
+                                    if (viewModel.isActive() == true) {
+                                        raidAutoSwitchJob?.cancel()
+                                        raidAutoSwitchJob = null
+                                    }
+                                    if (raidAutoSwitchJob?.isActive != true) {
+                                        raidLayout.visibility = View.GONE
+                                        viewModel.raidClosed = true
+                                    }
                                     viewModel.hideRaid.value = false
                                 }
                             }
@@ -477,19 +493,40 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 if (raid != null) {
                                     if (!viewModel.raidClosed) {
                                         if (raid.openStream) {
-                                            if (requireContext().prefs().getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) && parentFragment is PlayerFragment) {
-                                                (requireActivity() as? MainActivity)?.startStream(
-                                                    Stream(
-                                                        channelId = raid.targetId,
-                                                        channelLogin = raid.targetLogin,
-                                                        channelName = raid.targetName,
-                                                        channelImageURL = raid.targetImageURL,
-                                                    )
+                                            val parentPlayer = parentFragment as? PlayerFragment
+                                            if (parentPlayer?.isExperimentalVodActive() == true) {
+                                                raidAutoSwitchJob?.cancel()
+                                                val targetStream = Stream(
+                                                    channelId = raid.targetId,
+                                                    channelLogin = raid.targetLogin,
+                                                    channelName = raid.targetName,
+                                                    channelImageURL = raid.targetImageURL,
                                                 )
+                                                raidAutoSwitchJob = viewLifecycleOwner.lifecycleScope.launch {
+                                                    kotlinx.coroutines.delay(com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS)
+                                                    _binding?.raidLayout?.visibility = View.GONE
+                                                    viewModel.raidClosed = true
+                                                    if (isAdded && requireContext().prefs().getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) && parentFragment is PlayerFragment) {
+                                                        (activity as? MainActivity)?.startStream(targetStream)
+                                                    }
+                                                }
+                                            } else {
+                                                if (requireContext().prefs().getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) && parentFragment is PlayerFragment) {
+                                                    (requireActivity() as? MainActivity)?.startStream(
+                                                        Stream(
+                                                            channelId = raid.targetId,
+                                                            channelLogin = raid.targetLogin,
+                                                            channelName = raid.targetName,
+                                                            channelImageURL = raid.targetImageURL,
+                                                        )
+                                                    )
+                                                }
+                                                raidLayout.visibility = View.GONE
+                                                viewModel.raidClosed = true
                                             }
-                                            raidLayout.visibility = View.GONE
-                                            viewModel.raidClosed = true
                                         } else {
+                                            raidAutoSwitchJob?.cancel()
+                                            raidAutoSwitchJob = null
                                             raidLayout.visibility = View.VISIBLE
                                             raidLayout.setOnClickListener { viewModel.raidClicked.value = raid }
                                             requireContext().imageLoader.enqueue(
@@ -503,6 +540,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                 }.build()
                                             )
                                             raidClose.setOnClickListener {
+                                                raidAutoSwitchJob?.cancel()
+                                                raidAutoSwitchJob = null
                                                 raidLayout.visibility = View.GONE
                                                 viewModel.raidClosed = true
                                             }
@@ -530,6 +569,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.raidClicked.collectLatest {
                                 if (it != null) {
+                                    raidAutoSwitchJob?.cancel()
+                                    raidAutoSwitchJob = null
                                     (requireActivity() as? MainActivity)?.startStream(
                                         Stream(
                                             channelId = it.targetId,
@@ -1028,7 +1069,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     /** The delay of the chat in Auto (ms), 0 while not measured. */
-    fun getAutoDelayMs() = viewModel.autoDelayMs
+    fun getAutoDelayMs() = viewModel.effectiveAutoDelayMs()
 
     fun updateSpeed(speed: Float) {
         viewModel.updateSpeed(speed)
@@ -1410,6 +1451,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     override fun onDestroyView() {
+        raidAutoSwitchJob?.cancel()
+        raidAutoSwitchJob = null
         super.onDestroyView()
         _binding = null
     }

@@ -1131,4 +1131,14 @@
     <string name="tv_home_greeting_summary">ホーム画面の時計の横に「こんにちは / こんばんは」を表示します</string>
     <string name="tv_home_stats_badge">上部の統計ピル</string>
     <string name="tv_home_stats_badge_summary">ホーム画面の右上に切り替わる統計ピルを表示します</string>
+    <string name="tv_adblock_swap_title">広告ブロッカー (Swap)</string>
+    <string name="tv_adblock_swap_locked_hint">標準で有効です。オフにするにはカスタムプロキシまたはHTTPプロキシを有効にしてください。</string>
+    <string name="tv_adblock_swap_locked_exp_hint">実験的広告ブロッカーが有効な間は自動フォールバックとして有効のままになります。</string>
+    <string name="tv_adblock_exp_title">広告ブロッカー (実験的)</string>
+    <string name="tv_adblock_exp_summary">バックグラウンドのライブ再生なしで、進行中のVODを約30秒遅れで再生しすべての広告を回避します（チャンネルポイントと巻き戻しを維持、チャットは自動で同期）。配信者のVODが有効な場合のみ機能します（無効な場合はSwapへ切り替え）。開始直後の配信はSwapで始まり、VODの準備ができ次第自動で切り替わります。プロキシとは併用できません。</string>
+    <string name="tv_adblock_exp_switched">実験的広告ブロッカー：広告なしVODに切り替えました</string>
+    <string name="tv_adblock_exp_proxies_disabled">実験的広告ブロッカーが有効な間はプロキシを使用できません。</string>
+    <string name="tv_adblock_exp_disabled_by_proxy">実験的広告ブロッカーを有効にするには、先にカスタムおよびHTTPプロキシを無効にしてください。</string>
+    <string name="tv_adblock_exp_chat_auto_locked">実験的広告ブロッカー使用中はチャット遅延が自動に固定されます。</string>
+    <string name="tv_adblock_exp_chat_auto_info">実験的VODのため自動に固定 (%1$s)</string>
 </resources>

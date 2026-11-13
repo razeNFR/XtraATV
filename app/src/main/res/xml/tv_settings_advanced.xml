@@ -13,6 +13,8 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <Preference android:key="video_swap_settings" android:title="@string/video_swap_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
     <Preference android:key="api_token_settings" android:title="@string/api_token_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
 
     <Preference android:key="debug_settings" android:title="@string/debug_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />

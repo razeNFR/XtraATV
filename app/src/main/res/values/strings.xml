@@ -1150,4 +1150,14 @@
     <string name="tv_home_greeting_summary">Shows Hello / Good evening next to the clock on the home screen</string>
     <string name="tv_home_stats_badge">Statistics pill at the top</string>
     <string name="tv_home_stats_badge_summary">Shows a rotating statistics pill at the top right of the home screen</string>
+    <string name="tv_adblock_swap_title">Ad blocker (Swap)</string>
+    <string name="tv_adblock_swap_locked_hint">Enabled by default. Activate a custom or HTTP stream proxy to turn it off.</string>
+    <string name="tv_adblock_swap_locked_exp_hint">Stays active as automatic fallback while Experimental Adblock is enabled.</string>
+    <string name="tv_adblock_exp_title">Ad blocker (Experimental)</string>
+    <string name="tv_adblock_exp_summary">Plays the live stream via its ongoing VOD with ~30s delay to avoid all ads, with no background live player (Channel Points and VOD rewind preserved, chat synced on Auto). Only works if the streamer has an active VOD (otherwise falls back to Swap adblock). Brand-new streams start on Swap and switch automatically once the VOD is ready. Incompatible with proxies.</string>
+    <string name="tv_adblock_exp_switched">Experimental adblock: switched to ad-free VOD</string>
+    <string name="tv_adblock_exp_proxies_disabled">Proxies cannot be enabled while Experimental Adblock is active.</string>
+    <string name="tv_adblock_exp_disabled_by_proxy">Disable custom and HTTP stream proxies first to enable Experimental Adblock.</string>
+    <string name="tv_adblock_exp_chat_auto_locked">Chat delay is locked on Auto while Experimental Adblock is active.</string>
+    <string name="tv_adblock_exp_chat_auto_info">Locked on Auto for Experimental VOD (%1$s)</string>
 </resources>

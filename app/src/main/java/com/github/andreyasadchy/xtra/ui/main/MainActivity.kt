@@ -367,8 +367,16 @@ class MainActivity : AppCompatActivity() {
             windowInsets
         }
         settingsResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val prevAdblock = adblockPrefsBeforeSettings
+            adblockPrefsBeforeSettings = null
             if (result.resultCode == RESULT_OK) {
                 recreate()
+            } else if (isTv && prevAdblock != null && prevAdblock != snapshotAdblockPrefs() && currentPlayingStream() != null) {
+                val wasMaximized = isPlayerMaximized()
+                restartCurrentStream()
+                if (!wasMaximized) {
+                    (playerFragment as? PlayerFragment)?.minimize()
+                }
             }
         }
         loginResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -1801,12 +1809,23 @@ class MainActivity : AppCompatActivity() {
         return binding.navHostFragment.requestFocus() || binding.navBarContainer.requestFocus()
     }
 
+    private var adblockPrefsBeforeSettings: List<Boolean>? = null
+
+    private fun snapshotAdblockPrefs(): List<Boolean> = listOf(
+        com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(this),
+        com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(this),
+        prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false),
+        prefs.getBoolean(C.PLAYER_USE_STREAM_PROXY, false),
+    )
+
     fun openSettings() {
+        if (isTv) adblockPrefsBeforeSettings = snapshotAdblockPrefs()
         settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java))
     }
 
     /** TV: the settings of the custom proxies (from the proxy panel of the player). */
     fun openCustomProxySettings() {
+        if (isTv) adblockPrefsBeforeSettings = snapshotAdblockPrefs()
         settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_OPEN, SettingsActivity.OPEN_CUSTOM_PROXIES))
     }
 

@@ -78,6 +78,10 @@ object TvProxyPanel {
         manage: Manage? = null,
         onClosed: (List<CustomProxy>?) -> Unit,
     ) {
+        if (TvExperimentalAdblock.isExperimentalEnabled(context)) {
+            android.widget.Toast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         val entries = mutableStateListOf<Entry>().apply { addAll(proxies.sortedBy { it.position }.map { Entry(it) }) }
         val original = proxies.sortedBy { it.position }.map { it.id to it.enabled }
         val useBefore = context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
@@ -89,7 +93,13 @@ object TvProxyPanel {
                 var useProxies by remember { mutableStateOf(context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)) }
                 Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp).focusRequester(first), {
                     useProxies = !useProxies
-                    context.prefs().edit { putBoolean(C.PLAYER_USE_CUSTOM_PROXY, useProxies) }
+                    context.prefs().edit {
+                        putBoolean(C.PLAYER_USE_CUSTOM_PROXY, useProxies)
+                        if (useProxies) {
+                            putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
+                        }
+                    }
+                    TvExperimentalAdblock.normalizePrefs(context)
                 }) { focused ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(

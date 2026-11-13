@@ -10,6 +10,14 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_experimental_adblock"
+        android:summary="@string/tv_adblock_exp_summary"
+        android:title="@string/tv_adblock_exp_title"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="player_use_video_swap"
         android:summary="@string/use_video_swap_desc"

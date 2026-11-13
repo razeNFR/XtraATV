@@ -264,7 +264,7 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
             "theme_settings", "ui_startonfollowed",
             // a clock face for the sleep timer is made for a touch screen; the live notifications of Android are replaced
             // by the live banner of Xtra TV
-            "sleep_timer_use_time_picker", "live_notifications_enabled",
+            "sleep_timer_use_time_picker", "live_notifications_enabled", "player_use_video_swap",
         )
     }
 }

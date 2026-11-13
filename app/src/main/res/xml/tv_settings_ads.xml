@@ -5,7 +5,28 @@
 
     <PreferenceCategory android:title="@string/adblock" app:iconSpaceReserved="false">
 
-        <Preference android:key="adblock_settings" android:summary="@string/tv_adblock_summary_1440p" android:title="@string/adblock" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="player_adblock"
+            android:summary="@string/tv_adblock_summary_1440p"
+            android:title="@string/tv_adblock_swap_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_experimental_adblock"
+            android:summary="@string/tv_adblock_exp_summary"
+            android:title="@string/tv_adblock_exp_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="player_hide_ads"
+            android:title="@string/hide_during_ads"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/tv_settings_cat_proxies" app:iconSpaceReserved="false">

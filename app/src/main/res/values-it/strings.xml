@@ -1131,4 +1131,14 @@
     <string name="tv_home_greeting_summary">Mostra Ciao / Buonasera accanto all\'orologio nella schermata iniziale</string>
     <string name="tv_home_stats_badge">Pillola delle statistiche in alto</string>
     <string name="tv_home_stats_badge_summary">Mostra una pillola delle statistiche a rotazione in alto a destra nella schermata iniziale</string>
+    <string name="tv_adblock_swap_title">Blocco pubblicità (Swap)</string>
+    <string name="tv_adblock_swap_locked_hint">Attivo per impostazione predefinita. Attiva un proxy personalizzato o HTTP per poterlo disattivare.</string>
+    <string name="tv_adblock_swap_locked_exp_hint">Rimane attivo come riserva automatica mentre il blocco pubblicità sperimentale è abilitato.</string>
+    <string name="tv_adblock_exp_title">Blocco pubblicità (Sperimentale)</string>
+    <string name="tv_adblock_exp_summary">Riproduce la live tramite il VOD in corso con ~30 s di ritardo per evitare pubblicità, senza lettore live in background (mantiene punti canale e riavvolgimento VOD, chat sincronizzata su Auto). Funziona solo se lo streamer ha un VOD attivo (altrimenti passa al blocco Swap). Se la live è appena iniziata, parte con Swap e passa automaticamente al VOD appena è pronto. Incompatibile con i proxy.</string>
+    <string name="tv_adblock_exp_switched">Blocco sperimentale: passaggio al VOD senza pubblicità</string>
+    <string name="tv_adblock_exp_proxies_disabled">I proxy non possono essere attivati mentre il blocco pubblicità sperimentale è attivo.</string>
+    <string name="tv_adblock_exp_disabled_by_proxy">Disattiva prima i proxy personalizzati e HTTP per abilitare il blocco pubblicità sperimentale.</string>
+    <string name="tv_adblock_exp_chat_auto_locked">Il ritardo della chat è bloccato su Auto con il blocco pubblicità sperimentale.</string>
+    <string name="tv_adblock_exp_chat_auto_info">Bloccato su Auto per il VOD sperimentale (%1$s)</string>
 </resources>

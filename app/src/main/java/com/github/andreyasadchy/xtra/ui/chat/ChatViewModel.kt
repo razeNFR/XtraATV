@@ -1032,6 +1032,8 @@ class ChatViewModel(
      * Chat delay (live): what the player shows, in the time of Twitch (null: not known). Given by the chat of the player.
      */
     var programTime: (() -> Long?)? = null
+    /** Forces live chat into Auto delay mode without overwriting user prefs while Experimental VOD Adblock is active. */
+    var forceAutoDelay: (() -> Boolean)? = null
     /** The delay of the chat in Auto, measured on the last message shown with the picture (ms). */
     @Volatile
     var autoDelayMs = 0L
@@ -1055,6 +1057,15 @@ class ChatViewModel(
 
     /** The live chat waits for the stream: "chat_delay_mode" 0 off, 1 auto, 2 manual ("chat_delay_seconds"). */
     private fun delayMode() = applicationContext.prefs().getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull() ?: 1
+
+    private fun effectiveDelayMode(): Int = if (forceAutoDelay?.invoke() == true) 1 else delayMode()
+
+    fun effectiveAutoDelayMs(): Long =
+        if (autoDelayMs == 0L && forceAutoDelay?.invoke() == true) {
+            com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS
+        } else {
+            autoDelayMs
+        }
 
     /** Slow chat rate ("chat_slow_rate"): 0 off, or max normal messages per second (1, 2, 4, 6). */
     private fun slowChatRate() = applicationContext.prefs().getString(C.CHAT_SLOW_RATE, "0")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
@@ -1241,7 +1252,7 @@ class ChatViewModel(
             return
         }
         // a message of the live chat (with its time of Twitch), not one of ours: shown when the stream gets there
-        if (started && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && delayMode() != 0) {
+        if (started && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && effectiveDelayMode() != 0) {
             synchronized(delayedMessages) {
                 delayedMessages.addLast(message to System.currentTimeMillis())
             }
@@ -1257,18 +1268,21 @@ class ChatViewModel(
         }
         delayJob = viewModelScope.launch {
             while (true) {
+                val forcedAuto = forceAutoDelay?.invoke() == true
+                val mode = if (forcedAuto) 1 else delayMode()
                 val head = synchronized(delayedMessages) { delayedMessages.firstOrNull() }
                 if (head == null) {
-                    if (delayMode() == 0) break
+                    if (mode == 0) break
                     delay(100)
                     continue
                 }
                 val (message, arrival) = head
                 val waited = System.currentTimeMillis() - arrival
+                val maxWaitMs = if (forcedAuto) 120_000L else 60_000L
                 val due = when {
-                    // never more than 60 s, and the delay turned off: everything at once
-                    waited >= 60_000L || delayMode() == 0 -> true
-                    delayMode() == 2 -> waited >= applicationContext.prefs().getInt(C.CHAT_DELAY_SECONDS, 5).coerceIn(1, 60) * 1000L
+                    // never more than maxWaitMs, and the delay turned off: everything at once
+                    waited >= maxWaitMs || mode == 0 -> true
+                    mode == 2 -> waited >= applicationContext.prefs().getInt(C.CHAT_DELAY_SECONDS, 5).coerceIn(1, 60) * 1000L
                     else -> {
                         val shown = try {
                             programTime?.invoke()
@@ -1278,8 +1292,15 @@ class ChatViewModel(
                         if (shown != null && message.timestamp != null) {
                             (shown >= message.timestamp).also { if (it) autoDelayMs = waited }
                         } else {
-                            // not known (start, ad...): the last delay measured, else no delay
-                            waited >= autoDelayMs
+                            // not known (start, ad...): the last delay measured, else target offset when experimental VOD is active
+                            val fallbackDelay = if (autoDelayMs > 0L) {
+                                autoDelayMs
+                            } else if (forcedAuto) {
+                                com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS
+                            } else {
+                                0L
+                            }
+                            waited >= fallbackDelay
                         }
                     }
                 }

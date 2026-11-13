@@ -27,6 +27,7 @@ object TvSettingIcons {
         "xtratv_settings" to R.drawable.tv_ic_tv_small,
         "adblock_settings" to R.drawable.tv_ic_shield,
         "player_adblock" to R.drawable.tv_ic_shield,
+        "tv_experimental_adblock" to R.drawable.tv_ic_shield,
         "custom_proxy_settings" to R.drawable.tv_ic_proxy,
         "player_use_custom_proxy" to R.drawable.tv_ic_proxy,
         "stream_proxy_settings" to R.drawable.tv_ic_proxy,

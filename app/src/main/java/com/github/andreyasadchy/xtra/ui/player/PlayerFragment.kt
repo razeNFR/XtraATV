@@ -2139,6 +2139,20 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     protected fun isTvLiveTimeline() = isTv && playbackService?.type == BasePlaybackService.STREAM
 
+    fun isExperimentalVodActive(): Boolean =
+        (playbackService as? ExoPlayerService)?.experimentalVodActive == true
+
+    private fun styleTvGoLiveButton(button: android.widget.TextView) {
+        val density = resources.displayMetrics.density
+        val dot = requireContext().getDrawable(R.drawable.baseline_circle_24)?.mutate()?.apply {
+            setTint(requireContext().getColor(R.color.liveStreamRed))
+            val size = (8 * density).toInt()
+            setBounds(0, 0, size, size)
+        }
+        button.setCompoundDrawablesRelative(dot, null, null, null)
+        button.compoundDrawablePadding = (6 * density).toInt()
+    }
+
     /** VOD of a live stream opened from its timeline, the end of its timeline goes back to the live. */
     private fun getTvDvrStream(): Stream? {
         return (activity as? MainActivity)?.dvrStream?.takeIf {
@@ -2171,6 +2185,49 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             return
         }
         with(binding.playerControls) {
+            if (isExperimentalVodActive()) {
+                val exoService = playbackService as? ExoPlayerService
+                val vodEdge = exoService?.getExperimentalLiveEdgeMs()?.takeIf { it > 0L }
+                    ?: getStreamUptime()?.let { (it - com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS).coerceAtLeast(0L) }
+                if (vodEdge == null || vodEdge <= 0L) {
+                    progressBar.visibility = View.GONE
+                    position.visibility = View.GONE
+                    duration.visibility = View.GONE
+                    return
+                }
+                progressBar.visibility = View.VISIBLE
+                position.visibility = View.VISIBLE
+                duration.visibility = View.VISIBLE
+                val currentPos = (getCurrentPosition() ?: vodEdge).coerceIn(0L, vodEdge)
+                val atAdFreeEdge = vodEdge - currentPos <= 12_000L
+                progressBar.setDuration(vodEdge)
+                progressBar.setPosition(if (atAdFreeEdge) vodEdge else currentPos)
+                progressBar.setBufferedPosition((exoService?.player?.bufferedPosition ?: currentPos).coerceIn(currentPos, vodEdge))
+                position.text = if (atAdFreeEdge) getString(R.string.tv_live) else DateUtils.formatElapsedTime(currentPos / 1000)
+                duration.text = DateUtils.formatElapsedTime(vodEdge / 1000)
+                tvGoLive?.let { button ->
+                    if (!atAdFreeEdge) {
+                        styleTvGoLiveButton(button)
+                        button.visibility = View.VISIBLE
+                        button.setOnClickListener {
+                            hideTooltip()
+                            seekToLivePosition()
+                            updateTvLiveTimeline()
+                            showController()
+                        }
+                    } else if (getTvDvrStream() == null) {
+                        if (button.hasFocus()) {
+                            playPause.requestFocus()
+                        }
+                        button.visibility = View.GONE
+                    }
+                }
+                root.removeCallbacks(updateProgressAction)
+                if (root.isVisible) {
+                    root.postDelayed(updateProgressAction, 1000L)
+                }
+                return
+            }
             val uptime = getStreamUptime()
             if (uptime == null) {
                 progressBar.visibility = View.GONE
@@ -2224,12 +2281,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             return false
         }
         val isLive = isTvLiveTimeline()
-        val duration = (if (isLive) getStreamUptime() else getTotalDuration())?.takeIf { it > 0 } ?: return false
+        val expVod = isLive && isExperimentalVodActive()
+        val duration = when {
+            expVod -> (playbackService as? ExoPlayerService)?.getExperimentalLiveEdgeMs()?.takeIf { it > 0L }
+            isLive -> getStreamUptime()?.takeIf { it > 0 }
+            else -> getTotalDuration()?.takeIf { it > 0 }
+        } ?: return false
         with(binding.playerControls) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> {
                     if (tvScrubPosition < 0) {
-                        tvScrubPosition = if (isLive) duration else getCurrentPosition() ?: 0
+                        tvScrubPosition = when {
+                            expVod -> (getCurrentPosition() ?: duration).coerceIn(0L, duration)
+                            isLive -> duration
+                            else -> getCurrentPosition() ?: 0
+                        }
                         progressBar.isPressed = true
                     }
                     // the longer the key is held, the faster it goes, relative to the length of the video
@@ -2240,12 +2306,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         else -> maxOf(120_000L, duration / 50)
                     }.let {
                         // on the live: the first step back goes a minute back, right into the VOD, small steps never get past its edge
-                        if (isLive && keyCode == KeyEvent.KEYCODE_DPAD_LEFT && tvScrubPosition >= duration - LIVE_EDGE_MS) maxOf(it, LIVE_FIRST_STEP_MS) else it
+                        if (isLive && !expVod && keyCode == KeyEvent.KEYCODE_DPAD_LEFT && tvScrubPosition >= duration - LIVE_EDGE_MS) maxOf(it, LIVE_FIRST_STEP_MS) else it
                     }
                     tvScrubPosition = (tvScrubPosition + if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -step else step).coerceIn(0, duration)
                     progressBar.setDuration(duration)
                     progressBar.setPosition(tvScrubPosition)
-                    position.text = DateUtils.formatElapsedTime(tvScrubPosition / 1000)
+                    position.text = if (expVod && tvScrubPosition >= duration - 5_000L) {
+                        getString(R.string.tv_live)
+                    } else {
+                        DateUtils.formatElapsedTime(tvScrubPosition / 1000)
+                    }
                     seekPreview?.show(tvScrubPosition, duration)
                     root.removeCallbacks(controllerHideAction)
                 }
@@ -2257,6 +2327,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         seekPreview?.hideLater()
                         val dvrStream = getTvDvrStream()
                         when {
+                            expVod -> {
+                                seek(newPosition.coerceIn(0L, duration))
+                                updateTvLiveTimeline()
+                                showController()
+                            }
                             isLive -> {
                                 if (newPosition < duration - LIVE_EDGE_MS) {
                                     startTvDvr(newPosition)
@@ -2604,16 +2679,25 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     prefs.edit { putString(C.CHAT_SLOW_RATE, slowRateValues[it]) }
                 }
                 // delay of the live chat: off, auto (the latency of the stream) or 1 to 60 s
-                val delayMode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull()?.coerceIn(0, 2) ?: 1) }
+                val expVodChat = isExperimentalVodActive()
+                val savedDelayMode = prefs.getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull()?.coerceIn(0, 2) ?: 1
+                val delayMode = androidx.compose.runtime.remember(expVodChat) {
+                    androidx.compose.runtime.mutableIntStateOf(if (expVodChat) 1 else savedDelayMode)
+                }
                 com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
                     getString(R.string.tv_chat_delay),
                     listOf(getString(R.string.tv_chat_delay_off), getString(R.string.tv_chat_delay_auto), getString(R.string.tv_chat_delay_manual)),
                     delayMode.intValue,
                 ) {
-                    delayMode.intValue = it
-                    prefs.edit { putString(C.CHAT_DELAY_MODE, it.toString()) }
+                    if (isExperimentalVodActive()) {
+                        delayMode.intValue = 1
+                        Toast.makeText(requireContext(), R.string.tv_adblock_exp_chat_auto_locked, Toast.LENGTH_SHORT).show()
+                    } else {
+                        delayMode.intValue = it
+                        prefs.edit { putString(C.CHAT_DELAY_MODE, it.toString()) }
+                    }
                 }
-                androidx.compose.runtime.key(delayMode.intValue) {
+                androidx.compose.runtime.key(delayMode.intValue, expVodChat) {
                     when (delayMode.intValue) {
                         1 -> {
                             val measured by androidx.compose.runtime.produceState(chatFragment?.getAutoDelayMs() ?: 0L) {
@@ -2627,8 +2711,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             } else {
                                 getString(R.string.tv_chat_delay_auto_measuring)
                             }
+                            val infoText = if (expVodChat) {
+                                getString(R.string.tv_adblock_exp_chat_auto_info, now)
+                            } else {
+                                getString(R.string.tv_chat_delay_auto_info, now)
+                            }
                             androidx.tv.material3.Text(
-                                getString(R.string.tv_chat_delay_auto_info, now),
+                                infoText,
                                 fontSize = 13.sp,
                                 lineHeight = 18.sp,
                                 color = com.github.andreyasadchy.xtra.ui.tv.TvColors.secondaryText,
@@ -2771,13 +2860,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** TV: the icon of the proxy button says if the custom proxy is on. */
     private fun updateTvProxyIcon() {
-        val on = requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
-        _binding?.playerControls?.tvProxy?.setImageResource(if (on) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
+        val context = context ?: return
+        val expOn = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(context)
+        val on = !expOn && context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+        _binding?.playerControls?.tvProxy?.apply {
+            setImageResource(if (on) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
+            alpha = if (expOn) 0.45f else 1f
+        }
     }
 
     /** TV: the list of the custom proxies (OK held on the proxy button), saved in the settings when it closes. */
     private fun showTvProxyPanel() {
         val activity = activity as? MainActivity ?: return
+        if (com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(activity)) {
+            Toast.makeText(activity, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_SHORT).show()
+            return
+        }
         val repository = (activity.application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository
         viewLifecycleOwner.lifecycleScope.launch {
             val proxies = repository.getCustomProxies()
@@ -3209,20 +3307,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             tvGoLive?.let { button ->
                 val dvrStream = getTvDvrStream()
                 if (dvrStream != null) {
-                    val density = resources.displayMetrics.density
-                    val dot = requireContext().getDrawable(R.drawable.baseline_circle_24)?.mutate()?.apply {
-                        setTint(requireContext().getColor(R.color.liveStreamRed))
-                        val size = (8 * density).toInt()
-                        setBounds(0, 0, size, size)
-                    }
-                    button.setCompoundDrawablesRelative(dot, null, null, null)
-                    button.compoundDrawablePadding = (6 * density).toInt()
+                    styleTvGoLiveButton(button)
                     button.visibility = View.VISIBLE
                     button.setOnClickListener {
                         hideTooltip()
                         (activity as? MainActivity)?.startStream(dvrStream)
                     }
-                } else {
+                } else if (!isExperimentalVodActive()) {
                     button.visibility = View.GONE
                 }
             }
@@ -3276,10 +3367,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.visibility = View.GONE
                 }
                 button.setOnClickListener {
-                    val on = !requireContext().prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
-                    requireContext().prefs().edit { putBoolean(C.PLAYER_USE_CUSTOM_PROXY, on) }
+                    val ctx = requireContext()
+                    if (com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(ctx)) {
+                        Toast.makeText(ctx, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    val on = !ctx.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+                    ctx.prefs().edit {
+                        putBoolean(C.PLAYER_USE_CUSTOM_PROXY, on)
+                        if (on) {
+                            putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
+                        }
+                    }
+                    com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.normalizePrefs(ctx)
                     updateTvProxyIcon()
-                    android.widget.Toast.makeText(requireContext(), if (on) R.string.tv_proxy_on else R.string.tv_proxy_off, android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(ctx, if (on) R.string.tv_proxy_on else R.string.tv_proxy_off, android.widget.Toast.LENGTH_SHORT).show()
                     (activity as? MainActivity)?.restartCurrentStream()
                 }
                 button.setOnLongClickListener {
