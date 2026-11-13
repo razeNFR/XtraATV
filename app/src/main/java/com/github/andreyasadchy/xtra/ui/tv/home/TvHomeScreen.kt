@@ -296,16 +296,24 @@ fun TvHomeScreen(
             focus.focusFirst()
         }
     }
+    val homeContext = androidx.compose.ui.platform.LocalContext.current
+    val isPlayerCovering = {
+        var ctx: android.content.Context? = homeContext
+        while (ctx is android.content.ContextWrapper && ctx !is com.github.andreyasadchy.xtra.ui.main.MainActivity) {
+            ctx = ctx.baseContext
+        }
+        (ctx as? com.github.andreyasadchy.xtra.ui.main.MainActivity)?.isTvPlayerOverContent() == true
+    }
     // the grey card had the focus and its row came (or turned out empty): the focus goes on, unless it moved meanwhile
     val firstKey = sections.firstOrNull()?.key
     LaunchedEffect(firstKey, firstIsGhost, hasCards) {
-        if (!onGhost || userMoved) {
+        if (!onGhost || userMoved || isPlayerCovering()) {
             return@LaunchedEffect
         }
         // the new first row may need a few frames to be laid out: tried again for a moment
         repeat(30) {
             androidx.compose.runtime.withFrameNanos { }
-            if (userMoved) {
+            if (userMoved || isPlayerCovering()) {
                 return@LaunchedEffect
             }
             if (firstIsGhost) {
@@ -328,7 +336,7 @@ fun TvHomeScreen(
     }
     val request = focus.request
     LaunchedEffect(request, hasCards, firstIsGhost, allRows.size) {
-        if (request == null || (!hasCards && !firstIsGhost)) {
+        if (request == null || (!hasCards && !firstIsGhost) || isPlayerCovering()) {
             return@LaunchedEffect
         }
         if (firstIsGhost && (!request.toLast || focus.lastRow == null)) {
@@ -336,7 +344,7 @@ fun TvHomeScreen(
             listState.scrollToItem(0)
             androidx.compose.runtime.withFrameNanos { }
             androidx.compose.runtime.withFrameNanos { }
-            if (runCatching { ghostCard.requestFocus() }.getOrNull() == true) {
+            if (!isPlayerCovering() && runCatching { ghostCard.requestFocus() }.getOrNull() == true) {
                 // a new request (side menu, player closed): the home places the focus again
                 userMoved = false
                 onGhost = true
@@ -376,6 +384,7 @@ fun TvHomeScreen(
             rowStates[rowInfo.key]?.scrollToItem(cardIndex)
             repeat(10) {
                 androidx.compose.runtime.withFrameNanos { }
+                if (isPlayerCovering()) return@LaunchedEffect
                 if (runCatching { cardRequesters["${rowInfo.key}/$itemKey"]?.requestFocus() }.getOrNull() == true) {
                     focusedItem = rowInfo.rowIndex
                     done()
@@ -389,6 +398,7 @@ fun TvHomeScreen(
                 runCatching { rowStates[rowInfo.key]?.scrollToItem(0) }
                 repeat(10) {
                     androidx.compose.runtime.withFrameNanos { }
+                    if (isPlayerCovering()) return@LaunchedEffect
                     if (runCatching { cardRequesters["${rowInfo.key}/$firstRowItemKey"]?.requestFocus() }.getOrNull() == true) {
                         focusedItem = rowInfo.rowIndex
                         done()
@@ -401,10 +411,11 @@ fun TvHomeScreen(
         allRows.firstOrNull()?.let { rowStates[it.key]?.scrollToItem(0) }
         androidx.compose.runtime.withFrameNanos { }
         androidx.compose.runtime.withFrameNanos { }
-        runCatching { firstCard.requestFocus() }
-        done()
+        if (!isPlayerCovering()) {
+            runCatching { firstCard.requestFocus() }
+            done()
+        }
     }
-    val homeContext = androidx.compose.ui.platform.LocalContext.current
     val compactRail = remember { homeContext.prefs().getBoolean(C.TV_COMPACT_RAIL, true) }
     val startInset = if (compactRail) 16.dp else 48.dp
     val endInset = 48.dp

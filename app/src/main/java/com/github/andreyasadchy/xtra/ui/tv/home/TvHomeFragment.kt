@@ -77,7 +77,8 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val context = requireContext()
-        if (homeFocus.lastRow != null && (activity as? MainActivity)?.isTvMenuOpen() != true) {
+        val act = activity as? MainActivity
+        if (homeFocus.lastRow != null && act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
             homeFocus.focusLast()
         }
         val accent = MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, 0xFF9147FF.toInt())
