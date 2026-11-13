@@ -152,6 +152,13 @@ class ExoPlayerService : BasePlaybackService() {
     private var ignorePlaylistUpdate = false
     private var fallbackH264ForStream = false
     private var created = false
+    private var intentionalStopOrPause = false
+    private var streamEnded = false
+    private var liveRecoveryJob: Job? = null
+    private var liveRecoveryAttempt = 0
+
+    val isIntentionallyPausedOrStopped: Boolean
+        get() = intentionalStopOrPause || streamEnded
 
     interface Listener {
         fun started()
@@ -182,6 +189,7 @@ class ExoPlayerService : BasePlaybackService() {
                 updatePlaybackState()
             }
         }
+        startLiveWatchdog()
     }
 
     private fun create(restorePauseState: Boolean) {
@@ -375,19 +383,20 @@ class ExoPlayerService : BasePlaybackService() {
                     updatePlaybackState()
                     when (type) {
                         STREAM -> {
+                            val generation = streamGeneration
+                            val login = channelLogin
                             val responseCode = (player?.playerError?.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode ?: 0
                             val timeout = (player?.playerError?.cause as? DataSourceException)?.reason?.let {
                                 it == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                                         || it == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
                             } == true
-                            val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-                            val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-                            val isNetworkAvailable = networkCapabilities != null
-                                    && networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                                    && networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                            val isNetworkAvailable = isNetworkValidated()
                             if (isNetworkAvailable) {
                                 when {
                                     responseCode == 404 -> {
+                                        streamEnded = true
+                                        liveRecoveryJob?.cancel()
+                                        liveRecoveryJob = null
                                         serviceListener?.toast(R.string.stream_ended, Toast.LENGTH_LONG)
                                     }
                                     useCustomProxy && (responseCode >= 400 || timeout) -> {
@@ -399,8 +408,12 @@ class ExoPlayerService : BasePlaybackService() {
                                         if (responseCode == 403) {
                                             // 403 = geo-blocked / forbidden on this channel: skip for this channel only and retry immediately
                                             proxyHost?.let { geoBlockedProxiesForChannel.add(it) }
-                                            lifecycleScope.launch {
-                                                restartPlayer()
+                                            liveRecoveryJob?.cancel()
+                                            liveRecoveryJob = lifecycleScope.launch {
+                                                if (generation == streamGeneration && !intentionalStopOrPause && !streamEnded) {
+                                                    liveRecoveryJob = null
+                                                    restartPlayer(fromAutoRecovery = true)
+                                                }
                                             }
                                         } else {
                                             // not tried again for a while, on this stream or the next ones
@@ -408,34 +421,32 @@ class ExoPlayerService : BasePlaybackService() {
                                             if (host != null) {
                                                 serviceListener?.toast(getString(R.string.proxy_error, host), Toast.LENGTH_LONG)
                                             }
-                                            lifecycleScope.launch {
-                                                delay(1500.milliseconds)
-                                                restartPlayer()
-                                            }
+                                            scheduleLiveRecovery(generation, login, initialDelayMs = 1500L)
                                         }
                                     }
                                     useStreamProxy && (responseCode >= 400 || timeout) -> {
                                         val host = streamProxyList?.getOrNull(currentStreamProxy)?.host
                                         currentStreamProxy += 1
                                         if (responseCode == 403) {
-                                            lifecycleScope.launch {
-                                                restartPlayer()
+                                            liveRecoveryJob?.cancel()
+                                            liveRecoveryJob = lifecycleScope.launch {
+                                                if (generation == streamGeneration && !intentionalStopOrPause && !streamEnded) {
+                                                    liveRecoveryJob = null
+                                                    restartPlayer(fromAutoRecovery = true)
+                                                }
                                             }
                                         } else {
                                             if (host != null) {
                                                 serviceListener?.toast(getString(R.string.proxy_error, host), Toast.LENGTH_LONG)
                                             }
-                                            lifecycleScope.launch {
-                                                delay(1500.milliseconds)
-                                                restartPlayer()
-                                            }
+                                            scheduleLiveRecovery(generation, login, initialDelayMs = 1500L)
                                         }
                                     }
                                     isSwapping || hidden -> {
                                         // Background main player errored while ads are blocked: reconnect it silently at live edge
                                         lifecycleScope.launch {
                                             delay(1000.milliseconds)
-                                            if (isSwapping || hidden) {
+                                            if ((isSwapping || hidden) && generation == streamGeneration) {
                                                 player?.seekToDefaultPosition()
                                                 player?.prepare()
                                                 player?.play()
@@ -453,25 +464,26 @@ class ExoPlayerService : BasePlaybackService() {
                                             fallbackH264ForStream = true
                                             if (isCodecError) {
                                                 // Hardware AV1/HEVC/1440p decoder failed: switch immediately to H.264 1080p without error toast
-                                                lifecycleScope.launch {
-                                                    restartPlayer()
+                                                liveRecoveryJob?.cancel()
+                                                liveRecoveryJob = lifecycleScope.launch {
+                                                    if (generation == streamGeneration && !intentionalStopOrPause && !streamEnded) {
+                                                        liveRecoveryJob = null
+                                                        restartPlayer(fromAutoRecovery = true)
+                                                    }
                                                 }
                                             } else {
                                                 serviceListener?.toast(R.string.player_error, Toast.LENGTH_SHORT)
-                                                lifecycleScope.launch {
-                                                    delay(1500.milliseconds)
-                                                    restartPlayer()
-                                                }
+                                                scheduleLiveRecovery(generation, login, initialDelayMs = 1500L)
                                             }
                                         } else {
                                             serviceListener?.toast(R.string.player_error, Toast.LENGTH_SHORT)
-                                            lifecycleScope.launch {
-                                                delay(1500.milliseconds)
-                                                restartPlayer()
-                                            }
+                                            scheduleLiveRecovery(generation, login, initialDelayMs = 1500L)
                                         }
                                     }
                                 }
+                            } else if (!(isSwapping || hidden) && !intentionalStopOrPause && !streamEnded) {
+                                // Brief Wi-Fi band-steer / network drop: wait quietly for connectivity and auto-recover
+                                scheduleLiveRecovery(generation, login, initialDelayMs = 2000L)
                             }
                         }
                         VIDEO -> {
@@ -616,6 +628,11 @@ class ExoPlayerService : BasePlaybackService() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) {
                         videoStartPosition = null
+                        streamEnded = false
+                    } else if (playbackState == Player.STATE_ENDED && type == STREAM) {
+                        streamEnded = true
+                        liveRecoveryJob?.cancel()
+                        liveRecoveryJob = null
                     }
                     updatePlaybackState()
                     updateNotification()
@@ -670,7 +687,7 @@ class ExoPlayerService : BasePlaybackService() {
                 }
 
                 override fun onPlay() {
-                    togglePause()
+                    play()
                 }
 
                 override fun onPause() {
@@ -756,12 +773,14 @@ class ExoPlayerService : BasePlaybackService() {
                     }.build()
                 )
                 if (resources.getBoolean(R.bool.isTv)) {
-                    // TV: the sound of a film, the audio focus is held by the app for every player (TvPlaybackSignals)
+                    // TV: the sound of a film, the audio focus is held by the app for every player (TvPlaybackSignals),
+                    // and Bluetooth keyboards / remotes / HDMI audio sinks going idle must never pause the stream
                     setAudioAttributes(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.playerAttributes, false)
+                    setHandleAudioBecomingNoisy(false)
                 } else {
                     setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
+                    setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 }
-                setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
                 setBandwidthMeter(getBandwidthMeter(this@ExoPlayerService))
@@ -831,6 +850,11 @@ class ExoPlayerService : BasePlaybackService() {
             restorePlaybackState()
             when (type) {
                 STREAM -> {
+                    intentionalStopOrPause = (restorePauseState && paused) || quality?.name == VideoQuality.CHAT_ONLY_QUALITY
+                    streamEnded = false
+                    liveRecoveryAttempt = 0
+                    liveRecoveryJob?.cancel()
+                    liveRecoveryJob = null
                     started = true
                     serviceListener?.started()
                     if (!qualities.isNullOrEmpty()) {
@@ -1022,7 +1046,11 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
+    private var loadingStreamCount = 0
+
     private suspend fun loadStream(restorePauseState: Boolean = false, restart: Boolean = false) {
+        loadingStreamCount++
+        try {
         // the stream loads (again): its first seconds are not counted as stops for the quality of Auto
         playingSince = 0L
         if (!restart) {
@@ -1046,7 +1074,10 @@ class ExoPlayerService : BasePlaybackService() {
                     }
                 }
             } else null
-            if (restart || qualities.isNullOrEmpty()) {
+            val needsFreshUrl = restart || qualities.isNullOrEmpty()
+            var fetchedUrl: String? = null
+            waitingIntegrity = false
+            if (needsFreshUrl) {
                 val proxyUrl = if (useCustomProxy) {
                     // the custom proxies known offline or geo-blocked (403) on this channel are not tried
                     while (customProxyList?.getOrNull(currentCustomProxy)?.let { customProxyHost(it) }?.let {
@@ -1057,6 +1088,7 @@ class ExoPlayerService : BasePlaybackService() {
                     customProxyList?.getOrNull(currentCustomProxy)?.let { proxy -> customProxyUrl(proxy, channelLogin) }
                 } else null
                 if (proxyUrl != null) {
+                    fetchedUrl = proxyUrl
                     playlistUrl = proxyUrl
                 } else {
                     useCustomProxy = false
@@ -1093,10 +1125,13 @@ class ExoPlayerService : BasePlaybackService() {
                         (if (!restart && !fallbackH264ForStream) TvStreamPrefetch.take(channelLogin) else null)
                             ?: getStreamPlaylistUrl(channelLogin, supportedCodecsOverride = codecOverride)
                     }
-                    playlistUrl = url
+                    fetchedUrl = url
+                    if (url != null || !restart) {
+                        playlistUrl = url
+                    }
                 }
             }
-            val url = playlistUrl
+            val url = if (needsFreshUrl) fetchedUrl else playlistUrl
             TvLoadTimer.mark("Accès Twitch (jeton)")
             if (url != null) {
                 // statistics of the home: the proxy the stream goes through (the list of the app or added ones),
@@ -1353,9 +1388,16 @@ class ExoPlayerService : BasePlaybackService() {
                     player.prepare()
                     player.playWhenReady = !restorePauseState || !paused
                 }
+            } else if (type == STREAM && !waitingIntegrity && !intentionalStopOrPause && !streamEnded && quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
+                scheduleLiveRecovery(streamGeneration, channelLogin)
             }
         }
+        } finally {
+            loadingStreamCount = (loadingStreamCount - 1).coerceAtLeast(0)
+        }
     }
+
+    private var waitingIntegrity = false
 
     private suspend fun getStreamPlaylistUrl(
         channelLogin: String,
@@ -1366,6 +1408,7 @@ class ExoPlayerService : BasePlaybackService() {
             loadStreamPlaylistUrl(this, xtraModule, channelLogin, streamProxy, supportedCodecsOverride)
         } catch (e: Exception) {
             if (e.message == C.FAILED_INTEGRITY_CHECK) {
+                waitingIntegrity = true
                 integrity.emit("refreshStream")
             }
             null
@@ -1604,6 +1647,9 @@ class ExoPlayerService : BasePlaybackService() {
     fun retry(item: String) {
         when (item) {
             "refreshStream" -> {
+                streamEnded = false
+                liveRecoveryJob?.cancel()
+                liveRecoveryJob = null
                 lifecycleScope.launch {
                     loadStream()
                 }
@@ -1622,9 +1668,13 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun changeQuality(selectedQuality: VideoQuality?) {
+        val wasChatOnly = quality?.name == VideoQuality.CHAT_ONLY_QUALITY
         previousQuality = quality
         quality = selectedQuality
         quality?.let { quality ->
+            if (wasChatOnly && quality.name != VideoQuality.CHAT_ONLY_QUALITY) {
+                intentionalStopOrPause = false
+            }
             player?.let { player ->
                 player.currentMediaItem?.let { mediaItem ->
                     when (quality.name) {
@@ -1664,6 +1714,9 @@ class ExoPlayerService : BasePlaybackService() {
                             }
                         }
                         VideoQuality.CHAT_ONLY_QUALITY -> {
+                            intentionalStopOrPause = true
+                            liveRecoveryJob?.cancel()
+                            liveRecoveryJob = null
                             player.stop()
                         }
                         else -> {
@@ -2047,10 +2100,11 @@ class ExoPlayerService : BasePlaybackService() {
                 if (resources.getBoolean(R.bool.isTv)) {
                     // TV: the sound of a film, the audio focus is held by the app for every player (TvPlaybackSignals)
                     setAudioAttributes(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.playerAttributes, false)
+                    setHandleAudioBecomingNoisy(false)
                 } else {
                     setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
+                    setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 }
-                setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
                 setBandwidthMeter(createSecondaryBandwidthMeter(this@ExoPlayerService))
@@ -2589,6 +2643,9 @@ class ExoPlayerService : BasePlaybackService() {
      * and the picture has to go back on the surface of the player that shows it.
      */
     fun resumeAfterDisplayChange() {
+        if (intentionalStopOrPause || streamEnded) {
+            return
+        }
         player?.let { if (!it.playWhenReady) it.play() }
         secondaryPlayer?.let { if (!it.playWhenReady) it.play() }
         serviceListener?.setPlayerSurface(isSwapping)
@@ -2941,6 +2998,12 @@ class ExoPlayerService : BasePlaybackService() {
         }
         started = false
         loaded = false
+        intentionalStopOrPause = true
+        streamEnded = false
+        liveRecoveryAttempt = 0
+        waitingIntegrity = false
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = null
         // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
         // no sound), it must not come back on the screen for a moment when the backup player goes
         player?.setPlaybackSpeed(1f)
@@ -2996,6 +3059,12 @@ class ExoPlayerService : BasePlaybackService() {
         if (!created) {
             return
         }
+        intentionalStopOrPause = false
+        streamEnded = false
+        liveRecoveryAttempt = 0
+        waitingIntegrity = false
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = null
         playingAds = false
         backLiveFrom = 0L
         backLiveProgress = 0f
@@ -3235,14 +3304,59 @@ class ExoPlayerService : BasePlaybackService() {
         return (secondaryPlayer?.volume ?: player?.volume)?.let { (it / mix).coerceAtMost(1f) }
     }
 
-    fun togglePause() {
-        if (secondaryPlayer != null) {
-            Util.handlePlayPauseButtonAction(secondaryPlayer)
+    fun play() {
+        intentionalStopOrPause = false
+        streamEnded = false
+        liveRecoveryAttempt = 0
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = null
+        secondaryPlayer?.let { sp ->
+            if (sp.playbackState == Player.STATE_IDLE) {
+                sp.prepare()
+            } else if (sp.playbackState == Player.STATE_ENDED) {
+                sp.seekToDefaultPosition()
+            }
+            sp.play()
         }
-        Util.handlePlayPauseButtonAction(player)
+        val p = player ?: return
+        if (type == STREAM && quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
+            if (p.currentMediaItem == null) {
+                restartPlayer()
+                return
+            }
+            if (p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED) {
+                p.seekToDefaultPosition()
+                p.prepare()
+                p.play()
+                return
+            }
+            if (!p.playWhenReady && isTvDevice && !prefs().getBoolean(C.PLAYER_PAUSE, false)) {
+                p.seekToDefaultPosition()
+            }
+            p.play()
+        } else {
+            if (p.playbackState == Player.STATE_IDLE) {
+                p.prepare()
+            } else if (p.playbackState == Player.STATE_ENDED) {
+                p.seekToDefaultPosition()
+            }
+            p.play()
+        }
+    }
+
+    fun togglePause() {
+        val active = visiblePlayer ?: return
+        if (Util.shouldShowPlayButton(active)) {
+            play()
+        } else {
+            pause()
+        }
     }
 
     fun pause() {
+        intentionalStopOrPause = true
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = null
         if (secondaryPlayer != null) {
             secondaryPlayer?.pause()
         }
@@ -3250,6 +3364,9 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun stop() {
+        intentionalStopOrPause = true
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = null
         if (type == VIDEO && prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
             player?.takeIf { !it.currentTracks.isEmpty }?.let { player ->
                 videoId?.toLongOrNull()?.let { saveTvResume(it, player.currentPosition) }
@@ -3330,8 +3447,15 @@ class ExoPlayerService : BasePlaybackService() {
         }?.joinToString("\n")
     }
 
-    fun restartPlayer() {
+    fun restartPlayer(fromAutoRecovery: Boolean = false) {
         if (quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
+            intentionalStopOrPause = false
+            streamEnded = false
+            if (!fromAutoRecovery) {
+                liveRecoveryAttempt = 0
+                liveRecoveryJob?.cancel()
+                liveRecoveryJob = null
+            }
             streamGeneration++
             adMainWatchJob?.cancel()
             adMainWatchJob = null
@@ -3352,6 +3476,241 @@ class ExoPlayerService : BasePlaybackService() {
                     stopSecondaryPlayer()
                 }
                 loadStream(restart = true)
+            }
+        }
+    }
+
+    private fun isNetworkValidated(): Boolean {
+        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
+    /**
+     * Resilient background live-stream recovery: retries fetching a fresh Twitch access token with exponential backoff
+     * when a brief Wi-Fi/CDN blip interrupts playback, stopping cleanly if Twitch confirms the streamer went offline.
+     */
+    private fun scheduleLiveRecovery(generation: Int, login: String?, initialDelayMs: Long? = null) {
+        if (login.isNullOrBlank() || type != STREAM || intentionalStopOrPause || streamEnded ||
+            waitingIntegrity || quality?.name == VideoQuality.CHAT_ONLY_QUALITY
+        ) {
+            return
+        }
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = lifecycleScope.launch {
+            val attempt = liveRecoveryAttempt++
+            val backoffMs = initialDelayMs ?: when (attempt) {
+                0 -> 2000L
+                1 -> 4000L
+                2 -> 8000L
+                3 -> 15_000L
+                else -> 25_000L
+            }
+            delay(backoffMs)
+            var waitedOffline = 0
+            while (!isNetworkValidated() && waitedOffline < 20) {
+                if (!created || !started || generation != streamGeneration || channelLogin != login ||
+                    type != STREAM || intentionalStopOrPause || streamEnded || quality?.name == VideoQuality.CHAT_ONLY_QUALITY
+                ) {
+                    return@launch
+                }
+                delay(1000L)
+                waitedOffline++
+            }
+            if (!created || !started || generation != streamGeneration || channelLogin != login ||
+                type != STREAM || intentionalStopOrPause || streamEnded || quality?.name == VideoQuality.CHAT_ONLY_QUALITY
+            ) {
+                return@launch
+            }
+            if (visiblePlayer?.isPlaying == true) {
+                return@launch
+            }
+            if (attempt >= 1 && isNetworkValidated()) {
+                val stillLive = runCatching {
+                    val user = xtraModule.graphQLRepository.loadQueryUsersStream(
+                        networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                        headers = TwitchApiHelper.getGQLHeaders(this@ExoPlayerService),
+                        ids = null,
+                        logins = listOf(login),
+                    ).data?.users?.firstOrNull()
+                    if (user != null) user.stream != null else true
+                }.getOrDefault(true)
+                if (!stillLive) {
+                    if (generation == streamGeneration && channelLogin == login && !streamEnded) {
+                        streamEnded = true
+                        serviceListener?.toast(R.string.stream_ended, Toast.LENGTH_LONG)
+                    }
+                    return@launch
+                }
+            }
+            if (!created || !started || generation != streamGeneration || channelLogin != login ||
+                type != STREAM || intentionalStopOrPause || streamEnded || quality?.name == VideoQuality.CHAT_ONLY_QUALITY
+            ) {
+                return@launch
+            }
+            liveRecoveryJob = null
+            restartPlayer(fromAutoRecovery = true)
+        }
+    }
+
+    /**
+     * Lightweight defensive watchdog for long-running live streams: completely inert while playback advances normally,
+     * during intentional pause/stop, ad blocking, or genuine stream end; after ~5s of silent STATE_IDLE / unintended
+     * pause / frozen position (or 15s of zero-progress buffering), performs a soft kick to the live edge first (just
+     * like pressing Play on the remote) and escalates to a full token reload only if needed.
+     */
+    private fun startLiveWatchdog() {
+        lifecycleScope.launch {
+            var watchedGeneration = -1
+            var idleOrPausedSec = 0
+            var frozenReadySec = 0
+            var stuckBufferingSec = 0
+            var healthyPlaySec = 0
+            var lastPos = androidx.media3.common.C.TIME_UNSET
+            var lastBuffered = androidx.media3.common.C.TIME_UNSET
+            var softKickUsed = false
+
+            fun resetCounters() {
+                idleOrPausedSec = 0
+                frozenReadySec = 0
+                stuckBufferingSec = 0
+                healthyPlaySec = 0
+                lastPos = androidx.media3.common.C.TIME_UNSET
+                lastBuffered = androidx.media3.common.C.TIME_UNSET
+            }
+
+            while (true) {
+                if (!created || !started || type != STREAM || intentionalStopOrPause || streamEnded ||
+                    quality?.name == VideoQuality.CHAT_ONLY_QUALITY ||
+                    com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.leaveMuted
+                ) {
+                    resetCounters()
+                    softKickUsed = false
+                    delay(3000L)
+                    continue
+                }
+                delay(1000L)
+                if (!created || !started || type != STREAM || intentionalStopOrPause || streamEnded ||
+                    waitingIntegrity || loadingStreamCount > 0 ||
+                    quality?.name == VideoQuality.CHAT_ONLY_QUALITY ||
+                    com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.leaveMuted ||
+                    playingAds || videoSwapActive || proxyMediaPlaylist || hidden ||
+                    adDelayJob?.isActive == true || secondaryLoadJob?.isActive == true ||
+                    freezeWatchJob?.isActive == true || liveRecoveryJob?.isActive == true
+                ) {
+                    resetCounters()
+                    continue
+                }
+                if (watchedGeneration != streamGeneration) {
+                    watchedGeneration = streamGeneration
+                    resetCounters()
+                    softKickUsed = false
+                }
+                val p = player ?: run {
+                    resetCounters()
+                    continue
+                }
+                if (p.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
+                    resetCounters()
+                    continue
+                }
+                if (!p.playWhenReady) {
+                    frozenReadySec = 0
+                    stuckBufferingSec = 0
+                    healthyPlaySec = 0
+                    idleOrPausedSec++
+                    if (idleOrPausedSec >= 5) {
+                        idleOrPausedSec = 0
+                        if (p.currentMediaItem == null) {
+                            scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
+                        } else {
+                            p.seekToDefaultPosition()
+                            if (p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED) {
+                                p.prepare()
+                            }
+                            p.play()
+                        }
+                    }
+                    continue
+                }
+                when (p.playbackState) {
+                    Player.STATE_IDLE -> {
+                        frozenReadySec = 0
+                        stuckBufferingSec = 0
+                        healthyPlaySec = 0
+                        idleOrPausedSec++
+                        if (idleOrPausedSec >= 5) {
+                            idleOrPausedSec = 0
+                            if (!softKickUsed && p.currentMediaItem != null) {
+                                softKickUsed = true
+                                p.seekToDefaultPosition()
+                                p.prepare()
+                                p.play()
+                            } else {
+                                softKickUsed = false
+                                scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
+                            }
+                        }
+                    }
+                    Player.STATE_READY -> {
+                        idleOrPausedSec = 0
+                        stuckBufferingSec = 0
+                        val pos = p.currentPosition
+                        if (p.isPlaying && pos != lastPos) {
+                            frozenReadySec = 0
+                            healthyPlaySec++
+                            if (healthyPlaySec >= 8) {
+                                softKickUsed = false
+                                liveRecoveryAttempt = 0
+                            }
+                        } else {
+                            healthyPlaySec = 0
+                            frozenReadySec++
+                            if (frozenReadySec >= 6) {
+                                frozenReadySec = 0
+                                if (!softKickUsed) {
+                                    softKickUsed = true
+                                    p.seekToDefaultPosition()
+                                    p.prepare()
+                                    p.play()
+                                } else {
+                                    softKickUsed = false
+                                    scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
+                                }
+                            }
+                        }
+                        lastPos = pos
+                        lastBuffered = p.bufferedPosition
+                    }
+                    Player.STATE_BUFFERING -> {
+                        idleOrPausedSec = 0
+                        frozenReadySec = 0
+                        healthyPlaySec = 0
+                        val pos = p.currentPosition
+                        val buf = p.bufferedPosition
+                        if (pos == lastPos && buf == lastBuffered) {
+                            stuckBufferingSec++
+                            if (stuckBufferingSec >= 15) {
+                                stuckBufferingSec = 0
+                                if (!softKickUsed) {
+                                    softKickUsed = true
+                                    p.seekToDefaultPosition()
+                                    p.prepare()
+                                    p.play()
+                                } else {
+                                    softKickUsed = false
+                                    scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
+                                }
+                            }
+                        } else {
+                            stuckBufferingSec = 0
+                        }
+                        lastPos = pos
+                        lastBuffered = buf
+                    }
+                    else -> resetCounters()
+                }
             }
         }
     }
@@ -3843,6 +4202,9 @@ class ExoPlayerService : BasePlaybackService() {
             sleepTimer = Timer().apply {
                 schedule(duration) {
                     Handler(Looper.getMainLooper()).post {
+                        intentionalStopOrPause = true
+                        liveRecoveryJob?.cancel()
+                        liveRecoveryJob = null
                         savePosition()
                         player?.clearMediaItems()
                         player?.playWhenReady = false
@@ -4039,6 +4401,9 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        intentionalStopOrPause = true
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = null
         savePosition()
         player?.playWhenReady = false
         secondaryPlayer?.playWhenReady = false
@@ -4048,6 +4413,12 @@ class ExoPlayerService : BasePlaybackService() {
     /** Synchronously releases all hardware decoders and resets service state when closing before a new playback session. */
     fun releaseNow() {
         streamGeneration++
+        intentionalStopOrPause = true
+        streamEnded = false
+        liveRecoveryAttempt = 0
+        waitingIntegrity = false
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = null
         freezeWatchJob?.cancel()
         freezeWatchJob = null
         adMainWatchJob?.cancel()

@@ -56,6 +56,7 @@ class MultiStreamFragment : Fragment() {
     ) {
         /** Container of the chat under this stream (2 streams). */
         var chatContainer: FrameLayout? = null
+        var stateListener: Player.Listener? = null
         var adListener: Player.Listener? = null
         /** Optional per-stream manual cap for this multi-stream session (null: follows global profile). */
         var qualityOverrideHeight: Int? = null
@@ -71,6 +72,8 @@ class MultiStreamFragment : Fragment() {
         var onBackup = false
         var adPulseAnimator: android.animation.ValueAnimator? = null
         var backJob: kotlinx.coroutines.Job? = null
+        var recoveryJob: kotlinx.coroutines.Job? = null
+        var recoveryAttempt = 0
         var infoJob: kotlinx.coroutines.Job? = null
         var chatProbeJob: kotlinx.coroutines.Job? = null
         var resolvedChannelId: String? = null
@@ -311,12 +314,14 @@ class MultiStreamFragment : Fragment() {
             })
             addView(infoContainer, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         }
-        val player = ExoPlayer.Builder(requireContext()).build().apply {
-            // the sound of a film, the audio focus held by the multi-stream itself (TvPlaybackSignals)
-            setAudioAttributes(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.playerAttributes, false)
-            volume = 0f
-            setVideoTextureView(texture)
-        }
+        val player = ExoPlayer.Builder(requireContext())
+            .setHandleAudioBecomingNoisy(false)
+            .build().apply {
+                // the sound of a film, the audio focus held by the multi-stream itself (TvPlaybackSignals)
+                setAudioAttributes(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.playerAttributes, false)
+                volume = 0f
+                setVideoTextureView(texture)
+            }
         val tile = Tile(stream, tileView, player, label, adBadge, infoContainer, infoTop, infoTitle)
         // the frame and the name show as the others do (hidden a few seconds after the last key)
         label.alpha = chromeAlpha
@@ -1062,7 +1067,13 @@ class MultiStreamFragment : Fragment() {
         val login = tile.stream.channelLogin
         tile.adPulseAnimator?.cancel()
         tile.adPulseAnimator = null
+        tile.stateListener?.let { tile.player.removeListener(it) }
+        tile.stateListener = null
         tile.adListener?.let { tile.player.removeListener(it) }
+        tile.adListener = null
+        tile.recoveryJob?.cancel()
+        tile.backJob?.cancel()
+        tile.raiseJob?.cancel()
         tile.infoJob?.cancel()
         tile.chatProbeJob?.cancel()
         tile.player.release()
@@ -1112,8 +1123,13 @@ class MultiStreamFragment : Fragment() {
         tile.resolvedChannelId = null
         tile.qualityOverrideHeight = null
         tile.onBackup = false
+        tile.recoveryAttempt = 0
+        tile.recoveryJob?.cancel()
+        tile.recoveryJob = null
         updateAdBadge(tile)
         tile.label.text = stream.channelName ?: stream.channelLogin
+        tile.stateListener?.let { tile.player.removeListener(it) }
+        tile.stateListener = null
         tile.adListener?.let { tile.player.removeListener(it) }
         tile.adListener = null
         tile.player.stop()
@@ -1371,12 +1387,19 @@ class MultiStreamFragment : Fragment() {
         } else {
             prefetchTileChatState(tile)
         }
+        tile.stateListener?.let { player.removeListener(it) }
+        tile.stateListener = null
+        tile.recoveryJob?.cancel()
+        tile.recoveryJob = null
+        tile.recoveryAttempt = 0
         playStream(login, player, tile)
         // the stream ended (no more playlist, or the end of it): it leaves the multi-stream after a few seconds
-        player.addListener(object : Player.Listener {
+        val stateListener = object : Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 if ((error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode == 404) {
                     onStreamEnded(tile, login)
+                } else if (!pausedByAudioFocus && !leaveMuted) {
+                    scheduleTileRecovery(tile, login)
                 }
             }
 
@@ -1384,11 +1407,15 @@ class MultiStreamFragment : Fragment() {
                 if (view != null && tile in tiles) {
                     onTileState(tile, playbackState)
                 }
-                if (playbackState == Player.STATE_ENDED) {
+                if (playbackState == Player.STATE_READY) {
+                    tile.recoveryAttempt = 0
+                } else if (playbackState == Player.STATE_ENDED) {
                     onStreamEnded(tile, login)
                 }
             }
-        })
+        }
+        tile.stateListener = stateListener
+        player.addListener(stateListener)
         if (requireContext().prefs().getBoolean(C.PLAYER_ADBLOCK, true)) {
             var lastSwitch = 0L
             val listener = object : Player.Listener {
@@ -1435,6 +1462,49 @@ class MultiStreamFragment : Fragment() {
         }
     }
 
+    private fun scheduleTileRecovery(tile: Tile, login: String) {
+        if (view == null || tile !in tiles || tile.stream.channelLogin != login || login in endingLogins) {
+            return
+        }
+        if (tile.recoveryJob?.isActive == true) {
+            return
+        }
+        val attempt = tile.recoveryAttempt++
+        val delays = longArrayOf(2000L, 4000L, 8000L, 15_000L)
+        val delayMs = delays[attempt.coerceAtMost(delays.lastIndex)]
+        tile.recoveryJob = viewLifecycleOwner.lifecycleScope.launch {
+            kotlinx.coroutines.delay(delayMs)
+            if (view == null || tile !in tiles || tile.stream.channelLogin != login || pausedByAudioFocus || leaveMuted) {
+                return@launch
+            }
+            if (tile.player.isPlaying) {
+                tile.recoveryAttempt = 0
+                return@launch
+            }
+            if (attempt >= 1) {
+                val ctx = context ?: return@launch
+                val app = ctx.applicationContext as com.github.andreyasadchy.xtra.XtraApp
+                val user = runCatching {
+                    app.xtraModule.graphQLRepository.loadQueryUsersStream(
+                        ctx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                        com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(ctx),
+                        ids = tile.effectiveChannelId?.let { listOf(it) },
+                        logins = if (tile.effectiveChannelId.isNullOrBlank()) listOf(login) else null,
+                    ).data?.users?.firstOrNull()
+                }.getOrNull()
+                if (view == null || tile !in tiles || tile.stream.channelLogin != login) {
+                    return@launch
+                }
+                if (user != null && user.stream == null) {
+                    onStreamEnded(tile, login)
+                    return@launch
+                }
+            }
+            tile.recoveryJob = null
+            playStream(login, tile.player, tile, backup = tile.onBackup)
+        }
+    }
+
     /** Ad blocker on every stream, like VAFT: the player type without an ad playing. */
     /**
      * Ad blocker on every stream, like the video swap of the player: the normal player type (all the qualities), a
@@ -1455,7 +1525,7 @@ class MultiStreamFragment : Fragment() {
                 }
             } else null
             val url = normal ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getBackupPlaylistUrl(app, login)
-            if (url != null && view != null && tile.stream.channelLogin == login) {
+            if (url != null && view != null && tile in tiles && tile.stream.channelLogin == login) {
                 tile.onBackup = normal == null
                 updateAdBadge(tile)
                 player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
@@ -1465,6 +1535,8 @@ class MultiStreamFragment : Fragment() {
                 if (tile.onBackup) {
                     waitForEndOfAd(login, player, tile)
                 }
+            } else if (url == null && view != null && tile in tiles && tile.stream.channelLogin == login && !pausedByAudioFocus && !leaveMuted) {
+                scheduleTileRecovery(tile, login)
             }
         }
     }
@@ -1530,7 +1602,15 @@ class MultiStreamFragment : Fragment() {
 
     override fun onStart() {
         super.onStart()
-        tiles.forEach { it.player.play() }
+        pausedByAudioFocus = false
+        tiles.forEach { tile ->
+            val login = tile.stream.channelLogin
+            if (tile.player.playbackState == Player.STATE_IDLE && login != null && tile.recoveryJob?.isActive != true) {
+                scheduleTileRecovery(tile, login)
+            } else {
+                tile.player.play()
+            }
+        }
         holdPlaybackSignals()
     }
 
@@ -1538,9 +1618,18 @@ class MultiStreamFragment : Fragment() {
     fun setLeaveMuted(muted: Boolean) {
         leaveMuted = muted
         applySound()
+        if (!muted && !pausedByAudioFocus) {
+            tiles.forEach { tile ->
+                val login = tile.stream.channelLogin
+                if (tile.player.playbackState == Player.STATE_IDLE && login != null && tile.recoveryJob?.isActive != true) {
+                    scheduleTileRecovery(tile, login)
+                }
+            }
+        }
     }
 
     private var leaveMuted = false
+    private var pausedByAudioFocus = false
 
     /** The stream selected last (its sound is the one heard, unless the sounds are mixed). */
     private var selectedTile: Tile? = null
@@ -1719,7 +1808,13 @@ class MultiStreamFragment : Fragment() {
 
     private fun holdPlaybackSignals() {
         val context = context ?: return
-        com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.hold(context, this) { tiles.forEach { it.player.pause() } }
+        com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.hold(context, this) {
+            pausedByAudioFocus = true
+            tiles.forEach {
+                it.recoveryJob?.cancel()
+                it.player.pause()
+            }
+        }
         val session = session ?: android.media.session.MediaSession(context, "MultiStream").also { session = it }
         @Suppress("DEPRECATION")
         session.setFlags(7)
@@ -1756,6 +1851,9 @@ class MultiStreamFragment : Fragment() {
         root.removeCallbacks(hideChrome)
         chromeAnimator?.cancel()
         tiles.forEach {
+            it.stateListener?.let { l -> it.player.removeListener(l) }
+            it.adListener?.let { l -> it.player.removeListener(l) }
+            it.recoveryJob?.cancel()
             it.chatProbeJob?.cancel()
             it.infoJob?.cancel()
             it.backJob?.cancel()
