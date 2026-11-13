@@ -73,6 +73,9 @@ class MultiStreamFragment : Fragment() {
         var backJob: kotlinx.coroutines.Job? = null
         var infoJob: kotlinx.coroutines.Job? = null
         var chatProbeJob: kotlinx.coroutines.Job? = null
+        var resolvedChannelId: String? = null
+        val effectiveChannelId: String?
+            get() = stream.channelId?.takeIf { it.isNotBlank() } ?: resolvedChannelId?.takeIf { it.isNotBlank() }
     }
 
     private val tiles = mutableListOf<Tile>()
@@ -635,7 +638,7 @@ class MultiStreamFragment : Fragment() {
         val ctx = context ?: return null
         val login = tile.stream.channelLogin ?: return null
         val loginKey = login.lowercase()
-        val channelId = tile.stream.channelId
+        val channelId = tile.effectiveChannelId
         val userId = ctx.tokenPrefs().getString(C.USER_ID, null)
         if (!userId.isNullOrBlank() && !channelId.isNullOrBlank() && userId == channelId) {
             return null
@@ -702,7 +705,7 @@ class MultiStreamFragment : Fragment() {
         val gqlHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(ctx, true)
         val helixHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getHelixHeaders(ctx)
         val userId = ctx.tokenPrefs().getString(C.USER_ID, null)
-        var channelId = tile.stream.channelId
+        var channelId = tile.effectiveChannelId
         if (channelId.isNullOrBlank()) {
             val user = runCatching {
                 app.xtraModule.graphQLRepository.loadQueryUsersStream(
@@ -714,7 +717,7 @@ class MultiStreamFragment : Fragment() {
             }.getOrNull()
             if (!user?.id.isNullOrBlank()) {
                 channelId = user!!.id
-                tile.stream.channelId = channelId
+                tile.resolvedChannelId = channelId
             }
         }
         if (!channelId.isNullOrBlank() && !followCache.containsKey(channelId)) {
@@ -828,7 +831,7 @@ class MultiStreamFragment : Fragment() {
         }
         val login = tile.stream.channelLogin ?: return
         val loginKey = login.lowercase()
-        val channelId = tile.stream.channelId
+        val channelId = tile.effectiveChannelId
         val chat = findChatFragment(login)
         val stateReady = !channelId.isNullOrBlank() && followCache.containsKey(channelId) &&
             (chat?.getEffectiveRoomState()?.value != null || roomStateCache.containsKey(loginKey))
@@ -856,7 +859,7 @@ class MultiStreamFragment : Fragment() {
         val name = tile.stream.channelName?.takeIf { it.isNotBlank() } ?: login
         val chat = findChatFragment(login)
         val emoteGroupsState = androidx.compose.runtime.mutableStateOf(
-            chat?.getTvEmoteGroups() ?: buildFallbackTileEmoteGroups(tile.stream.channelId)
+            chat?.getTvEmoteGroups() ?: buildFallbackTileEmoteGroups(tile.effectiveChannelId)
         )
         if (chat == null) {
             loadFallbackTileEmotes(tile, emoteGroupsState)
@@ -895,7 +898,7 @@ class MultiStreamFragment : Fragment() {
         state: androidx.compose.runtime.MutableState<List<Pair<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>>>,
     ) {
         val ctx = context ?: return
-        val channelId = tile.stream.channelId?.takeIf { it.isNotBlank() } ?: return
+        val channelId = tile.effectiveChannelId ?: return
         if (twitchEmotesCache.containsKey(channelId)) {
             state.value = buildFallbackTileEmoteGroups(channelId)
             return
@@ -946,7 +949,7 @@ class MultiStreamFragment : Fragment() {
         val app = appCtx as com.github.andreyasadchy.xtra.XtraApp
         val login = tile.stream.channelLogin ?: return
         val loginKey = login.lowercase()
-        val initialChannelId = tile.stream.channelId
+        val initialChannelId = tile.effectiveChannelId
         val networkLibrary = appCtx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
         val gqlHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(appCtx, true)
         val helixHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getHelixHeaders(appCtx)
@@ -967,7 +970,7 @@ class MultiStreamFragment : Fragment() {
                         ).data?.users?.firstOrNull()?.id
                     }.getOrNull()
                     if (!channelId.isNullOrBlank()) {
-                        tile.stream.channelId = channelId
+                        tile.resolvedChannelId = channelId
                     }
                 }
                 if (channelId.isNullOrBlank()) return@launch
@@ -1106,6 +1109,7 @@ class MultiStreamFragment : Fragment() {
     private fun replaceStream(tile: Tile, stream: Stream) {
         val oldLogin = tile.stream.channelLogin
         tile.stream = stream
+        tile.resolvedChannelId = null
         tile.qualityOverrideHeight = null
         tile.onBackup = false
         updateAdBadge(tile)
@@ -1300,8 +1304,9 @@ class MultiStreamFragment : Fragment() {
             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         }
         root.addView(container)
+        val resolvedId = tiles.find { it.stream.channelLogin == stream.channelLogin }?.effectiveChannelId ?: stream.channelId
         childFragmentManager.beginTransaction()
-            .replace(container.id, ChatFragment.newInstance(stream.channelId, stream.channelLogin, stream.channelName, stream.id))
+            .replace(container.id, ChatFragment.newInstance(resolvedId, stream.channelLogin, stream.channelName, stream.id))
             .commitNowAllowingStateLoss()
         return container
     }
@@ -1334,7 +1339,7 @@ class MultiStreamFragment : Fragment() {
         tile.raiseJob?.cancel()
         tile.infoJob?.cancel()
         tile.chatProbeJob?.cancel()
-        if (tile.stream.channelId.isNullOrBlank() || tile.stream.createdAt.isNullOrBlank() || tile.stream.title.isNullOrBlank() || tile.stream.viewerCount == null) {
+        if (tile.effectiveChannelId.isNullOrBlank() || tile.stream.createdAt.isNullOrBlank() || tile.stream.title.isNullOrBlank() || tile.stream.viewerCount == null) {
             tile.infoJob = viewLifecycleOwner.lifecycleScope.launch {
                 val context = context ?: return@launch
                 val app = context.applicationContext as com.github.andreyasadchy.xtra.XtraApp
@@ -1342,15 +1347,15 @@ class MultiStreamFragment : Fragment() {
                     app.xtraModule.graphQLRepository.loadQueryUsersStream(
                         context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                         com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(context),
-                        ids = tile.stream.channelId?.takeIf { it.isNotBlank() }?.let { listOf(it) },
-                        logins = if (tile.stream.channelId.isNullOrBlank()) listOf(login) else null,
+                        ids = tile.effectiveChannelId?.let { listOf(it) },
+                        logins = if (tile.effectiveChannelId.isNullOrBlank()) listOf(login) else null,
                     ).data?.users?.firstOrNull()
                 }.getOrNull() ?: return@launch
                 if (view == null || tile !in tiles || tile.stream.channelLogin != login) {
                     return@launch
                 }
-                if (tile.stream.channelId.isNullOrBlank() && !user.id.isNullOrBlank()) {
-                    tile.stream.channelId = user.id
+                if (tile.effectiveChannelId.isNullOrBlank() && !user.id.isNullOrBlank()) {
+                    tile.resolvedChannelId = user.id
                 }
                 user.stream?.let { s ->
                     if (tile.stream.createdAt.isNullOrBlank()) tile.stream.createdAt = s.createdAt?.toString()
