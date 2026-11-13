@@ -51,7 +51,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -1037,12 +1039,13 @@ class MainViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             updateUrl.emit(
                 try {
-                    val response = when {
+                    val requestUrl = resolveUpdateRequestUrl(url)
+                    val rawBody = when {
                         networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> @SuppressLint("NewApi") {
                             val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.HttpEngineTimeout()
                                 val request = httpEngine.value!!.newUrlRequestBuilder(
-                                    url,
+                                    requestUrl,
                                     cronetExecutor.value,
                                     NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
                                 ).build()
@@ -1053,13 +1056,13 @@ class MainViewModel(
                                     timeout.stop()
                                 }
                             }
-                            json.decodeFromString<JsonObject>(response.body.decodeToString())
+                            response.body.decodeToString()
                         }
                         networkLibrary == C.CRONET && cronetEngine.value != null -> {
                             val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.CronetTimeout()
                                 val request = cronetEngine.value!!.newUrlRequestBuilder(
-                                    url,
+                                    requestUrl,
                                     NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
                                     cronetExecutor.value
                                 ).build()
@@ -1070,33 +1073,19 @@ class MainViewModel(
                                     timeout.stop()
                                 }
                             }
-                            json.decodeFromString<JsonObject>(response.body.decodeToString())
+                            response.body.decodeToString()
                         }
                         else -> {
-                            okHttpClient.value.newCall(Request.Builder().url(url).build()).executeAsync().use { response ->
-                                json.decodeFromString<JsonObject>(response.body.string())
+                            okHttpClient.value.newCall(Request.Builder().url(requestUrl).build()).executeAsync().use { response ->
+                                response.body.string()
                             }
                         }
                     }
-                    response["assets"]?.jsonArray?.find {
-                        it.jsonObject.getValue("content_type").jsonPrimitive.contentOrNull == "application/vnd.android.package-archive"
-                    }?.jsonObject?.let { obj ->
-                        val version = (response["tag_name"] ?: response["name"])?.jsonPrimitive?.contentOrNull
-                        val updatedAt = obj["updated_at"]?.jsonPrimitive?.contentOrNull?.let {
-                            Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 }
-                        }
-                        val hasUpdate = if (version != null) {
-                            isNewerVersion(version)
-                        } else {
-                            updatedAt != null && updatedAt > lastChecked
-                        }
-                        if (hasUpdate) {
-                            updateSize = obj["size"]?.jsonPrimitive?.longOrNull
-                            // TV: the version and the notes of the release, shown in the dialog of the update
-                            updateVersion = (response["name"] ?: response["tag_name"])?.jsonPrimitive?.contentOrNull
-                            updateNotes = response["body"]?.jsonPrimitive?.contentOrNull
-                            obj.getValue("browser_download_url").jsonPrimitive.contentOrNull
-                        } else null
+                    parseUpdatePayload(json, rawBody, lastChecked)?.let { parsed ->
+                        updateSize = parsed.size
+                        updateVersion = parsed.version
+                        updateNotes = parsed.notes
+                        parsed.downloadUrl
                     }
                 } catch (e: Exception) {
                     null
@@ -1311,6 +1300,93 @@ class MainViewModel(
             val cleanRemote = remoteVersion.trim().removePrefix("Xtra TV").trim().removePrefix("v").removeSuffix("-DEBUG")
             val cleanLocal = installedVersion.trim().removePrefix("v").removeSuffix("-DEBUG")
             return cleanRemote != cleanLocal
+        }
+
+        class ParsedUpdate(
+            val downloadUrl: String,
+            val size: Long?,
+            val version: String?,
+            val notes: String?,
+        )
+
+        /** Rewrites GitHub `/releases/latest` URLs to `/releases?per_page=15` so missed intermediate release notes can be shown. */
+        fun resolveUpdateRequestUrl(url: String): String =
+            url.trim().replace(Regex("""/releases/latest/?$"""), "/releases?per_page=15")
+
+        /** Parses either a GitHub `/releases` JSON array or a single `/releases/latest` JSON object and concatenates all newer release notes. */
+        fun parseUpdatePayload(
+            json: Json,
+            rawBody: String,
+            lastChecked: Long,
+            installedVersion: String = com.github.andreyasadchy.xtra.BuildConfig.VERSION_NAME,
+        ): ParsedUpdate? {
+            val element = json.parseToJsonElement(rawBody)
+            val releases: List<JsonObject> = when (element) {
+                is JsonArray -> element.mapNotNull { it as? JsonObject }.filter {
+                    it["draft"]?.jsonPrimitive?.booleanOrNull != true &&
+                        it["prerelease"]?.jsonPrimitive?.booleanOrNull != true
+                }
+                is JsonObject -> listOf(element)
+                else -> emptyList()
+            }
+            var targetRelease: JsonObject? = null
+            var targetAsset: JsonObject? = null
+            var targetIdx = -1
+            for ((idx, rel) in releases.withIndex()) {
+                val apk = rel["assets"]?.jsonArray?.firstOrNull {
+                    (it as? JsonObject)?.get("content_type")?.jsonPrimitive?.contentOrNull == "application/vnd.android.package-archive"
+                } as? JsonObject
+                if (apk != null) {
+                    targetRelease = rel
+                    targetAsset = apk
+                    targetIdx = idx
+                    break
+                }
+            }
+            val latest = targetRelease ?: return null
+            val asset = targetAsset ?: return null
+            val version = (latest["tag_name"] ?: latest["name"])?.jsonPrimitive?.contentOrNull
+            val updatedAt = asset["updated_at"]?.jsonPrimitive?.contentOrNull?.let {
+                Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 }
+            }
+            val hasUpdate = if (version != null) {
+                isNewerVersion(version, installedVersion)
+            } else {
+                updatedAt != null && updatedAt > lastChecked
+            }
+            if (!hasUpdate) return null
+            val downloadUrl = asset["browser_download_url"]?.jsonPrimitive?.contentOrNull ?: return null
+
+            val missedReleases = mutableListOf<JsonObject>()
+            for (rel in releases.drop(targetIdx)) {
+                val relVer = (rel["tag_name"] ?: rel["name"])?.jsonPrimitive?.contentOrNull
+                if (missedReleases.isEmpty()) {
+                    missedReleases.add(rel)
+                } else if (relVer != null && isNewerVersion(relVer, installedVersion)) {
+                    missedReleases.add(rel)
+                } else if (relVer != null) {
+                    break
+                }
+            }
+
+            val installFooterRegex = Regex("""\n+#{1,4}\s*Install\b[\s\S]*$""", RegexOption.IGNORE_CASE)
+            val combinedNotes = missedReleases.mapNotNull { rel ->
+                val raw = rel["body"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val cleaned = raw.replace(installFooterRegex, "").trim().ifEmpty { raw }
+                val relTitle = (rel["name"] ?: rel["tag_name"])?.jsonPrimitive?.contentOrNull?.trim()
+                if (!cleaned.startsWith("#") && !relTitle.isNullOrBlank()) {
+                    "# $relTitle\n\n$cleaned"
+                } else {
+                    cleaned
+                }
+            }.joinToString("\n\n").takeIf { it.isNotBlank() }
+
+            return ParsedUpdate(
+                downloadUrl = downloadUrl,
+                size = asset["size"]?.jsonPrimitive?.longOrNull,
+                version = (latest["name"] ?: latest["tag_name"])?.jsonPrimitive?.contentOrNull,
+                notes = combinedNotes,
+            )
         }
 
         val MainViewModelFactory = viewModelFactory {

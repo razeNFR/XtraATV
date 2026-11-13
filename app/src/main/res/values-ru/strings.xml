@@ -1125,4 +1125,10 @@
     <string name="tv_multistream_quality_cap_max">Макс.</string>
     <string name="tv_multistream_quality_this_stream">Этот стрим (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">По профилю</string>
+    <string name="tv_multistream_quality_balanced">Сбалансированное</string>
+    <string name="tv_nav_stats">Статистика</string>
+    <string name="tv_home_greeting">Приветствие</string>
+    <string name="tv_home_greeting_summary">Показывает «Здравствуйте / Добрый вечер» рядом с часами на главном экране</string>
+    <string name="tv_home_stats_badge">Плашка статистики сверху</string>
+    <string name="tv_home_stats_badge_summary">Показывает сменяющуюся плашку статистики в правом верхнем углу главного экрана</string>
 </resources>

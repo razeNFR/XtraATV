@@ -2403,6 +2403,7 @@ class ExoPlayerService : BasePlaybackService() {
                 }
                 val previous = secondaryPlayer
                 if (previous != null && previous !== player) {
+                    previous.setVideoSurfaceView(null)
                     secondaryDynamicsProcessing?.let {
                         runCatching { it.release() }
                         secondaryDynamicsProcessing = null
@@ -2540,6 +2541,7 @@ class ExoPlayerService : BasePlaybackService() {
                 }
                 player.volume = 0f
             }
+            serviceListener?.setPlayerSurface(false)
             startAdMainWatch()
         }
     }
@@ -2571,6 +2573,17 @@ class ExoPlayerService : BasePlaybackService() {
     val isSwapping: Boolean
         get() = secondaryPlayer != null && (videoSwapActive || proxyMediaPlaylist)
 
+    /** True while ads are hidden with a black veil without any backup player. */
+    val isHidingAds: Boolean
+        get() = hidden && !isSwapping
+
+    /** True only when the main video surface itself should be torn down (audio-only / chat-only / background video hidden). */
+    fun shouldHidePlayerSurface(): Boolean {
+        return videoHidden ||
+            quality?.name == VideoQuality.AUDIO_ONLY_QUALITY ||
+            quality?.name == VideoQuality.CHAT_ONLY_QUALITY
+    }
+
     /**
      * After the display switched its refresh rate: the HDMI resync paused the players, both have to play again
      * and the picture has to go back on the surface of the player that shows it.
@@ -2594,6 +2607,7 @@ class ExoPlayerService : BasePlaybackService() {
         target?.let {
             it.trackSelectionParameters = it.trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, hidden).build()
         }
+        serviceListener?.setPlayerSurface(isSwapping)
     }
 
     private var duckedVolume: Float? = null
@@ -3043,13 +3057,13 @@ class ExoPlayerService : BasePlaybackService() {
         }
         secondaryPlayer?.playWhenReady = false
         serviceListener?.setPlayerSurface(false)
+        secondaryPlayer?.release()
+        secondaryPlayer = null
         player?.let { player ->
             player.setPlaybackSpeed(1f)
             restoreMainPlayerQualityAfterAd(player)
             player.volume = userVolume()
         }
-        secondaryPlayer?.release()
-        secondaryPlayer = null
         // the main player plays again: the state the system sees is its own
         updatePlaybackState()
         startFreezeWatch()
@@ -3085,6 +3099,7 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                         hidden -> {
                             hidden = false
+                            serviceListener?.setPlayerSurface(false)
                             player?.let { player ->
                                 player.setPlaybackSpeed(1f)
                                 restoreMainPlayerQualityAfterAd(player)
@@ -3104,7 +3119,8 @@ class ExoPlayerService : BasePlaybackService() {
     /**
      * Drains the remaining buffered ad segments on the muted main player at 2x speed without calling seekTo(),
      * waiting until mainPlayer.currentPosition is strictly inside a "live" segment past all ad segments before
-     * restoring 1x speed, re-enabling video decoding, and switching back from the backup player.
+     * restoring 1x speed and switching back from the backup player (which releases its decoder first so the main
+     * hardware MediaCodec configures directly on the real SurfaceView with its native color space).
      */
     private suspend fun returnToLiveAfterAd(generation: Int, login: String?): Boolean {
         if (backLiveFrom == 0L) {
@@ -3117,7 +3133,6 @@ class ExoPlayerService : BasePlaybackService() {
         }
         initialPlayer.play()
         var initialGapMs = 0L
-        var videoReenabled = false
         var liveReadySteps = 0
         try {
             initialPlayer.setPlaybackSpeed(2f)
@@ -3141,10 +3156,6 @@ class ExoPlayerService : BasePlaybackService() {
                     (segments.none { it.title.isNotEmpty() } || segments[currentIdx].title.contains("live", true))
                 if (onLiveSegment) {
                     p.setPlaybackSpeed(1f)
-                    if (!videoReenabled && !hidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
-                        videoReenabled = true
-                        restoreMainPlayerQualityAfterAd(p)
-                    }
                     liveReadySteps++
                     backLiveProgress = maxOf(backLiveProgress, (0.80f + liveReadySteps * 0.05f).coerceAtMost(0.95f))
                     if (hidden || (p.playbackState == Player.STATE_READY && liveReadySteps >= 3) || liveReadySteps >= 8) {

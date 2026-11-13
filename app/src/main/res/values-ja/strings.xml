@@ -1125,4 +1125,10 @@
     <string name="tv_multistream_quality_cap_max">最大</string>
     <string name="tv_multistream_quality_this_stream">この配信 (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">プロファイルに従う</string>
+    <string name="tv_multistream_quality_balanced">バランス</string>
+    <string name="tv_nav_stats">統計</string>
+    <string name="tv_home_greeting">あいさつメッセージ</string>
+    <string name="tv_home_greeting_summary">ホーム画面の時計の横に「こんにちは / こんばんは」を表示します</string>
+    <string name="tv_home_stats_badge">上部の統計ピル</string>
+    <string name="tv_home_stats_badge_summary">ホーム画面の右上に切り替わる統計ピルを表示します</string>
 </resources>

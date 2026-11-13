@@ -1125,4 +1125,10 @@
     <string name="tv_multistream_quality_cap_max">Max</string>
     <string name="tv_multistream_quality_this_stream">Ce stream (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">Suivre le profil</string>
+    <string name="tv_multistream_quality_balanced">Équilibrée</string>
+    <string name="tv_nav_stats">Statistiques</string>
+    <string name="tv_home_greeting">Message d\'accueil</string>
+    <string name="tv_home_greeting_summary">Affiche Bonjour / Bonsoir à côté de l\'heure en haut de l\'accueil</string>
+    <string name="tv_home_stats_badge">Pilule de statistiques en haut</string>
+    <string name="tv_home_stats_badge_summary">Affiche un résumé tournant de tes statistiques en haut à droite de l\'accueil</string>
 </resources>

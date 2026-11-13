@@ -274,12 +274,13 @@ class SettingsViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             updateUrl.emit(
                 try {
-                    val response = when {
+                    val requestUrl = com.github.andreyasadchy.xtra.ui.main.MainViewModel.resolveUpdateRequestUrl(url)
+                    val rawBody = when {
                         networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> @SuppressLint("NewApi") {
                             val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.HttpEngineTimeout()
                                 val request = httpEngine.value!!.newUrlRequestBuilder(
-                                    url,
+                                    requestUrl,
                                     cronetExecutor.value,
                                     NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
                                 ).build()
@@ -290,13 +291,13 @@ class SettingsViewModel(
                                     timeout.stop()
                                 }
                             }
-                            json.decodeFromString<JsonObject>(response.body.decodeToString())
+                            response.body.decodeToString()
                         }
                         networkLibrary == C.CRONET && cronetEngine.value != null -> {
                             val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.CronetTimeout()
                                 val request = cronetEngine.value!!.newUrlRequestBuilder(
-                                    url,
+                                    requestUrl,
                                     NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
                                     cronetExecutor.value
                                 ).build()
@@ -307,33 +308,19 @@ class SettingsViewModel(
                                     timeout.stop()
                                 }
                             }
-                            json.decodeFromString<JsonObject>(response.body.decodeToString())
+                            response.body.decodeToString()
                         }
                         else -> {
-                            okHttpClient.value.newCall(Request.Builder().url(url).build()).executeAsync().use { response ->
-                                json.decodeFromString<JsonObject>(response.body.string())
+                            okHttpClient.value.newCall(Request.Builder().url(requestUrl).build()).executeAsync().use { response ->
+                                response.body.string()
                             }
                         }
                     }
-                    response["assets"]?.jsonArray?.find {
-                        it.jsonObject.getValue("content_type").jsonPrimitive.contentOrNull == "application/vnd.android.package-archive"
-                    }?.jsonObject?.let { obj ->
-                        val version = (response["tag_name"] ?: response["name"])?.jsonPrimitive?.contentOrNull
-                        val updatedAt = obj["updated_at"]?.jsonPrimitive?.contentOrNull?.let {
-                            Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 }
-                        }
-                        val hasUpdate = if (version != null) {
-                            com.github.andreyasadchy.xtra.ui.main.MainViewModel.isNewerVersion(version)
-                        } else {
-                            updatedAt != null && updatedAt > lastChecked
-                        }
-                        if (hasUpdate) {
-                            updateSize = obj["size"]?.jsonPrimitive?.longOrNull
-                            // TV: the version and the notes of the release, shown in the dialog of the update
-                            updateVersion = (response["name"] ?: response["tag_name"])?.jsonPrimitive?.contentOrNull
-                            updateNotes = response["body"]?.jsonPrimitive?.contentOrNull
-                            obj.getValue("browser_download_url").jsonPrimitive.contentOrNull
-                        } else null
+                    com.github.andreyasadchy.xtra.ui.main.MainViewModel.parseUpdatePayload(json, rawBody, lastChecked)?.let { parsed ->
+                        updateSize = parsed.size
+                        updateVersion = parsed.version
+                        updateNotes = parsed.notes
+                        parsed.downloadUrl
                     }
                 } catch (e: Exception) {
                     null

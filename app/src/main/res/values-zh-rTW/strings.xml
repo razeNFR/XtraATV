@@ -1125,4 +1125,10 @@
     <string name="tv_multistream_quality_cap_max">最高</string>
     <string name="tv_multistream_quality_this_stream">此直播 (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">跟隨設定檔</string>
+    <string name="tv_multistream_quality_balanced">均衡</string>
+    <string name="tv_nav_stats">統計</string>
+    <string name="tv_home_greeting">問候語</string>
+    <string name="tv_home_greeting_summary">在主畫面時鐘旁顯示「你好 / 晚安」</string>
+    <string name="tv_home_stats_badge">頂部統計膠囊</string>
+    <string name="tv_home_stats_badge_summary">在主畫面右上角顯示輪播統計膠囊</string>
 </resources>

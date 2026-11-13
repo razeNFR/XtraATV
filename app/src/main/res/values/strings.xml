@@ -1144,4 +1144,10 @@
     <string name="tv_multistream_quality_cap_max">Max</string>
     <string name="tv_multistream_quality_this_stream">This stream (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">Follow profile</string>
+    <string name="tv_multistream_quality_balanced">Balanced</string>
+    <string name="tv_nav_stats">Statistics</string>
+    <string name="tv_home_greeting">Greeting message</string>
+    <string name="tv_home_greeting_summary">Shows Hello / Good evening next to the clock on the home screen</string>
+    <string name="tv_home_stats_badge">Statistics pill at the top</string>
+    <string name="tv_home_stats_badge_summary">Shows a rotating statistics pill at the top right of the home screen</string>
 </resources>

@@ -50,6 +50,9 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private val resumeItems = mutableStateOf<List<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>>(emptyList())
     private val videoPositions = mutableStateOf<Map<String, Long>>(emptyMap())
     private val statsState = mutableStateOf<TvHomeStats?>(null)
+    private val showHeroState = mutableStateOf(true)
+    private val showGreetingState = mutableStateOf(true)
+    private val showStatsBadgeState = mutableStateOf(true)
     /** Kept while the app runs: the home is made again each time its section is opened from the side menu. */
     private val homeFocus get() = sharedFocus
 
@@ -248,11 +251,14 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             com.github.andreyasadchy.xtra.ui.tv.TvStats.changes.collect { loadStats() }
         }
         val followedId = if (context.prefs().getBoolean(C.UI_FOLLOW_PAGER, true)) R.id.followPagerFragment else R.id.followMediaFragment
-        val showHero = context.prefs().getBoolean(C.TV_HOME_HERO, true)
+        syncHomePrefs(context)
         return ComposeView(context).apply {
             id = R.id.tvHome
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                val showHero = showHeroState.value
+                val showGreeting = showGreetingState.value
+                val showStatsBadge = showStatsBadgeState.value
                 val followed by viewModel.followed.collectAsState()
                 val favorites by viewModel.favorites.collectAsState()
                 val multiStreams by viewModel.multiStreams.collectAsState()
@@ -422,6 +428,8 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                             name = context.tokenPrefs().getString(C.USERNAME, null)?.takeIf { it.isNotBlank() },
                             image = accountImage,
                         ),
+                        showGreeting = showGreeting,
+                        showStatsBadge = showStatsBadge,
                     )
                 }
             }
@@ -536,13 +544,22 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(activity, clip.title ?: channelLabel, actions)
     }
 
+    private fun syncHomePrefs(context: android.content.Context) {
+        val p = context.prefs()
+        showHeroState.value = p.getBoolean(C.TV_HOME_HERO, true)
+        showGreetingState.value = p.getBoolean(C.TV_HOME_GREETING, true)
+        showStatsBadgeState.value = p.getBoolean(C.TV_HOME_STATS_BADGE, true)
+    }
+
     override fun onResume() {
         super.onResume()
+        context?.let { syncHomePrefs(it) }
         viewModel.load()
         loadLocalRows()
     }
 
     fun refreshIfStale(maxAgeMs: Long = 60_000L) {
+        context?.let { syncHomePrefs(it) }
         viewModel.load(force = false, maxAgeMs = maxAgeMs)
         loadLocalRows()
     }

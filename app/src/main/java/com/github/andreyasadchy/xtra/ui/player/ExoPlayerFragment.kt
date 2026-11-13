@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.Color
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import android.text.format.DateUtils
 import android.util.Base64
@@ -53,6 +54,11 @@ class ExoPlayerFragment : PlayerFragment() {
 
     /** TV: the settings or the login were opened over the app, the stream went on and the service stayed bound. */
     private var keptAcrossStop = false
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        binding.secondaryPlayerSurface.setZOrderMediaOverlay(true)
+    }
 
     override fun onStart() {
         super.onStart()
@@ -145,7 +151,8 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                if (videoSize != VideoSize.UNKNOWN && playbackService?.player?.let { it.playbackState != Player.STATE_IDLE } == true) {
+                val activePlayer = playbackService?.visiblePlayer
+                if (videoSize != VideoSize.UNKNOWN && activePlayer?.let { it.playbackState != Player.STATE_IDLE } == true) {
                     val aspectRatio = (videoSize.width * videoSize.pixelWidthHeightRatio) / videoSize.height
                     binding.aspectRatioFrameLayout.setAspectRatio(aspectRatio)
                 }
@@ -197,11 +204,14 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun onTrackSelectionParametersChanged(parameters: TrackSelectionParameters) {
-                if (parameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_VIDEO)) {
-                    binding.playerSurface.visibility = View.GONE
+                val service = playbackService
+                val hideMainSurface = if (service != null) {
+                    service.shouldHidePlayerSurface()
                 } else {
-                    binding.playerSurface.visibility = View.VISIBLE
+                    parameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_VIDEO)
                 }
+                binding.playerSurface.visibility = if (hideMainSurface) View.GONE else View.VISIBLE
+                binding.adHideOverlay.isVisible = service?.isHidingAds == true
             }
         }
         val serviceListener = object : ExoPlayerService.Listener {
@@ -303,27 +313,31 @@ class ExoPlayerFragment : PlayerFragment() {
                 if (view == null || !isAdded) {
                     return
                 }
-                if (secondaryPlayer) {
-                    binding.playerSurface.visibility = View.VISIBLE
-                    playbackService?.player?.setVideoSurfaceView(null)
-                    playbackService?.secondaryPlayer?.setVideoSurfaceView(binding.playerSurface)
+                val service = playbackService
+                val hideMain = service?.shouldHidePlayerSurface() == true
+                binding.playerSurface.visibility = if (hideMain) View.GONE else View.VISIBLE
+                if (!hideMain) {
+                    service?.player?.setVideoSurfaceView(binding.playerSurface)
+                }
+                if (secondaryPlayer && !hideMain) {
+                    binding.adHideOverlay.visibility = View.GONE
+                    binding.secondaryPlayerSurface.visibility = View.VISIBLE
+                    service?.secondaryPlayer?.setVideoSurfaceView(binding.secondaryPlayerSurface)
                     playerListener?.let {
-                        playbackService?.player?.removeListener(it)
-                        playbackService?.secondaryPlayer?.addListener(it)
+                        service?.player?.removeListener(it)
+                        service?.secondaryPlayer?.addListener(it)
                     }
                 } else {
-                    if (playbackService?.player?.trackSelectionParameters?.disabledTrackTypes?.contains(androidx.media3.common.C.TRACK_TYPE_VIDEO) != true) {
-                        binding.playerSurface.visibility = View.VISIBLE
-                    }
-                    playbackService?.secondaryPlayer?.setVideoSurfaceView(null)
-                    playbackService?.player?.setVideoSurfaceView(binding.playerSurface)
+                    service?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
+                    binding.secondaryPlayerSurface.visibility = View.GONE
+                    binding.adHideOverlay.isVisible = service?.isHidingAds == true
                     playerListener?.let {
-                        playbackService?.secondaryPlayer?.removeListener(it)
-                        playbackService?.player?.addListener(it)
+                        service?.secondaryPlayer?.removeListener(it)
+                        service?.player?.addListener(it)
                     }
                 }
                 if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
-                    requireView().keepScreenOn = playbackService?.player?.isPlaying == true
+                    requireView().keepScreenOn = service?.visiblePlayer?.isPlaying == true
                 }
             }
         }
@@ -333,9 +347,8 @@ class ExoPlayerFragment : PlayerFragment() {
                     val binder = service as ExoPlayerService.ServiceBinder
                     playbackService = binder.getService()
                     playbackService?.serviceListener = serviceListener
-                    (playbackService?.secondaryPlayer ?: playbackService?.player)?.setVideoSurfaceView(binding.playerSurface)
-                    (playbackService?.secondaryPlayer ?: playbackService?.player)?.addListener(listener)
                     playerListener = listener
+                    serviceListener.setPlayerSurface(playbackService?.isSwapping == true)
                     // the video already plays (it started before this screen was ready): no picture over it; for a live
                     // stream only once a picture of the stream itself was shown (not an ad at its start, not before
                     // its first playlist was checked)
@@ -731,7 +744,9 @@ class ExoPlayerFragment : PlayerFragment() {
         playerListener = null
         service.serviceListener = null
         service.player?.clearVideoSurfaceView(binding.playerSurface)
-        service.secondaryPlayer?.clearVideoSurfaceView(binding.playerSurface)
+        service.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
+        binding.secondaryPlayerSurface.visibility = View.GONE
+        binding.adHideOverlay.visibility = View.GONE
         service.prepareStreamSwitch()
         serviceConnection?.let { requireContext().unbindService(it) }
         serviceConnection = null
@@ -749,9 +764,10 @@ class ExoPlayerFragment : PlayerFragment() {
         playerListener = null
         playbackService?.serviceListener = null
         if (view != null) {
-            val surface = binding.playerSurface
-            playbackService?.player?.clearVideoSurfaceView(surface)
-            playbackService?.secondaryPlayer?.clearVideoSurfaceView(surface)
+            playbackService?.player?.clearVideoSurfaceView(binding.playerSurface)
+            playbackService?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
+            binding.secondaryPlayerSurface.visibility = View.GONE
+            binding.adHideOverlay.visibility = View.GONE
         }
         serviceConnection?.let { requireContext().unbindService(it) }
         serviceConnection = null

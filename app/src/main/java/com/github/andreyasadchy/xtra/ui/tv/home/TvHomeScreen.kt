@@ -55,8 +55,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -199,6 +202,8 @@ fun TvHomeScreen(
     heroQueue: List<Stream> = emptyList(),
     /** Account for the greeting at the top right (no name: not logged in). */
     account: TvHomeAccount? = null,
+    showGreeting: Boolean = true,
+    showStatsBadge: Boolean = true,
     /** Where the focus goes when it comes into the home (side menu, player closed). */
     focus: TvHomeFocus = remember { TvHomeFocus() },
 ) {
@@ -403,9 +408,11 @@ fun TvHomeScreen(
     val compactRail = remember { homeContext.prefs().getBoolean(C.TV_COMPACT_RAIL, true) }
     val startInset = if (compactRail) 16.dp else 48.dp
     val endInset = 48.dp
+    LaunchedEffect(showStatsBadge) {
+        if (!showStatsBadge) badgeFocused = false
+    }
     Column(Modifier.fillMaxSize()) {
-        // always on screen above the rows: refresh, then the greeting, the picture of the account and the time (only
-        // to read, the focus never stops there)
+        // always on screen above the rows: refresh, then the optional stats pill, greeting, and time
         Row(
             Modifier.fillMaxWidth().padding(start = startInset + 12.dp, end = endInset + 12.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -424,25 +431,31 @@ fun TvHomeScreen(
                         if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && hasCards) {
                             focus.focusLast()
                             true
-                        } else false
-                    }
-            )
-            Spacer(Modifier.weight(1f))
-            // a statistic that changes each minute, OK opens their page; reached from "refresh" (right)
-            StatsBadge(
-                actions,
-                Modifier
-                    .focusProperties { canFocus = refreshFocused || badgeFocused || !hasCards }
-                    .onFocusChanged { badgeFocused = it.hasFocus }
-                    .onPreviewKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && hasCards) {
-                            focus.focusLast()
+                        } else if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight && (!showStatsBadge || actions.statsBadges().isEmpty())) {
                             true
                         } else false
                     }
             )
-            Spacer(Modifier.width(16.dp))
-            Greeting(account)
+            Spacer(Modifier.weight(1f))
+            if (showStatsBadge) {
+                // a statistic that changes each minute, OK opens their page; reached from "refresh" (right)
+                StatsBadge(
+                    actions,
+                    Modifier
+                        .focusProperties { canFocus = refreshFocused || badgeFocused || !hasCards }
+                        .onFocusChanged { badgeFocused = it.hasFocus }
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && hasCards) {
+                                focus.focusLast()
+                                true
+                            } else if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
+                                true
+                            } else false
+                        }
+                )
+                Spacer(Modifier.width(16.dp))
+            }
+            Greeting(account, showGreeting = showGreeting)
         }
         // refreshed with the button: a light sweeps once over the rows, like the other pages
         val sweepCount = actions.sweepCount()
@@ -1010,7 +1023,7 @@ class TvHomeFocus {
 class TvHomeAccount(val name: String?, val image: String?)
 
 @Composable
-private fun Greeting(account: TvHomeAccount?) {
+private fun Greeting(account: TvHomeAccount?, showGreeting: Boolean = true) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // the time, again at each new minute
     var now by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
@@ -1020,33 +1033,21 @@ private fun Greeting(account: TvHomeAccount?) {
             now = System.currentTimeMillis()
         }
     }
-    val hour = java.util.Calendar.getInstance().apply { timeInMillis = now }.get(java.util.Calendar.HOUR_OF_DAY)
-    val name = account?.name
-    val greeting = context.getString(
-        if (hour >= 18 || hour < 5) {
-            if (name != null) R.string.tv_good_evening_name else R.string.tv_good_evening
-        } else {
-            if (name != null) R.string.tv_hello_name else R.string.tv_hello
-        },
-        name ?: ""
-    )
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(greeting, fontSize = 15.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 320.dp))
-        Spacer(Modifier.width(12.dp))
-        val image = account?.image
-        if (name != null && image != null) {
-            AsyncImage(
-                model = image,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(34.dp).clip(CircleShape)
+        if (showGreeting) {
+            val hour = java.util.Calendar.getInstance().apply { timeInMillis = now }.get(java.util.Calendar.HOUR_OF_DAY)
+            val name = account?.name
+            val greeting = context.getString(
+                if (hour >= 18 || hour < 5) {
+                    if (name != null) R.string.tv_good_evening_name else R.string.tv_good_evening
+                } else {
+                    if (name != null) R.string.tv_hello_name else R.string.tv_hello
+                },
+                name ?: ""
             )
-        } else {
-            Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0x26FFFFFF)), contentAlignment = Alignment.Center) {
-                Icon(painterResource(R.drawable.tv_ic_person), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-            }
+            Text(greeting, fontSize = 15.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 320.dp))
+            Spacer(Modifier.width(14.dp))
         }
-        Spacer(Modifier.width(14.dp))
         Text(
             android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(now)),
             fontSize = 20.sp,
@@ -1186,10 +1187,43 @@ private fun RefreshPill(actions: TvHomeActions, modifier: Modifier = Modifier) {
     }
 }
 
+private val CardGlowSteps = floatArrayOf(
+    1.0f, 0.068f,
+    2.0f, 0.056f,
+    3.1f, 0.044f,
+    4.3f, 0.033f,
+    5.6f, 0.023f,
+    6.9f, 0.014f,
+    8.2f, 0.008f,
+    9.5f, 0.004f,
+)
+
+/** Symmetric, softly feathered outer halo around a focused card thumbnail (works on all APIs 24+ with zero downward bleed or clipping). */
+private fun Modifier.tvCardFocusGlow(
+    focused: Boolean,
+    color: Color,
+    cornerRadius: Dp = 10.dp,
+): Modifier = if (!focused) this else this.drawBehind {
+    val baseRadius = cornerRadius.toPx()
+    var i = 0
+    while (i < CardGlowSteps.size) {
+        val outset = CardGlowSteps[i].dp.toPx()
+        val alpha = CardGlowSteps[i + 1]
+        val r = baseRadius + outset
+        drawRoundRect(
+            color = color.copy(alpha = alpha),
+            topLeft = Offset(-outset, -outset),
+            size = Size(size.width + outset * 2f, size.height + outset * 2f),
+            cornerRadius = CornerRadius(r, r),
+        )
+        i += 2
+    }
+}
+
 @Composable
 private fun RowTitle(title: String, icon: Int? = null, startPadding: Dp = 12.dp) {
     Row(
-        modifier = Modifier.padding(start = startPadding, top = 10.dp, bottom = 8.dp),
+        modifier = Modifier.padding(start = startPadding, top = 10.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
@@ -1250,7 +1284,7 @@ private fun StreamRow(
                     scrolledEnd = { state.canScrollForward },
                 )
                 .focusRestorer(),
-            contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
+            contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 12.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(row.items, key = { index, item -> item.channelId ?: index }) { index, stream ->
@@ -1315,7 +1349,7 @@ private fun MultiStreamRow(
                         scrolledEnd = { state.canScrollForward },
                     )
                     .focusRestorer(),
-                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 12.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(row.items, key = { _, item -> item.group.id }) { index, item ->
@@ -1379,7 +1413,7 @@ private fun MultiStreamCard(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
+                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF141318))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
@@ -1472,7 +1506,7 @@ private fun MultiStreamCard(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             val avatars = item.liveStreams.take(4)
             if (avatars.isNotEmpty()) {
@@ -1563,7 +1597,7 @@ private fun GameRow(
                     scrolledEnd = { state.canScrollForward },
                 )
                 .focusRestorer(),
-            contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
+            contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 12.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(row.items, key = { index, item -> item.id ?: index }) { index, game ->
@@ -1702,7 +1736,7 @@ private fun StreamCard(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
+                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
@@ -1786,7 +1820,7 @@ private fun StreamCard(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = stream.channelImage,
@@ -1871,7 +1905,7 @@ private fun ResumeRow(
                         scrolledEnd = { state.canScrollForward },
                     )
                     .focusRestorer(),
-                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 12.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(row.items, key = { _, item -> item.id }) { index, item ->
@@ -1919,7 +1953,7 @@ private fun VideoRow(
                         scrolledEnd = { state.canScrollForward },
                     )
                     .focusRestorer(),
-                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 12.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(row.items, key = { index, item -> item.id ?: "video$index" }) { index, item ->
@@ -2027,7 +2061,7 @@ private fun FollowedVideoCard(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
+                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
@@ -2053,7 +2087,7 @@ private fun FollowedVideoCard(
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             video.title.orEmpty(),
             fontSize = if (small) 13.sp else 15.sp,
@@ -2098,7 +2132,7 @@ private fun ResumeCard(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
+                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
@@ -2122,7 +2156,7 @@ private fun ResumeCard(
                 VideoProgressBar(item.positionMs.toFloat() / durationMs)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = item.channelImage,
@@ -2173,6 +2207,7 @@ private fun StatsCard(
     val focused by interaction.collectIsFocusedAsState()
     Column(Modifier.padding(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp)) {
         RowTitle(stats.title, R.drawable.tv_ic_bar_chart)
+        Spacer(Modifier.height(4.dp))
         Column(
             modifier
                 .fillMaxWidth()
@@ -2247,7 +2282,7 @@ private fun ClipRow(
                         scrolledEnd = { state.canScrollForward },
                     )
                     .focusRestorer(),
-                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 12.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(row.items, key = { index, item -> item.id ?: "clip$index" }) { index, clip ->
@@ -2296,7 +2331,7 @@ private fun ClipCard(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
+                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
@@ -2344,7 +2379,7 @@ private fun ClipCard(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = clip.channelImage,
@@ -2401,7 +2436,7 @@ private fun GameCard(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(3f / 4f)
-                .then(if (focused) Modifier.shadow(18.dp, RoundedCornerShape(10.dp), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary) else Modifier)
+                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF26252C))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
@@ -2413,7 +2448,7 @@ private fun GameCard(
                 modifier = Modifier.fillMaxSize()
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(9.dp))
         // the whole category name scrolls on the focused card when it is longer than the card
         Text(
             game.name ?: "",

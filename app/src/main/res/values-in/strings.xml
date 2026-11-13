@@ -1126,4 +1126,10 @@
     <string name="tv_multistream_quality_cap_max">Maks</string>
     <string name="tv_multistream_quality_this_stream">Stream ini (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">Ikuti profil</string>
+    <string name="tv_multistream_quality_balanced">Seimbang</string>
+    <string name="tv_nav_stats">Statistik</string>
+    <string name="tv_home_greeting">Pesan sapaan</string>
+    <string name="tv_home_greeting_summary">Menampilkan Halo / Selamat malam di samping jam pada layar beranda</string>
+    <string name="tv_home_stats_badge">Pil statistik di bagian atas</string>
+    <string name="tv_home_stats_badge_summary">Menampilkan pil statistik bergilir di kanan atas layar beranda</string>
 </resources>
