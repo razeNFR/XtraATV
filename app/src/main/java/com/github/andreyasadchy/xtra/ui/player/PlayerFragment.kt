@@ -2222,10 +2222,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         button.visibility = View.GONE
                     }
                 }
-                root.removeCallbacks(updateProgressAction)
-                if (root.isVisible) {
-                    root.postDelayed(updateProgressAction, 1000L)
-                }
                 return
             }
             val uptime = getStreamUptime()

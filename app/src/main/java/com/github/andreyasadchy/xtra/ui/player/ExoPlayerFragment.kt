@@ -579,6 +579,14 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun updateProgress() {
         if (isTvLiveTimeline()) {
             updateTvLiveTimeline()
+            if (isExperimentalVodActive()) {
+                with(binding.playerControls) {
+                    root.removeCallbacks(updateProgressAction)
+                    if (root.isVisible) {
+                        root.postDelayed(updateProgressAction, 1000L)
+                    }
+                }
+            }
             return
         }
         with(binding.playerControls) {
