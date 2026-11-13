@@ -25,7 +25,7 @@ import com.github.andreyasadchy.xtra.util.prefs
 /**
  * TV multi-stream video quality profiles & custom per-count / per-stream caps.
  *
- * Profiles adapt maximum video height (and thus 30fps vs 60fps hardware decode load)
+ * Profiles adapt maximum video height and frame rate (30fps vs 60fps hardware decode load)
  * according to the number of active streams (2, 3, or 4) and Focus mode.
  */
 object TvMultiStreamQuality {
@@ -33,22 +33,40 @@ object TvMultiStreamQuality {
     const val PROFILE_POTATO = "potato"
     const val PROFILE_LOW = "low"
     const val PROFILE_MEDIUM = "medium"
+    const val PROFILE_BALANCED = "balanced"
     const val PROFILE_HIGH = "high"
     const val PROFILE_MAX = "max"
     const val PROFILE_CUSTOM = "custom"
 
+    const val CAP_720P30 = 72030
     const val CAP_MAX = Int.MAX_VALUE
+
+    data class CapSpec(val maxHeight: Int, val maxFrameRate: Int)
 
     private val PROFILES = listOf(
         PROFILE_POTATO,
         PROFILE_LOW,
         PROFILE_MEDIUM,
+        PROFILE_BALANCED,
         PROFILE_HIGH,
         PROFILE_MAX,
         PROFILE_CUSTOM,
     )
 
-    val CAPS = listOf(160, 360, 480, 720, 1080, CAP_MAX)
+    /** Ordered ascending for UI selectors. */
+    val CAPS = listOf(160, 360, 480, CAP_720P30, 720, 1080, CAP_MAX)
+
+    /** Ordered descending for auto step-down on buffering stalls. */
+    val LADDER_DESC = CAPS.asReversed()
+
+    fun specOf(cap: Int): CapSpec = when (cap) {
+        CAP_720P30 -> CapSpec(maxHeight = 720, maxFrameRate = 32)
+        CAP_MAX -> CapSpec(maxHeight = Int.MAX_VALUE, maxFrameRate = Int.MAX_VALUE)
+        else -> {
+            val h = if (cap <= 0 || cap > 1080) Int.MAX_VALUE else cap
+            CapSpec(maxHeight = h, maxFrameRate = Int.MAX_VALUE)
+        }
+    }
 
     fun profile(context: Context): String {
         val raw = context.prefs().getString(C.TV_MULTISTREAM_QUALITY, PROFILE_HIGH) ?: PROFILE_HIGH
@@ -56,6 +74,7 @@ object TvMultiStreamQuality {
     }
 
     private fun normalizeCap(raw: Int): Int {
+        if (raw == CAP_720P30) return CAP_720P30
         if (raw <= 0 || raw > 1080) return CAP_MAX
         return CAPS.firstOrNull { it == raw } ?: 720
     }
@@ -69,18 +88,19 @@ object TvMultiStreamQuality {
     fun customCap4(context: Context): Int =
         normalizeCap(context.prefs().getInt(C.TV_MULTISTREAM_Q_4, 720))
 
-    /** Returns the `(2 streams, 3 streams, 4 streams)` max heights for [prof]. */
+    /** Returns the `(2 streams, 3 streams, 4 streams)` cap tokens for [prof]. */
     fun capsForProfile(context: Context, prof: String = profile(context)): Triple<Int, Int, Int> = when (prof) {
         PROFILE_POTATO -> Triple(720, 480, 360)
         PROFILE_LOW -> Triple(1080, 720, 360)
         PROFILE_MEDIUM -> Triple(1080, 720, 480)
+        PROFILE_BALANCED -> Triple(CAP_MAX, 720, CAP_720P30)
         PROFILE_MAX -> Triple(CAP_MAX, CAP_MAX, CAP_MAX)
         PROFILE_CUSTOM -> Triple(customCap2(context), customCap3(context), customCap4(context))
         else -> Triple(CAP_MAX, 720, 720) // PROFILE_HIGH (default)
     }
 
-    /** Target max video height for a tile in `MultiStreamFragment`. */
-    fun maxHeightFor(
+    /** Target cap token for a tile in `MultiStreamFragment`. */
+    fun capFor(
         context: Context,
         streamCount: Int,
         isFocusLayout: Boolean,
@@ -92,6 +112,7 @@ object TvMultiStreamQuality {
                 PROFILE_POTATO -> if (isBigTile) 720 else 360
                 PROFILE_LOW -> if (isBigTile) 1080 else 360
                 PROFILE_MEDIUM -> if (isBigTile) 1080 else 480
+                PROFILE_BALANCED -> if (isBigTile) CAP_MAX else 480
                 PROFILE_MAX -> if (isBigTile) CAP_MAX else 720
                 PROFILE_CUSTOM -> if (isBigTile) customCap2(context) else customCap4(context)
                 else -> if (isBigTile) CAP_MAX else 480 // PROFILE_HIGH
@@ -105,17 +126,18 @@ object TvMultiStreamQuality {
         }
     }
 
-    fun capLabel(context: Context, cap: Int): String =
-        if (cap == CAP_MAX || cap > 1080 || cap <= 0) {
-            context.getString(R.string.tv_multistream_quality_cap_max)
-        } else {
-            "${cap}p"
-        }
+    fun capLabel(context: Context, cap: Int): String = when {
+        cap == CAP_720P30 -> "720p30"
+        cap == 720 -> "720p60"
+        cap == CAP_MAX || cap > 1080 || cap <= 0 -> context.getString(R.string.tv_multistream_quality_cap_max)
+        else -> "${cap}p"
+    }
 
     fun profileLabel(context: Context, prof: String): String = when (prof) {
         PROFILE_POTATO -> context.getString(R.string.tv_multistream_quality_potato)
         PROFILE_LOW -> context.getString(R.string.tv_multistream_quality_low)
         PROFILE_MEDIUM -> context.getString(R.string.tv_multistream_quality_medium)
+        PROFILE_BALANCED -> context.getString(R.string.tv_multistream_quality_balanced)
         PROFILE_MAX -> context.getString(R.string.tv_multistream_quality_max)
         PROFILE_CUSTOM -> context.getString(R.string.tv_multistream_quality_custom)
         else -> context.getString(R.string.tv_multistream_quality_high)

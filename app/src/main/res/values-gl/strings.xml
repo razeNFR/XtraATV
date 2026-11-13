@@ -1125,4 +1125,5 @@
     <string name="tv_multistream_quality_cap_max">Máx.</string>
     <string name="tv_multistream_quality_this_stream">Este stream (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">Seguir o perfil</string>
+    <string name="tv_multistream_quality_balanced">Equilibrada</string>
 </resources>	

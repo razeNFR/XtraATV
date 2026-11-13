@@ -1126,4 +1126,5 @@
     <string name="tv_multistream_quality_cap_max">Maks</string>
     <string name="tv_multistream_quality_this_stream">Stream ini (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">Ikuti profil</string>
+    <string name="tv_multistream_quality_balanced">Seimbang</string>
 </resources>

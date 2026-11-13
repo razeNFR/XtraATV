@@ -1125,4 +1125,5 @@
     <string name="tv_multistream_quality_cap_max">最大</string>
     <string name="tv_multistream_quality_this_stream">この配信 (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">プロファイルに従う</string>
+    <string name="tv_multistream_quality_balanced">バランス</string>
 </resources>

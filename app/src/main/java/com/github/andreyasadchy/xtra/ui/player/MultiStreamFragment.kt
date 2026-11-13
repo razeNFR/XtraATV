@@ -48,6 +48,7 @@ class MultiStreamFragment : Fragment() {
         val view: FrameLayout,
         val player: ExoPlayer,
         val label: TextView,
+        val adBadge: TextView,
         val infoContainer: android.widget.LinearLayout,
         val infoTop: TextView,
         val infoTitle: TextView,
@@ -67,6 +68,7 @@ class MultiStreamFragment : Fragment() {
         var texture: TextureView? = null
         /** Playing a backup player type for the time of an ad, back to the normal one once it is over. */
         var onBackup = false
+        var adPulseAnimator: android.animation.ValueAnimator? = null
         var backJob: kotlinx.coroutines.Job? = null
         var infoJob: kotlinx.coroutines.Job? = null
     }
@@ -252,6 +254,33 @@ class MultiStreamFragment : Fragment() {
             addView(infoTop, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(infoTitle, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
+        val adBadge = TextView(requireContext()).apply {
+            setTextColor(Color.WHITE)
+            textSize = 11f
+            isSingleLine = true
+            setBackgroundResource(R.drawable.tv_badge_background)
+            val padH = (8 * density).toInt()
+            val padV = (3 * density).toInt()
+            setPadding(padH, padV, padH, padV)
+            val badgeText = android.text.SpannableStringBuilder()
+            com.github.andreyasadchy.xtra.util.chat.TvChatNotices.appendIcon(
+                requireContext(),
+                badgeText,
+                R.drawable.tv_ic_shield,
+                com.github.andreyasadchy.xtra.ui.tv.TvAccent.color,
+                this.textSize * 1.1f,
+            )
+            val titleStart = badgeText.length
+            badgeText.append(getString(R.string.tv_adblock_ad))
+            badgeText.setSpan(
+                android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
+                titleStart,
+                badgeText.length,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+            text = badgeText
+            visibility = View.GONE
+        }
         val tileView = FrameLayout(requireContext()).apply {
             isFocusable = true
             foreground = GradientDrawable().apply {
@@ -263,6 +292,10 @@ class MultiStreamFragment : Fragment() {
                 scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
             }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(texture, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(adBadge, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+                val margin = (10 * density).toInt()
+                setMargins(margin, margin, margin, margin)
+            })
             addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
                 val margin = (12 * density).toInt()
                 setMargins(margin, margin, margin, margin)
@@ -275,7 +308,7 @@ class MultiStreamFragment : Fragment() {
             volume = 0f
             setVideoTextureView(texture)
         }
-        val tile = Tile(stream, tileView, player, label, infoContainer, infoTop, infoTitle)
+        val tile = Tile(stream, tileView, player, label, adBadge, infoContainer, infoTop, infoTitle)
         // the frame and the name show as the others do (hidden a few seconds after the last key)
         label.alpha = chromeAlpha
         infoContainer.alpha = chromeAlpha
@@ -367,26 +400,29 @@ class MultiStreamFragment : Fragment() {
         val ctx = context ?: return
         val focus = isFocusLayout()
         val big = if (focus) bigTile() else null
-        val steps = listOf(Int.MAX_VALUE, 1080, 720, 480, 360, 160)
+        val ladder = TvMultiStreamQuality.LADDER_DESC
         tiles.forEach { tile ->
             val override = tile.qualityOverrideHeight
-            val height = if (override != null) {
+            val effectiveCap = if (override != null) {
                 override
             } else {
-                val base = TvMultiStreamQuality.maxHeightFor(
+                val baseCap = TvMultiStreamQuality.capFor(
                     context = ctx,
                     streamCount = tiles.size,
                     isFocusLayout = focus,
                     isBigTile = focus && tile === big,
                 )
-                val available = steps.filter { it <= base }.ifEmpty { listOf(160) }
-                available.getOrElse(tile.qualityStepsDown) { available.last() }
+                val startIdx = ladder.indexOf(baseCap).takeIf { it >= 0 } ?: 0
+                ladder.getOrElse(startIdx + tile.qualityStepsDown) { ladder.last() }
             }
-            if (tile.player.trackSelectionParameters.maxVideoHeight != height ||
+            val spec = TvMultiStreamQuality.specOf(effectiveCap)
+            if (tile.player.trackSelectionParameters.maxVideoHeight != spec.maxHeight ||
+                tile.player.trackSelectionParameters.maxVideoFrameRate != spec.maxFrameRate ||
                 !tile.player.trackSelectionParameters.forceHighestSupportedBitrate
             ) {
                 tile.player.trackSelectionParameters = tile.player.trackSelectionParameters.buildUpon()
-                    .setMaxVideoSize(Int.MAX_VALUE, height)
+                    .setMaxVideoSize(Int.MAX_VALUE, spec.maxHeight)
+                    .setMaxVideoFrameRate(spec.maxFrameRate)
                     .setForceHighestSupportedBitrate(true)
                     .build()
             }
@@ -603,6 +639,8 @@ class MultiStreamFragment : Fragment() {
     /** 3 or 4 streams: a stream leaves, the others take the screen (back to 2: both chats with their streams). */
     private fun removeTile(tile: Tile) {
         val login = tile.stream.channelLogin
+        tile.adPulseAnimator?.cancel()
+        tile.adPulseAnimator = null
         tile.adListener?.let { tile.player.removeListener(it) }
         tile.infoJob?.cancel()
         tile.player.release()
@@ -650,6 +688,8 @@ class MultiStreamFragment : Fragment() {
         val oldLogin = tile.stream.channelLogin
         tile.stream = stream
         tile.qualityOverrideHeight = null
+        tile.onBackup = false
+        updateAdBadge(tile)
         tile.label.text = stream.channelName ?: stream.channelLogin
         tile.adListener?.let { tile.player.removeListener(it) }
         tile.adListener = null
@@ -986,6 +1026,7 @@ class MultiStreamFragment : Fragment() {
             val url = normal ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getBackupPlaylistUrl(app, login)
             if (url != null && view != null && tile.stream.channelLogin == login) {
                 tile.onBackup = normal == null
+                updateAdBadge(tile)
                 player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
                 player.repeatMode = Player.REPEAT_MODE_OFF
                 player.prepare()
@@ -1014,6 +1055,7 @@ class MultiStreamFragment : Fragment() {
                 } ?: continue
                 if (!com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.playlistHasAds(app, normal) && view != null && tile in tiles && tile.stream.channelLogin == login) {
                     tile.onBackup = false
+                    updateAdBadge(tile)
                     tile.playingSince = 0L
                     player.setMediaItem(MediaItem.Builder().setUri(normal).setMimeType(MimeTypes.APPLICATION_M3U8).build())
                     player.prepare()
@@ -1021,6 +1063,31 @@ class MultiStreamFragment : Fragment() {
                     return@launch
                 }
             }
+        }
+    }
+
+    /** Discreet softly breathing badge in the top-right corner of a tile while an ad is being bypassed. */
+    private fun updateAdBadge(tile: Tile) {
+        if (tile.onBackup) {
+            if (tile.adBadge.visibility != View.VISIBLE) {
+                tile.adBadge.alpha = 0.85f
+                tile.adBadge.visibility = View.VISIBLE
+            }
+            if (tile.adPulseAnimator?.isRunning != true) {
+                tile.adPulseAnimator?.cancel()
+                tile.adPulseAnimator = android.animation.ValueAnimator.ofFloat(0.85f, 0.45f).apply {
+                    duration = 1400L
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                    repeatMode = android.animation.ValueAnimator.REVERSE
+                    interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                    addUpdateListener { tile.adBadge.alpha = it.animatedValue as Float }
+                    start()
+                }
+            }
+        } else {
+            tile.adPulseAnimator?.cancel()
+            tile.adPulseAnimator = null
+            tile.adBadge.visibility = View.GONE
         }
     }
 
@@ -1257,7 +1324,10 @@ class MultiStreamFragment : Fragment() {
         root.removeCallbacks(followFocus)
         root.removeCallbacks(hideChrome)
         chromeAnimator?.cancel()
-        tiles.forEach { it.player.release() }
+        tiles.forEach {
+            it.adPulseAnimator?.cancel()
+            it.player.release()
+        }
         tiles.clear()
         releasePlaybackSignals()
         (activity as? MainActivity)?.onMultiStreamDestroyed()

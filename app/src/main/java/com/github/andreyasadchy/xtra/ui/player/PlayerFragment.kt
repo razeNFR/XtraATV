@@ -2977,7 +2977,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             1 -> if (pos == 2 || pos == 3 || pos == 5) 0 else 2
             2 -> if (pos == 1 || pos == 3 || pos == 6) 0 else 1
             else -> {
-                val ring = listOf(0, 2, 3, 1)
+                // Clockwise around the screen: bottom-right, middle-bottom, bottom-left, middle-left, top-left, middle-top, top-right, middle-right
+                val ring = listOf(0, 7, 2, 5, 3, 6, 1, 4)
                 val idx = ring.indexOf(pos)
                 if (idx >= 0) ring[(idx + delta + ring.size) % ring.size] else 0
             }

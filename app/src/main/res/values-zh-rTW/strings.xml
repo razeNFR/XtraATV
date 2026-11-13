@@ -1125,4 +1125,5 @@
     <string name="tv_multistream_quality_cap_max">最高</string>
     <string name="tv_multistream_quality_this_stream">此直播 (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">跟隨設定檔</string>
+    <string name="tv_multistream_quality_balanced">均衡</string>
 </resources>

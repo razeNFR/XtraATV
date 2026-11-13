@@ -1125,4 +1125,5 @@
     <string name="tv_multistream_quality_cap_max">القصوى</string>
     <string name="tv_multistream_quality_this_stream">هذا البث (%1$s)</string>
     <string name="tv_multistream_quality_follow_profile">اتّباع الملف</string>
+    <string name="tv_multistream_quality_balanced">متوازنة</string>
 </resources>
