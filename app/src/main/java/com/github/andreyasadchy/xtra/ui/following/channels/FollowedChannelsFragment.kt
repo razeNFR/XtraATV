@@ -27,6 +27,7 @@ import com.github.andreyasadchy.xtra.ui.common.Scrollable
 import com.github.andreyasadchy.xtra.ui.common.Sortable
 import com.github.andreyasadchy.xtra.ui.following.channels.FollowedChannelsViewModel.Companion.FollowedChannelsViewModelFactory
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class FollowedChannelsFragment : PagedListFragment(), Scrollable, Sortable, FollowedChannelsSortDialog.OnFilter {
@@ -89,10 +90,10 @@ class FollowedChannelsFragment : PagedListFragment(), Scrollable, Sortable, Foll
         }
         initializeAdapter(binding, pagingAdapter, enableScrollTopButton = false)
         viewLifecycleOwner.lifecycleScope.launch {
-            var first = true
+            var initial = true
             com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collect {
-                if (first) {
-                    first = false
+                if (initial) {
+                    initial = false
                 } else {
                     pagingAdapter.notifyItemRangeChanged(0, pagingAdapter.itemCount)
                     pagingAdapter.refresh()

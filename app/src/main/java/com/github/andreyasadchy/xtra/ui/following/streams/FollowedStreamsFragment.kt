@@ -137,12 +137,12 @@ class FollowedStreamsFragment : PagedListFragment(), Scrollable, Sortable {
             }
             if (TvUi.isTv(ctx)) {
                 TvDialogs.showChoices(
-                    ctx,
-                    getString(R.string.sort),
-                    options,
-                    currentIdx,
-                    listOf(R.drawable.tv_ic_eye, R.drawable.baseline_sort_black_24),
-                    applyChoice,
+                    context = ctx,
+                    title = getString(R.string.sort),
+                    options = options,
+                    selected = currentIdx,
+                    icons = listOf(R.drawable.tv_ic_eye, R.drawable.baseline_sort_black_24),
+                    onSelected = applyChoice,
                 )
             } else {
                 ctx.getAlertDialogBuilder()
