@@ -12,10 +12,13 @@ import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.OptIn
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.XtraApp
@@ -36,6 +39,7 @@ import kotlinx.coroutines.launch
  * While it is shown: OK held swaps the two streams, back closes it, OK alone still opens the controls of the player.
  * It hides with the player (mini player, browsing) and closes with it.
  */
+@OptIn(UnstableApi::class)
 class TvPip(private val activity: MainActivity, private val container: ViewGroup) {
 
     var stream: Stream? = null
@@ -111,7 +115,14 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             })
             container.addView(this)
             view = this
-            player = ExoPlayer.Builder(context).build().apply {
+            val pipLoadControl = DefaultLoadControl.Builder()
+                .setBufferDurationsMs(5_000, 12_000, 1_000, 2_000)
+                .setBackBuffer(0, false)
+                .build()
+            player = ExoPlayer.Builder(context)
+                .setLoadControl(pipLoadControl)
+                .setHandleAudioBecomingNoisy(false)
+                .build().apply {
                 volume = 0f
                 setVideoTextureView(texture)
                 trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
@@ -183,7 +194,15 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                     val activePlayer = player
                     if (activePlayer != null && stream?.channelLogin == login) {
                         experimentalVodActive = true
-                        activePlayer.setMediaSource(TvExperimentalAdblock.buildMediaSource(activity, app.xtraModule, vod.masterUri))
+                        activePlayer.setMediaSource(
+                            TvExperimentalAdblock.buildMediaSource(
+                                activity,
+                                app.xtraModule,
+                                vod.masterUri,
+                                slidingWindowOnly = true,
+                                createdAtMs = vod.createdAtMs,
+                            )
+                        )
                         activePlayer.prepare()
                         activePlayer.playWhenReady = true
                     }
@@ -228,7 +247,15 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                     val activePlayer = player
                     if (activePlayer != null && stream?.channelLogin == login && !experimentalVodActive) {
                         experimentalVodActive = true
-                        activePlayer.setMediaSource(TvExperimentalAdblock.buildMediaSource(activity, app.xtraModule, vod.masterUri))
+                        activePlayer.setMediaSource(
+                            TvExperimentalAdblock.buildMediaSource(
+                                activity,
+                                app.xtraModule,
+                                vod.masterUri,
+                                slidingWindowOnly = true,
+                                createdAtMs = vod.createdAtMs,
+                            )
+                        )
                         activePlayer.prepare()
                         activePlayer.playWhenReady = true
                     }

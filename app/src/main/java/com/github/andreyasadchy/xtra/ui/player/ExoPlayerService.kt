@@ -196,6 +196,9 @@ class ExoPlayerService : BasePlaybackService() {
     /** True while a live broadcast (`type == STREAM`) plays via Twitch's ongoing CDN VOD (`index-dvr.m3u8`) at `-32s`. */
     var experimentalVodActive = false
         private set
+    /** True when the viewer explicitly rewound or seeked back behind the ad-free live edge. */
+    var experimentalVodUserRewound = false
+        private set
     private var experimentalVodCreatedAtMs: Long? = null
     private var experimentalVodUpgradeJob: Job? = null
 
@@ -900,6 +903,7 @@ class ExoPlayerService : BasePlaybackService() {
                         restorePlaylist = false
                     }
                     experimentalVodActive = false
+                    experimentalVodUserRewound = false
                     experimentalVodCreatedAtMs = null
                     experimentalVodUpgradeJob?.cancel()
                     experimentalVodUpgradeJob = null
@@ -1158,6 +1162,7 @@ class ExoPlayerService : BasePlaybackService() {
                     if (createdAt.isNullOrBlank()) createdAt = outcome.createdAtIso
                     experimentalVodCreatedAtMs = outcome.createdAtMs
                     experimentalVodActive = true
+                    experimentalVodUserRewound = false
                     qualities = null
                     restorePlaylist = false
                     playlistUrl = vod.masterUri.toString()
@@ -1191,6 +1196,7 @@ class ExoPlayerService : BasePlaybackService() {
         // the stream loads (again): its first seconds are not counted as stops for the quality of Auto
         playingSince = 0L
         if (!restart) {
+            experimentalVodUserRewound = false
             // an ad at the start of the stream is looked for in its whole first playlist
             checkFirstPlaylist = true
             firstPlaylistAd = false
@@ -1223,6 +1229,7 @@ class ExoPlayerService : BasePlaybackService() {
                 val vod = outcome.vod
                 if (vod != null && vod.vodDurationMs >= TvExperimentalAdblock.MIN_INITIAL_VOD_DURATION_MS) {
                     experimentalVodActive = true
+                    experimentalVodUserRewound = false
                     qualities = null
                     restorePlaylist = false
                     playlistUrl = vod.masterUri.toString()
@@ -1250,6 +1257,7 @@ class ExoPlayerService : BasePlaybackService() {
                     return
                 } else {
                     experimentalVodActive = false
+                    experimentalVodUserRewound = false
                     if (playlistUrl?.contains("/tv_exp_vod/") == true) {
                         playlistUrl = null
                         qualities = null
@@ -1260,6 +1268,7 @@ class ExoPlayerService : BasePlaybackService() {
                 }
             } else {
                 experimentalVodActive = false
+                experimentalVodUserRewound = false
                 experimentalVodCreatedAtMs = null
                 if (playlistUrl?.contains("/tv_exp_vod/") == true) {
                     playlistUrl = null
@@ -3599,6 +3608,11 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun seekBack() {
+        if (type == STREAM && experimentalVodActive) {
+            experimentalVodUserRewound = true
+            player?.seekBack()
+            return
+        }
         if (secondaryPlayer != null) {
             secondaryPlayer?.seekBack()
         }
@@ -3606,6 +3620,14 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun seekForward() {
+        if (type == STREAM && experimentalVodActive) {
+            val p = player ?: return
+            val edge = getExperimentalLiveEdgeMs()
+            val target = (p.currentPosition + p.seekForwardIncrement).coerceAtMost(edge)
+            experimentalVodUserRewound = (edge - target) > 8_000L
+            p.seekTo(target)
+            return
+        }
         if (secondaryPlayer != null) {
             secondaryPlayer?.seekForward()
         }
@@ -3613,6 +3635,13 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun seekTo(position: Long) {
+        if (type == STREAM && experimentalVodActive) {
+            val edge = getExperimentalLiveEdgeMs()
+            val clamped = position.coerceIn(0L, edge)
+            experimentalVodUserRewound = (edge - clamped) > 8_000L
+            player?.seekTo(clamped)
+            return
+        }
         if (type == VIDEO && player?.playbackState != Player.STATE_READY) {
             videoStartPosition = position
         }
@@ -3623,6 +3652,11 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun seekToDefaultPosition() {
+        if (type == STREAM && experimentalVodActive) {
+            experimentalVodUserRewound = false
+            player?.seekTo(getExperimentalLiveEdgeMs())
+            return
+        }
         if (secondaryPlayer != null) {
             secondaryPlayer?.seekToDefaultPosition()
         }
@@ -3847,7 +3881,8 @@ class ExoPlayerService : BasePlaybackService() {
                         if (p.currentMediaItem == null) {
                             scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
                         } else {
-                            val preserveRewind = experimentalVodActive && (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L
+                            val preserveRewind = experimentalVodActive &&
+                                (experimentalVodUserRewound || (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L)
                             if (!preserveRewind) {
                                 p.seekToDefaultPosition()
                             }
@@ -3860,7 +3895,8 @@ class ExoPlayerService : BasePlaybackService() {
                     continue
                 }
                 fun softKick(p: ExoPlayer) {
-                    val preserveRewind = experimentalVodActive && (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L
+                    val preserveRewind = experimentalVodActive &&
+                        (experimentalVodUserRewound || (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L)
                     if (!preserveRewind) {
                         p.seekToDefaultPosition()
                     }
@@ -4647,6 +4683,7 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodUpgradeJob?.cancel()
         experimentalVodUpgradeJob = null
         experimentalVodActive = false
+        experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
         freezeWatchJob?.cancel()
         freezeWatchJob = null

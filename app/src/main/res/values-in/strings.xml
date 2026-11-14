@@ -1136,10 +1136,10 @@
     <string name="tv_adblock_swap_locked_hint">Aktif secara bawaan. Aktifkan proksi kustom atau HTTP untuk mematikannya.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Tetap aktif sebagai cadangan otomatis saat Pemblokir Iklan Eksperimental diaktifkan.</string>
     <string name="tv_adblock_exp_title">Pemblokir iklan (Eksperimental)</string>
-    <string name="tv_adblock_exp_summary">Memutar siaran langsung melalui VOD yang sedang berjalan dengan jeda ~30 dtk untuk menghindari semua iklan tanpa pemutar live di latar belakang (Poin Saluran dan mundur VOD tetap berfungsi, obrolan disinkronkan Otomatis). Hanya berfungsi jika streamer memiliki VOD aktif (jika tidak, beralih ke Swap). Siaran yang baru mulai memakai Swap lalu beralih otomatis saat VOD siap. Tidak kompatibel dengan proksi.</string>
-    <string name="tv_adblock_exp_switched">Pemblokir eksperimental: beralih ke VOD bebas iklan</string>
+    <string name="tv_adblock_exp_summary">Mode alternatif untuk menghindari jeda iklan dengan sedikit tunda (~30 dtk) dan obrolan tersinkron Otomatis. Beralih ke Swap jika tidak tersedia. Tidak kompatibel dengan proksi.</string>
+    <string name="tv_adblock_exp_switched">Pemblokir iklan eksperimental aktif</string>
     <string name="tv_adblock_exp_proxies_disabled">Proksi tidak dapat diaktifkan saat Pemblokir Iklan Eksperimental aktif.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Matikan proksi kustom dan HTTP terlebih dahulu untuk mengaktifkan Pemblokir Iklan Eksperimental.</string>
     <string name="tv_adblock_exp_chat_auto_locked">Jeda obrolan dikunci ke Otomatis saat Pemblokir Iklan Eksperimental aktif.</string>
-    <string name="tv_adblock_exp_chat_auto_info">Dikunci ke Otomatis untuk VOD eksperimental (%1$s)</string>
+    <string name="tv_adblock_exp_chat_auto_info">Dikunci ke Otomatis dengan Pemblokir Eksperimental (%1$s)</string>
 </resources>

@@ -1135,10 +1135,10 @@
     <string name="tv_adblock_swap_locked_hint">مفعّل افتراضياً. فعّل وكيل بث مخصص أو HTTP لتتمكن من إيقافه.</string>
     <string name="tv_adblock_swap_locked_exp_hint">يبقى مفعّلاً كبديل احتياطي تلقائي أثناء تشغيل مانع الإعلانات التجريبي.</string>
     <string name="tv_adblock_exp_title">مانع الإعلانات (تجريبي)</string>
-    <string name="tv_adblock_exp_summary">يشغّل البث المباشر عبر تسجيل VOD الجاري بتأخير ~30 ثانية لتجنب جميع الإعلانات دون مشغل مباشر في الخلفية (يحافظ على نقاط القناة وإرجاع الفيديو ومزامنة الدردشة تلقائياً). يعمل فقط إذا كان لدى صانع المحتوى تسجيل VOD نشط (وإلا ينتقل إلى وضع Swap). يبدأ البث الجديد بوضع Swap ثم ينتقل تلقائياً فور جهوزية VOD. غير متوافق مع الوكلاء.</string>
-    <string name="tv_adblock_exp_switched">مانع الإعلانات التجريبي: تم التبديل إلى VOD بدون إعلانات</string>
+    <string name="tv_adblock_exp_summary">وضع بديل يتجنب الفواصل الإعلانية مع تأخير بسيط (~30 ثانية) ومزامنة تلقائية للدردشة. ينتقل إلى وضع Swap عند عدم التوفر. غير متوافق مع الوكلاء.</string>
+    <string name="tv_adblock_exp_switched">مانع الإعلانات التجريبي مفعّل</string>
     <string name="tv_adblock_exp_proxies_disabled">لا يمكن تفعيل الوكلاء أثناء تشغيل مانع الإعلانات التجريبي.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">عطّل الوكلاء المخصصة ووكلاء HTTP أولاً لتفعيل مانع الإعلانات التجريبي.</string>
     <string name="tv_adblock_exp_chat_auto_locked">تأخير الدردشة مقفل على الوضع التلقائي مع مانع الإعلانات التجريبي.</string>
-    <string name="tv_adblock_exp_chat_auto_info">مقفل على التلقائي لوضع VOD التجريبي (%1$s)</string>
+    <string name="tv_adblock_exp_chat_auto_info">مقفل على التلقائي مع مانع الإعلانات التجريبي (%1$s)</string>
 </resources>

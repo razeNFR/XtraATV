@@ -1135,10 +1135,10 @@
     <string name="tv_adblock_swap_locked_hint">Activado por defecto. Activa un proxy personalizado ou HTTP para podelo desactivar.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Permanece activo como apoio automático mentres o bloqueador experimental está activado.</string>
     <string name="tv_adblock_exp_title">Bloqueador de anuncios (Experimental)</string>
-    <string name="tv_adblock_exp_summary">Reproduce o directo mediante o VOD en curso con ~30 s de atraso para evitar anuncios, sen reprodutor en directo en segundo plano (conserva puntos da canle e retroceso VOD, chat sincronizado en Auto). Só funciona se o streamer ten un VOD activo (se non, cambia ao bloqueador Swap). Se o directo acaba de comezar, inicia con Swap e cambia automaticamente cando o VOD está listo. Incompatible con proxies.</string>
-    <string name="tv_adblock_exp_switched">Bloqueador experimental: cambiado ao VOD sen anuncios</string>
+    <string name="tv_adblock_exp_summary">Modo alternativo que evita os cortes publicitarios cun lixeiro atraso (~30 s) e chat sincronizado en Auto. Cambia a Swap se non está dispoñible. Incompatible con proxies.</string>
+    <string name="tv_adblock_exp_switched">Bloqueador experimental activo</string>
     <string name="tv_adblock_exp_proxies_disabled">Non se poden activar proxies mentres o bloqueador experimental está activo.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Desactiva primeiro os proxies personalizados e HTTP para activar o bloqueador experimental.</string>
     <string name="tv_adblock_exp_chat_auto_locked">O atraso do chat está fixado en Auto co bloqueador experimental.</string>
-    <string name="tv_adblock_exp_chat_auto_info">Fixado en Auto para o VOD experimental (%1$s)</string>
+    <string name="tv_adblock_exp_chat_auto_info">Fixado en Auto co bloqueador experimental (%1$s)</string>
 </resources>	

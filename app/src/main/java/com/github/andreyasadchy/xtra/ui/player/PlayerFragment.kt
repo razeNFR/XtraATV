@@ -2199,7 +2199,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 position.visibility = View.VISIBLE
                 duration.visibility = View.VISIBLE
                 val currentPos = (getCurrentPosition() ?: vodEdge).coerceIn(0L, vodEdge)
-                val atAdFreeEdge = vodEdge - currentPos <= 12_000L
+                val behindMs = (vodEdge - currentPos).coerceAtLeast(0L)
+                val userRewound = exoService?.experimentalVodUserRewound == true
+                // 10s VOD segments + live-offset margin naturally fluctuate up to ~25s behind vodEdge without rewinding;
+                // only surface the "Direct" button when the viewer explicitly rewound (> 8s) or paused/drifted > 32s behind.
+                val atAdFreeEdge = if (userRewound) behindMs <= 8_000L else behindMs <= 32_000L
                 progressBar.setDuration(vodEdge)
                 progressBar.setPosition(if (atAdFreeEdge) vodEdge else currentPos)
                 progressBar.setBufferedPosition((exoService?.player?.bufferedPosition ?: currentPos).coerceIn(currentPos, vodEdge))
@@ -2307,7 +2311,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     tvScrubPosition = (tvScrubPosition + if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -step else step).coerceIn(0, duration)
                     progressBar.setDuration(duration)
                     progressBar.setPosition(tvScrubPosition)
-                    position.text = if (expVod && tvScrubPosition >= duration - 5_000L) {
+                    position.text = if (expVod && tvScrubPosition >= duration - 8_000L) {
                         getString(R.string.tv_live)
                     } else {
                         DateUtils.formatElapsedTime(tvScrubPosition / 1000)
@@ -2324,7 +2328,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         val dvrStream = getTvDvrStream()
                         when {
                             expVod -> {
-                                seek(newPosition.coerceIn(0L, duration))
+                                if (newPosition >= duration - 8_000L) {
+                                    seekToLivePosition()
+                                } else {
+                                    seek(newPosition.coerceIn(0L, duration))
+                                }
                                 updateTvLiveTimeline()
                                 showController()
                             }

@@ -488,7 +488,7 @@ class ExoPlayerFragment : PlayerFragment() {
             val delayMs = getLivePictureTime()?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
                 ?: getTotalDuration()?.let { (it - player.currentPosition).coerceAtLeast(0L) }
             if (delayMs != null) {
-                lines.add("Latency    ${"%.1f".format(delayMs / 1000f)} s (VOD)")
+                lines.add("Latency    ${"%.1f".format(delayMs / 1000f)} s")
             }
         } else if (player.isCurrentMediaItemLive) {
             player.currentLiveOffset.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { lines.add("Latency    ${"%.1f".format(it / 1000f)} s") }
@@ -539,33 +539,15 @@ class ExoPlayerFragment : PlayerFragment() {
     }
 
     override fun fastForward() {
-        val service = playbackService ?: return
-        if (service.type == BasePlaybackService.STREAM && service.experimentalVodActive) {
-            val edge = service.getExperimentalLiveEdgeMs()
-            val increment = (requireContext().prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10L) * 1000L
-            val target = ((service.player?.currentPosition ?: 0L) + increment).coerceAtMost(edge)
-            service.seekTo(target)
-        } else {
-            service.seekForward()
-        }
+        playbackService?.seekForward()
     }
 
     override fun seek(position: Long) {
-        val service = playbackService ?: return
-        if (service.type == BasePlaybackService.STREAM && service.experimentalVodActive) {
-            service.seekTo(position.coerceIn(0L, service.getExperimentalLiveEdgeMs()))
-        } else {
-            service.seekTo(position)
-        }
+        playbackService?.seekTo(position)
     }
 
     override fun seekToLivePosition() {
-        val service = playbackService ?: return
-        if (service.type == BasePlaybackService.STREAM && service.experimentalVodActive) {
-            service.seekTo(service.getExperimentalLiveEdgeMs())
-        } else {
-            service.seekToDefaultPosition()
-        }
+        playbackService?.seekToDefaultPosition()
     }
 
     override fun setPlaybackSpeed(speed: Float) {

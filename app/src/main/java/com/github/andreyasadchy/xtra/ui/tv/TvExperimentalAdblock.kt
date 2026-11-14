@@ -41,11 +41,15 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Request
+import java.io.BufferedReader
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
+import java.io.InputStreamReader
+import java.io.SequenceInputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToLong
 import kotlin.time.Instant
 
 /**
@@ -70,6 +74,10 @@ object TvExperimentalAdblock {
     const val NEW_STREAM_MAX_UPTIME_MS = 180_000L
     const val UPGRADE_POLL_INTERVAL_MS = 10_000L
     const val UPGRADE_MAX_ATTEMPTS = 18
+
+    /** Sliding window kept per Multi-Stream / PiP player (~3 minutes of 10s segments) to avoid parsing multi-hour playlists on every reload. */
+    private const val SLIDING_WINDOW_SEGMENTS = 18
+    private const val PROBE_RANGE_BYTES = 2048
 
     data class LiveVodOutcome(
         val vod: LiveVodResult?,
@@ -181,6 +189,8 @@ object TvExperimentalAdblock {
         context: Context,
         xtraModule: XtraModule,
         uri: Uri,
+        slidingWindowOnly: Boolean = false,
+        createdAtMs: Long? = null,
     ): HlsMediaSource {
         val networkLibrary = context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
         val httpFactory = when {
@@ -226,7 +236,7 @@ object TvExperimentalAdblock {
             .setLiveConfiguration(liveConfiguration())
             .build()
         return HlsMediaSource.Factory(DefaultDataSource.Factory(context, httpFactory))
-            .setPlaylistParserFactory(PlaylistParserFactory())
+            .setPlaylistParserFactory(PlaylistParserFactory(slidingWindowOnly, createdAtMs))
             .createMediaSource(mediaItem)
     }
 
@@ -235,38 +245,246 @@ object TvExperimentalAdblock {
      * treats Twitch's growing `index-dvr.m3u8` as an active live DVR window (`0 .. duration`) positioned
      * at `duration - TARGET_OFFSET_MS` instead of starting at `00:00:00`, while naturally ending once
      * `#EXT-X-ENDLIST` appears when the streamer goes offline.
+     *
+     * When [slidingWindowOnly] is enabled (Multi-Stream & PiP, where timeline rewind is not used),
+     * keeps only the latest [SLIDING_WINDOW_SEGMENTS] segments and advances `#EXT-X-MEDIA-SEQUENCE`
+     * so 4 concurrent multi-hour streams never allocate or parse thousands of segments every few seconds.
      */
     @OptIn(UnstableApi::class)
-    class PlaylistParserFactory : HlsPlaylistParserFactory {
+    class PlaylistParserFactory(
+        private val slidingWindowOnly: Boolean = false,
+        private val createdAtMs: Long? = null,
+    ) : HlsPlaylistParserFactory {
         override fun createPlaylistParser(): ParsingLoadable.Parser<HlsPlaylist> =
-            WrappingParser(HlsPlaylistParser())
+            WrappingParser(HlsPlaylistParser(), slidingWindowOnly, createdAtMs)
 
         override fun createPlaylistParser(
             multivariantPlaylist: HlsMultivariantPlaylist,
             previousMediaPlaylist: HlsMediaPlaylist?,
         ): ParsingLoadable.Parser<HlsPlaylist> =
-            WrappingParser(HlsPlaylistParser(multivariantPlaylist, previousMediaPlaylist))
+            WrappingParser(HlsPlaylistParser(multivariantPlaylist, previousMediaPlaylist), slidingWindowOnly, createdAtMs)
+
+        private data class SegmentBlock(
+            val lines: List<String>,
+            val durationUs: Long,
+            val hasDiscontinuity: Boolean,
+            val hasProgramDateTime: Boolean,
+            val firstKeyLine: String?,
+            val lastKeyLine: String?,
+            val firstMapLine: String?,
+            val lastMapLine: String?,
+        )
 
         private class WrappingParser(
             private val inner: HlsPlaylistParser,
+            private val slidingWindowOnly: Boolean,
+            private val createdAtMs: Long?,
         ) : ParsingLoadable.Parser<HlsPlaylist> {
             override fun parse(uri: Uri, inputStream: InputStream): HlsPlaylist {
-                val text = inputStream.bufferedReader(Charsets.UTF_8).readText()
-                val normalized = if (!text.contains("#EXT-X-ENDLIST")) {
-                    buildString(text.length) {
-                        for (line in text.lineSequence()) {
-                            val trimmed = line.trimStart()
-                            if (trimmed.startsWith("#EXT-X-PLAYLIST-TYPE") || trimmed.startsWith("#EXT-X-START")) {
-                                continue
-                            }
-                            append(line)
-                            append('\n')
-                        }
+                val rawBytes = inputStream.readBytes()
+                if (rawBytes.isEmpty()) {
+                    return inner.parse(uri, ByteArrayInputStream(rawBytes))
+                }
+                if (slidingWindowOnly) {
+                    val trimmed = trimToSlidingWindow(rawBytes, createdAtMs)
+                    if (trimmed != null) {
+                        return inner.parse(uri, ByteArrayInputStream(trimmed))
                     }
-                } else {
-                    text
+                }
+                // Full-window mode (full-screen player with DVR rewind): avoid copying the segment body
+                val tailLen = minOf(rawBytes.size, 256)
+                val tailStr = String(rawBytes, rawBytes.size - tailLen, tailLen, Charsets.UTF_8)
+                if (tailStr.contains("#EXT-X-ENDLIST")) {
+                    return inner.parse(uri, ByteArrayInputStream(rawBytes))
+                }
+                val scanLen = minOf(rawBytes.size, 4096)
+                val headPreview = String(rawBytes, 0, scanLen, Charsets.UTF_8)
+                val extInfCharIdx = headPreview.indexOf("#EXTINF:")
+                if (extInfCharIdx > 0) {
+                    val headerText = headPreview.substring(0, extInfCharIdx)
+                    val headerByteLen = headerText.toByteArray(Charsets.UTF_8).size
+                    if (headerByteLen <= rawBytes.size) {
+                        val filteredHeader = buildString(headerText.length) {
+                            for (line in headerText.lineSequence()) {
+                                val trimmed = line.trimStart()
+                                if (trimmed.startsWith("#EXT-X-PLAYLIST-TYPE") || trimmed.startsWith("#EXT-X-START")) {
+                                    continue
+                                }
+                                append(line)
+                                append('\n')
+                            }
+                        }.toByteArray(Charsets.UTF_8)
+                        val combined = SequenceInputStream(
+                            ByteArrayInputStream(filteredHeader),
+                            ByteArrayInputStream(rawBytes, headerByteLen, rawBytes.size - headerByteLen),
+                        )
+                        return inner.parse(uri, combined)
+                    }
+                }
+                // Fallback for short or non-standard playlists
+                val fullText = String(rawBytes, Charsets.UTF_8)
+                val normalized = buildString(fullText.length) {
+                    for (line in fullText.lineSequence()) {
+                        val trimmed = line.trimStart()
+                        if (trimmed.startsWith("#EXT-X-PLAYLIST-TYPE") || trimmed.startsWith("#EXT-X-START")) {
+                            continue
+                        }
+                        append(line)
+                        append('\n')
+                    }
                 }
                 return inner.parse(uri, ByteArrayInputStream(normalized.toByteArray(Charsets.UTF_8)))
+            }
+
+            private fun isSegmentScopedTag(trimmed: String): Boolean =
+                trimmed.startsWith("#EXTINF:") ||
+                    trimmed.startsWith("#EXT-X-DISCONTINUITY") && !trimmed.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE") ||
+                    trimmed.startsWith("#EXT-X-PROGRAM-DATE-TIME:") ||
+                    trimmed.startsWith("#EXT-X-KEY:") ||
+                    trimmed.startsWith("#EXT-X-MAP:") ||
+                    trimmed.startsWith("#EXT-X-BYTERANGE:")
+
+            private fun trimToSlidingWindow(rawBytes: ByteArray, streamCreatedAtMs: Long?): ByteArray? {
+                val headCheckLen = minOf(rawBytes.size, 2048)
+                val headCheck = String(rawBytes, 0, headCheckLen, Charsets.UTF_8)
+                if (headCheck.contains("#EXT-X-STREAM-INF:")) {
+                    // Multivariant master playlist: leave untouched
+                    return null
+                }
+                val headerLines = ArrayList<String>(12)
+                val ring = ArrayDeque<SegmentBlock>(SLIDING_WINDOW_SEGMENTS + 1)
+                var baseMediaSeq = 0L
+                var baseDiscSeq = 0L
+                var droppedCount = 0L
+                var droppedDurationUs = 0L
+                var droppedDiscontinuities = 0L
+                var activeKeyLine: String? = null
+                var activeMapLine: String? = null
+                var hasEndList = false
+                var inSegments = false
+
+                var curLines = ArrayList<String>(4)
+                var curDurationUs = 0L
+                var curHasDisc = false
+                var curHasPdt = false
+                var curFirstKey: String? = null
+                var curLastKey: String? = null
+                var curFirstMap: String? = null
+                var curLastMap: String? = null
+
+                BufferedReader(InputStreamReader(ByteArrayInputStream(rawBytes), Charsets.UTF_8), 8192).use { reader ->
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        val trimmed = line.trimStart()
+                        if (trimmed.isEmpty()) continue
+                        if (trimmed.startsWith("#EXT-X-ENDLIST")) {
+                            hasEndList = true
+                            continue
+                        }
+                        if (!inSegments && !isSegmentScopedTag(trimmed)) {
+                            when {
+                                trimmed.startsWith("#EXT-X-PLAYLIST-TYPE") || trimmed.startsWith("#EXT-X-START") -> continue
+                                trimmed.startsWith("#EXT-X-MEDIA-SEQUENCE:") -> {
+                                    baseMediaSeq = trimmed.removePrefix("#EXT-X-MEDIA-SEQUENCE:").trim().toLongOrNull() ?: 0L
+                                }
+                                trimmed.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE:") -> {
+                                    baseDiscSeq = trimmed.removePrefix("#EXT-X-DISCONTINUITY-SEQUENCE:").trim().toLongOrNull() ?: 0L
+                                }
+                                else -> headerLines.add(line)
+                            }
+                            continue
+                        }
+                        inSegments = true
+                        if (trimmed.startsWith("#")) {
+                            curLines.add(line)
+                            when {
+                                trimmed.startsWith("#EXTINF:") -> {
+                                    val secs = trimmed.removePrefix("#EXTINF:").substringBefore(',').trim().toDoubleOrNull()
+                                    if (secs != null && secs > 0.0) {
+                                        curDurationUs += (secs * 1_000_000.0).roundToLong()
+                                    }
+                                }
+                                trimmed.startsWith("#EXT-X-DISCONTINUITY") && !trimmed.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE") -> {
+                                    curHasDisc = true
+                                }
+                                trimmed.startsWith("#EXT-X-PROGRAM-DATE-TIME:") -> {
+                                    curHasPdt = true
+                                }
+                                trimmed.startsWith("#EXT-X-KEY:") -> {
+                                    if (curFirstKey == null) curFirstKey = line
+                                    curLastKey = line
+                                }
+                                trimmed.startsWith("#EXT-X-MAP:") -> {
+                                    if (curFirstMap == null) curFirstMap = line
+                                    curLastMap = line
+                                }
+                            }
+                        } else {
+                            curLines.add(line)
+                            val block = SegmentBlock(
+                                lines = curLines,
+                                durationUs = curDurationUs,
+                                hasDiscontinuity = curHasDisc,
+                                hasProgramDateTime = curHasPdt,
+                                firstKeyLine = curFirstKey,
+                                lastKeyLine = curLastKey,
+                                firstMapLine = curFirstMap,
+                                lastMapLine = curLastMap,
+                            )
+                            if (ring.size >= SLIDING_WINDOW_SEGMENTS) {
+                                val evicted = ring.removeFirst()
+                                droppedCount++
+                                droppedDurationUs += evicted.durationUs
+                                if (evicted.hasDiscontinuity) droppedDiscontinuities++
+                                if (evicted.lastKeyLine != null) activeKeyLine = evicted.lastKeyLine
+                                if (evicted.lastMapLine != null) activeMapLine = evicted.lastMapLine
+                            }
+                            ring.addLast(block)
+                            curLines = ArrayList(4)
+                            curDurationUs = 0L
+                            curHasDisc = false
+                            curHasPdt = false
+                            curFirstKey = null
+                            curLastKey = null
+                            curFirstMap = null
+                            curLastMap = null
+                        }
+                    }
+                }
+
+                if (ring.isEmpty()) {
+                    return null
+                }
+
+                val out = StringBuilder(2048)
+                for (h in headerLines) {
+                    out.append(h).append('\n')
+                }
+                out.append("#EXT-X-MEDIA-SEQUENCE:").append(baseMediaSeq + droppedCount).append('\n')
+                val totalDiscSeq = baseDiscSeq + droppedDiscontinuities
+                if (totalDiscSeq > 0L) {
+                    out.append("#EXT-X-DISCONTINUITY-SEQUENCE:").append(totalDiscSeq).append('\n')
+                }
+                val firstKept = ring.first()
+                if (activeKeyLine != null && firstKept.firstKeyLine == null) {
+                    out.append(activeKeyLine).append('\n')
+                }
+                if (activeMapLine != null && firstKept.firstMapLine == null) {
+                    out.append(activeMapLine).append('\n')
+                }
+                if (streamCreatedAtMs != null && streamCreatedAtMs > 0L && !firstKept.hasProgramDateTime) {
+                    val firstSegEpochMs = streamCreatedAtMs + (droppedDurationUs / 1_000L)
+                    out.append("#EXT-X-PROGRAM-DATE-TIME:").append(Instant.fromEpochMilliseconds(firstSegEpochMs)).append('\n')
+                }
+                for (seg in ring) {
+                    for (l in seg.lines) {
+                        out.append(l).append('\n')
+                    }
+                }
+                if (hasEndList) {
+                    out.append("#EXT-X-ENDLIST\n")
+                }
+                return out.toString().toByteArray(Charsets.UTF_8)
             }
         }
     }
@@ -311,9 +529,9 @@ object TvExperimentalAdblock {
         // Fast path: reuse cached CDN baseDir & variants for this streamId if already discovered
         cachedVods[cacheKey]?.let { cached ->
             val chunkedUrl = "${cached.baseDir}/chunked/index-dvr.m3u8"
-            val playlistText = fetchPlaylistIfValid(xtraModule, networkLibrary, chunkedUrl)
-            if (playlistText != null) {
-                val durationMs = parseExtInfDurationMs(playlistText)
+            val playlistSnippet = fetchPlaylistIfValid(xtraModule, networkLibrary, chunkedUrl, headerOnly = true)
+            if (playlistSnippet != null) {
+                val durationMs = parseVodDurationMs(playlistSnippet)
                 val filteredVariants = selectVariants(cached.variants, fallbackH264)
                     ?: return@withContext LiveVodOutcome(null, resolvedStreamId, resolvedCreatedAtIso, resolvedCreatedAtMs, uptimeMs, true)
                 val masterUri = writeMasterPlaylist(context, login, resolvedStreamId, cached.baseDir, filteredVariants, fallbackH264)
@@ -354,8 +572,8 @@ object TvExperimentalAdblock {
             )
         }
 
-        val (baseDir, chunkedText) = found
-        val durationMs = parseExtInfDurationMs(chunkedText)
+        val (baseDir, chunkedSnippet) = found
+        val durationMs = parseVodDurationMs(chunkedSnippet)
         val variants = probeAvailableVariants(xtraModule, networkLibrary, baseDir)
         cachedVods[cacheKey] = CachedVod(baseDir, variants, resolvedCreatedAtIso, resolvedCreatedAtMs)
         if (cachedVods.size > 32) {
@@ -388,18 +606,24 @@ object TvExperimentalAdblock {
             Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0L }
         }
 
-    private fun parseExtInfDurationMs(playlistText: String): Long {
-        var totalSeconds = 0.0
+    private fun parseVodDurationMs(playlistText: String): Long {
+        var totalTagSeconds = 0.0
+        var extInfSeconds = 0.0
         for (line in playlistText.lineSequence()) {
             val trimmed = line.trimStart()
-            if (trimmed.startsWith("#EXTINF:")) {
+            if (trimmed.startsWith("#EXT-X-TWITCH-TOTAL-SECS:")) {
+                val totalVal = trimmed.removePrefix("#EXT-X-TWITCH-TOTAL-SECS:").trim().toDoubleOrNull()
+                if (totalVal != null && totalVal > 0.0) {
+                    totalTagSeconds = totalVal
+                }
+            } else if (trimmed.startsWith("#EXTINF:")) {
                 val value = trimmed.removePrefix("#EXTINF:").substringBefore(',').trim().toDoubleOrNull()
                 if (value != null && value > 0.0) {
-                    totalSeconds += value
+                    extInfSeconds += value
                 }
             }
         }
-        return (totalSeconds * 1000.0).toLong()
+        return (maxOf(totalTagSeconds, extInfSeconds) * 1000.0).toLong()
     }
 
     private suspend fun fetchLiveStreamMeta(
@@ -483,7 +707,7 @@ object TvExperimentalAdblock {
                 jobs.add(
                     launch(Dispatchers.IO) {
                         try {
-                            val body = fetchPlaylistIfValid(xtraModule, networkLibrary, url)
+                            val body = fetchPlaylistIfValid(xtraModule, networkLibrary, url, headerOnly = true)
                             if (body != null && found.compareAndSet(null, baseDir to body)) {
                                 jobs.forEach { it.cancel() }
                             }
@@ -509,7 +733,7 @@ object TvExperimentalAdblock {
         val deferreds = transcodeSpecs.map { spec ->
             async(Dispatchers.IO) {
                 val url = "$baseDir/${spec.folder}/index-dvr.m3u8"
-                if (fetchPlaylistIfValid(xtraModule, networkLibrary, url) != null) spec else null
+                if (fetchPlaylistIfValid(xtraModule, networkLibrary, url, headerOnly = true) != null) spec else null
             }
         }
         val available = deferreds.awaitAll().filterNotNull()
@@ -574,7 +798,9 @@ object TvExperimentalAdblock {
         xtraModule: XtraModule,
         networkLibrary: String?,
         url: String,
+        headerOnly: Boolean = false,
     ): String? = withTimeoutOrNull(4_000L) {
+        val rangeHeader = "bytes=0-${PROBE_RANGE_BYTES - 1}"
         try {
             when {
                 networkLibrary == C.HTTP_ENGINE && xtraModule.httpEngine.value != null -> @SuppressLint("NewApi") {
@@ -584,7 +810,11 @@ object TvExperimentalAdblock {
                             url,
                             xtraModule.cronetExecutor.value,
                             NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
-                        ).build()
+                        ).apply {
+                            if (headerOnly) {
+                                addHeader("Range", rangeHeader)
+                            }
+                        }.build()
                         timeout.start(request, continuation)
                         request.start()
                         continuation.invokeOnCancellation {
@@ -593,7 +823,9 @@ object TvExperimentalAdblock {
                         }
                     }
                     if (response.info.httpStatusCode in 200..299) {
-                        response.body.decodeToString().takeIf { it.contains("#EXTM3U") }
+                        val bytes = response.body
+                        val len = if (headerOnly) minOf(bytes.size, PROBE_RANGE_BYTES) else bytes.size
+                        String(bytes, 0, len, Charsets.UTF_8).takeIf { it.contains("#EXTM3U") }
                     } else null
                 }
                 networkLibrary == C.CRONET && xtraModule.cronetEngine.value != null -> {
@@ -603,7 +835,11 @@ object TvExperimentalAdblock {
                             url,
                             NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
                             xtraModule.cronetExecutor.value
-                        ).build()
+                        ).apply {
+                            if (headerOnly) {
+                                addHeader("Range", rangeHeader)
+                            }
+                        }.build()
                         timeout.start(request, continuation)
                         request.start()
                         continuation.invokeOnCancellation {
@@ -612,13 +848,33 @@ object TvExperimentalAdblock {
                         }
                     }
                     if (response.info.httpStatusCode in 200..299) {
-                        response.body.decodeToString().takeIf { it.contains("#EXTM3U") }
+                        val bytes = response.body
+                        val len = if (headerOnly) minOf(bytes.size, PROBE_RANGE_BYTES) else bytes.size
+                        String(bytes, 0, len, Charsets.UTF_8).takeIf { it.contains("#EXTM3U") }
                     } else null
                 }
                 else -> {
-                    xtraModule.okHttpClient.value.newCall(Request.Builder().url(url).build()).executeAsync().use { response ->
+                    val request = Request.Builder().url(url).apply {
+                        if (headerOnly) {
+                            header("Range", rangeHeader)
+                        }
+                    }.build()
+                    xtraModule.okHttpClient.value.newCall(request).executeAsync().use { response ->
                         if (response.isSuccessful) {
-                            response.body.string().takeIf { it.contains("#EXTM3U") }
+                            val text = if (headerOnly) {
+                                val buf = ByteArray(PROBE_RANGE_BYTES)
+                                val stream = response.body.byteStream()
+                                var total = 0
+                                while (total < buf.size) {
+                                    val n = stream.read(buf, total, buf.size - total)
+                                    if (n <= 0) break
+                                    total += n
+                                }
+                                String(buf, 0, total, Charsets.UTF_8)
+                            } else {
+                                response.body.string()
+                            }
+                            text.takeIf { it.contains("#EXTM3U") }
                         } else null
                     }
                 }

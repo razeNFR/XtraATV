@@ -1136,10 +1136,10 @@
     <string name="tv_adblock_swap_locked_hint">Varsayılan olarak etkindir. Kapatmak için özel veya HTTP akış proxy\'sini etkinleştirin.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Deneysel reklam engelleyici açıkken otomatik yedek olarak etkin kalır.</string>
     <string name="tv_adblock_exp_title">Reklam engelleyici (Deneysel)</string>
-    <string name="tv_adblock_exp_summary">Tüm reklamları önlemek için yayını arka planda canlı oynatıcı olmadan ~30 sn gecikmeli aktif VOD üzerinden oynatır (Kanal Puanları ve geri sarma korunur, sohbet Otomatik senkronize edilir). Yalnızca yayıncının aktif bir VOD kaydı varsa çalışır (yoksa Swap engelleyiciye geçer). Yeni başlayan yayınlar Swap ile başlar ve VOD hazır olduğunda otomatik geçer. Proxy\'lerle uyumsuzdur.</string>
-    <string name="tv_adblock_exp_switched">Deneysel engelleyici: reklamsız VOD akışına geçildi</string>
+    <string name="tv_adblock_exp_summary">Kısa bir gecikme (~30 sn) ve Otomatik senkronize sohbet ile reklam aralarını önleyen alternatif mod. Kullanılamadığında Swap moduna geçer. Proxy\'lerle uyumsuzdur.</string>
+    <string name="tv_adblock_exp_switched">Deneysel reklam engelleyici etkin</string>
     <string name="tv_adblock_exp_proxies_disabled">Deneysel reklam engelleyici açıkken proxy\'ler etkinleştirilemez.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Deneysel reklam engelleyiciyi açmak için önce özel ve HTTP proxy\'leri kapatın.</string>
     <string name="tv_adblock_exp_chat_auto_locked">Deneysel reklam engelleyici açıkken sohbet gecikmesi Otomatik olarak kilitlenir.</string>
-    <string name="tv_adblock_exp_chat_auto_info">Deneysel VOD için Otomatik olarak kilitli (%1$s)</string>
+    <string name="tv_adblock_exp_chat_auto_info">Deneysel engelleyici ile Otomatik olarak kilitli (%1$s)</string>
 </resources>

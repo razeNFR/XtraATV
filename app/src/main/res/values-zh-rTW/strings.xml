@@ -1135,10 +1135,10 @@
     <string name="tv_adblock_swap_locked_hint">預設開啟。啟用自訂代理或 HTTP 串流代理後才可關閉。</string>
     <string name="tv_adblock_swap_locked_exp_hint">開啟實驗性廣告攔截器時將保持開啟作為自動備援方案。</string>
     <string name="tv_adblock_exp_title">廣告攔截器 (實驗性)</string>
-    <string name="tv_adblock_exp_summary">透過正在錄製的 VOD 延遲約 30 秒播放直播，無需背景直播播放器即可避開所有廣告（保留忠誠點數與倒轉功能，聊天室自動同步）。僅在實況主開啟同步 VOD 時生效（否則自動切換回 Swap 攔截）。剛開播的直播會先使用 Swap，待 VOD 就緒後自動切換。與代理功能不相容。</string>
-    <string name="tv_adblock_exp_switched">實驗性廣告攔截：已切換至無廣告 VOD</string>
+    <string name="tv_adblock_exp_summary">透過約 30 秒輕微延遲與聊天室自動同步來避開廣告插播的替代模式。無法使用時自動切換回 Swap。與代理功能不相容。</string>
+    <string name="tv_adblock_exp_switched">實驗性廣告攔截已啟用</string>
     <string name="tv_adblock_exp_proxies_disabled">啟用實驗性廣告攔截器時無法開啟代理。</string>
     <string name="tv_adblock_exp_disabled_by_proxy">請先關閉自訂代理與 HTTP 串流代理，再開啟實驗性廣告攔截器。</string>
     <string name="tv_adblock_exp_chat_auto_locked">啟用實驗性廣告攔截器時聊天室延遲鎖定為自動。</string>
-    <string name="tv_adblock_exp_chat_auto_info">實驗性 VOD 已鎖定為自動 (%1$s)</string>
+    <string name="tv_adblock_exp_chat_auto_info">啟用實驗性廣告攔截時鎖定為自動 (%1$s)</string>
 </resources>

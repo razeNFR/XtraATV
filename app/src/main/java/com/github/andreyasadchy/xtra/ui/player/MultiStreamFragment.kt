@@ -16,9 +16,12 @@ import androidx.core.os.BundleCompat
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.ui.Stream
@@ -42,6 +45,7 @@ import kotlinx.coroutines.launch
  * hidden or moved). With 3 streams, the empty cell at the bottom right shows the chat of the selected stream, or the one
  * pinned. With 3 or 4 streams, a stream can be removed.
  */
+@OptIn(UnstableApi::class)
 class MultiStreamFragment : Fragment() {
 
     private class Tile(
@@ -318,7 +322,12 @@ class MultiStreamFragment : Fragment() {
             })
             addView(infoContainer, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         }
+        val tileLoadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(6_000, 14_000, 1_000, 2_000)
+            .setBackBuffer(0, false)
+            .build()
         val player = ExoPlayer.Builder(requireContext())
+            .setLoadControl(tileLoadControl)
             .setHandleAudioBecomingNoisy(false)
             .build().apply {
                 // the sound of a film, the audio focus held by the multi-stream itself (TvPlaybackSignals)
@@ -1587,6 +1596,8 @@ class MultiStreamFragment : Fragment() {
                             context,
                             app.xtraModule,
                             vod.masterUri,
+                            slidingWindowOnly = true,
+                            createdAtMs = vod.createdAtMs,
                         )
                     )
                     player.repeatMode = Player.REPEAT_MODE_OFF
@@ -1672,6 +1683,8 @@ class MultiStreamFragment : Fragment() {
                                 ctx,
                                 app.xtraModule,
                                 vod.masterUri,
+                                slidingWindowOnly = true,
+                                createdAtMs = vod.createdAtMs,
                             )
                         )
                         tile.player.repeatMode = Player.REPEAT_MODE_OFF
