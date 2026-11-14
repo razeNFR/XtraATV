@@ -987,14 +987,16 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     fun isActive(): Boolean? {
-        return viewModel.isActive()
+        return if (isAdded) viewModel.isActive() else null
     }
 
     fun disconnect() {
+        if (!isAdded) return
         viewModel.disconnect()
     }
 
     fun reconnect() {
+        if (!isAdded) return
         val channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN)
         if (channelLogin != null) {
             viewModel.startLiveChat(requireArguments().getString(KEY_CHANNEL_ID), channelLogin)
@@ -1059,6 +1061,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     fun reloadEmotes() {
+        if (!isAdded) return
         viewModel.reloadEmotes(
             requireArguments().getString(KEY_CHANNEL_ID),
             requireArguments().getString(KEY_CHANNEL_LOGIN)
@@ -1066,10 +1069,12 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     fun startReplayChatLoad() {
+        if (!isAdded) return
         viewModel.startReplayChatLoad()
     }
 
     fun startHybridReplay(videoId: String, createdAt: String?) {
+        if (!isAdded) return
         val parent = parentFragment as? PlayerFragment ?: return
         viewModel.startHybridReplay(
             videoId = videoId,
@@ -1080,41 +1085,47 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     fun stopHybridReplay() {
+        if (!isAdded) return
         viewModel.stopHybridReplay()
     }
 
-    fun isHybridReplayActive(): Boolean = viewModel.hybridReplayActive
+    fun isHybridReplayActive(): Boolean = isAdded && viewModel.hybridReplayActive
 
     fun updatePosition(position: Long) {
+        if (!isAdded) return
         viewModel.updatePosition(position)
     }
 
     /** The delay of the chat in Auto (ms), 0 while not measured. */
-    fun getAutoDelayMs() = viewModel.effectiveAutoDelayMs()
+    fun getAutoDelayMs(): Long = if (isAdded) viewModel.effectiveAutoDelayMs() else 0L
 
     fun updateSpeed(speed: Float) {
+        if (!isAdded) return
         viewModel.updateSpeed(speed)
     }
 
     fun updateStreamId(id: String?) {
+        if (!isAdded) return
         viewModel.streamId = id
     }
 
     fun getTranslateAllMessages(): Boolean {
-        return viewModel.translateAllMessages.value == true
+        return isAdded && viewModel.translateAllMessages.value == true
     }
 
     fun saveTranslatedChannel(channelId: String) {
+        if (!isAdded) return
         viewModel.translateAllMessages.value = true
         viewModel.saveTranslatedChannel(channelId)
     }
 
     fun deleteTranslatedChannel(channelId: String) {
+        if (!isAdded) return
         viewModel.translateAllMessages.value = false
         viewModel.deleteTranslatedChannel(channelId)
     }
 
-    fun emoteMenuIsVisible() = binding.emoteMenu.isVisible
+    fun emoteMenuIsVisible() = _binding?.emoteMenu?.isVisible == true
 
     fun toggleEmoteMenu(enable: Boolean) {
         if (enable) {
@@ -1522,7 +1533,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     fun getRecentChatters(): List<com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.BlockedUser> =
-        viewModel.getRecentChatters()
+        if (isAdded) viewModel.getRecentChatters() else emptyList()
 
     companion object {
         private const val KEY_IS_LIVE = "isLive"
