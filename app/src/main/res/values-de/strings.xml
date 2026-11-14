@@ -1135,10 +1135,14 @@
     <string name="tv_adblock_swap_locked_hint">Standardmäßig aktiviert. Aktiviere einen benutzerdefinierten oder HTTP-Proxy, um ihn auszuschalten.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Bleibt als automatischer Rückfall aktiv, solange der experimentelle Werbeblocker eingeschaltet ist.</string>
     <string name="tv_adblock_exp_title">Werbeblocker (Experimentell)</string>
-    <string name="tv_adblock_exp_summary">Alternativer Modus, der Werbeunterbrechungen mit leichter Verzögerung (~30 Sek.) und automatisch synchronisiertem Chat vermeidet. Wechselt bei Nichtverfügbarkeit zu Swap. Nicht mit Proxys kompatibel.</string>
+    <string name="tv_adblock_exp_summary">Vermeidet Werbung ohne Unterbrechung oder Qualitätsverlust durch eine leichte Verzögerung (~30 Sek., Chat automatisch synchronisiert). Nutzt den Swap-Modus als Rückfall, falls bei einem Stream nicht unterstützt. Nicht mit Proxys kompatibel.</string>
     <string name="tv_adblock_exp_switched">Experimenteller Werbeblocker aktiv</string>
     <string name="tv_adblock_exp_proxies_disabled">Proxys können nicht aktiviert werden, solange der experimentelle Werbeblocker aktiv ist.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Deaktiviere zuerst benutzerdefinierte und HTTP-Proxys, um den experimentellen Werbeblocker zu nutzen.</string>
     <string name="tv_adblock_exp_chat_auto_locked">Chat-Verzögerung ist beim experimentellen Werbeblocker fest auf Auto eingestellt.</string>
     <string name="tv_adblock_exp_chat_auto_info">Auf Auto gesperrt beim experimentellen Werbeblocker (%1$s)</string>
+    <string name="tv_adblock_exp_unsupported_title">Experimentell nicht unterstützt</string>
+    <string name="tv_adblock_exp_fallback_swap">Swap-Modus</string>
+    <string name="tv_adblock_exp_new_stream_title">Stream-Start</string>
+    <string name="tv_adblock_exp_temp_swap">Vorübergehend Swap</string>
 </resources>

@@ -1135,10 +1135,14 @@
     <string name="tv_adblock_swap_locked_hint">Activado por defecto. Activa un proxy personalizado ou HTTP para podelo desactivar.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Permanece activo como apoio automático mentres o bloqueador experimental está activado.</string>
     <string name="tv_adblock_exp_title">Bloqueador de anuncios (Experimental)</string>
-    <string name="tv_adblock_exp_summary">Modo alternativo que evita os cortes publicitarios cun lixeiro atraso (~30 s) e chat sincronizado en Auto. Cambia a Swap se non está dispoñible. Incompatible con proxies.</string>
+    <string name="tv_adblock_exp_summary">Evita os anuncios sen cortes nin baixadas de calidade grazas a un lixeiro atraso (~30 s, chat sincronizado automaticamente). Usa o modo Swap de apoio se non está soportado nun directo. Incompatible con proxies.</string>
     <string name="tv_adblock_exp_switched">Bloqueador experimental activo</string>
     <string name="tv_adblock_exp_proxies_disabled">Non se poden activar proxies mentres o bloqueador experimental está activo.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Desactiva primeiro os proxies personalizados e HTTP para activar o bloqueador experimental.</string>
     <string name="tv_adblock_exp_chat_auto_locked">O atraso do chat está fixado en Auto co bloqueador experimental.</string>
     <string name="tv_adblock_exp_chat_auto_info">Fixado en Auto co bloqueador experimental (%1$s)</string>
+    <string name="tv_adblock_exp_unsupported_title">Experimental non soportado</string>
+    <string name="tv_adblock_exp_fallback_swap">Modo Swap</string>
+    <string name="tv_adblock_exp_new_stream_title">Inicio do directo</string>
+    <string name="tv_adblock_exp_temp_swap">Swap temporal</string>
 </resources>	

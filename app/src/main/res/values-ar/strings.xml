@@ -1135,10 +1135,14 @@
     <string name="tv_adblock_swap_locked_hint">مفعّل افتراضياً. فعّل وكيل بث مخصص أو HTTP لتتمكن من إيقافه.</string>
     <string name="tv_adblock_swap_locked_exp_hint">يبقى مفعّلاً كبديل احتياطي تلقائي أثناء تشغيل مانع الإعلانات التجريبي.</string>
     <string name="tv_adblock_exp_title">مانع الإعلانات (تجريبي)</string>
-    <string name="tv_adblock_exp_summary">وضع بديل يتجنب الفواصل الإعلانية مع تأخير بسيط (~30 ثانية) ومزامنة تلقائية للدردشة. ينتقل إلى وضع Swap عند عدم التوفر. غير متوافق مع الوكلاء.</string>
+    <string name="tv_adblock_exp_summary">يتجنب الإعلانات دون انقطاع أو انخفاض في الجودة بفضل تأخير بسيط (~30 ثانية مع مزامنة تلقائية للدردشة). يستخدم وضع Swap احتياطياً إذا لم يكن مدعوماً في البث. غير متوافق مع الوكلاء.</string>
     <string name="tv_adblock_exp_switched">مانع الإعلانات التجريبي مفعّل</string>
     <string name="tv_adblock_exp_proxies_disabled">لا يمكن تفعيل الوكلاء أثناء تشغيل مانع الإعلانات التجريبي.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">عطّل الوكلاء المخصصة ووكلاء HTTP أولاً لتفعيل مانع الإعلانات التجريبي.</string>
     <string name="tv_adblock_exp_chat_auto_locked">تأخير الدردشة مقفل على الوضع التلقائي مع مانع الإعلانات التجريبي.</string>
     <string name="tv_adblock_exp_chat_auto_info">مقفل على التلقائي مع مانع الإعلانات التجريبي (%1$s)</string>
+    <string name="tv_adblock_exp_unsupported_title">الوضع التجريبي غير مدعوم</string>
+    <string name="tv_adblock_exp_fallback_swap">وضع Swap</string>
+    <string name="tv_adblock_exp_new_stream_title">بداية البث</string>
+    <string name="tv_adblock_exp_temp_swap">Swap مؤقت</string>
 </resources>

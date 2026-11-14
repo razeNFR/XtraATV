@@ -193,6 +193,8 @@ class ExoPlayerService : BasePlaybackService() {
         startLiveWatchdog()
     }
 
+    private enum class ExperimentalFallback { NONE, NEW_STREAM, UNSUPPORTED }
+
     /** True while a live broadcast (`type == STREAM`) plays via Twitch's ongoing CDN VOD (`index-dvr.m3u8`) at `-32s`. */
     var experimentalVodActive = false
         private set
@@ -201,6 +203,22 @@ class ExoPlayerService : BasePlaybackService() {
         private set
     private var experimentalVodCreatedAtMs: Long? = null
     private var experimentalVodUpgradeJob: Job? = null
+    private var experimentalFallback = ExperimentalFallback.NONE
+    private var experimentalNoticeTitleRes = 0
+    private var experimentalNoticeSubtitleRes = 0
+    private var experimentalNoticeStartedAtMs = 0L
+
+    private fun showExperimentalBadgeNotice(titleRes: Int, subtitleRes: Int = 0) {
+        experimentalNoticeTitleRes = titleRes
+        experimentalNoticeSubtitleRes = subtitleRes
+        experimentalNoticeStartedAtMs = 0L
+    }
+
+    private fun clearExperimentalBadgeNotice() {
+        experimentalNoticeTitleRes = 0
+        experimentalNoticeSubtitleRes = 0
+        experimentalNoticeStartedAtMs = 0L
+    }
 
     /** Ad-free live edge inside the ongoing VOD (`max(0, vodDuration - 32s)`). */
     fun getExperimentalLiveEdgeMs(): Long {
@@ -892,6 +910,8 @@ class ExoPlayerService : BasePlaybackService() {
     private fun start(restorePauseState: Boolean) {
         lifecycleScope.launch {
             restorePlaybackState()
+            experimentalFallback = ExperimentalFallback.NONE
+            clearExperimentalBadgeNotice()
             when (type) {
                 STREAM -> {
                     TvExperimentalAdblock.normalizePrefs(this@ExoPlayerService)
@@ -1163,6 +1183,7 @@ class ExoPlayerService : BasePlaybackService() {
                     experimentalVodCreatedAtMs = outcome.createdAtMs
                     experimentalVodActive = true
                     experimentalVodUserRewound = false
+                    experimentalFallback = ExperimentalFallback.NONE
                     qualities = null
                     restorePlaylist = false
                     playlistUrl = vod.masterUri.toString()
@@ -1178,12 +1199,23 @@ class ExoPlayerService : BasePlaybackService() {
                         p.prepare()
                         p.playWhenReady = !paused
                     }
-                    serviceListener?.toast(R.string.tv_adblock_exp_switched, Toast.LENGTH_SHORT)
+                    showExperimentalBadgeNotice(R.string.tv_adblock_exp_switched)
                     return@launch
                 } else if (vod == null && outcome.streamUptimeMs != null && outcome.streamUptimeMs >= TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS) {
-                    // Streamer has VOD archiving disabled: keep Swap Adblock active without further polling
+                    // Streamer does not support ongoing recording: keep Swap Adblock active without further polling
+                    if (experimentalFallback != ExperimentalFallback.UNSUPPORTED) {
+                        experimentalFallback = ExperimentalFallback.UNSUPPORTED
+                        showExperimentalBadgeNotice(R.string.tv_adblock_exp_unsupported_title, R.string.tv_adblock_exp_fallback_swap)
+                    }
                     return@launch
                 }
+            }
+            if (generation == streamGeneration && created && started && type == STREAM &&
+                !experimentalVodActive && experimentalFallback == ExperimentalFallback.NEW_STREAM &&
+                TvExperimentalAdblock.isExperimentalEnabled(this@ExoPlayerService)
+            ) {
+                experimentalFallback = ExperimentalFallback.UNSUPPORTED
+                showExperimentalBadgeNotice(R.string.tv_adblock_exp_unsupported_title, R.string.tv_adblock_exp_fallback_swap)
             }
         }
     }
@@ -1197,6 +1229,8 @@ class ExoPlayerService : BasePlaybackService() {
         playingSince = 0L
         if (!restart) {
             experimentalVodUserRewound = false
+            experimentalFallback = ExperimentalFallback.NONE
+            clearExperimentalBadgeNotice()
             // an ad at the start of the stream is looked for in its whole first playlist
             checkFirstPlaylist = true
             firstPlaylistAd = false
@@ -1230,6 +1264,8 @@ class ExoPlayerService : BasePlaybackService() {
                 if (vod != null && vod.vodDurationMs >= TvExperimentalAdblock.MIN_INITIAL_VOD_DURATION_MS) {
                     experimentalVodActive = true
                     experimentalVodUserRewound = false
+                    experimentalFallback = ExperimentalFallback.NONE
+                    clearExperimentalBadgeNotice()
                     qualities = null
                     restorePlaylist = false
                     playlistUrl = vod.masterUri.toString()
@@ -1262,13 +1298,28 @@ class ExoPlayerService : BasePlaybackService() {
                         playlistUrl = null
                         qualities = null
                     }
-                    if (outcome.channelIsLive && (outcome.streamUptimeMs == null || outcome.streamUptimeMs < TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS)) {
+                    val isKnownUnsupported = outcome.channelIsLive &&
+                        outcome.streamUptimeMs != null &&
+                        outcome.streamUptimeMs >= TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS &&
+                        vod == null
+                    if (isKnownUnsupported) {
+                        experimentalFallback = ExperimentalFallback.UNSUPPORTED
+                        if (!restart) {
+                            showExperimentalBadgeNotice(R.string.tv_adblock_exp_unsupported_title, R.string.tv_adblock_exp_fallback_swap)
+                        }
+                    } else {
+                        experimentalFallback = ExperimentalFallback.NEW_STREAM
+                        if (!restart) {
+                            showExperimentalBadgeNotice(R.string.tv_adblock_exp_new_stream_title, R.string.tv_adblock_exp_temp_swap)
+                        }
                         scheduleExperimentalVodUpgrade(streamGeneration, channelLogin)
                     }
                 }
             } else {
                 experimentalVodActive = false
                 experimentalVodUserRewound = false
+                experimentalFallback = ExperimentalFallback.NONE
+                clearExperimentalBadgeNotice()
                 experimentalVodCreatedAtMs = null
                 if (playlistUrl?.contains("/tv_exp_vod/") == true) {
                     playlistUrl = null
@@ -2914,6 +2965,7 @@ class ExoPlayerService : BasePlaybackService() {
      * is back. Without the marks of Twitch: the kind of ad and the source only.
      */
     fun getAdblockInfo(): AdblockInfo? {
+        if (type != STREAM) return null
         val source = when {
             videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
                 val host = adProxyHost(swap)?.let { TvProxyStatus.displayName(it) }
@@ -2929,12 +2981,40 @@ class ExoPlayerService : BasePlaybackService() {
             proxyMediaPlaylist -> "proxy"
             else -> null
         }
+        val now = System.currentTimeMillis()
         if (source == null && !hidden) {
             backLiveFrom = 0L
             backLiveProgress = 0f
+            if (experimentalNoticeTitleRes != 0) {
+                if (!streamPictureShown && player?.playbackState != Player.STATE_READY) {
+                    return null
+                }
+                if (experimentalNoticeStartedAtMs == 0L) {
+                    experimentalNoticeStartedAtMs = now
+                }
+                if (now - experimentalNoticeStartedAtMs < 4_500L) {
+                    val title = getString(experimentalNoticeTitleRes)
+                    val subtitle = experimentalNoticeSubtitleRes.takeIf { it != 0 }?.let { getString(it) }
+                    return AdblockInfo(title, subtitle, null)
+                }
+                clearExperimentalBadgeNotice()
+            }
             return null
         }
-        val now = System.currentTimeMillis()
+        // A pre-roll / Swap badge is already explaining the fallback state; don't queue a duplicate notice after it
+        if (experimentalNoticeStartedAtMs == 0L && experimentalFallback != ExperimentalFallback.NONE) {
+            clearExperimentalBadgeNotice()
+        }
+        val fallbackLabel = when (experimentalFallback) {
+            ExperimentalFallback.UNSUPPORTED -> getString(R.string.tv_adblock_exp_unsupported_title)
+            ExperimentalFallback.NEW_STREAM -> getString(R.string.tv_adblock_exp_new_stream_title)
+            ExperimentalFallback.NONE -> null
+        }
+        val displaySource = when {
+            source != null && fallbackLabel != null -> "$fallbackLabel · $source"
+            source != null -> source
+            else -> fallbackLabel
+        }
         val times = adPodTimes
         val position = adPodPosition
         val length = adPodLength
@@ -2950,7 +3030,7 @@ class ExoPlayerService : BasePlaybackService() {
             val timeProgress = ((now - backLiveFrom).toFloat() / delay).coerceIn(0f, 0.92f)
             val progress = maxOf(timeProgress, backLiveProgress).coerceIn(0.05f, 0.95f)
             backLiveProgress = progress
-            return AdblockInfo(getString(R.string.tv_adblock_back_live), source, progress)
+            return AdblockInfo(getString(R.string.tv_adblock_back_live), displaySource, progress)
         }
         val ad = getString(
             when (adRollType) {
@@ -2961,7 +3041,7 @@ class ExoPlayerService : BasePlaybackService() {
         )
         if (source == null) {
             // no stream without the ad: the picture waits for the end of the ad
-            return AdblockInfo(ad + " · " + getString(R.string.tv_adblock_on_hold), null, null)
+            return AdblockInfo(ad + " · " + getString(R.string.tv_adblock_on_hold), fallbackLabel, null)
         }
         val title = StringBuilder(ad)
         if (position > 0 && length > 0) {
@@ -2976,7 +3056,7 @@ class ExoPlayerService : BasePlaybackService() {
             ended && position > 0 && length > 0 -> if (position >= length) 1f else 0f
             else -> null
         }
-        return AdblockInfo(title.toString(), source, progress)
+        return AdblockInfo(title.toString(), displaySource, progress)
     }
 
     /** Keeps the quality of the backup player in line with the quality chosen for the main one. */
@@ -4684,6 +4764,8 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodUpgradeJob = null
         experimentalVodActive = false
         experimentalVodUserRewound = false
+        experimentalFallback = ExperimentalFallback.NONE
+        clearExperimentalBadgeNotice()
         experimentalVodCreatedAtMs = null
         freezeWatchJob?.cancel()
         freezeWatchJob = null

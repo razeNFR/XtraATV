@@ -1135,10 +1135,14 @@
     <string name="tv_adblock_swap_locked_hint">Activé par défaut. Active un proxy personnalisé ou HTTP pour pouvoir le désactiver.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Reste actif en secours automatique tant que le bloqueur de pub expérimental est activé.</string>
     <string name="tv_adblock_exp_title">Bloqueur de pub (Expérimental)</string>
-    <string name="tv_adblock_exp_summary">Mode alternatif évitant les coupures pub avec un léger différé (~30 s) et synchronisation auto du chat. Bascule sur Swap si indisponible. Incompatible avec les proxys.</string>
+    <string name="tv_adblock_exp_summary">Évite les publicités sans coupure ni baisse de qualité grâce à un léger différé (~30 s, chat synchronisé automatiquement). Utilise le mode Swap en secours si non supporté sur un live. Incompatible avec les proxys.</string>
     <string name="tv_adblock_exp_switched">Bloqueur expérimental actif</string>
     <string name="tv_adblock_exp_proxies_disabled">Les proxys ne peuvent pas être activés avec le bloqueur de pub expérimental.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Désactive d\'abord les proxys personnalisés et HTTP pour activer le bloqueur de pub expérimental.</string>
     <string name="tv_adblock_exp_chat_auto_locked">Retard du chat verrouillé sur Auto avec le bloqueur de pub expérimental.</string>
     <string name="tv_adblock_exp_chat_auto_info">Verrouillé sur Auto avec le bloqueur expérimental (%1$s)</string>
+    <string name="tv_adblock_exp_unsupported_title">Expérimental non supporté</string>
+    <string name="tv_adblock_exp_fallback_swap">Mode Swap</string>
+    <string name="tv_adblock_exp_new_stream_title">Début de live</string>
+    <string name="tv_adblock_exp_temp_swap">Swap temporaire</string>
 </resources>

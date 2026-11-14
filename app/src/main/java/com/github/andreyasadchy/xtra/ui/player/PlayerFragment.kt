@@ -3751,6 +3751,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         badge.removeCallbacks(adblockBadgeRefresh)
         if (info != null) {
+            val density = resources.displayMetrics.density
+            val padBottom = ((if (info.progress != null) 10 else 6) * density).toInt()
+            if (badge.paddingBottom != padBottom) {
+                badge.setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), padBottom)
+            }
             val text = android.text.SpannableStringBuilder()
             com.github.andreyasadchy.xtra.util.chat.TvChatNotices.appendIcon(requireContext(), text, R.drawable.tv_ic_shield, com.github.andreyasadchy.xtra.ui.tv.TvAccent.color, badge.textSize * 1.1f)
             val titleStart = text.length

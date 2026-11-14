@@ -1135,10 +1135,14 @@
     <string name="tv_adblock_swap_locked_hint">默认开启。启用自定义代理或 HTTP 流代理后才可关闭。</string>
     <string name="tv_adblock_swap_locked_exp_hint">开启实验性广告拦截器时将保持开启作为自动备用方案。</string>
     <string name="tv_adblock_exp_title">广告拦截器 (实验性)</string>
-    <string name="tv_adblock_exp_summary">通过约 30 秒轻微延迟与聊天自动同步来避开广告插播的替代模式。不可用时自动回退至 Swap。与代理功能不兼容。</string>
+    <string name="tv_adblock_exp_summary">通过轻微延迟（约 30 秒，聊天自动同步）避开广告，无中断且不降画质。当前直播不支持时自动使用 Swap 模式作为备用。与代理功能不兼容。</string>
     <string name="tv_adblock_exp_switched">实验性广告拦截已启用</string>
     <string name="tv_adblock_exp_proxies_disabled">启用实验性广告拦截器时无法开启代理。</string>
     <string name="tv_adblock_exp_disabled_by_proxy">请先关闭自定义代理和 HTTP 流代理，再开启实验性广告拦截器。</string>
     <string name="tv_adblock_exp_chat_auto_locked">启用实验性广告拦截器时聊天延迟锁定为自动。</string>
     <string name="tv_adblock_exp_chat_auto_info">启用实验性广告拦截时锁定为自动 (%1$s)</string>
+    <string name="tv_adblock_exp_unsupported_title">不支持实验性模式</string>
+    <string name="tv_adblock_exp_fallback_swap">Swap 模式</string>
+    <string name="tv_adblock_exp_new_stream_title">刚开播</string>
+    <string name="tv_adblock_exp_temp_swap">临时 Swap</string>
 </resources>

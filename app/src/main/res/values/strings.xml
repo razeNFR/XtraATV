@@ -1154,10 +1154,14 @@
     <string name="tv_adblock_swap_locked_hint">Enabled by default. Activate a custom or HTTP stream proxy to turn it off.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Stays active as automatic fallback while Experimental Adblock is enabled.</string>
     <string name="tv_adblock_exp_title">Ad blocker (Experimental)</string>
-    <string name="tv_adblock_exp_summary">Alternative mode that avoids ad breaks with a slight delay (~30s) and auto-synced chat. Falls back to Swap when unavailable. Incompatible with proxies.</string>
+    <string name="tv_adblock_exp_summary">Avoids ads without interruptions or quality drops using a slight delay (~30s, chat synced automatically). Uses Swap mode as fallback if unsupported on a live stream. Incompatible with proxies.</string>
     <string name="tv_adblock_exp_switched">Experimental adblock active</string>
     <string name="tv_adblock_exp_proxies_disabled">Proxies cannot be enabled while Experimental Adblock is active.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Disable custom and HTTP stream proxies first to enable Experimental Adblock.</string>
     <string name="tv_adblock_exp_chat_auto_locked">Chat delay is locked on Auto while Experimental Adblock is active.</string>
     <string name="tv_adblock_exp_chat_auto_info">Locked on Auto with Experimental Adblock (%1$s)</string>
+    <string name="tv_adblock_exp_unsupported_title">Experimental unsupported</string>
+    <string name="tv_adblock_exp_fallback_swap">Swap mode</string>
+    <string name="tv_adblock_exp_new_stream_title">New stream</string>
+    <string name="tv_adblock_exp_temp_swap">Temporary Swap</string>
 </resources>

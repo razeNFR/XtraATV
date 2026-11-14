@@ -1135,10 +1135,14 @@
     <string name="tv_adblock_swap_locked_hint">標準で有効です。オフにするにはカスタムプロキシまたはHTTPプロキシを有効にしてください。</string>
     <string name="tv_adblock_swap_locked_exp_hint">実験的広告ブロッカーが有効な間は自動フォールバックとして有効のままになります。</string>
     <string name="tv_adblock_exp_title">広告ブロッカー (実験的)</string>
-    <string name="tv_adblock_exp_summary">約30秒のわずかな遅延と自動同期チャットで広告中断を回避する代替モードです。利用できない場合はSwapに切り替わります。プロキシとは併用できません。</string>
+    <string name="tv_adblock_exp_summary">わずかな遅延（約30秒、チャット自動同期）により、途切れや画質低下なしで広告を回避します。配信が非対応の場合はバックアップとしてSwapモードを使用します。プロキシとは併用できません。</string>
     <string name="tv_adblock_exp_switched">実験的広告ブロッカーが有効になりました</string>
     <string name="tv_adblock_exp_proxies_disabled">実験的広告ブロッカーが有効な間はプロキシを使用できません。</string>
     <string name="tv_adblock_exp_disabled_by_proxy">実験的広告ブロッカーを有効にするには、先にカスタムおよびHTTPプロキシを無効にしてください。</string>
     <string name="tv_adblock_exp_chat_auto_locked">実験的広告ブロッカー使用中はチャット遅延が自動に固定されます。</string>
     <string name="tv_adblock_exp_chat_auto_info">実験的広告ブロッカー使用中のため自動に固定 (%1$s)</string>
+    <string name="tv_adblock_exp_unsupported_title">実験的モード非対応</string>
+    <string name="tv_adblock_exp_fallback_swap">Swapモード</string>
+    <string name="tv_adblock_exp_new_stream_title">配信開始直後</string>
+    <string name="tv_adblock_exp_temp_swap">一時的なSwap</string>
 </resources>

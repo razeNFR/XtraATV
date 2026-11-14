@@ -1136,10 +1136,14 @@
     <string name="tv_adblock_swap_locked_hint">Aktif secara bawaan. Aktifkan proksi kustom atau HTTP untuk mematikannya.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Tetap aktif sebagai cadangan otomatis saat Pemblokir Iklan Eksperimental diaktifkan.</string>
     <string name="tv_adblock_exp_title">Pemblokir iklan (Eksperimental)</string>
-    <string name="tv_adblock_exp_summary">Mode alternatif untuk menghindari jeda iklan dengan sedikit tunda (~30 dtk) dan obrolan tersinkron Otomatis. Beralih ke Swap jika tidak tersedia. Tidak kompatibel dengan proksi.</string>
+    <string name="tv_adblock_exp_summary">Menghindari iklan tanpa jeda atau penurunan kualitas berkat sedikit tunda (~30 dtk, obrolan disinkronkan otomatis). Menggunakan mode Swap sebagai cadangan jika tidak didukung pada siaran langsung. Tidak kompatibel dengan proksi.</string>
     <string name="tv_adblock_exp_switched">Pemblokir iklan eksperimental aktif</string>
     <string name="tv_adblock_exp_proxies_disabled">Proksi tidak dapat diaktifkan saat Pemblokir Iklan Eksperimental aktif.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Matikan proksi kustom dan HTTP terlebih dahulu untuk mengaktifkan Pemblokir Iklan Eksperimental.</string>
     <string name="tv_adblock_exp_chat_auto_locked">Jeda obrolan dikunci ke Otomatis saat Pemblokir Iklan Eksperimental aktif.</string>
     <string name="tv_adblock_exp_chat_auto_info">Dikunci ke Otomatis dengan Pemblokir Eksperimental (%1$s)</string>
+    <string name="tv_adblock_exp_unsupported_title">Eksperimental tidak didukung</string>
+    <string name="tv_adblock_exp_fallback_swap">Mode Swap</string>
+    <string name="tv_adblock_exp_new_stream_title">Awal siaran</string>
+    <string name="tv_adblock_exp_temp_swap">Swap sementara</string>
 </resources>
