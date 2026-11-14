@@ -1054,7 +1054,7 @@
     <string name="tv_clock_bg_off">Transparent</string>
     <string name="tv_clock_bg_on">Dunkle Kapsel</string>
     <string name="tv_dpad_shortcuts">Steuerkreuz-Kurzbefehle</string>
-    <string name="tv_dpad_shortcuts_summary">Aktion für Links, Rechts, Oben und Unten wählen, wenn die Steuerung ausgeblendet ist</string>
+    <string name="tv_dpad_shortcuts_summary">Aktion für Links, Rechts, Oben, Unten und OK wählen, wenn die Steuerung ausgeblendet ist</string>
     <string name="tv_dpad_left">Links</string>
     <string name="tv_dpad_right">Rechts</string>
     <string name="tv_dpad_up">Oben</string>

@@ -1054,7 +1054,7 @@
     <string name="tv_clock_bg_off">透明</string>
     <string name="tv_clock_bg_on">暗いカプセル背景</string>
     <string name="tv_dpad_shortcuts">方向キーのショートカット</string>
-    <string name="tv_dpad_shortcuts_summary">コントロール非表示時の左・右・上・下キーの動作を選択します</string>
+    <string name="tv_dpad_shortcuts_summary">コントロール非表示時の左・右・上・下・OKキーの動作を選択します</string>
     <string name="tv_dpad_left">左</string>
     <string name="tv_dpad_right">右</string>
     <string name="tv_dpad_up">上</string>

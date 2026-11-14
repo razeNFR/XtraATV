@@ -1059,7 +1059,7 @@
     <string name="tv_clock_bg_off">Transparente</string>
     <string name="tv_clock_bg_on">Pastilla oscura</string>
     <string name="tv_dpad_shortcuts">Atajos de cruceta</string>
-    <string name="tv_dpad_shortcuts_summary">Elige la acción de Izquierda, Derecha, Arriba y Abajo cuando los controles están ocultos</string>
+    <string name="tv_dpad_shortcuts_summary">Elige la acción de Izquierda, Derecha, Arriba, Abajo y OK cuando los controles están ocultos</string>
     <string name="tv_dpad_left">Izquierda</string>
     <string name="tv_dpad_right">Derecha</string>
     <string name="tv_dpad_up">Arriba</string>

@@ -1073,7 +1073,8 @@
     <string name="tv_clock_bg_off">Transparent</string>
     <string name="tv_clock_bg_on">Dark pill</string>
     <string name="tv_dpad_shortcuts">Directional pad shortcuts</string>
-    <string name="tv_dpad_shortcuts_summary">Choose the action of Left, Right, Up, and Down when player controls are hidden</string>
+    <string name="tv_dpad_shortcuts_summary">Choose the action of Left, Right, Up, Down, and OK when player controls are hidden</string>
+    <string name="tv_dpad_center" translatable="false">OK</string>
     <string name="tv_dpad_left">Left</string>
     <string name="tv_dpad_right">Right</string>
     <string name="tv_dpad_up">Up</string>

@@ -1055,7 +1055,7 @@
     <string name="tv_clock_bg_off">Şeffaf</string>
     <string name="tv_clock_bg_on">Koyu kapsül</string>
     <string name="tv_dpad_shortcuts">Yön tuşları kısayolları</string>
-    <string name="tv_dpad_shortcuts_summary">Oynatıcı kontrolleri gizliyken Sol, Sağ, Yukarı ve Aşağı tuşlarının işlevini seçin</string>
+    <string name="tv_dpad_shortcuts_summary">Oynatıcı kontrolleri gizliyken Sol, Sağ, Yukarı, Aşağı ve OK tuşlarının işlevini seçin</string>
     <string name="tv_dpad_left">Sol</string>
     <string name="tv_dpad_right">Sağ</string>
     <string name="tv_dpad_up">Yukarı</string>

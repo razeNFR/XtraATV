@@ -4534,8 +4534,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                // only the D-pad center is remappable, Enter keeps opening the HUD
+                val action = if (isTv && hudHiddenOrPeek && keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+                    Keys.centerAction(requireContext())
+                } else {
+                    Keys.ACTION_DEFAULT
+                }
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                    openHudFromDpad()
+                    if (action != Keys.ACTION_DEFAULT) {
+                        executeTvRemoteAction(action)
+                    } else {
+                        openHudFromDpad()
+                    }
                 }
                 true
             }

@@ -1054,7 +1054,7 @@
     <string name="tv_clock_bg_off">Прозрачный</string>
     <string name="tv_clock_bg_on">Тёмная плашка</string>
     <string name="tv_dpad_shortcuts">Действия кнопок крестовины</string>
-    <string name="tv_dpad_shortcuts_summary">Выберите действие для кнопок Влево, Вправо, Вверх и Вниз, когда панель управления скрыта</string>
+    <string name="tv_dpad_shortcuts_summary">Выберите действие для кнопок Влево, Вправо, Вверх, Вниз и OK, когда панель управления скрыта</string>
     <string name="tv_dpad_left">Влево</string>
     <string name="tv_dpad_right">Вправо</string>
     <string name="tv_dpad_up">Вверх</string>
