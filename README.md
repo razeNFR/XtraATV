@@ -55,6 +55,10 @@ Twitch only serves the 1440p - 4K streams to its website client with a logged-in
 | ![Sort panel](docs/screenshots/sort.jpg) | ![Search](docs/screenshots/search.jpg) |
 | Sort and filters panel | Voice search |
 
+## Deep Links & Automation
+
+Xtra TV can open live streams, channel pages, VODs (with timestamps), clips, and categories directly from ADB, Home Assistant, tvQuickActions, or custom launchers. See [**docs/deeplinks.md**](docs/deeplinks.md) for all supported URLs and examples.
+
 ## Building
 
 ```bash

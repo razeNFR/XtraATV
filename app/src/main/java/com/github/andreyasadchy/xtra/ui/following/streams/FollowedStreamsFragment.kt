@@ -14,24 +14,30 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
+import androidx.paging.PagingData
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.CommonRecyclerViewLayoutBinding
+import com.github.andreyasadchy.xtra.databinding.SortBarBinding
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.common.PagedListFragment
 import com.github.andreyasadchy.xtra.ui.common.Scrollable
+import com.github.andreyasadchy.xtra.ui.common.Sortable
 import com.github.andreyasadchy.xtra.ui.common.StreamsAdapter
 import com.github.andreyasadchy.xtra.ui.common.StreamsCompactAdapter
 import com.github.andreyasadchy.xtra.ui.following.streams.FollowedStreamsViewModel.Companion.FollowedStreamsViewModelFactory
 import com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections
+import com.github.andreyasadchy.xtra.ui.tv.TvDialogs
+import com.github.andreyasadchy.xtra.ui.view.TvUi
 import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class FollowedStreamsFragment : PagedListFragment(), Scrollable {
+class FollowedStreamsFragment : PagedListFragment(), Scrollable, Sortable {
 
     private var _binding: CommonRecyclerViewLayoutBinding? = null
     private val binding get() = _binding!!
@@ -72,7 +78,15 @@ class FollowedStreamsFragment : PagedListFragment(), Scrollable {
         }
     }
 
+    private fun formatSortLabel(sort: String): String = getString(
+        R.string.sort_by,
+        getString(if (sort == "alpha") R.string.alphabetically else R.string.viewers_high)
+    )
+
     override fun initialize() {
+        if (viewModel.sortText.value == null) {
+            viewModel.sortText.value = formatSortLabel(viewModel.sortState.value)
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { pagingData ->
@@ -95,11 +109,55 @@ class FollowedStreamsFragment : PagedListFragment(), Scrollable {
                     viewLifecycleOwner.lifecycleScope.launch {
                         kotlinx.coroutines.withTimeoutOrNull(15_000L) {
                             pagingAdapter.onPagesUpdatedFlow.first()
-                            binding.recyclerView.post {
+                            _binding?.recyclerView?.post {
                                 pagingAdapter.notifyItemRangeChanged(0, pagingAdapter.itemCount)
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    override fun setupSortBar(sortBar: SortBarBinding) {
+        sortBar.root.visibility = View.VISIBLE
+        sortBar.root.setOnClickListener {
+            val ctx = context ?: return@setOnClickListener
+            val options = listOf(getString(R.string.viewers_high), getString(R.string.alphabetically))
+            val currentIdx = if (viewModel.sortState.value == "alpha") 1 else 0
+            val applyChoice: (Int) -> Unit = { idx ->
+                val nextSort = if (idx == 1) "alpha" else "viewers"
+                if (nextSort != viewModel.sortState.value) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        pagingAdapter.submitData(PagingData.empty())
+                        viewModel.setSort(nextSort)
+                        viewModel.sortText.value = formatSortLabel(nextSort)
+                    }
+                }
+            }
+            if (TvUi.isTv(ctx)) {
+                TvDialogs.showChoices(
+                    ctx,
+                    getString(R.string.sort),
+                    options,
+                    currentIdx,
+                    listOf(R.drawable.tv_ic_eye, R.drawable.baseline_sort_black_24),
+                    applyChoice,
+                )
+            } else {
+                ctx.getAlertDialogBuilder()
+                    .setTitle(R.string.sort)
+                    .setSingleChoiceItems(options.toTypedArray(), currentIdx) { dialog, which ->
+                        applyChoice(which)
+                        dialog.dismiss()
+                    }
+                    .show()
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.sortText.collectLatest {
+                    sortBar.sortText.text = it
                 }
             }
         }

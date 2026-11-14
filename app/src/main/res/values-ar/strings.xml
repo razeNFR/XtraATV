@@ -1145,4 +1145,22 @@
     <string name="tv_adblock_exp_fallback_swap">وضع Swap</string>
     <string name="tv_adblock_exp_new_stream_title">بداية البث</string>
     <string name="tv_adblock_exp_temp_swap">Swap مؤقت</string>
+    <string name="tv_home_followed_show_all">عرض جميع القنوات المتابَعة المباشرة</string>
+    <string name="tv_home_followed_show_all_summary">تحميل جميع البثوث المباشرة المتابَعة تدريجياً في الصف بدون بطاقة عرض الكل</string>
+    <string name="tv_home_row_offline_channels">القنوات المتابَعة غير المتصلة</string>
+    <string name="tv_hide_menu_stats">إخفاء الإحصائيات من القائمة الجانبية</string>
+    <string name="tv_hide_menu_stats_summary">يزيل عنصر الإحصائيات من شريط التنقل</string>
+    <string name="tv_back_closes_menu">زر الرجوع يغلق القائمة الجانبية</string>
+    <string name="tv_back_closes_menu_summary">الضغط على رجوع أثناء فتح القائمة الجانبية يغلقها ويعود إلى الشاشة</string>
+    <string name="tv_disable_soft_keyboard">تعطيل لوحة المفاتيح على الشاشة</string>
+    <string name="tv_disable_soft_keyboard_summary">يمنع ظهور لوحة المفاتيح الافتراضية عند التركيز على حقول النص (للوحات المفاتيح الفعلية أو البلوتوث)</string>
+    <string name="tv_dpad_up_long">أعلى (ضغطة مطولة)</string>
+    <string name="tv_remote_action_live_alert_default">فتح تنبيه البث المباشر (افتراضي)</string>
+    <string name="tv_custom_key_short_press">ضغطة قصيرة</string>
+    <string name="tv_custom_key_long_press">ضغطة مطولة</string>
+    <string name="tv_custom_key_long_suffix">%1$s (مطول)</string>
+    <string name="tv_chat_predictions_popup">التوقعات (الدردشة مخفية)</string>
+    <string name="tv_option_on">مفعّل</string>
+    <string name="tv_prediction_started">بدأ التوقع</string>
+    <string name="tv_prediction_ended">انتهى التوقع</string>
 </resources>

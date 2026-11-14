@@ -17,6 +17,7 @@ class FollowedStreamsDataSource(
     private val helixRepository: HelixRepository,
     private val enableIntegrity: Boolean,
     private val networkLibrary: String?,
+    private val sort: String = "viewers",
 ) : PagingSource<Int, Stream>() {
     private var api: String? = null
     private var offset: String? = null
@@ -75,12 +76,31 @@ class FollowedStreamsDataSource(
                     list.add(stream)
                 }
             }
-            list.sortByDescending { it.viewerCount }
+            var finalNextKey = result?.nextKey
+            if (sort == "alpha") {
+                var pages = 0
+                while (finalNextKey != null && !offset.isNullOrBlank() && pages < 4) {
+                    pages++
+                    val extra = runCatching {
+                        loadFromApi(LoadParams.Append(finalNextKey!!, 100, false)) as? LoadResult.Page
+                    }.getOrNull() ?: break
+                    extra.data.forEach { stream ->
+                        if (list.none { it.channelId == stream.channelId }) {
+                            list.add(stream)
+                        }
+                    }
+                    finalNextKey = extra.nextKey
+                }
+                finalNextKey = null
+                list.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.channelName ?: it.channelLogin ?: "" })
+            } else {
+                list.sortByDescending { it.viewerCount }
+            }
             LoadResult.Page(
                 // TV: the favorite channels live first (none on the phone and tablet)
                 data = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.sort(list),
                 prevKey = null,
-                nextKey = result?.nextKey
+                nextKey = finalNextKey
             )
         }
     }

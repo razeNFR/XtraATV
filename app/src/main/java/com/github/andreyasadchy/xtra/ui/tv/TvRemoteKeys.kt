@@ -63,6 +63,7 @@ object TvRemoteKeys {
     const val ACTION_TOGGLE_CHAT = "toggle_chat"
     const val ACTION_CHAT_PANEL = "chat_panel"
     const val ACTION_STREAM_SWITCHER = "stream_switcher"
+    const val ACTION_GO_LIVE = "go_live"
     const val ACTION_PLAY_PAUSE = "play_pause"
     const val ACTION_MUTE = "mute"
     const val ACTION_QUALITY = "quality"
@@ -77,6 +78,7 @@ object TvRemoteKeys {
         ACTION_TOGGLE_CHAT,
         ACTION_CHAT_PANEL,
         ACTION_STREAM_SWITCHER,
+        ACTION_GO_LIVE,
         ACTION_PLAY_PAUSE,
         ACTION_MUTE,
         ACTION_QUALITY,
@@ -85,7 +87,7 @@ object TvRemoteKeys {
 
     val CUSTOM_KEY_ACTIONS = ALL_ACTIONS.filter { it != ACTION_DEFAULT }
 
-    data class CustomKeyBinding(val keyCode: Int, val action: String)
+    data class CustomKeyBinding(val keyCode: Int, val action: String, val longPress: Boolean = false)
 
     fun ensureMigrated(context: Context) {
         val prefs = context.prefs()
@@ -103,6 +105,9 @@ object TvRemoteKeys {
             }
             if (!prefs.contains(C.TV_DPAD_UP_ACTION)) {
                 putString(C.TV_DPAD_UP_ACTION, if (legacyUpDown) ACTION_STREAM_SWITCHER else ACTION_DEFAULT)
+            }
+            if (!prefs.contains(C.TV_DPAD_UP_LONG_ACTION)) {
+                putString(C.TV_DPAD_UP_LONG_ACTION, ACTION_DEFAULT)
             }
             if (!prefs.contains(C.TV_DPAD_DOWN_ACTION)) {
                 putString(C.TV_DPAD_DOWN_ACTION, if (legacyUpDown) ACTION_TOGGLE_CHAT else ACTION_DEFAULT)
@@ -123,6 +128,7 @@ object TvRemoteKeys {
     fun leftAction(context: Context): String = dpadAction(context, C.TV_DPAD_LEFT_ACTION)
     fun rightAction(context: Context): String = dpadAction(context, C.TV_DPAD_RIGHT_ACTION)
     fun upAction(context: Context): String = dpadAction(context, C.TV_DPAD_UP_ACTION)
+    fun upLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_UP_LONG_ACTION)
     fun downAction(context: Context): String = dpadAction(context, C.TV_DPAD_DOWN_ACTION)
     fun downLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_DOWN_LONG_ACTION)
 
@@ -142,6 +148,7 @@ object TvRemoteKeys {
         ACTION_TOGGLE_CHAT -> context.getString(R.string.tv_remote_action_toggle_chat)
         ACTION_CHAT_PANEL -> context.getString(R.string.tv_remote_action_chat_panel)
         ACTION_STREAM_SWITCHER -> context.getString(R.string.tv_remote_action_stream_switcher)
+        ACTION_GO_LIVE -> context.getString(R.string.tv_go_to_live)
         ACTION_PLAY_PAUSE -> context.getString(R.string.tv_remote_action_play_pause)
         ACTION_MUTE -> context.getString(R.string.tv_remote_action_mute)
         ACTION_QUALITY -> context.getString(R.string.tv_remote_action_quality)
@@ -178,6 +185,11 @@ object TvRemoteKeys {
             .replaceFirstChar { it.uppercase() }
     }
 
+    private fun bindingKeyLabel(context: Context, item: CustomKeyBinding): String {
+        val base = keyLabel(context, item.keyCode)
+        return if (item.longPress) context.getString(R.string.tv_custom_key_long_suffix, base) else base
+    }
+
     fun loadCustomKeys(context: Context): List<CustomKeyBinding> {
         val raw = context.prefs().getString(C.TV_CUSTOM_KEYS, null) ?: return emptyList()
         return runCatching {
@@ -187,8 +199,9 @@ object TvRemoteKeys {
                     val obj = arr.optJSONObject(i) ?: continue
                     val code = obj.optInt("keyCode", 0)
                     val act = obj.optString("action", "")
+                    val longPress = obj.optBoolean("longPress", false)
                     if (code > 0 && act in CUSTOM_KEY_ACTIONS) {
-                        add(CustomKeyBinding(code, act))
+                        add(CustomKeyBinding(code, act, longPress))
                     }
                 }
             }
@@ -198,17 +211,24 @@ object TvRemoteKeys {
     fun saveCustomKeys(context: Context, bindings: List<CustomKeyBinding>) {
         val arr = JSONArray()
         bindings.forEach { b ->
-            arr.put(JSONObject().put("keyCode", b.keyCode).put("action", b.action))
+            arr.put(JSONObject().put("keyCode", b.keyCode).put("action", b.action).put("longPress", b.longPress))
         }
         context.prefs().edit {
             putString(C.TV_CUSTOM_KEYS, arr.toString())
         }
     }
 
-    fun customActionForKey(context: Context, keyCode: Int): String? {
+    fun customShortActionForKey(context: Context, keyCode: Int): String? {
         if (keyCode <= 0) return null
-        return loadCustomKeys(context).firstOrNull { it.keyCode == keyCode }?.action
+        return loadCustomKeys(context).firstOrNull { it.keyCode == keyCode && !it.longPress }?.action
     }
+
+    fun customLongActionForKey(context: Context, keyCode: Int): String? {
+        if (keyCode <= 0) return null
+        return loadCustomKeys(context).firstOrNull { it.keyCode == keyCode && it.longPress }?.action
+    }
+
+    fun customActionForKey(context: Context, keyCode: Int): String? = customShortActionForKey(context, keyCode)
 
     fun dpadSummary(context: Context): String {
         ensureMigrated(context)
@@ -216,6 +236,7 @@ object TvRemoteKeys {
             if (leftAction(context) != ACTION_DEFAULT) add("← ${actionLabel(context, leftAction(context))}")
             if (rightAction(context) != ACTION_DEFAULT) add("→ ${actionLabel(context, rightAction(context))}")
             if (upAction(context) != ACTION_DEFAULT) add("↑ ${actionLabel(context, upAction(context))}")
+            if (upLongAction(context) != ACTION_DEFAULT) add("↑⏳ ${actionLabel(context, upLongAction(context))}")
             if (downAction(context) != ACTION_DEFAULT) add("↓ ${actionLabel(context, downAction(context))}")
             if (downLongAction(context) != ACTION_DEFAULT) add("↓⏳ ${actionLabel(context, downLongAction(context))}")
         }
@@ -231,13 +252,17 @@ object TvRemoteKeys {
         if (list.isEmpty()) {
             return context.getString(R.string.tv_custom_keys_summary)
         }
-        return list.joinToString(" · ") { "${keyLabel(context, it.keyCode)} → ${actionLabel(context, it.action)}" }
+        return list.joinToString(" · ") { "${bindingKeyLabel(context, it)} → ${actionLabel(context, it.action)}" }
     }
 
     fun showDpadPanel(context: Context, onChanged: () -> Unit = {}) {
         ensureMigrated(context)
         val prefs = context.prefs()
         val labels = ALL_ACTIONS.map { actionLabel(context, it) }
+        val upLongLabels = ALL_ACTIONS.map {
+            if (it == ACTION_DEFAULT) context.getString(R.string.tv_remote_action_live_alert_default)
+            else actionLabel(context, it)
+        }
         fun idxOf(action: String) = ALL_ACTIONS.indexOf(action).coerceAtLeast(0)
         TvDialogs.show(context) {
             val firstFocus = remember { FocusRequester() }
@@ -275,6 +300,14 @@ object TvRemoteKeys {
                         onChanged()
                     }
                     SelectorRow(
+                        label = context.getString(R.string.tv_dpad_up_long),
+                        options = upLongLabels,
+                        selected = idxOf(upLongAction(context)),
+                    ) { i ->
+                        prefs.edit { putString(C.TV_DPAD_UP_LONG_ACTION, ALL_ACTIONS[i]) }
+                        onChanged()
+                    }
+                    SelectorRow(
                         label = context.getString(R.string.tv_dpad_down),
                         options = labels,
                         selected = idxOf(downAction(context)),
@@ -296,6 +329,7 @@ object TvRemoteKeys {
                             putString(C.TV_DPAD_LEFT_ACTION, ACTION_DEFAULT)
                             putString(C.TV_DPAD_RIGHT_ACTION, ACTION_DEFAULT)
                             putString(C.TV_DPAD_UP_ACTION, ACTION_DEFAULT)
+                            putString(C.TV_DPAD_UP_LONG_ACTION, ACTION_DEFAULT)
                             putString(C.TV_DPAD_DOWN_ACTION, ACTION_DEFAULT)
                             putString(C.TV_DPAD_DOWN_LONG_ACTION, ACTION_DEFAULT)
                         }
@@ -330,31 +364,45 @@ object TvRemoteKeys {
                         modifier = Modifier.focusRequester(addFocus),
                     ) {
                         showKeyCaptureDialog(context) { capturedKeyCode ->
-                            val existingIdx = bindings.indexOfFirst { it.keyCode == capturedKeyCode }
-                            val currentActionIdx = if (existingIdx >= 0) {
-                                CUSTOM_KEY_ACTIONS.indexOf(bindings[existingIdx].action).coerceAtLeast(0)
-                            } else 0
-                            val options = CUSTOM_KEY_ACTIONS.map { actionLabel(context, it) }
+                            val baseTitle = keyLabel(context, capturedKeyCode)
+                            val pressOptions = listOf(
+                                context.getString(R.string.tv_custom_key_short_press),
+                                context.getString(R.string.tv_custom_key_long_press),
+                            )
                             TvDialogs.showChoices(
                                 context = context,
-                                title = keyLabel(context, capturedKeyCode),
-                                options = options,
-                                selected = currentActionIdx,
-                            ) { selectedIdx ->
-                                val chosen = CUSTOM_KEY_ACTIONS[selectedIdx]
-                                val next = bindings.toMutableList()
-                                if (existingIdx >= 0) {
-                                    next[existingIdx] = CustomKeyBinding(capturedKeyCode, chosen)
-                                } else {
-                                    next.add(CustomKeyBinding(capturedKeyCode, chosen))
+                                title = baseTitle,
+                                options = pressOptions,
+                                selected = 0,
+                            ) { pressIdx ->
+                                val isLong = pressIdx == 1
+                                val existingIdx = bindings.indexOfFirst { it.keyCode == capturedKeyCode && it.longPress == isLong }
+                                val currentActionIdx = if (existingIdx >= 0) {
+                                    CUSTOM_KEY_ACTIONS.indexOf(bindings[existingIdx].action).coerceAtLeast(0)
+                                } else 0
+                                val options = CUSTOM_KEY_ACTIONS.map { actionLabel(context, it) }
+                                val fullTitle = if (isLong) context.getString(R.string.tv_custom_key_long_suffix, baseTitle) else baseTitle
+                                TvDialogs.showChoices(
+                                    context = context,
+                                    title = fullTitle,
+                                    options = options,
+                                    selected = currentActionIdx,
+                                ) { selectedIdx ->
+                                    val chosen = CUSTOM_KEY_ACTIONS[selectedIdx]
+                                    val next = bindings.toMutableList()
+                                    if (existingIdx >= 0) {
+                                        next[existingIdx] = CustomKeyBinding(capturedKeyCode, chosen, isLong)
+                                    } else {
+                                        next.add(CustomKeyBinding(capturedKeyCode, chosen, isLong))
+                                    }
+                                    updateBindings(next)
                                 }
-                                updateBindings(next)
                             }
                         }
                     }
                     Spacer(Modifier.height(12.dp))
                     LazyColumn(Modifier.weight(1f)) {
-                        itemsIndexed(bindings, key = { _, item -> item.keyCode }) { index, item ->
+                        itemsIndexed(bindings, key = { _, item -> "${item.keyCode}_${item.longPress}" }) { index, item ->
                             FocusRow(
                                 onClick = {
                                     val options = CUSTOM_KEY_ACTIONS.map { actionLabel(context, it) } +
@@ -362,7 +410,7 @@ object TvRemoteKeys {
                                     val currentIdx = CUSTOM_KEY_ACTIONS.indexOf(item.action).coerceAtLeast(0)
                                     TvDialogs.showChoices(
                                         context = context,
-                                        title = keyLabel(context, item.keyCode),
+                                        title = bindingKeyLabel(context, item),
                                         options = options,
                                         selected = currentIdx,
                                     ) { chosenIdx ->
@@ -370,7 +418,7 @@ object TvRemoteKeys {
                                         if (chosenIdx == options.lastIndex) {
                                             next.removeAt(index)
                                         } else {
-                                            next[index] = CustomKeyBinding(item.keyCode, CUSTOM_KEY_ACTIONS[chosenIdx])
+                                            next[index] = CustomKeyBinding(item.keyCode, CUSTOM_KEY_ACTIONS[chosenIdx], item.longPress)
                                         }
                                         updateBindings(next)
                                     }
@@ -389,7 +437,7 @@ object TvRemoteKeys {
                                             .padding(horizontal = 10.dp, vertical = 4.dp)
                                     ) {
                                         Text(
-                                            keyLabel(context, item.keyCode),
+                                            bindingKeyLabel(context, item),
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = textColor,

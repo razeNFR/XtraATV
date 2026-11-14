@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.following.streams
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
@@ -18,6 +19,9 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 
 class FollowedStreamsViewModel(
     private val applicationContext: Context,
@@ -26,15 +30,28 @@ class FollowedStreamsViewModel(
     private val helixRepository: HelixRepository,
 ) : ViewModel() {
 
-    val flow = Pager(
-        if (applicationContext.prefs().getString(C.COMPACT_STREAMS, "disabled") != "disabled") {
-            PagingConfig(pageSize = 30, prefetchDistance = 10, initialLoadSize = 30)
-        } else {
-            PagingConfig(pageSize = 30, prefetchDistance = 3, initialLoadSize = 30)
+    val sortState = MutableStateFlow(applicationContext.prefs().getString(C.TV_FOLLOWED_LIVE_SORT, "viewers") ?: "viewers")
+    val sortText = MutableStateFlow<CharSequence?>(null)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val flow = sortState.flatMapLatest {
+        Pager(
+            if (applicationContext.prefs().getString(C.COMPACT_STREAMS, "disabled") != "disabled") {
+                PagingConfig(pageSize = 30, prefetchDistance = 10, initialLoadSize = 30)
+            } else {
+                PagingConfig(pageSize = 30, prefetchDistance = 3, initialLoadSize = 30)
+            }
+        ) {
+            createSource()
+        }.flow
+    }.cachedIn(viewModelScope)
+
+    fun setSort(sort: String) {
+        applicationContext.prefs().edit {
+            putString(C.TV_FOLLOWED_LIVE_SORT, sort)
         }
-    ) {
-        createSource()
-    }.flow.cachedIn(viewModelScope)
+        sortState.value = sort
+    }
 
     /** Source of the list, also used by the player to load the list again (the other streams, left / right). */
     fun createSource() = FollowedStreamsDataSource(
@@ -46,6 +63,7 @@ class FollowedStreamsViewModel(
         helixRepository = helixRepository,
         enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
         networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+        sort = sortState.value,
     )
 
     companion object {

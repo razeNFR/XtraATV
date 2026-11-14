@@ -1145,4 +1145,22 @@
     <string name="tv_adblock_exp_fallback_swap">Swap 模式</string>
     <string name="tv_adblock_exp_new_stream_title">剛開播</string>
     <string name="tv_adblock_exp_temp_swap">暫時 Swap</string>
+    <string name="tv_home_followed_show_all">顯示所有直播中的已追隨頻道</string>
+    <string name="tv_home_followed_show_all_summary">在列內逐步載入所有直播中的已追隨頻道，不顯示「查看全部」卡片</string>
+    <string name="tv_home_row_offline_channels">離線的已追隨頻道</string>
+    <string name="tv_hide_menu_stats">在側邊選單中隱藏統計</string>
+    <string name="tv_hide_menu_stats_summary">從導覽列移除「統計」項目</string>
+    <string name="tv_back_closes_menu">返回鍵關閉側邊選單</string>
+    <string name="tv_back_closes_menu_summary">側邊選單開啟時按返回鍵將其關閉並返回目前畫面</string>
+    <string name="tv_disable_soft_keyboard">停用螢幕虛擬鍵盤</string>
+    <string name="tv_disable_soft_keyboard_summary">聚焦文字欄位時不彈出螢幕鍵盤（適用於實體或藍牙鍵盤）</string>
+    <string name="tv_dpad_up_long">上（長按）</string>
+    <string name="tv_remote_action_live_alert_default">開啟開台通知（預設）</string>
+    <string name="tv_custom_key_short_press">短按</string>
+    <string name="tv_custom_key_long_press">長按</string>
+    <string name="tv_custom_key_long_suffix">%1$s（長按）</string>
+    <string name="tv_chat_predictions_popup">忠誠點數預測（隱藏聊天室時）</string>
+    <string name="tv_option_on">開啟</string>
+    <string name="tv_prediction_started">預測已開始</string>
+    <string name="tv_prediction_ended">預測已結束</string>
 </resources>

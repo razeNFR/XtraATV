@@ -227,6 +227,15 @@ class ExoPlayerService : BasePlaybackService() {
         return (dur - TvExperimentalAdblock.TARGET_OFFSET_MS).coerceAtLeast(0L)
     }
 
+    fun clearExperimentalRewoundIfAtEdge() {
+        if (experimentalVodUserRewound) {
+            val pos = player?.currentPosition ?: return
+            if ((getExperimentalLiveEdgeMs() - pos) <= 8_000L) {
+                experimentalVodUserRewound = false
+            }
+        }
+    }
+
     /** Epoch timestamp (ms) of the video frame currently rendered on screen, for both standard live and Experimental VOD. */
     fun getStreamPictureEpochMs(): Long? {
         val active = if (videoSwapActive || proxyMediaPlaylist) secondaryPlayer else player

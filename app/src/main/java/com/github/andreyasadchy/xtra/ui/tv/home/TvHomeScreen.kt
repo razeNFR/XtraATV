@@ -145,6 +145,9 @@ class TvHomeActions(
     /** Saved multi-stream groups with at least 2 channels live: OK launches the multi-stream, OK held opens its actions. */
     val openMultiStream: (TvHomeMultiStream) -> Unit = {},
     val showMultiStreamActions: (TvHomeMultiStream) -> Unit = {},
+    /** Offline followed channels row: OK opens the channel page, OK held opens channel actions. */
+    val openOfflineChannel: (com.github.andreyasadchy.xtra.model.ui.User) -> Unit = {},
+    val showOfflineChannelActions: (com.github.andreyasadchy.xtra.model.ui.User) -> Unit = {},
 )
 
 class TvHomeRow<T>(
@@ -153,6 +156,7 @@ class TvHomeRow<T>(
     val seeAllId: Int,
     val icon: Int? = null,
     val onSeeAll: (() -> Unit)? = null,
+    val onLoadMore: (() -> Unit)? = null,
 )
 
 sealed class TvHomeSection(val key: String) {
@@ -164,6 +168,7 @@ sealed class TvHomeSection(val key: String) {
     class Clips(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Clip>) : TvHomeSection(key)
     class Stats(key: String, val stats: TvHomeStats) : TvHomeSection(key)
     class Games(key: String, val row: TvHomeRow<Game>) : TvHomeSection(key)
+    class OfflineChannels(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.User>) : TvHomeSection(key)
 }
 
 private class HomeRowInfo(val rowIndex: Int, val key: String, val itemKeys: List<String>)
@@ -272,6 +277,12 @@ fun TvHomeScreen(
                         val hasSeeAll = section.row.seeAllId != 0 || section.row.onSeeAll != null
                         val keys = section.row.items.mapIndexed { i, g -> g.id ?: g.name ?: "game_$i" } +
                             if (hasSeeAll) listOf("seeAll") else emptyList()
+                        add(HomeRowInfo(listIndex, section.key, keys))
+                    }
+                }
+                is TvHomeSection.OfflineChannels -> {
+                    if (section.row.items.isNotEmpty()) {
+                        val keys = section.row.items.mapIndexed { i, u -> u.login ?: u.id ?: "offline_$i" }
                         add(HomeRowInfo(listIndex, section.key, keys))
                     }
                 }
@@ -686,6 +697,28 @@ fun TvHomeScreen(
                             item(key = key) {
                                 Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
                                     GameRow(
+                                        section.row, actions, rowFirstCard,
+                                        startInset = startInset,
+                                        endInset = endInset,
+                                        state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
+                                        cardModifier = { idx, itemKey ->
+                                            Modifier
+                                                .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
+                                                .onFocusChanged {
+                                                    if (it.hasFocus) {
+                                                        focus.rememberCard(key, itemKey, idx)
+                                                    }
+                                                }
+                                        },
+                                        onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                                    )
+                                }
+                            }
+                        }
+                        is TvHomeSection.OfflineChannels -> {
+                            item(key = key) {
+                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                                    OfflineChannelRow(
                                         section.row, actions, rowFirstCard,
                                         startInset = startInset,
                                         endInset = endInset,
@@ -1277,6 +1310,19 @@ private fun StreamRow(
     cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
     onCardSelected: (Int, String) -> Unit = { _, _ -> },
 ) {
+    if (row.onLoadMore != null) {
+        val shouldLoadMore by remember(state, row.items.size) {
+            derivedStateOf {
+                val lastVisible = state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                row.items.isNotEmpty() && lastVisible >= row.items.size - 6
+            }
+        }
+        LaunchedEffect(shouldLoadMore, row.items.size) {
+            if (shouldLoadMore) {
+                row.onLoadMore.invoke()
+            }
+        }
+    }
     Column {
         RowTitle(row.title, row.icon, startPadding = startInset + 12.dp)
         // the cards fill the width of the screen, with a part of the next one in sight
@@ -1638,6 +1684,160 @@ private fun GameRow(
                 }
             }
         }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun OfflineChannelRow(
+    row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.User>,
+    actions: TvHomeActions,
+    firstRequester: FocusRequester?,
+    startInset: Dp = 0.dp,
+    endInset: Dp = 0.dp,
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
+    onCardSelected: (Int, String) -> Unit = { _, _ -> },
+) {
+    if (row.onLoadMore != null) {
+        val shouldLoadMore by remember(state, row.items.size) {
+            derivedStateOf {
+                val lastVisible = state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                row.items.isNotEmpty() && lastVisible >= row.items.size - 6
+            }
+        }
+        LaunchedEffect(shouldLoadMore, row.items.size) {
+            if (shouldLoadMore) {
+                row.onLoadMore.invoke()
+            }
+        }
+    }
+    Column {
+        RowTitle(row.title, row.icon, startPadding = startInset + 12.dp)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
+            LazyRow(
+                state = state,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvHorizontalFade(
+                        startWidth = 56.dp,
+                        endWidth = 56.dp,
+                        scrolledStart = { state.canScrollBackward },
+                        scrolledEnd = { state.canScrollForward },
+                    )
+                    .focusRestorer(),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 12.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(row.items, key = { index, item -> item.id ?: item.login ?: index }) { index, user ->
+                    val itemKey = user.login ?: user.id ?: "offline_$index"
+                    OfflineChannelCard(
+                        user = user,
+                        actions = actions,
+                        modifier = Modifier
+                            .leftEdge(index, actions.openMenu)
+                            .then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier)
+                            .then(cardModifier(index, itemKey)),
+                        onClick = {
+                            onCardSelected(index, itemKey)
+                            actions.openOfflineChannel(user)
+                        },
+                        onLongClick = {
+                            onCardSelected(index, itemKey)
+                            actions.showOfflineChannelActions(user)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfflineChannelCard(
+    user: com.github.andreyasadchy.xtra.model.ui.User,
+    actions: TvHomeActions,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
+    val isFavorite = favorites.any { it.login.equals(user.login, ignoreCase = true) }
+    val lastText = remember(user.lastBroadcast) {
+        val lastMs = user.lastBroadcast?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } }
+        lastMs?.let {
+            android.text.format.DateUtils.getRelativeTimeSpanString(
+                it,
+                System.currentTimeMillis(),
+                android.text.format.DateUtils.MINUTE_IN_MILLIS,
+            ).toString().replaceFirstChar { c -> c.uppercase() }
+        }
+    }
+    FocusCard(
+        width = 136.dp,
+        modifier = modifier,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onFocus = { if (it) actions.onPictureFocused(user) },
+    ) { focused ->
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier
+                    .size(92.dp)
+                    .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary, cornerRadius = 46.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF26252C))
+                    .then(if (focused) Modifier.border(3.dp, Color.White, CircleShape) else Modifier)
+            ) {
+                AsyncImage(
+                    model = user.profileImage,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isFavorite) {
+                Icon(
+                    painterResource(R.drawable.tv_ic_star),
+                    contentDescription = null,
+                    tint = Color(0xFFFACC15),
+                    modifier = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                user.name ?: user.login ?: "",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                modifier = if (focused) Modifier.titleMarquee() else Modifier,
+            )
+        }
+        if (!lastText.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    lastText,
+                    fontSize = 12.sp,
+                    color = TvColors.secondaryText,
+                    maxLines = 1,
+                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                )
+            }
         }
     }
 }

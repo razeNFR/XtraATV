@@ -1145,4 +1145,22 @@
     <string name="tv_adblock_exp_fallback_swap">Swapモード</string>
     <string name="tv_adblock_exp_new_stream_title">配信開始直後</string>
     <string name="tv_adblock_exp_temp_swap">一時的なSwap</string>
+    <string name="tv_home_followed_show_all">フォロー中のライブチャンネルをすべて表示</string>
+    <string name="tv_home_followed_show_all_summary">「すべて表示」カードなしでフォロー中の全ライブを行内に順次読み込みます</string>
+    <string name="tv_home_row_offline_channels">オフラインのフォロー中チャンネル</string>
+    <string name="tv_hide_menu_stats">サイドメニューの統計を非表示</string>
+    <string name="tv_hide_menu_stats_summary">ナビゲーションバーから統計項目を削除します</string>
+    <string name="tv_back_closes_menu">戻るボタンでサイドメニューを閉じる</string>
+    <string name="tv_back_closes_menu_summary">サイドメニュー表示中に戻るを押すとメニューを閉じて画面に戻ります</string>
+    <string name="tv_disable_soft_keyboard">画面キーボードを無効化</string>
+    <string name="tv_disable_soft_keyboard_summary">テキスト欄選択時に仮想キーボードを開きません（物理・Bluetoothキーボード向け）</string>
+    <string name="tv_dpad_up_long">上（長押し）</string>
+    <string name="tv_remote_action_live_alert_default">ライブ通知を開く（デフォルト）</string>
+    <string name="tv_custom_key_short_press">短押し</string>
+    <string name="tv_custom_key_long_press">長押し</string>
+    <string name="tv_custom_key_long_suffix">%1$s（長押し）</string>
+    <string name="tv_chat_predictions_popup">予想（チャット非表示時）</string>
+    <string name="tv_option_on">オン</string>
+    <string name="tv_prediction_started">予想が開始されました</string>
+    <string name="tv_prediction_ended">予想が終了しました</string>
 </resources>

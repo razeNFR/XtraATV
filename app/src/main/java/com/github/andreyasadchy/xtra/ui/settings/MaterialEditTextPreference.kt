@@ -10,6 +10,9 @@ import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import androidx.preference.EditTextPreferenceDialogFragmentCompat
+import com.github.andreyasadchy.xtra.ui.view.TvUi
+import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.prefs
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class MaterialEditTextPreference : EditTextPreferenceDialogFragmentCompat() {
@@ -17,13 +20,20 @@ class MaterialEditTextPreference : EditTextPreferenceDialogFragmentCompat() {
     private var mEditText: EditText? = null
     private val mShowSoftInputRunnable = Runnable { scheduleShowSoftInputInner() }
 
+    private fun isSoftKeyboardDisabled(context: Context): Boolean =
+        TvUi.isTv(context) && context.prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
+
     override fun onBindDialogView(view: View) {
         super.onBindDialogView(view)
         mEditText = view.findViewById(android.R.id.edit)
+        if (isSoftKeyboardDisabled(view.context)) {
+            mEditText?.showSoftInputOnFocus = false
+        }
     }
 
     private fun scheduleShowSoftInputInner() {
         mEditText?.let { mEditText ->
+            if (isSoftKeyboardDisabled(mEditText.context)) return
             if (mEditText.isFocused) {
                 val imm = mEditText.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
                 if (!imm.showSoftInput(mEditText, 0)) {
@@ -54,11 +64,14 @@ class MaterialEditTextPreference : EditTextPreferenceDialogFragmentCompat() {
 
         // Create the dialog
         val dialog: Dialog = builder.create()
-        requestInputMethod(dialog)
+        if (!isSoftKeyboardDisabled(requireContext())) {
+            requestInputMethod(dialog)
+        }
         return dialog
     }
 
     private fun requestInputMethod(dialog: Dialog) {
+        if (isSoftKeyboardDisabled(requireContext())) return
         val window = dialog.window
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window!!.decorView.windowInsetsController!!.show(WindowInsets.Type.ime())

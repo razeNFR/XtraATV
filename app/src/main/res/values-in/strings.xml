@@ -1146,4 +1146,22 @@
     <string name="tv_adblock_exp_fallback_swap">Mode Swap</string>
     <string name="tv_adblock_exp_new_stream_title">Awal siaran</string>
     <string name="tv_adblock_exp_temp_swap">Swap sementara</string>
+    <string name="tv_home_followed_show_all">Tampilkan semua saluran diikuti yang live</string>
+    <string name="tv_home_followed_show_all_summary">Muat semua siaran langsung diikuti secara bertahap di baris tanpa kartu Lihat semua</string>
+    <string name="tv_home_row_offline_channels">Saluran diikuti yang offline</string>
+    <string name="tv_hide_menu_stats">Sembunyikan Statistik di menu samping</string>
+    <string name="tv_hide_menu_stats_summary">Menghapus menu Statistik dari bilah navigasi</string>
+    <string name="tv_back_closes_menu">Tombol Kembali menutup menu samping</string>
+    <string name="tv_back_closes_menu_summary">Menekan Kembali saat menu samping terbuka akan menutupnya dan kembali ke layar</string>
+    <string name="tv_disable_soft_keyboard">Nonaktifkan keyboard layar</string>
+    <string name="tv_disable_soft_keyboard_summary">Mencegah keyboard virtual muncul saat memilih kolom teks (untuk keyboard fisik atau Bluetooth)</string>
+    <string name="tv_dpad_up_long">Atas (tekan lama)</string>
+    <string name="tv_remote_action_live_alert_default">Buka notifikasi live (bawaan)</string>
+    <string name="tv_custom_key_short_press">Tekan singkat</string>
+    <string name="tv_custom_key_long_press">Tekan lama</string>
+    <string name="tv_custom_key_long_suffix">%1$s (lama)</string>
+    <string name="tv_chat_predictions_popup">Prediksi (chat disembunyikan)</string>
+    <string name="tv_option_on">Aktif</string>
+    <string name="tv_prediction_started">Prediksi dimulai</string>
+    <string name="tv_prediction_ended">Prediksi selesai</string>
 </resources>

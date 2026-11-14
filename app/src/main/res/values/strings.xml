@@ -1164,4 +1164,22 @@
     <string name="tv_adblock_exp_fallback_swap">Swap mode</string>
     <string name="tv_adblock_exp_new_stream_title">New stream</string>
     <string name="tv_adblock_exp_temp_swap">Temporary Swap</string>
+    <string name="tv_home_followed_show_all">Show all live followed channels</string>
+    <string name="tv_home_followed_show_all_summary">Load all live followed channels progressively in the row without a See all card</string>
+    <string name="tv_home_row_offline_channels">Offline followed channels</string>
+    <string name="tv_hide_menu_stats">Hide Statistics in side menu</string>
+    <string name="tv_hide_menu_stats_summary">Removes the Statistics entry from the navigation bar</string>
+    <string name="tv_back_closes_menu">Back closes side menu</string>
+    <string name="tv_back_closes_menu_summary">Pressing Back while the side menu is open closes it and returns to the screen</string>
+    <string name="tv_disable_soft_keyboard">Disable on-screen keyboard</string>
+    <string name="tv_disable_soft_keyboard_summary">Prevents the virtual keyboard from opening when focusing text fields (for physical or Bluetooth keyboards)</string>
+    <string name="tv_dpad_up_long">Up (long press)</string>
+    <string name="tv_remote_action_live_alert_default">Open live alert (default)</string>
+    <string name="tv_custom_key_short_press">Short press</string>
+    <string name="tv_custom_key_long_press">Long press</string>
+    <string name="tv_custom_key_long_suffix">%1$s (long)</string>
+    <string name="tv_chat_predictions_popup">Predictions (chat hidden)</string>
+    <string name="tv_option_on">On</string>
+    <string name="tv_prediction_started">Prediction started</string>
+    <string name="tv_prediction_ended">Prediction ended</string>
 </resources>

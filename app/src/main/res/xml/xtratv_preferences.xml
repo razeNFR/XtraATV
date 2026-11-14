@@ -87,10 +87,26 @@
             app:singleLineTitle="false" />
 
         <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_back_closes_menu"
+            android:summary="@string/tv_back_closes_menu_summary"
+            android:title="@string/tv_back_closes_menu"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="tv_focus_switch"
             android:summary="@string/tv_focus_switch_summary"
             android:title="@string/tv_focus_switch"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_disable_soft_keyboard"
+            android:summary="@string/tv_disable_soft_keyboard_summary"
+            android:title="@string/tv_disable_soft_keyboard"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
@@ -147,6 +163,14 @@
             app:singleLineTitle="false" />
 
         <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_hide_menu_stats"
+            android:summary="@string/tv_hide_menu_stats_summary"
+            android:title="@string/tv_hide_menu_stats"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="tv_home_hero"
             android:summary="@string/tv_home_hero_summary"
@@ -167,6 +191,14 @@
             android:key="tv_home_stats_badge"
             android:summary="@string/tv_home_stats_badge_summary"
             android:title="@string/tv_home_stats_badge"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_home_followed_show_all"
+            android:summary="@string/tv_home_followed_show_all_summary"
+            android:title="@string/tv_home_followed_show_all"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 

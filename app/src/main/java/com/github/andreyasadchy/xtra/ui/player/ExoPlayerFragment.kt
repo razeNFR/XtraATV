@@ -536,18 +536,22 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun rewind() {
         playbackService?.seekBack()
+        if (isTvLiveTimeline()) updateTvLiveTimeline()
     }
 
     override fun fastForward() {
         playbackService?.seekForward()
+        if (isTvLiveTimeline()) updateTvLiveTimeline()
     }
 
     override fun seek(position: Long) {
         playbackService?.seekTo(position)
+        if (isTvLiveTimeline()) updateTvLiveTimeline()
     }
 
     override fun seekToLivePosition() {
         playbackService?.seekToDefaultPosition()
+        if (isTvLiveTimeline()) updateTvLiveTimeline()
     }
 
     override fun setPlaybackSpeed(speed: Float) {

@@ -1145,4 +1145,22 @@
     <string name="tv_adblock_exp_fallback_swap">Режим Swap</string>
     <string name="tv_adblock_exp_new_stream_title">Начало стрима</string>
     <string name="tv_adblock_exp_temp_swap">Временный Swap</string>
+    <string name="tv_home_followed_show_all">Показывать все отслеживаемые каналы в эфире</string>
+    <string name="tv_home_followed_show_all_summary">Постепенно подгружает все отслеживаемые стримы в строке без карточки «Показать все»</string>
+    <string name="tv_home_row_offline_channels">Отслеживаемые каналы не в сети</string>
+    <string name="tv_hide_menu_stats">Скрыть «Статистику» в боковом меню</string>
+    <string name="tv_hide_menu_stats_summary">Убирает пункт «Статистика» из боковой панели навигации</string>
+    <string name="tv_back_closes_menu">Кнопка «Назад» закрывает боковое меню</string>
+    <string name="tv_back_closes_menu_summary">Нажатие «Назад» при открытом боковом меню закрывает его и возвращает на экран</string>
+    <string name="tv_disable_soft_keyboard">Отключить экранную клавиатуру</string>
+    <string name="tv_disable_soft_keyboard_summary">Не открывать виртуальную клавиатуру в текстовых полях (для физических и Bluetooth-клавиатур)</string>
+    <string name="tv_dpad_up_long">Вверх (долгое нажатие)</string>
+    <string name="tv_remote_action_live_alert_default">Открыть уведомление о стриме (по умолчанию)</string>
+    <string name="tv_custom_key_short_press">Короткое нажатие</string>
+    <string name="tv_custom_key_long_press">Долгое нажатие</string>
+    <string name="tv_custom_key_long_suffix">%1$s (долго)</string>
+    <string name="tv_chat_predictions_popup">Прогнозы (при скрытом чате)</string>
+    <string name="tv_option_on">Вкл.</string>
+    <string name="tv_prediction_started">Прогноз начался</string>
+    <string name="tv_prediction_ended">Прогноз завершён</string>
 </resources>

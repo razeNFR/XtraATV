@@ -1145,4 +1145,22 @@
     <string name="tv_adblock_exp_fallback_swap">Swap 模式</string>
     <string name="tv_adblock_exp_new_stream_title">刚开播</string>
     <string name="tv_adblock_exp_temp_swap">临时 Swap</string>
+    <string name="tv_home_followed_show_all">显示所有直播中的已关注频道</string>
+    <string name="tv_home_followed_show_all_summary">在行内逐步加载所有直播中的已关注频道，不显示“查看全部”卡片</string>
+    <string name="tv_home_row_offline_channels">未开播的已关注频道</string>
+    <string name="tv_hide_menu_stats">在侧边菜单中隐藏统计</string>
+    <string name="tv_hide_menu_stats_summary">从导航栏移除“统计”入口</string>
+    <string name="tv_back_closes_menu">返回键关闭侧边菜单</string>
+    <string name="tv_back_closes_menu_summary">侧边菜单打开时按返回键将其关闭并返回当前画面</string>
+    <string name="tv_disable_soft_keyboard">禁用屏幕虚拟键盘</string>
+    <string name="tv_disable_soft_keyboard_summary">聚焦输入框时不弹出屏幕键盘（适用于实体或蓝牙键盘）</string>
+    <string name="tv_dpad_up_long">上（长按）</string>
+    <string name="tv_remote_action_live_alert_default">打开开播提醒（默认）</string>
+    <string name="tv_custom_key_short_press">短按</string>
+    <string name="tv_custom_key_long_press">长按</string>
+    <string name="tv_custom_key_long_suffix">%1$s（长按）</string>
+    <string name="tv_chat_predictions_popup">竞猜弹窗（隐藏聊天时）</string>
+    <string name="tv_option_on">开启</string>
+    <string name="tv_prediction_started">竞猜已开始</string>
+    <string name="tv_prediction_ended">竞猜已结束</string>
 </resources>

@@ -1145,4 +1145,22 @@
     <string name="tv_adblock_exp_fallback_swap">Swap-Modus</string>
     <string name="tv_adblock_exp_new_stream_title">Stream-Start</string>
     <string name="tv_adblock_exp_temp_swap">Vorübergehend Swap</string>
+    <string name="tv_home_followed_show_all">Alle gefolgten Live-Kanäle anzeigen</string>
+    <string name="tv_home_followed_show_all_summary">Lädt alle gefolgten Live-Streams schrittweise in der Zeile ohne „Alle anzeigen“-Karte</string>
+    <string name="tv_home_row_offline_channels">Gefolgte Offline-Kanäle</string>
+    <string name="tv_hide_menu_stats">Statistiken im Seitenmenü ausblenden</string>
+    <string name="tv_hide_menu_stats_summary">Entfernt den Eintrag Statistiken aus der Navigationsleiste</string>
+    <string name="tv_back_closes_menu">Zurück schließt das Seitenmenü</string>
+    <string name="tv_back_closes_menu_summary">Drücken von Zurück bei geöffnetem Seitenmenü schließt es und kehrt zum Bildschirm zurück</string>
+    <string name="tv_disable_soft_keyboard">Bildschirmtastatur deaktivieren</string>
+    <string name="tv_disable_soft_keyboard_summary">Verhindert das Öffnen der virtuellen Tastatur bei Textfeldern (für physische oder Bluetooth-Tastaturen)</string>
+    <string name="tv_dpad_up_long">Oben (gedrückt halten)</string>
+    <string name="tv_remote_action_live_alert_default">Live-Benachrichtigung öffnen (Standard)</string>
+    <string name="tv_custom_key_short_press">Kurzer Druck</string>
+    <string name="tv_custom_key_long_press">Langer Druck</string>
+    <string name="tv_custom_key_long_suffix">%1$s (lang)</string>
+    <string name="tv_chat_predictions_popup">Vorhersagen (Chat ausgeblendet)</string>
+    <string name="tv_option_on">Ein</string>
+    <string name="tv_prediction_started">Vorhersage gestartet</string>
+    <string name="tv_prediction_ended">Vorhersage beendet</string>
 </resources>

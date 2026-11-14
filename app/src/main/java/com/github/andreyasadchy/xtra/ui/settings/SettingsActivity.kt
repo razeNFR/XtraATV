@@ -2197,7 +2197,14 @@ class SettingsActivity : AppCompatActivity() {
                 (requireActivity() as? SettingsActivity)?.setResult()
                 true
             }
-            listOf(C.TV_HOME_HERO, C.TV_HOME_GREETING, C.TV_HOME_STATS_BADGE, C.TV_COMPACT_RAIL).forEach { key ->
+            listOf(
+                C.TV_HOME_HERO,
+                C.TV_HOME_GREETING,
+                C.TV_HOME_STATS_BADGE,
+                C.TV_COMPACT_RAIL,
+                C.TV_HOME_FOLLOWED_SHOW_ALL,
+                C.TV_HIDE_MENU_STATS,
+            ).forEach { key ->
                 findPreference<Preference>(key)?.setOnPreferenceChangeListener { _, _ ->
                     (requireActivity() as? SettingsActivity)?.setResult()
                     true

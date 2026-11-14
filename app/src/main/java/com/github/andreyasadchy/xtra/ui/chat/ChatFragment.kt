@@ -677,6 +677,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                     viewModel.predictionTimer?.cancel()
                                     viewModel.predictionClosed = true
                                     viewModel.hidePrediction.value = false
+                                    (parentFragment as? PlayerFragment)?.onTvPredictionHidden()
                                 }
                             }
                         }
@@ -686,12 +687,14 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         viewModel.predictionSecondsLeft.value = null
                         viewModel.predictionTimer?.cancel()
                         viewModel.predictionClosed = true
+                        (parentFragment as? PlayerFragment)?.onTvPredictionHidden()
                     }
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.prediction.collectLatest { prediction ->
                                 if (prediction != null) {
                                     if (!viewModel.predictionClosed) {
+                                        (parentFragment as? PlayerFragment)?.onTvPredictionEvent(prediction)
                                         when (prediction.status) {
                                             "ACTIVE" -> {
                                                 predictionLayout.visibility = View.VISIBLE
@@ -760,6 +763,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                 viewModel.predictionSecondsLeft.value = null
                                                 viewModel.predictionTimer?.cancel()
                                                 viewModel.predictionClosed = true
+                                                (parentFragment as? PlayerFragment)?.onTvPredictionHidden()
                                             }
                                         }
                                     }
@@ -771,6 +775,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.predictionSecondsLeft.collectLatest {
+                                (parentFragment as? PlayerFragment)?.onTvPredictionSecondsLeft(it)
                                 if (it != null) {
                                     predictionStatus.text = getString(R.string.remaining_time, DateUtils.formatElapsedTime(it.toLong()))
                                     if (it <= 0) {
@@ -1063,6 +1068,22 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     fun startReplayChatLoad() {
         viewModel.startReplayChatLoad()
     }
+
+    fun startHybridReplay(videoId: String, createdAt: String?) {
+        val parent = parentFragment as? PlayerFragment ?: return
+        viewModel.startHybridReplay(
+            videoId = videoId,
+            createdAt = createdAt,
+            getCurrentPosition = parent::getCurrentPosition,
+            getCurrentSpeed = parent::getCurrentSpeed,
+        )
+    }
+
+    fun stopHybridReplay() {
+        viewModel.stopHybridReplay()
+    }
+
+    fun isHybridReplayActive(): Boolean = viewModel.hybridReplayActive
 
     fun updatePosition(position: Long) {
         viewModel.updatePosition(position)

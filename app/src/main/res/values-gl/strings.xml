@@ -1145,4 +1145,22 @@
     <string name="tv_adblock_exp_fallback_swap">Modo Swap</string>
     <string name="tv_adblock_exp_new_stream_title">Inicio do directo</string>
     <string name="tv_adblock_exp_temp_swap">Swap temporal</string>
+    <string name="tv_home_followed_show_all">Mostrar todas as canles seguidas en directo</string>
+    <string name="tv_home_followed_show_all_summary">Carga progresivamente todos os directos seguidos na fila sen tarxeta «Ver todo»</string>
+    <string name="tv_home_row_offline_channels">Canles seguidas fóra de liña</string>
+    <string name="tv_hide_menu_stats">Ocultar Estatísticas no menú lateral</string>
+    <string name="tv_hide_menu_stats_summary">Elimina a entrada Estatísticas da barra de navegación</string>
+    <string name="tv_back_closes_menu">Atrás pecha o menú lateral</string>
+    <string name="tv_back_closes_menu_summary">Premer Atrás co menú lateral aberto péchao e volve á pantalla</string>
+    <string name="tv_disable_soft_keyboard">Desactivar teclado en pantalla</string>
+    <string name="tv_disable_soft_keyboard_summary">Evita que se abra o teclado virtual ao enfocar campos de texto (para teclados físicos ou Bluetooth)</string>
+    <string name="tv_dpad_up_long">Arriba (pulsación longa)</string>
+    <string name="tv_remote_action_live_alert_default">Abrir alerta en directo (predeterminado)</string>
+    <string name="tv_custom_key_short_press">Pulsación curta</string>
+    <string name="tv_custom_key_long_press">Pulsación longa</string>
+    <string name="tv_custom_key_long_suffix">%1$s (longo)</string>
+    <string name="tv_chat_predictions_popup">Predicións (chat oculto)</string>
+    <string name="tv_option_on">Activado</string>
+    <string name="tv_prediction_started">Predición iniciada</string>
+    <string name="tv_prediction_ended">Predición rematada</string>
 </resources>	

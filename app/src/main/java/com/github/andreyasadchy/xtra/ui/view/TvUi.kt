@@ -160,6 +160,9 @@ object TvUi {
 
     /** Dialog content: every clickable row or button gets a clearly visible focus frame. */
     fun adaptDialog(view: View) {
+        if (view is android.widget.EditText && view.context.prefs().getBoolean(com.github.andreyasadchy.xtra.util.C.TV_DISABLE_SOFT_KEYBOARD, false)) {
+            view.showSoftInputOnFocus = false
+        }
         if (view.isClickable && view.isFocusable && view.foreground == null && view !is RecyclerView) {
             view.foreground = view.context.getDrawable(R.drawable.tv_row_focus)
         }

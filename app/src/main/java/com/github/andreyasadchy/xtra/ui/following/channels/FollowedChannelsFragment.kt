@@ -88,6 +88,25 @@ class FollowedChannelsFragment : PagedListFragment(), Scrollable, Sortable, Foll
             }
         }
         initializeAdapter(binding, pagingAdapter, enableScrollTopButton = false)
+        viewLifecycleOwner.lifecycleScope.launch {
+            var first = true
+            com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collect {
+                if (first) {
+                    first = false
+                } else {
+                    pagingAdapter.notifyItemRangeChanged(0, pagingAdapter.itemCount)
+                    pagingAdapter.refresh()
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+                            pagingAdapter.onPagesUpdatedFlow.first()
+                            _binding?.recyclerView?.post {
+                                pagingAdapter.notifyItemRangeChanged(0, pagingAdapter.itemCount)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun setupSortBar(sortBar: SortBarBinding) {

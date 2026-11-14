@@ -1146,4 +1146,22 @@
     <string name="tv_adblock_exp_fallback_swap">Swap modu</string>
     <string name="tv_adblock_exp_new_stream_title">Yayın başlangıcı</string>
     <string name="tv_adblock_exp_temp_swap">Geçici Swap</string>
+    <string name="tv_home_followed_show_all">Canlı takip edilen tüm kanalları göster</string>
+    <string name="tv_home_followed_show_all_summary">Tümünü gör kartı olmadan takip edilen tüm canlı yayınları satırda kademeli olarak yükler</string>
+    <string name="tv_home_row_offline_channels">Çevrimdışı takip edilen kanallar</string>
+    <string name="tv_hide_menu_stats">Yan menüde İstatistikler\'i gizle</string>
+    <string name="tv_hide_menu_stats_summary">Gezinme çubuğundan İstatistikler öğesini kaldırır</string>
+    <string name="tv_back_closes_menu">Geri tuşu yan menüyü kapatır</string>
+    <string name="tv_back_closes_menu_summary">Yan menü açıkken Geri tuşuna basmak menüyü kapatır ve ekrana döner</string>
+    <string name="tv_disable_soft_keyboard">Ekran klavyesini devre dışı bırak</string>
+    <string name="tv_disable_soft_keyboard_summary">Metin alanlarına odaklanıldığında sanal klavyenin açılmasını engeller (fiziksel veya Bluetooth klavyeler için)</string>
+    <string name="tv_dpad_up_long">Yukarı (uzun basma)</string>
+    <string name="tv_remote_action_live_alert_default">Canlı yayın bildirimini aç (varsayılan)</string>
+    <string name="tv_custom_key_short_press">Kısa basma</string>
+    <string name="tv_custom_key_long_press">Uzun basma</string>
+    <string name="tv_custom_key_long_suffix">%1$s (uzun)</string>
+    <string name="tv_chat_predictions_popup">Tahminler (sohbet gizliyken)</string>
+    <string name="tv_option_on">Açık</string>
+    <string name="tv_prediction_started">Tahmin başladı</string>
+    <string name="tv_prediction_ended">Tahmin sona erdi</string>
 </resources>

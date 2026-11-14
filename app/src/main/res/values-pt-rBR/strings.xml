@@ -1145,4 +1145,22 @@
     <string name="tv_adblock_exp_fallback_swap">Modo Swap</string>
     <string name="tv_adblock_exp_new_stream_title">Início da live</string>
     <string name="tv_adblock_exp_temp_swap">Swap temporário</string>
+    <string name="tv_home_followed_show_all">Mostrar todos os canais seguidos ao vivo</string>
+    <string name="tv_home_followed_show_all_summary">Carrega progressivamente todas as lives seguidas na linha sem o cartão «Ver tudo»</string>
+    <string name="tv_home_row_offline_channels">Canais seguidos offline</string>
+    <string name="tv_hide_menu_stats">Ocultar Estatísticas no menu lateral</string>
+    <string name="tv_hide_menu_stats_summary">Remove o item Estatísticas da barra de navegação</string>
+    <string name="tv_back_closes_menu">Voltar fecha o menu lateral</string>
+    <string name="tv_back_closes_menu_summary">Pressionar Voltar com o menu lateral aberto fecha o menu e retorna à tela</string>
+    <string name="tv_disable_soft_keyboard">Desativar teclado na tela</string>
+    <string name="tv_disable_soft_keyboard_summary">Impede a abertura do teclado virtual ao focar campos de texto (para teclados físicos ou Bluetooth)</string>
+    <string name="tv_dpad_up_long">Cima (toque longo)</string>
+    <string name="tv_remote_action_live_alert_default">Abrir alerta de live (padrão)</string>
+    <string name="tv_custom_key_short_press">Toque curto</string>
+    <string name="tv_custom_key_long_press">Toque longo</string>
+    <string name="tv_custom_key_long_suffix">%1$s (longo)</string>
+    <string name="tv_chat_predictions_popup">Palpites (chat oculto)</string>
+    <string name="tv_option_on">Ativado</string>
+    <string name="tv_prediction_started">Palpite iniciado</string>
+    <string name="tv_prediction_ended">Palpite encerrado</string>
 </resources>

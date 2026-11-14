@@ -107,6 +107,10 @@ class ChatViewModel(
 
     private var chatReplayManager: ChatReplayManager? = null
     private var chatReplayManagerLocal: ChatReplayManagerLocal? = null
+    var hybridReplayActive = false
+        private set
+    private var hybridReplayVideoId: String? = null
+    private val liveBackupBuffer = ArrayDeque<ChatMessage>(120)
 
     val recentEmotes by lazy { playerRepository.loadRecentEmotesFlow() }
     val hasRecentEmotes = MutableStateFlow(false)
@@ -1231,6 +1235,13 @@ class ChatViewModel(
                 )
             }
         }
+        synchronized(liveBackupBuffer) {
+            liveBackupBuffer.removeAll { msg ->
+                com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(
+                    applicationContext, msg, activeChannelLogin, ownUserId, ownUserLogin
+                )
+            }
+        }
         return synchronized(chatMessages) {
             chatMessages.removeAll { msg ->
                 com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(
@@ -1240,7 +1251,19 @@ class ChatViewModel(
         }
     }
 
-    suspend fun onMessage(message: ChatMessage) {
+    private fun appendLiveBackup(message: ChatMessage) {
+        if (message.type == ChatMessage.REPLY_MESSAGE && !showReplies()) {
+            return
+        }
+        synchronized(liveBackupBuffer) {
+            liveBackupBuffer.addLast(message)
+            while (liveBackupBuffer.size > 100) {
+                liveBackupBuffer.removeFirst()
+            }
+        }
+    }
+
+    suspend fun onMessage(message: ChatMessage, fromReplay: Boolean = false) {
         recordSeenChatter(message, activeChannelLogin, ownUserId, ownUserLogin)
         if (com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(
                 applicationContext, message, activeChannelLogin, ownUserId, ownUserLogin
@@ -1252,11 +1275,18 @@ class ChatViewModel(
             return
         }
         // a message of the live chat (with its time of Twitch), not one of ours: shown when the stream gets there
-        if (started && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && effectiveDelayMode() != 0) {
+        if (!fromReplay && started && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && effectiveDelayMode() != 0) {
             synchronized(delayedMessages) {
                 delayedMessages.addLast(message to System.currentTimeMillis())
             }
             startDelayLoop()
+            return
+        }
+        if (hybridReplayActive && !fromReplay) {
+            appendLiveBackup(message)
+            if (message.userId != null && message.userId == ownUserId) {
+                showMessage(message)
+            }
             return
         }
         showMessage(message)
@@ -1278,6 +1308,17 @@ class ChatViewModel(
                 }
                 val (message, arrival) = head
                 val waited = System.currentTimeMillis() - arrival
+                if (hybridReplayActive) {
+                    if (waited >= com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS) {
+                        synchronized(delayedMessages) {
+                            if (delayedMessages.firstOrNull() === head) delayedMessages.removeFirst()
+                        }
+                        appendLiveBackup(message)
+                    } else {
+                        delay(100)
+                    }
+                    continue
+                }
                 val maxWaitMs = if (forcedAuto) 120_000L else 60_000L
                 val due = when {
                     // never more than maxWaitMs, and the delay turned off: everything at once
@@ -1414,7 +1455,8 @@ class ChatViewModel(
             val notifyPoints = applicationContext.prefs().getBoolean(C.CHAT_POINTS_NOTIFY, false)
             val showRaids = applicationContext.prefs().getBoolean(C.CHAT_RAIDS_SHOW, true)
             val showPolls = applicationContext.prefs().getBoolean(C.CHAT_POLLS_SHOW, true)
-            val showPredictions = applicationContext.prefs().getBoolean(C.CHAT_PREDICTIONS_SHOW, true)
+            val showPredictions = applicationContext.prefs().getBoolean(C.CHAT_PREDICTIONS_SHOW, true) ||
+                applicationContext.prefs().getBoolean(C.TV_CHAT_PREDICTIONS_POPUP, false)
             hermesWebSocket = HermesWebSocket(
                 channelId = channelId,
                 userId = accountId,
@@ -1431,9 +1473,9 @@ class ChatViewModel(
                     } else null
                 },
                 collectPoints = collectPoints,
-                showRaids = applicationContext.prefs().getBoolean(C.CHAT_RAIDS_SHOW, true),
-                showPolls = applicationContext.prefs().getBoolean(C.CHAT_POLLS_SHOW, true),
-                showPredictions = applicationContext.prefs().getBoolean(C.CHAT_PREDICTIONS_SHOW, true),
+                showRaids = showRaids,
+                showPolls = showPolls,
+                showPredictions = showPredictions,
                 listener = PubSubListener(channelLogin, collectPoints, notifyPoints, showRaids, showPolls, showPredictions, networkLibrary, gqlHeaders, isLoggedIn, accountId, channelId, enableIntegrity, showWebSocketDebugInfo)
             )
             pubSubJob = hermesWebSocket?.connect(viewModelScope)
@@ -1462,6 +1504,13 @@ class ChatViewModel(
     }
 
     fun stopLiveChat() {
+        if (hybridReplayActive) {
+            hybridReplayActive = false
+            hybridReplayVideoId = null
+            chatReplayManager?.stop()
+            chatReplayManager = null
+        }
+        synchronized(liveBackupBuffer) { liveBackupBuffer.clear() }
         clearDelayedMessages()
         resetSlowChat()
         autoDelayMs = 0L
@@ -3071,6 +3120,75 @@ class ChatViewModel(
         chatReplayManager?.start() ?: chatReplayManagerLocal?.startLoad()
     }
 
+    fun startHybridReplay(
+        videoId: String,
+        createdAt: String?,
+        getCurrentPosition: () -> Long?,
+        getCurrentSpeed: () -> Float?,
+    ) {
+        if (videoId.isBlank()) return
+        if (hybridReplayActive && hybridReplayVideoId == videoId && chatReplayManager?.isActive == true) {
+            return
+        }
+        if (!hybridReplayActive) {
+            val snapshot = synchronized(chatMessages) { chatMessages.takeLast(100) }
+            synchronized(liveBackupBuffer) {
+                liveBackupBuffer.clear()
+                liveBackupBuffer.addAll(snapshot)
+            }
+        }
+        chatReplayManager?.stop()
+        hybridReplayActive = true
+        hybridReplayVideoId = videoId
+        chatReplayManager = ChatReplayManager(
+            networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+            gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true),
+            graphQLRepository = graphQLRepository,
+            json = json,
+            enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
+            videoId = videoId,
+            createdAt = createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } },
+            startTime = 0L,
+            getCurrentPosition = getCurrentPosition,
+            getCurrentSpeed = getCurrentSpeed,
+            coroutineScope = viewModelScope,
+            listener = ChatReplayListener(),
+        )
+        chatReplayManager?.start()
+    }
+
+    fun stopHybridReplay() {
+        if (!hybridReplayActive) return
+        hybridReplayActive = false
+        hybridReplayVideoId = null
+        chatReplayManager?.stop()
+        chatReplayManager = null
+        resetSlowChat()
+        val restored = synchronized(liveBackupBuffer) {
+            val items = liveBackupBuffer.toList()
+            liveBackupBuffer.clear()
+            items
+        }
+        viewModelScope.launch {
+            val oldSize = synchronized(chatMessages) {
+                val s = chatMessages.size
+                chatMessages.clear()
+                s
+            }
+            if (oldSize > 0) {
+                removeMessages.emit(oldSize)
+            }
+            if (restored.isNotEmpty()) {
+                val inserted = synchronized(chatMessages) {
+                    val items = restored.takeLast(messageLimit)
+                    chatMessages.addAll(0, items)
+                    Pair(items, chatMessages.lastIndex)
+                }
+                addMessages.emit(inserted)
+            }
+        }
+    }
+
     fun stopReplayChat() {
         resetSlowChat()
         chatReplayManager?.stop() ?: chatReplayManagerLocal?.stop()
@@ -3086,7 +3204,7 @@ class ChatViewModel(
 
     private inner class ChatReplayListener : ChatReplayManager.Listener {
         override suspend fun onChatMessage(message: ChatMessage) {
-            onMessage(message)
+            onMessage(message, fromReplay = true)
         }
 
         override suspend fun clearMessages() {

@@ -149,9 +149,9 @@ class GridRecyclerView : RecyclerView {
                     listOfNotNull(options?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(context.getString(R.string.tv_more_options), R.drawable.baseline_more_vert_black_24) { it.performClick() } })
                 )
             } else if (adapter is com.github.andreyasadchy.xtra.ui.common.VideosAdapter || adapter is com.github.andreyasadchy.xtra.ui.common.ClipsAdapter ||
-                adapter is com.github.andreyasadchy.xtra.ui.saved.bookmarks.BookmarksAdapter
+                adapter is com.github.andreyasadchy.xtra.ui.saved.bookmarks.BookmarksAdapter || adapter is FollowedChannelsAdapter
             ) {
-                // videos, clips, bookmarks: their own panel of actions (the same as on the home), not the small menu
+                // videos, clips, bookmarks, followed channels: their own panel of actions (the same as on the home), not the small menu
                 if (!card.performLongClick()) {
                     TvCards.showMenu(card)
                 }

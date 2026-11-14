@@ -443,7 +443,7 @@
     <string name="minimize">Réduire</string>
     <string name="player_menu_settings">Paramètres du menu du lecteur</string>
     <string name="chapters">Chapitres</string>
-    <string name="seek_to_live">Rechercher en direct</string>
+    <string name="seek_to_live">Aller au direct</string>
     <string name="audio_compressor">Compresseur audio</string>
     <string name="subtitles">Sous-titres</string>
     <string name="chat_input_toggle">Basculer l\'input du chat</string>
@@ -1145,4 +1145,22 @@
     <string name="tv_adblock_exp_fallback_swap">Mode Swap</string>
     <string name="tv_adblock_exp_new_stream_title">Début de live</string>
     <string name="tv_adblock_exp_temp_swap">Swap temporaire</string>
+    <string name="tv_home_followed_show_all">Afficher toutes les chaînes suivies en direct</string>
+    <string name="tv_home_followed_show_all_summary">Charge progressivement tous les lives suivis dans la ligne sans bouton « Tout voir »</string>
+    <string name="tv_home_row_offline_channels">Chaînes suivies hors live</string>
+    <string name="tv_hide_menu_stats">Masquer Statistiques dans le menu latéral</string>
+    <string name="tv_hide_menu_stats_summary">Retire l\'entrée Statistiques de la barre de navigation</string>
+    <string name="tv_back_closes_menu">Retour ferme le menu latéral</string>
+    <string name="tv_back_closes_menu_summary">Appuyer sur Retour quand le menu latéral est ouvert le referme et revient à l\'écran</string>
+    <string name="tv_disable_soft_keyboard">Désactiver le clavier à l\'écran</string>
+    <string name="tv_disable_soft_keyboard_summary">Empêche l\'ouverture du clavier virtuel sur les champs de texte (pour clavier physique ou Bluetooth)</string>
+    <string name="tv_dpad_up_long">Haut (appui long)</string>
+    <string name="tv_remote_action_live_alert_default">Ouvrir l\'alerte de live (par défaut)</string>
+    <string name="tv_custom_key_short_press">Appui court</string>
+    <string name="tv_custom_key_long_press">Appui long</string>
+    <string name="tv_custom_key_long_suffix">%1$s (long)</string>
+    <string name="tv_chat_predictions_popup">Prédictions (chat masqué)</string>
+    <string name="tv_option_on">Activé</string>
+    <string name="tv_prediction_started">Prédiction lancée</string>
+    <string name="tv_prediction_ended">Prédiction terminée</string>
 </resources>
