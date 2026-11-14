@@ -188,10 +188,13 @@ class StreamProxySettingsFragment : Fragment() {
             }
             .setNegativeButton(getString(android.R.string.cancel), null)
             .create()
+        val disableSoftKeyboard = resources.getBoolean(R.bool.isTv) &&
+            requireContext().prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
         binding.hostInput.editText?.apply {
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
             val string = item.host ?: ""
             text.replace(0, length(), string, 0, string.length)
-            if (requestFocus()) {
+            if (requestFocus() && !disableSoftKeyboard) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     dialog.window?.decorView?.windowInsetsController?.show(WindowInsets.Type.ime())
                 } else {
@@ -201,14 +204,17 @@ class StreamProxySettingsFragment : Fragment() {
             }
         }
         binding.portInput.editText?.apply {
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
             val string = item.port?.toString() ?: ""
             text.replace(0, length(), string, 0, string.length)
         }
         binding.userInput.editText?.apply {
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
             val string = item.username ?: ""
             text.replace(0, length(), string, 0, string.length)
         }
         binding.passwordInput.editText?.apply {
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
             val string = item.password ?: ""
             text.replace(0, length(), string, 0, string.length)
             setOnEditorActionListener { _, actionId, _ ->

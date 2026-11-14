@@ -3,8 +3,10 @@ package com.github.andreyasadchy.xtra.ui.tv
 import android.Manifest
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
@@ -56,6 +58,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -76,6 +80,9 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.prefs
+import kotlinx.coroutines.awaitCancellation
 
 object TvPermissions {
 
@@ -140,6 +147,7 @@ fun rememberVoiceInput(state: VoiceState, onResult: (String) -> Unit): TvVoiceIn
  * Text field for the D-pad: it gets the focus like a button and the keyboard only shows with OK,
  * so moving around never opens it by accident.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun TvTextField(
     value: String,
@@ -154,6 +162,20 @@ fun TvTextField(
     onLeft: (() -> Unit)? = null,
     onSubmit: () -> Unit,
 ) {
+    val appContext = LocalContext.current
+    val sharedPrefs = remember(appContext) { appContext.prefs() }
+    var disableSoftKeyboard by remember(sharedPrefs) {
+        mutableStateOf(sharedPrefs.getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false))
+    }
+    DisposableEffect(sharedPrefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+            if (key == C.TV_DISABLE_SOFT_KEYBOARD) {
+                disableSoftKeyboard = p.getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
+            }
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     var editing by remember { mutableStateOf(false) }
     var textFieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
     if (textFieldValue.text != value) {
@@ -166,6 +188,10 @@ fun TvTextField(
     var editFocused by remember { mutableStateOf(false) }
     val highlighted = focused || editFocused
     val textColor = if (highlighted) TvColors.onFocused else Color.White
+    BackHandler(enabled = editing && disableSoftKeyboard) {
+        editing = false
+        focusRequester.requestFocus()
+    }
     Box(
         modifier
             .height(56.dp)
@@ -195,6 +221,18 @@ fun TvTextField(
                         }
                         return@onPreviewKeyEvent true
                     }
+                    val codePoint = event.nativeKeyEvent.unicodeChar
+                    if (codePoint >= 32 &&
+                        event.key != Key.DirectionCenter &&
+                        event.key != Key.Enter &&
+                        event.key != Key.NumPadEnter
+                    ) {
+                        val next = value + String(Character.toChars(codePoint))
+                        textFieldValue = TextFieldValue(next, TextRange(next.length))
+                        onValueChange(next)
+                        editing = true
+                        return@onPreviewKeyEvent true
+                    }
                 }
                 false
             }
@@ -219,43 +257,69 @@ fun TvTextField(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                editing -> BasicTextField(
-                    value = textFieldValue,
-                    onValueChange = { newValue ->
-                        textFieldValue = newValue
-                        if (newValue.text != value) {
-                            onValueChange(newValue.text)
+                editing -> InterceptPlatformTextInput(
+                    interceptor = { request, nextHandler ->
+                        if (disableSoftKeyboard) {
+                            awaitCancellation()
+                        } else {
+                            nextHandler.startInputMethod(request)
                         }
-                    },
-                    singleLine = true,
-                    textStyle = TextStyle(color = textColor, fontSize = 18.sp),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = imeAction),
-                    keyboardActions = KeyboardActions(onAny = {
-                        keyboard?.hide()
-                        editing = false
-                        focusRequester.requestFocus()
-                        onSubmit()
-                    }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(editRequester)
-                        .onFocusChanged {
-                            if (editFocused && !it.isFocused) {
-                                editing = false
+                    }
+                ) {
+                    BasicTextField(
+                        value = textFieldValue,
+                        onValueChange = { newValue ->
+                            textFieldValue = newValue
+                            if (newValue.text != value) {
+                                onValueChange(newValue.text)
                             }
-                            editFocused = it.isFocused
-                        }
-                        .onPreviewKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown && (event.key == Key.Backspace || event.key == Key.Delete) &&
-                                event.nativeKeyEvent.repeatCount >= 2 && value.isNotEmpty()
-                            ) {
-                                textFieldValue = TextFieldValue("", TextRange.Zero)
-                                onValueChange("")
-                                true
-                            } else false
-                        }
-                )
+                        },
+                        singleLine = true,
+                        textStyle = TextStyle(color = textColor, fontSize = 18.sp),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = imeAction),
+                        keyboardActions = KeyboardActions(onAny = {
+                            keyboard?.hide()
+                            editing = false
+                            focusRequester.requestFocus()
+                            onSubmit()
+                        }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(editRequester)
+                            .onFocusChanged {
+                                if (editFocused && !it.isFocused) {
+                                    editing = false
+                                }
+                                editFocused = it.isFocused
+                            }
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown) {
+                                    if ((event.key == Key.Backspace || event.key == Key.Delete) &&
+                                        event.nativeKeyEvent.repeatCount >= 2 && value.isNotEmpty()
+                                    ) {
+                                        textFieldValue = TextFieldValue("", TextRange.Zero)
+                                        onValueChange("")
+                                        return@onPreviewKeyEvent true
+                                    }
+                                    if (disableSoftKeyboard && (event.key == Key.Enter || event.key == Key.NumPadEnter)) {
+                                        keyboard?.hide()
+                                        editing = false
+                                        focusRequester.requestFocus()
+                                        onSubmit()
+                                        return@onPreviewKeyEvent true
+                                    }
+                                    if (event.key == Key.Escape) {
+                                        keyboard?.hide()
+                                        editing = false
+                                        focusRequester.requestFocus()
+                                        return@onPreviewKeyEvent true
+                                    }
+                                }
+                                false
+                            }
+                    )
+                }
                 value.isNotEmpty() && emotes.isNotEmpty() -> {
                     val context = LocalContext.current
                     val (annotated, inlineContent) = remember(value, emotes) {
@@ -318,11 +382,15 @@ fun TvTextField(
             }
         }
     }
-    LaunchedEffect(editing) {
+    LaunchedEffect(editing, disableSoftKeyboard) {
         if (editing) {
             textFieldValue = TextFieldValue(value, TextRange(value.length))
             editRequester.requestFocus()
-            keyboard?.show()
+            if (disableSoftKeyboard) {
+                keyboard?.hide()
+            } else {
+                keyboard?.show()
+            }
         }
     }
 }

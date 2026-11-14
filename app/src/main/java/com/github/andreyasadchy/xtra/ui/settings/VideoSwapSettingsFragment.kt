@@ -190,10 +190,13 @@ class VideoSwapSettingsFragment : Fragment() {
             }
             .setNegativeButton(getString(android.R.string.cancel), null)
             .create()
+        val disableSoftKeyboard = resources.getBoolean(R.bool.isTv) &&
+            requireContext().prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
         binding.platformInput.editText?.apply {
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
             val string = item.platform ?: ""
             text.replace(0, length(), string, 0, string.length)
-            if (requestFocus()) {
+            if (requestFocus() && !disableSoftKeyboard) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     dialog.window?.decorView?.windowInsetsController?.show(WindowInsets.Type.ime())
                 } else {
@@ -203,6 +206,7 @@ class VideoSwapSettingsFragment : Fragment() {
             }
         }
         binding.playerTypeInput.editText?.apply {
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
             val string = item.playerType ?: ""
             text.replace(0, length(), string, 0, string.length)
             setOnEditorActionListener { _, actionId, _ ->

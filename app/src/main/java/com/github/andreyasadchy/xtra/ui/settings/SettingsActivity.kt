@@ -795,6 +795,10 @@ class SettingsActivity : AppCompatActivity() {
                 true
             }
             findPreference<Preference>("custom_proxy_settings")?.setOnPreferenceClickListener {
+                if (TvUi.isTv(requireContext()) && requireContext().prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                    android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_LONG).show()
+                    return@setOnPreferenceClickListener true
+                }
                 val openScreen = {
                     requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
                     findNavController().navigate(SettingsNavGraphDirections.actionGlobalCustomProxySettingsFragment())
@@ -816,6 +820,7 @@ class SettingsActivity : AppCompatActivity() {
                                     repository.updateCustomProxies(changed)
                                 }
                                 if (isAdded) {
+                                    updateTvAdsAndProxiesState()
                                     updateTvProxySummary()
                                 }
                             }
@@ -827,9 +832,57 @@ class SettingsActivity : AppCompatActivity() {
                 true
             }
             findPreference<Preference>("stream_proxy_settings")?.setOnPreferenceClickListener {
+                if (TvUi.isTv(requireContext()) && requireContext().prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                    android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_LONG).show()
+                    return@setOnPreferenceClickListener true
+                }
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalStreamProxySettingsFragment())
                 true
+            }
+            findPreference<Preference>("video_swap_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalVideoSwapSettingsFragment())
+                true
+            }
+            if (TvUi.isTv(requireContext())) {
+                findPreference<SwitchPreferenceCompat>(C.TV_EXPERIMENTAL_ADBLOCK)?.setOnPreferenceChangeListener { _, newValue ->
+                    val enabled = newValue as Boolean
+                    if (enabled && com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isAnyProxyEnabled(requireContext())) {
+                        android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_disabled_by_proxy, android.widget.Toast.LENGTH_LONG).show()
+                        return@setOnPreferenceChangeListener false
+                    }
+                    requireContext().prefs().edit().putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, enabled).apply()
+                    updateTvAdsAndProxiesState()
+                    updateTvProxySummary()
+                    true
+                }
+                findPreference<SwitchPreferenceCompat>(C.PLAYER_USE_STREAM_PROXY)?.setOnPreferenceChangeListener { _, newValue ->
+                    val enabled = newValue as Boolean
+                    if (enabled && requireContext().prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                        android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_LONG).show()
+                        return@setOnPreferenceChangeListener false
+                    }
+                    requireContext().prefs().edit().putBoolean(C.PLAYER_USE_STREAM_PROXY, enabled).apply()
+                    updateTvAdsAndProxiesState()
+                    true
+                }
+                findPreference<SwitchPreferenceCompat>(C.PLAYER_ADBLOCK)?.setOnPreferenceChangeListener { _, newValue ->
+                    val enabled = newValue as Boolean
+                    if (!enabled && !com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isAnyProxyEnabled(requireContext())) {
+                        val hintRes = if (requireContext().prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                            R.string.tv_adblock_swap_locked_exp_hint
+                        } else {
+                            R.string.tv_adblock_swap_locked_hint
+                        }
+                        android.widget.Toast.makeText(requireContext(), hintRes, android.widget.Toast.LENGTH_LONG).show()
+                        return@setOnPreferenceChangeListener false
+                    }
+                    requireContext().prefs().edit().putBoolean(C.PLAYER_ADBLOCK, enabled).apply()
+                    updateTvAdsAndProxiesState()
+                    true
+                }
+                updateTvAdsAndProxiesState()
             }
             findPreference<Preference>("playback_settings")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
@@ -1103,6 +1156,9 @@ class SettingsActivity : AppCompatActivity() {
         /** TV: the row of the custom proxies says whether they are on and how many there are ("On · 3 proxies"). */
         override fun onResume() {
             super.onResume()
+            if (TvUi.isTv(requireContext())) {
+                updateTvAdsAndProxiesState()
+            }
             updateTvProxySummary()
             val url = pendingUpdateUrl
             if (url != null) {
@@ -1113,6 +1169,49 @@ class SettingsActivity : AppCompatActivity() {
                     pendingUpdateUrl = null
                 }
             }
+        }
+
+        fun updateTvAdsAndProxiesState() {
+            val ctx = context ?: return
+            if (!TvUi.isTv(ctx)) return
+            com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.normalizePrefs(ctx)
+            val prefs = ctx.prefs()
+            val expOn = prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
+            val customProxyOn = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+            val streamProxyOn = prefs.getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
+            val anyProxyOn = !expOn && (customProxyOn || streamProxyOn)
+            val swapOn = if (!anyProxyOn) true else prefs.getBoolean(C.PLAYER_ADBLOCK, true)
+
+            disabledHints[C.PLAYER_ADBLOCK] = {
+                getString(if (expOn) R.string.tv_adblock_swap_locked_exp_hint else R.string.tv_adblock_swap_locked_hint)
+            }
+            disabledHints[C.TV_EXPERIMENTAL_ADBLOCK] = {
+                getString(R.string.tv_adblock_exp_disabled_by_proxy)
+            }
+            disabledHints["custom_proxy_settings"] = {
+                getString(R.string.tv_adblock_exp_proxies_disabled)
+            }
+            disabledHints[C.PLAYER_USE_STREAM_PROXY] = {
+                getString(R.string.tv_adblock_exp_proxies_disabled)
+            }
+            disabledHints["stream_proxy_settings"] = {
+                getString(R.string.tv_adblock_exp_proxies_disabled)
+            }
+
+            findPreference<SwitchPreferenceCompat>(C.PLAYER_ADBLOCK)?.apply {
+                isChecked = swapOn
+                isEnabled = anyProxyOn
+            }
+            findPreference<SwitchPreferenceCompat>(C.TV_EXPERIMENTAL_ADBLOCK)?.apply {
+                isChecked = expOn
+                isEnabled = !anyProxyOn
+            }
+            findPreference<Preference>("custom_proxy_settings")?.isEnabled = !expOn
+            findPreference<SwitchPreferenceCompat>(C.PLAYER_USE_STREAM_PROXY)?.apply {
+                isChecked = !expOn && streamProxyOn
+                isEnabled = !expOn
+            }
+            findPreference<Preference>("stream_proxy_settings")?.isEnabled = !expOn
         }
 
         fun updateTvProxySummary() {
@@ -2098,7 +2197,14 @@ class SettingsActivity : AppCompatActivity() {
                 (requireActivity() as? SettingsActivity)?.setResult()
                 true
             }
-            listOf(C.TV_HOME_HERO, C.TV_HOME_GREETING, C.TV_HOME_STATS_BADGE, C.TV_COMPACT_RAIL).forEach { key ->
+            listOf(
+                C.TV_HOME_HERO,
+                C.TV_HOME_GREETING,
+                C.TV_HOME_STATS_BADGE,
+                C.TV_COMPACT_RAIL,
+                C.TV_HOME_FOLLOWED_SHOW_ALL,
+                C.TV_HIDE_MENU_STATS,
+            ).forEach { key ->
                 findPreference<Preference>(key)?.setOnPreferenceChangeListener { _, _ ->
                     (requireActivity() as? SettingsActivity)?.setResult()
                     true
@@ -2141,27 +2247,93 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    /** Ad blocker of Xtra TV: on / off, backup player types (video swap), hiding during ads. */
+    /** Ad blocker of Xtra TV: Swap (VAFT) and Experimental (live VOD), plus hiding during ads. */
     class AdblockSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.adblock_preferences, rootKey)
-            // the ad blocker always uses video swap: its switch only counts when the ad blocker is off
-            val useVideoSwap = findPreference<SwitchPreferenceCompat>(C.PLAYER_USE_VIDEO_SWAP)
-            val updateUseVideoSwap = { adblock: Boolean ->
-                useVideoSwap?.isEnabled = !adblock
-                useVideoSwap?.summary = getString(if (adblock) R.string.use_video_swap_adblock_on else R.string.use_video_swap_desc)
-            }
-            findPreference<SwitchPreferenceCompat>(C.PLAYER_ADBLOCK)?.let { adblock ->
-                updateUseVideoSwap(adblock.isChecked)
-                adblock.setOnPreferenceChangeListener { _, newValue ->
-                    updateUseVideoSwap(newValue as Boolean)
+            if (TvUi.isTv(requireContext())) {
+                findPreference<Preference>("video_swap_settings")?.isVisible = false
+                findPreference<SwitchPreferenceCompat>(C.PLAYER_ADBLOCK)?.apply {
+                    setTitle(R.string.tv_adblock_swap_title)
+                    setSummary(R.string.tv_adblock_summary_1440p)
+                    setOnPreferenceChangeListener { _, newValue ->
+                        val enabled = newValue as Boolean
+                        if (!enabled && !com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isAnyProxyEnabled(requireContext())) {
+                            val hintRes = if (requireContext().prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                                R.string.tv_adblock_swap_locked_exp_hint
+                            } else {
+                                R.string.tv_adblock_swap_locked_hint
+                            }
+                            android.widget.Toast.makeText(requireContext(), hintRes, android.widget.Toast.LENGTH_LONG).show()
+                            return@setOnPreferenceChangeListener false
+                        }
+                        requireContext().prefs().edit().putBoolean(C.PLAYER_ADBLOCK, enabled).apply()
+                        updateTvAdblockState()
+                        true
+                    }
+                }
+                findPreference<SwitchPreferenceCompat>(C.TV_EXPERIMENTAL_ADBLOCK)?.setOnPreferenceChangeListener { _, newValue ->
+                    val enabled = newValue as Boolean
+                    if (enabled && com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isAnyProxyEnabled(requireContext())) {
+                        android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_disabled_by_proxy, android.widget.Toast.LENGTH_LONG).show()
+                        return@setOnPreferenceChangeListener false
+                    }
+                    requireContext().prefs().edit().putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, enabled).apply()
+                    updateTvAdblockState()
+                    true
+                }
+                updateTvAdblockState()
+            } else {
+                findPreference<Preference>(C.TV_EXPERIMENTAL_ADBLOCK)?.isVisible = false
+                // the ad blocker always uses video swap: its switch only counts when the ad blocker is off
+                val useVideoSwap = findPreference<SwitchPreferenceCompat>(C.PLAYER_USE_VIDEO_SWAP)
+                val updateUseVideoSwap = { adblock: Boolean ->
+                    useVideoSwap?.isEnabled = !adblock
+                    useVideoSwap?.summary = getString(if (adblock) R.string.use_video_swap_adblock_on else R.string.use_video_swap_desc)
+                }
+                findPreference<SwitchPreferenceCompat>(C.PLAYER_ADBLOCK)?.let { adblock ->
+                    updateUseVideoSwap(adblock.isChecked)
+                    adblock.setOnPreferenceChangeListener { _, newValue ->
+                        updateUseVideoSwap(newValue as Boolean)
+                        true
+                    }
+                }
+                findPreference<Preference>("video_swap_settings")?.setOnPreferenceClickListener {
+                    requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                    findNavController().navigate(SettingsNavGraphDirections.actionGlobalVideoSwapSettingsFragment())
                     true
                 }
             }
-            findPreference<Preference>("video_swap_settings")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalVideoSwapSettingsFragment())
-                true
+        }
+
+        override fun onResume() {
+            super.onResume()
+            if (TvUi.isTv(requireContext())) {
+                updateTvAdblockState()
+            }
+        }
+
+        private fun updateTvAdblockState() {
+            val ctx = context ?: return
+            if (!TvUi.isTv(ctx)) return
+            com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.normalizePrefs(ctx)
+            val prefs = ctx.prefs()
+            val expOn = prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
+            val anyProxyOn = !expOn && com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isAnyProxyEnabled(ctx)
+            val swapOn = if (!anyProxyOn) true else prefs.getBoolean(C.PLAYER_ADBLOCK, true)
+            disabledHints[C.PLAYER_ADBLOCK] = {
+                getString(if (expOn) R.string.tv_adblock_swap_locked_exp_hint else R.string.tv_adblock_swap_locked_hint)
+            }
+            disabledHints[C.TV_EXPERIMENTAL_ADBLOCK] = {
+                getString(R.string.tv_adblock_exp_disabled_by_proxy)
+            }
+            findPreference<SwitchPreferenceCompat>(C.PLAYER_ADBLOCK)?.apply {
+                isChecked = swapOn
+                isEnabled = anyProxyOn
+            }
+            findPreference<SwitchPreferenceCompat>(C.TV_EXPERIMENTAL_ADBLOCK)?.apply {
+                isChecked = expOn
+                isEnabled = !anyProxyOn
             }
         }
 
@@ -2520,18 +2692,42 @@ class SettingsActivity : AppCompatActivity() {
                         getPreference(index).let { if (it is PreferenceCategory) it.flatten() else listOf(it) }
                     }
                     preferenceManager.inflateFromResource(requireContext(), item.first, null).flatten().forEach {
+                        val isTvDevice = resources.getBoolean(R.bool.isTv)
                         // the settings hidden on this device are not found either
-                        if (!it.isVisible || (resources.getBoolean(R.bool.isTv) && it.key in MaterialPreferenceFragment.TV_HIDDEN_KEYS)) {
+                        if (!it.isVisible ||
+                            (isTvDevice && it.key in MaterialPreferenceFragment.TV_HIDDEN_KEYS) ||
+                            (!isTvDevice && it.key == C.TV_EXPERIMENTAL_ADBLOCK)
+                        ) {
                             return@forEach
+                        }
+                        val navDir = if (isTvDevice && it.key == "video_swap_settings") {
+                            SettingsNavGraphDirections.actionGlobalVideoSwapSettingsFragment()
+                        } else {
+                            item.second
+                        }
+                        val loc = if (isTvDevice && it.key == "video_swap_settings") {
+                            getString(R.string.tv_settings_section_advanced)
+                        } else {
+                            item.third
+                        }
+                        val title = if (isTvDevice && it.key == C.PLAYER_ADBLOCK) {
+                            getString(R.string.tv_adblock_swap_title)
+                        } else {
+                            it.title
+                        }
+                        val summary = if (isTvDevice && it.key == C.PLAYER_ADBLOCK) {
+                            getString(R.string.tv_adblock_summary_1440p)
+                        } else {
+                            it.summary
                         }
                         when (it) {
                             is SwitchPreferenceCompat -> {
                                 list.add(SettingsSearchItem(
-                                    navDirections = item.second,
-                                    location = item.third,
+                                    navDirections = navDir,
+                                    location = loc,
                                     key = it.key,
-                                    title = it.title,
-                                    summary = it.summary,
+                                    title = title,
+                                    summary = summary,
                                     value = if (it.isChecked) {
                                         getString(R.string.enabled_setting)
                                     } else {
@@ -2541,22 +2737,22 @@ class SettingsActivity : AppCompatActivity() {
                             }
                             is SeekBarPreference -> {
                                 list.add(SettingsSearchItem(
-                                    navDirections = item.second,
-                                    location = item.third,
+                                    navDirections = navDir,
+                                    location = loc,
                                     key = it.key,
-                                    title = it.title,
-                                    summary = it.summary,
+                                    title = title,
+                                    summary = summary,
                                     value = it.value.toString()
                                 ))
                             }
                             is PreferenceCategory -> {}
                             else -> {
                                 list.add(SettingsSearchItem(
-                                    navDirections = item.second,
-                                    location = item.third,
+                                    navDirections = navDir,
+                                    location = loc,
                                     key = it.key,
-                                    title = it.title,
-                                    summary = it.summary,
+                                    title = title,
+                                    summary = summary,
                                 ))
                             }
                         }

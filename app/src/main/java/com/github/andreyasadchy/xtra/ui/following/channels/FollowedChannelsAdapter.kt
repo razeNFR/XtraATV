@@ -107,6 +107,21 @@ class FollowedChannelsAdapter(
                             )
                         )
                     }
+                    if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                        root.setOnLongClickListener {
+                            val activity = fragment.activity as? com.github.andreyasadchy.xtra.ui.main.MainActivity ?: return@setOnLongClickListener false
+                            activity.showTvStreamActions(
+                                com.github.andreyasadchy.xtra.model.ui.Stream(
+                                    channelId = item.id,
+                                    channelLogin = item.login,
+                                    channelName = item.name,
+                                    channelImageURL = item.profileImageURL,
+                                    gameName = item.liveGame,
+                                )
+                            )
+                            true
+                        }
+                    }
                     if (item.profileImage != null) {
                         userImage.visibility = View.VISIBLE
                         fragment.requireContext().imageLoader.enqueue(

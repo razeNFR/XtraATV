@@ -89,6 +89,7 @@ object TvHomeRows {
     const val ROW_FOLLOWED_VIDEOS = "followed_videos"
     const val ROW_FOLLOWED_CLIPS = "followed_clips"
     const val ROW_FOLLOWED_GAMES = "followed_games"
+    const val ROW_OFFLINE_CHANNELS = "offline_channels"
     const val ROW_STATS = "stats"
     const val ROW_GAMES = "games"
 
@@ -105,6 +106,7 @@ object TvHomeRows {
         ROW_FOLLOWED_VIDEOS,
         ROW_FOLLOWED_CLIPS,
         ROW_FOLLOWED_GAMES,
+        ROW_OFFLINE_CHANNELS,
         ROW_STATS,
         ROW_GAMES,
     )
@@ -173,6 +175,7 @@ object TvHomeRows {
             add(Entry(ROW_FOLLOWED_VIDEOS, videosEnabled))
             add(Entry(ROW_FOLLOWED_CLIPS, false))
             add(Entry(ROW_FOLLOWED_GAMES, false))
+            add(Entry(ROW_OFFLINE_CHANNELS, false))
             add(Entry(ROW_STATS, true))
             add(Entry(ROW_GAMES, true))
         }
@@ -326,6 +329,7 @@ object TvHomeRows {
         id == ROW_FOLLOWED_VIDEOS -> R.drawable.tv_ic_video_library
         id == ROW_FOLLOWED_CLIPS -> R.drawable.tv_ic_play
         id == ROW_FOLLOWED_GAMES -> R.drawable.tv_ic_heart
+        id == ROW_OFFLINE_CHANNELS -> R.drawable.tv_ic_person
         id == ROW_STATS -> R.drawable.tv_ic_bar_chart
         id == ROW_GAMES -> R.drawable.tv_ic_gamepad
         id.startsWith("lang:") -> R.drawable.tv_ic_globe
@@ -354,6 +358,7 @@ object TvHomeRows {
             ROW_FOLLOWED_VIDEOS -> context.getString(R.string.tv_followed_videos_row)
             ROW_FOLLOWED_CLIPS -> context.getString(R.string.tv_home_row_clips)
             ROW_FOLLOWED_GAMES -> context.getString(R.string.tv_home_row_followed_games)
+            ROW_OFFLINE_CHANNELS -> context.getString(R.string.tv_home_row_offline_channels)
             ROW_STATS -> context.getString(R.string.tv_stats)
             ROW_GAMES -> context.getString(R.string.games)
             else -> id

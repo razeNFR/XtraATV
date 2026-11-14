@@ -484,7 +484,13 @@ class ExoPlayerFragment : PlayerFragment() {
         lines.add("Quality    ${super.getCurrentQualityLabel() ?: "-"}")
         val buffer = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0)
         lines.add("Buffer     ${"%.1f".format(buffer / 1000f)} s")
-        if (player.isCurrentMediaItemLive) {
+        if (playbackService?.experimentalVodActive == true) {
+            val delayMs = getLivePictureTime()?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
+                ?: getTotalDuration()?.let { (it - player.currentPosition).coerceAtLeast(0L) }
+            if (delayMs != null) {
+                lines.add("Latency    ${"%.1f".format(delayMs / 1000f)} s")
+            }
+        } else if (player.isCurrentMediaItemLive) {
             player.currentLiveOffset.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { lines.add("Latency    ${"%.1f".format(it / 1000f)} s") }
         }
         player.videoDecoderCounters?.let { counters ->
@@ -500,12 +506,7 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun getLivePictureTime(): Long? {
         val service = playbackService ?: return null
         if (service.type != BasePlaybackService.STREAM) return null
-        val player = service.player ?: return null
-        val timeline = player.currentTimeline
-        if (timeline.isEmpty || player.currentMediaItemIndex !in 0 until timeline.windowCount) return null
-        // the time of the first segment of the playlist (EXT-X-PROGRAM-DATE-TIME) + where the picture is in it
-        val start = timeline.getWindow(player.currentMediaItemIndex, Timeline.Window()).windowStartTimeMs
-        return if (start != androidx.media3.common.C.TIME_UNSET) start + player.currentPosition else null
+        return service.getStreamPictureEpochMs()
     }
 
     override fun getCurrentSpeed() = playbackService?.player?.playbackParameters?.speed
@@ -535,18 +536,22 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun rewind() {
         playbackService?.seekBack()
+        if (isTvLiveTimeline()) updateTvLiveTimeline()
     }
 
     override fun fastForward() {
         playbackService?.seekForward()
+        if (isTvLiveTimeline()) updateTvLiveTimeline()
     }
 
     override fun seek(position: Long) {
         playbackService?.seekTo(position)
+        if (isTvLiveTimeline()) updateTvLiveTimeline()
     }
 
     override fun seekToLivePosition() {
         playbackService?.seekToDefaultPosition()
+        if (isTvLiveTimeline()) updateTvLiveTimeline()
     }
 
     override fun setPlaybackSpeed(speed: Float) {
@@ -560,6 +565,14 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun updateProgress() {
         if (isTvLiveTimeline()) {
             updateTvLiveTimeline()
+            if (isExperimentalVodActive()) {
+                with(binding.playerControls) {
+                    root.removeCallbacks(updateProgressAction)
+                    if (root.isVisible) {
+                        root.postDelayed(updateProgressAction, 1000L)
+                    }
+                }
+            }
             return
         }
         with(binding.playerControls) {

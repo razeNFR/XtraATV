@@ -75,9 +75,12 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     private val binding get() = _binding!!
     private val viewModel: ChatViewModel by viewModels { ChatViewModelFactory }
 
+    private var raidAutoSwitchJob: kotlinx.coroutines.Job? = null
+
     /** A raid was announced and its stream will be opened (switch to raids on): the player waits for it. */
     fun isRaidPending(): Boolean {
-        return context?.prefs()?.getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) == true && viewModel.raid.value != null && !viewModel.raidClosed
+        return context?.prefs()?.getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) == true &&
+            ((viewModel.raid.value != null && !viewModel.raidClosed) || raidAutoSwitchJob?.isActive == true)
     }
     private var adapter: ChatAdapter? = null
 
@@ -119,6 +122,13 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 // multi-stream: each chat with the picture of its own stream
                 is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment -> parent.getLivePictureTime(delayLogin)
                 else -> null
+            }
+        }
+        viewModel.forceAutoDelay = {
+            when (val parent = parentFragment) {
+                is com.github.andreyasadchy.xtra.ui.player.PlayerFragment -> parent.isExperimentalVodActive()
+                is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment -> parent.isExperimentalVodActive(delayLogin)
+                else -> false
             }
         }
         (parentFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment)?.onChatFragmentReady(this)
@@ -464,8 +474,14 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.hideRaid.collectLatest {
                                 if (it) {
-                                    raidLayout.visibility = View.GONE
-                                    viewModel.raidClosed = true
+                                    if (viewModel.isActive() == true) {
+                                        raidAutoSwitchJob?.cancel()
+                                        raidAutoSwitchJob = null
+                                    }
+                                    if (raidAutoSwitchJob?.isActive != true) {
+                                        raidLayout.visibility = View.GONE
+                                        viewModel.raidClosed = true
+                                    }
                                     viewModel.hideRaid.value = false
                                 }
                             }
@@ -477,19 +493,40 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 if (raid != null) {
                                     if (!viewModel.raidClosed) {
                                         if (raid.openStream) {
-                                            if (requireContext().prefs().getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) && parentFragment is PlayerFragment) {
-                                                (requireActivity() as? MainActivity)?.startStream(
-                                                    Stream(
-                                                        channelId = raid.targetId,
-                                                        channelLogin = raid.targetLogin,
-                                                        channelName = raid.targetName,
-                                                        channelImageURL = raid.targetImageURL,
-                                                    )
+                                            val parentPlayer = parentFragment as? PlayerFragment
+                                            if (parentPlayer?.isExperimentalVodActive() == true) {
+                                                raidAutoSwitchJob?.cancel()
+                                                val targetStream = Stream(
+                                                    channelId = raid.targetId,
+                                                    channelLogin = raid.targetLogin,
+                                                    channelName = raid.targetName,
+                                                    channelImageURL = raid.targetImageURL,
                                                 )
+                                                raidAutoSwitchJob = viewLifecycleOwner.lifecycleScope.launch {
+                                                    kotlinx.coroutines.delay(com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS)
+                                                    _binding?.raidLayout?.visibility = View.GONE
+                                                    viewModel.raidClosed = true
+                                                    if (isAdded && requireContext().prefs().getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) && parentFragment is PlayerFragment) {
+                                                        (activity as? MainActivity)?.startStream(targetStream)
+                                                    }
+                                                }
+                                            } else {
+                                                if (requireContext().prefs().getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) && parentFragment is PlayerFragment) {
+                                                    (requireActivity() as? MainActivity)?.startStream(
+                                                        Stream(
+                                                            channelId = raid.targetId,
+                                                            channelLogin = raid.targetLogin,
+                                                            channelName = raid.targetName,
+                                                            channelImageURL = raid.targetImageURL,
+                                                        )
+                                                    )
+                                                }
+                                                raidLayout.visibility = View.GONE
+                                                viewModel.raidClosed = true
                                             }
-                                            raidLayout.visibility = View.GONE
-                                            viewModel.raidClosed = true
                                         } else {
+                                            raidAutoSwitchJob?.cancel()
+                                            raidAutoSwitchJob = null
                                             raidLayout.visibility = View.VISIBLE
                                             raidLayout.setOnClickListener { viewModel.raidClicked.value = raid }
                                             requireContext().imageLoader.enqueue(
@@ -503,6 +540,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                 }.build()
                                             )
                                             raidClose.setOnClickListener {
+                                                raidAutoSwitchJob?.cancel()
+                                                raidAutoSwitchJob = null
                                                 raidLayout.visibility = View.GONE
                                                 viewModel.raidClosed = true
                                             }
@@ -530,6 +569,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.raidClicked.collectLatest {
                                 if (it != null) {
+                                    raidAutoSwitchJob?.cancel()
+                                    raidAutoSwitchJob = null
                                     (requireActivity() as? MainActivity)?.startStream(
                                         Stream(
                                             channelId = it.targetId,
@@ -636,6 +677,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                     viewModel.predictionTimer?.cancel()
                                     viewModel.predictionClosed = true
                                     viewModel.hidePrediction.value = false
+                                    (parentFragment as? PlayerFragment)?.onTvPredictionHidden()
                                 }
                             }
                         }
@@ -645,12 +687,14 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         viewModel.predictionSecondsLeft.value = null
                         viewModel.predictionTimer?.cancel()
                         viewModel.predictionClosed = true
+                        (parentFragment as? PlayerFragment)?.onTvPredictionHidden()
                     }
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.prediction.collectLatest { prediction ->
                                 if (prediction != null) {
                                     if (!viewModel.predictionClosed) {
+                                        (parentFragment as? PlayerFragment)?.onTvPredictionEvent(prediction)
                                         when (prediction.status) {
                                             "ACTIVE" -> {
                                                 predictionLayout.visibility = View.VISIBLE
@@ -719,6 +763,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                 viewModel.predictionSecondsLeft.value = null
                                                 viewModel.predictionTimer?.cancel()
                                                 viewModel.predictionClosed = true
+                                                (parentFragment as? PlayerFragment)?.onTvPredictionHidden()
                                             }
                                         }
                                     }
@@ -730,6 +775,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.predictionSecondsLeft.collectLatest {
+                                (parentFragment as? PlayerFragment)?.onTvPredictionSecondsLeft(it)
                                 if (it != null) {
                                     predictionStatus.text = getString(R.string.remaining_time, DateUtils.formatElapsedTime(it.toLong()))
                                     if (it <= 0) {
@@ -941,14 +987,16 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     fun isActive(): Boolean? {
-        return viewModel.isActive()
+        return if (isAdded) viewModel.isActive() else null
     }
 
     fun disconnect() {
+        if (!isAdded) return
         viewModel.disconnect()
     }
 
     fun reconnect() {
+        if (!isAdded) return
         val channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN)
         if (channelLogin != null) {
             viewModel.startLiveChat(requireArguments().getString(KEY_CHANNEL_ID), channelLogin)
@@ -1013,6 +1061,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     fun reloadEmotes() {
+        if (!isAdded) return
         viewModel.reloadEmotes(
             requireArguments().getString(KEY_CHANNEL_ID),
             requireArguments().getString(KEY_CHANNEL_LOGIN)
@@ -1020,39 +1069,63 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     fun startReplayChatLoad() {
+        if (!isAdded) return
         viewModel.startReplayChatLoad()
     }
 
+    fun startHybridReplay(videoId: String, createdAt: String?) {
+        if (!isAdded) return
+        val parent = parentFragment as? PlayerFragment ?: return
+        viewModel.startHybridReplay(
+            videoId = videoId,
+            createdAt = createdAt,
+            getCurrentPosition = parent::getCurrentPosition,
+            getCurrentSpeed = parent::getCurrentSpeed,
+        )
+    }
+
+    fun stopHybridReplay() {
+        if (!isAdded) return
+        viewModel.stopHybridReplay()
+    }
+
+    fun isHybridReplayActive(): Boolean = isAdded && viewModel.hybridReplayActive
+
     fun updatePosition(position: Long) {
+        if (!isAdded) return
         viewModel.updatePosition(position)
     }
 
     /** The delay of the chat in Auto (ms), 0 while not measured. */
-    fun getAutoDelayMs() = viewModel.autoDelayMs
+    fun getAutoDelayMs(): Long = if (isAdded) viewModel.effectiveAutoDelayMs() else 0L
 
     fun updateSpeed(speed: Float) {
+        if (!isAdded) return
         viewModel.updateSpeed(speed)
     }
 
     fun updateStreamId(id: String?) {
+        if (!isAdded) return
         viewModel.streamId = id
     }
 
     fun getTranslateAllMessages(): Boolean {
-        return viewModel.translateAllMessages.value == true
+        return isAdded && viewModel.translateAllMessages.value == true
     }
 
     fun saveTranslatedChannel(channelId: String) {
+        if (!isAdded) return
         viewModel.translateAllMessages.value = true
         viewModel.saveTranslatedChannel(channelId)
     }
 
     fun deleteTranslatedChannel(channelId: String) {
+        if (!isAdded) return
         viewModel.translateAllMessages.value = false
         viewModel.deleteTranslatedChannel(channelId)
     }
 
-    fun emoteMenuIsVisible() = binding.emoteMenu.isVisible
+    fun emoteMenuIsVisible() = _binding?.emoteMenu?.isVisible == true
 
     fun toggleEmoteMenu(enable: Boolean) {
         if (enable) {
@@ -1410,6 +1483,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     override fun onDestroyView() {
+        raidAutoSwitchJob?.cancel()
+        raidAutoSwitchJob = null
         super.onDestroyView()
         _binding = null
     }
@@ -1458,7 +1533,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     fun getRecentChatters(): List<com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.BlockedUser> =
-        viewModel.getRecentChatters()
+        if (isAdded) viewModel.getRecentChatters() else emptyList()
 
     companion object {
         private const val KEY_IS_LIVE = "isLive"

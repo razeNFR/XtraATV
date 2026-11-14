@@ -16,13 +16,17 @@ import com.github.andreyasadchy.xtra.graphql.type.VideoSort
 import com.github.andreyasadchy.xtra.model.ui.Clip
 import com.github.andreyasadchy.xtra.model.ui.Game
 import com.github.andreyasadchy.xtra.model.ui.Stream
+import com.github.andreyasadchy.xtra.model.ui.User
 import com.github.andreyasadchy.xtra.model.ui.Video
+import com.github.andreyasadchy.xtra.repository.BookmarksRepository
 import com.github.andreyasadchy.xtra.repository.GraphQLRepository
 import com.github.andreyasadchy.xtra.repository.HelixRepository
 import com.github.andreyasadchy.xtra.repository.LocalChannelFollowsRepository
 import com.github.andreyasadchy.xtra.repository.LocalGameFollowsRepository
+import com.github.andreyasadchy.xtra.repository.OfflineVideosRepository
 import com.github.andreyasadchy.xtra.repository.datasource.ChannelClipsDataSource
 import com.github.andreyasadchy.xtra.repository.datasource.ChannelSuggestionsDataSource
+import com.github.andreyasadchy.xtra.repository.datasource.FollowedChannelsDataSource
 import com.github.andreyasadchy.xtra.repository.datasource.FollowedGamesDataSource
 import com.github.andreyasadchy.xtra.repository.datasource.FollowedStreamsDataSource
 import com.github.andreyasadchy.xtra.repository.datasource.FollowedVideosDataSource
@@ -53,6 +57,8 @@ class TvHomeViewModel(
     private val applicationContext: Context,
     private val localChannelFollowsRepository: LocalChannelFollowsRepository,
     private val localGameFollowsRepository: LocalGameFollowsRepository,
+    private val offlineVideosRepository: OfflineVideosRepository,
+    private val bookmarksRepository: BookmarksRepository,
     private val graphQLRepository: GraphQLRepository,
     private val helixRepository: HelixRepository,
 ) : ViewModel() {
@@ -66,6 +72,7 @@ class TvHomeViewModel(
     val popular = MutableStateFlow<List<Stream>?>(null)
     val recommended = MutableStateFlow<List<Stream>?>(null)
     val followedGames = MutableStateFlow<List<Game>?>(null)
+    val offlineChannels = MutableStateFlow<List<User>?>(null)
     val games = MutableStateFlow<List<Game>?>(null)
     /** Rows of the popular streams of one language (`lang:<code>` -> streams). */
     val languageRows = MutableStateFlow<Map<String, List<Stream>>>(emptyMap())
@@ -78,6 +85,12 @@ class TvHomeViewModel(
 
     private var loadedAt = 0L
     private var loadedActiveIds: List<String>? = null
+    private var followedSource: PagingSource<Int, Stream>? = null
+    private var followedNextKey: Int? = null
+    private var loadingMoreFollowed = false
+    private var offlineSource: FollowedChannelsDataSource? = null
+    private var offlineNextKey: Int? = null
+    private var loadingMoreOffline = false
 
     /** Picture of the account logged in, for the greeting at the top of the home. */
     val accountImage = MutableStateFlow<String?>(null)
@@ -116,6 +129,14 @@ class TvHomeViewModel(
             .sortedBy { s -> favOrder[s.channelLogin?.lowercase()] ?: Int.MAX_VALUE }
     }
 
+    private fun sortOfflineChannels(list: List<User>): List<User> {
+        val favOrder = TvFavorites.items.value.mapIndexed { idx, fav -> fav.login.lowercase() to idx }.toMap()
+        return list.sortedWith(
+            compareBy<User> { u -> favOrder[u.login?.lowercase()] ?: Int.MAX_VALUE }
+                .thenByDescending { it.lastBroadcast ?: "" }
+        )
+    }
+
     init {
         TvFavorites.load(applicationContext)
         // a channel added to the favorites or removed: the followed row and favorites row update at once
@@ -125,6 +146,9 @@ class TvHomeViewModel(
                     val sorted = TvFavorites.sort(list.sortedByDescending { stream -> stream.viewerCount })
                     followed.value = sorted
                     favorites.value = computeFavorites(sorted)
+                }
+                offlineChannels.value?.let { list ->
+                    offlineChannels.value = sortOfflineChannels(list)
                 }
             }
         }
@@ -163,6 +187,12 @@ class TvHomeViewModel(
         }
         loadedActiveIds = activeIds
         loadedAt = System.currentTimeMillis()
+        followedSource = null
+        followedNextKey = null
+        loadingMoreFollowed = false
+        offlineSource = null
+        offlineNextKey = null
+        loadingMoreOffline = false
         val activeSet = activeIds.toSet()
         val showHero = prefs.getBoolean(C.TV_HOME_HERO, true)
         val networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP)
@@ -178,11 +208,20 @@ class TvHomeViewModel(
             TvHomeRows.ROW_FAVORITES in activeSet ||
             TvHomeRows.ROW_FOLLOWED_VIDEOS in activeSet ||
             TvHomeRows.ROW_RECOMMENDED in activeSet ||
-            TvHomeRows.ROW_FOLLOWED_CLIPS in activeSet
+            TvHomeRows.ROW_FOLLOWED_CLIPS in activeSet ||
+            TvHomeRows.ROW_OFFLINE_CHANNELS in activeSet
 
         val followedJob: Job? = if (needFollowed) {
             viewModelScope.launch {
-                val list = loadPage(createFollowedSource())
+                val source = createFollowedSource()
+                val page = try {
+                    source.load(PagingSource.LoadParams.Refresh(null, 30, false)) as? PagingSource.LoadResult.Page
+                } catch (_: Exception) {
+                    null
+                }
+                val list = page?.data.orEmpty().distinctBy { it.channelId ?: it.channelLogin }
+                followedSource = source
+                followedNextKey = page?.nextKey
                 followed.value = list
                 favorites.value = computeFavorites(list)
             }.also { jobs += it }
@@ -268,6 +307,47 @@ class TvHomeViewModel(
             }
         } else {
             followedGames.value = emptyList()
+        }
+
+        if (TvHomeRows.ROW_OFFLINE_CHANNELS in activeSet) {
+            jobs += viewModelScope.launch {
+                followedJob?.join()
+                val liveIds = followed.value.orEmpty().mapNotNull { it.channelId }.toSet()
+                val liveLogins = followed.value.orEmpty().mapNotNull { it.channelLogin?.lowercase() }.toSet()
+                val source = FollowedChannelsDataSource(
+                    sort = "last_broadcast",
+                    order = "desc",
+                    userId = applicationContext.tokenPrefs().getString(C.USER_ID, null),
+                    localChannelFollowsRepository = localChannelFollowsRepository,
+                    offlineVideosRepository = offlineVideosRepository,
+                    bookmarksRepository = bookmarksRepository,
+                    gqlHeaders = gqlAccountHeaders,
+                    graphQLRepository = graphQLRepository,
+                    helixHeaders = helixHeaders,
+                    helixRepository = helixRepository,
+                    enableIntegrity = enableIntegrity,
+                    networkLibrary = networkLibrary,
+                    liveFirst = true,
+                    favorites = TvFavorites.items.value.map { it.login },
+                )
+                val page = try {
+                    source.load(PagingSource.LoadParams.Refresh(null, 100, false)) as? PagingSource.LoadResult.Page
+                } catch (_: Exception) {
+                    null
+                }
+                offlineSource = source
+                offlineNextKey = page?.nextKey
+                val offline = page?.data.orEmpty()
+                    .filter { u ->
+                        u.liveViewers == null &&
+                            (u.id == null || u.id !in liveIds) &&
+                            (u.login == null || u.login.lowercase() !in liveLogins)
+                    }
+                    .distinctBy { it.id ?: it.login }
+                offlineChannels.value = sortOfflineChannels(offline)
+            }
+        } else {
+            offlineChannels.value = emptyList()
         }
 
         val languages = activeEntries.mapNotNull { TvHomeRows.parseLanguage(it.id) }.distinct()
@@ -619,6 +699,59 @@ class TvHomeViewModel(
         )
     }
 
+    fun loadMoreFollowed() {
+        if (!applicationContext.prefs().getBoolean(C.TV_HOME_FOLLOWED_SHOW_ALL, false)) return
+        val key = followedNextKey ?: return
+        val source = followedSource ?: return
+        if (loadingMoreFollowed) return
+        loadingMoreFollowed = true
+        viewModelScope.launch {
+            try {
+                val page = source.load(PagingSource.LoadParams.Append(key, 30, false)) as? PagingSource.LoadResult.Page
+                followedNextKey = page?.nextKey
+                val more = page?.data.orEmpty()
+                if (more.isNotEmpty()) {
+                    val merged = (followed.value.orEmpty() + more)
+                        .distinctBy { it.channelId ?: it.channelLogin }
+                        .sortedByDescending { it.viewerCount }
+                        .let { TvFavorites.sort(it) }
+                    followed.value = merged
+                    favorites.value = computeFavorites(merged)
+                }
+            } catch (_: Exception) {
+            } finally {
+                loadingMoreFollowed = false
+            }
+        }
+    }
+
+    fun loadMoreOfflineChannels() {
+        val key = offlineNextKey ?: return
+        val source = offlineSource ?: return
+        if (loadingMoreOffline) return
+        loadingMoreOffline = true
+        viewModelScope.launch {
+            try {
+                val page = source.load(PagingSource.LoadParams.Append(key, 100, false)) as? PagingSource.LoadResult.Page
+                offlineNextKey = page?.nextKey
+                val liveIds = followed.value.orEmpty().mapNotNull { it.channelId }.toSet()
+                val liveLogins = followed.value.orEmpty().mapNotNull { it.channelLogin?.lowercase() }.toSet()
+                val more = page?.data.orEmpty().filter { u ->
+                    u.liveViewers == null &&
+                        (u.id == null || u.id !in liveIds) &&
+                        (u.login == null || u.login.lowercase() !in liveLogins)
+                }
+                if (more.isNotEmpty()) {
+                    val merged = (offlineChannels.value.orEmpty() + more).distinctBy { it.id ?: it.login }
+                    offlineChannels.value = sortOfflineChannels(merged)
+                }
+            } catch (_: Exception) {
+            } finally {
+                loadingMoreOffline = false
+            }
+        }
+    }
+
     private suspend fun <T : Any> loadPage(source: PagingSource<Int, T>, size: Int = 30): List<T> {
         return try {
             (source.load(PagingSource.LoadParams.Refresh(null, size, false)) as? PagingSource.LoadResult.Page)?.data ?: emptyList()
@@ -636,6 +769,8 @@ class TvHomeViewModel(
                     application.applicationContext,
                     xtraModule.localChannelFollowsRepository,
                     xtraModule.localGameFollowsRepository,
+                    xtraModule.offlineVideosRepository,
+                    xtraModule.bookmarksRepository,
                     xtraModule.graphQLRepository,
                     xtraModule.helixRepository,
                 )

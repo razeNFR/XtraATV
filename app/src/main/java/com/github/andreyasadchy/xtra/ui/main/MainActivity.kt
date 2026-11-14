@@ -367,8 +367,16 @@ class MainActivity : AppCompatActivity() {
             windowInsets
         }
         settingsResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val prevAdblock = adblockPrefsBeforeSettings
+            adblockPrefsBeforeSettings = null
             if (result.resultCode == RESULT_OK) {
                 recreate()
+            } else if (isTv && prevAdblock != null && prevAdblock != snapshotAdblockPrefs() && currentPlayingStream() != null) {
+                val wasMaximized = isPlayerMaximized()
+                restartCurrentStream()
+                if (!wasMaximized) {
+                    (playerFragment as? PlayerFragment)?.minimize()
+                }
             }
         }
         loginResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -1078,7 +1086,8 @@ class MainActivity : AppCompatActivity() {
         if (BuildConfig.DEBUG && isTv) {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
         }
-        if (isTv && (playerFragment as? PlayerFragment)?.consumeHeldDpadDownTail(event) == true) {
+        if (isTv && ((playerFragment as? PlayerFragment)?.consumeHeldDpadUpTail(event) == true ||
+                    (playerFragment as? PlayerFragment)?.consumeHeldDpadDownTail(event) == true)) {
             return true
         }
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
@@ -1099,12 +1108,22 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         }
+        if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && isTvMenuShown && !tvMenuOpenedByBack &&
+            prefs.getBoolean(C.TV_BACK_CLOSES_MENU, true) && !tvMultiStreamShown &&
+            (playerFragment as? PlayerFragment)?.isMaximizedPlayer() != true
+        ) {
+            if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+                closeTvMenuAndFocusContent()
+            }
+            return true
+        }
         if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot() && !tvGridBackCallback.isEnabled) {
             if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
                 val onHome = ::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment
                 if (onHome && prefs.getBoolean(C.TV_CONFIRM_EXIT, true)) {
                     confirmOrExitTvApp()
                 } else {
+                    tvMenuOpenedByBack = true
                     showTvMenu(true)
                 }
             }
@@ -1113,6 +1132,9 @@ class MainActivity : AppCompatActivity() {
         if (isTv && event.action == KeyEvent.ACTION_DOWN && isTvMenuShown &&
             (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
         ) {
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                tvMenuOpenedByBack = false
+            }
             // the menu keeps the focus at its ends, only right leaves it
             val focus = currentFocus
             // the Compose menu handles its own ends
@@ -1131,38 +1153,7 @@ class MainActivity : AppCompatActivity() {
         if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             val focus = currentFocus
             if (focus != null && focus.isInside(binding.navBarContainer)) {
-                binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-                if (tvMenuPendingId != 0) {
-                    binding.root.removeCallbacks(tvMenuAutoNav)
-                    tvMenuAutoNav.run()
-                    tvMenuAutoNavAt = 0L
-                    hideTvMenu()
-                    focusContentAfterMenu(false)
-                    return true
-                }
-                // the home first: giving the focus back to its view would put it on its banner. The card that had the
-                // focus is asked before the view takes the focus (the banner focused meanwhile is not remembered)
-                val home = binding.navHostFragment.findViewById<View>(R.id.tvHome)
-                if (home != null && home.isShown) {
-                    hideTvMenu()
-                    currentTvHome()?.focusLastCard()
-                    home.requestFocus()
-                    return true
-                }
-                // from the menu, go back to the item last selected in the screen, else to its first item
-                val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(binding.navHostFragment) }
-                if (last != null && last.requestFocus()) {
-                    return true
-                }
-                val grid = TvUi.findVisibleGrid(binding.navHostFragment)
-                if (grid != null && focusRememberedItem(grid)) {
-                    return true
-                }
-                if (binding.navHostFragment.requestFocus(View.FOCUS_RIGHT)) {
-                    return true
-                }
-                hideTvMenu()
-                focusContentAfterMenu(false)
+                closeTvMenuAndFocusContent()
                 return true
             }
         }
@@ -1183,6 +1174,7 @@ class MainActivity : AppCompatActivity() {
             ) {
                 val next = FocusFinder.getInstance().findNextFocus(binding.root, focus, View.FOCUS_LEFT)
                 if (next == null || !next.isInside(binding.navHostFragment)) {
+                    tvMenuOpenedByBack = false
                     showTvMenu(true)
                     return true
                 }
@@ -1241,6 +1233,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private var isTvMenuShown = true
+    private var tvMenuOpenedByBack = false
     fun isTvMenuOpen() = isTv && isTvMenuShown
     private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, true)
 
@@ -1447,6 +1440,7 @@ class MainActivity : AppCompatActivity() {
             if (onHome && prefs.getBoolean(C.TV_CONFIRM_EXIT, true)) {
                 confirmOrExitTvApp()
             } else {
+                tvMenuOpenedByBack = true
                 showTvMenu(true)
             }
         }
@@ -1649,7 +1643,46 @@ class MainActivity : AppCompatActivity() {
 
     /** Opens the side menu from a Compose screen (left on its first card). */
     fun openTvMenu() {
+        tvMenuOpenedByBack = false
         showTvMenu(true)
+    }
+
+    private fun closeTvMenuAndFocusContent() {
+        binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        if (tvMenuPendingId != 0) {
+            binding.root.removeCallbacks(tvMenuAutoNav)
+            tvMenuAutoNav.run()
+            tvMenuAutoNavAt = 0L
+            hideTvMenu()
+            focusContentAfterMenu(false)
+            return
+        }
+        // the home first: giving the focus back to its view would put it on its banner. The card that had the
+        // focus is asked before the view takes the focus (the banner focused meanwhile is not remembered)
+        val home = binding.navHostFragment.findViewById<View>(R.id.tvHome)
+        if (home != null && home.isShown) {
+            hideTvMenu()
+            currentTvHome()?.focusLastCard()
+            home.requestFocus()
+            return
+        }
+        // from the menu, go back to the item last selected in the screen, else to its first item
+        val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(binding.navHostFragment) }
+        if (last != null && last.requestFocus()) {
+            hideTvMenu()
+            return
+        }
+        val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+        if (grid != null && focusRememberedItem(grid)) {
+            hideTvMenu()
+            return
+        }
+        if (binding.navHostFragment.requestFocus(View.FOCUS_RIGHT)) {
+            hideTvMenu()
+            return
+        }
+        hideTvMenu()
+        focusContentAfterMenu(false)
     }
 
     private fun refreshStaleStreamLists(view: View) {
@@ -1724,6 +1757,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideTvMenu() {
+        tvMenuOpenedByBack = false
         tvMenuState.pendingFocus = false
         // a player or a multi-stream is over the screens: they stay out of reach of the focus
         if (!isTvPlayerOverContent()) {
@@ -1801,12 +1835,23 @@ class MainActivity : AppCompatActivity() {
         return binding.navHostFragment.requestFocus() || binding.navBarContainer.requestFocus()
     }
 
+    private var adblockPrefsBeforeSettings: List<Boolean>? = null
+
+    private fun snapshotAdblockPrefs(): List<Boolean> = listOf(
+        com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(this),
+        com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(this),
+        prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false),
+        prefs.getBoolean(C.PLAYER_USE_STREAM_PROXY, false),
+    )
+
     fun openSettings() {
+        if (isTv) adblockPrefsBeforeSettings = snapshotAdblockPrefs()
         settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java))
     }
 
     /** TV: the settings of the custom proxies (from the proxy panel of the player). */
     fun openCustomProxySettings() {
+        if (isTv) adblockPrefsBeforeSettings = snapshotAdblockPrefs()
         settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_OPEN, SettingsActivity.OPEN_CUSTOM_PROXIES))
     }
 
@@ -3280,7 +3325,9 @@ class MainActivity : AppCompatActivity() {
                 if ("games" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedGames, Menu.NONE, R.string.tv_menu_followed_games).setIcon(R.drawable.tv_ic_gamepad)
             }
             if (isTv) {
-                menu.add(Menu.NONE, R.id.tvNavStats, Menu.NONE, R.string.tv_nav_stats).setIcon(R.drawable.tv_ic_bar_chart)
+                if (!prefs.getBoolean(C.TV_HIDE_MENU_STATS, false)) {
+                    menu.add(Menu.NONE, R.id.tvNavStats, Menu.NONE, R.string.tv_nav_stats).setIcon(R.drawable.tv_ic_bar_chart)
+                }
                 menu.add(Menu.NONE, R.id.tvNavSettings, Menu.NONE, R.string.settings).setIcon(R.drawable.baseline_settings_black_24)
                 menu.add(Menu.NONE, R.id.tvNavAccount, Menu.NONE, R.string.tv_account).setIcon(R.drawable.baseline_person_black_24)
             }

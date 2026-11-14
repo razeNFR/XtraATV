@@ -190,7 +190,12 @@ class CustomProxySettingsFragment : Fragment() {
             }
             .setNegativeButton(getString(android.R.string.cancel), null)
             .create()
+        val disableSoftKeyboard = resources.getBoolean(R.bool.isTv) &&
+            requireContext().prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
         binding.editText.editText?.apply {
+            if (disableSoftKeyboard) {
+                showSoftInputOnFocus = false
+            }
             val url = item.url ?: ""
             text.replace(0, length(), url, 0, url.length)
             inputType = InputType.TYPE_TEXT_FLAG_MULTI_LINE
@@ -208,7 +213,7 @@ class CustomProxySettingsFragment : Fragment() {
                     false
                 }
             }
-            if (requestFocus()) {
+            if (requestFocus() && !disableSoftKeyboard) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     dialog.window?.decorView?.windowInsetsController?.show(WindowInsets.Type.ime())
                 } else {

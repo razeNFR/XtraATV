@@ -165,6 +165,7 @@ abstract class BasePlaybackService : LifecycleService() {
                 val savedQuality = prefs().getString(C.PLAYER_QUALITY, "720p60")?.substringBefore(" ")
                 when (savedQuality) {
                     VideoQuality.AUTO_QUALITY -> qualities?.find { it.name == VideoQuality.AUTO_QUALITY }
+                    VideoQuality.SOURCE_QUALITY -> qualities?.find { it.name != VideoQuality.AUTO_QUALITY }
                     VideoQuality.AUDIO_ONLY_QUALITY -> qualities?.find { it.name == VideoQuality.AUDIO_ONLY_QUALITY }
                     VideoQuality.CHAT_ONLY_QUALITY -> qualities?.find { it.name == VideoQuality.CHAT_ONLY_QUALITY }
                     else -> findQuality(savedQuality)

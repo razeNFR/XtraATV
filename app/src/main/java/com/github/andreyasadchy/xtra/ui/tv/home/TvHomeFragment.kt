@@ -53,6 +53,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private val showHeroState = mutableStateOf(true)
     private val showGreetingState = mutableStateOf(true)
     private val showStatsBadgeState = mutableStateOf(true)
+    private val showAllFollowedState = mutableStateOf(false)
     /** Kept while the app runs: the home is made again each time its section is opened from the side menu. */
     private val homeFocus get() = sharedFocus
 
@@ -215,6 +216,29 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 }
             },
             showMultiStreamActions = { item -> showMultiStreamActions(item) },
+            openOfflineChannel = { user ->
+                stopPreview()
+                (activity as? MainActivity)?.openTvChannel(
+                    Stream(
+                        channelId = user.id,
+                        channelLogin = user.login,
+                        channelName = user.name,
+                        channelImageURL = user.profileImageURL,
+                    ),
+                    null,
+                )
+            },
+            showOfflineChannelActions = { user ->
+                stopPreview()
+                (activity as? MainActivity)?.showTvStreamActions(
+                    Stream(
+                        channelId = user.id,
+                        channelLogin = user.login,
+                        channelName = user.name,
+                        channelImageURL = user.profileImageURL,
+                    )
+                )
+            },
         )
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.stamp.collect { homeStamp.longValue = it }
@@ -260,6 +284,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val showHero = showHeroState.value
                 val showGreeting = showGreetingState.value
                 val showStatsBadge = showStatsBadgeState.value
+                val showAllFollowed = showAllFollowedState.value
                 val followed by viewModel.followed.collectAsState()
                 val favorites by viewModel.favorites.collectAsState()
                 val multiStreams by viewModel.multiStreams.collectAsState()
@@ -268,6 +293,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val popular by viewModel.popular.collectAsState()
                 val recommended by viewModel.recommended.collectAsState()
                 val followedGames by viewModel.followedGames.collectAsState()
+                val offlineChannels by viewModel.offlineChannels.collectAsState()
                 val games by viewModel.games.collectAsState()
                 val languageRows by viewModel.languageRows.collectAsState()
                 val categoryRows by viewModel.categoryRows.collectAsState()
@@ -305,7 +331,18 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                                 if (list == null) {
                                     add(TvHomeSection.Skeleton(entry.id))
                                 } else if (list.isNotEmpty()) {
-                                    add(TvHomeSection.Streams(entry.id, TvHomeRow(getString(R.string.tv_followed_live), list, followedId, R.drawable.tv_ic_heart)))
+                                    add(
+                                        TvHomeSection.Streams(
+                                            entry.id,
+                                            TvHomeRow(
+                                                title = getString(R.string.tv_followed_live),
+                                                items = if (showAllFollowed) list else list.take(30),
+                                                seeAllId = if (showAllFollowed) 0 else followedId,
+                                                icon = R.drawable.tv_ic_heart,
+                                                onLoadMore = if (showAllFollowed) viewModel::loadMoreFollowed else null,
+                                            )
+                                        )
+                                    )
                                 }
                             }
                             TvHomeRows.ROW_FAVORITES -> {
@@ -360,6 +397,25 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                             TvHomeRows.ROW_FOLLOWED_GAMES -> {
                                 followedGames?.takeIf { it.isNotEmpty() }?.let { list ->
                                     add(TvHomeSection.Games(entry.id, TvHomeRow(getString(R.string.tv_home_row_followed_games), list, followedId, R.drawable.tv_ic_heart)))
+                                }
+                            }
+                            TvHomeRows.ROW_OFFLINE_CHANNELS -> {
+                                val list = offlineChannels
+                                if (list == null) {
+                                    add(TvHomeSection.Skeleton(entry.id))
+                                } else if (list.isNotEmpty()) {
+                                    add(
+                                        TvHomeSection.OfflineChannels(
+                                            entry.id,
+                                            TvHomeRow(
+                                                title = getString(R.string.tv_home_row_offline_channels),
+                                                items = list,
+                                                seeAllId = 0,
+                                                icon = R.drawable.tv_ic_person,
+                                                onLoadMore = viewModel::loadMoreOfflineChannels,
+                                            )
+                                        )
+                                    )
                                 }
                             }
                             TvHomeRows.ROW_STATS -> {
@@ -550,6 +606,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         showHeroState.value = p.getBoolean(C.TV_HOME_HERO, true)
         showGreetingState.value = p.getBoolean(C.TV_HOME_GREETING, true)
         showStatsBadgeState.value = p.getBoolean(C.TV_HOME_STATS_BADGE, true)
+        showAllFollowedState.value = p.getBoolean(C.TV_HOME_FOLLOWED_SHOW_ALL, false)
     }
 
     override fun onResume() {
