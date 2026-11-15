@@ -1054,7 +1054,7 @@
     <string name="tv_clock_bg_off">Transparente</string>
     <string name="tv_clock_bg_on">Pílula escura</string>
     <string name="tv_dpad_shortcuts">Atalhos das setas</string>
-    <string name="tv_dpad_shortcuts_summary">Escolha a ação de Esquerda, Direita, Cima e Baixo quando os controles estão ocultos</string>
+    <string name="tv_dpad_shortcuts_summary">Escolha a ação de Esquerda, Direita, Cima, Baixo e OK quando os controles estão ocultos</string>
     <string name="tv_dpad_left">Esquerda</string>
     <string name="tv_dpad_right">Direita</string>
     <string name="tv_dpad_up">Cima</string>

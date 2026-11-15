@@ -1055,7 +1055,7 @@
     <string name="tv_clock_bg_off">Transparan</string>
     <string name="tv_clock_bg_on">Kapsul gelap</string>
     <string name="tv_dpad_shortcuts">Pintasan tombol arah</string>
-    <string name="tv_dpad_shortcuts_summary">Pilih aksi Kiri, Kanan, Atas, dan Bawah saat kontrol pemutar disembunyikan</string>
+    <string name="tv_dpad_shortcuts_summary">Pilih aksi Kiri, Kanan, Atas, Bawah, dan OK saat kontrol pemutar disembunyikan</string>
     <string name="tv_dpad_left">Kiri</string>
     <string name="tv_dpad_right">Kanan</string>
     <string name="tv_dpad_up">Atas</string>

@@ -1054,7 +1054,7 @@
     <string name="tv_clock_bg_off">شفاف</string>
     <string name="tv_clock_bg_on">خلفية داكنة</string>
     <string name="tv_dpad_shortcuts">اختصارات أسهم الاتجاهات</string>
-    <string name="tv_dpad_shortcuts_summary">اختر إجراء اليسار واليمين والأعلى والأسفل عند إخفاء عناصر التحكم</string>
+    <string name="tv_dpad_shortcuts_summary">اختر إجراء اليسار واليمين والأعلى والأسفل وOK عند إخفاء عناصر التحكم</string>
     <string name="tv_dpad_left">يسار</string>
     <string name="tv_dpad_right">يمين</string>
     <string name="tv_dpad_up">أعلى</string>

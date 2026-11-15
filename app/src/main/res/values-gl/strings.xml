@@ -1054,7 +1054,7 @@
     <string name="tv_clock_bg_off">Transparente</string>
     <string name="tv_clock_bg_on">Pílula escura</string>
     <string name="tv_dpad_shortcuts">Atallos das frechas</string>
-    <string name="tv_dpad_shortcuts_summary">Escolle a acción de Esquerda, Dereita, Arriba e Abaixo cando os controis están ocultos</string>
+    <string name="tv_dpad_shortcuts_summary">Escolle a acción de Esquerda, Dereita, Arriba, Abaixo e OK cando os controis están ocultos</string>
     <string name="tv_dpad_left">Esquerda</string>
     <string name="tv_dpad_right">Dereita</string>
     <string name="tv_dpad_up">Arriba</string>

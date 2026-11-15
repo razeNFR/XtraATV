@@ -1054,7 +1054,7 @@
     <string name="tv_clock_bg_off">Transparent</string>
     <string name="tv_clock_bg_on">Pastille sombre</string>
     <string name="tv_dpad_shortcuts">Raccourcis flèches directionnelles</string>
-    <string name="tv_dpad_shortcuts_summary">Choisir l\'action des flèches Gauche, Droite, Haut et Bas quand les contrôles sont masqués</string>
+    <string name="tv_dpad_shortcuts_summary">Choisir l\'action des flèches Gauche, Droite, Haut, Bas et OK quand les contrôles sont masqués</string>
     <string name="tv_dpad_left">Gauche</string>
     <string name="tv_dpad_right">Droite</string>
     <string name="tv_dpad_up">Haut</string>

@@ -313,6 +313,7 @@ object C {
     const val TV_CLOCK_BG = "tv_clock_bg"
     const val TV_DPAD_UP_ACTION = "tv_dpad_up_action"
     const val TV_DPAD_DOWN_ACTION = "tv_dpad_down_action"
+    const val TV_DPAD_CENTER_ACTION = "tv_dpad_center_action"
     const val TV_DPAD_LEFT_ACTION = "tv_dpad_left_action"
     const val TV_DPAD_RIGHT_ACTION = "tv_dpad_right_action"
     const val TV_DPAD_DOWN_LONG_ACTION = "tv_dpad_down_long_action"

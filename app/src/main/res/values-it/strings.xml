@@ -1054,7 +1054,7 @@
     <string name="tv_clock_bg_off">Trasparente</string>
     <string name="tv_clock_bg_on">Pillola scura</string>
     <string name="tv_dpad_shortcuts">Scorciatoie frecce direzionali</string>
-    <string name="tv_dpad_shortcuts_summary">Scegli l\'azione di Sinistra, Destra, Su e Giù quando i controlli sono nascosti</string>
+    <string name="tv_dpad_shortcuts_summary">Scegli l\'azione di Sinistra, Destra, Su, Giù e OK quando i controlli sono nascosti</string>
     <string name="tv_dpad_left">Sinistra</string>
     <string name="tv_dpad_right">Destra</string>
     <string name="tv_dpad_up">Su</string>

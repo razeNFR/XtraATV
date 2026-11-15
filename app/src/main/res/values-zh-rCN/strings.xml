@@ -1054,7 +1054,7 @@
     <string name="tv_clock_bg_off">透明</string>
     <string name="tv_clock_bg_on">深色胶囊</string>
     <string name="tv_dpad_shortcuts">方向键快捷操作</string>
-    <string name="tv_dpad_shortcuts_summary">选择播放控制栏隐藏时左、右、上、下方向键的功能</string>
+    <string name="tv_dpad_shortcuts_summary">选择播放控制栏隐藏时左、右、上、下方向键和确定键的功能</string>
     <string name="tv_dpad_left">左键</string>
     <string name="tv_dpad_right">右键</string>
     <string name="tv_dpad_up">上键</string>
