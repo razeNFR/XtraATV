@@ -72,10 +72,13 @@ import com.github.andreyasadchy.xtra.ui.view.TvReorder
 import com.github.andreyasadchy.xtra.ui.view.TvUi
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
+import com.github.andreyasadchy.xtra.util.UpdateInstallHelper
 import com.github.andreyasadchy.xtra.util.applyTheme
+import com.github.andreyasadchy.xtra.util.canInstallUnknownAppsCompat
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.openUnknownAppSourcesSettings
 import com.github.andreyasadchy.xtra.util.prefs
+import com.github.andreyasadchy.xtra.util.showInstallBlockedDialog
 import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.google.android.material.appbar.AppBarLayout
 import com.google.mlkit.common.model.DownloadConditions
@@ -1056,7 +1059,9 @@ class SettingsActivity : AppCompatActivity() {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     viewModel.updateUrl.collectLatest {
                         if (it != null) {
+                            UpdateInstallHelper.lastAttemptedUpdateUrl = it
                             val startUpdate: () -> Unit = {
+                                UpdateInstallHelper.lastAttemptedUpdateUrl = it
                                 if (requireContext().prefs().getBoolean(C.UPDATE_USE_BROWSER, false)) {
                                     try {
                                         val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
@@ -1069,7 +1074,8 @@ class SettingsActivity : AppCompatActivity() {
                                     } catch (e: ActivityNotFoundException) {
                                         Toast.makeText(requireContext(), R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                     }
-                                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !requireContext().packageManager.canRequestPackageInstalls()) {
+                                } else if (!requireContext().canInstallUnknownAppsCompat() && !UpdateInstallHelper.unknownSourcesPromptedInSession) {
+                                    UpdateInstallHelper.unknownSourcesPromptedInSession = true
                                     pendingUpdateUrl = it
                                     pendingUpdateAt = android.os.SystemClock.elapsedRealtime()
                                     if (!requireActivity().openUnknownAppSourcesSettings()) {
@@ -1121,6 +1127,13 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
             }
+            viewLifecycleOwner.lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    viewModel.updateInstallBlocked.collectLatest { blockedUrl ->
+                        requireActivity().showInstallBlockedDialog(blockedUrl)
+                    }
+                }
+            }
         }
 
         private var pendingUpdateUrl: String? = null
@@ -1162,11 +1175,11 @@ class SettingsActivity : AppCompatActivity() {
             updateTvProxySummary()
             val url = pendingUpdateUrl
             if (url != null) {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || requireContext().packageManager.canRequestPackageInstalls()) {
-                    pendingUpdateUrl = null
+                pendingUpdateUrl = null
+                if (requireContext().canInstallUnknownAppsCompat() &&
+                    android.os.SystemClock.elapsedRealtime() - pendingUpdateAt <= 5 * 60_000L
+                ) {
                     startUpdateDownload(url)
-                } else if (android.os.SystemClock.elapsedRealtime() - pendingUpdateAt > 5 * 60_000L) {
-                    pendingUpdateUrl = null
                 }
             }
         }
@@ -1631,6 +1644,19 @@ class SettingsActivity : AppCompatActivity() {
                 (requireActivity() as? SettingsActivity)?.setResult()
                 com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.notifyPrefsChanged()
                 true
+            }
+            findPreference<Preference>(C.CHAT_HIGHLIGHTED_USERS)?.apply {
+                summary = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.highlightedSummary(requireContext())
+                setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.showHighlightedSettingsDialog(requireActivity()) {
+                        if (isAdded) {
+                            summary = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.highlightedSummary(requireContext())
+                            summary = summary // force refresh
+                            (activity as? SettingsActivity)?.setResult()
+                        }
+                    }
+                    true
+                }
             }
             findPreference<Preference>(C.CHAT_BLOCKED_USERS)?.apply {
                 summary = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.summary(requireContext())
@@ -2500,7 +2526,7 @@ class SettingsActivity : AppCompatActivity() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
                     newValue == true &&
                     !requireContext().prefs().getBoolean(C.UPDATE_USE_BROWSER, false) &&
-                    !requireContext().packageManager.canRequestPackageInstalls()
+                    !requireContext().canInstallUnknownAppsCompat()
                 ) {
                     requireActivity().openUnknownAppSourcesSettings()
                 }
@@ -2517,7 +2543,7 @@ class SettingsActivity : AppCompatActivity() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
                     newValue == false &&
                     requireContext().prefs().getBoolean(C.UPDATE_CHECK_ENABLED, true) &&
-                    !requireContext().packageManager.canRequestPackageInstalls()
+                    !requireContext().canInstallUnknownAppsCompat()
                 ) {
                     requireActivity().openUnknownAppSourcesSettings()
                 }

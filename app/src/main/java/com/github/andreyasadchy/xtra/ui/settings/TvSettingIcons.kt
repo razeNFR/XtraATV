@@ -95,6 +95,7 @@ object TvSettingIcons {
         "chat_blocked_users" to R.drawable.tv_ic_person,
         "chat_show_replies" to R.drawable.tv_ic_chat_message,
         "chat_highlight_mentions" to R.drawable.tv_ic_chat_message,
+        "chat_highlighted_users" to R.drawable.tv_ic_star,
         "chat_show_usernotice" to R.drawable.tv_ic_campaign,
         "chat_show_clearmsg" to R.drawable.tv_ic_delete,
         "chat_show_clearchat" to R.drawable.tv_ic_block,

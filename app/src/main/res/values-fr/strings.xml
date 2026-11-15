@@ -743,7 +743,7 @@
     <string name="tv_switch_current">Cette liste</string>
     <string name="tv_switch_suggested">Suggestions</string>
     <string name="tv_switch_empty">Aucun stream en direct dans cette liste</string>
-    <string name="tv_pip_hint">Petite fenêtre : maintiens OK pour inverser les streams, Retour pour la fermer. Son bouton dans les contrôles change sa place, sa taille et le son</string>
+    <string name="tv_pip_hint">Petite fenêtre : maintiens OK pour inverser les streams (modifiable dans Télécommande), Retour pour fermer. Son bouton dans les contrôles règle sa place, sa taille et le son.</string>
     <string name="tv_multistream_focus">Mode focus : ce stream en grand</string>
     <string name="tv_multistream_grid">Revenir à la grille</string>
     <string name="tv_followed_videos_need_code">Les vidéos des suivis demandent la connexion avec le code : connecte-toi avec twitch.tv/activate (Compte)</string>
@@ -844,8 +844,8 @@
     <string name="tv_followed_videos_row">Dernières vidéos de tes chaînes suivies</string>
     <string name="tv_refreshed">Mis à jour</string>
     <string name="tv_multistream_hint">OK : ajouter ou retirer un stream · jusqu\'à %1$d</string>
-    <string name="tv_proxy_button">Proxy</string>
-    <string name="tv_proxy_button_summary">OK active ou désactive le proxy personnalisé, OK maintenu ouvre la liste des proxys</string>
+    <string name="tv_proxy_button">Adblock et Proxy</string>
+    <string name="tv_proxy_button_summary">Ouvre le panneau du bloqueur de pub et des proxys personnalisés</string>
     <string name="tv_proxy_on">Proxy activé</string>
     <string name="tv_proxy_off">Proxy désactivé</string>
     <string name="tv_proxy_panel_title">Proxys personnalisés</string>
@@ -1027,6 +1027,20 @@
     <string name="chat_blocked_badge">Bloqué</string>
     <string name="tv_chat_recent_users">Actifs dans le chat (OK pour bloquer / débloquer)</string>
     <string name="tv_chat_recent_empty">Aucun message récent dans le chat</string>
+    <string name="chat_highlighted_users">Pseudos mis en évidence</string>
+    <string name="chat_highlighted_users_none">Aucun pseudo mis en évidence</string>
+    <string name="chat_highlighted_users_one">1 pseudo mis en évidence</string>
+    <string name="chat_highlighted_users_count">%1$d pseudos mis en évidence</string>
+    <string name="chat_highlight_add">Mettre en évidence un pseudo…</string>
+    <string name="chat_highlight_username_hint">Pseudo(s) Twitch, séparés par des virgules</string>
+    <string name="chat_highlight_action">Mettre en évidence</string>
+    <string name="chat_unhighlight_action">Retirer la mise en évidence</string>
+    <string name="chat_unblock_action">Débloquer</string>
+    <string name="chat_user_highlighted">%1$s mis en évidence</string>
+    <string name="chat_user_unhighlighted">Mise en évidence retirée pour %1$s</string>
+    <string name="chat_highlighted_badge">Mis en évidence</string>
+    <string name="tv_chat_manage_users">Comptes &amp; bots</string>
+    <string name="tv_chat_recent_users_manage">Actifs dans le chat (OK pour mettre en évidence / bloquer)</string>
     <string name="tv_home_multistream">Multi-streams enregistrés</string>
     <string name="tv_home_multistream_summary">Afficher une ligne avec vos groupes multi-streams enregistrés lorsqu\'au moins 2 chaînes sont en direct</string>
     <string name="tv_home_multistreams_row">Multi-streams</string>
@@ -1163,4 +1177,13 @@
     <string name="tv_option_on">Activé</string>
     <string name="tv_prediction_started">Prédiction lancée</string>
     <string name="tv_prediction_ended">Prédiction terminée</string>
+    <string name="tv_dpad_center_long">OK (appui long)</string>
+    <string name="tv_remote_action_pip_swap">Petite fenêtre : inverser les streams</string>
+    <string name="tv_remote_action_pip_settings">Petite fenêtre : réglages</string>
+    <string name="tv_remote_action_pip_close">Petite fenêtre : fermer</string>
+    <string name="tv_adblock_and_proxies_title">Bloqueur de pub et proxys</string>
+    <string name="tv_adblock_and_proxies_subtitle">Bloqueur de pub expérimental ou proxys HLS personnalisés pour les lives</string>
+    <string name="tv_update_install_blocked">Android a bloqué l\'installation. Autorisez « Installer des applis inconnues » pour Xtra TV dans les paramètres système, ou téléchargez la mise à jour via le navigateur.</string>
+    <string name="tv_remote_action_pip_swap_default">Petite fenêtre : inverser les streams (par défaut)</string>
+    <string name="tv_remote_action_show_controls">Afficher les contrôles</string>
 </resources>

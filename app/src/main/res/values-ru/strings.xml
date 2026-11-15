@@ -743,7 +743,7 @@
     <string name="tv_switch_current">Этот список</string>
     <string name="tv_switch_suggested">Предложения</string>
     <string name="tv_switch_empty">В этом списке нет трансляций в эфире</string>
-    <string name="tv_pip_hint">Маленькое окно: удерживайте OK, чтобы поменять, «Назад» — закрыть</string>
+    <string name="tv_pip_hint">Маленькое окно: удерживайте OK для смены (настраивается в «Пульт»), «Назад» — закрыть</string>
     <string name="tv_multistream_focus">Режим фокуса: эта трансляция крупно</string>
     <string name="tv_multistream_grid">Вернуться к сетке</string>
     <string name="tv_followed_videos_need_code">Для видео отслеживаемых нужен вход по коду: войдите через twitch.tv/activate (Аккаунт)</string>
@@ -844,8 +844,8 @@
     <string name="tv_followed_videos_row">Новые видео отслеживаемых каналов</string>
     <string name="tv_refreshed">Обновлено</string>
     <string name="tv_multistream_hint">OK: добавить или убрать трансляцию · до %1$d</string>
-    <string name="tv_proxy_button">Прокси</string>
-    <string name="tv_proxy_button_summary">OK включает или выключает свой прокси, удержание OK открывает список прокси</string>
+    <string name="tv_proxy_button">Блокировщик и прокси</string>
+    <string name="tv_proxy_button_summary">Открывает панель блокировщика рекламы и своих прокси</string>
     <string name="tv_proxy_on">Прокси включён</string>
     <string name="tv_proxy_off">Прокси выключен</string>
     <string name="tv_proxy_panel_title">Свои прокси</string>
@@ -1027,6 +1027,20 @@
     <string name="chat_blocked_badge">Заблокирован</string>
     <string name="tv_chat_recent_users">Недавние в чате (OK — заблокировать / разблокировать)</string>
     <string name="tv_chat_recent_empty">В чате пока нет недавних сообщений</string>
+    <string name="chat_highlighted_users">Выделенные пользователи</string>
+    <string name="chat_highlighted_users_none">Нет выделенных пользователей</string>
+    <string name="chat_highlighted_users_one">1 выделенный пользователь</string>
+    <string name="chat_highlighted_users_count">Выделено пользователей: %1$d</string>
+    <string name="chat_highlight_add">Выделить по нику…</string>
+    <string name="chat_highlight_username_hint">Ник(и) на Twitch через запятую</string>
+    <string name="chat_highlight_action">Выделить</string>
+    <string name="chat_unhighlight_action">Убрать выделение</string>
+    <string name="chat_unblock_action">Разблокировать</string>
+    <string name="chat_user_highlighted">%1$s выделен</string>
+    <string name="chat_user_unhighlighted">Выделение снято для %1$s</string>
+    <string name="chat_highlighted_badge">Выделен</string>
+    <string name="tv_chat_manage_users">Аккаунты и боты</string>
+    <string name="tv_chat_recent_users_manage">Недавние в чате (OK — выделить / заблокировать)</string>
     <string name="tv_home_multistream">Сохранённые мультистримы</string>
     <string name="tv_home_multistream_summary">Показывать ряд сохранённых групп мультистрима, когда хотя бы 2 канала в эфире</string>
     <string name="tv_home_multistreams_row">Мультистримы</string>
@@ -1163,4 +1177,13 @@
     <string name="tv_option_on">Вкл.</string>
     <string name="tv_prediction_started">Прогноз начался</string>
     <string name="tv_prediction_ended">Прогноз завершён</string>
+    <string name="tv_dpad_center_long">OK (долгое нажатие)</string>
+    <string name="tv_remote_action_pip_swap">Маленькое окно: поменять стримы</string>
+    <string name="tv_remote_action_pip_settings">Маленькое окно: настройки</string>
+    <string name="tv_remote_action_pip_close">Маленькое окно: закрыть</string>
+    <string name="tv_adblock_and_proxies_title">Блокировщик рекламы и прокси</string>
+    <string name="tv_adblock_and_proxies_subtitle">Экспериментальный блокировщик рекламы или свои HLS-прокси для стримов</string>
+    <string name="tv_update_install_blocked">Android заблокировал установку. Разрешите «Установка неизвестных приложений» для Xtra TV в системных настройках или скачайте обновление через браузер.</string>
+    <string name="tv_remote_action_pip_swap_default">Маленькое окно: поменять стримы (по умолчанию)</string>
+    <string name="tv_remote_action_show_controls">Показать управление</string>
 </resources>

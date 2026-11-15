@@ -158,7 +158,7 @@ object ChatUtils {
                     message = message.tags["reply-parent-msg-body"]
                 )
             },
-            timestamp = message.tags["tmi-sent-ts"]?.toLongOrNull(),
+            timestamp = message.tags["tmi-sent-ts"]?.toLongOrNull() ?: message.tags["rm-received-ts"]?.toLongOrNull(),
             fullMsg = message.fullMessage
         )
     }
@@ -172,7 +172,7 @@ object ChatUtils {
             userLogin = message.tags["login"],
             message = userMessage,
             targetMsgId = message.tags["target-msg-id"],
-            timestamp = message.tags["tmi-sent-ts"]?.toLongOrNull(),
+            timestamp = message.tags["tmi-sent-ts"]?.toLongOrNull() ?: message.tags["rm-received-ts"]?.toLongOrNull(),
             fullMsg = message.fullMessage
         )
     }
@@ -205,7 +205,7 @@ object ChatUtils {
                 duration != null -> R.drawable.tv_ic_timer
                 else -> R.drawable.tv_ic_block
             },
-            timestamp = message.tags["tmi-sent-ts"]?.toLongOrNull(),
+            timestamp = message.tags["tmi-sent-ts"]?.toLongOrNull() ?: message.tags["rm-received-ts"]?.toLongOrNull(),
             fullMsg = message.fullMessage
         )
     }
@@ -217,6 +217,7 @@ object ChatUtils {
         return ChatMessage(
             type = ChatMessage.NOTICE_MESSAGE,
             systemMsg = text,
+            timestamp = message.tags["tmi-sent-ts"]?.toLongOrNull() ?: message.tags["rm-received-ts"]?.toLongOrNull(),
             fullMsg = message.fullMessage
         )
     }

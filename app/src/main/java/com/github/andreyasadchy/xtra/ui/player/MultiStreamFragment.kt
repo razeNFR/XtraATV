@@ -1328,21 +1328,42 @@ class MultiStreamFragment : Fragment() {
     fun isExperimentalVodActive(channelLogin: String?): Boolean =
         tiles.find { it.stream.channelLogin == channelLogin }?.experimentalVodActive == true
 
+    fun shouldHoldExperimentalChat(channelLogin: String?): Boolean {
+        val tile = tiles.find { it.stream.channelLogin == channelLogin } ?: return false
+        if (tile.experimentalVodActive) return true
+        val ctx = context ?: return false
+        if (!com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(ctx)) return false
+        return tile.playJob?.isActive == true || tile.player.playbackState != Player.STATE_READY
+    }
+
     /** The chat of a stream with its delay in Auto: the time of Twitch of the picture of its tile (null when not known). */
     fun getLivePictureTime(channelLogin: String?): Long? {
         val tile = tiles.find { it.stream.channelLogin == channelLogin } ?: return null
         val player = tile.player
         val timeline = player.currentTimeline
         if (timeline.isEmpty || player.currentMediaItemIndex !in 0 until timeline.windowCount) return null
-        val start = timeline.getWindow(player.currentMediaItemIndex, androidx.media3.common.Timeline.Window()).windowStartTimeMs
-        if (start != androidx.media3.common.C.TIME_UNSET) {
-            return start + player.currentPosition
+        val window = androidx.media3.common.Timeline.Window()
+        timeline.getWindow(player.currentMediaItemIndex, window)
+        if (window.windowStartTimeMs != androidx.media3.common.C.TIME_UNSET) {
+            return window.windowStartTimeMs + player.currentPosition
         }
         if (tile.experimentalVodActive) {
             val baseMs = tile.experimentalCreatedAtMs
                 ?: com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.parseEpochMs(tile.stream.createdAt)
             if (baseMs != null) {
                 return baseMs + player.currentPosition.coerceAtLeast(0L)
+            }
+        }
+        if (window.isDynamic) {
+            val bufferedMs = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)
+            val horizonMs = if (window.durationMs != androidx.media3.common.C.TIME_UNSET && window.durationMs > 0L) {
+                (window.durationMs - player.currentPosition).coerceAtLeast(0L)
+            } else {
+                0L
+            }
+            val delayMs = maxOf(horizonMs, bufferedMs).coerceAtLeast(0L)
+            if (com.github.andreyasadchy.xtra.util.TwitchClock.isCalibrated() || delayMs > 0L) {
+                return com.github.andreyasadchy.xtra.util.TwitchClock.nowMs() - delayMs
             }
         }
         return null

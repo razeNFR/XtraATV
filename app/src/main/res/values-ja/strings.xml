@@ -743,7 +743,7 @@
     <string name="tv_switch_current">このリスト</string>
     <string name="tv_switch_suggested">おすすめ</string>
     <string name="tv_switch_empty">このリストに配信中のものはありません</string>
-    <string name="tv_pip_hint">小窓: OK長押しで入れ替え、戻るで閉じる</string>
+    <string name="tv_pip_hint">小窓: OK長押しで入れ替え（リモコン設定で変更可）、戻るで閉じる</string>
     <string name="tv_multistream_focus">フォーカスモード: この配信を大きく</string>
     <string name="tv_multistream_grid">グリッドに戻る</string>
     <string name="tv_followed_videos_need_code">フォロー中の動画にはコードでのログインが必要です: twitch.tv/activate でログイン (アカウント)</string>
@@ -844,8 +844,8 @@
     <string name="tv_followed_videos_row">フォロー中チャンネルの最新動画</string>
     <string name="tv_refreshed">更新しました</string>
     <string name="tv_multistream_hint">OK：配信を追加／削除 · 最大 %1$d</string>
-    <string name="tv_proxy_button">プロキシ</string>
-    <string name="tv_proxy_button_summary">OK でカスタムプロキシをオン／オフ、OK 長押しでプロキシ一覧</string>
+    <string name="tv_proxy_button">広告ブロックとプロキシ</string>
+    <string name="tv_proxy_button_summary">広告ブロックとカスタムプロキシのパネルを開きます</string>
     <string name="tv_proxy_on">プロキシ オン</string>
     <string name="tv_proxy_off">プロキシ オフ</string>
     <string name="tv_proxy_panel_title">カスタムプロキシ</string>
@@ -1027,6 +1027,20 @@
     <string name="chat_blocked_badge">ブロック中</string>
     <string name="tv_chat_recent_users">最近のチャット参加者（OKでブロック / 解除）</string>
     <string name="tv_chat_recent_empty">最近のチャットメッセージはまだありません</string>
+    <string name="chat_highlighted_users">強調表示するユーザー</string>
+    <string name="chat_highlighted_users_none">強調表示するユーザーなし</string>
+    <string name="chat_highlighted_users_one">1 人のユーザーを強調表示中</string>
+    <string name="chat_highlighted_users_count">%1$d 人のユーザーを強調表示中</string>
+    <string name="chat_highlight_add">ユーザー名を指定して強調表示…</string>
+    <string name="chat_highlight_username_hint">Twitch ユーザー名（カンマ区切り）</string>
+    <string name="chat_highlight_action">強調表示</string>
+    <string name="chat_unhighlight_action">強調表示を解除</string>
+    <string name="chat_unblock_action">ブロック解除</string>
+    <string name="chat_user_highlighted">%1$s を強調表示しました</string>
+    <string name="chat_user_unhighlighted">%1$s の強調表示を解除しました</string>
+    <string name="chat_highlighted_badge">強調中</string>
+    <string name="tv_chat_manage_users">アカウント / Bot</string>
+    <string name="tv_chat_recent_users_manage">最近のチャット参加者（OKで強調表示 / ブロック）</string>
     <string name="tv_home_multistream">保存済みマルチストリーム</string>
     <string name="tv_home_multistream_summary">保存したマルチストリームグループのうち2チャンネル以上が配信中のときにホームに表示します</string>
     <string name="tv_home_multistreams_row">マルチストリーム</string>
@@ -1163,4 +1177,13 @@
     <string name="tv_option_on">オン</string>
     <string name="tv_prediction_started">予想が開始されました</string>
     <string name="tv_prediction_ended">予想が終了しました</string>
+    <string name="tv_dpad_center_long">OK（長押し）</string>
+    <string name="tv_remote_action_pip_swap">小窓: 配信を入れ替え</string>
+    <string name="tv_remote_action_pip_settings">小窓: 設定</string>
+    <string name="tv_remote_action_pip_close">小窓: 閉じる</string>
+    <string name="tv_adblock_and_proxies_title">広告ブロックとプロキシ</string>
+    <string name="tv_adblock_and_proxies_subtitle">ライブ配信向けの実験的広告ブロックまたはカスタムHLSプロキシ</string>
+    <string name="tv_update_install_blocked">Androidによりインストールがブロックされました。システム設定でXtra TVの「不明なアプリのインストール」を許可するか、ブラウザから更新をダウンロードしてください。</string>
+    <string name="tv_remote_action_pip_swap_default">小窓: 配信を入れ替え（デフォルト）</string>
+    <string name="tv_remote_action_show_controls">コントロールを表示</string>
 </resources>

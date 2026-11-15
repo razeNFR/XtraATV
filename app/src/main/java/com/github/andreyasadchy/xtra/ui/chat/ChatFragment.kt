@@ -126,8 +126,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         }
         viewModel.forceAutoDelay = {
             when (val parent = parentFragment) {
-                is com.github.andreyasadchy.xtra.ui.player.PlayerFragment -> parent.isExperimentalVodActive()
-                is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment -> parent.isExperimentalVodActive(delayLogin)
+                is com.github.andreyasadchy.xtra.ui.player.PlayerFragment -> parent.shouldHoldExperimentalChat()
+                is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment -> parent.shouldHoldExperimentalChat(delayLogin)
                 else -> false
             }
         }
@@ -268,9 +268,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.version.collect {
-                                if (viewModel.purgeFilteredMessages()) {
-                                    adapter?.notifyDataSetChanged()
-                                }
+                                viewModel.purgeFilteredMessages()
+                                adapter?.notifyDataSetChanged()
                             }
                         }
                     }

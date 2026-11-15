@@ -744,7 +744,7 @@
     <string name="tv_switch_current">Bu liste</string>
     <string name="tv_switch_suggested">Öneriler</string>
     <string name="tv_switch_empty">Bu listede canlı yayın yok</string>
-    <string name="tv_pip_hint">Küçük pencere: değiştirmek için OK\'u basılı tutun, kapatmak için Geri</string>
+    <string name="tv_pip_hint">Küçük pencere: değiştirmek için OK\'u basılı tutun (Kumanda ayarlarından değiştirilebilir), kapatmak için Geri</string>
     <string name="tv_multistream_focus">Odak modu: bu yayın büyük</string>
     <string name="tv_multistream_grid">Izgaraya dön</string>
     <string name="tv_followed_videos_need_code">Takip edilen videolar için kodla giriş gerekir: twitch.tv/activate ile giriş yapın (Hesap)</string>
@@ -845,8 +845,8 @@
     <string name="tv_followed_videos_row">Takip ettiğin kanalların son videoları</string>
     <string name="tv_refreshed">Güncellendi</string>
     <string name="tv_multistream_hint">OK: yayın ekle veya çıkar · en fazla %1$d</string>
-    <string name="tv_proxy_button">Proxy</string>
-    <string name="tv_proxy_button_summary">OK özel proxy\'yi açar veya kapatır, OK basılı tutmak proxy listesini açar</string>
+    <string name="tv_proxy_button">Reklam engelleyici ve Proxy</string>
+    <string name="tv_proxy_button_summary">Reklam engelleyici ve özel proxy panelini açar</string>
     <string name="tv_proxy_on">Proxy açık</string>
     <string name="tv_proxy_off">Proxy kapalı</string>
     <string name="tv_proxy_panel_title">Özel proxy\'ler</string>
@@ -1028,6 +1028,20 @@
     <string name="chat_blocked_badge">Engellendi</string>
     <string name="tv_chat_recent_users">Sohbetteki son kişiler (Engelle / kaldır için OK)</string>
     <string name="tv_chat_recent_empty">Sohbette henüz yeni mesaj yok</string>
+    <string name="chat_highlighted_users">Vurgulanan kullanıcılar</string>
+    <string name="chat_highlighted_users_none">Vurgulanan kullanıcı yok</string>
+    <string name="chat_highlighted_users_one">1 vurgulanan kullanıcı</string>
+    <string name="chat_highlighted_users_count">%1$d vurgulanan kullanıcı</string>
+    <string name="chat_highlight_add">Kullanıcı adı vurgula…</string>
+    <string name="chat_highlight_username_hint">Twitch kullanıcı adları (virgülle ayırın)</string>
+    <string name="chat_highlight_action">Vurgula</string>
+    <string name="chat_unhighlight_action">Vurguyu kaldır</string>
+    <string name="chat_unblock_action">Engeli kaldır</string>
+    <string name="chat_user_highlighted">%1$s vurgulandı</string>
+    <string name="chat_user_unhighlighted">%1$s vurgusu kaldırıldı</string>
+    <string name="chat_highlighted_badge">Vurgulandı</string>
+    <string name="tv_chat_manage_users">Hesaplar ve botlar</string>
+    <string name="tv_chat_recent_users_manage">Sohbetteki son kişiler (Vurgula / engelle için OK)</string>
     <string name="tv_home_multistream">Kayıtlı çoklu yayınlar</string>
     <string name="tv_home_multistream_summary">En az 2 kanal canlı olduğunda kayıtlı çoklu yayın gruplarını ana ekranda gösterir</string>
     <string name="tv_home_multistreams_row">Çoklu yayınlar</string>
@@ -1164,4 +1178,13 @@
     <string name="tv_option_on">Açık</string>
     <string name="tv_prediction_started">Tahmin başladı</string>
     <string name="tv_prediction_ended">Tahmin sona erdi</string>
+    <string name="tv_dpad_center_long">OK (uzun basma)</string>
+    <string name="tv_remote_action_pip_swap">Küçük pencere: yayınları değiştir</string>
+    <string name="tv_remote_action_pip_settings">Küçük pencere: ayarlar</string>
+    <string name="tv_remote_action_pip_close">Küçük pencere: kapat</string>
+    <string name="tv_adblock_and_proxies_title">Reklam engelleyici ve proxyler</string>
+    <string name="tv_adblock_and_proxies_subtitle">Canlı yayınlar için deneysel reklam engelleyici veya özel HLS proxyleri</string>
+    <string name="tv_update_install_blocked">Android yüklemeyi engelledi. Sistem ayarlarından Xtra TV için \"Bilinmeyen uygulamaları yükle\" iznini verin veya güncellemeyi tarayıcıdan indirin.</string>
+    <string name="tv_remote_action_pip_swap_default">Küçük pencere: yayınları değiştir (varsayılan)</string>
+    <string name="tv_remote_action_show_controls">Kontrolleri göster</string>
 </resources>

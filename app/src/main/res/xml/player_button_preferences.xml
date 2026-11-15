@@ -142,6 +142,13 @@
         android:icon="@drawable/baseline_more_vert_black_24"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_pause"
+        android:title="@string/player_pause"
+        android:icon="@drawable/baseline_play_arrow_black_48"
+        app:singleLineTitle="false" />
+
     <Preference
         android:key="player_menu_settings"
         android:title="@string/player_menu_settings"
@@ -278,13 +285,6 @@
         android:defaultValue="true"
         android:key="player_viewericon"
         android:title="@string/show_view_count_icon"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_pause"
-        android:title="@string/player_pause"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

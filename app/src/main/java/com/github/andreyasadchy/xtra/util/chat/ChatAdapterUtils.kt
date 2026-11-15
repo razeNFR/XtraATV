@@ -445,6 +445,7 @@ object ChatAdapterUtils {
                 when {
                     // an answer to the user or a mention of the user: the accent color over it and a bar on its left
                     highlightReplies && (wasMentioned || repliesTo(chatMessage, loggedInUser)) -> itemView.background = TvChatNotices.highlight(context)
+                    ChatBlocklist.isHighlighted(context, chatMessage.userLogin) -> itemView.background = TvChatNotices.userHighlight(context)
                     chatMessage.isFirst && firstMsgVisibility < 2 -> itemView.setBackgroundResource(R.color.chatMessageFirst)
                     chatMessage.reward?.id != null && firstMsgVisibility < 2 -> itemView.setBackgroundResource(R.color.chatMessageReward)
                     chatMessage.systemMsg != null || chatMessage.msgId != null -> itemView.setBackgroundResource(R.color.chatMessageNotice)

@@ -60,6 +60,27 @@ class ExoPlayerFragment : PlayerFragment() {
         binding.secondaryPlayerSurface.setZOrderMediaOverlay(true)
     }
 
+    override fun syncPlayPauseButtonVisibility() {
+        if (view == null) return
+        val player = playbackService?.visiblePlayer ?: playbackService?.player ?: return
+        if (Util.shouldShowPlayButton(player)) {
+            binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
+            binding.playerControls.playPause.visibility = View.VISIBLE
+        } else {
+            binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
+            if (shouldHideLivePlayPauseWhenPlaying()) {
+                val hadFocus = binding.playerControls.playPause.hasFocus()
+                binding.playerControls.playPause.visibility = View.GONE
+                if (hadFocus) {
+                    // the play button goes away once the stream plays: the focus goes to the timeline, never lost
+                    focusAfterHiddenControl()
+                }
+            } else {
+                binding.playerControls.playPause.visibility = View.VISIBLE
+            }
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         if (keptAcrossStop && playbackService != null && serviceConnection != null) {
@@ -75,6 +96,7 @@ class ExoPlayerFragment : PlayerFragment() {
                     service.secondaryPlayer?.setVideoSurfaceView(binding.secondaryPlayerSurface)
                 }
             }
+            syncPlayPauseButtonVisibility()
             updateProgress()
             return
         }
@@ -101,21 +123,8 @@ class ExoPlayerFragment : PlayerFragment() {
                     }
                 }
                 binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING
-                val showPlayButton = Util.shouldShowPlayButton(playbackService?.player)
-                if (showPlayButton) {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                    binding.playerControls.playPause.visibility = View.VISIBLE
-                } else {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                    if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                        val hadFocus = binding.playerControls.playPause.hasFocus()
-                        binding.playerControls.playPause.visibility = View.GONE
-                        if (hadFocus) {
-                            // the play button goes away once the stream plays: the focus goes to the timeline, never lost
-                            focusAfterHiddenControl()
-                        }
-                    }
-                }
+                val showPlayButton = Util.shouldShowPlayButton(playbackService?.visiblePlayer ?: playbackService?.player)
+                syncPlayPauseButtonVisibility()
                 setPipActions(!showPlayButton)
                 updateProgress()
                 controllerAutoHide = !showPlayButton
@@ -126,16 +135,8 @@ class ExoPlayerFragment : PlayerFragment() {
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 binding.bufferingIndicator.isVisible = playbackService?.player?.playbackState == Player.STATE_BUFFERING
-                val showPlayButton = Util.shouldShowPlayButton(playbackService?.player)
-                if (showPlayButton) {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                    binding.playerControls.playPause.visibility = View.VISIBLE
-                } else {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                    if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                        binding.playerControls.playPause.visibility = View.GONE
-                    }
-                }
+                val showPlayButton = Util.shouldShowPlayButton(playbackService?.visiblePlayer ?: playbackService?.player)
+                syncPlayPauseButtonVisibility()
                 setPipActions(!showPlayButton)
                 updateProgress()
                 controllerAutoHide = !showPlayButton
@@ -145,15 +146,7 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
-                if (Util.shouldShowPlayButton(playbackService?.player)) {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                    binding.playerControls.playPause.visibility = View.VISIBLE
-                } else {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                    if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                        binding.playerControls.playPause.visibility = View.GONE
-                    }
-                }
+                syncPlayPauseButtonVisibility()
                 playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
                     binding.playerControls.progressBar.setDuration(duration)
                     binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
@@ -178,6 +171,7 @@ class ExoPlayerFragment : PlayerFragment() {
                     binding.playerControls.progressBar.setDuration(duration)
                     binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
                 }
+                syncPlayPauseButtonVisibility()
                 updateProgress()
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                     if (chatFragment?.context != null) { // TODO
@@ -319,6 +313,13 @@ class ExoPlayerFragment : PlayerFragment() {
                 }
             }
 
+            override fun onLivePauseResumeToDvr(targetOffsetMs: Long): Boolean {
+                if (view != null && isAdded) {
+                    return startTvDvrFromPause(targetOffsetMs)
+                }
+                return false
+            }
+
             override fun setPlayerSurface(secondaryPlayer: Boolean) {
                 // the screen of the player is not there (made again, closing): nothing to move
                 if (view == null || !isAdded) {
@@ -388,15 +389,7 @@ class ExoPlayerFragment : PlayerFragment() {
                             requireView().keepScreenOn = player.isPlaying
                         }
                         updateProgress()
-                        if (Util.shouldShowPlayButton(player)) {
-                            binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                            binding.playerControls.playPause.visibility = View.VISIBLE
-                        } else {
-                            binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                            if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                                binding.playerControls.playPause.visibility = View.GONE
-                            }
-                        }
+                        syncPlayPauseButtonVisibility()
                     }
                     if (playbackService?.started == true) {
                         if (!started) {
@@ -484,14 +477,13 @@ class ExoPlayerFragment : PlayerFragment() {
         lines.add("Quality    ${super.getCurrentQualityLabel() ?: "-"}")
         val buffer = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0)
         lines.add("Buffer     ${"%.1f".format(buffer / 1000f)} s")
-        if (playbackService?.experimentalVodActive == true) {
-            val delayMs = getLivePictureTime()?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
-                ?: getTotalDuration()?.let { (it - player.currentPosition).coerceAtLeast(0L) }
-            if (delayMs != null) {
-                lines.add("Latency    ${"%.1f".format(delayMs / 1000f)} s")
-            }
+        val latencyMs = playbackService?.getLiveLatencyMs()
+        if (latencyMs != null) {
+            lines.add("Latency    ${"%.1f".format(latencyMs / 1000f)} s")
         } else if (player.isCurrentMediaItemLive) {
-            player.currentLiveOffset.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { lines.add("Latency    ${"%.1f".format(it / 1000f)} s") }
+            player.currentLiveOffset
+                .takeIf { it != androidx.media3.common.C.TIME_UNSET }
+                ?.let { lines.add("Latency    ${"%.1f".format(it.coerceAtLeast(0L) / 1000f)} s") }
         }
         player.videoDecoderCounters?.let { counters ->
             lines.add("Dropped    ${counters.droppedBufferCount} / ${counters.renderedOutputBufferCount} frames")
@@ -525,7 +517,10 @@ class ExoPlayerFragment : PlayerFragment() {
         val service = playbackService ?: return null
         if (service.type == BasePlaybackService.VIDEO) {
             return service.durationSeconds?.takeIf { it > 0 }?.let { it * 1000L }
-                ?: service.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.takeIf { service.videoId == null }?.let { System.currentTimeMillis() - it }?.takeIf { it > 0 }
+                ?: service.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                    ?.takeIf { service.videoId == null }
+                    ?.let { com.github.andreyasadchy.xtra.util.TwitchClock.nowMs() - it }
+                    ?.takeIf { it > 0 }
         }
         return null
     }
@@ -565,7 +560,10 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun updateProgress() {
         if (isTvLiveTimeline()) {
             updateTvLiveTimeline()
-            if (isExperimentalVodActive()) {
+            if (isExperimentalVodActive() ||
+                playbackService?.livePausedUptimeMs != null ||
+                (playbackService?.getLiveTimeShiftBehindMs() ?: 0L) > 0L
+            ) {
                 with(binding.playerControls) {
                     root.removeCallbacks(updateProgressAction)
                     if (root.isVisible) {

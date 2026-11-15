@@ -67,6 +67,7 @@ object NetworkUtils {
         }
 
         override fun onResponseStarted(request: UrlRequest, info: UrlResponseInfo) {
+            TwitchClock.onHttpResponse(info.url, info.headers.asMap["Date"]?.firstOrNull() ?: info.headers.asMap["date"]?.firstOrNull())
             val bodyLength = info.headers.asMap[CONTENT_LENGTH_HEADER_NAME]?.takeIf { it.size == 1 }?.getOrNull(0)?.toLongOrNull() ?: -1
             require(bodyLength <= MAX_ARRAY_SIZE) { "The body is too large and wouldn't fit in a byte array!" }
             mResponseBodyStream = if (bodyLength >= 0) {
@@ -146,6 +147,7 @@ object NetworkUtils {
         }
 
         override fun onResponseStarted(request: org.chromium.net.UrlRequest, info: org.chromium.net.UrlResponseInfo) {
+            TwitchClock.onHttpResponse(info.url, info.allHeaders["Date"]?.firstOrNull() ?: info.allHeaders["date"]?.firstOrNull())
             val bodyLength = info.allHeaders[CONTENT_LENGTH_HEADER_NAME]?.takeIf { it.size == 1 }?.getOrNull(0)?.toLongOrNull() ?: -1
             require(bodyLength <= MAX_ARRAY_SIZE) { "The body is too large and wouldn't fit in a byte array!" }
             mResponseBodyStream = if (bodyLength >= 0) {
@@ -333,6 +335,7 @@ object NetworkUtils {
                         call: Call,
                         response: Response,
                     ) {
+                        TwitchClock.onHttpResponse(response.request.url.toString(), response.header("Date"))
                         continuation.resume(response) { _, value, _ ->
                             value.closeQuietly()
                         }

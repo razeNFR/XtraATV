@@ -78,21 +78,61 @@ object TvProxyPanel {
         manage: Manage? = null,
         onClosed: (List<CustomProxy>?) -> Unit,
     ) {
-        if (TvExperimentalAdblock.isExperimentalEnabled(context)) {
+        if (manage != null && TvExperimentalAdblock.isExperimentalEnabled(context)) {
             android.widget.Toast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
+        TvExperimentalAdblock.normalizePrefs(context)
         val entries = mutableStateListOf<Entry>().apply { addAll(proxies.sortedBy { it.position }.map { Entry(it) }) }
         val original = proxies.sortedBy { it.position }.map { it.id to it.enabled }
+        val expBefore = TvExperimentalAdblock.isExperimentalEnabled(context)
         val useBefore = context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
         val modeBefore = context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0")
+        val panelTitle = context.getString(if (manage != null) R.string.tv_proxy_panel_title else R.string.tv_adblock_and_proxies_title)
+        val panelSubtitle = context.getString(if (manage != null) R.string.tv_proxy_panel_subtitle else R.string.tv_adblock_and_proxies_subtitle)
         val dialog = TvDialogs.show(context) { dismiss ->
-            SidePanel(title = context.getString(R.string.tv_proxy_panel_title), subtitle = context.getString(R.string.tv_proxy_panel_subtitle), width = if (manage != null) 500.dp else 440.dp, scrollable = true) {
+            SidePanel(title = panelTitle, subtitle = panelSubtitle, width = if (manage != null) 500.dp else 460.dp, scrollable = true) {
                 val first = remember { FocusRequester() }
-                // the custom proxies on or off, first (shown both in the player and in the settings)
-                var useProxies by remember { mutableStateOf(context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)) }
-                Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp).focusRequester(first), {
+                var expAdblock by remember { mutableStateOf(TvExperimentalAdblock.isExperimentalEnabled(context)) }
+                var useProxies by remember { mutableStateOf(!expAdblock && context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)) }
+                if (manage == null) {
+                    Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp).focusRequester(first), {
+                        expAdblock = !expAdblock
+                        if (expAdblock) {
+                            useProxies = false
+                        }
+                        context.prefs().edit {
+                            putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, expAdblock)
+                            if (expAdblock) {
+                                putBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+                                putBoolean(C.PLAYER_USE_STREAM_PROXY, false)
+                            }
+                        }
+                        TvExperimentalAdblock.normalizePrefs(context)
+                    }) { focused ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                context.getString(R.string.tv_adblock_exp_title),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (focused) TvColors.onFocused else Color.White,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TvListPanel.Switch(expAdblock)
+                        }
+                    }
+                }
+                // the custom proxies on or off (shown both in the player and in the settings)
+                val proxiesSwitchModifier = if (manage != null) {
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp).focusRequester(first)
+                } else {
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                }
+                Pill(proxiesSwitchModifier, {
                     useProxies = !useProxies
+                    if (useProxies) {
+                        expAdblock = false
+                    }
                     context.prefs().edit {
                         putBoolean(C.PLAYER_USE_CUSTOM_PROXY, useProxies)
                         if (useProxies) {
@@ -112,91 +152,94 @@ object TvProxyPanel {
                         TvListPanel.Switch(useProxies)
                     }
                 }
-                // the proxies for the whole stream, or only while an ad plays (the stream itself from Twitch)
-                SelectorRow(
-                    context.getString(R.string.tv_proxy_mode),
-                    listOf(context.getString(R.string.tv_proxy_mode_always), context.getString(R.string.tv_proxy_mode_ads)),
-                    if (context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1") 1 else 0,
-                ) {
-                    context.prefs().edit { putString(C.PLAYER_CUSTOM_PROXY_MODE, it.toString()) }
-                }
-                Spacer(Modifier.height(8.dp))
-                entries.forEachIndexed { index, entry ->
-                    androidx.compose.runtime.key(entry) {
-                        // the status, checked again when the url changes
-                        val online by produceState<Boolean?>(null, entry.url) {
-                            value = null
-                            value = TvProxyStatus.check(context, entry.url)
-                        }
-                        ProxyRow(
-                            label = entry.url?.let { shortUrl(it) } ?: "",
-                            online = online,
-                            enabled = entry.enabled,
-                            canUp = index > 0,
-                            canDown = index < entries.lastIndex,
-                            modifier = Modifier,
-                            onToggle = {
-                                entry.enabled = !entry.enabled
-                                if (manage != null) {
-                                    entry.proxy.enabled = entry.enabled
-                                    manage.scope.launch { manage.repository.updateCustomProxy(entry.proxy) }
-                                }
-                            },
-                            onMove = { step ->
-                                val target = index + step
-                                if (target in entries.indices) {
-                                    val moved = entries.removeAt(index)
-                                    entries.add(target, moved)
-                                }
-                            },
-                            onEdit = if (manage != null) {
-                                {
-                                    showEdit(context, entry.url, entry.addQueryParams, onSave = { url, addQueryParams ->
-                                        TvProxyStatus.forget(entry.url)
-                                        TvProxyStatus.forget(url)
-                                        entry.proxy.url = url
-                                        entry.proxy.addQueryParams = addQueryParams
-                                        entry.addQueryParams = addQueryParams
-                                        entry.url = url
-                                        manage.scope.launch { manage.repository.updateCustomProxy(entry.proxy) }
-                                    }, onDelete = {
-                                        entries.remove(entry)
-                                        manage.scope.launch { manage.repository.deleteCustomProxy(entry.proxy) }
-                                    })
-                                }
-                            } else null,
-                        )
+                if (!expAdblock) {
+                    // the proxies for the whole stream, or only while an ad plays (the stream itself from Twitch)
+                    SelectorRow(
+                        context.getString(R.string.tv_proxy_mode),
+                        listOf(context.getString(R.string.tv_proxy_mode_always), context.getString(R.string.tv_proxy_mode_ads)),
+                        if (context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1") 1 else 0,
+                    ) {
+                        context.prefs().edit { putString(C.PLAYER_CUSTOM_PROXY_MODE, it.toString()) }
                     }
-                }
-                Spacer(Modifier.height(12.dp))
-                if (manage != null) {
-                    // no proxy yet: the focus on "Add"
-                    ButtonRow(context.getString(R.string.tv_proxy_add)) {
-                        showEdit(context, null, true, onSave = { url, addQueryParams ->
-                            if (!url.isNullOrBlank()) {
-                                val item = CustomProxy(url = url, addQueryParams = addQueryParams, position = entries.size)
-                                TvProxyStatus.forget(url)
-                                manage.scope.launch {
-                                    item.id = manage.repository.saveCustomProxy(item).toInt()
-                                    entries.add(Entry(item))
-                                }
+                    Spacer(Modifier.height(8.dp))
+                    entries.forEachIndexed { index, entry ->
+                        androidx.compose.runtime.key(entry) {
+                            // the status, checked again when the url changes
+                            val online by produceState<Boolean?>(null, entry.url) {
+                                value = null
+                                value = TvProxyStatus.check(context, entry.url)
                             }
-                        }, onDelete = null)
+                            ProxyRow(
+                                label = entry.url?.let { shortUrl(it) } ?: "",
+                                online = online,
+                                enabled = entry.enabled,
+                                canUp = index > 0,
+                                canDown = index < entries.lastIndex,
+                                modifier = Modifier,
+                                onToggle = {
+                                    entry.enabled = !entry.enabled
+                                    if (manage != null) {
+                                        entry.proxy.enabled = entry.enabled
+                                        manage.scope.launch { manage.repository.updateCustomProxy(entry.proxy) }
+                                    }
+                                },
+                                onMove = { step ->
+                                    val target = index + step
+                                    if (target in entries.indices) {
+                                        val moved = entries.removeAt(index)
+                                        entries.add(target, moved)
+                                    }
+                                },
+                                onEdit = if (manage != null) {
+                                    {
+                                        showEdit(context, entry.url, entry.addQueryParams, onSave = { url, addQueryParams ->
+                                            TvProxyStatus.forget(entry.url)
+                                            TvProxyStatus.forget(url)
+                                            entry.proxy.url = url
+                                            entry.proxy.addQueryParams = addQueryParams
+                                            entry.addQueryParams = addQueryParams
+                                            entry.url = url
+                                            manage.scope.launch { manage.repository.updateCustomProxy(entry.proxy) }
+                                        }, onDelete = {
+                                            entries.remove(entry)
+                                            manage.scope.launch { manage.repository.deleteCustomProxy(entry.proxy) }
+                                        })
+                                    }
+                                } else null,
+                            )
+                        }
                     }
-                }
-                ButtonRow(context.getString(if (manage != null) R.string.tv_proxy_full_screen else R.string.tv_proxy_all_settings)) {
-                    dismiss()
-                    openSettings()
+                    Spacer(Modifier.height(12.dp))
+                    if (manage != null) {
+                        // no proxy yet: the focus on "Add"
+                        ButtonRow(context.getString(R.string.tv_proxy_add)) {
+                            showEdit(context, null, true, onSave = { url, addQueryParams ->
+                                if (!url.isNullOrBlank()) {
+                                    val item = CustomProxy(url = url, addQueryParams = addQueryParams, position = entries.size)
+                                    TvProxyStatus.forget(url)
+                                    manage.scope.launch {
+                                        item.id = manage.repository.saveCustomProxy(item).toInt()
+                                        entries.add(Entry(item))
+                                    }
+                                }
+                            }, onDelete = null)
+                        }
+                    }
+                    ButtonRow(context.getString(if (manage != null) R.string.tv_proxy_full_screen else R.string.tv_proxy_all_settings)) {
+                        dismiss()
+                        openSettings()
+                    }
                 }
                 LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
             }
         }
         dialog.setOnDismissListener {
             val now = entries.map { it.proxy.id to it.enabled }
+            val expSame = TvExperimentalAdblock.isExperimentalEnabled(context) == expBefore
             val useSame = context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false) == useBefore
             val modeSame = context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == modeBefore
             // on/off or mode changed: as a change of the list (the stream starts again with it)
-            if (now == original && useSame && modeSame) {
+            if (now == original && expSame && useSame && modeSame) {
                 onClosed(null)
             } else {
                 onClosed(entries.mapIndexed { index, entry ->

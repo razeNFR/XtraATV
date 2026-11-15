@@ -762,7 +762,7 @@
     <string name="tv_switch_current">This list</string>
     <string name="tv_switch_suggested">Suggested</string>
     <string name="tv_switch_empty">No live stream in this list</string>
-    <string name="tv_pip_hint">Small window: hold OK to swap the streams, back to close it. Its button in the controls changes its place, its size and the sound</string>
+    <string name="tv_pip_hint">Small window: hold OK to swap streams (customizable in Remote settings), Back to close. Its button in controls changes position, size, and sound.</string>
     <string name="tv_multistream_focus">Focus mode: this stream big</string>
     <string name="tv_multistream_grid">Back to the grid</string>
     <string name="tv_followed_videos_need_code">The videos of the followed channels need the login with the code: log in with twitch.tv/activate (Account)</string>
@@ -863,8 +863,8 @@
     <string name="tv_followed_videos_row">Latest videos of your followed channels</string>
     <string name="tv_refreshed">Updated</string>
     <string name="tv_multistream_hint">OK: add or remove a stream · up to %1$d</string>
-    <string name="tv_proxy_button">Proxy</string>
-    <string name="tv_proxy_button_summary">OK turns the custom proxy on or off, OK held opens the list of the proxies</string>
+    <string name="tv_proxy_button">Adblock &amp; Proxy</string>
+    <string name="tv_proxy_button_summary">Opens the ad blocker and custom proxies panel</string>
     <string name="tv_proxy_on">Proxy on</string>
     <string name="tv_proxy_off">Proxy off</string>
     <string name="tv_proxy_panel_title">Custom proxies</string>
@@ -1046,6 +1046,20 @@
     <string name="chat_blocked_badge">Blocked</string>
     <string name="tv_chat_recent_users">Recent in chat (OK to block / unblock)</string>
     <string name="tv_chat_recent_empty">No recent messages in chat yet</string>
+    <string name="chat_highlighted_users">Highlighted users</string>
+    <string name="chat_highlighted_users_none">No highlighted users</string>
+    <string name="chat_highlighted_users_one">1 highlighted user</string>
+    <string name="chat_highlighted_users_count">%1$d highlighted users</string>
+    <string name="chat_highlight_add">Highlight a username…</string>
+    <string name="chat_highlight_username_hint">Twitch username(s), separated by commas</string>
+    <string name="chat_highlight_action">Highlight</string>
+    <string name="chat_unhighlight_action">Remove highlight</string>
+    <string name="chat_unblock_action">Unblock</string>
+    <string name="chat_user_highlighted">Highlighted %1$s</string>
+    <string name="chat_user_unhighlighted">Removed highlight for %1$s</string>
+    <string name="chat_highlighted_badge">Highlighted</string>
+    <string name="tv_chat_manage_users">Accounts &amp; bots</string>
+    <string name="tv_chat_recent_users_manage">Recent in chat (OK to highlight / block)</string>
     <string name="tv_home_multistream">Saved multi-streams</string>
     <string name="tv_home_multistream_summary">Shows a row of your saved multi-stream groups when at least 2 channels are live</string>
     <string name="tv_home_multistreams_row">Multi-streams</string>
@@ -1183,4 +1197,13 @@
     <string name="tv_option_on">On</string>
     <string name="tv_prediction_started">Prediction started</string>
     <string name="tv_prediction_ended">Prediction ended</string>
+    <string name="tv_dpad_center_long">OK (long press)</string>
+    <string name="tv_remote_action_pip_swap">Small window: swap streams</string>
+    <string name="tv_remote_action_pip_settings">Small window: settings</string>
+    <string name="tv_remote_action_pip_close">Small window: close</string>
+    <string name="tv_adblock_and_proxies_title">Ad blocker &amp; proxies</string>
+    <string name="tv_adblock_and_proxies_subtitle">Experimental ad blocker or custom HLS proxies for live streams</string>
+    <string name="tv_update_install_blocked">Android blocked the installation. Allow \"Install unknown apps\" for Xtra TV in system settings, or download the update in your browser.</string>
+    <string name="tv_remote_action_pip_swap_default">Small window: swap streams (default)</string>
+    <string name="tv_remote_action_show_controls">Show controls</string>
 </resources>

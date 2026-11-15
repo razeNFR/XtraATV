@@ -42,7 +42,9 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.NetworkUtils
 import com.github.andreyasadchy.xtra.util.NetworkUtils.executeAsync
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
+import com.github.andreyasadchy.xtra.util.UpdateInstallHelper
 import com.github.andreyasadchy.xtra.util.tokenPrefs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -112,6 +114,7 @@ class MainViewModel(
     var updateJob: Job? = null
     val updateProgress = MutableSharedFlow<Int>()
     val closeUpdateDialog = MutableSharedFlow<Boolean>()
+    val updateInstallBlocked = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     fun savePlaybackState(item: PlaybackState, then: (() -> Unit)? = null) {
         viewModelScope.launch {
@@ -1096,6 +1099,7 @@ class MainViewModel(
     }
 
     fun downloadUpdate(networkLibrary: String?, url: String) {
+        UpdateInstallHelper.lastAttemptedUpdateUrl = url
         updateJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val progressListener = NetworkUtils.ProgressListener { bytesRead ->
@@ -1167,12 +1171,17 @@ class MainViewModel(
                             0,
                             Intent(applicationContext, MainActivity::class.java).apply {
                                 setAction(MainActivity.INTENT_INSTALL_UPDATE)
+                                putExtra("update_url", url)
                             },
                             PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                         ).intentSender
                     )
                     session.close()
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SecurityException) {
+                updateInstallBlocked.emit(url)
             } catch (e: Exception) {
 
             }

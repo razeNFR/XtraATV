@@ -160,6 +160,7 @@ class MediaPlayerService : BasePlaybackService() {
                 }
 
                 override fun onSkipToNext() {
+                    if (resources.getBoolean(R.bool.isTv) && type == STREAM) return
                     player?.let { player ->
                         val position = player.currentPosition + fastForwardMs
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -182,6 +183,7 @@ class MediaPlayerService : BasePlaybackService() {
                 }
 
                 override fun onFastForward() {
+                    if (resources.getBoolean(R.bool.isTv) && type == STREAM) return
                     player?.let { player ->
                         val position = player.currentPosition + fastForwardMs
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -242,11 +244,13 @@ class MediaPlayerService : BasePlaybackService() {
                                 }
                             }
                             INTENT_FAST_FORWARD -> {
-                                val position = player.currentPosition + fastForwardMs
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    player.seekTo(position, MediaPlayer.SEEK_CLOSEST)
-                                } else {
-                                    player.seekTo(position.toInt())
+                                if (!(resources.getBoolean(R.bool.isTv) && type == STREAM)) {
+                                    val position = player.currentPosition + fastForwardMs
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        player.seekTo(position, MediaPlayer.SEEK_CLOSEST)
+                                    } else {
+                                        player.seekTo(position.toInt())
+                                    }
                                 }
                             }
                         }
@@ -279,15 +283,19 @@ class MediaPlayerService : BasePlaybackService() {
                                         true
                                     }
                                     KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                                        player?.let { player ->
-                                            val position = player.currentPosition + fastForwardMs
-                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                                player.seekTo(position, MediaPlayer.SEEK_CLOSEST)
-                                            } else {
-                                                player.seekTo(position.toInt())
+                                        if (resources.getBoolean(R.bool.isTv) && type == STREAM) {
+                                            false
+                                        } else {
+                                            player?.let { player ->
+                                                val position = player.currentPosition + fastForwardMs
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                                    player.seekTo(position, MediaPlayer.SEEK_CLOSEST)
+                                                } else {
+                                                    player.seekTo(position.toInt())
+                                                }
                                             }
+                                            true
                                         }
-                                        true
                                     }
                                     else -> false
                                 }
@@ -1507,15 +1515,21 @@ class MediaPlayerService : BasePlaybackService() {
                             0f
                         }
                     )
+                    val isTvStream = resources.getBoolean(R.bool.isTv) && type == STREAM
                     setActions(
                         (PlaybackState.ACTION_STOP
                                 or PlaybackState.ACTION_PAUSE
                                 or PlaybackState.ACTION_PLAY
                                 or PlaybackState.ACTION_REWIND
-                                or PlaybackState.ACTION_FAST_FORWARD
                                 or PlaybackState.ACTION_SET_RATING
                                 or PlaybackState.ACTION_PLAY_PAUSE
                                 or PlaybackState.ACTION_PREPARE).let {
+                            if (!isTvStream) {
+                                it or PlaybackState.ACTION_FAST_FORWARD
+                            } else {
+                                it
+                            }
+                        }.let {
                             if (showSeekbar) {
                                 it or PlaybackState.ACTION_SEEK_TO
                             } else {
@@ -1530,7 +1544,9 @@ class MediaPlayerService : BasePlaybackService() {
                         }
                     )
                     addCustomAction(INTENT_REWIND, ContextCompat.getString(this@MediaPlayerService, R.string.rewind), androidx.media3.session.R.drawable.media3_icon_rewind)
-                    addCustomAction(INTENT_FAST_FORWARD, ContextCompat.getString(this@MediaPlayerService, R.string.forward), androidx.media3.session.R.drawable.media3_icon_fast_forward)
+                    if (!isTvStream) {
+                        addCustomAction(INTENT_FAST_FORWARD, ContextCompat.getString(this@MediaPlayerService, R.string.forward), androidx.media3.session.R.drawable.media3_icon_fast_forward)
+                    }
                 }.build()
             )
         }
@@ -2025,13 +2041,15 @@ class MediaPlayerService : BasePlaybackService() {
                 }
             }
             INTENT_FAST_FORWARD -> {
-                player?.let { player ->
-                    val fastForwardMs = (prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000
-                    val position = player.currentPosition + fastForwardMs
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        player.seekTo(position, MediaPlayer.SEEK_CLOSEST)
-                    } else {
-                        player.seekTo(position.toInt())
+                if (!(resources.getBoolean(R.bool.isTv) && type == STREAM)) {
+                    player?.let { player ->
+                        val fastForwardMs = (prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000
+                        val position = player.currentPosition + fastForwardMs
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            player.seekTo(position, MediaPlayer.SEEK_CLOSEST)
+                        } else {
+                            player.seekTo(position.toInt())
+                        }
                     }
                 }
             }

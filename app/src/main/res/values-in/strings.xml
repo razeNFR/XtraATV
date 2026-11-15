@@ -744,7 +744,7 @@
     <string name="tv_switch_current">Daftar ini</string>
     <string name="tv_switch_suggested">Saran</string>
     <string name="tv_switch_empty">Tidak ada siaran langsung di daftar ini</string>
-    <string name="tv_pip_hint">Jendela kecil: tahan OK untuk menukar, Kembali untuk menutup</string>
+    <string name="tv_pip_hint">Jendela kecil: tahan OK untuk menukar (dapat diatur di Remote), Kembali untuk menutup</string>
     <string name="tv_multistream_focus">Mode fokus: stream ini besar</string>
     <string name="tv_multistream_grid">Kembali ke grid</string>
     <string name="tv_followed_videos_need_code">Video yang diikuti memerlukan login dengan kode: login lewat twitch.tv/activate (Akun)</string>
@@ -845,8 +845,8 @@
     <string name="tv_followed_videos_row">Video terbaru dari channel yang kamu ikuti</string>
     <string name="tv_refreshed">Diperbarui</string>
     <string name="tv_multistream_hint">OK: tambah atau hapus stream · hingga %1$d</string>
-    <string name="tv_proxy_button">Proxy</string>
-    <string name="tv_proxy_button_summary">OK menyalakan atau mematikan proxy kustom, tahan OK membuka daftar proxy</string>
+    <string name="tv_proxy_button">Pemblokir iklan &amp; Proxy</string>
+    <string name="tv_proxy_button_summary">Membuka panel pemblokir iklan dan proxy kustom</string>
     <string name="tv_proxy_on">Proxy aktif</string>
     <string name="tv_proxy_off">Proxy nonaktif</string>
     <string name="tv_proxy_panel_title">Proxy kustom</string>
@@ -1028,6 +1028,20 @@
     <string name="chat_blocked_badge">Diblokir</string>
     <string name="tv_chat_recent_users">Terbaru di chat (OK untuk blokir / buka)</string>
     <string name="tv_chat_recent_empty">Belum ada pesan terbaru di chat</string>
+    <string name="chat_highlighted_users">Pengguna disorot</string>
+    <string name="chat_highlighted_users_none">Tidak ada pengguna disorot</string>
+    <string name="chat_highlighted_users_one">1 pengguna disorot</string>
+    <string name="chat_highlighted_users_count">%1$d pengguna disorot</string>
+    <string name="chat_highlight_add">Sorot nama pengguna…</string>
+    <string name="chat_highlight_username_hint">Nama pengguna Twitch, pisahkan dengan koma</string>
+    <string name="chat_highlight_action">Sorot</string>
+    <string name="chat_unhighlight_action">Hapus sorotan</string>
+    <string name="chat_unblock_action">Buka blokir</string>
+    <string name="chat_user_highlighted">%1$s disorot</string>
+    <string name="chat_user_unhighlighted">Sorotan untuk %1$s dihapus</string>
+    <string name="chat_highlighted_badge">Disorot</string>
+    <string name="tv_chat_manage_users">Akun &amp; bot</string>
+    <string name="tv_chat_recent_users_manage">Terbaru di chat (OK untuk sorot / blokir)</string>
     <string name="tv_home_multistream">Multi-stream tersimpan</string>
     <string name="tv_home_multistream_summary">Tampilkan baris grup multi-stream tersimpan saat minimal 2 channel sedang live</string>
     <string name="tv_home_multistreams_row">Multi-stream</string>
@@ -1164,4 +1178,13 @@
     <string name="tv_option_on">Aktif</string>
     <string name="tv_prediction_started">Prediksi dimulai</string>
     <string name="tv_prediction_ended">Prediksi selesai</string>
+    <string name="tv_dpad_center_long">OK (tekan lama)</string>
+    <string name="tv_remote_action_pip_swap">Jendela kecil: tukar siaran</string>
+    <string name="tv_remote_action_pip_settings">Jendela kecil: pengaturan</string>
+    <string name="tv_remote_action_pip_close">Jendela kecil: tutup</string>
+    <string name="tv_adblock_and_proxies_title">Pemblokir iklan &amp; proxy</string>
+    <string name="tv_adblock_and_proxies_subtitle">Pemblokir iklan eksperimental atau proxy HLS kustom untuk siaran langsung</string>
+    <string name="tv_update_install_blocked">Android memblokir pemasangan. Izinkan \"Instal aplikasi tak dikenal\" untuk Xtra TV di pengaturan sistem, atau unduh pembaruan melalui browser.</string>
+    <string name="tv_remote_action_pip_swap_default">Jendela kecil: tukar siaran (bawaan)</string>
+    <string name="tv_remote_action_show_controls">Tampilkan kontrol</string>
 </resources>

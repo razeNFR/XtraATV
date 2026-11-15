@@ -748,7 +748,7 @@
     <string name="tv_switch_current">Esta lista</string>
     <string name="tv_switch_suggested">Sugerencias</string>
     <string name="tv_switch_empty">Ningún stream en directo en esta lista</string>
-    <string name="tv_pip_hint">Ventana pequeña: mantén OK para intercambiar, Atrás para cerrarla</string>
+    <string name="tv_pip_hint">Ventana pequeña: mantén OK para intercambiar (configurable en Mando), Atrás para cerrarla</string>
     <string name="tv_multistream_focus">Modo foco: este stream en grande</string>
     <string name="tv_multistream_grid">Volver a la cuadrícula</string>
     <string name="tv_followed_videos_need_code">Los vídeos de los seguidos necesitan el inicio de sesión con código: inicia sesión con twitch.tv/activate (Cuenta)</string>
@@ -849,8 +849,8 @@
     <string name="tv_followed_videos_row">Últimos vídeos de tus canales seguidos</string>
     <string name="tv_refreshed">Actualizado</string>
     <string name="tv_multistream_hint">OK: añadir o quitar un stream · hasta %1$d</string>
-    <string name="tv_proxy_button">Proxy</string>
-    <string name="tv_proxy_button_summary">OK activa o desactiva el proxy personalizado, mantener OK abre la lista de proxys</string>
+    <string name="tv_proxy_button">Bloqueador y Proxy</string>
+    <string name="tv_proxy_button_summary">Abre el panel del bloqueador de anuncios y proxys personalizados</string>
     <string name="tv_proxy_on">Proxy activado</string>
     <string name="tv_proxy_off">Proxy desactivado</string>
     <string name="tv_proxy_panel_title">Proxys personalizados</string>
@@ -1032,6 +1032,20 @@
     <string name="chat_blocked_badge">Bloqueado</string>
     <string name="tv_chat_recent_users">Recientes en el chat (OK para bloquear / desbloquear)</string>
     <string name="tv_chat_recent_empty">Aún no hay mensajes recientes en el chat</string>
+    <string name="chat_highlighted_users">Usuarios resaltados</string>
+    <string name="chat_highlighted_users_none">Ningún usuario resaltado</string>
+    <string name="chat_highlighted_users_one">1 usuario resaltado</string>
+    <string name="chat_highlighted_users_count">%1$d usuarios resaltados</string>
+    <string name="chat_highlight_add">Resaltar un usuario…</string>
+    <string name="chat_highlight_username_hint">Usuario(s) de Twitch, separados por comas</string>
+    <string name="chat_highlight_action">Resaltar</string>
+    <string name="chat_unhighlight_action">Quitar resaltado</string>
+    <string name="chat_unblock_action">Desbloquear</string>
+    <string name="chat_user_highlighted">%1$s resaltado</string>
+    <string name="chat_user_unhighlighted">Se quitó el resaltado de %1$s</string>
+    <string name="chat_highlighted_badge">Resaltado</string>
+    <string name="tv_chat_manage_users">Cuentas y bots</string>
+    <string name="tv_chat_recent_users_manage">Recientes en el chat (OK para resaltar / bloquear)</string>
     <string name="tv_home_multistream">Multi-streams guardados</string>
     <string name="tv_home_multistream_summary">Muestra una fila con tus grupos multi-stream guardados cuando al menos 2 canales están en directo</string>
     <string name="tv_home_multistreams_row">Multi-streams</string>
@@ -1168,4 +1182,13 @@
     <string name="tv_option_on">Activado</string>
     <string name="tv_prediction_started">Predicción iniciada</string>
     <string name="tv_prediction_ended">Predicción finalizada</string>
+    <string name="tv_dpad_center_long">OK (pulsación larga)</string>
+    <string name="tv_remote_action_pip_swap">Ventana pequeña: intercambiar directos</string>
+    <string name="tv_remote_action_pip_settings">Ventana pequeña: ajustes</string>
+    <string name="tv_remote_action_pip_close">Ventana pequeña: cerrar</string>
+    <string name="tv_adblock_and_proxies_title">Bloqueador de anuncios y proxys</string>
+    <string name="tv_adblock_and_proxies_subtitle">Bloqueador de anuncios experimental o proxys HLS personalizados para directos</string>
+    <string name="tv_update_install_blocked">Android bloqueó la instalación. Permite «Instalar aplicaciones desconocidas» para Xtra TV en los ajustes del sistema o descarga la actualización en el navegador.</string>
+    <string name="tv_remote_action_pip_swap_default">Ventana pequeña: intercambiar directos (predeterminado)</string>
+    <string name="tv_remote_action_show_controls">Mostrar controles</string>
 </resources>
