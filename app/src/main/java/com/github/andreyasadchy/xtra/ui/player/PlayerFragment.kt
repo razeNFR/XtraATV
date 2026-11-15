@@ -2231,6 +2231,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (_binding == null || tvScrubPosition >= 0 || !isPlayingOrLoading()) {
             return
         }
+        val exoService = playbackService as? ExoPlayerService
+        if (exoService?.isDvrInitialSeekPending == true) {
+            return
+        }
+        val speed = getCurrentSpeed() ?: 1f
+        if (speed <= 1.02f) {
+            return
+        }
         val duration = getTotalDuration()?.takeIf { it > LIVE_EDGE_MS * 2 } ?: return
         val position = getCurrentPosition() ?: return
         if (position >= duration - DVR_CAUGHT_UP_MS) {
@@ -2239,7 +2247,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun getStreamUptime(): Long? {
-        return playbackService?.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.let { System.currentTimeMillis() - it }?.takeIf { it > 0 }
+        return playbackService?.createdAt
+            ?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+            ?.let { com.github.andreyasadchy.xtra.util.TwitchClock.nowMs() - it }
+            ?.takeIf { it > 0 }
     }
 
     protected open fun syncPlayPauseButtonVisibility() {}
@@ -2260,6 +2271,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             return !atAdFreeEdge
         }
         val exoService = service as? ExoPlayerService
+        val shiftBehindMs = exoService?.getLiveTimeShiftBehindMs() ?: 0L
+        if (shiftBehindMs >= 4_500L) {
+            return true
+        }
         val pausedUptime = exoService?.livePausedUptimeMs
         val uptime = getStreamUptime()
         if (pausedUptime != null && uptime != null && uptime - pausedUptime > 8_000L) {
@@ -2351,20 +2366,26 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             position.visibility = View.VISIBLE
             duration.visibility = View.VISIBLE
             progressBar.setDuration(uptime)
-            val pausedUptime = (playbackService as? ExoPlayerService)?.livePausedUptimeMs
+            val exoService = playbackService as? ExoPlayerService
+            val shiftBehindMs = exoService?.getLiveTimeShiftBehindMs() ?: 0L
+            val pausedUptime = exoService?.livePausedUptimeMs
             if (pendingDvr) {
                 val target = pendingDvrPosition.coerceIn(0L, uptime)
                 progressBar.setPosition(target)
                 progressBar.setBufferedPosition(target)
                 position.text = DateUtils.formatElapsedTime(target / 1000)
-            } else if (pausedUptime != null) {
-                val target = pausedUptime.coerceIn(0L, uptime)
+            } else if (shiftBehindMs >= 4_500L || pausedUptime != null) {
+                val target = if (shiftBehindMs > 0L) {
+                    (uptime - shiftBehindMs).coerceIn(0L, uptime)
+                } else {
+                    (pausedUptime ?: uptime).coerceIn(0L, uptime)
+                }
                 val behindMs = (uptime - target).coerceAtLeast(0L)
                 progressBar.setPosition(target)
-                progressBar.setBufferedPosition(target)
-                position.text = if (behindMs <= 8_000L) getString(R.string.tv_live) else DateUtils.formatElapsedTime(target / 1000)
+                progressBar.setBufferedPosition(uptime)
+                position.text = if (behindMs < 4_500L) getString(R.string.tv_live) else DateUtils.formatElapsedTime(target / 1000)
                 tvGoLive?.let { button ->
-                    if (behindMs > 8_000L) {
+                    if (behindMs >= 4_500L) {
                         styleTvGoLiveButton(button)
                         button.visibility = View.VISIBLE
                         button.setOnClickListener {
@@ -2527,9 +2548,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> {
                     if (tvScrubPosition < 0) {
+                        val shiftBehindMs = if (isLive && !expVod) {
+                            (playbackService as? ExoPlayerService)?.getLiveTimeShiftBehindMs() ?: 0L
+                        } else {
+                            0L
+                        }
                         tvScrubPosition = when {
                             expVod -> (getCurrentPosition() ?: duration).coerceIn(0L, duration)
-                            isLive -> duration
+                            isLive -> (duration - shiftBehindMs).coerceIn(0L, duration)
                             else -> getCurrentPosition() ?: 0
                         }
                         progressBar.isPressed = true
@@ -2573,11 +2599,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 showController()
                             }
                             isLive -> {
+                                val wasShifted = ((playbackService as? ExoPlayerService)?.getLiveTimeShiftBehindMs() ?: 0L) > 0L
                                 if (newPosition < duration - LIVE_EDGE_MS) {
                                     startTvDvr(newPosition)
                                     updateTvLiveTimeline()
                                     showController()
                                 } else {
+                                    if (wasShifted && newPosition >= duration - 8_000L) {
+                                        seekToLivePosition()
+                                    }
                                     updateTvLiveTimeline()
                                     showController()
                                 }
@@ -2895,7 +2925,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                 }
-                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_chat_block_users)) {
+                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_chat_manage_users)) {
                     com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.showPlayerBlockPanel(
                         context = context,
                         alignEnd = left && mode.intValue != 2,

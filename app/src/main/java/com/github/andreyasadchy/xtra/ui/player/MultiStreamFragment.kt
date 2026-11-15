@@ -1342,15 +1342,28 @@ class MultiStreamFragment : Fragment() {
         val player = tile.player
         val timeline = player.currentTimeline
         if (timeline.isEmpty || player.currentMediaItemIndex !in 0 until timeline.windowCount) return null
-        val start = timeline.getWindow(player.currentMediaItemIndex, androidx.media3.common.Timeline.Window()).windowStartTimeMs
-        if (start != androidx.media3.common.C.TIME_UNSET) {
-            return start + player.currentPosition
+        val window = androidx.media3.common.Timeline.Window()
+        timeline.getWindow(player.currentMediaItemIndex, window)
+        if (window.windowStartTimeMs != androidx.media3.common.C.TIME_UNSET) {
+            return window.windowStartTimeMs + player.currentPosition
         }
         if (tile.experimentalVodActive) {
             val baseMs = tile.experimentalCreatedAtMs
                 ?: com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.parseEpochMs(tile.stream.createdAt)
             if (baseMs != null) {
                 return baseMs + player.currentPosition.coerceAtLeast(0L)
+            }
+        }
+        if (window.isDynamic) {
+            val bufferedMs = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)
+            val horizonMs = if (window.durationMs != androidx.media3.common.C.TIME_UNSET && window.durationMs > 0L) {
+                (window.durationMs - player.currentPosition).coerceAtLeast(0L)
+            } else {
+                0L
+            }
+            val delayMs = maxOf(horizonMs, bufferedMs).coerceAtLeast(0L)
+            if (com.github.andreyasadchy.xtra.util.TwitchClock.isCalibrated() || delayMs > 0L) {
+                return com.github.andreyasadchy.xtra.util.TwitchClock.nowMs() - delayMs
             }
         }
         return null

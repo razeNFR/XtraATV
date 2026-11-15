@@ -477,14 +477,13 @@ class ExoPlayerFragment : PlayerFragment() {
         lines.add("Quality    ${super.getCurrentQualityLabel() ?: "-"}")
         val buffer = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0)
         lines.add("Buffer     ${"%.1f".format(buffer / 1000f)} s")
-        if (playbackService?.experimentalVodActive == true) {
-            val delayMs = getLivePictureTime()?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
-                ?: getTotalDuration()?.let { (it - player.currentPosition).coerceAtLeast(0L) }
-            if (delayMs != null) {
-                lines.add("Latency    ${"%.1f".format(delayMs / 1000f)} s")
-            }
+        val latencyMs = playbackService?.getLiveLatencyMs()
+        if (latencyMs != null) {
+            lines.add("Latency    ${"%.1f".format(latencyMs / 1000f)} s")
         } else if (player.isCurrentMediaItemLive) {
-            player.currentLiveOffset.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { lines.add("Latency    ${"%.1f".format(it / 1000f)} s") }
+            player.currentLiveOffset
+                .takeIf { it != androidx.media3.common.C.TIME_UNSET }
+                ?.let { lines.add("Latency    ${"%.1f".format(it.coerceAtLeast(0L) / 1000f)} s") }
         }
         player.videoDecoderCounters?.let { counters ->
             lines.add("Dropped    ${counters.droppedBufferCount} / ${counters.renderedOutputBufferCount} frames")
@@ -518,7 +517,10 @@ class ExoPlayerFragment : PlayerFragment() {
         val service = playbackService ?: return null
         if (service.type == BasePlaybackService.VIDEO) {
             return service.durationSeconds?.takeIf { it > 0 }?.let { it * 1000L }
-                ?: service.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.takeIf { service.videoId == null }?.let { System.currentTimeMillis() - it }?.takeIf { it > 0 }
+                ?: service.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                    ?.takeIf { service.videoId == null }
+                    ?.let { com.github.andreyasadchy.xtra.util.TwitchClock.nowMs() - it }
+                    ?.takeIf { it > 0 }
         }
         return null
     }
@@ -558,7 +560,10 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun updateProgress() {
         if (isTvLiveTimeline()) {
             updateTvLiveTimeline()
-            if (isExperimentalVodActive() || playbackService?.livePausedUptimeMs != null) {
+            if (isExperimentalVodActive() ||
+                playbackService?.livePausedUptimeMs != null ||
+                (playbackService?.getLiveTimeShiftBehindMs() ?: 0L) > 0L
+            ) {
                 with(binding.playerControls) {
                     root.removeCallbacks(updateProgressAction)
                     if (root.isVisible) {

@@ -61,7 +61,9 @@ abstract class BasePlaybackService : LifecycleService() {
     var loaded = false
 
     protected suspend fun restorePlaybackState() {
-        val savedState = xtraModule.playerRepository.getPlaybackStates().firstOrNull()
+        val immediateState = pendingImmediatePlaybackState
+        pendingImmediatePlaybackState = null
+        val savedState = immediateState ?: xtraModule.playerRepository.getPlaybackStates().firstOrNull()
         xtraModule.playerRepository.deletePlaybackStates()
         if (savedState != null) {
             type = savedState.type
@@ -199,5 +201,8 @@ abstract class BasePlaybackService : LifecycleService() {
         const val VIDEO = "video"
         const val CLIP = "clip"
         const val OFFLINE_VIDEO = "offlineVideo"
+
+        @Volatile
+        var pendingImmediatePlaybackState: PlaybackState? = null
     }
 }

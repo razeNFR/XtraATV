@@ -1645,6 +1645,19 @@ class SettingsActivity : AppCompatActivity() {
                 com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.notifyPrefsChanged()
                 true
             }
+            findPreference<Preference>(C.CHAT_HIGHLIGHTED_USERS)?.apply {
+                summary = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.highlightedSummary(requireContext())
+                setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.showHighlightedSettingsDialog(requireActivity()) {
+                        if (isAdded) {
+                            summary = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.highlightedSummary(requireContext())
+                            summary = summary // force refresh
+                            (activity as? SettingsActivity)?.setResult()
+                        }
+                    }
+                    true
+                }
+            }
             findPreference<Preference>(C.CHAT_BLOCKED_USERS)?.apply {
                 summary = com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.summary(requireContext())
                 setOnPreferenceClickListener {

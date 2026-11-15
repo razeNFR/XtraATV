@@ -140,6 +140,12 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <Preference
+        android:key="chat_highlighted_users"
+        android:title="@string/chat_highlighted_users"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <ListPreference
         android:defaultValue="0"
         android:entries="@array/chatSlowEntries"

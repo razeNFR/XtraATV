@@ -2756,7 +2756,8 @@ class MainActivity : AppCompatActivity() {
         if (keptService == null) {
             (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         }
-        viewModel.savePlaybackState(PlaybackState(
+        com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.pendingDvrResume = null
+        val state = PlaybackState(
             type = BasePlaybackService.STREAM,
             streamId = stream.id,
             channelId = stream.channelId,
@@ -2770,7 +2771,9 @@ class MainActivity : AppCompatActivity() {
             thumbnail = stream.thumbnail,
             createdAt = stream.createdAt,
             viewerCount = stream.viewerCount,
-        )) {
+        )
+        BasePlaybackService.pendingImmediatePlaybackState = state
+        viewModel.savePlaybackState(state) {
             if (keptService != null) {
                 keptService.startSwitchedStream()
             } else if (startServiceEarly && playerFragment != null && currentStreamLogin == stream.channelLogin) {
@@ -2862,6 +2865,7 @@ class MainActivity : AppCompatActivity() {
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false, qualities: String? = null) {
         currentClipId = null
         if (video.id != null) {
+            com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.pendingDvrResume = null
             currentStream = null
             dvrStream = null
             dvrChatVideoId = null
@@ -2874,7 +2878,7 @@ class MainActivity : AppCompatActivity() {
             neighborJob?.cancel()
         }
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
-        viewModel.savePlaybackState(PlaybackState(
+        val state = PlaybackState(
             type = BasePlaybackService.VIDEO,
             videoId = video.id,
             channelId = video.channelId,
@@ -2892,7 +2896,9 @@ class MainActivity : AppCompatActivity() {
             videoAnimatedPreviewURL = video.animatedPreviewURL,
             position = offset,
             qualities = qualities,
-        ))
+        )
+        BasePlaybackService.pendingImmediatePlaybackState = state
+        viewModel.savePlaybackState(state)
         if (ignoreSavedPosition && prefs.getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
             video.id?.toLongOrNull()?.let { id ->
                 viewModel.saveVideoPosition(id, offset ?: 0)
@@ -2932,6 +2938,7 @@ class MainActivity : AppCompatActivity() {
         if (queue != null) {
             clipQueue = queue
         }
+        com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.pendingDvrResume = null
         currentClipId = clip.id
         currentStream = null
         if (isTv) {
@@ -2940,7 +2947,7 @@ class MainActivity : AppCompatActivity() {
         dvrStream = null
         dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
-        viewModel.savePlaybackState(PlaybackState(
+        val state = PlaybackState(
             type = BasePlaybackService.CLIP,
             videoId = clip.videoId,
             clipId = clip.id,
@@ -2958,7 +2965,9 @@ class MainActivity : AppCompatActivity() {
             videoOffsetSeconds = clip.videoOffsetSeconds,
             videoCreatedAt = clip.videoCreatedAt,
             videoAnimatedPreviewURL = clip.videoAnimatedPreviewURL,
-        ))
+        )
+        BasePlaybackService.pendingImmediatePlaybackState = state
+        viewModel.savePlaybackState(state)
         val fragment = when (prefs.getString(C.PLAYER, C.EXOPLAYER)) {
             C.MEDIA_PLAYER -> MediaPlayerFragment()
             else -> ExoPlayerFragment()
@@ -2967,12 +2976,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startOfflineVideo(video: OfflineVideo, offset: Long? = null) {
+        com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.pendingDvrResume = null
         currentClipId = null
         currentStream = null
         dvrStream = null
         dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
-        viewModel.savePlaybackState(PlaybackState(
+        val state = PlaybackState(
             type = BasePlaybackService.OFFLINE_VIDEO,
             offlineVideoId = video.id,
             channelId = video.channelId,
@@ -2985,7 +2995,9 @@ class MainActivity : AppCompatActivity() {
             title = video.name,
             createdAt = video.uploadDate?.toString(),
             videoCreatedAt = video.videoCreatedAt,
-        ))
+        )
+        BasePlaybackService.pendingImmediatePlaybackState = state
+        viewModel.savePlaybackState(state)
         if (offset != null && prefs.getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
             viewModel.saveOfflineVideoPosition(video.id, offset)
         }

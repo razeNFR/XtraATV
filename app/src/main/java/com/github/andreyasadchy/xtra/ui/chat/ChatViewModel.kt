@@ -961,7 +961,7 @@ class ChatViewModel(
                             }
                         }
                         if (forceAutoDelay?.invoke() == true) {
-                            val nowMs = System.currentTimeMillis()
+                            val nowMs = com.github.andreyasadchy.xtra.util.TwitchClock.nowMs()
                             val cutoffMs = runCatching { programTime?.invoke() }.getOrNull()
                                 ?: (nowMs - com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS)
                             val pastItems = list.filter { (it.timestamp ?: Long.MIN_VALUE) <= cutoffMs }
@@ -1147,6 +1147,7 @@ class ChatViewModel(
         val chan = activeChannelLogin
         if (!chan.isNullOrBlank() && msg.userLogin?.equals(chan, ignoreCase = true) == true) return true
         if (msg.badges?.any { it.setId in slowChatPriorityBadges } == true) return true
+        if (com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.isHighlighted(applicationContext, msg.userLogin)) return true
         val myLogin = ownUserLogin?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
         if (myLogin != null) {
             if (msg.userLogin?.equals(myLogin, ignoreCase = true) == true || msg.userName?.equals(myLogin, ignoreCase = true) == true) {

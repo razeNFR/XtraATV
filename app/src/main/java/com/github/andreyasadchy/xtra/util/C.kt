@@ -296,6 +296,7 @@ object C {
     const val CHAT_DELAY_SECONDS = "chat_delay_seconds"
     const val CHAT_SHOW_REPLIES = "chat_show_replies"
     const val CHAT_HIGHLIGHT_MENTIONS = "chat_highlight_mentions"
+    const val CHAT_HIGHLIGHTED_USERS = "chat_highlighted_users"
     const val TV_HOME_FOLLOWED_VIDEOS = "tv_home_followed_videos"
     const val TV_HOME_MULTISTREAM = "tv_home_multistream"
     const val TV_HOME_HERO = "tv_home_hero"

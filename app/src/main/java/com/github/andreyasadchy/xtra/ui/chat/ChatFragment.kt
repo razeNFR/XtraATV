@@ -268,9 +268,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.version.collect {
-                                if (viewModel.purgeFilteredMessages()) {
-                                    adapter?.notifyDataSetChanged()
-                                }
+                                viewModel.purgeFilteredMessages()
+                                adapter?.notifyDataSetChanged()
                             }
                         }
                     }

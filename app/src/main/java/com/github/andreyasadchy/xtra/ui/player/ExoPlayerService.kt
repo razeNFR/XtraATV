@@ -49,8 +49,10 @@ import androidx.media3.common.util.Util
 import androidx.media3.datasource.DataSourceException
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.LivePlaybackSpeedControl
 import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
@@ -84,6 +86,7 @@ import com.github.andreyasadchy.xtra.util.MediaButtonReceiver
 import com.github.andreyasadchy.xtra.util.NetworkUtils
 import com.github.andreyasadchy.xtra.util.NetworkUtils.executeAsync
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
+import com.github.andreyasadchy.xtra.util.TwitchClock
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -160,7 +163,76 @@ class ExoPlayerService : BasePlaybackService() {
     private var livePausedAtElapsedMs = 0L
     var livePausedUptimeMs: Long? = null
         private set
+    private var livePausedPictureEpochMs: Long? = null
+    private var liveBehindAtPauseMs = 0L
+    @Volatile
+    private var liveTimeShiftedBehindMs = 0L
+    private var liveBufferExpiredWhilePaused = false
+    private var activeDvrResume: PendingDvrResume? = null
+    private var dvrInitialSeekPending = false
     private var lastUserSeekAt = 0L
+
+    val isDvrInitialSeekPending: Boolean
+        get() = dvrInitialSeekPending
+
+    private fun clearLivePauseState() {
+        livePausedAtElapsedMs = 0L
+        livePausedUptimeMs = null
+        livePausedPictureEpochMs = null
+        liveBehindAtPauseMs = 0L
+        liveTimeShiftedBehindMs = 0L
+        liveBufferExpiredWhilePaused = false
+    }
+
+    private fun createLivePlaybackSpeedControl(): LivePlaybackSpeedControl {
+        val delegate = DefaultLivePlaybackSpeedControl.Builder().build()
+        return object : LivePlaybackSpeedControl {
+            override fun setLiveConfiguration(liveConfiguration: MediaItem.LiveConfiguration) {
+                delegate.setLiveConfiguration(liveConfiguration)
+            }
+
+            override fun setTargetLiveOffsetOverrideUs(liveOffsetUs: Long) {
+                delegate.setTargetLiveOffsetOverrideUs(liveOffsetUs)
+            }
+
+            override fun notifyRebuffer() {
+                delegate.notifyRebuffer()
+            }
+
+            override fun getAdjustedPlaybackSpeed(liveOffsetUs: Long, bufferedDurationUs: Long): Float {
+                if (liveTimeShiftedBehindMs > 0L) {
+                    return 1.0f
+                }
+                return delegate.getAdjustedPlaybackSpeed(liveOffsetUs, bufferedDurationUs)
+            }
+
+            override fun getTargetLiveOffsetUs(): Long = delegate.getTargetLiveOffsetUs()
+        }
+    }
+
+    /**
+     * How far behind the live edge (ms) a standard live stream currently is due to user pause / RAM time-shift,
+     * or 0L when playing normally at the live edge.
+     */
+    fun getLiveTimeShiftBehindMs(): Long {
+        if (type != STREAM || experimentalVodActive) return 0L
+        val pausedAt = livePausedAtElapsedMs
+        if (pausedAt > 0L) {
+            val pausedDur = (android.os.SystemClock.elapsedRealtime() - pausedAt).coerceAtLeast(0L)
+            return liveBehindAtPauseMs + pausedDur
+        }
+        val shifted = liveTimeShiftedBehindMs
+        if (shifted <= 0L) return 0L
+        val measured = getLiveLatencyMs()
+        if (measured != null) {
+            if (measured <= 3_500L) {
+                liveTimeShiftedBehindMs = 0L
+                return 0L
+            }
+            return measured
+        }
+        return shifted
+    }
 
     val isIntentionallyPausedOrStopped: Boolean
         get() = intentionalStopOrPause || streamEnded
@@ -250,10 +322,12 @@ class ExoPlayerService : BasePlaybackService() {
         if (timeline.isEmpty || active.currentMediaItemIndex !in 0 until timeline.windowCount) return null
         val window = Timeline.Window()
         timeline.getWindow(active.currentMediaItemIndex, window)
-        val pos = active.currentPosition.coerceAtLeast(0L)
         if (window.windowStartTimeMs != androidx.media3.common.C.TIME_UNSET) {
-            return window.windowStartTimeMs + pos
+            // Do not clamp currentPosition to >= 0 here: if the live playlist slides past a paused frame,
+            // windowStartTimeMs + currentPosition cancels windowPositionInPeriod and keeps the exact frame epoch.
+            return window.windowStartTimeMs + active.currentPosition
         }
+        val pos = active.currentPosition.coerceAtLeast(0L)
         if (experimentalVodActive && active === player) {
             val baseMs = experimentalVodCreatedAtMs
                 ?: TvExperimentalAdblock.parseEpochMs(createdAt)?.also { experimentalVodCreatedAtMs = it }
@@ -261,7 +335,54 @@ class ExoPlayerService : BasePlaybackService() {
                 return baseMs + pos
             }
         }
+        // Fallback for proxy streams whose playlists omit #EXT-X-PROGRAM-DATE-TIME: derive picture epoch
+        // from Twitch's calibrated server clock minus the playlist/buffer horizon.
+        if (type == STREAM && window.isDynamic) {
+            val bufferedMs = (active.bufferedPosition - active.currentPosition).coerceAtLeast(0L)
+            val playlistHorizonMs = if (window.durationMs != androidx.media3.common.C.TIME_UNSET && window.durationMs > 0L) {
+                (window.durationMs - active.currentPosition).coerceAtLeast(0L)
+            } else {
+                0L
+            }
+            val estimatedDelayMs = maxOf(playlistHorizonMs, bufferedMs, liveTimeShiftedBehindMs).coerceAtLeast(0L)
+            if (TwitchClock.isCalibrated() || estimatedDelayMs > 0L) {
+                return TwitchClock.nowMs() - estimatedDelayMs
+            }
+        }
         return null
+    }
+
+    /**
+     * Calibrated end-to-end live latency (ms) between Twitch's server clock and the currently rendered video frame,
+     * immune to local Android TV clock skew and physically lower-bounded by already-buffered media (>= 0 ms).
+     */
+    fun getLiveLatencyMs(): Long? {
+        if (type != STREAM || quality?.name == VideoQuality.CHAT_ONLY_QUALITY) return null
+        val active = visiblePlayer ?: return null
+        val timeline = active.currentTimeline
+        if (timeline.isEmpty || active.currentMediaItemIndex !in 0 until timeline.windowCount) return null
+        val bufferedMs = (active.bufferedPosition - active.currentPosition).coerceAtLeast(0L)
+        if (experimentalVodActive && active === player) {
+            val vodDurationMs = (player?.currentManifest as? HlsManifest)?.mediaPlaylist?.durationUs?.div(1000L)?.takeIf { it > 0L }
+                ?: active.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0L }
+            val vodRemainMs = vodDurationMs?.let { (it - active.currentPosition).coerceAtLeast(0L) } ?: 0L
+            val serverDiffMs = getStreamPictureEpochMs()?.let { (TwitchClock.nowMs() - it).coerceAtLeast(0L) } ?: 0L
+            return maxOf(serverDiffMs, vodRemainMs, bufferedMs).coerceAtLeast(0L)
+        }
+        val window = Timeline.Window()
+        timeline.getWindow(active.currentMediaItemIndex, window)
+        if (!window.isDynamic && !active.isCurrentMediaItemLive) return null
+        val playlistHorizonMs = if (window.durationMs != androidx.media3.common.C.TIME_UNSET && window.durationMs > 0L) {
+            (window.durationMs - active.currentPosition).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        if (window.windowStartTimeMs != androidx.media3.common.C.TIME_UNSET) {
+            val pictureEpochMs = window.windowStartTimeMs + active.currentPosition
+            val serverDiffMs = TwitchClock.nowMs() - pictureEpochMs
+            return maxOf(serverDiffMs, playlistHorizonMs, bufferedMs).coerceAtLeast(0L)
+        }
+        return maxOf(playlistHorizonMs, bufferedMs, liveTimeShiftedBehindMs).coerceAtLeast(0L)
     }
 
     private fun create(restorePauseState: Boolean) {
@@ -315,6 +436,50 @@ class ExoPlayerService : BasePlaybackService() {
                     updatePlaybackState()
                     updateMetadata()
                     updateNotification()
+                    if (dvrInitialSeekPending && type == VIDEO && videoId == null) {
+                        val mediaPlaylist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
+                        val vodDurationMs = mediaPlaylist?.durationUs?.div(1000L)?.takeIf { it > 0L }
+                        if (vodDurationMs != null) {
+                            dvrInitialSeekPending = false
+                            val resume = activeDvrResume
+                            activeDvrResume = null
+                            val maxSafePosMs = (vodDurationMs - 5_000L).coerceAtLeast(0L)
+                            val resolvedTargetMs = if (resume != null) {
+                                val window = Timeline.Window()
+                                val p = player
+                                val windowStartMs = if (p != null && !timeline.isEmpty && p.currentMediaItemIndex in 0 until timeline.windowCount) {
+                                    timeline.getWindow(p.currentMediaItemIndex, window).windowStartTimeMs
+                                } else {
+                                    androidx.media3.common.C.TIME_UNSET
+                                }
+                                if (resume.pausedPictureEpochMs != null && windowStartMs != androidx.media3.common.C.TIME_UNSET) {
+                                    (resume.pausedPictureEpochMs - windowStartMs).coerceIn(0L, maxSafePosMs)
+                                } else {
+                                    val nowElapsed = android.os.SystemClock.elapsedRealtime()
+                                    val nowEpoch = TwitchClock.nowMs()
+                                    val totalBehindNowMs = resume.behindLiveAtPauseMs +
+                                        (nowElapsed - resume.pausedAtElapsedMs).coerceAtLeast(0L)
+                                    val uptimeNowMs = TvExperimentalAdblock.parseEpochMs(createdAt)
+                                        ?.let { (nowEpoch - it).coerceAtLeast(0L) }
+                                    val vodPublishLagMs = if (uptimeNowMs != null && uptimeNowMs >= vodDurationMs) {
+                                        (uptimeNowMs - vodDurationMs).coerceIn(8_000L, 45_000L)
+                                    } else {
+                                        18_000L
+                                    }
+                                    (vodDurationMs - (totalBehindNowMs - vodPublishLagMs)).coerceIn(0L, maxSafePosMs)
+                                }
+                            } else {
+                                (videoStartPosition ?: savedPosition ?: 0L).coerceIn(0L, maxSafePosMs)
+                            }
+                            videoStartPosition = resolvedTargetMs
+                            val currentPos = player?.currentPosition ?: 0L
+                            if (kotlin.math.abs(currentPos - resolvedTargetMs) > 1_500L) {
+                                player?.seekTo(resolvedTargetMs)
+                            } else if (player?.playbackState == Player.STATE_READY) {
+                                videoStartPosition = null
+                            }
+                        }
+                    }
                     if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED && !timeline.isEmpty && qualities?.find { it.name == VideoQuality.AUTO_QUALITY } != null) {
                         if (ignorePlaylistUpdate) {
                             ignorePlaylistUpdate = false
@@ -403,6 +568,7 @@ class ExoPlayerService : BasePlaybackService() {
                                     when {
                                         useProxy -> {
                                             if (!proxyMediaPlaylist) {
+                                                liveTimeShiftedBehindMs = 0L
                                                 proxyMediaPlaylist = true
                                                 serviceListener?.toast(R.string.starting_proxy, Toast.LENGTH_SHORT)
                                                 player?.let { player ->
@@ -426,6 +592,7 @@ class ExoPlayerService : BasePlaybackService() {
                                         }
                                         useVideoSwap -> {
                                             if (!videoSwapActive) {
+                                                liveTimeShiftedBehindMs = 0L
                                                 startVideoSwap()
                                             }
                                         }
@@ -469,8 +636,31 @@ class ExoPlayerService : BasePlaybackService() {
                             } == true
                             val isNetworkAvailable = isNetworkValidated()
                             if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
-                                livePausedAtElapsedMs = 0L
-                                livePausedUptimeMs = null
+                                if (intentionalStopOrPause) {
+                                    liveBufferExpiredWhilePaused = true
+                                    return
+                                }
+                                val behindShift = liveTimeShiftedBehindMs
+                                if (isTvDevice && !experimentalVodActive && behindShift >= 4_000L) {
+                                    val nowElapsed = android.os.SystemClock.elapsedRealtime()
+                                    val frameEpoch = getStreamPictureEpochMs() ?: (TwitchClock.nowMs() - behindShift)
+                                    val uptimeAtFrame = TvExperimentalAdblock.parseEpochMs(createdAt)
+                                        ?.let { (frameEpoch - it).coerceAtLeast(0L) }
+                                    if (uptimeAtFrame != null) {
+                                        clearLivePauseState()
+                                        pendingDvrResume = PendingDvrResume(
+                                            channelLogin = channelLogin,
+                                            pausedAtElapsedMs = nowElapsed,
+                                            pausedPictureEpochMs = frameEpoch,
+                                            behindLiveAtPauseMs = behindShift,
+                                        )
+                                        if (serviceListener?.onLivePauseResumeToDvr(uptimeAtFrame) == true) {
+                                            return
+                                        }
+                                        pendingDvrResume = null
+                                    }
+                                }
+                                clearLivePauseState()
                                 player?.seekToDefaultPosition()
                                 player?.prepare()
                                 player?.play()
@@ -625,7 +815,7 @@ class ExoPlayerService : BasePlaybackService() {
                                             val url = quality?.url
                                             if (url != null) {
                                                 player?.let { player ->
-                                                    val playbackPosition = player.currentPosition
+                                                    val playbackPosition = (videoStartPosition ?: player.currentPosition).coerceAtLeast(0L)
                                                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                                                         setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
                                                     }.build()
@@ -650,13 +840,13 @@ class ExoPlayerService : BasePlaybackService() {
                                                             setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
                                                         }.createMediaSource(
                                                             MediaItem.fromUri(url)
-                                                        )
+                                                        ),
+                                                        playbackPosition
                                                     )
                                                     player.volume = userVolume()
                                                     player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
                                                     player.prepare()
                                                     player.playWhenReady = true
-                                                    player.seekTo(playbackPosition)
                                                 }
                                             }
                                         }
@@ -710,7 +900,9 @@ class ExoPlayerService : BasePlaybackService() {
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) {
-                        videoStartPosition = null
+                        if (!dvrInitialSeekPending) {
+                            videoStartPosition = null
+                        }
                         streamEnded = false
                     } else if (playbackState == Player.STATE_ENDED && type == STREAM) {
                         streamEnded = true
@@ -759,6 +951,9 @@ class ExoPlayerService : BasePlaybackService() {
                 override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
                     if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) {
                         lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
+                        if (!dvrInitialSeekPending && player?.playbackState == Player.STATE_READY) {
+                            videoStartPosition = null
+                        }
                     }
                     updatePlaybackState()
                 }
@@ -879,6 +1074,7 @@ class ExoPlayerService : BasePlaybackService() {
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
                 setBandwidthMeter(getBandwidthMeter(this@ExoPlayerService))
                 setTrackSelector(createTrackSelector())
+                setLivePlaybackSpeedControl(createLivePlaybackSpeedControl())
             }.build()
             this.player = player
             player.addListener(playerListener)
@@ -959,8 +1155,9 @@ class ExoPlayerService : BasePlaybackService() {
                     experimentalVodCreatedAtMs = null
                     experimentalVodUpgradeJob?.cancel()
                     experimentalVodUpgradeJob = null
-                    livePausedAtElapsedMs = 0L
-                    livePausedUptimeMs = null
+                    clearLivePauseState()
+                    activeDvrResume = null
+                    dvrInitialSeekPending = false
                     intentionalStopOrPause = (restorePauseState && paused) || quality?.name == VideoQuality.CHAT_ONLY_QUALITY
                     streamEnded = false
                     liveRecoveryAttempt = 0
@@ -1049,7 +1246,14 @@ class ExoPlayerService : BasePlaybackService() {
                             updateVideoInfo()
                         }
                     } else {
-                        videoStartPosition = savedPosition ?: 0
+                        val resume = pendingDvrResume?.takeIf {
+                            it.channelLogin == null || it.channelLogin.equals(channelLogin, ignoreCase = true)
+                        }
+                        pendingDvrResume = null
+                        activeDvrResume = resume
+                        val initialPos = (savedPosition ?: 0L).coerceAtLeast(0L)
+                        videoStartPosition = initialPos
+                        dvrInitialSeekPending = resume != null || initialPos > 0L
                         qualities?.let { list ->
                             qualities = list
                                 .sortedByDescending { it.bitrate }
@@ -1095,18 +1299,22 @@ class ExoPlayerService : BasePlaybackService() {
                                             setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
                                         }.createMediaSource(
                                             MediaItem.fromUri(url)
-                                        )
+                                        ),
+                                        initialPos
                                     )
                                     player.volume = userVolume()
                                     player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
                                     player.prepare()
                                     player.playWhenReady = !restorePauseState || !paused
-                                    player.seekTo(savedPosition ?: 0)
                                 }
                             } else {
+                                activeDvrResume = null
+                                dvrInitialSeekPending = false
                                 videoStartPosition = null
                             }
                         } ?: run {
+                            activeDvrResume = null
+                            dvrInitialSeekPending = false
                             videoStartPosition = null
                         }
                     }
@@ -2415,6 +2623,7 @@ class ExoPlayerService : BasePlaybackService() {
                 setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
                 setBandwidthMeter(createSecondaryBandwidthMeter(this@ExoPlayerService))
                 setTrackSelector(createTrackSelector())
+                setLivePlaybackSpeedControl(createLivePlaybackSpeedControl())
             }.build()
             player.addListener(playerListener)
             matchSecondaryQuality(player)
@@ -3347,8 +3556,7 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodActive = false
         experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
-        livePausedAtElapsedMs = 0L
-        livePausedUptimeMs = null
+        clearLivePauseState()
         // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
         // no sound), it must not come back on the screen for a moment when the backup player goes
         player?.setPlaybackSpeed(1f)
@@ -3415,8 +3623,7 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodActive = false
         experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
-        livePausedAtElapsedMs = 0L
-        livePausedUptimeMs = null
+        clearLivePauseState()
         playingAds = false
         backLiveFrom = 0L
         backLiveProgress = 0f
@@ -3659,18 +3866,48 @@ class ExoPlayerService : BasePlaybackService() {
     fun play() {
         val pausedAt = livePausedAtElapsedMs
         val pausedUptime = livePausedUptimeMs
+        val pausedPicEpoch = livePausedPictureEpochMs
+        val pausedBehind = liveBehindAtPauseMs
+        val bufferExpired = liveBufferExpiredWhilePaused
         livePausedAtElapsedMs = 0L
         livePausedUptimeMs = null
+        livePausedPictureEpochMs = null
+        liveBehindAtPauseMs = 0L
+        liveBufferExpiredWhilePaused = false
         val pausedDurationMs = if (pausedAt > 0L) {
             (android.os.SystemClock.elapsedRealtime() - pausedAt).coerceAtLeast(0L)
         } else {
             0L
         }
-        if (isTvDevice && type == STREAM && quality?.name != VideoQuality.CHAT_ONLY_QUALITY &&
-            !experimentalVodActive && pausedDurationMs >= 15_000L && pausedUptime != null
+        if (type == STREAM && quality?.name != VideoQuality.CHAT_ONLY_QUALITY &&
+            !experimentalVodActive && pausedAt > 0L
         ) {
-            if (serviceListener?.onLivePauseResumeToDvr(pausedUptime) == true) {
-                return
+            val active = visiblePlayer
+            val totalBehindMs = pausedBehind + pausedDurationMs
+            val bufferedAheadMs = active?.let { (it.bufferedPosition - it.currentPosition).coerceAtLeast(0L) } ?: 0L
+            val canResumeInRam = !bufferExpired &&
+                active != null &&
+                active.currentMediaItem != null &&
+                active.playerError == null &&
+                active.playbackState == Player.STATE_READY &&
+                totalBehindMs <= 48_000L &&
+                (bufferedAheadMs >= 1_500L || pausedDurationMs < 5_000L)
+            if (canResumeInRam) {
+                liveTimeShiftedBehindMs = if (totalBehindMs >= 3_500L) totalBehindMs else 0L
+            } else if (isTvDevice && pausedDurationMs >= 8_000L && pausedUptime != null) {
+                pendingDvrResume = PendingDvrResume(
+                    channelLogin = channelLogin,
+                    pausedAtElapsedMs = pausedAt,
+                    pausedPictureEpochMs = pausedPicEpoch,
+                    behindLiveAtPauseMs = pausedBehind,
+                )
+                if (serviceListener?.onLivePauseResumeToDvr(pausedUptime) == true) {
+                    return
+                }
+                pendingDvrResume = null
+                liveTimeShiftedBehindMs = 0L
+            } else {
+                liveTimeShiftedBehindMs = 0L
             }
         }
         intentionalStopOrPause = false
@@ -3679,7 +3916,10 @@ class ExoPlayerService : BasePlaybackService() {
         liveRecoveryJob?.cancel()
         liveRecoveryJob = null
         secondaryPlayer?.let { sp ->
-            if (sp.playbackState == Player.STATE_IDLE) {
+            if (sp.playbackState == Player.STATE_IDLE || sp.playerError != null) {
+                if (liveTimeShiftedBehindMs == 0L) {
+                    sp.seekToDefaultPosition()
+                }
                 sp.prepare()
             } else if (sp.playbackState == Player.STATE_ENDED) {
                 sp.seekToDefaultPosition()
@@ -3709,7 +3949,8 @@ class ExoPlayerService : BasePlaybackService() {
                 p.play()
                 return
             }
-            if (p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED) {
+            if (p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED || p.playerError != null) {
+                liveTimeShiftedBehindMs = 0L
                 p.seekToDefaultPosition()
                 p.prepare()
                 p.play()
@@ -3737,9 +3978,17 @@ class ExoPlayerService : BasePlaybackService() {
 
     fun pause() {
         if (type == STREAM && visiblePlayer?.playWhenReady == true && livePausedAtElapsedMs == 0L) {
-            livePausedAtElapsedMs = android.os.SystemClock.elapsedRealtime()
-            livePausedUptimeMs = TvExperimentalAdblock.parseEpochMs(createdAt)
-                ?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
+            val nowElapsed = android.os.SystemClock.elapsedRealtime()
+            val picEpoch = getStreamPictureEpochMs()
+            val currentBehind = (getLiveLatencyMs() ?: liveTimeShiftedBehindMs).coerceAtLeast(0L)
+            livePausedAtElapsedMs = nowElapsed
+            livePausedPictureEpochMs = picEpoch
+            liveBehindAtPauseMs = currentBehind
+            liveBufferExpiredWhilePaused = false
+            livePausedUptimeMs = TvExperimentalAdblock.parseEpochMs(createdAt)?.let { createdMs ->
+                val frameEpoch = picEpoch ?: (TwitchClock.nowMs() - currentBehind)
+                (frameEpoch - createdMs).coerceAtLeast(0L)
+            }
         }
         intentionalStopOrPause = true
         liveRecoveryJob?.cancel()
@@ -3751,8 +4000,7 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun stop() {
-        livePausedAtElapsedMs = 0L
-        livePausedUptimeMs = null
+        clearLivePauseState()
         intentionalStopOrPause = true
         liveRecoveryJob?.cancel()
         liveRecoveryJob = null
@@ -3794,6 +4042,10 @@ class ExoPlayerService : BasePlaybackService() {
             secondaryPlayer?.seekForward()
         }
         player?.seekForward()
+        if (type == STREAM && !experimentalVodActive && liveTimeShiftedBehindMs > 0L) {
+            val behind = getLiveLatencyMs() ?: 0L
+            liveTimeShiftedBehindMs = if (behind <= 4_000L) 0L else behind
+        }
     }
 
     fun seekTo(position: Long) {
@@ -3812,12 +4064,15 @@ class ExoPlayerService : BasePlaybackService() {
             secondaryPlayer?.seekTo(position)
         }
         player?.seekTo(position)
+        if (type == STREAM && !experimentalVodActive && liveTimeShiftedBehindMs > 0L) {
+            val behind = getLiveLatencyMs() ?: 0L
+            liveTimeShiftedBehindMs = if (behind <= 4_000L) 0L else behind
+        }
     }
 
     fun seekToDefaultPosition() {
         lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
-        livePausedAtElapsedMs = 0L
-        livePausedUptimeMs = null
+        clearLivePauseState()
         if (type == STREAM && experimentalVodActive) {
             experimentalVodUserRewound = false
             player?.seekTo(getExperimentalLiveEdgeMs())
@@ -3875,8 +4130,7 @@ class ExoPlayerService : BasePlaybackService() {
 
     fun restartPlayer(fromAutoRecovery: Boolean = false) {
         if (quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
-            livePausedAtElapsedMs = 0L
-            livePausedUptimeMs = null
+            clearLivePauseState()
             intentionalStopOrPause = false
             streamEnded = false
             if (!fromAutoRecovery) {
@@ -4055,8 +4309,9 @@ class ExoPlayerService : BasePlaybackService() {
                         if (p.currentMediaItem == null) {
                             scheduleLiveRecovery(streamGeneration, channelLogin, initialDelayMs = 500L)
                         } else {
-                            val preserveRewind = experimentalVodActive &&
-                                (experimentalVodUserRewound || (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L)
+                            val preserveRewind = (experimentalVodActive &&
+                                (experimentalVodUserRewound || (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L)) ||
+                                liveTimeShiftedBehindMs > 0L
                             if (!preserveRewind) {
                                 p.seekToDefaultPosition()
                             }
@@ -4069,8 +4324,9 @@ class ExoPlayerService : BasePlaybackService() {
                     continue
                 }
                 fun softKick(p: ExoPlayer) {
-                    val preserveRewind = experimentalVodActive &&
-                        (experimentalVodUserRewound || (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L)
+                    val preserveRewind = (experimentalVodActive &&
+                        (experimentalVodUserRewound || (getExperimentalLiveEdgeMs() - p.currentPosition) > 45_000L)) ||
+                        liveTimeShiftedBehindMs > 0L
                     if (!preserveRewind) {
                         p.seekToDefaultPosition()
                     }
@@ -4855,8 +5111,9 @@ class ExoPlayerService : BasePlaybackService() {
     /** Synchronously releases all hardware decoders and resets service state when closing before a new playback session. */
     fun releaseNow() {
         streamGeneration++
-        livePausedAtElapsedMs = 0L
-        livePausedUptimeMs = null
+        clearLivePauseState()
+        activeDvrResume = null
+        dvrInitialSeekPending = false
         lastUserSeekAt = 0L
         intentionalStopOrPause = true
         streamEnded = false
@@ -5026,5 +5283,15 @@ class ExoPlayerService : BasePlaybackService() {
         private const val INTENT_PLAY_PAUSE = "com.github.andreyasadchy.xtra.PLAY_PAUSE"
         private const val INTENT_FAST_FORWARD = "com.github.andreyasadchy.xtra.FAST_FORWARD"
         const val INTENT_START = "com.github.andreyasadchy.xtra.START_PLAYBACK_SERVICE"
+
+        data class PendingDvrResume(
+            val channelLogin: String?,
+            val pausedAtElapsedMs: Long,
+            val pausedPictureEpochMs: Long?,
+            val behindLiveAtPauseMs: Long,
+        )
+
+        @Volatile
+        var pendingDvrResume: PendingDvrResume? = null
     }
 }

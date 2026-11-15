@@ -125,17 +125,25 @@ object TvChatNotices {
         builder.setSpan(CenteredIconSpan(drawable), start, start + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
 
+    const val USER_HIGHLIGHT_COLOR = 0xFFF5B638.toInt()
+
     /** Background of an answer to the user or a mention of the user: the accent color over it and a bar of it on its left. */
-    fun highlight(context: Context): Drawable {
-        val color = com.github.andreyasadchy.xtra.ui.tv.TvAccent.color
+    fun highlight(context: Context): Drawable = coloredHighlight(context, com.github.andreyasadchy.xtra.ui.tv.TvAccent.color, 0x40)
+
+    /** Background of a message sent by a user on the custom Highlighted Users list: warm gold tint and left accent bar. */
+    fun userHighlight(context: Context): Drawable = coloredHighlight(context, USER_HIGHLIGHT_COLOR, 0x38)
+
+    private fun coloredHighlight(context: Context, color: Int, fillAlpha: Int): Drawable {
         val bar = 3f * context.resources.displayMetrics.density
+        val fillColor = (color and 0x00FFFFFF) or ((fillAlpha and 0xFF) shl 24)
+        val barColor = color or 0xFF000000.toInt()
         return object : Drawable() {
             private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
             override fun draw(canvas: Canvas) {
-                paint.color = (color and 0x00FFFFFF) or 0x40000000
+                paint.color = fillColor
                 canvas.drawRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bounds.bottom.toFloat(), paint)
-                paint.color = color or 0xFF000000.toInt()
+                paint.color = barColor
                 canvas.drawRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.left + bar, bounds.bottom.toFloat(), paint)
             }
 

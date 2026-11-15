@@ -469,6 +469,9 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       if (line.startsWith(TAG_PREFIX)) {
         // We expose all tags through the playlist.
         tags.add(line);
+        if (line.startsWith("#EXT-X-TWITCH-INFO:")) {
+          com.github.andreyasadchy.xtra.util.TwitchClock.onTwitchInfoLine(line);
+        }
       }
       boolean isIFrameOnlyVariant = line.startsWith(TAG_I_FRAME_STREAM_INF);
 
@@ -1038,6 +1041,9 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       if (line.startsWith(TAG_PREFIX)) {
         // We expose all tags through the playlist.
         tags.add(line);
+        if (line.startsWith("#EXT-X-TWITCH-INFO:")) {
+          com.github.andreyasadchy.xtra.util.TwitchClock.onTwitchInfoLine(line);
+        }
       }
 
       if (line.startsWith(TAG_PLAYLIST_TYPE)) {
