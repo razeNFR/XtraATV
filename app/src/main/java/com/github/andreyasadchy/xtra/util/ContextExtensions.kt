@@ -314,11 +314,13 @@ fun Context.canInstallUnknownAppsCompat(): Boolean {
     }
     return try {
         val appOps = getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
+        val op = AppOpsManager.permissionToOp(android.Manifest.permission.REQUEST_INSTALL_PACKAGES)
+            ?: "android:request_install_packages"
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_REQUEST_INSTALL_PACKAGES, Process.myUid(), packageName)
+            appOps.unsafeCheckOpNoThrow(op, Process.myUid(), packageName)
         } else {
             @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(AppOpsManager.OPSTR_REQUEST_INSTALL_PACKAGES, Process.myUid(), packageName)
+            appOps.checkOpNoThrow(op, Process.myUid(), packageName)
         }
         mode == AppOpsManager.MODE_ALLOWED
     } catch (_: Throwable) {
