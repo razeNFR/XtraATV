@@ -743,7 +743,7 @@
     <string name="tv_switch_current">هذه القائمة</string>
     <string name="tv_switch_suggested">مقترحات</string>
     <string name="tv_switch_empty">لا يوجد بث مباشر في هذه القائمة</string>
-    <string name="tv_pip_hint">نافذة صغيرة: اضغط مطولًا على OK للتبديل، ورجوع للإغلاق</string>
+    <string name="tv_pip_hint">نافذة صغيرة: اضغط مطولًا على OK للتبديل (قابل للتخصيص في إعدادات الريموت)، ورجوع للإغلاق</string>
     <string name="tv_multistream_focus">وضع التركيز: هذا البث كبيرًا</string>
     <string name="tv_multistream_grid">العودة إلى الشبكة</string>
     <string name="tv_followed_videos_need_code">فيديوهات المتابَعين تتطلب تسجيل الدخول بالرمز: سجّل الدخول عبر twitch.tv/activate (الحساب)</string>
@@ -844,8 +844,8 @@
     <string name="tv_followed_videos_row">أحدث فيديوهات القنوات التي تتابعها</string>
     <string name="tv_refreshed">تم التحديث</string>
     <string name="tv_multistream_hint">OK: إضافة بث أو إزالته · حتى %1$d</string>
-    <string name="tv_proxy_button">بروكسي</string>
-    <string name="tv_proxy_button_summary">OK يشغّل البروكسي المخصص أو يوقفه، والضغط المطوّل على OK يفتح قائمة البروكسيات</string>
+    <string name="tv_proxy_button">مانع الإعلانات والبروكسي</string>
+    <string name="tv_proxy_button_summary">يفتح لوحة مانع الإعلانات والبروكسيات المخصصة</string>
     <string name="tv_proxy_on">البروكسي مفعّل</string>
     <string name="tv_proxy_off">البروكسي معطّل</string>
     <string name="tv_proxy_panel_title">البروكسيات المخصصة</string>
@@ -1163,4 +1163,11 @@
     <string name="tv_option_on">مفعّل</string>
     <string name="tv_prediction_started">بدأ التوقع</string>
     <string name="tv_prediction_ended">انتهى التوقع</string>
+    <string name="tv_dpad_center_long">OK (ضغطة مطوّلة)</string>
+    <string name="tv_remote_action_pip_swap">النافذة الصغيرة: تبديل البثوث</string>
+    <string name="tv_remote_action_pip_settings">النافذة الصغيرة: الإعدادات</string>
+    <string name="tv_remote_action_pip_close">النافذة الصغيرة: إغلاق</string>
+    <string name="tv_adblock_and_proxies_title">مانع الإعلانات والبروكسيات</string>
+    <string name="tv_adblock_and_proxies_subtitle">مانع الإعلانات التجريبي أو بروكسيات HLS المخصصة للبث المباشر</string>
+    <string name="tv_update_install_blocked">منع النظام التثبيت. اسمح بخيار «تثبيت تطبيقات غير معروفة» لتطبيق Xtra TV من إعدادات النظام، أو نزّل التحديث عبر المتصفح.</string>
 </resources>

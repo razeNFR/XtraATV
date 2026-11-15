@@ -743,7 +743,7 @@
     <string name="tv_switch_current">Questo elenco</string>
     <string name="tv_switch_suggested">Suggeriti</string>
     <string name="tv_switch_empty">Nessuno stream in diretta in questo elenco</string>
-    <string name="tv_pip_hint">Finestra piccola: tieni premuto OK per scambiare, Indietro per chiuderla</string>
+    <string name="tv_pip_hint">Finestra piccola: tieni premuto OK per scambiare (configurabile in Telecomando), Indietro per chiuderla</string>
     <string name="tv_multistream_focus">Modalità focus: questo stream in grande</string>
     <string name="tv_multistream_grid">Torna alla griglia</string>
     <string name="tv_followed_videos_need_code">I video dei seguiti richiedono l\'accesso con il codice: accedi con twitch.tv/activate (Account)</string>
@@ -844,8 +844,8 @@
     <string name="tv_followed_videos_row">Ultimi video dei canali che segui</string>
     <string name="tv_refreshed">Aggiornato</string>
     <string name="tv_multistream_hint">OK: aggiungi o togli uno stream · fino a %1$d</string>
-    <string name="tv_proxy_button">Proxy</string>
-    <string name="tv_proxy_button_summary">OK attiva o disattiva il proxy personalizzato, tenere premuto OK apre l\'elenco dei proxy</string>
+    <string name="tv_proxy_button">Adblock e Proxy</string>
+    <string name="tv_proxy_button_summary">Apre il pannello del blocco annunci e dei proxy personalizzati</string>
     <string name="tv_proxy_on">Proxy attivo</string>
     <string name="tv_proxy_off">Proxy disattivato</string>
     <string name="tv_proxy_panel_title">Proxy personalizzati</string>
@@ -1163,4 +1163,11 @@
     <string name="tv_option_on">Attivo</string>
     <string name="tv_prediction_started">Pronostico iniziato</string>
     <string name="tv_prediction_ended">Pronostico terminato</string>
+    <string name="tv_dpad_center_long">OK (pressione prolungata)</string>
+    <string name="tv_remote_action_pip_swap">Finestra piccola: scambia dirette</string>
+    <string name="tv_remote_action_pip_settings">Finestra piccola: impostazioni</string>
+    <string name="tv_remote_action_pip_close">Finestra piccola: chiudi</string>
+    <string name="tv_adblock_and_proxies_title">Blocco annunci e proxy</string>
+    <string name="tv_adblock_and_proxies_subtitle">Blocco annunci sperimentale o proxy HLS personalizzati per le dirette</string>
+    <string name="tv_update_install_blocked">Android ha bloccato l\'installazione. Consenti \"Installa app sconosciute\" per Xtra TV nelle impostazioni di sistema oppure scarica l\'aggiornamento dal browser.</string>
 </resources>

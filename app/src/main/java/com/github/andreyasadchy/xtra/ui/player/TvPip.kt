@@ -374,21 +374,17 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         view = null
     }
 
-    private var okDown = false
-    private var swapped = false
     private var backDown = false
 
     /**
-     * Keys while the small window is shown over the full screen player: OK held swaps the streams, back closes it.
-     * True when the key was used here.
+     * Keys while the small window is shown over the full screen player: back closes it (stream swapping and settings
+     * are configurable in Directional pad shortcuts and Custom remote buttons).
      */
     fun onKey(event: KeyEvent): Boolean {
         if (!isShown) {
-            okDown = false
             backDown = false
             return false
         }
-        val isOk = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
         when {
             // back hides the controls first (the player does it), it closes the small window only once they are hidden
             event.keyCode == KeyEvent.KEYCODE_BACK && activity.isPlayerFocusedWithoutControls() -> {
@@ -406,30 +402,6 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             event.keyCode == KeyEvent.KEYCODE_BACK -> {
                 backDown = false
                 return false
-            }
-            isOk && activity.isPlayerFocusedWithoutControls() -> {
-                when {
-                    event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> {
-                        okDown = true
-                        swapped = false
-                    }
-                    event.action == KeyEvent.ACTION_DOWN && event.repeatCount >= 1 -> {
-                        if (okDown && !swapped) {
-                            swapped = true
-                            swap()
-                        }
-                    }
-                    event.action == KeyEvent.ACTION_UP -> {
-                        val shortPress = okDown && !swapped
-                        okDown = false
-                        if (shortPress) {
-                            // OK alone: the controls of the player, as without the small window
-                            activity.dispatchPlayerKey(KeyEvent(KeyEvent.ACTION_DOWN, event.keyCode))
-                            activity.dispatchPlayerKey(KeyEvent(KeyEvent.ACTION_UP, event.keyCode))
-                        }
-                    }
-                }
-                return true
             }
         }
         return false

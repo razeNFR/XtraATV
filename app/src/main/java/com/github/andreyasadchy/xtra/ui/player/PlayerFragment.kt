@@ -183,8 +183,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return getTvDvrStream() != null || (playbackService == null && arguments?.getBoolean(KEY_DVR) == true)
     }
 
+    /** Live broadcast screen (excluding DVR/VOD). */
+    fun isLiveStreamScreen(): Boolean = isStreamScreen()
+
     /** Live broadcast or live-rewind DVR broadcast (where left/right and channel +/- switch streamers). */
     fun isLiveOrDvrScreen(): Boolean = isStreamScreen() || isDvrScreen()
+
+    private fun effectiveDpadAction(action: String, pipOpen: Boolean): String =
+        if (!pipOpen && com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.isPipOnlyAction(action)) {
+            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_DEFAULT
+        } else {
+            action
+        }
 
     /**
      * TV: returns -1 or +1 when [keyCode] is configured to switch to the previous/next streamer while controls are
@@ -198,22 +208,35 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             return null
         }
         val appCtx = com.github.andreyasadchy.xtra.XtraApp.INSTANCE
-        if (keyCode == KeyEvent.KEYCODE_DPAD_UP &&
-            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.upLongAction(appCtx) != com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_DEFAULT &&
-            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.upLongAction(appCtx) != com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.upAction(appCtx)
-        ) {
-            // let onPlayerKey distinguish short vs long press on Up
-            return null
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        val pipOpen = (activity as? MainActivity)?.isTvPipOpen() == true
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            val shortAct = effectiveDpadAction(Keys.upAction(appCtx), pipOpen)
+            val longAct = effectiveDpadAction(Keys.upLongAction(appCtx), pipOpen)
+            if (longAct != Keys.ACTION_DEFAULT && longAct != shortAct) {
+                // let onPlayerKey distinguish short vs long press on Up
+                return null
+            }
         }
-        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.downLongAction(appCtx) != com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.downAction(appCtx)
-        ) {
-            // let onPlayerKey distinguish short vs long press on Down
-            return null
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+            val shortAct = effectiveDpadAction(Keys.downAction(appCtx), pipOpen)
+            val longAct = effectiveDpadAction(Keys.downLongAction(appCtx), pipOpen)
+            if (longAct != shortAct) {
+                // let onPlayerKey distinguish short vs long press on Down
+                return null
+            }
         }
-        return when (com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.dpadForKeyCode(appCtx, keyCode)) {
-            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_SWITCH_PREV -> -1
-            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_SWITCH_NEXT -> 1
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+            val shortAct = effectiveDpadAction(Keys.centerAction(appCtx), pipOpen)
+            val longAct = effectiveDpadAction(Keys.centerLongAction(appCtx), pipOpen)
+            if (longAct != shortAct) {
+                // let onPlayerKey distinguish short vs long press on OK
+                return null
+            }
+        }
+        return when (effectiveDpadAction(Keys.dpadForKeyCode(appCtx, keyCode), pipOpen)) {
+            Keys.ACTION_SWITCH_PREV -> -1
+            Keys.ACTION_SWITCH_NEXT -> 1
             else -> null
         }
     }
@@ -797,7 +820,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         // the timeline focused without a HUD opened on purpose: left / right still run their hidden-HUD shortcut
                         if ((keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) && _binding != null && !hudOpenedByUser) {
                             val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
-                            val dpadAction = Keys.dpadForKeyCode(requireContext(), keyCode)
+                            val pipOpen = (activity as? MainActivity)?.isTvPipOpen() == true
+                            val dpadAction = effectiveDpadAction(Keys.dpadForKeyCode(requireContext(), keyCode), pipOpen)
                             val isSwitch = dpadAction == Keys.ACTION_SWITCH_PREV || dpadAction == Keys.ACTION_SWITCH_NEXT
                             if ((isSwitch && isLiveOrDvrScreen()) || (!isSwitch && dpadAction != Keys.ACTION_DEFAULT)) {
                                 binding.dragView.requestFocus()
@@ -1133,6 +1157,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         if (pendingDvr) {
                                             // go back in the live: open the VOD of the stream being broadcast at the chosen position
                                             pendingDvr = false
+                                            pendingDvrResumeFromPause = false
                                             val offset = pendingDvrPosition.coerceAtLeast(0L)
                                             val video = Video(
                                                 channelId = playbackService?.channelId,
@@ -1160,15 +1185,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                             }
                                             activity.startVideo(video, offset, qualities = qualities)
                                         } else {
+                                            pendingDvrResumeFromPause = false
                                             (requireActivity() as MainActivity).startVideo(Video(), 0, qualities = qualities)
                                         }
                                     } else {
+                                        val resumeLive = pendingDvrResumeFromPause
                                         pendingDvr = false
+                                        pendingDvrResumeFromPause = false
                                         (activity as? MainActivity)?.dvrStream = null
+                                        if (resumeLive) {
+                                            seekToLivePosition()
+                                        }
                                         if (isTvLiveTimeline()) {
                                             updateTvLiveTimeline()
                                         }
-                                        Toast.makeText(requireContext(), R.string.video_not_found, Toast.LENGTH_SHORT).show()
+                                        if (!resumeLive) {
+                                            Toast.makeText(requireContext(), R.string.video_not_found, Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                     viewModel.unlistedVideoQualities.value = null
                                 }
@@ -2144,11 +2177,32 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var tvScrubPosition = -1L
     private var pendingDvr = false
     private var pendingDvrPosition = 0L
+    private var pendingDvrResumeFromPause = false
 
     protected fun isTvLiveTimeline() = isTv && playbackService?.type == BasePlaybackService.STREAM
 
     fun isExperimentalVodActive(): Boolean =
         (playbackService as? ExoPlayerService)?.experimentalVodActive == true
+
+    /**
+     * True while live IRC messages should be buffered until video frame timestamp sync is ready:
+     * either Experimental Adblock VOD playback is active, or Experimental Adblock is enabled while
+     * the live stream is still loading its initial picture (preventing early "future" chat messages).
+     */
+    fun shouldHoldExperimentalChat(): Boolean {
+        if (isExperimentalVodActive()) return true
+        val ctx = context ?: return false
+        if (!isTv || !com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(ctx)) {
+            return false
+        }
+        val service = playbackService
+        return if (service == null) {
+            arguments?.getBoolean(KEY_STREAM) == true
+        } else {
+            service.type == BasePlaybackService.STREAM &&
+                ((service as? ExoPlayerService)?.let { !it.streamPictureShown && !it.isIntentionallyPausedOrStopped } ?: !service.loaded)
+        }
+    }
 
     private fun styleTvGoLiveButton(button: android.widget.TextView) {
         val density = resources.displayMetrics.density
@@ -2254,15 +2308,44 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             position.visibility = View.VISIBLE
             duration.visibility = View.VISIBLE
             progressBar.setDuration(uptime)
+            val pausedUptime = (playbackService as? ExoPlayerService)?.livePausedUptimeMs
             if (pendingDvr) {
                 val target = pendingDvrPosition.coerceIn(0L, uptime)
                 progressBar.setPosition(target)
                 progressBar.setBufferedPosition(target)
                 position.text = DateUtils.formatElapsedTime(target / 1000)
+            } else if (pausedUptime != null) {
+                val target = pausedUptime.coerceIn(0L, uptime)
+                val behindMs = (uptime - target).coerceAtLeast(0L)
+                progressBar.setPosition(target)
+                progressBar.setBufferedPosition(target)
+                position.text = if (behindMs <= 8_000L) getString(R.string.tv_live) else DateUtils.formatElapsedTime(target / 1000)
+                tvGoLive?.let { button ->
+                    if (behindMs > 8_000L) {
+                        styleTvGoLiveButton(button)
+                        button.visibility = View.VISIBLE
+                        button.setOnClickListener {
+                            hideTooltip()
+                            seekToLivePosition()
+                            updateTvLiveTimeline()
+                            showController()
+                        }
+                    } else if (getTvDvrStream() == null) {
+                        button.visibility = View.GONE
+                    }
+                }
             } else {
                 progressBar.setPosition(uptime)
                 progressBar.setBufferedPosition(uptime)
                 position.text = getString(R.string.tv_live)
+                tvGoLive?.let { button ->
+                    if (getTvDvrStream() == null) {
+                        if (button.hasFocus()) {
+                            playPause.requestFocus()
+                        }
+                        button.visibility = View.GONE
+                    }
+                }
             }
             duration.text = DateUtils.formatElapsedTime(uptime / 1000)
         }
@@ -2346,6 +2429,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 expArchiveLookupFailedAt = SystemClock.elapsedRealtime()
             }
         }
+    }
+
+    protected fun startTvDvrFromPause(position: Long): Boolean {
+        if (!isAdded || _binding == null || playbackService?.type != BasePlaybackService.STREAM) {
+            return false
+        }
+        pendingDvrResumeFromPause = true
+        startTvDvr(position)
+        updateTvLiveTimeline()
+        return true
     }
 
     private fun startTvDvr(position: Long) {
@@ -2974,31 +3067,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         )
     }
 
-    /** TV: the icon of the proxy button says if the custom proxy is on. */
+    /** TV: the icon of the adblock & proxy button lights up when Experimental Adblock or Custom Proxy is enabled. */
     private fun updateTvProxyIcon() {
         val context = context ?: return
         val expOn = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(context)
-        val on = !expOn && context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+        val customOn = !expOn && context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
         _binding?.playerControls?.tvProxy?.apply {
-            setImageResource(if (on) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
-            alpha = if (expOn) 0.45f else 1f
+            setImageResource(if (expOn || customOn) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
+            alpha = 1f
         }
     }
 
-    /** TV: the list of the custom proxies (OK held on the proxy button), saved in the settings when it closes. */
+    /** TV: unified Ad blocker & custom proxies panel, restarting the stream when closed if settings changed. */
     private fun showTvProxyPanel() {
         val activity = activity as? MainActivity ?: return
-        if (com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(activity)) {
-            Toast.makeText(activity, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_SHORT).show()
-            return
-        }
         val repository = (activity.application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository
         viewLifecycleOwner.lifecycleScope.launch {
             val proxies = repository.getCustomProxies()
             if (_binding == null) {
                 return@launch
             }
+            val expBefore = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(activity)
             val useBefore = activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+            val modeBefore = activity.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0")
             com.github.andreyasadchy.xtra.ui.tv.TvProxyPanel.show(
                 activity,
                 proxies,
@@ -3010,9 +3101,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (changed != null) {
                     activity.lifecycleScope.launch {
                         repository.updateCustomProxies(changed)
-                        // the stream plays through the proxies or custom proxies were turned on/off: it starts again
+                        val expNow = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(activity)
                         val useNow = activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
-                        if (useNow || useNow != useBefore) {
+                        val modeNow = activity.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0")
+                        if (expNow != expBefore || useNow || useNow != useBefore || modeNow != modeBefore) {
                             activity.restartCurrentStream()
                         }
                     }
@@ -3311,6 +3403,30 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             Keys.ACTION_MUTE -> togglePlayerMute()
             Keys.ACTION_QUALITY -> showQualityDialog()
             Keys.ACTION_STATS -> toggleStatsForNerds()
+            Keys.ACTION_PIP_SWAP -> {
+                val main = activity as? MainActivity
+                if (main?.isTvPipOpen() == true) {
+                    main.swapTvPip()
+                } else {
+                    return false
+                }
+            }
+            Keys.ACTION_PIP_SETTINGS -> {
+                val main = activity as? MainActivity
+                if (main?.isTvPipOpen() == true) {
+                    showTvPipPanel()
+                } else {
+                    return false
+                }
+            }
+            Keys.ACTION_PIP_CLOSE -> {
+                val main = activity as? MainActivity
+                if (main?.isTvPipOpen() == true) {
+                    main.closeTvPip()
+                } else {
+                    return false
+                }
+            }
             else -> return false
         }
         return true
@@ -3324,8 +3440,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         val ctx = requireContext()
         val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
-        val shortAction = Keys.customShortActionForKey(ctx, event.keyCode)
-        val longAction = Keys.customLongActionForKey(ctx, event.keyCode)
+        val pipOpen = (activity as? MainActivity)?.isTvPipOpen() == true
+        val rawShort = Keys.customShortActionForKey(ctx, event.keyCode)
+        val rawLong = Keys.customLongActionForKey(ctx, event.keyCode)
+        if (rawShort == null && rawLong == null) {
+            return false
+        }
+        val shortAction = rawShort?.takeUnless { !pipOpen && Keys.isPipOnlyAction(it) }
+        val longAction = rawLong?.takeUnless { !pipOpen && Keys.isPipOnlyAction(it) }
         if (shortAction == null && longAction == null) {
             return false
         }
@@ -3512,7 +3634,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     true
                 }
             }
-            // custom proxy: OK turns it on / off (the stream starts again with it), OK held opens the list of the proxies
+            // adblock & custom proxies: OK (short or long) opens the unified Ad blocker & Proxies panel
             tvProxy?.let { button ->
                 if (playbackService?.type == BasePlaybackService.STREAM && prefs.getBoolean(C.TV_BUTTON_PROXY, true)) {
                     button.visibility = View.VISIBLE
@@ -3521,22 +3643,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.visibility = View.GONE
                 }
                 button.setOnClickListener {
-                    val ctx = requireContext()
-                    if (com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(ctx)) {
-                        Toast.makeText(ctx, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_SHORT).show()
-                        return@setOnClickListener
-                    }
-                    val on = !ctx.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
-                    ctx.prefs().edit {
-                        putBoolean(C.PLAYER_USE_CUSTOM_PROXY, on)
-                        if (on) {
-                            putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
-                        }
-                    }
-                    com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.normalizePrefs(ctx)
-                    updateTvProxyIcon()
-                    android.widget.Toast.makeText(ctx, if (on) R.string.tv_proxy_on else R.string.tv_proxy_off, android.widget.Toast.LENGTH_SHORT).show()
-                    (activity as? MainActivity)?.restartCurrentStream()
+                    showController(force = true)
+                    showTvProxyPanel()
                 }
                 button.setOnLongClickListener {
                     showController(force = true)
@@ -4367,6 +4475,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var tvClockObserverJob: Job? = null
     private var dpadUpLongHandled = false
     private var dpadDownLongHandled = false
+    private var dpadCenterLongHandled = false
 
     /** Swallows trailing auto-repeat DOWN events and final UP event of an Up long-press that already fired. */
     fun consumeHeldDpadUpTail(event: KeyEvent): Boolean {
@@ -4398,6 +4507,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return true
     }
 
+    /** Swallows trailing auto-repeat DOWN events and final UP event of an OK long-press that already fired. */
+    fun consumeHeldDpadCenterTail(event: KeyEvent): Boolean {
+        if (!dpadCenterLongHandled || event.keyCode != KeyEvent.KEYCODE_DPAD_CENTER) {
+            return false
+        }
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            dpadCenterLongHandled = false
+            return false
+        }
+        if (event.action == KeyEvent.ACTION_UP || event.isCanceled) {
+            dpadCenterLongHandled = false
+        }
+        return true
+    }
+
     /** Handles D-pad keys while the player itself (and not one of its controls) has focus. */
     private fun onPlayerKey(keyCode: Int, event: KeyEvent): Boolean {
         if (BuildConfig.DEBUG) {
@@ -4421,10 +4545,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
         val hudHiddenOrPeek = !binding.playerControls.root.isVisible || hudPeek
+        val pipOpen = (activity as? MainActivity)?.isTvPipOpen() == true
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (isTv && hudHiddenOrPeek) {
-                    val action = Keys.dpadForKeyCode(requireContext(), keyCode)
+                    val action = effectiveDpadAction(Keys.dpadForKeyCode(requireContext(), keyCode), pipOpen)
                     if (action == Keys.ACTION_SWITCH_PREV || action == Keys.ACTION_SWITCH_NEXT) {
                         if (isLiveOrDvrScreen()) {
                             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
@@ -4453,8 +4578,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (isTv && hudHiddenOrPeek) {
-                    val shortAction = Keys.upAction(requireContext())
-                    val longAction = Keys.upLongAction(requireContext())
+                    val shortAction = effectiveDpadAction(Keys.upAction(requireContext()), pipOpen)
+                    val longAction = effectiveDpadAction(Keys.upLongAction(requireContext()), pipOpen)
                     if (longAction != Keys.ACTION_DEFAULT && shortAction != longAction) {
                         when (event.action) {
                             KeyEvent.ACTION_DOWN -> {
@@ -4492,8 +4617,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 if (isTv && hudHiddenOrPeek) {
-                    val shortAction = Keys.downAction(requireContext())
-                    val longAction = Keys.downLongAction(requireContext())
+                    val shortAction = effectiveDpadAction(Keys.downAction(requireContext()), pipOpen)
+                    val longAction = effectiveDpadAction(Keys.downLongAction(requireContext()), pipOpen)
                     if (shortAction != longAction) {
                         when (event.action) {
                             KeyEvent.ACTION_DOWN -> {
@@ -4535,17 +4660,47 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                 // only the D-pad center is remappable, Enter keeps opening the HUD
-                val action = if (isTv && hudHiddenOrPeek && keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-                    Keys.centerAction(requireContext())
-                } else {
-                    Keys.ACTION_DEFAULT
+                if (isTv && hudHiddenOrPeek && keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+                    val shortAction = effectiveDpadAction(Keys.centerAction(requireContext()), pipOpen)
+                    val longAction = effectiveDpadAction(Keys.centerLongAction(requireContext()), pipOpen)
+                    if (shortAction != longAction) {
+                        when (event.action) {
+                            KeyEvent.ACTION_DOWN -> {
+                                if (event.repeatCount == 0) {
+                                    dpadCenterLongHandled = false
+                                } else if (!dpadCenterLongHandled && (event.repeatCount >= 1 || event.isLongPress)) {
+                                    dpadCenterLongHandled = true
+                                    if (longAction != Keys.ACTION_DEFAULT) {
+                                        executeTvRemoteAction(longAction)
+                                    } else {
+                                        openHudFromDpad()
+                                    }
+                                }
+                            }
+                            KeyEvent.ACTION_UP -> {
+                                if (!dpadCenterLongHandled && !event.isCanceled) {
+                                    if (shortAction != Keys.ACTION_DEFAULT) {
+                                        executeTvRemoteAction(shortAction)
+                                    } else {
+                                        openHudFromDpad()
+                                    }
+                                }
+                                dpadCenterLongHandled = false
+                            }
+                        }
+                        return true
+                    }
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        if (shortAction != Keys.ACTION_DEFAULT) {
+                            executeTvRemoteAction(shortAction)
+                        } else {
+                            openHudFromDpad()
+                        }
+                    }
+                    return true
                 }
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                    if (action != Keys.ACTION_DEFAULT) {
-                        executeTvRemoteAction(action)
-                    } else {
-                        openHudFromDpad()
-                    }
+                    openHudFromDpad()
                 }
                 true
             }

@@ -1,12 +1,14 @@
 package com.github.andreyasadchy.xtra.util
 
 import android.app.Activity
+import android.app.AppOpsManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.os.Build
+import android.os.Process
 import android.provider.Settings
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -293,6 +295,61 @@ private class TvMaterialDialogBuilder(context: Context) : MaterialAlertDialogBui
 
 private class TvDialogBuilder(context: Context) : AlertDialog.Builder(context) {
     override fun create(): AlertDialog = super.create().also { it.focusPositiveButtonOnShow() }
+}
+
+object UpdateInstallHelper {
+    @Volatile var unknownSourcesPromptedInSession = false
+    @Volatile var lastAttemptedUpdateUrl: String? = null
+}
+
+/**
+ * Returns true if this app is allowed to request package installs.
+ * Some Android TV / Fire OS / OEM firmwares keep returning false from [android.content.pm.PackageManager.canRequestPackageInstalls]
+ * even when "Install unknown apps" is enabled in system settings (`AppOpsManager.MODE_ALLOWED`).
+ */
+fun Context.canInstallUnknownAppsCompat(): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+    if (try { packageManager.canRequestPackageInstalls() } catch (_: Throwable) { false }) {
+        return true
+    }
+    return try {
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_REQUEST_INSTALL_PACKAGES, Process.myUid(), packageName)
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(AppOpsManager.OPSTR_REQUEST_INSTALL_PACKAGES, Process.myUid(), packageName)
+        }
+        mode == AppOpsManager.MODE_ALLOWED
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+fun Activity.showInstallBlockedDialog(downloadUrl: String?) {
+    if (isFinishing || isDestroyed) return
+    val openBrowser: (String) -> Unit = { url ->
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri()).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+            }
+            startActivity(intent)
+            tokenPrefs().edit().putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis()).apply()
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.no_browser_found, Toast.LENGTH_LONG).show()
+        }
+    }
+    val builder = getAlertDialogBuilder()
+        .setTitle(R.string.update_available)
+        .setMessage(R.string.tv_update_install_blocked)
+        .setNegativeButton(android.R.string.cancel, null)
+    if (!downloadUrl.isNullOrBlank()) {
+        builder.setPositiveButton(R.string.update_using_browser) { _, _ -> openBrowser(downloadUrl) }
+        builder.setNeutralButton(R.string.settings) { _, _ -> openUnknownAppSourcesSettings() }
+    } else {
+        builder.setPositiveButton(R.string.settings) { _, _ -> openUnknownAppSourcesSettings() }
+    }
+    builder.show()
 }
 
 /**

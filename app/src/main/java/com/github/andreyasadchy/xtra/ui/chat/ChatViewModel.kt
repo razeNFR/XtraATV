@@ -940,6 +940,7 @@ class ChatViewModel(
                                         type = ChatMessage.REPLY_MESSAGE,
                                         reply = msg.reply,
                                         replyParent = msg,
+                                        timestamp = msg.timestamp,
                                     )
                                     if (!com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(applicationContext, replyLine, channelLogin, myId, myLogin)) {
                                         list.add(replyLine)
@@ -950,17 +951,59 @@ class ChatViewModel(
                         }
                     }
                     if (list.isNotEmpty()) {
-                        synchronized(chatMessages) {
-                            val left = messageLimit - chatMessages.size
-                            if (left > 0) {
-                                val items = list.takeLast(left)
-                                chatMessages.addAll(0, items)
-                                Pair(items, chatMessages.lastIndex)
-                            } else null
-                        }.let {
-                            if (it != null) {
-                                addMessages.emit(it)
+                        if (forceAutoDelay?.invoke() == true) {
+                            var waitedSteps = 0
+                            while (waitedSteps < 60 && forceAutoDelay?.invoke() == true &&
+                                runCatching { programTime?.invoke() }.getOrNull() == null
+                            ) {
+                                delay(100L)
+                                waitedSteps++
                             }
+                        }
+                        if (forceAutoDelay?.invoke() == true) {
+                            val nowMs = System.currentTimeMillis()
+                            val cutoffMs = runCatching { programTime?.invoke() }.getOrNull()
+                                ?: (nowMs - com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS)
+                            val pastItems = list.filter { (it.timestamp ?: Long.MIN_VALUE) <= cutoffMs }
+                            val futureItems = list.filter { (it.timestamp ?: Long.MIN_VALUE) > cutoffMs }
+                            if (pastItems.isNotEmpty()) {
+                                synchronized(chatMessages) {
+                                    val existingIds = chatMessages.mapNotNullTo(HashSet()) { it.id }
+                                    val dedupedPast = pastItems.filter {
+                                        val checkId = if (it.type == ChatMessage.REPLY_MESSAGE) it.replyParent?.id else it.id
+                                        checkId == null || checkId !in existingIds
+                                    }
+                                    val left = messageLimit - chatMessages.size
+                                    if (left > 0 && dedupedPast.isNotEmpty()) {
+                                        val items = dedupedPast.takeLast(left)
+                                        chatMessages.addAll(0, items)
+                                        Pair(items, chatMessages.lastIndex)
+                                    } else null
+                                }?.let { addMessages.emit(it) }
+                            }
+                            if (futureItems.isNotEmpty()) {
+                                synchronized(delayedMessages) {
+                                    val existingIds = delayedMessages.mapNotNullTo(HashSet()) { (m, _) -> m.id }
+                                    for (i in futureItems.lastIndex downTo 0) {
+                                        val item = futureItems[i]
+                                        val checkId = if (item.type == ChatMessage.REPLY_MESSAGE) item.replyParent?.id else item.id
+                                        if (checkId == null || checkId !in existingIds) {
+                                            val syntheticArrival = item.timestamp?.coerceAtMost(nowMs) ?: nowMs
+                                            delayedMessages.addFirst(item to syntheticArrival)
+                                        }
+                                    }
+                                }
+                                startDelayLoop()
+                            }
+                        } else {
+                            synchronized(chatMessages) {
+                                val left = messageLimit - chatMessages.size
+                                if (left > 0) {
+                                    val items = list.takeLast(left)
+                                    chatMessages.addAll(0, items)
+                                    Pair(items, chatMessages.lastIndex)
+                                } else null
+                            }?.let { addMessages.emit(it) }
                         }
                     }
                 } catch (e: Exception) {
@@ -1275,9 +1318,20 @@ class ChatViewModel(
             return
         }
         // a message of the live chat (with its time of Twitch), not one of ours: shown when the stream gets there
-        if (!fromReplay && started && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && effectiveDelayMode() != 0) {
+        val forcedAuto = forceAutoDelay?.invoke() == true
+        if (!fromReplay && (started || forcedAuto) && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && (forcedAuto || effectiveDelayMode() != 0)) {
+            val checkId = if (message.type == ChatMessage.REPLY_MESSAGE) message.replyParent?.id else message.id
+            if (checkId != null) {
+                val alreadyShown = synchronized(chatMessages) { chatMessages.any { it.id == checkId } }
+                if (alreadyShown) return
+            }
             synchronized(delayedMessages) {
-                delayedMessages.addLast(message to System.currentTimeMillis())
+                val alreadyQueued = checkId != null && delayedMessages.any { (m, _) ->
+                    m.type == message.type && (if (m.type == ChatMessage.REPLY_MESSAGE) m.replyParent?.id else m.id) == checkId
+                }
+                if (!alreadyQueued) {
+                    delayedMessages.addLast(message to System.currentTimeMillis())
+                }
             }
             startDelayLoop()
             return
@@ -1634,6 +1688,7 @@ class ChatViewModel(
                         type = ChatMessage.REPLY_MESSAGE,
                         reply = chatMessage.reply,
                         replyParent = chatMessage,
+                        timestamp = chatMessage.timestamp,
                     ))
                 }
                 if (usePubSub && chatMessage.reward != null && !chatMessage.reward.id.isNullOrBlank()) {

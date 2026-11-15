@@ -319,6 +319,13 @@ class ExoPlayerFragment : PlayerFragment() {
                 }
             }
 
+            override fun onLivePauseResumeToDvr(targetOffsetMs: Long): Boolean {
+                if (view != null && isAdded) {
+                    return startTvDvrFromPause(targetOffsetMs)
+                }
+                return false
+            }
+
             override fun setPlayerSurface(secondaryPlayer: Boolean) {
                 // the screen of the player is not there (made again, closing): nothing to move
                 if (view == null || !isAdded) {
@@ -565,7 +572,7 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun updateProgress() {
         if (isTvLiveTimeline()) {
             updateTvLiveTimeline()
-            if (isExperimentalVodActive()) {
+            if (isExperimentalVodActive() || playbackService?.livePausedUptimeMs != null) {
                 with(binding.playerControls) {
                     root.removeCallbacks(updateProgressAction)
                     if (root.isVisible) {

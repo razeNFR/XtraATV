@@ -1328,6 +1328,14 @@ class MultiStreamFragment : Fragment() {
     fun isExperimentalVodActive(channelLogin: String?): Boolean =
         tiles.find { it.stream.channelLogin == channelLogin }?.experimentalVodActive == true
 
+    fun shouldHoldExperimentalChat(channelLogin: String?): Boolean {
+        val tile = tiles.find { it.stream.channelLogin == channelLogin } ?: return false
+        if (tile.experimentalVodActive) return true
+        val ctx = context ?: return false
+        if (!com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(ctx)) return false
+        return tile.playJob?.isActive == true || tile.player.playbackState != Player.STATE_READY
+    }
+
     /** The chat of a stream with its delay in Auto: the time of Twitch of the picture of its tile (null when not known). */
     fun getLivePictureTime(channelLogin: String?): Long? {
         val tile = tiles.find { it.stream.channelLogin == channelLogin } ?: return null

@@ -743,7 +743,7 @@
     <string name="tv_switch_current">Этот список</string>
     <string name="tv_switch_suggested">Предложения</string>
     <string name="tv_switch_empty">В этом списке нет трансляций в эфире</string>
-    <string name="tv_pip_hint">Маленькое окно: удерживайте OK, чтобы поменять, «Назад» — закрыть</string>
+    <string name="tv_pip_hint">Маленькое окно: удерживайте OK для смены (настраивается в «Пульт»), «Назад» — закрыть</string>
     <string name="tv_multistream_focus">Режим фокуса: эта трансляция крупно</string>
     <string name="tv_multistream_grid">Вернуться к сетке</string>
     <string name="tv_followed_videos_need_code">Для видео отслеживаемых нужен вход по коду: войдите через twitch.tv/activate (Аккаунт)</string>
@@ -844,8 +844,8 @@
     <string name="tv_followed_videos_row">Новые видео отслеживаемых каналов</string>
     <string name="tv_refreshed">Обновлено</string>
     <string name="tv_multistream_hint">OK: добавить или убрать трансляцию · до %1$d</string>
-    <string name="tv_proxy_button">Прокси</string>
-    <string name="tv_proxy_button_summary">OK включает или выключает свой прокси, удержание OK открывает список прокси</string>
+    <string name="tv_proxy_button">Блокировщик и прокси</string>
+    <string name="tv_proxy_button_summary">Открывает панель блокировщика рекламы и своих прокси</string>
     <string name="tv_proxy_on">Прокси включён</string>
     <string name="tv_proxy_off">Прокси выключен</string>
     <string name="tv_proxy_panel_title">Свои прокси</string>
@@ -1163,4 +1163,11 @@
     <string name="tv_option_on">Вкл.</string>
     <string name="tv_prediction_started">Прогноз начался</string>
     <string name="tv_prediction_ended">Прогноз завершён</string>
+    <string name="tv_dpad_center_long">OK (долгое нажатие)</string>
+    <string name="tv_remote_action_pip_swap">Маленькое окно: поменять стримы</string>
+    <string name="tv_remote_action_pip_settings">Маленькое окно: настройки</string>
+    <string name="tv_remote_action_pip_close">Маленькое окно: закрыть</string>
+    <string name="tv_adblock_and_proxies_title">Блокировщик рекламы и прокси</string>
+    <string name="tv_adblock_and_proxies_subtitle">Экспериментальный блокировщик рекламы или свои HLS-прокси для стримов</string>
+    <string name="tv_update_install_blocked">Android заблокировал установку. Разрешите «Установка неизвестных приложений» для Xtra TV в системных настройках или скачайте обновление через браузер.</string>
 </resources>

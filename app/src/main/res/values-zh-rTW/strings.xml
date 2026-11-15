@@ -743,7 +743,7 @@
     <string name="tv_switch_current">此列表</string>
     <string name="tv_switch_suggested">推薦</string>
     <string name="tv_switch_empty">此列表中沒有正在直播的頻道</string>
-    <string name="tv_pip_hint">小視窗：長按 OK 交換直播，按返回關閉</string>
+    <string name="tv_pip_hint">小視窗：長按 OK 交換直播（可在遙控器設定中變更），按返回關閉</string>
     <string name="tv_multistream_focus">焦點模式：放大此直播</string>
     <string name="tv_multistream_grid">返回網格</string>
     <string name="tv_followed_videos_need_code">追隨的影片需要使用代碼登入：透過 twitch.tv/activate 登入（帳戶）</string>
@@ -844,8 +844,8 @@
     <string name="tv_followed_videos_row">你追隨頻道的最新影片</string>
     <string name="tv_refreshed">已更新</string>
     <string name="tv_multistream_hint">OK：新增或移除直播 · 最多 %1$d 個</string>
-    <string name="tv_proxy_button">代理</string>
-    <string name="tv_proxy_button_summary">OK 開啟或關閉自訂代理，長按 OK 開啟代理清單</string>
+    <string name="tv_proxy_button">廣告攔截與代理</string>
+    <string name="tv_proxy_button_summary">開啟廣告攔截與自訂代理面板</string>
     <string name="tv_proxy_on">代理已開啟</string>
     <string name="tv_proxy_off">代理已關閉</string>
     <string name="tv_proxy_panel_title">自訂代理</string>
@@ -1163,4 +1163,11 @@
     <string name="tv_option_on">開啟</string>
     <string name="tv_prediction_started">預測已開始</string>
     <string name="tv_prediction_ended">預測已結束</string>
+    <string name="tv_dpad_center_long">OK（長按）</string>
+    <string name="tv_remote_action_pip_swap">小視窗：交換直播</string>
+    <string name="tv_remote_action_pip_settings">小視窗：設定</string>
+    <string name="tv_remote_action_pip_close">小視窗：關閉</string>
+    <string name="tv_adblock_and_proxies_title">廣告攔截與代理</string>
+    <string name="tv_adblock_and_proxies_subtitle">用於直播的實驗性廣告攔截或自訂 HLS 代理</string>
+    <string name="tv_update_install_blocked">Android 封鎖了安裝。請在系統設定中允許 Xtra TV「安裝未知應用程式」，或透過瀏覽器下載更新。</string>
 </resources>

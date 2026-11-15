@@ -157,6 +157,10 @@ class ExoPlayerService : BasePlaybackService() {
     private var streamEnded = false
     private var liveRecoveryJob: Job? = null
     private var liveRecoveryAttempt = 0
+    private var livePausedAtElapsedMs = 0L
+    var livePausedUptimeMs: Long? = null
+        private set
+    private var lastUserSeekAt = 0L
 
     val isIntentionallyPausedOrStopped: Boolean
         get() = intentionalStopOrPause || streamEnded
@@ -171,6 +175,8 @@ class ExoPlayerService : BasePlaybackService() {
         fun setPlayerSurface(secondaryPlayer: Boolean)
         /** TV: a picture of the stream itself (not of an ad) is on the screen, the loading picture can go. */
         fun streamPictureShown()
+        /** TV: live stream resumed after being paused past the HLS live window; returns true if DVR playback took over. */
+        fun onLivePauseResumeToDvr(targetOffsetMs: Long): Boolean = false
     }
 
     var serviceListener: Listener? = null
@@ -462,7 +468,13 @@ class ExoPlayerService : BasePlaybackService() {
                                         || it == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
                             } == true
                             val isNetworkAvailable = isNetworkValidated()
-                            if (isNetworkAvailable) {
+                            if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                                livePausedAtElapsedMs = 0L
+                                livePausedUptimeMs = null
+                                player?.seekToDefaultPosition()
+                                player?.prepare()
+                                player?.play()
+                            } else if (isNetworkAvailable) {
                                 when {
                                     responseCode == 404 -> {
                                         streamEnded = true
@@ -745,6 +757,9 @@ class ExoPlayerService : BasePlaybackService() {
                 }
 
                 override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                    if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) {
+                        lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
+                    }
                     updatePlaybackState()
                 }
 
@@ -766,7 +781,9 @@ class ExoPlayerService : BasePlaybackService() {
                 }
 
                 override fun onSkipToNext() {
-                    seekForward()
+                    if (!(isTvDevice && type == STREAM)) {
+                        seekForward()
+                    }
                 }
 
                 override fun onSkipToPrevious() {
@@ -774,7 +791,9 @@ class ExoPlayerService : BasePlaybackService() {
                 }
 
                 override fun onFastForward() {
-                    seekForward()
+                    if (!(isTvDevice && type == STREAM)) {
+                        seekForward()
+                    }
                 }
 
                 override fun onRewind() {
@@ -796,7 +815,7 @@ class ExoPlayerService : BasePlaybackService() {
                 override fun onCustomAction(action: String, extras: Bundle?) {
                     when (action) {
                         INTENT_REWIND -> seekBack()
-                        INTENT_FAST_FORWARD -> seekForward()
+                        INTENT_FAST_FORWARD -> if (!(isTvDevice && type == STREAM)) seekForward()
                     }
                 }
 
@@ -819,8 +838,12 @@ class ExoPlayerService : BasePlaybackService() {
                                         true
                                     }
                                     KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                                        seekForward()
-                                        true
+                                        if (!(isTvDevice && type == STREAM)) {
+                                            seekForward()
+                                            true
+                                        } else {
+                                            false
+                                        }
                                     }
                                     else -> false
                                 }
@@ -936,6 +959,8 @@ class ExoPlayerService : BasePlaybackService() {
                     experimentalVodCreatedAtMs = null
                     experimentalVodUpgradeJob?.cancel()
                     experimentalVodUpgradeJob = null
+                    livePausedAtElapsedMs = 0L
+                    livePausedUptimeMs = null
                     intentionalStopOrPause = (restorePauseState && paused) || quality?.name == VideoQuality.CHAT_ONLY_QUALITY
                     streamEnded = false
                     liveRecoveryAttempt = 0
@@ -3108,7 +3133,8 @@ class ExoPlayerService : BasePlaybackService() {
                 playingSince = now
             }
         } else if (playbackState == Player.STATE_BUFFERING && autoHighest && player.playWhenReady && playingSince != 0L &&
-            now - playingSince >= 10_000L && (quality == null || quality?.name == VideoQuality.AUTO_QUALITY)) {
+            now - playingSince >= 10_000L && (lastUserSeekAt == 0L || now - lastUserSeekAt >= 10_000L) &&
+            (quality == null || quality?.name == VideoQuality.AUTO_QUALITY)) {
             rebufferTimes.addLast(now)
             while (rebufferTimes.isNotEmpty() && now - rebufferTimes.first() > 60_000L) {
                 rebufferTimes.removeFirst()
@@ -3162,6 +3188,7 @@ class ExoPlayerService : BasePlaybackService() {
         autoCapHeight = null
         rebufferTimes.clear()
         playingSince = 0L
+        lastUserSeekAt = 0L
         autoHighest = isUnmeteredNetwork()
         player?.let { player ->
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -3232,6 +3259,7 @@ class ExoPlayerService : BasePlaybackService() {
         autoCapHeight = null
         rebufferTimes.clear()
         playingSince = 0L
+        lastUserSeekAt = 0L
         autoHighest = isUnmeteredNetwork()
         val q = quality
         if (q?.name == VideoQuality.AUDIO_ONLY_QUALITY || q?.name == VideoQuality.CHAT_ONLY_QUALITY) {
@@ -3317,7 +3345,10 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodUpgradeJob?.cancel()
         experimentalVodUpgradeJob = null
         experimentalVodActive = false
+        experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
+        livePausedAtElapsedMs = 0L
+        livePausedUptimeMs = null
         // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
         // no sound), it must not come back on the screen for a moment when the backup player goes
         player?.setPlaybackSpeed(1f)
@@ -3382,7 +3413,10 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodUpgradeJob?.cancel()
         experimentalVodUpgradeJob = null
         experimentalVodActive = false
+        experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
+        livePausedAtElapsedMs = 0L
+        livePausedUptimeMs = null
         playingAds = false
         backLiveFrom = 0L
         backLiveProgress = 0f
@@ -3623,6 +3657,22 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun play() {
+        val pausedAt = livePausedAtElapsedMs
+        val pausedUptime = livePausedUptimeMs
+        livePausedAtElapsedMs = 0L
+        livePausedUptimeMs = null
+        val pausedDurationMs = if (pausedAt > 0L) {
+            (android.os.SystemClock.elapsedRealtime() - pausedAt).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        if (isTvDevice && type == STREAM && quality?.name != VideoQuality.CHAT_ONLY_QUALITY &&
+            !experimentalVodActive && pausedDurationMs >= 15_000L && pausedUptime != null
+        ) {
+            if (serviceListener?.onLivePauseResumeToDvr(pausedUptime) == true) {
+                return
+            }
+        }
         intentionalStopOrPause = false
         streamEnded = false
         liveRecoveryAttempt = 0
@@ -3642,14 +3692,28 @@ class ExoPlayerService : BasePlaybackService() {
                 restartPlayer()
                 return
             }
+            if (experimentalVodActive) {
+                if (pausedDurationMs >= 8_000L) {
+                    experimentalVodUserRewound = true
+                }
+                val resumePos = p.currentPosition.takeIf { it > 0L }
+                if (p.playbackState == Player.STATE_ENDED) {
+                    p.seekTo(getExperimentalLiveEdgeMs())
+                    p.prepare()
+                } else if (p.playbackState == Player.STATE_IDLE) {
+                    p.prepare()
+                    if (resumePos != null) {
+                        p.seekTo(resumePos)
+                    }
+                }
+                p.play()
+                return
+            }
             if (p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED) {
                 p.seekToDefaultPosition()
                 p.prepare()
                 p.play()
                 return
-            }
-            if (!p.playWhenReady && isTvDevice && !prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                p.seekToDefaultPosition()
             }
             p.play()
         } else {
@@ -3672,6 +3736,11 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun pause() {
+        if (type == STREAM && visiblePlayer?.playWhenReady == true && livePausedAtElapsedMs == 0L) {
+            livePausedAtElapsedMs = android.os.SystemClock.elapsedRealtime()
+            livePausedUptimeMs = TvExperimentalAdblock.parseEpochMs(createdAt)
+                ?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
+        }
         intentionalStopOrPause = true
         liveRecoveryJob?.cancel()
         liveRecoveryJob = null
@@ -3682,6 +3751,8 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun stop() {
+        livePausedAtElapsedMs = 0L
+        livePausedUptimeMs = null
         intentionalStopOrPause = true
         liveRecoveryJob?.cancel()
         liveRecoveryJob = null
@@ -3697,6 +3768,7 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun seekBack() {
+        lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
         if (type == STREAM && experimentalVodActive) {
             experimentalVodUserRewound = true
             player?.seekBack()
@@ -3709,6 +3781,7 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun seekForward() {
+        lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
         if (type == STREAM && experimentalVodActive) {
             val p = player ?: return
             val edge = getExperimentalLiveEdgeMs()
@@ -3724,6 +3797,7 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun seekTo(position: Long) {
+        lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
         if (type == STREAM && experimentalVodActive) {
             val edge = getExperimentalLiveEdgeMs()
             val clamped = position.coerceIn(0L, edge)
@@ -3741,15 +3815,24 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun seekToDefaultPosition() {
+        lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
+        livePausedAtElapsedMs = 0L
+        livePausedUptimeMs = null
         if (type == STREAM && experimentalVodActive) {
             experimentalVodUserRewound = false
             player?.seekTo(getExperimentalLiveEdgeMs())
+            if (visiblePlayer?.playWhenReady == false && quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
+                play()
+            }
             return
         }
         if (secondaryPlayer != null) {
             secondaryPlayer?.seekToDefaultPosition()
         }
         player?.seekToDefaultPosition()
+        if (type == STREAM && visiblePlayer?.playWhenReady == false && quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
+            play()
+        }
     }
 
     fun changeVolume(volume: Float) {
@@ -3792,6 +3875,8 @@ class ExoPlayerService : BasePlaybackService() {
 
     fun restartPlayer(fromAutoRecovery: Boolean = false) {
         if (quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {
+            livePausedAtElapsedMs = 0L
+            livePausedUptimeMs = null
             intentionalStopOrPause = false
             streamEnded = false
             if (!fromAutoRecovery) {
@@ -4181,10 +4266,15 @@ class ExoPlayerService : BasePlaybackService() {
                                 or PlaybackState.ACTION_PAUSE
                                 or PlaybackState.ACTION_PLAY
                                 or PlaybackState.ACTION_REWIND
-                                or PlaybackState.ACTION_FAST_FORWARD
                                 or PlaybackState.ACTION_SET_RATING
                                 or PlaybackState.ACTION_PLAY_PAUSE
                                 or PlaybackState.ACTION_PREPARE).let {
+                            if (!(isTvDevice && type == STREAM)) {
+                                it or PlaybackState.ACTION_FAST_FORWARD
+                            } else {
+                                it
+                            }
+                        }.let {
                             if (showSeekbar) {
                                 it or PlaybackState.ACTION_SEEK_TO
                             } else {
@@ -4199,7 +4289,9 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                     )
                     addCustomAction(INTENT_REWIND, ContextCompat.getString(this@ExoPlayerService, R.string.rewind), androidx.media3.session.R.drawable.media3_icon_rewind)
-                    addCustomAction(INTENT_FAST_FORWARD, ContextCompat.getString(this@ExoPlayerService, R.string.forward), androidx.media3.session.R.drawable.media3_icon_fast_forward)
+                    if (!(isTvDevice && type == STREAM)) {
+                        addCustomAction(INTENT_FAST_FORWARD, ContextCompat.getString(this@ExoPlayerService, R.string.forward), androidx.media3.session.R.drawable.media3_icon_fast_forward)
+                    }
                     if (isTvDevice) {
                         setActiveQueueItemId(0L)
                     }
@@ -4732,7 +4824,7 @@ class ExoPlayerService : BasePlaybackService() {
         when (intent?.action) {
             INTENT_REWIND -> seekBack()
             INTENT_PLAY_PAUSE -> togglePause()
-            INTENT_FAST_FORWARD -> seekForward()
+            INTENT_FAST_FORWARD -> if (!(isTvDevice && type == STREAM)) seekForward()
             INTENT_START -> create(restorePauseState = true)
             Intent.ACTION_MEDIA_BUTTON -> create(restorePauseState = false)
         }
@@ -4763,6 +4855,9 @@ class ExoPlayerService : BasePlaybackService() {
     /** Synchronously releases all hardware decoders and resets service state when closing before a new playback session. */
     fun releaseNow() {
         streamGeneration++
+        livePausedAtElapsedMs = 0L
+        livePausedUptimeMs = null
+        lastUserSeekAt = 0L
         intentionalStopOrPause = true
         streamEnded = false
         liveRecoveryAttempt = 0

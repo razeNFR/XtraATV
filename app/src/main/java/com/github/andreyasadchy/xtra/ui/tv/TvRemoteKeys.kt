@@ -50,7 +50,7 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 
 /**
  * Customizable remote shortcuts (#59):
- * - Per-key D-pad actions (Left, Right, Up, Down, OK, long-press of Up and Down) while player controls are hidden.
+ * - Per-key D-pad actions (Left, Right, Up, Down, OK, long-press of OK, Up, and Down) while player controls are hidden.
  * - Arbitrary custom remote key bindings (color buttons, Info, Guide, Channels, digits, gamepad, etc.).
  */
 object TvRemoteKeys {
@@ -68,6 +68,9 @@ object TvRemoteKeys {
     const val ACTION_MUTE = "mute"
     const val ACTION_QUALITY = "quality"
     const val ACTION_STATS = "stats"
+    const val ACTION_PIP_SWAP = "pip_swap"
+    const val ACTION_PIP_SETTINGS = "pip_settings"
+    const val ACTION_PIP_CLOSE = "pip_close"
 
     val ALL_ACTIONS = listOf(
         ACTION_DEFAULT,
@@ -83,9 +86,15 @@ object TvRemoteKeys {
         ACTION_MUTE,
         ACTION_QUALITY,
         ACTION_STATS,
+        ACTION_PIP_SWAP,
+        ACTION_PIP_SETTINGS,
+        ACTION_PIP_CLOSE,
     )
 
     val CUSTOM_KEY_ACTIONS = ALL_ACTIONS.filter { it != ACTION_DEFAULT }
+
+    fun isPipOnlyAction(action: String): Boolean =
+        action == ACTION_PIP_SWAP || action == ACTION_PIP_SETTINGS || action == ACTION_PIP_CLOSE
 
     data class CustomKeyBinding(val keyCode: Int, val action: String, val longPress: Boolean = false)
 
@@ -109,6 +118,9 @@ object TvRemoteKeys {
             if (!prefs.contains(C.TV_DPAD_CENTER_ACTION)) {
                 putString(C.TV_DPAD_CENTER_ACTION, ACTION_DEFAULT)
             }
+            if (!prefs.contains(C.TV_DPAD_CENTER_LONG_ACTION)) {
+                putString(C.TV_DPAD_CENTER_LONG_ACTION, ACTION_PIP_SWAP)
+            }
             if (!prefs.contains(C.TV_DPAD_UP_LONG_ACTION)) {
                 putString(C.TV_DPAD_UP_LONG_ACTION, ACTION_DEFAULT)
             }
@@ -122,15 +134,16 @@ object TvRemoteKeys {
         }
     }
 
-    fun dpadAction(context: Context, keyPreference: String): String {
+    fun dpadAction(context: Context, keyPreference: String, defaultAction: String = ACTION_DEFAULT): String {
         ensureMigrated(context)
-        val raw = context.prefs().getString(keyPreference, ACTION_DEFAULT) ?: ACTION_DEFAULT
-        return if (raw in ALL_ACTIONS) raw else ACTION_DEFAULT
+        val raw = context.prefs().getString(keyPreference, defaultAction) ?: defaultAction
+        return if (raw in ALL_ACTIONS) raw else defaultAction
     }
 
     fun leftAction(context: Context): String = dpadAction(context, C.TV_DPAD_LEFT_ACTION)
     fun rightAction(context: Context): String = dpadAction(context, C.TV_DPAD_RIGHT_ACTION)
     fun centerAction(context: Context): String = dpadAction(context, C.TV_DPAD_CENTER_ACTION)
+    fun centerLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_CENTER_LONG_ACTION, ACTION_PIP_SWAP)
     fun upAction(context: Context): String = dpadAction(context, C.TV_DPAD_UP_ACTION)
     fun upLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_UP_LONG_ACTION)
     fun downAction(context: Context): String = dpadAction(context, C.TV_DPAD_DOWN_ACTION)
@@ -158,6 +171,9 @@ object TvRemoteKeys {
         ACTION_MUTE -> context.getString(R.string.tv_remote_action_mute)
         ACTION_QUALITY -> context.getString(R.string.tv_remote_action_quality)
         ACTION_STATS -> context.getString(R.string.tv_remote_action_stats)
+        ACTION_PIP_SWAP -> context.getString(R.string.tv_remote_action_pip_swap)
+        ACTION_PIP_SETTINGS -> context.getString(R.string.tv_remote_action_pip_settings)
+        ACTION_PIP_CLOSE -> context.getString(R.string.tv_remote_action_pip_close)
         else -> context.getString(R.string.tv_remote_action_default)
     }
 
@@ -239,6 +255,9 @@ object TvRemoteKeys {
         ensureMigrated(context)
         val active = buildList {
             if (centerAction(context) != ACTION_DEFAULT) add("OK ${actionLabel(context, centerAction(context))}")
+            if (centerLongAction(context) != ACTION_DEFAULT && centerLongAction(context) != ACTION_PIP_SWAP) {
+                add("OK⏳ ${actionLabel(context, centerLongAction(context))}")
+            }
             if (leftAction(context) != ACTION_DEFAULT) add("← ${actionLabel(context, leftAction(context))}")
             if (rightAction(context) != ACTION_DEFAULT) add("→ ${actionLabel(context, rightAction(context))}")
             if (upAction(context) != ACTION_DEFAULT) add("↑ ${actionLabel(context, upAction(context))}")
@@ -287,6 +306,14 @@ object TvRemoteKeys {
                         modifier = Modifier.focusRequester(firstFocus),
                     ) { i ->
                         prefs.edit { putString(C.TV_DPAD_CENTER_ACTION, ALL_ACTIONS[i]) }
+                        onChanged()
+                    }
+                    SelectorRow(
+                        label = context.getString(R.string.tv_dpad_center_long),
+                        options = labels,
+                        selected = idxOf(centerLongAction(context)),
+                    ) { i ->
+                        prefs.edit { putString(C.TV_DPAD_CENTER_LONG_ACTION, ALL_ACTIONS[i]) }
                         onChanged()
                     }
                     SelectorRow(
@@ -347,6 +374,7 @@ object TvRemoteKeys {
                             putString(C.TV_DPAD_DOWN_ACTION, ACTION_DEFAULT)
                             putString(C.TV_DPAD_DOWN_LONG_ACTION, ACTION_DEFAULT)
                             putString(C.TV_DPAD_CENTER_ACTION, ACTION_DEFAULT)
+                            putString(C.TV_DPAD_CENTER_LONG_ACTION, ACTION_PIP_SWAP)
                         }
                         resetTick++
                         onChanged()

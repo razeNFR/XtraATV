@@ -103,10 +103,13 @@ import com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections
 import com.github.andreyasadchy.xtra.ui.view.TvUi
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
+import com.github.andreyasadchy.xtra.util.UpdateInstallHelper
 import com.github.andreyasadchy.xtra.util.applyTheme
+import com.github.andreyasadchy.xtra.util.canInstallUnknownAppsCompat
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.openUnknownAppSourcesSettings
 import com.github.andreyasadchy.xtra.util.prefs
+import com.github.andreyasadchy.xtra.util.showInstallBlockedDialog
 import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.flow.collectLatest
@@ -223,6 +226,13 @@ class MainActivity : AppCompatActivity() {
             prefs.edit {
                 putBoolean(C.TV_DEFAULTS_COMPACT_RAIL, true)
                 putBoolean(C.TV_COMPACT_RAIL, true)
+            }
+        }
+        if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_LIVE_PAUSE, false)) {
+            // Pause button enabled once by default on TV live streams for time-shift pause/resume (can still be turned off in Player buttons)
+            prefs.edit {
+                putBoolean(C.TV_DEFAULTS_LIVE_PAUSE, true)
+                putBoolean(C.PLAYER_PAUSE, true)
             }
         }
         if (tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) <= 0L) {
@@ -524,7 +534,9 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.updateUrl.collectLatest {
                     if (it != null) {
+                        UpdateInstallHelper.lastAttemptedUpdateUrl = it
                         val startUpdate: () -> Unit = {
+                            UpdateInstallHelper.lastAttemptedUpdateUrl = it
                             if (prefs.getBoolean(C.UPDATE_USE_BROWSER, false)) {
                                 try {
                                     val intent = Intent(Intent.ACTION_VIEW, it.toUri()).apply {
@@ -537,7 +549,8 @@ class MainActivity : AppCompatActivity() {
                                 } catch (e: ActivityNotFoundException) {
                                     Toast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                 }
-                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                            } else if (!canInstallUnknownAppsCompat() && !UpdateInstallHelper.unknownSourcesPromptedInSession) {
+                                UpdateInstallHelper.unknownSourcesPromptedInSession = true
                                 pendingUpdateUrl = it
                                 pendingUpdateAt = android.os.SystemClock.elapsedRealtime()
                                 if (!openUnknownAppSourcesSettings()) {
@@ -589,6 +602,13 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.closeUpdateDialog.collectLatest {
                     updateDownloadDialog?.dismiss()
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.updateInstallBlocked.collectLatest { blockedUrl ->
+                    showInstallBlockedDialog(blockedUrl)
                 }
             }
         }
@@ -870,11 +890,9 @@ class MainActivity : AppCompatActivity() {
         }
         val url = pendingUpdateUrl
         if (url != null) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()) {
-                pendingUpdateUrl = null
+            pendingUpdateUrl = null
+            if (canInstallUnknownAppsCompat() && android.os.SystemClock.elapsedRealtime() - pendingUpdateAt <= 5 * 60_000L) {
                 startUpdateDownload(url)
-            } else if (android.os.SystemClock.elapsedRealtime() - pendingUpdateAt > 5 * 60_000L) {
-                pendingUpdateUrl = null
             }
         }
     }
@@ -1087,12 +1105,14 @@ class MainActivity : AppCompatActivity() {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
         }
         if (isTv && ((playerFragment as? PlayerFragment)?.consumeHeldDpadUpTail(event) == true ||
-                    (playerFragment as? PlayerFragment)?.consumeHeldDpadDownTail(event) == true)) {
+                    (playerFragment as? PlayerFragment)?.consumeHeldDpadDownTail(event) == true ||
+                    (playerFragment as? PlayerFragment)?.consumeHeldDpadCenterTail(event) == true)) {
             return true
         }
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
         if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
-                    event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER)) {
             val player = playerFragment as? PlayerFragment
             val switchDelta = player?.handlesDpadSwitchDirection(event.keyCode)
             if (player != null && switchDelta != null) {
@@ -1181,6 +1201,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
         if (isTv && !tvMultiStreamShown && (playerFragment as? PlayerFragment)?.dispatchCustomRemoteKey(event) == true) {
+            return true
+        }
+        if (isTv && !tvMultiStreamShown &&
+            (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD || event.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT) &&
+            (playerFragment as? PlayerFragment)?.let { it.isMaximizedPlayer() && it.isLiveStreamScreen() } == true
+        ) {
             return true
         }
         if (isTv && event.action == KeyEvent.ACTION_DOWN) {
@@ -2142,14 +2168,38 @@ class MainActivity : AppCompatActivity() {
             }
             INTENT_INSTALL_UPDATE -> {
                 val extras = intent.extras
-                if (extras?.getInt(PackageInstaller.EXTRA_STATUS) == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        extras.getParcelable(Intent.EXTRA_INTENT, Intent::class.java)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        extras.getParcelable(Intent.EXTRA_INTENT)
-                    }?.let {
-                        startActivity(it)
+                val status = extras?.getInt(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+                    ?: PackageInstaller.STATUS_FAILURE
+                val fallbackUrl = extras?.getString("update_url") ?: UpdateInstallHelper.lastAttemptedUpdateUrl
+                when (status) {
+                    PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                        val confirmIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            extras?.getParcelable(Intent.EXTRA_INTENT, Intent::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            extras?.getParcelable(Intent.EXTRA_INTENT)
+                        }
+                        if (confirmIntent != null) {
+                            try {
+                                startActivity(confirmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            } catch (_: Exception) {
+                                showInstallBlockedDialog(fallbackUrl)
+                            }
+                        } else {
+                            showInstallBlockedDialog(fallbackUrl)
+                        }
+                    }
+                    PackageInstaller.STATUS_SUCCESS,
+                    PackageInstaller.STATUS_FAILURE_ABORTED -> Unit
+                    PackageInstaller.STATUS_FAILURE_BLOCKED -> {
+                        showInstallBlockedDialog(fallbackUrl)
+                    }
+                    else -> {
+                        val msg = extras?.getString(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                        if (!msg.isNullOrBlank()) {
+                            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                        }
+                        showInstallBlockedDialog(fallbackUrl)
                     }
                 }
             }

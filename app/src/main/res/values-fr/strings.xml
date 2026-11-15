@@ -743,7 +743,7 @@
     <string name="tv_switch_current">Cette liste</string>
     <string name="tv_switch_suggested">Suggestions</string>
     <string name="tv_switch_empty">Aucun stream en direct dans cette liste</string>
-    <string name="tv_pip_hint">Petite fenêtre : maintiens OK pour inverser les streams, Retour pour la fermer. Son bouton dans les contrôles change sa place, sa taille et le son</string>
+    <string name="tv_pip_hint">Petite fenêtre : maintiens OK pour inverser les streams (modifiable dans Télécommande), Retour pour fermer. Son bouton dans les contrôles règle sa place, sa taille et le son.</string>
     <string name="tv_multistream_focus">Mode focus : ce stream en grand</string>
     <string name="tv_multistream_grid">Revenir à la grille</string>
     <string name="tv_followed_videos_need_code">Les vidéos des suivis demandent la connexion avec le code : connecte-toi avec twitch.tv/activate (Compte)</string>
@@ -844,8 +844,8 @@
     <string name="tv_followed_videos_row">Dernières vidéos de tes chaînes suivies</string>
     <string name="tv_refreshed">Mis à jour</string>
     <string name="tv_multistream_hint">OK : ajouter ou retirer un stream · jusqu\'à %1$d</string>
-    <string name="tv_proxy_button">Proxy</string>
-    <string name="tv_proxy_button_summary">OK active ou désactive le proxy personnalisé, OK maintenu ouvre la liste des proxys</string>
+    <string name="tv_proxy_button">Adblock et Proxy</string>
+    <string name="tv_proxy_button_summary">Ouvre le panneau du bloqueur de pub et des proxys personnalisés</string>
     <string name="tv_proxy_on">Proxy activé</string>
     <string name="tv_proxy_off">Proxy désactivé</string>
     <string name="tv_proxy_panel_title">Proxys personnalisés</string>
@@ -1163,4 +1163,11 @@
     <string name="tv_option_on">Activé</string>
     <string name="tv_prediction_started">Prédiction lancée</string>
     <string name="tv_prediction_ended">Prédiction terminée</string>
+    <string name="tv_dpad_center_long">OK (appui long)</string>
+    <string name="tv_remote_action_pip_swap">Petite fenêtre : inverser les streams</string>
+    <string name="tv_remote_action_pip_settings">Petite fenêtre : réglages</string>
+    <string name="tv_remote_action_pip_close">Petite fenêtre : fermer</string>
+    <string name="tv_adblock_and_proxies_title">Bloqueur de pub et proxys</string>
+    <string name="tv_adblock_and_proxies_subtitle">Bloqueur de pub expérimental ou proxys HLS personnalisés pour les lives</string>
+    <string name="tv_update_install_blocked">Android a bloqué l\'installation. Autorisez « Installer des applis inconnues » pour Xtra TV dans les paramètres système, ou téléchargez la mise à jour via le navigateur.</string>
 </resources>

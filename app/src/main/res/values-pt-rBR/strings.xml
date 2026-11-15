@@ -743,7 +743,7 @@
     <string name="tv_switch_current">Esta lista</string>
     <string name="tv_switch_suggested">Sugestões</string>
     <string name="tv_switch_empty">Nenhum stream ao vivo nesta lista</string>
-    <string name="tv_pip_hint">Janela pequena: segure OK para trocar, Voltar para fechar</string>
+    <string name="tv_pip_hint">Janela pequena: segure OK para trocar (configurável em Controle remoto), Voltar para fechar</string>
     <string name="tv_multistream_focus">Modo foco: este stream em tamanho grande</string>
     <string name="tv_multistream_grid">Voltar à grade</string>
     <string name="tv_followed_videos_need_code">Os vídeos dos seguidos precisam do login com código: entre com twitch.tv/activate (Conta)</string>
@@ -844,8 +844,8 @@
     <string name="tv_followed_videos_row">Últimos vídeos dos canais que você segue</string>
     <string name="tv_refreshed">Atualizado</string>
     <string name="tv_multistream_hint">OK: adicionar ou remover um stream · até %1$d</string>
-    <string name="tv_proxy_button">Proxy</string>
-    <string name="tv_proxy_button_summary">OK liga ou desliga o proxy personalizado, segurar OK abre a lista de proxys</string>
+    <string name="tv_proxy_button">Adblock e Proxy</string>
+    <string name="tv_proxy_button_summary">Abre o painel do bloqueador de anúncios e proxys personalizados</string>
     <string name="tv_proxy_on">Proxy ligado</string>
     <string name="tv_proxy_off">Proxy desligado</string>
     <string name="tv_proxy_panel_title">Proxys personalizados</string>
@@ -1163,4 +1163,11 @@
     <string name="tv_option_on">Ativado</string>
     <string name="tv_prediction_started">Palpite iniciado</string>
     <string name="tv_prediction_ended">Palpite encerrado</string>
+    <string name="tv_dpad_center_long">OK (toque longo)</string>
+    <string name="tv_remote_action_pip_swap">Janela pequena: trocar lives</string>
+    <string name="tv_remote_action_pip_settings">Janela pequena: configurações</string>
+    <string name="tv_remote_action_pip_close">Janela pequena: fechar</string>
+    <string name="tv_adblock_and_proxies_title">Bloqueador de anúncios e proxys</string>
+    <string name="tv_adblock_and_proxies_subtitle">Bloqueador de anúncios experimental ou proxys HLS personalizados para lives</string>
+    <string name="tv_update_install_blocked">O Android bloqueou a instalação. Permita \"Instalar apps desconhecidos\" para o Xtra TV nas configurações do sistema ou baixe a atualização pelo navegador.</string>
 </resources>
