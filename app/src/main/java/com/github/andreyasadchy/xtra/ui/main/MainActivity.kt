@@ -1004,7 +1004,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun currentPlayingStream(): Stream? = (playerFragment as? PlayerFragment)?.getPlayingStream()
+    private var currentStream: Stream? = null
+
+    fun currentPlayingStream(): Stream? {
+        val live = (playerFragment as? PlayerFragment)?.getPlayingStream()
+        val cached = currentStream?.takeIf { live == null || it.channelLogin == live.channelLogin }
+        return if (live != null && cached != null) {
+            Stream(
+                id = live.id ?: cached.id,
+                channelId = live.channelId ?: cached.channelId,
+                channelLogin = live.channelLogin ?: cached.channelLogin,
+                channelName = live.channelName ?: cached.channelName,
+                channelImageURL = cached.channelImageURL,
+                gameId = live.gameId ?: cached.gameId,
+                gameSlug = live.gameSlug ?: cached.gameSlug,
+                gameName = live.gameName ?: cached.gameName,
+                title = live.title ?: cached.title,
+                thumbnailURL = cached.thumbnailURL,
+                createdAt = live.createdAt ?: cached.createdAt,
+                viewerCount = live.viewerCount ?: cached.viewerCount,
+                tags = cached.tags,
+            )
+        } else {
+            live ?: cached
+        }
+    }
 
     /** TV: the small window is open over the full screen player. */
     fun isTvPipOpen() = isTv && tvPip.stream != null
@@ -1076,6 +1100,9 @@ class MainActivity : AppCompatActivity() {
                 lastExitBackAt = 0L
             }
         }
+        if (isTv && PlayerFragment.consumeHeldRemoteKeyTail(event)) {
+            return true
+        }
         if (isTv && tvMultiStreamShown && event.action == KeyEvent.ACTION_DOWN && event.keyCode != KeyEvent.KEYCODE_BACK &&
             keepFocusInMultiStream() && currentFocus?.isInside(binding.playerContainer) == true
         ) {
@@ -1103,11 +1130,6 @@ class MainActivity : AppCompatActivity() {
         }
         if (BuildConfig.DEBUG && isTv) {
             android.util.Log.d("XtraTv", "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} focus=${currentFocus?.let { "${it.javaClass.simpleName}#${try { resources.getResourceEntryName(it.id) } catch (e: Exception) { it.id }}" }}")
-        }
-        if (isTv && ((playerFragment as? PlayerFragment)?.consumeHeldDpadUpTail(event) == true ||
-                    (playerFragment as? PlayerFragment)?.consumeHeldDpadDownTail(event) == true ||
-                    (playerFragment as? PlayerFragment)?.consumeHeldDpadCenterTail(event) == true)) {
-            return true
         }
         (playerFragment as? PlayerFragment)?.onKeyEventDispatched(event)
         if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
@@ -2718,6 +2740,7 @@ class MainActivity : AppCompatActivity() {
             queueRefreshJob?.cancel()
             startQueueCheck()
         }
+        currentStream = stream
         currentStreamLogin = stream.channelLogin
         dvrStream = null
         dvrChatVideoId = null
@@ -2839,6 +2862,7 @@ class MainActivity : AppCompatActivity() {
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false, qualities: String? = null) {
         currentClipId = null
         if (video.id != null) {
+            currentStream = null
             dvrStream = null
             dvrChatVideoId = null
             streamQueue = emptyList()
@@ -2909,6 +2933,7 @@ class MainActivity : AppCompatActivity() {
             clipQueue = queue
         }
         currentClipId = clip.id
+        currentStream = null
         if (isTv) {
             com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = true
         }
@@ -2943,6 +2968,7 @@ class MainActivity : AppCompatActivity() {
 
     fun startOfflineVideo(video: OfflineVideo, offset: Long? = null) {
         currentClipId = null
+        currentStream = null
         dvrStream = null
         dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
@@ -3160,6 +3186,7 @@ class MainActivity : AppCompatActivity() {
     fun closePlayer(focusHome: Boolean = true) {
         binding.root.removeCallbacks(keepFocusInPlayerAction)
         currentClipId = null
+        currentStream = null
         neighborJob?.cancel()
         com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.clear()
         closeTvPip()

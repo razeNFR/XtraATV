@@ -1175,4 +1175,6 @@
     <string name="tv_adblock_and_proxies_title">Bloqueador de anuncios y proxys</string>
     <string name="tv_adblock_and_proxies_subtitle">Bloqueador de anuncios experimental o proxys HLS personalizados para directos</string>
     <string name="tv_update_install_blocked">Android bloqueó la instalación. Permite «Instalar aplicaciones desconocidas» para Xtra TV en los ajustes del sistema o descarga la actualización en el navegador.</string>
+    <string name="tv_remote_action_pip_swap_default">Ventana pequeña: intercambiar directos (predeterminado)</string>
+    <string name="tv_remote_action_show_controls">Mostrar controles</string>
 </resources>

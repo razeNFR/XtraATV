@@ -60,6 +60,27 @@ class ExoPlayerFragment : PlayerFragment() {
         binding.secondaryPlayerSurface.setZOrderMediaOverlay(true)
     }
 
+    override fun syncPlayPauseButtonVisibility() {
+        if (view == null) return
+        val player = playbackService?.visiblePlayer ?: playbackService?.player ?: return
+        if (Util.shouldShowPlayButton(player)) {
+            binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
+            binding.playerControls.playPause.visibility = View.VISIBLE
+        } else {
+            binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
+            if (shouldHideLivePlayPauseWhenPlaying()) {
+                val hadFocus = binding.playerControls.playPause.hasFocus()
+                binding.playerControls.playPause.visibility = View.GONE
+                if (hadFocus) {
+                    // the play button goes away once the stream plays: the focus goes to the timeline, never lost
+                    focusAfterHiddenControl()
+                }
+            } else {
+                binding.playerControls.playPause.visibility = View.VISIBLE
+            }
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         if (keptAcrossStop && playbackService != null && serviceConnection != null) {
@@ -75,6 +96,7 @@ class ExoPlayerFragment : PlayerFragment() {
                     service.secondaryPlayer?.setVideoSurfaceView(binding.secondaryPlayerSurface)
                 }
             }
+            syncPlayPauseButtonVisibility()
             updateProgress()
             return
         }
@@ -101,21 +123,8 @@ class ExoPlayerFragment : PlayerFragment() {
                     }
                 }
                 binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING
-                val showPlayButton = Util.shouldShowPlayButton(playbackService?.player)
-                if (showPlayButton) {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                    binding.playerControls.playPause.visibility = View.VISIBLE
-                } else {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                    if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                        val hadFocus = binding.playerControls.playPause.hasFocus()
-                        binding.playerControls.playPause.visibility = View.GONE
-                        if (hadFocus) {
-                            // the play button goes away once the stream plays: the focus goes to the timeline, never lost
-                            focusAfterHiddenControl()
-                        }
-                    }
-                }
+                val showPlayButton = Util.shouldShowPlayButton(playbackService?.visiblePlayer ?: playbackService?.player)
+                syncPlayPauseButtonVisibility()
                 setPipActions(!showPlayButton)
                 updateProgress()
                 controllerAutoHide = !showPlayButton
@@ -126,16 +135,8 @@ class ExoPlayerFragment : PlayerFragment() {
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 binding.bufferingIndicator.isVisible = playbackService?.player?.playbackState == Player.STATE_BUFFERING
-                val showPlayButton = Util.shouldShowPlayButton(playbackService?.player)
-                if (showPlayButton) {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                    binding.playerControls.playPause.visibility = View.VISIBLE
-                } else {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                    if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                        binding.playerControls.playPause.visibility = View.GONE
-                    }
-                }
+                val showPlayButton = Util.shouldShowPlayButton(playbackService?.visiblePlayer ?: playbackService?.player)
+                syncPlayPauseButtonVisibility()
                 setPipActions(!showPlayButton)
                 updateProgress()
                 controllerAutoHide = !showPlayButton
@@ -145,15 +146,7 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
-                if (Util.shouldShowPlayButton(playbackService?.player)) {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                    binding.playerControls.playPause.visibility = View.VISIBLE
-                } else {
-                    binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                    if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                        binding.playerControls.playPause.visibility = View.GONE
-                    }
-                }
+                syncPlayPauseButtonVisibility()
                 playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
                     binding.playerControls.progressBar.setDuration(duration)
                     binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
@@ -178,6 +171,7 @@ class ExoPlayerFragment : PlayerFragment() {
                     binding.playerControls.progressBar.setDuration(duration)
                     binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
                 }
+                syncPlayPauseButtonVisibility()
                 updateProgress()
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                     if (chatFragment?.context != null) { // TODO
@@ -395,15 +389,7 @@ class ExoPlayerFragment : PlayerFragment() {
                             requireView().keepScreenOn = player.isPlaying
                         }
                         updateProgress()
-                        if (Util.shouldShowPlayButton(player)) {
-                            binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                            binding.playerControls.playPause.visibility = View.VISIBLE
-                        } else {
-                            binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                            if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                                binding.playerControls.playPause.visibility = View.GONE
-                            }
-                        }
+                        syncPlayPauseButtonVisibility()
                     }
                     if (playbackService?.started == true) {
                         if (!started) {

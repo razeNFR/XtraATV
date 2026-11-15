@@ -1170,4 +1170,6 @@
     <string name="tv_adblock_and_proxies_title">广告拦截与代理</string>
     <string name="tv_adblock_and_proxies_subtitle">用于直播的实验性广告拦截或自定义 HLS 代理</string>
     <string name="tv_update_install_blocked">Android 阻止了安装。请在系统设置中允许 Xtra TV“安装未知应用”，或通过浏览器下载更新。</string>
+    <string name="tv_remote_action_pip_swap_default">小窗口：交换直播（默认）</string>
+    <string name="tv_remote_action_show_controls">显示控制栏</string>
 </resources>

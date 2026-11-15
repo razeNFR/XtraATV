@@ -1171,4 +1171,6 @@
     <string name="tv_adblock_and_proxies_title">Pemblokir iklan &amp; proxy</string>
     <string name="tv_adblock_and_proxies_subtitle">Pemblokir iklan eksperimental atau proxy HLS kustom untuk siaran langsung</string>
     <string name="tv_update_install_blocked">Android memblokir pemasangan. Izinkan \"Instal aplikasi tak dikenal\" untuk Xtra TV di pengaturan sistem, atau unduh pembaruan melalui browser.</string>
+    <string name="tv_remote_action_pip_swap_default">Jendela kecil: tukar siaran (bawaan)</string>
+    <string name="tv_remote_action_show_controls">Tampilkan kontrol</string>
 </resources>

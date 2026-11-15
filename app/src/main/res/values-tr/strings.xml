@@ -1171,4 +1171,6 @@
     <string name="tv_adblock_and_proxies_title">Reklam engelleyici ve proxyler</string>
     <string name="tv_adblock_and_proxies_subtitle">Canlı yayınlar için deneysel reklam engelleyici veya özel HLS proxyleri</string>
     <string name="tv_update_install_blocked">Android yüklemeyi engelledi. Sistem ayarlarından Xtra TV için \"Bilinmeyen uygulamaları yükle\" iznini verin veya güncellemeyi tarayıcıdan indirin.</string>
+    <string name="tv_remote_action_pip_swap_default">Küçük pencere: yayınları değiştir (varsayılan)</string>
+    <string name="tv_remote_action_show_controls">Kontrolleri göster</string>
 </resources>

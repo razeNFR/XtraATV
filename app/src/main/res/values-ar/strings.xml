@@ -1170,4 +1170,6 @@
     <string name="tv_adblock_and_proxies_title">مانع الإعلانات والبروكسيات</string>
     <string name="tv_adblock_and_proxies_subtitle">مانع الإعلانات التجريبي أو بروكسيات HLS المخصصة للبث المباشر</string>
     <string name="tv_update_install_blocked">منع النظام التثبيت. اسمح بخيار «تثبيت تطبيقات غير معروفة» لتطبيق Xtra TV من إعدادات النظام، أو نزّل التحديث عبر المتصفح.</string>
+    <string name="tv_remote_action_pip_swap_default">النافذة الصغيرة: تبديل البثوث (افتراضي)</string>
+    <string name="tv_remote_action_show_controls">إظهار عناصر التحكم</string>
 </resources>

@@ -1170,4 +1170,6 @@
     <string name="tv_adblock_and_proxies_title">Блокировщик рекламы и прокси</string>
     <string name="tv_adblock_and_proxies_subtitle">Экспериментальный блокировщик рекламы или свои HLS-прокси для стримов</string>
     <string name="tv_update_install_blocked">Android заблокировал установку. Разрешите «Установка неизвестных приложений» для Xtra TV в системных настройках или скачайте обновление через браузер.</string>
+    <string name="tv_remote_action_pip_swap_default">Маленькое окно: поменять стримы (по умолчанию)</string>
+    <string name="tv_remote_action_show_controls">Показать управление</string>
 </resources>

@@ -1170,4 +1170,6 @@
     <string name="tv_adblock_and_proxies_title">Werbeblocker &amp; Proxys</string>
     <string name="tv_adblock_and_proxies_subtitle">Experimenteller Werbeblocker oder eigene HLS-Proxys für Livestreams</string>
     <string name="tv_update_install_blocked">Android hat die Installation blockiert. Erlaube „Unbekannte Apps installieren“ für Xtra TV in den Systemeinstellungen oder lade das Update im Browser herunter.</string>
+    <string name="tv_remote_action_pip_swap_default">Kleines Fenster: Streams tauschen (Standard)</string>
+    <string name="tv_remote_action_show_controls">Steuerung zeigen</string>
 </resources>

@@ -220,15 +220,7 @@ class MediaPlayerFragment : PlayerFragment() {
                             requireView().keepScreenOn = player.isPlaying
                         }
                         updateProgress()
-                        if (!player.isPlaying) {
-                            binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                            binding.playerControls.playPause.visibility = View.VISIBLE
-                        } else {
-                            binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                            if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                                binding.playerControls.playPause.visibility = View.GONE
-                            }
-                        }
+                        syncPlayPauseButtonVisibility()
                     }
                     if (playbackService?.started == true) {
                         if (!started) {
@@ -262,18 +254,30 @@ class MediaPlayerFragment : PlayerFragment() {
         serviceConnection = connection
     }
 
+    override fun syncPlayPauseButtonVisibility() {
+        if (view == null) return
+        val player = playbackService?.player ?: return
+        if (!player.isPlaying) {
+            binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
+            binding.playerControls.playPause.visibility = View.VISIBLE
+        } else {
+            binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
+            if (shouldHideLivePlayPauseWhenPlaying()) {
+                val hadFocus = binding.playerControls.playPause.hasFocus()
+                binding.playerControls.playPause.visibility = View.GONE
+                if (hadFocus) {
+                    focusAfterHiddenControl()
+                }
+            } else {
+                binding.playerControls.playPause.visibility = View.VISIBLE
+            }
+        }
+    }
+
     private fun updatePlayingState(ended: Boolean = false) {
         playbackService?.player?.let { player ->
             val isPlaying = player.isPlaying
-            if (!isPlaying) {
-                binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
-                binding.playerControls.playPause.visibility = View.VISIBLE
-            } else {
-                binding.playerControls.playPause.setImageResource(R.drawable.baseline_pause_black_48)
-                if (playbackService?.type == BasePlaybackService.STREAM && !requireContext().prefs().getBoolean(C.PLAYER_PAUSE, false)) {
-                    binding.playerControls.playPause.visibility = View.GONE
-                }
-            }
+            syncPlayPauseButtonVisibility()
             setPipActions(isPlaying)
             controllerAutoHide = isPlaying
             if (useController) {

@@ -1170,4 +1170,6 @@
     <string name="tv_adblock_and_proxies_title">Blocco annunci e proxy</string>
     <string name="tv_adblock_and_proxies_subtitle">Blocco annunci sperimentale o proxy HLS personalizzati per le dirette</string>
     <string name="tv_update_install_blocked">Android ha bloccato l\'installazione. Consenti \"Installa app sconosciute\" per Xtra TV nelle impostazioni di sistema oppure scarica l\'aggiornamento dal browser.</string>
+    <string name="tv_remote_action_pip_swap_default">Finestra piccola: scambia dirette (predefinito)</string>
+    <string name="tv_remote_action_show_controls">Mostra controlli</string>
 </resources>

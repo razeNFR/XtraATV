@@ -2242,6 +2242,45 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return playbackService?.createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.let { System.currentTimeMillis() - it }?.takeIf { it > 0 }
     }
 
+    protected open fun syncPlayPauseButtonVisibility() {}
+
+    protected fun isRewoundBehindLiveOnStream(): Boolean {
+        val service = playbackService ?: return false
+        if (service.type != BasePlaybackService.STREAM) {
+            return false
+        }
+        if (isExperimentalVodActive()) {
+            val exoService = service as? ExoPlayerService
+            val vodEdge = exoService?.getExperimentalLiveEdgeMs()?.takeIf { it > 0L }
+                ?: return exoService?.experimentalVodUserRewound == true
+            val currentPos = (getCurrentPosition() ?: vodEdge).coerceIn(0L, vodEdge)
+            val behindMs = (vodEdge - currentPos).coerceAtLeast(0L)
+            val userRewound = exoService?.experimentalVodUserRewound == true
+            val atAdFreeEdge = if (userRewound) behindMs <= 8_000L else behindMs <= 32_000L
+            return !atAdFreeEdge
+        }
+        val exoService = service as? ExoPlayerService
+        val pausedUptime = exoService?.livePausedUptimeMs
+        val uptime = getStreamUptime()
+        if (pausedUptime != null && uptime != null && uptime - pausedUptime > 8_000L) {
+            return true
+        }
+        return pendingDvr
+    }
+
+    protected fun shouldHideLivePlayPauseWhenPlaying(): Boolean {
+        val ctx = context ?: return false
+        if (ctx.prefs().getBoolean(C.PLAYER_PAUSE, false)) {
+            return false
+        }
+        val isStream = playbackService?.type == BasePlaybackService.STREAM ||
+            (playbackService == null && arguments?.getBoolean(KEY_STREAM) == true)
+        if (!isStream) {
+            return false
+        }
+        return !isRewoundBehindLiveOnStream()
+    }
+
     protected fun updateTvLiveTimeline() {
         if (_binding == null || tvScrubPosition >= 0) {
             return
@@ -2252,6 +2291,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 val vodEdge = exoService?.getExperimentalLiveEdgeMs()?.takeIf { it > 0L }
                     ?: getStreamUptime()?.let { (it - com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS).coerceAtLeast(0L) }
                 if (vodEdge == null || vodEdge <= 0L) {
+                    syncPlayPauseButtonVisibility()
                     progressBar.visibility = View.GONE
                     position.visibility = View.GONE
                     duration.visibility = View.GONE
@@ -2269,6 +2309,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (atAdFreeEdge) {
                     exoService?.clearExperimentalRewoundIfAtEdge()
                 }
+                syncPlayPauseButtonVisibility()
                 syncExperimentalChatReplay(!atAdFreeEdge && (userRewound || behindMs > 45_000L))
                 progressBar.setDuration(vodEdge)
                 progressBar.setPosition(if (atAdFreeEdge) vodEdge else currentPos)
@@ -2286,10 +2327,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             showController()
                         }
                     } else if (getTvDvrStream() == null) {
-                        if (button.hasFocus()) {
-                            playPause.requestFocus()
-                        }
+                        val hadButtonFocus = button.hasFocus()
                         button.visibility = View.GONE
+                        if (hadButtonFocus && !(playPause.isVisible && playPause.requestFocus())) {
+                            focusAfterHiddenControl()
+                        }
                     }
                 }
                 return
@@ -2297,6 +2339,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (chatFragment?.isHybridReplayActive() == true) {
                 chatFragment?.stopHybridReplay()
             }
+            syncPlayPauseButtonVisibility()
             val uptime = getStreamUptime()
             if (uptime == null) {
                 progressBar.visibility = View.GONE
@@ -2331,7 +2374,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             showController()
                         }
                     } else if (getTvDvrStream() == null) {
+                        val hadButtonFocus = button.hasFocus()
                         button.visibility = View.GONE
+                        if (hadButtonFocus && !(playPause.isVisible && playPause.requestFocus())) {
+                            focusAfterHiddenControl()
+                        }
                     }
                 }
             } else {
@@ -2340,10 +2387,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 position.text = getString(R.string.tv_live)
                 tvGoLive?.let { button ->
                     if (getTvDvrStream() == null) {
-                        if (button.hasFocus()) {
-                            playPause.requestFocus()
-                        }
+                        val hadButtonFocus = button.hasFocus()
                         button.visibility = View.GONE
+                        if (hadButtonFocus && !(playPause.isVisible && playPause.requestFocus())) {
+                            focusAfterHiddenControl()
+                        }
                     }
                 }
             }
@@ -3432,7 +3480,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return true
     }
 
-    private var customLongHandledKey = 0
+    private var customKeyDownSeen = 0
 
     fun dispatchCustomRemoteKey(event: KeyEvent): Boolean {
         if (!isTv || !isMaximized || _binding == null || binding.chatLayout.hasFocus()) {
@@ -3460,18 +3508,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) {
-                    customLongHandledKey = 0
-                } else if (customLongHandledKey != event.keyCode && (event.repeatCount >= 1 || event.isLongPress)) {
-                    customLongHandledKey = event.keyCode
+                    customKeyDownSeen = event.keyCode
+                } else if (customKeyDownSeen == event.keyCode && heldLongKeyCode != event.keyCode && (event.repeatCount >= 1 || event.isLongPress)) {
+                    heldLongKeyCode = event.keyCode
+                    customKeyDownSeen = 0
                     executeTvRemoteAction(longAction)
                 }
             }
             KeyEvent.ACTION_UP -> {
-                if (customLongHandledKey != event.keyCode && !event.isCanceled && shortAction != null) {
+                val wasDownSeen = customKeyDownSeen == event.keyCode
+                customKeyDownSeen = 0
+                if (wasDownSeen && heldLongKeyCode != event.keyCode && !event.isCanceled && shortAction != null) {
                     executeTvRemoteAction(shortAction)
                 }
-                if (customLongHandledKey == event.keyCode) {
-                    customLongHandledKey = 0
+                if (heldLongKeyCode == event.keyCode) {
+                    heldLongKeyCode = 0
                 }
             }
         }
@@ -3503,6 +3554,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatLayout.animate().translationY(if (lift) getTvChatLift() else 0f).setDuration(200L).start()
             }
             if (visible) {
+                syncPlayPauseButtonVisibility()
                 // the button of the small window, only while it is open
                 playerControls.tvPipSettings?.visibility = if ((activity as? MainActivity)?.isTvPipOpen() == true) View.VISIBLE else View.GONE
                 playerControls.tvQualityInfo?.let { info ->
@@ -4473,54 +4525,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private var tvClockObserverJob: Job? = null
-    private var dpadUpLongHandled = false
-    private var dpadDownLongHandled = false
-    private var dpadCenterLongHandled = false
-
-    /** Swallows trailing auto-repeat DOWN events and final UP event of an Up long-press that already fired. */
-    fun consumeHeldDpadUpTail(event: KeyEvent): Boolean {
-        if (!dpadUpLongHandled || event.keyCode != KeyEvent.KEYCODE_DPAD_UP) {
-            return false
-        }
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            dpadUpLongHandled = false
-            return false
-        }
-        if (event.action == KeyEvent.ACTION_UP || event.isCanceled) {
-            dpadUpLongHandled = false
-        }
-        return true
-    }
-
-    /** Swallows trailing auto-repeat DOWN events and final UP event of a Down long-press that already fired. */
-    fun consumeHeldDpadDownTail(event: KeyEvent): Boolean {
-        if (!dpadDownLongHandled || event.keyCode != KeyEvent.KEYCODE_DPAD_DOWN) {
-            return false
-        }
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            dpadDownLongHandled = false
-            return false
-        }
-        if (event.action == KeyEvent.ACTION_UP || event.isCanceled) {
-            dpadDownLongHandled = false
-        }
-        return true
-    }
-
-    /** Swallows trailing auto-repeat DOWN events and final UP event of an OK long-press that already fired. */
-    fun consumeHeldDpadCenterTail(event: KeyEvent): Boolean {
-        if (!dpadCenterLongHandled || event.keyCode != KeyEvent.KEYCODE_DPAD_CENTER) {
-            return false
-        }
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            dpadCenterLongHandled = false
-            return false
-        }
-        if (event.action == KeyEvent.ACTION_UP || event.isCanceled) {
-            dpadCenterLongHandled = false
-        }
-        return true
-    }
+    private var dpadKeyDownSeen = 0
 
     /** Handles D-pad keys while the player itself (and not one of its controls) has focus. */
     private fun onPlayerKey(keyCode: Int, event: KeyEvent): Boolean {
@@ -4584,21 +4589,26 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         when (event.action) {
                             KeyEvent.ACTION_DOWN -> {
                                 if (event.repeatCount == 0) {
-                                    dpadUpLongHandled = false
-                                } else if (!dpadUpLongHandled && event.repeatCount >= 1) {
-                                    dpadUpLongHandled = true
+                                    dpadKeyDownSeen = keyCode
+                                } else if (dpadKeyDownSeen == keyCode && heldLongKeyCode != keyCode && (event.repeatCount >= 1 || event.isLongPress)) {
+                                    heldLongKeyCode = keyCode
+                                    dpadKeyDownSeen = 0
                                     executeTvRemoteAction(longAction)
                                 }
                             }
                             KeyEvent.ACTION_UP -> {
-                                if (!dpadUpLongHandled && !event.isCanceled) {
+                                val wasDownSeen = dpadKeyDownSeen == keyCode
+                                dpadKeyDownSeen = 0
+                                if (wasDownSeen && heldLongKeyCode != keyCode && !event.isCanceled) {
                                     if (shortAction != Keys.ACTION_DEFAULT) {
                                         executeTvRemoteAction(shortAction)
                                     } else {
                                         openHudFromDpad()
                                     }
                                 }
-                                dpadUpLongHandled = false
+                                if (heldLongKeyCode == keyCode) {
+                                    heldLongKeyCode = 0
+                                }
                             }
                         }
                         return true
@@ -4623,9 +4633,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         when (event.action) {
                             KeyEvent.ACTION_DOWN -> {
                                 if (event.repeatCount == 0) {
-                                    dpadDownLongHandled = false
-                                } else if (!dpadDownLongHandled && event.repeatCount >= 1) {
-                                    dpadDownLongHandled = true
+                                    dpadKeyDownSeen = keyCode
+                                } else if (dpadKeyDownSeen == keyCode && heldLongKeyCode != keyCode && (event.repeatCount >= 1 || event.isLongPress)) {
+                                    heldLongKeyCode = keyCode
+                                    dpadKeyDownSeen = 0
                                     if (longAction != Keys.ACTION_DEFAULT) {
                                         executeTvRemoteAction(longAction)
                                     } else {
@@ -4634,14 +4645,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 }
                             }
                             KeyEvent.ACTION_UP -> {
-                                if (!dpadDownLongHandled && !event.isCanceled) {
+                                val wasDownSeen = dpadKeyDownSeen == keyCode
+                                dpadKeyDownSeen = 0
+                                if (wasDownSeen && heldLongKeyCode != keyCode && !event.isCanceled) {
                                     if (shortAction != Keys.ACTION_DEFAULT) {
                                         executeTvRemoteAction(shortAction)
                                     } else {
                                         openHudFromDpad()
                                     }
                                 }
-                                dpadDownLongHandled = false
+                                if (heldLongKeyCode == keyCode) {
+                                    heldLongKeyCode = 0
+                                }
                             }
                         }
                         return true
@@ -4667,9 +4682,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         when (event.action) {
                             KeyEvent.ACTION_DOWN -> {
                                 if (event.repeatCount == 0) {
-                                    dpadCenterLongHandled = false
-                                } else if (!dpadCenterLongHandled && (event.repeatCount >= 1 || event.isLongPress)) {
-                                    dpadCenterLongHandled = true
+                                    dpadKeyDownSeen = keyCode
+                                } else if (dpadKeyDownSeen == keyCode && heldLongKeyCode != keyCode && (event.repeatCount >= 1 || event.isLongPress)) {
+                                    heldLongKeyCode = keyCode
+                                    dpadKeyDownSeen = 0
                                     if (longAction != Keys.ACTION_DEFAULT) {
                                         executeTvRemoteAction(longAction)
                                     } else {
@@ -4678,14 +4694,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 }
                             }
                             KeyEvent.ACTION_UP -> {
-                                if (!dpadCenterLongHandled && !event.isCanceled) {
+                                val wasDownSeen = dpadKeyDownSeen == keyCode
+                                dpadKeyDownSeen = 0
+                                if (wasDownSeen && heldLongKeyCode != keyCode && !event.isCanceled) {
                                     if (shortAction != Keys.ACTION_DEFAULT) {
                                         executeTvRemoteAction(shortAction)
                                     } else {
                                         openHudFromDpad()
                                     }
                                 }
-                                dpadCenterLongHandled = false
+                                if (heldLongKeyCode == keyCode) {
+                                    heldLongKeyCode = 0
+                                }
                             }
                         }
                         return true
@@ -5189,6 +5209,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             gameSlug = service.gameSlug,
             gameName = service.gameName,
             title = service.title,
+            createdAt = service.createdAt,
             viewerCount = service.viewerCount,
         )
     }
@@ -5659,5 +5680,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         /** Button of the controls focused last (its id, else its description), kept from one player to the next. */
         private var lastControlId = View.NO_ID
         private var lastControlLabel: String? = null
+
+        private var heldLongKeyCode = 0
+
+        /** Swallows trailing auto-repeat DOWN events and final UP event of a remote long-press across fragment switches. */
+        fun consumeHeldRemoteKeyTail(event: KeyEvent): Boolean {
+            if (heldLongKeyCode == 0 || event.keyCode != heldLongKeyCode) {
+                return false
+            }
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                heldLongKeyCode = 0
+                return false
+            }
+            if (event.action == KeyEvent.ACTION_UP || event.isCanceled) {
+                heldLongKeyCode = 0
+            }
+            return true
+        }
     }
 }
