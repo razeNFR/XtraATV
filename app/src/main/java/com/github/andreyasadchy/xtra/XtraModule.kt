@@ -93,7 +93,7 @@ class XtraModule(application: Application) {
         Json { ignoreUnknownKeys = true }
     }
 
-    val database by lazy {
+    private val databaseLazy = lazy {
         Room.databaseBuilder(application, AppDatabase::class.java, "database").apply {
             addMigrations(
                 Migration(9, 10) { db ->
@@ -282,6 +282,14 @@ class XtraModule(application: Application) {
                 },
             )
         }.build()
+    }
+
+    val database by databaseLazy
+
+    fun closeDatabaseIfOpen() {
+        if (databaseLazy.isInitialized()) {
+            runCatching { database.close() }
+        }
     }
 
     val authRepository by lazy {

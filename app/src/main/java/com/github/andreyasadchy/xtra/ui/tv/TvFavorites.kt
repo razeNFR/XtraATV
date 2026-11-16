@@ -39,6 +39,12 @@ object TvFavorites {
         }
     }
 
+    @Synchronized
+    fun reload(context: Context) {
+        loaded = false
+        load(context)
+    }
+
     fun isFavorite(login: String?) = login != null && items.value.any { it.login == login }
 
     @Synchronized

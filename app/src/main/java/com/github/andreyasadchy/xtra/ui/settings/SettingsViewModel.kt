@@ -423,79 +423,200 @@ class SettingsViewModel(
         }
     }
 
+    private fun writeTreeDocument(
+        treeUri: Uri,
+        directoryUri: Uri,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ): String? {
+        val resolver = applicationContext.contentResolver
+        runCatching {
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
+                treeUri,
+                DocumentsContract.getTreeDocumentId(treeUri)
+            )
+            resolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                ),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(nameCol) == fileName) {
+                        val existingUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idCol))
+                        val overwritten = runCatching {
+                            resolver.openOutputStream(existingUri, "wt")?.use { out ->
+                                out.write(bytes)
+                                out.flush()
+                            } != null
+                        }.getOrDefault(false)
+                        if (overwritten) return fileName
+                        runCatching { DocumentsContract.deleteDocument(resolver, existingUri) }
+                        break
+                    }
+                }
+            }
+        }
+        val createdUri = runCatching {
+            DocumentsContract.createDocument(resolver, directoryUri, mimeType, fileName)
+        }.getOrNull() ?: return null
+        val wrote = runCatching {
+            resolver.openOutputStream(createdUri)?.use { out ->
+                out.write(bytes)
+                out.flush()
+            } != null
+        }.getOrDefault(false)
+        if (!wrote) {
+            runCatching { DocumentsContract.deleteDocument(resolver, createdUri) }
+            return null
+        }
+        return runCatching {
+            resolver.query(
+                createdUri,
+                arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        }.getOrNull() ?: fileName
+    }
+
     fun backupSettings(url: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val documentId = DocumentsContract.getTreeDocumentId(url.toUri())
-            val directoryUri = DocumentsContract.buildDocumentUriUsingTree(url.toUri(), documentId)
-            val preferences = File("${applicationContext.applicationInfo.dataDir}/shared_prefs/${applicationContext.packageName}_preferences.xml")
-            val preferencesUri = directoryUri.toString() + (if (!directoryUri.toString().endsWith("%3A")) "%2F" else "") + preferences.name
-            try {
-                applicationContext.contentResolver.openOutputStream(preferencesUri.toUri())!!
-            } catch (e: IllegalArgumentException) {
-                DocumentsContract.createDocument(applicationContext.contentResolver, directoryUri, "", preferences.name)
-                applicationContext.contentResolver.openOutputStream(preferencesUri.toUri())!!
-            }.use { outputStream ->
-                preferences.inputStream().use { inputStream ->
-                    inputStream.copyTo(outputStream)
+            val zipBytes = runCatching {
+                com.github.andreyasadchy.xtra.ui.tv.TvBackup.buildBackupZip(applicationContext)
+            }.getOrNull() ?: return@launch
+
+            val savedName = runCatching {
+                val treeUri = url.toUri()
+                val documentId = DocumentsContract.getTreeDocumentId(treeUri)
+                val directoryUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
+
+                val zipSaved = writeTreeDocument(
+                    treeUri = treeUri,
+                    directoryUri = directoryUri,
+                    fileName = com.github.andreyasadchy.xtra.ui.tv.TvBackup.FILE_NAME,
+                    mimeType = "application/zip",
+                    bytes = zipBytes
+                )
+                val prefsName = "${applicationContext.packageName}_preferences.xml"
+                val prefsSaved = writeTreeDocument(
+                    treeUri = treeUri,
+                    directoryUri = directoryUri,
+                    fileName = prefsName,
+                    mimeType = "text/xml",
+                    bytes = com.github.andreyasadchy.xtra.ui.tv.TvBackup.exportDefaultPrefsXml(applicationContext)
+                )
+                val dbFile = applicationContext.getDatabasePath("database")
+                if (com.github.andreyasadchy.xtra.ui.tv.TvBackup.isValidSqliteFile(dbFile)) {
+                    runCatching {
+                        writeTreeDocument(
+                            treeUri = treeUri,
+                            directoryUri = directoryUri,
+                            fileName = dbFile.name,
+                            mimeType = "application/octet-stream",
+                            bytes = dbFile.readBytes()
+                        )
+                    }
                 }
-            }
-            appDatabase.query(SimpleSQLiteQuery("PRAGMA wal_checkpoint(FULL)")).use {
-                it.moveToPosition(-1)
-            }
-            val database = applicationContext.getDatabasePath("database")
-            val databaseUri = directoryUri.toString() + (if (!directoryUri.toString().endsWith("%3A")) "%2F" else "") + database.name
-            try {
-                applicationContext.contentResolver.openOutputStream(databaseUri.toUri())!!
-            } catch (e: IllegalArgumentException) {
-                DocumentsContract.createDocument(applicationContext.contentResolver, directoryUri, "", database.name)
-                applicationContext.contentResolver.openOutputStream(databaseUri.toUri())!!
-            }.use { outputStream ->
-                database.inputStream().use { inputStream ->
-                    inputStream.copyTo(outputStream)
+                zipSaved ?: prefsSaved
+            }.getOrNull()
+
+            if (savedName != null) {
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        applicationContext,
+                        applicationContext.getString(com.github.andreyasadchy.xtra.R.string.tv_backup_saved, savedName),
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 }
+            } else {
+                com.github.andreyasadchy.xtra.ui.tv.TvBackup.saveToTv(applicationContext, viewModelScope)
             }
         }
     }
 
     fun restoreSettings(list: List<String>, networkLibrary: String?, gqlHeaders: Map<String, String>, helixHeaders: Map<String, String>) {
+        if (list.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
-            val first = list.firstOrNull()
-            if (first != null && first.endsWith(".zip", ignoreCase = true)) {
-                val bytes = runCatching {
-                    applicationContext.contentResolver.openInputStream(first.toUri())?.use { it.readBytes() }
-                }.getOrNull()
-                if (bytes != null && com.github.andreyasadchy.xtra.ui.tv.TvBackup.applyBackupBytes(applicationContext, bytes)) {
-                    return@launch
+            val resolver = applicationContext.contentResolver
+            val postPrefsCallback: (Map<String, Any>) -> Unit = { parsed ->
+                if (!applicationContext.resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)) {
+                    toggleNotifications(
+                        parsed[C.LIVE_NOTIFICATIONS_ENABLED] == true,
+                        networkLibrary,
+                        gqlHeaders,
+                        helixHeaders
+                    )
                 }
             }
-            list.take(2).forEach { url ->
-                if (url.endsWith(".xml")) {
-                    FileOutputStream("${applicationContext.applicationInfo.dataDir}/shared_prefs/${applicationContext.packageName}_preferences.xml").use { outputStream ->
-                        applicationContext.contentResolver.openInputStream(url.toUri())!!.use { inputStream ->
-                            inputStream.copyTo(outputStream)
-                        }
+
+            var mainPrefsXml: ByteArray? = null
+            var tvFavoritesXml: ByteArray? = null
+            var tvStatsXml: ByteArray? = null
+            var dbBytes: ByteArray? = null
+
+            for (rawUri in list) {
+                val uri = runCatching { rawUri.toUri() }.getOrNull() ?: continue
+                val bytes = runCatching {
+                    resolver.openInputStream(uri)?.use { it.readBytes() }
+                }.getOrNull() ?: continue
+                if (bytes.isEmpty()) continue
+
+                // ZIP archive (magic bytes PK) — contains all backup components together
+                if (bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()) {
+                    if (com.github.andreyasadchy.xtra.ui.tv.TvBackup.applyBackupBytes(applicationContext, bytes, postPrefsCallback)) {
+                        return@launch
                     }
-                    val prefs = applicationContext.contentResolver.openInputStream(url.toUri())!!.bufferedReader().use {
-                        it.readText()
+                    continue
+                }
+
+                if (com.github.andreyasadchy.xtra.ui.tv.TvBackup.isValidSqliteBytes(bytes)) {
+                    dbBytes = bytes
+                    continue
+                }
+
+                if (com.github.andreyasadchy.xtra.ui.tv.TvBackup.isSharedPrefsXmlBytes(bytes)) {
+                    val displayName = runCatching {
+                        resolver.query(
+                            uri,
+                            arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                            null,
+                            null,
+                            null
+                        )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+                    }.getOrNull().orEmpty()
+                    when {
+                        displayName.equals("tv_favorites.xml", ignoreCase = true) -> tvFavoritesXml = bytes
+                        displayName.equals("tv_stats.xml", ignoreCase = true) -> tvStatsXml = bytes
+                        displayName.equals("prefs2.xml", ignoreCase = true) -> Unit
+                        else -> mainPrefsXml = bytes
                     }
-                    toggleNotifications(prefs.contains("name=\"${C.LIVE_NOTIFICATIONS_ENABLED}\" value=\"true\""), networkLibrary, gqlHeaders, helixHeaders)
-                    val language = Regex("<string name=\"${C.UI_LANGUAGE}\">(.+?)</string>").find(prefs)?.groups?.get(1)?.value
-                    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(language.takeIf { it != "auto" }))
-                } else {
-                    val database = applicationContext.getDatabasePath("database")
-                    File(database.parent, "database-shm").delete()
-                    File(database.parent, "database-wal").delete()
-                    database.outputStream().use { outputStream ->
-                        applicationContext.contentResolver.openInputStream(url.toUri())!!.use { inputStream ->
-                            inputStream.copyTo(outputStream)
-                        }
-                    }
-                    applicationContext.startActivity(
-                        Intent(applicationContext, MainActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                        }
-                    )
-                    exitProcess(0)
+                }
+            }
+
+            val restored = com.github.andreyasadchy.xtra.ui.tv.TvBackup.applyRestoredParts(
+                context = applicationContext,
+                mainPrefsXml = mainPrefsXml,
+                tvFavoritesXml = tvFavoritesXml,
+                tvStatsXml = tvStatsXml,
+                dbBytes = dbBytes,
+                onPostPrefsCommit = postPrefsCallback
+            )
+            if (!restored) {
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        applicationContext,
+                        com.github.andreyasadchy.xtra.R.string.tv_backup_not_found,
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }
