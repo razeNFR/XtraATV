@@ -102,6 +102,7 @@ object TvSettingIcons {
         "chat_firstmsg_visibility" to R.drawable.tv_ic_person,
         "chat_points_collect" to R.drawable.tv_ic_diamond,
         "chat_points_notify" to R.drawable.tv_ic_diamond,
+        "chat_drops_collect" to R.drawable.tv_ic_gift,
         "chat_raids_show" to R.drawable.tv_ic_raid,
         "chat_raids_auto_switch" to R.drawable.tv_ic_raid,
         "chat_polls_show" to R.drawable.tv_ic_stats,

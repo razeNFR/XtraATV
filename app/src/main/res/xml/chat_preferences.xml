@@ -291,6 +291,13 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:key="chat_drops_collect"
+        android:title="@string/drops_collect"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
         android:key="chat_raids_show"
         android:title="@string/show_raids"
         app:iconSpaceReserved="false"

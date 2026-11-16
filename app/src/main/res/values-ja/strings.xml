@@ -271,6 +271,9 @@
     <string name="points_earned">%d チャンネルポイントを獲得しました</string>
     <string name="points_notify">チャンネルポイント獲得時に通知</string>
     <string name="points_collect">チャンネルポイントの自動獲得</string>
+    <string name="drops_collect">Twitch Drops を自動受け取り</string>
+    <string name="drop_claimed">Twitch Drop を受け取りました: %s</string>
+    <string name="drop_claimed_generic">Twitch Drop を受け取りました</string>
     <string name="connect_chat">チャットに接続</string>
     <string name="raid_text">%1$s は %2$d 人のパーティーと Raid 中です</string>
     <string name="show_raids">Raid の表示</string>

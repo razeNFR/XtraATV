@@ -52,6 +52,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
@@ -697,61 +699,28 @@ class PlayerRepository(
         }
     }
 
-    suspend fun sendMinuteWatched(networkLibrary: String?, userId: String?, streamId: String?, channelId: String?, channelLogin: String?) = withContext(Dispatchers.IO) {
-        val pageResponse = channelLogin?.let {
-            val pageUrl = "https://www.twitch.tv/${channelLogin}"
-            when {
-                networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> @SuppressLint("NewApi") {
-                    val response = suspendCancellableCoroutine { continuation ->
-                        val timeout = NetworkUtils.HttpEngineTimeout()
-                        val request = httpEngine.value!!.newUrlRequestBuilder(
-                            pageUrl,
-                            cronetExecutor.value,
-                            NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
-                        ).build()
-                        timeout.start(request, continuation)
-                        request.start()
-                        continuation.invokeOnCancellation {
-                            request.cancel()
-                            timeout.stop()
-                        }
-                    }
-                    response.body.decodeToString()
-                }
-                networkLibrary == C.CRONET && cronetEngine.value != null -> {
-                    val response = suspendCancellableCoroutine { continuation ->
-                        val timeout = NetworkUtils.CronetTimeout()
-                        val request = cronetEngine.value!!.newUrlRequestBuilder(
-                            pageUrl,
-                            NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
-                            cronetExecutor.value
-                        ).build()
-                        timeout.start(request, continuation)
-                        request.start()
-                        continuation.invokeOnCancellation {
-                            request.cancel()
-                            timeout.stop()
-                        }
-                    }
-                    response.body.decodeToString()
-                }
-                else -> {
-                    okHttpClient.value.newCall(Request.Builder().url(pageUrl).build()).executeAsync().use { response ->
-                        response.body.string()
-                    }
-                }
-            }
-        }
-        if (!pageResponse.isNullOrBlank()) {
-            val settingsRegex = Regex("https://[\\w.]+/config/settings\\.\\w+?\\.js")
-            val settingsUrl = settingsRegex.find(pageResponse)?.value
-            val settingsResponse = settingsUrl?.let {
+    @Volatile
+    private var cachedSpadeUrl: String? = null
+    @Volatile
+    private var cachedPresenceKey: String? = null
+    @Volatile
+    private var cachedPresenceVariantUrl: String? = null
+    @Volatile
+    private var cachedPresenceFetchedAtMs: Long = 0L
+    private val presenceDeviceId = Uuid.random().toHexString()
+
+    private suspend fun resolveSpadeUrl(networkLibrary: String?, channelLogin: String?): String {
+        cachedSpadeUrl?.let { return it }
+        val spadeRegex = Regex("\"(?:beacon_url|spade_url)\":\"(.*?)\"")
+        val resolved = runCatching {
+            val pageResponse = channelLogin?.takeIf { it.isNotBlank() }?.let {
+                val pageUrl = "https://www.twitch.tv/${channelLogin}"
                 when {
                     networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> @SuppressLint("NewApi") {
                         val response = suspendCancellableCoroutine { continuation ->
                             val timeout = NetworkUtils.HttpEngineTimeout()
                             val request = httpEngine.value!!.newUrlRequestBuilder(
-                                settingsUrl,
+                                pageUrl,
                                 cronetExecutor.value,
                                 NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
                             ).build()
@@ -768,7 +737,7 @@ class PlayerRepository(
                         val response = suspendCancellableCoroutine { continuation ->
                             val timeout = NetworkUtils.CronetTimeout()
                             val request = cronetEngine.value!!.newUrlRequestBuilder(
-                                settingsUrl,
+                                pageUrl,
                                 NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
                                 cronetExecutor.value
                             ).build()
@@ -782,38 +751,29 @@ class PlayerRepository(
                         response.body.decodeToString()
                     }
                     else -> {
-                        okHttpClient.value.newCall(Request.Builder().url(settingsUrl).build()).executeAsync().use { response ->
+                        okHttpClient.value.newCall(Request.Builder().url(pageUrl).build()).executeAsync().use { response ->
                             response.body.string()
                         }
                     }
                 }
             }
-            if (!settingsResponse.isNullOrBlank()) {
-                val spadeRegex = Regex("\"(?:beacon_url|spade_url)\":\"(.*?)\"")
-                val spadeUrl = spadeRegex.find(settingsResponse)?.groups?.get(1)?.value
-                if (!spadeUrl.isNullOrBlank()) {
-                    val body = buildJsonObject {
-                        put("event", "minute-watched")
-                        putJsonObject("properties") {
-                            put("channel_id", channelId)
-                            put("broadcast_id", streamId)
-                            put("player", "site")
-                            put("user_id", userId?.toLong())
-                        }
-                    }.toString()
-                    val spadeRequest = "data=" + Base64.encodeToString(body.toByteArray(), Base64.NO_WRAP)
+            val directFromPage = pageResponse?.let { spadeRegex.find(it)?.groups?.get(1)?.value?.replace("\\/", "/") }
+                ?.takeIf { it.isNotBlank() }
+            if (directFromPage != null) {
+                directFromPage
+            } else if (!pageResponse.isNullOrBlank()) {
+                val settingsRegex = Regex("https://[\\w.-]+/config/settings\\.\\w+?\\.js")
+                val settingsUrl = settingsRegex.find(pageResponse)?.value
+                val settingsResponse = settingsUrl?.let {
                     when {
                         networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> @SuppressLint("NewApi") {
-                            suspendCancellableCoroutine { continuation ->
+                            val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.HttpEngineTimeout()
                                 val request = httpEngine.value!!.newUrlRequestBuilder(
-                                    spadeUrl,
+                                    settingsUrl,
                                     cronetExecutor.value,
                                     NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
-                                ).apply {
-                                    addHeader("Content-Type", "application/x-www-form-urlencoded")
-                                    setUploadDataProvider(NetworkUtils.ByteArrayUploadProvider(spadeRequest.toByteArray()), cronetExecutor.value)
-                                }.build()
+                                ).build()
                                 timeout.start(request, continuation)
                                 request.start()
                                 continuation.invokeOnCancellation {
@@ -821,18 +781,16 @@ class PlayerRepository(
                                     timeout.stop()
                                 }
                             }
+                            response.body.decodeToString()
                         }
                         networkLibrary == C.CRONET && cronetEngine.value != null -> {
-                            suspendCancellableCoroutine<NetworkUtils.CronetResponse> { continuation ->
+                            val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.CronetTimeout()
                                 val request = cronetEngine.value!!.newUrlRequestBuilder(
-                                    spadeUrl,
+                                    settingsUrl,
                                     NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
                                     cronetExecutor.value
-                                ).apply {
-                                    addHeader("Content-Type", "application/x-www-form-urlencoded")
-                                    setUploadDataProvider(UploadDataProviders.create(spadeRequest.toByteArray()), cronetExecutor.value)
-                                }.build()
+                                ).build()
                                 timeout.start(request, continuation)
                                 request.start()
                                 continuation.invokeOnCancellation {
@@ -840,16 +798,200 @@ class PlayerRepository(
                                     timeout.stop()
                                 }
                             }
+                            response.body.decodeToString()
                         }
                         else -> {
-                            okHttpClient.value.newCall(Request.Builder().apply {
-                                url(spadeUrl)
-                                header("Content-Type", "application/x-www-form-urlencoded")
-                                post(spadeRequest.toRequestBody())
-                            }.build()).executeAsync()
+                            okHttpClient.value.newCall(Request.Builder().url(settingsUrl).build()).executeAsync().use { response ->
+                                response.body.string()
+                            }
                         }
                     }
                 }
+                settingsResponse?.let { spadeRegex.find(it)?.groups?.get(1)?.value?.replace("\\/", "/") }
+                    ?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
+        }.getOrNull() ?: "https://spade.twitch.tv/track"
+        cachedSpadeUrl = resolved
+        return resolved
+    }
+
+    private suspend fun resolvePresenceVariantUrl(
+        networkLibrary: String?,
+        gqlHeaders: Map<String, String>,
+        channelLogin: String,
+    ): String? {
+        val tokenHeaders = if (gqlHeaders.containsKey("X-Device-Id") || gqlHeaders.containsKey("Client-Integrity")) {
+            gqlHeaders
+        } else {
+            gqlHeaders.toMutableMap().apply { put("X-Device-Id", presenceDeviceId) }
+        }
+        val tokenResp = graphQLRepository.loadPlaybackAccessToken(
+            networkLibrary = networkLibrary,
+            headers = tokenHeaders,
+            login = channelLogin,
+            vodId = null,
+            platform = "web",
+            playerType = "site",
+        )
+        val sig = tokenResp.data?.streamPlaybackAccessToken?.signature?.takeIf { it.isNotBlank() } ?: return null
+        val token = tokenResp.data?.streamPlaybackAccessToken?.value?.takeIf { it.isNotBlank() } ?: return null
+        val usherUrl = "https://usher.ttvnw.net/api/channel/hls/${channelLogin}.m3u8".toUri().buildUpon()
+            .appendQueryParameter("allow_source", "true")
+            .appendQueryParameter("allow_audio_only", "true")
+            .appendQueryParameter("p", Random.nextInt(9_999_999).toString())
+            .appendQueryParameter("sig", sig)
+            .appendQueryParameter("token", token)
+            .build()
+            .toString()
+        val masterText = okHttpClient.value.newCall(Request.Builder().url(usherUrl).build()).executeAsync().use { resp ->
+            if (!resp.isSuccessful) return null
+            resp.body.string()
+        }
+        return masterText.lineSequence()
+            .map { it.trim() }
+            .filter { it.startsWith("https://") }
+            .lastOrNull()
+    }
+
+    private suspend fun sendPresenceHeadPing(
+        networkLibrary: String?,
+        gqlHeaders: Map<String, String>,
+        channelLogin: String,
+        streamId: String?,
+    ) {
+        val key = "${channelLogin.lowercase()}|${streamId ?: ""}"
+        val nowMs = android.os.SystemClock.elapsedRealtime()
+        var variantUrl = cachedPresenceVariantUrl?.takeIf {
+            cachedPresenceKey == key && (nowMs - cachedPresenceFetchedAtMs) < 10 * 60_000L
+        }
+        if (variantUrl == null) {
+            variantUrl = resolvePresenceVariantUrl(networkLibrary, gqlHeaders, channelLogin) ?: return
+            cachedPresenceKey = key
+            cachedPresenceVariantUrl = variantUrl
+            cachedPresenceFetchedAtMs = nowMs
+        }
+        var mediaText = okHttpClient.value.newCall(Request.Builder().url(variantUrl).build()).executeAsync().use { resp ->
+            if (resp.isSuccessful) resp.body.string() else null
+        }
+        if (mediaText == null) {
+            cachedPresenceVariantUrl = null
+            variantUrl = resolvePresenceVariantUrl(networkLibrary, gqlHeaders, channelLogin) ?: return
+            cachedPresenceKey = key
+            cachedPresenceVariantUrl = variantUrl
+            cachedPresenceFetchedAtMs = android.os.SystemClock.elapsedRealtime()
+            mediaText = okHttpClient.value.newCall(Request.Builder().url(variantUrl).build()).executeAsync().use { resp ->
+                if (resp.isSuccessful) resp.body.string() else null
+            } ?: return
+        }
+        val segmentUrl = mediaText.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .lastOrNull()
+            ?.let { line ->
+                if (line.startsWith("http://") || line.startsWith("https://")) {
+                    line
+                } else {
+                    variantUrl.substringBeforeLast('/') + "/" + line.trimStart('/')
+                }
+            } ?: return
+        okHttpClient.value.newCall(Request.Builder().url(segmentUrl).head().build()).executeAsync().use { }
+    }
+
+    suspend fun sendMinuteWatched(
+        networkLibrary: String?,
+        userId: String?,
+        streamId: String?,
+        channelId: String?,
+        channelLogin: String?,
+        gameId: String? = null,
+        gameName: String? = null,
+        gqlHeaders: Map<String, String>? = null,
+        needsPresencePing: Boolean = false,
+    ) = withContext(Dispatchers.IO) {
+        if (needsPresencePing && !channelLogin.isNullOrBlank() && gqlHeaders != null && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+            runCatching {
+                sendPresenceHeadPing(networkLibrary, gqlHeaders, channelLogin, streamId)
+            }
+        }
+        if (streamId.isNullOrBlank() || channelId.isNullOrBlank()) return@withContext
+        val spadeUrl = resolveSpadeUrl(networkLibrary, channelLogin)
+        val body = buildJsonArray {
+            addJsonObject {
+                put("event", "minute-watched")
+                putJsonObject("properties") {
+                    put("broadcast_id", streamId)
+                    put("channel_id", channelId)
+                    if (!channelLogin.isNullOrBlank()) {
+                        put("channel", channelLogin)
+                    }
+                    if (!gameName.isNullOrBlank()) {
+                        put("game", gameName)
+                    }
+                    if (!gameId.isNullOrBlank()) {
+                        put("game_id", gameId)
+                    }
+                    put("hidden", false)
+                    put("live", true)
+                    put("location", "channel")
+                    put("logged_in", !userId.isNullOrBlank())
+                    put("muted", false)
+                    put("player", "site")
+                    userId?.toLongOrNull()?.let { uid ->
+                        put("user_id", uid)
+                    } ?: userId?.takeIf { it.isNotBlank() }?.let { uid ->
+                        put("user_id", uid)
+                    }
+                }
+            }
+        }.toString()
+        val spadeRequest = "data=" + Base64.encodeToString(body.toByteArray(), Base64.NO_WRAP)
+        when {
+            networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> @SuppressLint("NewApi") {
+                suspendCancellableCoroutine { continuation ->
+                    val timeout = NetworkUtils.HttpEngineTimeout()
+                    val request = httpEngine.value!!.newUrlRequestBuilder(
+                        spadeUrl,
+                        cronetExecutor.value,
+                        NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
+                    ).apply {
+                        addHeader("Content-Type", "application/x-www-form-urlencoded")
+                        setUploadDataProvider(NetworkUtils.ByteArrayUploadProvider(spadeRequest.toByteArray()), cronetExecutor.value)
+                    }.build()
+                    timeout.start(request, continuation)
+                    request.start()
+                    continuation.invokeOnCancellation {
+                        request.cancel()
+                        timeout.stop()
+                    }
+                }
+            }
+            networkLibrary == C.CRONET && cronetEngine.value != null -> {
+                suspendCancellableCoroutine<NetworkUtils.CronetResponse> { continuation ->
+                    val timeout = NetworkUtils.CronetTimeout()
+                    val request = cronetEngine.value!!.newUrlRequestBuilder(
+                        spadeUrl,
+                        NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
+                        cronetExecutor.value
+                    ).apply {
+                        addHeader("Content-Type", "application/x-www-form-urlencoded")
+                        setUploadDataProvider(UploadDataProviders.create(spadeRequest.toByteArray()), cronetExecutor.value)
+                    }.build()
+                    timeout.start(request, continuation)
+                    request.start()
+                    continuation.invokeOnCancellation {
+                        request.cancel()
+                        timeout.stop()
+                    }
+                }
+            }
+            else -> {
+                okHttpClient.value.newCall(Request.Builder().apply {
+                    url(spadeUrl)
+                    header("Content-Type", "application/x-www-form-urlencoded")
+                    post(spadeRequest.toRequestBody())
+                }.build()).executeAsync().use { }
             }
         }
     }

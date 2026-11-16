@@ -153,6 +153,9 @@ class ChatViewModel(
     private val _playbackMessage = MutableStateFlow<PubSubUtils.PlaybackMessage?>(null)
     val playbackMessage: StateFlow<PubSubUtils.PlaybackMessage?> = _playbackMessage
     var streamId: String? = null
+    var gameId: String? = null
+    var gameName: String? = null
+    private val claimedDropIds = LinkedHashSet<String>()
     private val rewardList = mutableListOf<ChatMessage>()
     val namePaints = mutableListOf<NamePaint>()
     val stvBadges = mutableListOf<STVBadge>()
@@ -962,8 +965,8 @@ class ChatViewModel(
                         }
                         if (forceAutoDelay?.invoke() == true) {
                             val nowMs = com.github.andreyasadchy.xtra.util.TwitchClock.nowMs()
-                            val cutoffMs = runCatching { programTime?.invoke() }.getOrNull()
-                                ?: (nowMs - com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS)
+                            val cutoffMs = runCatching { programTime?.invoke() }.getOrNull()?.plus(chatterBaselineLatencyMs)
+                                ?: (nowMs - com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS + chatterBaselineLatencyMs)
                             val pastItems = list.filter { (it.timestamp ?: Long.MIN_VALUE) <= cutoffMs }
                             val futureItems = list.filter { (it.timestamp ?: Long.MIN_VALUE) > cutoffMs }
                             if (pastItems.isNotEmpty()) {
@@ -1075,16 +1078,29 @@ class ChatViewModel(
         )
     }
 
+    data class StreamWatchMetadata(
+        val streamId: String?,
+        val gameId: String?,
+        val gameName: String?,
+        val needsPresencePing: Boolean,
+    )
+
     /**
      * Chat delay (live): what the player shows, in the time of Twitch (null: not known). Given by the chat of the player.
      */
     var programTime: (() -> Long?)? = null
     /** Forces live chat into Auto delay mode without overwriting user prefs while Experimental VOD Adblock is active. */
     var forceAutoDelay: (() -> Boolean)? = null
+    /** Live stream metadata provider from PlayerFragment / MultiStreamFragment for Spade watch-time and Drops. */
+    var streamMetadataProvider: (() -> StreamWatchMetadata?)? = null
+    /** Typical Twitch Low-Latency stream lag (~2.0s) already experienced by chatters when sending `tmi-sent-ts`. */
+    private val chatterBaselineLatencyMs = 2_000L
     /** The delay of the chat in Auto, measured on the last message shown with the picture (ms). */
     @Volatile
     var autoDelayMs = 0L
         private set
+    @Volatile
+    private var autoDelayMeasured = false
     private val delayedMessages = ArrayDeque<Pair<ChatMessage, Long>>()
     private var delayJob: Job? = null
     private var ownUserId: String? = null
@@ -1107,8 +1123,10 @@ class ChatViewModel(
 
     private fun effectiveDelayMode(): Int = if (forceAutoDelay?.invoke() == true) 1 else delayMode()
 
+    fun isAutoDelayReady(): Boolean = autoDelayMeasured || forceAutoDelay?.invoke() == true
+
     fun effectiveAutoDelayMs(): Long =
-        if (autoDelayMs == 0L && forceAutoDelay?.invoke() == true) {
+        if (!autoDelayMeasured && autoDelayMs == 0L && forceAutoDelay?.invoke() == true) {
             com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS
         } else {
             autoDelayMs
@@ -1320,11 +1338,24 @@ class ChatViewModel(
         }
         // a message of the live chat (with its time of Twitch), not one of ours: shown when the stream gets there
         val forcedAuto = forceAutoDelay?.invoke() == true
-        if (!fromReplay && (started || forcedAuto) && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && (forcedAuto || effectiveDelayMode() != 0)) {
+        val modeNow = effectiveDelayMode()
+        if (!fromReplay && (started || forcedAuto) && message.timestamp != null && (message.userId == null || message.userId != ownUserId) && (forcedAuto || modeNow != 0)) {
             val checkId = if (message.type == ChatMessage.REPLY_MESSAGE) message.replyParent?.id else message.id
             if (checkId != null) {
                 val alreadyShown = synchronized(chatMessages) { chatMessages.any { it.id == checkId } }
                 if (alreadyShown) return
+            }
+            if (!hybridReplayActive && modeNow == 1 && !forcedAuto) {
+                val queueEmpty = synchronized(delayedMessages) { delayedMessages.isEmpty() }
+                if (queueEmpty) {
+                    val shownNow = runCatching { programTime?.invoke() }.getOrNull()?.plus(chatterBaselineLatencyMs)
+                    if (shownNow != null && shownNow >= message.timestamp) {
+                        autoDelayMs = 0L
+                        autoDelayMeasured = true
+                        showMessage(message)
+                        return
+                    }
+                }
             }
             synchronized(delayedMessages) {
                 val alreadyQueued = checkId != null && delayedMessages.any { (m, _) ->
@@ -1381,15 +1412,20 @@ class ChatViewModel(
                     mode == 2 -> waited >= applicationContext.prefs().getInt(C.CHAT_DELAY_SECONDS, 5).coerceIn(1, 60) * 1000L
                     else -> {
                         val shown = try {
-                            programTime?.invoke()
+                            programTime?.invoke()?.plus(chatterBaselineLatencyMs)
                         } catch (e: Exception) {
                             null
                         }
                         if (shown != null && message.timestamp != null) {
-                            (shown >= message.timestamp).also { if (it) autoDelayMs = waited }
+                            (shown >= message.timestamp).also {
+                                if (it) {
+                                    autoDelayMs = if (waited <= 150L) 0L else waited
+                                    autoDelayMeasured = true
+                                }
+                            }
                         } else {
                             // not known (start, ad...): the last delay measured, else target offset when experimental VOD is active
-                            val fallbackDelay = if (autoDelayMs > 0L) {
+                            val fallbackDelay = if (autoDelayMeasured || autoDelayMs > 0L) {
                                 autoDelayMs
                             } else if (forcedAuto) {
                                 com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS
@@ -1505,6 +1541,7 @@ class ChatViewModel(
         }
         if (usePubSub && !channelId.isNullOrBlank()) {
             val collectPoints = applicationContext.prefs().getBoolean(C.CHAT_POINTS_COLLECT, true)
+            val collectDrops = applicationContext.prefs().getBoolean(C.CHAT_DROPS_COLLECT, true)
             val gqlWebClientId = applicationContext.prefs().getString(C.GQL_CLIENT_ID_WEB, "kimne78kx3ncx6brgo4mv6wki5h1ko")
             val gqlWebToken = applicationContext.tokenPrefs().getString(C.GQL_TOKEN_WEB, null)
             val notifyPoints = applicationContext.prefs().getBoolean(C.CHAT_POINTS_NOTIFY, false)
@@ -1512,26 +1549,53 @@ class ChatViewModel(
             val showPolls = applicationContext.prefs().getBoolean(C.CHAT_POLLS_SHOW, true)
             val showPredictions = applicationContext.prefs().getBoolean(C.CHAT_PREDICTIONS_SHOW, true) ||
                 applicationContext.prefs().getBoolean(C.TV_CHAT_PREDICTIONS_POPUP, false)
+            val primaryGqlToken = gqlHeaders[C.HEADER_TOKEN]?.removePrefix("OAuth ")?.takeIf { it.isNotBlank() }
+            val primaryGqlClientId = gqlHeaders[C.HEADER_CLIENT_ID]?.takeIf { it.isNotBlank() }
+            val webTokenClean = gqlWebToken?.removePrefix("OAuth ")?.takeIf { it.isNotBlank() }
+            val (hermesClientId, hermesToken) = when {
+                enableIntegrity && primaryGqlToken != null -> primaryGqlClientId to primaryGqlToken
+                primaryGqlToken != null && primaryGqlClientId != null -> primaryGqlClientId to primaryGqlToken
+                webTokenClean != null -> gqlWebClientId to webTokenClean
+                else -> (primaryGqlClientId ?: gqlWebClientId) to null
+            }
+            val effectiveGqlHeaders = if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+                gqlHeaders
+            } else if (webTokenClean != null && !gqlWebClientId.isNullOrBlank()) {
+                mapOf(
+                    C.HEADER_CLIENT_ID to gqlWebClientId,
+                    C.HEADER_TOKEN to TwitchApiHelper.addTokenPrefixGQL(webTokenClean),
+                )
+            } else {
+                gqlHeaders
+            }
+            val needsAuthPresenceFallback = webTokenClean == null && !enableIntegrity
             hermesWebSocket = HermesWebSocket(
                 channelId = channelId,
                 userId = accountId,
-                gqlClientId = if (enableIntegrity) {
-                    gqlHeaders[C.HEADER_CLIENT_ID]
-                } else {
-                    gqlWebClientId
-                },
-                gqlToken = if (enableIntegrity) {
-                    gqlHeaders[C.HEADER_TOKEN]?.removePrefix("OAuth ")
-                } else {
-                    if (!gqlWebToken.isNullOrBlank()) {
-                        gqlWebToken
-                    } else null
-                },
+                gqlClientId = hermesClientId,
+                gqlToken = hermesToken,
                 collectPoints = collectPoints,
+                collectDrops = collectDrops,
                 showRaids = showRaids,
                 showPolls = showPolls,
                 showPredictions = showPredictions,
-                listener = PubSubListener(channelLogin, collectPoints, notifyPoints, showRaids, showPolls, showPredictions, networkLibrary, gqlHeaders, isLoggedIn, accountId, channelId, enableIntegrity, showWebSocketDebugInfo)
+                listener = PubSubListener(
+                    channelLogin = channelLogin,
+                    collectPoints = collectPoints,
+                    collectDrops = collectDrops,
+                    notifyPoints = notifyPoints,
+                    showRaids = showRaids,
+                    showPolls = showPolls,
+                    showPredictions = showPredictions,
+                    networkLibrary = networkLibrary,
+                    gqlHeaders = effectiveGqlHeaders,
+                    needsAuthPresenceFallback = needsAuthPresenceFallback,
+                    isLoggedIn = isLoggedIn,
+                    accountId = accountId,
+                    channelId = channelId,
+                    enableIntegrity = enableIntegrity,
+                    showWebSocketDebugInfo = showWebSocketDebugInfo,
+                )
             )
             pubSubJob = hermesWebSocket?.connect(viewModelScope)
         }
@@ -1569,6 +1633,7 @@ class ChatViewModel(
         clearDelayedMessages()
         resetSlowChat()
         autoDelayMs = 0L
+        autoDelayMeasured = false
         effectiveRoomState.value = RoomState("0", "-1", "0", "0", "0")
         userRoomBadges.value = null
         if (started) {
@@ -1883,21 +1948,79 @@ class ChatViewModel(
     private inner class PubSubListener(
         private val channelLogin: String,
         private val collectPoints: Boolean,
+        private val collectDrops: Boolean,
         private val notifyPoints: Boolean,
         private val showRaids: Boolean,
         private val showPolls: Boolean,
         private val showPredictions: Boolean,
         private val networkLibrary: String?,
         private val gqlHeaders: Map<String, String>,
+        private val needsAuthPresenceFallback: Boolean,
         private val isLoggedIn: Boolean,
         private val accountId: String?,
         private val channelId: String?,
         private val enableIntegrity: Boolean,
         private val showWebSocketDebugInfo: Boolean,
     ) : HermesWebSocket.Listener {
+        private var minuteTickCount = 0
+        private var streamLookupAttempted = false
+
+        private fun recordClaimedDrop(dropInstanceId: String): Boolean {
+            return synchronized(claimedDropIds) {
+                val added = claimedDropIds.add(dropInstanceId)
+                while (claimedDropIds.size > 200) {
+                    val iterator = claimedDropIds.iterator()
+                    if (iterator.hasNext()) {
+                        iterator.next()
+                        iterator.remove()
+                    } else {
+                        break
+                    }
+                }
+                added
+            }
+        }
+
+        private suspend fun checkAndClaimInventoryDrops() {
+            if (!collectDrops || gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) return
+            try {
+                val claimable = graphQLRepository.loadClaimableDropsFromInventory(networkLibrary, gqlHeaders)
+                for (item in claimable) {
+                    val alreadyHandled = synchronized(claimedDropIds) { item.dropInstanceId in claimedDropIds }
+                    if (alreadyHandled) continue
+                    val result = graphQLRepository.claimDropRewards(networkLibrary, gqlHeaders, item.dropInstanceId)
+                    if (result == GraphQLRepository.DropClaimResult.CLAIMED ||
+                        result == GraphQLRepository.DropClaimResult.ALREADY_CLAIMED
+                    ) {
+                        val firstClaim = recordClaimedDrop(item.dropInstanceId)
+                        if (firstClaim && result == GraphQLRepository.DropClaimResult.CLAIMED && notifyPoints) {
+                            val notice = if (!item.dropName.isNullOrBlank()) {
+                                ContextCompat.getString(applicationContext, R.string.drop_claimed).format(item.dropName)
+                            } else {
+                                ContextCompat.getString(applicationContext, R.string.drop_claimed_generic)
+                            }
+                            onMessage(ChatMessage(type = ChatMessage.NOTICE_MESSAGE, systemMsg = notice))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+
+            }
+        }
+
         override suspend fun onConnect() {
             if (showWebSocketDebugInfo) {
                 onMessage(ChatMessage(systemMsg = ContextCompat.getString(applicationContext, R.string.websocket_connected).format("PubSub")))
+            }
+            if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+                if (collectPoints) {
+                    onClaimAvailable()
+                }
+                if (collectDrops) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        checkAndClaimInventoryDrops()
+                    }
+                }
             }
         }
 
@@ -1922,7 +2045,10 @@ class ChatViewModel(
         }
 
         override suspend fun onStreamInfo(message: JSONObject) {
-            _streamInfo.value = PubSubUtils.parseStreamInfo(message)
+            val info = PubSubUtils.parseStreamInfo(message)
+            _streamInfo.value = info
+            if (!info.gameId.isNullOrBlank()) gameId = info.gameId
+            if (!info.gameName.isNullOrBlank()) gameName = info.gameName
         }
 
         override suspend fun onRewardMessage(message: JSONObject) {
@@ -1979,13 +2105,90 @@ class ChatViewModel(
             }
         }
 
-        override suspend fun onMinuteWatched() {
-            if (!streamId.isNullOrBlank()) {
+        override suspend fun onDropClaimAvailable(dropInstanceId: String) {
+            if (!collectDrops || gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() || dropInstanceId.isBlank()) return
+            val alreadyHandled = synchronized(claimedDropIds) { dropInstanceId in claimedDropIds }
+            if (alreadyHandled) return
+            viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    playerRepository.sendMinuteWatched(networkLibrary, accountId, streamId, channelId, channelLogin)
+                    val result = graphQLRepository.claimDropRewards(networkLibrary, gqlHeaders, dropInstanceId)
+                    if (result == GraphQLRepository.DropClaimResult.CLAIMED ||
+                        result == GraphQLRepository.DropClaimResult.ALREADY_CLAIMED
+                    ) {
+                        val firstClaim = recordClaimedDrop(dropInstanceId)
+                        if (firstClaim && result == GraphQLRepository.DropClaimResult.CLAIMED && notifyPoints) {
+                            onMessage(
+                                ChatMessage(
+                                    type = ChatMessage.NOTICE_MESSAGE,
+                                    systemMsg = ContextCompat.getString(applicationContext, R.string.drop_claimed_generic),
+                                )
+                            )
+                        }
+                    }
                 } catch (e: Exception) {
 
                 }
+            }
+        }
+
+        override suspend fun onMinuteWatched() {
+            minuteTickCount++
+            try {
+                val liveMeta = runCatching { streamMetadataProvider?.invoke() }.getOrNull()
+                var resolvedStreamId = liveMeta?.streamId?.takeIf { it.isNotBlank() } ?: streamId?.takeIf { it.isNotBlank() }
+                var resolvedGameId = _streamInfo.value?.gameId?.takeIf { it.isNotBlank() }
+                    ?: liveMeta?.gameId?.takeIf { it.isNotBlank() }
+                    ?: gameId?.takeIf { it.isNotBlank() }
+                var resolvedGameName = _streamInfo.value?.gameName?.takeIf { it.isNotBlank() }
+                    ?: liveMeta?.gameName?.takeIf { it.isNotBlank() }
+                    ?: gameName?.takeIf { it.isNotBlank() }
+
+                if ((resolvedStreamId.isNullOrBlank() || resolvedGameId.isNullOrBlank() || resolvedGameName.isNullOrBlank()) &&
+                    !streamLookupAttempted
+                ) {
+                    streamLookupAttempted = true
+                    runCatching {
+                        val resp = graphQLRepository.loadQueryUsersStream(
+                            networkLibrary = networkLibrary,
+                            headers = gqlHeaders,
+                            ids = channelId?.takeIf { it.isNotBlank() }?.let { listOf(it) },
+                            logins = if (channelId.isNullOrBlank()) listOf(channelLogin) else null,
+                        )
+                        val remoteStream = resp.data?.users?.firstOrNull()?.stream
+                        remoteStream?.id?.takeIf { it.isNotBlank() }?.let {
+                            streamId = it
+                            if (resolvedStreamId.isNullOrBlank()) resolvedStreamId = it
+                        }
+                        remoteStream?.game?.id?.takeIf { it.isNotBlank() }?.let {
+                            gameId = it
+                            if (resolvedGameId.isNullOrBlank()) resolvedGameId = it
+                        }
+                        remoteStream?.game?.displayName?.takeIf { it.isNotBlank() }?.let {
+                            gameName = it
+                            if (resolvedGameName.isNullOrBlank()) resolvedGameName = it
+                        }
+                    }
+                }
+
+                if (!resolvedStreamId.isNullOrBlank()) {
+                    val needsPresencePing = (liveMeta?.needsPresencePing == true) || needsAuthPresenceFallback
+                    playerRepository.sendMinuteWatched(
+                        networkLibrary = networkLibrary,
+                        userId = accountId,
+                        streamId = resolvedStreamId,
+                        channelId = channelId,
+                        channelLogin = channelLogin,
+                        gameId = resolvedGameId,
+                        gameName = resolvedGameName,
+                        gqlHeaders = gqlHeaders,
+                        needsPresencePing = needsPresencePing,
+                    )
+                }
+                if (collectDrops && minuteTickCount % 15 == 0) {
+                    checkAndClaimInventoryDrops()
+                }
+            } catch (e: Exception) {
+
             }
         }
 

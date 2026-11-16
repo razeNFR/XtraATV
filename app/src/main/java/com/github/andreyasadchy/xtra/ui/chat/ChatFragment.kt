@@ -131,6 +131,13 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 else -> false
             }
         }
+        viewModel.streamMetadataProvider = {
+            when (val parent = parentFragment) {
+                is com.github.andreyasadchy.xtra.ui.player.PlayerFragment -> parent.getStreamWatchMetadata()
+                is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment -> parent.getStreamWatchMetadata(delayLogin)
+                else -> null
+            }
+        }
         (parentFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment)?.onChatFragmentReady(this)
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -1098,6 +1105,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     /** The delay of the chat in Auto (ms), 0 while not measured. */
     fun getAutoDelayMs(): Long = if (isAdded) viewModel.effectiveAutoDelayMs() else 0L
 
+    fun isAutoDelayMeasured(): Boolean = isAdded && viewModel.isAutoDelayReady()
+
     fun updateSpeed(speed: Float) {
         if (!isAdded) return
         viewModel.updateSpeed(speed)
@@ -1105,7 +1114,16 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     fun updateStreamId(id: String?) {
         if (!isAdded) return
-        viewModel.streamId = id
+        if (!id.isNullOrBlank()) {
+            viewModel.streamId = id
+        }
+    }
+
+    fun updateStreamMetadata(streamId: String?, gameId: String?, gameName: String?) {
+        if (!isAdded) return
+        if (!streamId.isNullOrBlank()) viewModel.streamId = streamId
+        if (!gameId.isNullOrBlank()) viewModel.gameId = gameId
+        if (!gameName.isNullOrBlank()) viewModel.gameName = gameName
     }
 
     fun getTranslateAllMessages(): Boolean {

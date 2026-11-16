@@ -274,6 +274,11 @@ class ExoPlayerFragment : PlayerFragment() {
 
             override fun updateVideoInfo() {
                 if (view != null) {
+                    playbackService?.let { svc ->
+                        if (svc.type == BasePlaybackService.STREAM) {
+                            chatFragment?.updateStreamMetadata(svc.streamId, svc.gameId, svc.gameName)
+                        }
+                    }
                     with(binding.playerControls) {
                         val titleText = playbackService?.title
                         if (!titleText.isNullOrBlank() && requireContext().prefs().getBoolean(C.PLAYER_TITLE, true)) {
@@ -527,6 +532,7 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun playPause() {
         playbackService?.togglePause()
+        if (isTvLiveTimeline()) updateProgress()
     }
 
     override fun rewind() {
@@ -561,6 +567,7 @@ class ExoPlayerFragment : PlayerFragment() {
         if (isTvLiveTimeline()) {
             updateTvLiveTimeline()
             if (isExperimentalVodActive() ||
+                playbackService?.isLivePaused == true ||
                 playbackService?.livePausedUptimeMs != null ||
                 (playbackService?.getLiveTimeShiftBehindMs() ?: 0L) > 0L
             ) {

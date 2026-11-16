@@ -270,6 +270,9 @@
     <string name="points_earned">Mendapat %d channel point</string>
     <string name="points_notify">Beri tahu saat mendapatkan channel poin</string>
     <string name="points_collect">Kumpulkan channel poin secara otomatis</string>
+    <string name="drops_collect">Klaim Twitch Drops secara otomatis</string>
+    <string name="drop_claimed">Twitch Drop diklaim: %s</string>
+    <string name="drop_claimed_generic">Twitch Drop diklaim</string>
     <string name="connect_chat">Menyambungkan ke chat</string>
     <string name="raid_text">Raiding %1$s dengan %2$d penonton</string>
     <string name="show_raids">Tampilkan raid dan host</string>

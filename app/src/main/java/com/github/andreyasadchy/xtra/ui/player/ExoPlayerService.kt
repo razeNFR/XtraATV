@@ -175,6 +175,12 @@ class ExoPlayerService : BasePlaybackService() {
     val isDvrInitialSeekPending: Boolean
         get() = dvrInitialSeekPending
 
+    val isLivePaused: Boolean
+        get() = type == STREAM && (livePausedAtElapsedMs > 0L || (visiblePlayer?.playWhenReady == false && intentionalStopOrPause))
+
+    fun isIndirectStreamPlayback(): Boolean =
+        experimentalVodActive || useCustomProxy || useStreamProxy || proxyMediaPlaylist
+
     private fun clearLivePauseState() {
         livePausedAtElapsedMs = 0L
         livePausedUptimeMs = null
@@ -275,10 +281,22 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** True while a live broadcast (`type == STREAM`) plays via Twitch's ongoing CDN VOD (`index-dvr.m3u8`) at `-32s`. */
     var experimentalVodActive = false
-        private set
-    /** True when the viewer explicitly rewound or seeked back behind the ad-free live edge. */
+        private set(value) {
+            if (field != value) {
+                field = value
+                expLastRawEdgeMs = 0L
+                expLastRawEdgeElapsedMs = 0L
+                expDisplayEdgeHighWaterMs = 0L
+                expWasRewoundBeforePause = false
+            }
+        }
+    /** True when the viewer explicitly rewound, paused, or seeked back behind the ad-free live edge. */
     var experimentalVodUserRewound = false
         private set
+    private var expWasRewoundBeforePause = false
+    private var expLastRawEdgeMs = 0L
+    private var expLastRawEdgeElapsedMs = 0L
+    private var expDisplayEdgeHighWaterMs = 0L
     private var experimentalVodCreatedAtMs: Long? = null
     private var experimentalVodUpgradeJob: Job? = null
     private var experimentalFallback = ExperimentalFallback.NONE
@@ -305,14 +323,55 @@ class ExoPlayerService : BasePlaybackService() {
         return (dur - TvExperimentalAdblock.TARGET_OFFSET_MS).coerceAtLeast(0L)
     }
 
+    /**
+     * Smooth 1s-ticking live edge for the TV timeline UI so the right-hand total duration advances
+     * second-by-second (including while paused) instead of jumping in 10s segment steps.
+     */
+    fun getExperimentalDisplayEdgeMs(): Long {
+        val rawEdge = getExperimentalLiveEdgeMs()
+        if (rawEdge <= 0L) return 0L
+        val hasEndTag = (player?.currentManifest as? HlsManifest)?.mediaPlaylist?.hasEndTag == true
+        if (streamEnded || hasEndTag) {
+            expLastRawEdgeMs = rawEdge
+            expLastRawEdgeElapsedMs = android.os.SystemClock.elapsedRealtime()
+            expDisplayEdgeHighWaterMs = rawEdge
+            return rawEdge
+        }
+        val nowElapsed = android.os.SystemClock.elapsedRealtime()
+        if (rawEdge != expLastRawEdgeMs) {
+            if (rawEdge < expLastRawEdgeMs - 5_000L) {
+                expDisplayEdgeHighWaterMs = 0L
+            }
+            expLastRawEdgeMs = rawEdge
+            expLastRawEdgeElapsedMs = nowElapsed
+        }
+        val extraMs = if (isLivePaused) {
+            (nowElapsed - expLastRawEdgeElapsedMs).coerceAtLeast(0L)
+        } else {
+            (nowElapsed - expLastRawEdgeElapsedMs).coerceIn(0L, 12_000L)
+        }
+        val candidate = rawEdge + extraMs
+        if (candidate > expDisplayEdgeHighWaterMs) {
+            expDisplayEdgeHighWaterMs = candidate
+        }
+        return expDisplayEdgeHighWaterMs
+    }
+
     fun clearExperimentalRewoundIfAtEdge() {
-        if (experimentalVodUserRewound) {
+        if (experimentalVodUserRewound && !isLivePaused) {
             val pos = player?.currentPosition ?: return
-            if ((getExperimentalLiveEdgeMs() - pos) <= 8_000L) {
+            val rawBehind = getExperimentalLiveEdgeMs() - pos
+            val displayBehind = getExperimentalDisplayEdgeMs() - pos
+            if (rawBehind <= 4_500L && displayBehind <= 4_500L) {
                 experimentalVodUserRewound = false
             }
         }
     }
+
+    private fun prefetchDurationMs(p: ExoPlayer): Long =
+        (p.currentManifest as? HlsManifest)?.mediaPlaylist?.tags
+            ?.count { it.startsWith("#EXT-X-TWITCH-PREFETCH") }
+            ?.times(2_000L) ?: 0L
 
     /** Epoch timestamp (ms) of the video frame currently rendered on screen, for both standard live and Experimental VOD. */
     fun getStreamPictureEpochMs(): Long? {
@@ -336,11 +395,12 @@ class ExoPlayerService : BasePlaybackService() {
             }
         }
         // Fallback for proxy streams whose playlists omit #EXT-X-PROGRAM-DATE-TIME: derive picture epoch
-        // from Twitch's calibrated server clock minus the playlist/buffer horizon.
+        // from Twitch's calibrated server clock minus the playlist/buffer horizon (excluding prefetch tags).
         if (type == STREAM && window.isDynamic) {
             val bufferedMs = (active.bufferedPosition - active.currentPosition).coerceAtLeast(0L)
+            val prefetchMs = prefetchDurationMs(active)
             val playlistHorizonMs = if (window.durationMs != androidx.media3.common.C.TIME_UNSET && window.durationMs > 0L) {
-                (window.durationMs - active.currentPosition).coerceAtLeast(0L)
+                (window.durationMs - prefetchMs - active.currentPosition).coerceAtLeast(0L)
             } else {
                 0L
             }
@@ -363,24 +423,29 @@ class ExoPlayerService : BasePlaybackService() {
         if (timeline.isEmpty || active.currentMediaItemIndex !in 0 until timeline.windowCount) return null
         val bufferedMs = (active.bufferedPosition - active.currentPosition).coerceAtLeast(0L)
         if (experimentalVodActive && active === player) {
+            val picEpoch = getStreamPictureEpochMs()
+            if (picEpoch != null) {
+                val serverDiffMs = (TwitchClock.nowMs() - picEpoch).coerceAtLeast(0L)
+                return maxOf(serverDiffMs, bufferedMs).coerceAtLeast(0L)
+            }
             val vodDurationMs = (player?.currentManifest as? HlsManifest)?.mediaPlaylist?.durationUs?.div(1000L)?.takeIf { it > 0L }
                 ?: active.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0L }
             val vodRemainMs = vodDurationMs?.let { (it - active.currentPosition).coerceAtLeast(0L) } ?: 0L
-            val serverDiffMs = getStreamPictureEpochMs()?.let { (TwitchClock.nowMs() - it).coerceAtLeast(0L) } ?: 0L
-            return maxOf(serverDiffMs, vodRemainMs, bufferedMs).coerceAtLeast(0L)
+            return maxOf(vodRemainMs, bufferedMs).coerceAtLeast(0L)
         }
         val window = Timeline.Window()
         timeline.getWindow(active.currentMediaItemIndex, window)
         if (!window.isDynamic && !active.isCurrentMediaItemLive) return null
-        val playlistHorizonMs = if (window.durationMs != androidx.media3.common.C.TIME_UNSET && window.durationMs > 0L) {
-            (window.durationMs - active.currentPosition).coerceAtLeast(0L)
-        } else {
-            0L
-        }
         if (window.windowStartTimeMs != androidx.media3.common.C.TIME_UNSET) {
             val pictureEpochMs = window.windowStartTimeMs + active.currentPosition
             val serverDiffMs = TwitchClock.nowMs() - pictureEpochMs
-            return maxOf(serverDiffMs, playlistHorizonMs, bufferedMs).coerceAtLeast(0L)
+            return maxOf(serverDiffMs, bufferedMs).coerceAtLeast(0L)
+        }
+        val prefetchMs = prefetchDurationMs(active)
+        val playlistHorizonMs = if (window.durationMs != androidx.media3.common.C.TIME_UNSET && window.durationMs > 0L) {
+            (window.durationMs - prefetchMs - active.currentPosition).coerceAtLeast(0L)
+        } else {
+            0L
         }
         return maxOf(playlistHorizonMs, bufferedMs, liveTimeShiftedBehindMs).coerceAtLeast(0L)
     }
@@ -3933,8 +3998,12 @@ class ExoPlayerService : BasePlaybackService() {
                 return
             }
             if (experimentalVodActive) {
-                if (pausedDurationMs >= 8_000L) {
-                    experimentalVodUserRewound = true
+                val wasRewound = expWasRewoundBeforePause
+                expWasRewoundBeforePause = false
+                experimentalVodUserRewound = if (!wasRewound && pausedDurationMs < 1_500L) {
+                    false
+                } else {
+                    true
                 }
                 val resumePos = p.currentPosition.takeIf { it > 0L }
                 if (p.playbackState == Player.STATE_ENDED) {
@@ -3989,6 +4058,10 @@ class ExoPlayerService : BasePlaybackService() {
                 val frameEpoch = picEpoch ?: (TwitchClock.nowMs() - currentBehind)
                 (frameEpoch - createdMs).coerceAtLeast(0L)
             }
+            if (experimentalVodActive) {
+                expWasRewoundBeforePause = experimentalVodUserRewound
+                experimentalVodUserRewound = true
+            }
         }
         intentionalStopOrPause = true
         liveRecoveryJob?.cancel()
@@ -4034,7 +4107,7 @@ class ExoPlayerService : BasePlaybackService() {
             val p = player ?: return
             val edge = getExperimentalLiveEdgeMs()
             val target = (p.currentPosition + p.seekForwardIncrement).coerceAtMost(edge)
-            experimentalVodUserRewound = (edge - target) > 8_000L
+            experimentalVodUserRewound = (edge - target) > 4_500L
             p.seekTo(target)
             return
         }
@@ -4053,7 +4126,7 @@ class ExoPlayerService : BasePlaybackService() {
         if (type == STREAM && experimentalVodActive) {
             val edge = getExperimentalLiveEdgeMs()
             val clamped = position.coerceIn(0L, edge)
-            experimentalVodUserRewound = (edge - clamped) > 8_000L
+            experimentalVodUserRewound = (edge - clamped) > 4_500L
             player?.seekTo(clamped)
             return
         }
@@ -4074,6 +4147,7 @@ class ExoPlayerService : BasePlaybackService() {
         lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
         clearLivePauseState()
         if (type == STREAM && experimentalVodActive) {
+            expWasRewoundBeforePause = false
             experimentalVodUserRewound = false
             player?.seekTo(getExperimentalLiveEdgeMs())
             if (visiblePlayer?.playWhenReady == false && quality?.name != VideoQuality.CHAT_ONLY_QUALITY) {

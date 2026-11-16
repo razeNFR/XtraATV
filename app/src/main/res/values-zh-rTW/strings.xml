@@ -271,6 +271,9 @@
     <string name="points_earned">已收到 %d 忠誠點數</string>
     <string name="points_notify">當賺取忠誠點數時通知</string>
     <string name="points_collect">自動地收集忠誠點數</string>
+    <string name="drops_collect">自動領取 Twitch 掉寶</string>
+    <string name="drop_claimed">已領取 Twitch 掉寶：%s</string>
+    <string name="drop_claimed_generic">已領取 Twitch 掉寶</string>
     <string name="connect_chat">連接聊天室</string>
     <string name="raid_text">與 %2$d 觀眾揪團至 %1$s</string>
     <string name="show_raids">顯示揪團</string>

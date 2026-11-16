@@ -19,6 +19,7 @@ class HermesWebSocket(
     private val gqlClientId: String?,
     private val gqlToken: String?,
     private val collectPoints: Boolean,
+    private val collectDrops: Boolean = false,
     private val showRaids: Boolean,
     private val showPolls: Boolean,
     private val showPredictions: Boolean,
@@ -48,7 +49,7 @@ class HermesWebSocket(
     }
 
     private suspend fun subscribe() = withContext(Dispatchers.IO) {
-        if (!userId.isNullOrBlank() && !gqlToken.isNullOrBlank() && collectPoints) {
+        if (!userId.isNullOrBlank() && !gqlToken.isNullOrBlank() && (collectPoints || collectDrops)) {
             val authenticate = JSONObject().apply {
                 put("id", Uuid.random().toHexString().substring(0, 21))
                 put("type", "authenticate")
@@ -75,6 +76,9 @@ class HermesWebSocket(
             if (!userId.isNullOrBlank() && !gqlToken.isNullOrBlank()) {
                 if (collectPoints) {
                     put(Uuid.random().toHexString().substring(0, 21), "community-points-user-v1.$userId")
+                }
+                if (collectDrops) {
+                    put(Uuid.random().toHexString().substring(0, 21), "user-drop-events.$userId")
                 }
             }
         }
@@ -107,7 +111,7 @@ class HermesWebSocket(
 
     private suspend fun startMinuteWatchedTimer() = withContext(Dispatchers.IO) {
         minuteWatchedTimer = Timer().apply {
-            scheduleAtFixedRate(60000, 60000) {
+            scheduleAtFixedRate(15000, 60000) {
                 webSocket?.coroutineScope?.launch {
                     listener.onMinuteWatched()
                 }
@@ -122,6 +126,7 @@ class HermesWebSocket(
         suspend fun onRewardMessage(message: JSONObject) {}
         suspend fun onPointsEarned(message: JSONObject) {}
         suspend fun onClaimAvailable() {}
+        suspend fun onDropClaimAvailable(dropInstanceId: String) {}
         suspend fun onMinuteWatched() {}
         suspend fun onRaidUpdate(message: JSONObject, openStream: Boolean) {}
         suspend fun onPollUpdate(message: JSONObject) {}
@@ -177,6 +182,16 @@ class HermesWebSocket(
                                         messageType.startsWith("claim-available") -> listener.onClaimAvailable()
                                     }
                                 }
+                                topic.startsWith("user-drop-events") -> {
+                                    if (messageType == "drop-claim") {
+                                        val dropInstanceId = message.optJSONObject("data")
+                                            ?.optString("drop_instance_id")
+                                            ?.takeIf { it.isNotBlank() }
+                                        if (dropInstanceId != null) {
+                                            listener.onDropClaimAvailable(dropInstanceId)
+                                        }
+                                    }
+                                }
                                 topic.startsWith("raid") -> {
                                     when {
                                         messageType.startsWith("raid_update") -> listener.onRaidUpdate(message, false)
@@ -208,7 +223,7 @@ class HermesWebSocket(
                         pongTimer?.cancel()
                         startPongTimer()
                         subscribe()
-                        if (collectPoints && !userId.isNullOrBlank() && !gqlToken.isNullOrBlank() && minuteWatchedTimer == null) {
+                        if ((collectPoints || collectDrops) && !userId.isNullOrBlank() && !gqlToken.isNullOrBlank() && minuteWatchedTimer == null) {
                             startMinuteWatchedTimer()
                         }
                     }

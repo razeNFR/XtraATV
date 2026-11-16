@@ -272,6 +272,9 @@
     <string name="points_earned">%d kanal puanı kazanıldı</string>
     <string name="points_notify">Kanal puanı kazanıldığında bildir</string>
     <string name="points_collect">Kanal puanlarını otomatik olarak topla</string>
+    <string name="drops_collect">Twitch Drop\'larını otomatik olarak al</string>
+    <string name="drop_claimed">Twitch Drop alındı: %s</string>
+    <string name="drop_claimed_generic">Twitch Drop alındı</string>
     <string name="connect_chat">Sohbete bağlan</string>
     <string name="raid_text">%1$s kanalına %2$d izleyici ile baskın yapılıyor</string>
     <string name="show_raids">Baskınları göster</string>
