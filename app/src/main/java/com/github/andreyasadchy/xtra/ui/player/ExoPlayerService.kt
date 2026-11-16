@@ -190,6 +190,48 @@ class ExoPlayerService : BasePlaybackService() {
         liveBufferExpiredWhilePaused = false
     }
 
+    private fun createLoadControl(): DefaultLoadControl {
+        // TV: 1 s of video to start instead of 2 when the setting was not changed (after a stall it
+        // still waits for its own setting, 2 s)
+        val playbackMs = (prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull()
+            ?.let { if (it == 2000 && resources.getBoolean(R.bool.isTv)) 1000 else it } ?: 2000)
+            .coerceAtLeast(0)
+        val rebufferMs = (prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000)
+            .coerceAtLeast(0)
+        val minBufferMs = (prefs().getString(C.PLAYER_BUFFER_MIN, "15000")?.toIntOrNull() ?: 15000)
+            .coerceAtLeast(maxOf(playbackMs, rebufferMs))
+        val maxBufferMs = (prefs().getString(C.PLAYER_BUFFER_MAX, "50000")?.toIntOrNull() ?: 50000)
+            .coerceAtLeast(minBufferMs)
+        return DefaultLoadControl.Builder()
+            .setBufferDurationsMs(minBufferMs, maxBufferMs, playbackMs, rebufferMs)
+            .build()
+    }
+
+    private fun createLiveConfiguration(): MediaItem.LiveConfiguration =
+        MediaItem.LiveConfiguration.Builder().apply {
+            val rawMin = prefs().getString(C.PLAYER_LIVE_MIN_SPEED, "")?.toFloatOrNull()
+                ?.takeIf { it.isFinite() && it > 0f }
+                ?.coerceIn(0.01f, 10f)
+            val rawMax = prefs().getString(C.PLAYER_LIVE_MAX_SPEED, "")?.toFloatOrNull()
+                ?.takeIf { it.isFinite() && it > 0f }
+                ?.coerceIn(0.01f, 10f)
+            val safeMin = when {
+                rawMin != null -> rawMin
+                rawMax != null && rawMax < 0.97f -> rawMax
+                else -> null
+            }
+            val safeMax = when {
+                rawMax != null -> if (safeMin != null) rawMax.coerceAtLeast(safeMin) else rawMax
+                safeMin != null && safeMin > 1.02f -> safeMin
+                else -> null
+            }
+            safeMin?.let { setMinPlaybackSpeed(it) }
+            safeMax?.let { setMaxPlaybackSpeed(it) }
+            prefs().getString(C.PLAYER_LIVE_TARGET_OFFSET, "2000")?.toLongOrNull()
+                ?.coerceAtLeast(0L)
+                ?.let { setTargetOffsetMs(it) }
+        }.build()
+
     private fun createLivePlaybackSpeedControl(): LivePlaybackSpeedControl {
         val delegate = DefaultLivePlaybackSpeedControl.Builder().build()
         return object : LivePlaybackSpeedControl {
@@ -1113,19 +1155,7 @@ class ExoPlayerService : BasePlaybackService() {
                 }
             }
             val player = ExoPlayer.Builder(this).apply {
-                setLoadControl(
-                    DefaultLoadControl.Builder().apply {
-                        setBufferDurationsMs(
-                            prefs().getString(C.PLAYER_BUFFER_MIN, "15000")?.toIntOrNull() ?: 15000,
-                            prefs().getString(C.PLAYER_BUFFER_MAX, "50000")?.toIntOrNull() ?: 50000,
-                            // TV: 1 s of video to start instead of 2 when the setting was not changed (after a stall it
-                            // still waits for its own setting, 2 s)
-                            prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull()
-                                ?.let { if (it == 2000 && resources.getBoolean(R.bool.isTv)) 1000 else it } ?: 2000,
-                            prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000
-                        )
-                    }.build()
-                )
+                setLoadControl(createLoadControl())
                 if (resources.getBoolean(R.bool.isTv)) {
                     // TV: the sound of a film, the audio focus is held by the app for every player (TvPlaybackSignals),
                     // and Bluetooth keyboards / remotes / HDMI audio sinks going idle must never pause the stream
@@ -1135,8 +1165,8 @@ class ExoPlayerService : BasePlaybackService() {
                     setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
                     setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 }
-                setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
-                setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
+                setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10L).coerceIn(1L, 3600L) * 1000L)
+                setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10L).coerceIn(1L, 3600L) * 1000L)
                 setBandwidthMeter(getBandwidthMeter(this@ExoPlayerService))
                 setTrackSelector(createTrackSelector())
                 setLivePlaybackSpeedControl(createLivePlaybackSpeedControl())
@@ -1935,11 +1965,7 @@ class ExoPlayerService : BasePlaybackService() {
                             MediaItem.Builder().apply {
                                 setUri(url.toUri())
                                 setMimeType(MimeTypes.APPLICATION_M3U8)
-                                setLiveConfiguration(MediaItem.LiveConfiguration.Builder().apply {
-                                    prefs().getString(C.PLAYER_LIVE_MIN_SPEED, "")?.toFloatOrNull()?.let { setMinPlaybackSpeed(it) }
-                                    prefs().getString(C.PLAYER_LIVE_MAX_SPEED, "")?.toFloatOrNull()?.let { setMaxPlaybackSpeed(it) }
-                                    prefs().getString(C.PLAYER_LIVE_TARGET_OFFSET, "2000")?.toLongOrNull()?.let { setTargetOffsetMs(it) }
-                                }.build())
+                                setLiveConfiguration(createLiveConfiguration())
                             }.build()
                         )
                     )
@@ -2665,17 +2691,7 @@ class ExoPlayerService : BasePlaybackService() {
                 }
             }
             val player = ExoPlayer.Builder(this@ExoPlayerService).apply {
-                setLoadControl(
-                    DefaultLoadControl.Builder().apply {
-                        setBufferDurationsMs(
-                            prefs().getString(C.PLAYER_BUFFER_MIN, "15000")?.toIntOrNull() ?: 15000,
-                            prefs().getString(C.PLAYER_BUFFER_MAX, "50000")?.toIntOrNull() ?: 50000,
-                            prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull()
-                                ?.let { if (it == 2000 && resources.getBoolean(R.bool.isTv)) 1000 else it } ?: 2000,
-                            prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000
-                        )
-                    }.build()
-                )
+                setLoadControl(createLoadControl())
                 if (resources.getBoolean(R.bool.isTv)) {
                     // TV: the sound of a film, the audio focus is held by the app for every player (TvPlaybackSignals)
                     setAudioAttributes(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.playerAttributes, false)
@@ -2684,8 +2700,8 @@ class ExoPlayerService : BasePlaybackService() {
                     setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
                     setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
                 }
-                setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000)
-                setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10) * 1000)
+                setSeekBackIncrementMs((prefs().getString(C.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10L).coerceIn(1L, 3600L) * 1000L)
+                setSeekForwardIncrementMs((prefs().getString(C.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10L).coerceIn(1L, 3600L) * 1000L)
                 setBandwidthMeter(createSecondaryBandwidthMeter(this@ExoPlayerService))
                 setTrackSelector(createTrackSelector())
                 setLivePlaybackSpeedControl(createLivePlaybackSpeedControl())
@@ -3022,11 +3038,7 @@ class ExoPlayerService : BasePlaybackService() {
                         MediaItem.Builder().apply {
                             setUri(url.toUri())
                             setMimeType(MimeTypes.APPLICATION_M3U8)
-                            setLiveConfiguration(MediaItem.LiveConfiguration.Builder().apply {
-                                prefs().getString(C.PLAYER_LIVE_MIN_SPEED, "")?.toFloatOrNull()?.let { setMinPlaybackSpeed(it) }
-                                prefs().getString(C.PLAYER_LIVE_MAX_SPEED, "")?.toFloatOrNull()?.let { setMaxPlaybackSpeed(it) }
-                                prefs().getString(C.PLAYER_LIVE_TARGET_OFFSET, "2000")?.toLongOrNull()?.let { setTargetOffsetMs(it) }
-                            }.build())
+                            setLiveConfiguration(createLiveConfiguration())
                         }.build()
                     )
                 )
