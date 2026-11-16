@@ -367,6 +367,8 @@ object C {
     const val CHAT_STV_LIVE_UPDATES = "chat_stv_live_updates"
     const val TOKEN_X_DEVICE_ID = "token_xdeviceid"
     const val TOKEN_RANDOM_DEVICE_ID = "token_random_deviceid"
+    /** Device id of the requests of "Recommended for you" (Twitch only applies its RELEVANCE order with one). */
+    const val GQL_RECOMMENDATIONS_DEVICE_ID = "gql_recommendations_device_id"
     const val TOKEN_PLATFORM = "token_platform"
     const val TOKEN_PLAYER_TYPE = "token_playertype"
     const val TOKEN_PLAYER_TYPE_VIDEO = "token_playertype_video"

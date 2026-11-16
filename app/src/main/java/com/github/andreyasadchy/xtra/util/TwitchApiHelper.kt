@@ -248,6 +248,24 @@ object TwitchApiHelper {
         return !getGQLHeaders(context, true)[C.HEADER_TOKEN].isNullOrBlank()
     }
 
+    /**
+     * Headers of "Recommended for you": the token of the account and an `X-Device-Id`. Twitch only applies its
+     * RELEVANCE order when the request has a device id (without one it gives the order of the viewers). The id stays the
+     * same for the app, like the device of the website.
+     */
+    fun getGQLRecommendationHeaders(context: Context): Map<String, String> {
+        val headers = getGQLHeaders(context, true).toMutableMap()
+        if (headers.keys.none { it.equals("X-Device-Id", true) }) {
+            val prefs = context.tokenPrefs()
+            val deviceId = prefs.getString(C.GQL_RECOMMENDATIONS_DEVICE_ID, null)?.takeIf { it.isNotBlank() }
+                ?: java.util.UUID.randomUUID().toString().replace("-", "").also {
+                    prefs.edit().putString(C.GQL_RECOMMENDATIONS_DEVICE_ID, it).apply()
+                }
+            headers["X-Device-Id"] = deviceId
+        }
+        return headers
+    }
+
     fun getGQLHeaders(context: Context, includeToken: Boolean = false): Map<String, String> {
         return mutableMapOf<String, String>().apply {
             if (context.prefs().getBoolean(C.ENABLE_INTEGRITY, false)) {

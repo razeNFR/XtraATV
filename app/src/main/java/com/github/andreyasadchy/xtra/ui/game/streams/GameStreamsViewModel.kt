@@ -94,8 +94,8 @@ class GameStreamsViewModel(
             else -> "VIEWER_COUNT"
         },
         tags = tags.ifEmpty { null }?.toList(),
-        // "Recommended for you": the token of the account, Twitch gives the order chosen for that user
-        gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, relevance),
+        // "Recommended for you": the token of the account and a device id, Twitch gives the order chosen for that user
+        gqlHeaders = if (relevance) TwitchApiHelper.getGQLRecommendationHeaders(applicationContext) else TwitchApiHelper.getGQLHeaders(applicationContext),
         graphQLRepository = graphQLRepository,
         helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
         helixRepository = helixRepository,

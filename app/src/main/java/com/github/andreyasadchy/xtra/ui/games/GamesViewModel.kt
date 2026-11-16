@@ -42,7 +42,7 @@ class GamesViewModel(
                 tags = tags.ifEmpty { null }?.mapNotNull { it.id },
                 ascending = ascending,
                 relevance = relevance,
-                gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, relevance),
+                gqlHeaders = if (relevance) TwitchApiHelper.getGQLRecommendationHeaders(applicationContext) else TwitchApiHelper.getGQLHeaders(applicationContext),
                 graphQLRepository = graphQLRepository,
                 helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
                 helixRepository = helixRepository,
