@@ -125,7 +125,7 @@ class HermesWebSocket(
         suspend fun onStreamInfo(message: JSONObject) {}
         suspend fun onRewardMessage(message: JSONObject) {}
         suspend fun onPointsEarned(message: JSONObject) {}
-        suspend fun onClaimAvailable() {}
+        suspend fun onClaimAvailable(claimId: String? = null, claimChannelId: String? = null) {}
         suspend fun onDropClaimAvailable(dropInstanceId: String) {}
         suspend fun onMinuteWatched() {}
         suspend fun onRaidUpdate(message: JSONObject, openStream: Boolean) {}
@@ -179,7 +179,12 @@ class HermesWebSocket(
                                 topic.startsWith("community-points-user") -> {
                                     when {
                                         messageType.startsWith("points-earned") -> listener.onPointsEarned(message)
-                                        messageType.startsWith("claim-available") -> listener.onClaimAvailable()
+                                        messageType.startsWith("claim-available") -> {
+                                            val claimObj = message.optJSONObject("data")?.optJSONObject("claim")
+                                            val claimId = claimObj?.optString("id")?.takeIf { it.isNotBlank() }
+                                            val claimChannelId = claimObj?.optString("channel_id")?.takeIf { it.isNotBlank() }
+                                            listener.onClaimAvailable(claimId, claimChannelId)
+                                        }
                                     }
                                 }
                                 topic.startsWith("user-drop-events") -> {

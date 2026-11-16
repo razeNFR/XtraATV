@@ -2076,22 +2076,28 @@ class ChatViewModel(
             }
         }
 
-        override suspend fun onClaimAvailable() {
+        override suspend fun onClaimAvailable(claimId: String?, claimChannelId: String?) {
+            if (!claimChannelId.isNullOrBlank() && claimChannelId != channelId) return
             if (collectPoints) {
                 if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
                     viewModelScope.launch {
                         try {
-                            val response = graphQLRepository.loadChannelPointsContext(networkLibrary, gqlHeaders, channelLogin)
-                            if (enableIntegrity) {
-                                response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
-                                    integrity.emit("refresh")
-                                    return@launch
-                                }
-                            }
-                            response.data?.community?.channel?.self?.communityPoints?.availableClaim?.id?.let { claimId ->
-                                val response = graphQLRepository.loadClaimPoints(networkLibrary, gqlHeaders, channelId, claimId)
+                            val resolvedClaimId = if (!claimId.isNullOrBlank()) {
+                                claimId
+                            } else {
+                                val response = graphQLRepository.loadChannelPointsContext(networkLibrary, gqlHeaders, channelLogin)
                                 if (enableIntegrity) {
                                     response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                                        integrity.emit("refresh")
+                                        return@launch
+                                    }
+                                }
+                                response.data?.community?.channel?.self?.communityPoints?.availableClaim?.id
+                            }
+                            if (!resolvedClaimId.isNullOrBlank()) {
+                                val claimResponse = graphQLRepository.loadClaimPoints(networkLibrary, gqlHeaders, channelId, resolvedClaimId)
+                                if (enableIntegrity) {
+                                    claimResponse.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
                                         integrity.emit("refresh")
                                         return@launch
                                     }
@@ -3198,7 +3204,18 @@ class ChatViewModel(
                                 headers = helixHeaders,
                                 logins = listOf(targetLogin)
                             ).data.firstOrNull()?.id
-                            helixRepository.banUser(networkLibrary, helixHeaders, channelId, accountId, targetId, duration ?: "600", reason)
+                            val durationSeconds = duration?.lastOrNull()?.takeIf { it.isLetter() }?.let { char ->
+                                duration.substringBefore(char).toIntOrNull()?.let { input ->
+                                    when (char.lowercaseChar()) {
+                                        's' -> input
+                                        'm' -> input * 60
+                                        'h' -> input * 3600
+                                        'd' -> input * 86400
+                                        else -> null
+                                    }
+                                }
+                            }
+                            helixRepository.banUser(networkLibrary, helixHeaders, channelId, accountId, targetId, durationSeconds ?: 600, reason)
                         } else null
                     }?.let {
                         onMessage(ChatMessage(systemMsg = it))
