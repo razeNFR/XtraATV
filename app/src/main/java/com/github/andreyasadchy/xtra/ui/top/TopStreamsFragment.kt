@@ -33,6 +33,7 @@ import com.github.andreyasadchy.xtra.ui.common.StreamsAdapter
 import com.github.andreyasadchy.xtra.ui.common.StreamsCompactAdapter
 import com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog
 import com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog.Companion.RECENT
+import com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog.Companion.SORT_RELEVANCE
 import com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog.Companion.SORT_VIEWERS
 import com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog.Companion.SORT_VIEWERS_ASC
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentArgs
@@ -151,6 +152,7 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                     R.string.sort_by,
                     getString(
                         when (viewModel.sort) {
+                            SORT_RELEVANCE -> if (TwitchApiHelper.isLoggedIn(requireContext())) R.string.tv_sort_recommended else R.string.viewers_high
                             SORT_VIEWERS -> R.string.viewers_high
                             SORT_VIEWERS_ASC -> R.string.viewers_low
                             RECENT -> R.string.recent

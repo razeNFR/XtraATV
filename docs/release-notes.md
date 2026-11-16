@@ -1,8 +1,10 @@
-# Xtra TV 1.4.3
+# Xtra TV 1.4.3.1
+
+### New
+- **"Recommended for you" sort**: when logged in, categories (*Categories → Sort*), the streams of a category, and Top streams can now be sorted the way Twitch recommends them for your account (Twitch's `RELEVANCE` order, the same as *Recommended For You* on the website). The option only shows up when logged in, since the order is personalized for your account; the default sort is unchanged.
 
 ### Fixes
-- **Settings & data backup / restore**: fixed backup and restore failing on Android 10+ (Scoped Storage / system file picker `content://` URIs, overwriting existing backups after an app reset, and in-memory preferences overwriting restored settings on restart), and included TV favorite channels and watch statistics in the backup archive.
-- **Buffer settings safety**: prevented an ExoPlayer startup crash loop when custom buffer or live playback speed values violate Media3 bounds (e.g. `Min buffer` set lower than `Rebuffer` or `Buffer for playback`).
+- **In-app update loop on Google TV / Android TV** (#72): attempted fix for *Update* sending you back to *Install unknown apps* in a loop, although it was already allowed, without ever installing the update.
 
 ### Install
-Download `XtraTV-1.4.3-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.4.3.1-tv.apk` below and install it over the previous version, your settings and account are kept.

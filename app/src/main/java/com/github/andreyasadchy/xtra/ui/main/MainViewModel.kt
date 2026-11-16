@@ -2,11 +2,9 @@ package com.github.andreyasadchy.xtra.ui.main
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Context.CONNECTIVITY_SERVICE
 import android.content.Intent
-import android.content.pm.PackageInstaller
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.http.HttpEngine
@@ -115,6 +113,8 @@ class MainViewModel(
     val updateProgress = MutableSharedFlow<Int>()
     val closeUpdateDialog = MutableSharedFlow<Boolean>()
     val updateInstallBlocked = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    /** The downloaded update to open with the installer of Android (the second way of installing). */
+    val updateInstallApk = MutableSharedFlow<File>(extraBufferCapacity = 1)
 
     fun savePlaybackState(item: PlaybackState, then: (() -> Unit)? = null) {
         viewModelScope.launch {
@@ -1157,26 +1157,10 @@ class MainViewModel(
                     }
                 }
                 if (response != null && response.isNotEmpty()) {
-                    val packageInstaller = applicationContext.packageManager.packageInstaller
-                    val sessionId = packageInstaller.createSession(
-                        PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
-                    )
-                    val session = packageInstaller.openSession(sessionId)
-                    session.openWrite("package", 0, response.size.toLong()).use {
-                        it.write(response)
+                    // a session first, then the APK opened with the installer of Android (see UpdateInstallHelper)
+                    UpdateInstallHelper.install(applicationContext, response, url)?.let {
+                        updateInstallApk.emit(it)
                     }
-                    session.commit(
-                        PendingIntent.getActivity(
-                            applicationContext,
-                            0,
-                            Intent(applicationContext, MainActivity::class.java).apply {
-                                setAction(MainActivity.INTENT_INSTALL_UPDATE)
-                                putExtra("update_url", url)
-                            },
-                            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                        ).intentSender
-                    )
-                    session.close()
                 }
             } catch (e: CancellationException) {
                 throw e

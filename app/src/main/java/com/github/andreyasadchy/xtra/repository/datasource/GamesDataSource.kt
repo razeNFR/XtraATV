@@ -2,6 +2,7 @@ package com.github.andreyasadchy.xtra.repository.datasource
 
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
+import com.github.andreyasadchy.xtra.graphql.type.GameSort
 import com.github.andreyasadchy.xtra.model.ui.Game
 import com.github.andreyasadchy.xtra.model.ui.Tag
 import com.github.andreyasadchy.xtra.repository.GraphQLRepository
@@ -12,6 +13,8 @@ class GamesDataSource(
     private val tags: List<String>?,
     /** Fewest viewers first: Twitch only gives the most viewed first, the first 100 categories are loaded at once and sorted here. */
     private val ascending: Boolean = false,
+    /** "Recommended for you": the order Twitch chooses for the logged in user (the token must be in [gqlHeaders]). */
+    private val relevance: Boolean = false,
     private val gqlHeaders: Map<String, String>,
     private val graphQLRepository: GraphQLRepository,
     private val helixHeaders: Map<String, String>,
@@ -69,7 +72,7 @@ class GamesDataSource(
     }
 
     private suspend fun gqlQueryLoad(params: LoadParams<Int>): LoadResult<Int, Game> {
-        val response = graphQLRepository.loadQueryTopGames(networkLibrary, gqlHeaders, tags, params.loadSize, offset)
+        val response = graphQLRepository.loadQueryTopGames(networkLibrary, gqlHeaders, if (relevance && !ascending) GameSort.RELEVANCE else null, tags, params.loadSize, offset)
         if (enableIntegrity) {
             response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { return LoadResult.Error(Exception(it.message)) }
         }
@@ -105,7 +108,7 @@ class GamesDataSource(
     }
 
     private suspend fun gqlLoad(params: LoadParams<Int>): LoadResult<Int, Game> {
-        val response = graphQLRepository.loadTopGames(networkLibrary, gqlHeaders, tags, params.loadSize, offset)
+        val response = graphQLRepository.loadTopGames(networkLibrary, gqlHeaders, if (relevance && !ascending) "RELEVANCE" else "VIEWER_COUNT", tags, params.loadSize, offset)
         if (enableIntegrity) {
             response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { return LoadResult.Error(Exception(it.message)) }
         }

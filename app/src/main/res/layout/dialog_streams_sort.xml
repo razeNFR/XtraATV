@@ -24,6 +24,13 @@
                 android:layout_marginStart="5dp" />
 
             <RadioButton
+                android:id="@+id/recommended"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/tv_sort_recommended"
+                android:visibility="gone" />
+
+            <RadioButton
                 android:id="@+id/viewers_high"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

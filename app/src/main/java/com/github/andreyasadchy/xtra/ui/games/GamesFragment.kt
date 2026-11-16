@@ -29,6 +29,9 @@ import com.github.andreyasadchy.xtra.model.ui.Tag
 import com.github.andreyasadchy.xtra.ui.common.GamesAdapter
 import com.github.andreyasadchy.xtra.ui.common.PagedListFragment
 import com.github.andreyasadchy.xtra.ui.common.Scrollable
+import com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog.Companion.SORT_RELEVANCE
+import com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog.Companion.SORT_VIEWERS
+import com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog.Companion.SORT_VIEWERS_ASC
 import com.github.andreyasadchy.xtra.ui.games.GamesViewModel.Companion.GamesViewModelFactory
 import com.github.andreyasadchy.xtra.ui.login.LoginActivity
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
@@ -129,7 +132,13 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
     override fun initialize() {
         viewLifecycleOwner.lifecycleScope.launch {
             if (viewModel.filter.value == null) {
-                viewModel.setFilter(viewModel.tags.ifEmpty { args.tags }, requireContext().prefs().getBoolean(C.GAMES_SORT_ASCENDING, false))
+                val prefs = requireContext().prefs()
+                viewModel.setFilter(
+                    viewModel.tags.ifEmpty { args.tags },
+                    prefs.getBoolean(C.GAMES_SORT_ASCENDING, false),
+                    // "Recommended for you" needs the account: the viewers when logged out
+                    prefs.getBoolean(C.GAMES_SORT_RELEVANCE, false) && TwitchApiHelper.isLoggedIn(requireContext()),
+                )
                 viewModel.filtersText.value = if (viewModel.tags.isNotEmpty()) {
                     buildString {
                         append(
@@ -170,26 +179,62 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
                 ).show(childFragmentManager, null)
             }
             val updateSortText = {
-                sortBar.sortText.text = getString(R.string.sort_by, getString(if (viewModel.ascending) R.string.viewers_low else R.string.viewers_high))
+                sortBar.sortText.text = getString(
+                    R.string.sort_by,
+                    getString(
+                        when {
+                            viewModel.relevance -> R.string.tv_sort_recommended
+                            viewModel.ascending -> R.string.viewers_low
+                            else -> R.string.viewers_high
+                        }
+                    )
+                )
             }
             if (resources.getBoolean(R.bool.isTv)) {
-                // TV: sort by viewers (most or fewest), and the tags
+                // TV: sort by "Recommended for you" (logged in), by viewers (most or fewest), and the tags
                 updateSortText()
                 sortBar.sortText.visibility = View.VISIBLE
                 sortBar.root.setOnClickListener {
+                    val loggedIn = TwitchApiHelper.isLoggedIn(requireContext())
+                    // the sorts: relevance (only when logged in), most viewers, fewest viewers; then the tags
+                    val sorts = buildList {
+                        if (loggedIn) add(SORT_RELEVANCE)
+                        add(SORT_VIEWERS)
+                        add(SORT_VIEWERS_ASC)
+                    }
+                    val labels = sorts.map {
+                        getString(
+                            when (it) {
+                                SORT_RELEVANCE -> R.string.tv_sort_recommended
+                                SORT_VIEWERS_ASC -> R.string.viewers_low_top
+                                else -> R.string.viewers_high
+                            }
+                        )
+                    } + getString(R.string.tags_filter)
+                    val current = when {
+                        viewModel.relevance -> SORT_RELEVANCE
+                        viewModel.ascending -> SORT_VIEWERS_ASC
+                        else -> SORT_VIEWERS
+                    }
                     com.github.andreyasadchy.xtra.ui.tv.TvDialogs.showChoices(
                         requireContext(),
                         getString(R.string.sort_and_filter),
-                        listOf(getString(R.string.viewers_high), getString(R.string.viewers_low_top), getString(R.string.tags_filter)),
-                        if (viewModel.ascending) 1 else 0,
+                        labels,
+                        sorts.indexOf(current).coerceAtLeast(0),
                     ) { which ->
-                        if (which == 2) {
+                        val selected = sorts.getOrNull(which)
+                        if (selected == null) {
                             openTagsDialog()
-                        } else if ((which == 1) != viewModel.ascending) {
-                            requireContext().prefs().edit().putBoolean(C.GAMES_SORT_ASCENDING, which == 1).apply()
+                        } else if (selected != current) {
+                            val ascending = selected == SORT_VIEWERS_ASC
+                            val relevance = selected == SORT_RELEVANCE
+                            requireContext().prefs().edit()
+                                .putBoolean(C.GAMES_SORT_ASCENDING, ascending)
+                                .putBoolean(C.GAMES_SORT_RELEVANCE, relevance)
+                                .apply()
                             viewLifecycleOwner.lifecycleScope.launch {
                                 pagingAdapter.submitData(PagingData.empty())
-                                viewModel.setFilter(viewModel.tags, which == 1)
+                                viewModel.setFilter(viewModel.tags, ascending, relevance)
                                 updateSortText()
                             }
                         }

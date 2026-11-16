@@ -66,6 +66,10 @@ class GameStreamsViewModel(
         }.flow
     }.cachedIn(viewModelScope)
 
+    /** "Recommended for you" is chosen and the user is logged in (the viewers otherwise). */
+    private val relevance: Boolean
+        get() = sort == StreamsSortDialog.SORT_RELEVANCE && TwitchApiHelper.isLoggedIn(applicationContext)
+
     /** Source of the list with the current sort and filters, also used by the player to load the list again (the other streams, left / right). */
     fun createSource() = GameStreamsDataSource(
         gameId = args.gameId,
@@ -75,6 +79,7 @@ class GameStreamsViewModel(
             Language.entries.find { it.rawValue == language }
         },
         gqlQuerySort = when (sort) {
+            StreamsSortDialog.SORT_RELEVANCE -> if (relevance) StreamSort.RELEVANCE else StreamSort.VIEWER_COUNT
             StreamsSortDialog.SORT_VIEWERS -> StreamSort.VIEWER_COUNT
             StreamsSortDialog.SORT_VIEWERS_ASC -> StreamSort.VIEWER_COUNT_ASC
             StreamsSortDialog.RECENT -> StreamSort.RECENT
@@ -82,13 +87,15 @@ class GameStreamsViewModel(
         },
         gqlLanguages = languages.ifEmpty { null }?.toList(),
         gqlSort = when (sort) {
+            StreamsSortDialog.SORT_RELEVANCE -> if (relevance) "RELEVANCE" else "VIEWER_COUNT"
             StreamsSortDialog.SORT_VIEWERS -> "VIEWER_COUNT"
             StreamsSortDialog.SORT_VIEWERS_ASC -> "VIEWER_COUNT_ASC"
             StreamsSortDialog.RECENT -> "RECENT"
             else -> "VIEWER_COUNT"
         },
         tags = tags.ifEmpty { null }?.toList(),
-        gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),
+        // "Recommended for you": the token of the account and a device id, Twitch gives the order chosen for that user
+        gqlHeaders = if (relevance) TwitchApiHelper.getGQLRecommendationHeaders(applicationContext) else TwitchApiHelper.getGQLHeaders(applicationContext),
         graphQLRepository = graphQLRepository,
         helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
         helixRepository = helixRepository,

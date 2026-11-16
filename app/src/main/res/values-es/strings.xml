@@ -1119,6 +1119,7 @@
     <string name="tv_home_no_category_found">No se encontraron categorías</string>
     <string name="tv_home_row_favorites">Canales favoritos en directo</string>
     <string name="tv_home_row_recommended">Canales recomendados</string>
+    <string name="tv_sort_recommended">Recomendado para ti</string>
     <string name="tv_home_row_clips">Clips populares de canales seguidos</string>
     <string name="tv_home_row_followed_games">Categorías seguidas</string>
     <string name="tv_home_row_show">Mostrar en inicio</string>
@@ -1192,6 +1193,7 @@
     <string name="tv_adblock_and_proxies_title">Bloqueador de anuncios y proxys</string>
     <string name="tv_adblock_and_proxies_subtitle">Bloqueador de anuncios experimental o proxys HLS personalizados para directos</string>
     <string name="tv_update_install_blocked">Android bloqueó la instalación. Permite «Instalar aplicaciones desconocidas» para Xtra TV en los ajustes del sistema o descarga la actualización en el navegador.</string>
+    <string name="tv_update_try_again">Reintentar</string>
     <string name="tv_remote_action_pip_swap_default">Ventana pequeña: intercambiar directos (predeterminado)</string>
     <string name="tv_remote_action_show_controls">Mostrar controles</string>
 </resources>

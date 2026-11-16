@@ -13,6 +13,7 @@ import com.github.andreyasadchy.xtra.model.ui.Tag
 import com.github.andreyasadchy.xtra.ui.game.streams.GameStreamsFragment
 import com.github.andreyasadchy.xtra.ui.top.TopStreamsFragment
 import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.chip.Chip
@@ -28,6 +29,8 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSel
         const val SORT_VIEWERS = "VIEWER_COUNT"
         const val SORT_VIEWERS_ASC = "VIEWER_COUNT_ASC"
         const val RECENT = "RECENT"
+        /** "Recommended for you": the order Twitch chooses for the logged in user (only offered when logged in). */
+        const val SORT_RELEVANCE = "RELEVANCE"
 
         private const val SORT = "sort"
         private const val TAGS = "tags"
@@ -78,7 +81,10 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSel
                     saveSortLayout.visibility = View.GONE
                 }
             }
+            val loggedIn = TwitchApiHelper.isLoggedIn(requireContext())
+            recommended.isVisible = loggedIn
             val originalSortId = when (args.getString(SORT)) {
+                SORT_RELEVANCE -> if (loggedIn) R.id.recommended else R.id.viewers_high
                 SORT_VIEWERS -> R.id.viewers_high
                 SORT_VIEWERS_ASC -> R.id.viewers_low
                 RECENT -> R.id.recent
@@ -140,6 +146,7 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSel
             val sortBtn = requireView().findViewById<RadioButton>(checkedSortId)
             listener.onChange(
                 when (checkedSortId) {
+                    R.id.recommended -> SORT_RELEVANCE
                     R.id.viewers_high -> SORT_VIEWERS
                     R.id.viewers_low -> SORT_VIEWERS_ASC
                     R.id.recent -> RECENT

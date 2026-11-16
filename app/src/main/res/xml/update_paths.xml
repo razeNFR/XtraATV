@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- the downloaded update only (cache/update/), shared with the installer of Android -->
+<paths>
+    <cache-path name="update" path="update/" />
+</paths>

@@ -92,6 +92,7 @@ object C {
     const val TV_HOME_CARDS = "tv_home_cards"
     const val TV_CARD_ZOOM = "tv_card_zoom"
     const val GAMES_SORT_ASCENDING = "games_sort_ascending"
+    const val GAMES_SORT_RELEVANCE = "games_sort_relevance"
     const val TV_MINI_PLAYER_KEEP_ON_HOME = "tv_mini_player_keep_on_home"
     const val TV_AUDIO_ONLY_KEEP_ON_HOME = "tv_audio_only_keep_on_home"
     const val TV_FULLSCREEN_KEEP_ON_HOME = "tv_fullscreen_keep_on_home"
@@ -366,6 +367,8 @@ object C {
     const val CHAT_STV_LIVE_UPDATES = "chat_stv_live_updates"
     const val TOKEN_X_DEVICE_ID = "token_xdeviceid"
     const val TOKEN_RANDOM_DEVICE_ID = "token_random_deviceid"
+    /** Device id of the requests of "Recommended for you" (Twitch only applies its RELEVANCE order with one). */
+    const val GQL_RECOMMENDATIONS_DEVICE_ID = "gql_recommendations_device_id"
     const val TOKEN_PLATFORM = "token_platform"
     const val TOKEN_PLAYER_TYPE = "token_playertype"
     const val TOKEN_PLAYER_TYPE_VIDEO = "token_playertype_video"

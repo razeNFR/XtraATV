@@ -1114,6 +1114,7 @@
     <string name="tv_home_no_category_found">Категории не найдены</string>
     <string name="tv_home_row_favorites">Избранные каналы в эфире</string>
     <string name="tv_home_row_recommended">Рекомендуемые каналы</string>
+    <string name="tv_sort_recommended">Рекомендуем вам</string>
     <string name="tv_home_row_clips">Популярные клипы отслеживаемых каналов</string>
     <string name="tv_home_row_followed_games">Отслеживаемые категории</string>
     <string name="tv_home_row_show">Показать на главной</string>
@@ -1187,6 +1188,7 @@
     <string name="tv_adblock_and_proxies_title">Блокировщик рекламы и прокси</string>
     <string name="tv_adblock_and_proxies_subtitle">Экспериментальный блокировщик рекламы или свои HLS-прокси для стримов</string>
     <string name="tv_update_install_blocked">Android заблокировал установку. Разрешите «Установка неизвестных приложений» для Xtra TV в системных настройках или скачайте обновление через браузер.</string>
+    <string name="tv_update_try_again">Повторить</string>
     <string name="tv_remote_action_pip_swap_default">Маленькое окно: поменять стримы (по умолчанию)</string>
     <string name="tv_remote_action_show_controls">Показать управление</string>
 </resources>

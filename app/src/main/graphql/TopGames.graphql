@@ -1,5 +1,5 @@
-query TopGames($tags: [String!], $first: Int, $after: Cursor) {
-    games(first: $first, after: $after, options: { tags: $tags }) {
+query TopGames($sort: GameSort, $tags: [String!], $first: Int, $after: Cursor) {
+    games(first: $first, after: $after, options: { sort: $sort, tags: $tags }) {
         edges {
             cursor
             node {
