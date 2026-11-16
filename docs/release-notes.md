@@ -15,6 +15,8 @@
 - **Stream latency & Auto chat delay**:
   - Locked Twitch server clock calibration to millisecond precision once acquired so coarse HTTP `Date` headers no longer cause `1s` latency jumps.
   - Accounted for chatter baseline viewing latency in **Auto** chat delay mode and updated the chat panel indicator to display `0.0s` once measured instead of staying on *"Measuring…"*.
+- **Chat overlays readability**:
+  - Replaced the semi-transparent background on **Poll**, **Prediction**, **Raid**, and **Chat status** overlays with a solid, high-contrast bordered card independent of chat window opacity so poll options, percentages, votes, and timers remain clearly readable over active chat.
 
 ### Install
 Download `XtraTV-1.4.1-tv.apk` below and install it over the previous version, your settings and account are kept.

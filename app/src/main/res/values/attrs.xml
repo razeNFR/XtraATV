@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <attr name="chatStatus" format="color" />
+    <attr name="chatOverlayCard" format="reference" />
     <attr name="sortBarTextColor" format="color" />
     <attr name="dialogPadding" format="dimension" />
     <attr name="dialogLayoutPadding" format="dimension" />

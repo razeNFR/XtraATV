@@ -603,6 +603,11 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             }
                         }
                     }
+                    if (resources.getBoolean(R.bool.isTv)) {
+                        val accentColor = com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
+                        pollStatus.setTextColor(accentColor)
+                        predictionStatus.setTextColor(accentColor)
+                    }
                     pollClose.setOnClickListener {
                         pollLayout.visibility = View.GONE
                         viewModel.pollSecondsLeft.value = null
@@ -622,7 +627,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                     getString(
                                                         R.string.poll_choice,
                                                         (((it.totalVotes ?: 0).toLong() * 100.0) / max((poll.totalVotes ?: 0), 1)).roundToInt(),
-                                                        it.totalVotes?.let { NumberFormat.getInstance().format(it) },
+                                                        it.totalVotes?.let { NumberFormat.getInstance().format(it) } ?: "0",
                                                         it.title
                                                     )
                                                 }
@@ -640,7 +645,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                             R.string.poll_choice
                                                         },
                                                         (((it.totalVotes ?: 0).toLong() * 100.0) / max((poll.totalVotes ?: 0), 1)).roundToInt(),
-                                                        it.totalVotes?.let { NumberFormat.getInstance().format(it) },
+                                                        it.totalVotes?.let { NumberFormat.getInstance().format(it) } ?: "0",
                                                         it.title
                                                     )
                                                 }

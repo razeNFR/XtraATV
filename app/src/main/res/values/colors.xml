@@ -22,8 +22,10 @@
     <color name="secondaryTextColorLight">#464646</color>
     <color name="secondaryBlue">#000F32</color>
     <color name="secondaryTextColorBlue">#46649B</color>
-    <color name="chatStatusDark">#99000000</color>
-    <color name="chatStatusLight">#99FFFFFF</color>
+    <color name="chatStatusDark">#FF18181B</color>
+    <color name="chatStatusLight">#FFF7F7FA</color>
+    <color name="chatOverlayBorderDark">#3DFFFFFF</color>
+    <color name="chatOverlayBorderLight">#29000000</color>
     <color name="chatMessageFirst">#800a4028</color>
     <color name="chatMessageReward">#800E4C68</color>
     <color name="chatMessageNotice">#803E0E68</color>
