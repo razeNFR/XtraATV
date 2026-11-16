@@ -147,9 +147,11 @@ class ExoPlayerFragment : PlayerFragment() {
 
             override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
                 syncPlayPauseButtonVisibility()
-                playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
-                    binding.playerControls.progressBar.setDuration(duration)
-                    binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                if (!isTvLiveTimeline()) {
+                    playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
+                        binding.playerControls.progressBar.setDuration(duration)
+                        binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                    }
                 }
                 updateProgress()
             }
@@ -167,9 +169,11 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
-                playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
-                    binding.playerControls.progressBar.setDuration(duration)
-                    binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                if (!isTvLiveTimeline()) {
+                    playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
+                        binding.playerControls.progressBar.setDuration(duration)
+                        binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                    }
                 }
                 syncPlayPauseButtonVisibility()
                 updateProgress()
@@ -201,9 +205,11 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-                playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
-                    binding.playerControls.progressBar.setDuration(duration)
-                    binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                if (!isTvLiveTimeline()) {
+                    playbackService?.player?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { duration ->
+                        binding.playerControls.progressBar.setDuration(duration)
+                        binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                    }
                 }
                 updateProgress()
             }
@@ -566,16 +572,10 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun updateProgress() {
         if (isTvLiveTimeline()) {
             updateTvLiveTimeline()
-            if (isExperimentalVodActive() ||
-                playbackService?.isLivePaused == true ||
-                playbackService?.livePausedUptimeMs != null ||
-                (playbackService?.getLiveTimeShiftBehindMs() ?: 0L) > 0L
-            ) {
-                with(binding.playerControls) {
-                    root.removeCallbacks(updateProgressAction)
-                    if (root.isVisible) {
-                        root.postDelayed(updateProgressAction, 1000L)
-                    }
+            with(binding.playerControls) {
+                root.removeCallbacks(updateProgressAction)
+                if (root.isVisible) {
+                    root.postDelayed(updateProgressAction, 1000L)
                 }
             }
             return
@@ -810,6 +810,7 @@ class ExoPlayerFragment : PlayerFragment() {
     }
 
     override fun onDestroyView() {
+        binding.playerControls.root.removeCallbacks(updateProgressAction)
         if (keptAcrossStop) {
             // the screen is made again (a setting changed): the service is let go here, the new player binds it again
             keptAcrossStop = false

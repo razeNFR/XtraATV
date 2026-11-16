@@ -1912,8 +1912,38 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var streamOfflineReceived = false
+
+    private fun syncUptimeBadgeElapsedMs(elapsedMs: Long) {
+        if (_binding == null || streamOfflineReceived) {
+            return
+        }
+        with(binding.playerControls) {
+            if (!requireContext().prefs().getBoolean(C.PLAYER_SHOW_UPTIME, true)) {
+                if (uptimeLayout.isVisible) {
+                    uptimeTimer.stop()
+                    uptimeLayout.visibility = View.GONE
+                }
+                return
+            }
+            val safeElapsedMs = elapsedMs.coerceAtLeast(0L)
+            val wasVisible = uptimeLayout.isVisible
+            uptimeLayout.visibility = View.VISIBLE
+            uptimeIcon.visibility = if (requireContext().prefs().getBoolean(C.PLAYER_VIEWER_ICON, true)) View.VISIBLE else View.GONE
+            val nowElapsed = SystemClock.elapsedRealtime()
+            val desiredBase = nowElapsed - safeElapsedMs
+            val currentDisplayedSec = (nowElapsed - uptimeTimer.base) / 1000L
+            val targetSec = safeElapsedMs / 1000L
+            if (!wasVisible || currentDisplayedSec != targetSec || kotlin.math.abs(uptimeTimer.base - desiredBase) > 250L) {
+                uptimeTimer.base = desiredBase
+                uptimeTimer.start()
+            }
+        }
+    }
+
     fun updateLiveStatus(live: Boolean, serverTime: Long?, channelLogin: String?) {
         if (channelLogin == playbackService?.channelLogin) {
+            streamOfflineReceived = !live
             if (live) {
                 restartPlayer()
             }
@@ -1923,17 +1953,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private fun updateUptime(uptimeMs: Long?) {
         with(binding.playerControls) {
-            uptimeTimer.stop()
-            if (uptimeMs != null && requireContext().prefs().getBoolean(C.PLAYER_SHOW_UPTIME, true)) {
-                uptimeLayout.visibility = View.VISIBLE
-                uptimeTimer.base = SystemClock.elapsedRealtime() + uptimeMs - System.currentTimeMillis()
-                uptimeTimer.start()
-                if (requireContext().prefs().getBoolean(C.PLAYER_VIEWER_ICON, true)) {
-                    uptimeIcon.visibility = View.VISIBLE
+            if (uptimeMs != null && !streamOfflineReceived && requireContext().prefs().getBoolean(C.PLAYER_SHOW_UPTIME, true)) {
+                val rawElapsedMs = (com.github.andreyasadchy.xtra.util.TwitchClock.nowMs() - uptimeMs).coerceAtLeast(0L)
+                val effectiveElapsedMs = if (isExperimentalVodActive()) {
+                    (playbackService as? ExoPlayerService)?.getExperimentalDisplayEdgeMs()?.takeIf { it > 0L }
+                        ?: (rawElapsedMs - com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS).coerceAtLeast(0L)
                 } else {
-                    uptimeIcon.visibility = View.GONE
+                    rawElapsedMs
                 }
+                syncUptimeBadgeElapsedMs(effectiveElapsedMs)
             } else {
+                uptimeTimer.stop()
                 uptimeLayout.visibility = View.GONE
             }
         }
@@ -2367,6 +2397,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 )
                 position.text = if (atAdFreeEdge) getString(R.string.tv_live) else DateUtils.formatElapsedTime(currentPos / 1000)
                 duration.text = DateUtils.formatElapsedTime(displayEdge / 1000)
+                syncUptimeBadgeElapsedMs(displayEdge)
                 tvGoLive?.let { button ->
                     if (!atAdFreeEdge) {
                         styleTvGoLiveButton(button)
@@ -2455,6 +2486,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             duration.text = DateUtils.formatElapsedTime(uptime / 1000)
+            syncUptimeBadgeElapsedMs(uptime)
         }
     }
 
