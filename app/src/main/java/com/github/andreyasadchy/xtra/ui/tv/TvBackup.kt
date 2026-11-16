@@ -1,11 +1,18 @@
 package com.github.andreyasadchy.xtra.ui.tv
 
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
+import android.util.Xml
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -35,13 +42,17 @@ import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.xmlpull.v1.XmlPullParser
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
@@ -53,31 +64,236 @@ import kotlin.system.exitProcess
 import androidx.compose.ui.graphics.Color as ComposeColor
 
 /**
- * TV: backup and restore of the settings and database (without the Twitch account), either to a file on the TV
- * (working even on TVs without a system file picker) or between the TV and a phone over Wi-Fi with a QR code.
+ * TV & mobile helper: backup and restore of settings, TV favorites/stats, and Room database (never Twitch account tokens),
+ * either to Download/ on the device (via MediaStore on Android 10+ and filesystem fallback) or over Wi-Fi via QR code.
  */
 object TvBackup {
 
-    private const val FILE_NAME = "XtraTV-backup.zip"
+    const val FILE_NAME = "XtraTV-backup.zip"
     private const val PREFS_ENTRY = "preferences.xml"
+    private const val TV_FAVORITES_ENTRY = "tv_favorites.xml"
+    private const val TV_STATS_ENTRY = "tv_stats.xml"
     private const val DB_ENTRY = "database"
+    private val SQLITE_MAGIC = "SQLite format 3".toByteArray(Charsets.US_ASCII)
 
-    /** Builds the backup archive in memory (settings XML and Room database, never the Twitch account tokens). */
-    fun buildBackupZip(context: Context): ByteArray {
-        val app = context.applicationContext as XtraApp
-        app.xtraModule.database.query(SimpleSQLiteQuery("PRAGMA wal_checkpoint(FULL)")).use {
-            it.moveToPosition(-1)
+    fun isValidSqliteBytes(bytes: ByteArray): Boolean =
+        bytes.size >= 16 && SQLITE_MAGIC.indices.all { bytes[it] == SQLITE_MAGIC[it] }
+
+    fun isValidSqliteFile(file: File): Boolean {
+        if (!file.exists() || file.length() < 16L) return false
+        return runCatching {
+            val header = ByteArray(16)
+            val read = file.inputStream().use { it.read(header) }
+            read >= 15 && SQLITE_MAGIC.indices.all { header[it] == SQLITE_MAGIC[it] }
+        }.getOrDefault(false)
+    }
+
+    fun isSharedPrefsXmlBytes(bytes: ByteArray): Boolean {
+        if (bytes.isEmpty()) return false
+        val startOffset = if (bytes.size >= 3 &&
+            bytes[0] == 0xEF.toByte() &&
+            bytes[1] == 0xBB.toByte() &&
+            bytes[2] == 0xBF.toByte()
+        ) 3 else 0
+        val headLen = minOf(256, bytes.size - startOffset)
+        if (headLen <= 0) return false
+        val head = String(bytes, startOffset, headLen, Charsets.UTF_8).trimStart()
+        return head.startsWith("<?xml") || head.startsWith("<map") || head.contains("<map")
+    }
+
+    /** Serializes an Android [SharedPreferences] instance directly from memory into standard `<map>` XML bytes. */
+    fun exportSharedPrefsXml(prefs: SharedPreferences): ByteArray {
+        val snapshot = prefs.all
+        val out = ByteArrayOutputStream()
+        val serializer = Xml.newSerializer()
+        serializer.setOutput(out, "UTF-8")
+        serializer.startDocument("UTF-8", true)
+        serializer.startTag(null, "map")
+        for ((key, value) in snapshot) {
+            if (key == null || value == null) continue
+            when (value) {
+                is Boolean -> {
+                    serializer.startTag(null, "boolean")
+                    serializer.attribute(null, "name", key)
+                    serializer.attribute(null, "value", value.toString())
+                    serializer.endTag(null, "boolean")
+                }
+                is Int -> {
+                    serializer.startTag(null, "int")
+                    serializer.attribute(null, "name", key)
+                    serializer.attribute(null, "value", value.toString())
+                    serializer.endTag(null, "int")
+                }
+                is Long -> {
+                    serializer.startTag(null, "long")
+                    serializer.attribute(null, "name", key)
+                    serializer.attribute(null, "value", value.toString())
+                    serializer.endTag(null, "long")
+                }
+                is Float -> {
+                    serializer.startTag(null, "float")
+                    serializer.attribute(null, "name", key)
+                    serializer.attribute(null, "value", value.toString())
+                    serializer.endTag(null, "float")
+                }
+                is String -> {
+                    serializer.startTag(null, "string")
+                    serializer.attribute(null, "name", key)
+                    serializer.text(value)
+                    serializer.endTag(null, "string")
+                }
+                is Set<*> -> {
+                    serializer.startTag(null, "set")
+                    serializer.attribute(null, "name", key)
+                    for (item in value) {
+                        if (item is String) {
+                            serializer.startTag(null, "string")
+                            serializer.text(item)
+                            serializer.endTag(null, "string")
+                        }
+                    }
+                    serializer.endTag(null, "set")
+                }
+            }
         }
-        val prefsFile = File("${context.applicationInfo.dataDir}/shared_prefs/${context.packageName}_preferences.xml")
-        val dbFile = context.getDatabasePath("database")
+        serializer.endTag(null, "map")
+        serializer.endDocument()
+        serializer.flush()
+        return out.toByteArray()
+    }
+
+    fun exportDefaultPrefsXml(context: Context): ByteArray = exportSharedPrefsXml(context.prefs())
+
+    private fun parseSharedPrefsXml(xmlBytes: ByteArray): Map<String, Any>? {
+        return runCatching {
+            val parser = Xml.newPullParser()
+            parser.setInput(ByteArrayInputStream(xmlBytes), "UTF-8")
+            var sawMap = false
+            val result = LinkedHashMap<String, Any>()
+            var event = parser.eventType
+            while (event != XmlPullParser.END_DOCUMENT) {
+                if (event == XmlPullParser.START_TAG) {
+                    when (parser.name) {
+                        "map" -> sawMap = true
+                        "boolean" -> if (sawMap) {
+                            val name = parser.getAttributeValue(null, "name")
+                            val value = parser.getAttributeValue(null, "value")
+                            if (name != null && value != null) result[name] = value.toBoolean()
+                        }
+                        "int" -> if (sawMap) {
+                            val name = parser.getAttributeValue(null, "name")
+                            val value = parser.getAttributeValue(null, "value")?.toIntOrNull()
+                            if (name != null && value != null) result[name] = value
+                        }
+                        "long" -> if (sawMap) {
+                            val name = parser.getAttributeValue(null, "name")
+                            val value = parser.getAttributeValue(null, "value")?.toLongOrNull()
+                            if (name != null && value != null) result[name] = value
+                        }
+                        "float" -> if (sawMap) {
+                            val name = parser.getAttributeValue(null, "name")
+                            val value = parser.getAttributeValue(null, "value")?.toFloatOrNull()
+                            if (name != null && value != null) result[name] = value
+                        }
+                        "string" -> if (sawMap) {
+                            val name = parser.getAttributeValue(null, "name")
+                            val text = parser.nextText()
+                            if (name != null) result[name] = text
+                        }
+                        "set" -> if (sawMap) {
+                            val name = parser.getAttributeValue(null, "name")
+                            val set = LinkedHashSet<String>()
+                            var setDepth = 1
+                            while (setDepth > 0) {
+                                val inner = parser.next()
+                                if (inner == XmlPullParser.END_DOCUMENT) break
+                                if (inner == XmlPullParser.START_TAG) {
+                                    if (parser.name == "string") {
+                                        set.add(parser.nextText())
+                                    } else {
+                                        setDepth++
+                                    }
+                                } else if (inner == XmlPullParser.END_TAG) {
+                                    setDepth--
+                                }
+                            }
+                            if (name != null) result[name] = set
+                        }
+                    }
+                }
+                event = parser.next()
+            }
+            if (sawMap) result else null
+        }.getOrNull()
+    }
+
+    /** Atomically replaces all keys in [prefs] in memory AND on disk via synchronous [SharedPreferences.Editor.commit]. */
+    @Suppress("ApplySharedPref")
+    private fun commitSharedPrefsXml(prefs: SharedPreferences, xmlBytes: ByteArray): Map<String, Any>? {
+        val parsed = parseSharedPrefsXml(xmlBytes) ?: return null
+        val editor = prefs.edit().clear()
+        for ((key, value) in parsed) {
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is Float -> editor.putFloat(key, value)
+                is String -> editor.putString(key, value)
+                is Set<*> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    editor.putStringSet(key, value as Set<String>)
+                }
+            }
+        }
+        editor.commit()
+        return parsed
+    }
+
+    /** Repairs a corrupted SQLite database file if an earlier broken restore overwrote it with non-SQLite bytes. */
+    fun ensureHealthyDatabaseFile(context: Context): File {
+        val app = context.applicationContext as? XtraApp
+        val dbFile = context.getDatabasePath(DB_ENTRY)
+        if (dbFile.exists() && !isValidSqliteFile(dbFile)) {
+            app?.xtraModule?.closeDatabaseIfOpen()
+            runCatching { File(dbFile.parentFile, "database-shm").delete() }
+            runCatching { File(dbFile.parentFile, "database-wal").delete() }
+            runCatching { File(dbFile.parentFile, "database-journal").delete() }
+            runCatching { dbFile.delete() }
+        }
+        return dbFile
+    }
+
+    /** Builds the backup archive in memory (settings XML, TV favorites/stats XML, and Room database — never Twitch tokens). */
+    fun buildBackupZip(context: Context): ByteArray {
+        val appContext = context.applicationContext
+        val app = appContext as? XtraApp
+        val dbFile = ensureHealthyDatabaseFile(appContext)
+        runCatching {
+            app?.xtraModule?.database?.query(SimpleSQLiteQuery("PRAGMA wal_checkpoint(FULL)"))?.use {
+                it.moveToPosition(-1)
+            }
+        }
+        val mainPrefsBytes = exportDefaultPrefsXml(appContext)
+        val tvFavPrefs = appContext.getSharedPreferences("tv_favorites", Context.MODE_PRIVATE)
+        val tvStatsPrefs = appContext.getSharedPreferences("tv_stats", Context.MODE_PRIVATE)
+
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
-            if (prefsFile.exists()) {
-                zip.putNextEntry(ZipEntry(PREFS_ENTRY))
-                prefsFile.inputStream().use { it.copyTo(zip) }
+            zip.putNextEntry(ZipEntry(PREFS_ENTRY))
+            zip.write(mainPrefsBytes)
+            zip.closeEntry()
+
+            if (tvFavPrefs.all.isNotEmpty()) {
+                zip.putNextEntry(ZipEntry(TV_FAVORITES_ENTRY))
+                zip.write(exportSharedPrefsXml(tvFavPrefs))
                 zip.closeEntry()
             }
-            if (dbFile.exists()) {
+            if (tvStatsPrefs.all.isNotEmpty()) {
+                zip.putNextEntry(ZipEntry(TV_STATS_ENTRY))
+                zip.write(exportSharedPrefsXml(tvStatsPrefs))
+                zip.closeEntry()
+            }
+            if (isValidSqliteFile(dbFile)) {
                 zip.putNextEntry(ZipEntry(DB_ENTRY))
                 dbFile.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
@@ -86,61 +302,78 @@ object TvBackup {
         return out.toByteArray()
     }
 
-    /** Restores the settings XML and/or database from a backup zip (or raw XML / database bytes) and restarts the app. */
-    fun applyBackupBytes(context: Context, bytes: ByteArray): Boolean {
-        if (bytes.isEmpty()) return false
-        val prefsTarget = File("${context.applicationInfo.dataDir}/shared_prefs/${context.packageName}_preferences.xml")
-        prefsTarget.parentFile?.mkdirs()
-        val dbTarget = context.getDatabasePath("database")
-        var restoredPrefs: String? = null
-        var restoredDb = false
-        // zip archive (starts with PK)
-        if (bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()) {
-            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    val name = entry.name.substringAfterLast('/')
-                    when {
-                        name == PREFS_ENTRY || name.endsWith("_preferences.xml") -> {
-                            val data = zip.readBytes()
-                            prefsTarget.writeBytes(data)
-                            restoredPrefs = data.toString(Charsets.UTF_8)
-                        }
-                        name == DB_ENTRY -> {
-                            File(dbTarget.parent, "database-shm").delete()
-                            File(dbTarget.parent, "database-wal").delete()
-                            dbTarget.writeBytes(zip.readBytes())
-                            restoredDb = true
-                        }
-                    }
-                    zip.closeEntry()
-                    entry = zip.nextEntry
+    /**
+     * Applies parsed backup components synchronously to in-memory + disk SharedPreferences and Room database,
+     * shows confirmation Toast, updates app locale if needed, and performs a clean cold process restart.
+     */
+    fun applyRestoredParts(
+        context: Context,
+        mainPrefsXml: ByteArray? = null,
+        tvFavoritesXml: ByteArray? = null,
+        tvStatsXml: ByteArray? = null,
+        dbBytes: ByteArray? = null,
+        onPostPrefsCommit: ((Map<String, Any>) -> Unit)? = null,
+    ): Boolean {
+        val appContext = context.applicationContext
+        var restoredAny = false
+        var restoredLanguage: String? = null
+
+        if (mainPrefsXml != null && isSharedPrefsXmlBytes(mainPrefsXml)) {
+            val parsed = commitSharedPrefsXml(appContext.prefs(), mainPrefsXml)
+            if (parsed != null) {
+                restoredAny = true
+                restoredLanguage = parsed[C.UI_LANGUAGE] as? String
+                runCatching { onPostPrefsCommit?.invoke(parsed) }
+            }
+        }
+        if (tvFavoritesXml != null && isSharedPrefsXmlBytes(tvFavoritesXml)) {
+            val favPrefs = appContext.getSharedPreferences("tv_favorites", Context.MODE_PRIVATE)
+            if (commitSharedPrefsXml(favPrefs, tvFavoritesXml) != null) {
+                runCatching { TvFavorites.reload(appContext) }
+                restoredAny = true
+            }
+        }
+        if (tvStatsXml != null && isSharedPrefsXmlBytes(tvStatsXml)) {
+            val statsPrefs = appContext.getSharedPreferences("tv_stats", Context.MODE_PRIVATE)
+            if (commitSharedPrefsXml(statsPrefs, tvStatsXml) != null) {
+                restoredAny = true
+            }
+        }
+        if (dbBytes != null && isValidSqliteBytes(dbBytes)) {
+            (appContext as? XtraApp)?.xtraModule?.closeDatabaseIfOpen()
+            val dbTarget = appContext.getDatabasePath(DB_ENTRY)
+            dbTarget.parentFile?.mkdirs()
+            File(dbTarget.parentFile, "database-shm").delete()
+            File(dbTarget.parentFile, "database-wal").delete()
+            File(dbTarget.parentFile, "database-journal").delete()
+            val wroteDb = runCatching {
+                FileOutputStream(dbTarget).use { out ->
+                    out.write(dbBytes)
+                    out.flush()
+                    runCatching { out.fd.sync() }
+                }
+                true
+            }.getOrDefault(false)
+            if (wroteDb) {
+                restoredAny = true
+            }
+        }
+
+        if (!restoredAny) return false
+
+        CoroutineScope(Dispatchers.Main).launch {
+            Toast.makeText(appContext, R.string.tv_backup_restored, Toast.LENGTH_SHORT).show()
+            if (restoredLanguage != null) {
+                val desired = LocaleListCompat.forLanguageTags(
+                    restoredLanguage.takeIf { it.isNotBlank() && it != "auto" }
+                )
+                if (AppCompatDelegate.getApplicationLocales() != desired) {
+                    runCatching { AppCompatDelegate.setApplicationLocales(desired) }
                 }
             }
-        } else {
-            val head = bytes.take(64).toByteArray().toString(Charsets.UTF_8)
-            if (head.trimStart().startsWith("<?xml") || head.contains("<map")) {
-                prefsTarget.writeBytes(bytes)
-                restoredPrefs = bytes.toString(Charsets.UTF_8)
-            } else if (head.startsWith("SQLite format 3")) {
-                File(dbTarget.parent, "database-shm").delete()
-                File(dbTarget.parent, "database-wal").delete()
-                dbTarget.writeBytes(bytes)
-                restoredDb = true
-            }
-        }
-        if (restoredPrefs == null && !restoredDb) {
-            return false
-        }
-        restoredPrefs?.let { prefs ->
-            val language = Regex("<string name=\"${C.UI_LANGUAGE}\">(.+?)</string>").find(prefs)?.groups?.get(1)?.value
-            CoroutineScope(Dispatchers.Main).launch {
-                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(language.takeIf { it != "auto" }))
-            }
-        }
-        CoroutineScope(Dispatchers.Main).launch {
-            context.startActivity(
-                Intent(context, MainActivity::class.java).apply {
+            delay(300)
+            appContext.startActivity(
+                Intent(appContext, MainActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 }
             )
@@ -149,85 +382,241 @@ object TvBackup {
         return true
     }
 
-    /** Candidate folders on the TV where the backup file can be written or read without a system file picker. */
-    private fun candidateFiles(context: Context): List<File> {
-        val list = mutableListOf<File>()
-        runCatching {
-            val pub = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            if (pub != null) list += File(pub, FILE_NAME)
+    /** Restores settings XML and/or database from a backup zip (or raw XML / SQLite bytes) and cold-restarts the app. */
+    fun applyBackupBytes(
+        context: Context,
+        bytes: ByteArray,
+        onPostPrefsCommit: ((Map<String, Any>) -> Unit)? = null,
+    ): Boolean {
+        if (bytes.isEmpty()) return false
+        if (bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()) {
+            var mainPrefsXml: ByteArray? = null
+            var tvFavoritesXml: ByteArray? = null
+            var tvStatsXml: ByteArray? = null
+            var dbBytes: ByteArray? = null
+            runCatching {
+                ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory) {
+                            val name = entry.name.substringAfterLast('/')
+                            when {
+                                name == TV_FAVORITES_ENTRY -> tvFavoritesXml = zip.readBytes()
+                                name == TV_STATS_ENTRY -> tvStatsXml = zip.readBytes()
+                                name == "prefs2.xml" -> Unit
+                                name == PREFS_ENTRY || name.endsWith("_preferences.xml") -> mainPrefsXml = zip.readBytes()
+                                name == DB_ENTRY -> dbBytes = zip.readBytes()
+                            }
+                        }
+                        zip.closeEntry()
+                        entry = zip.nextEntry
+                    }
+                }
+            }
+            return applyRestoredParts(context, mainPrefsXml, tvFavoritesXml, tvStatsXml, dbBytes, onPostPrefsCommit)
         }
-        runCatching {
-            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { list += File(it, FILE_NAME) }
+        if (isValidSqliteBytes(bytes)) {
+            return applyRestoredParts(context, dbBytes = bytes, onPostPrefsCommit = onPostPrefsCommit)
         }
-        list += File(context.filesDir, FILE_NAME)
-        return list.distinctBy { it.absolutePath }
+        if (isSharedPrefsXmlBytes(bytes)) {
+            return applyRestoredParts(context, mainPrefsXml = bytes, onPostPrefsCommit = onPostPrefsCommit)
+        }
+        return false
     }
 
-    /** Saves the backup directly to a file on the TV and shows its path. */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun saveToMediaStoreDownloads(context: Context, bytes: ByteArray): String? {
+        val resolver = context.contentResolver
+        // Remove previous backup archives owned by this app so we keep Download/ tidy
+        runCatching {
+            resolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.MediaColumns._ID),
+                "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                arrayOf("XtraTV-backup%"),
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                while (cursor.moveToNext()) {
+                    val existingUri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cursor.getLong(idCol))
+                    runCatching { resolver.delete(existingUri, null, null) }
+                }
+            }
+        }
+        return runCatching {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val itemUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+            val wrote = runCatching {
+                resolver.openOutputStream(itemUri)?.use { out ->
+                    out.write(bytes)
+                    out.flush()
+                } != null
+            }.getOrDefault(false)
+            if (!wrote) {
+                runCatching { resolver.delete(itemUri, null, null) }
+                return null
+            }
+            val done = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            runCatching { resolver.update(itemUri, done, null, null) }
+            val actualName = runCatching {
+                resolver.query(
+                    itemUri,
+                    arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            }.getOrNull() ?: FILE_NAME
+            "${Environment.DIRECTORY_DOWNLOADS}/$actualName"
+        }.getOrNull()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun readLatestFromMediaStoreDownloads(context: Context): Pair<Long, ByteArray>? {
+        return runCatching {
+            val resolver = context.contentResolver
+            resolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DATE_MODIFIED),
+                "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                arrayOf("XtraTV-backup%"),
+                "${MediaStore.MediaColumns.DATE_MODIFIED} DESC, ${MediaStore.MediaColumns._ID} DESC"
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED)
+                while (cursor.moveToNext()) {
+                    val uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cursor.getLong(idCol))
+                    val modifiedMs = cursor.getLong(dateCol) * 1000L
+                    val data = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+                    if (data != null && data.size >= 4 && data[0] == 'P'.code.toByte() && data[1] == 'K'.code.toByte()) {
+                        return@runCatching modifiedMs to data
+                    }
+                }
+                null
+            }
+        }.getOrNull()
+    }
+
+    /** Candidate directories on the TV where backup files can be stored or discovered without a system file picker. */
+    private fun candidateDirs(context: Context): List<File> {
+        val dirs = mutableListOf<File>()
+        runCatching {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)?.let { dirs += it }
+        }
+        runCatching {
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { dirs += it }
+        }
+        dirs += context.filesDir
+        return dirs.distinctBy { it.absolutePath }
+    }
+
+    /** Saves the backup archive to Download/ (surviving app data resets on Android 10+) and shows its path. */
     fun saveToTv(context: Context, scope: CoroutineScope) {
         val appContext = context.applicationContext
         scope.launch {
-            val saved = withContext(Dispatchers.IO) {
+            val savedPath = withContext(Dispatchers.IO) {
                 val bytes = runCatching { buildBackupZip(appContext) }.getOrNull() ?: return@withContext null
-                val prefsFile = File("${appContext.applicationInfo.dataDir}/shared_prefs/${appContext.packageName}_preferences.xml")
-                val dbFile = appContext.getDatabasePath("database")
-                for (target in candidateFiles(appContext)) {
-                    val ok = runCatching {
-                        target.parentFile?.mkdirs()
-                        target.writeBytes(bytes)
-                        // also write the raw files next to the archive for users who copy them by hand
-                        val dir = target.parentFile
-                        if (dir != null) {
-                            if (prefsFile.exists()) prefsFile.copyTo(File(dir, prefsFile.name), overwrite = true)
-                            if (dbFile.exists()) dbFile.copyTo(File(dir, dbFile.name), overwrite = true)
-                        }
+                // Always keep a fast local mirror inside app-specific external files if available
+                runCatching {
+                    appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { extDir ->
+                        extDir.mkdirs()
+                        File(extDir, FILE_NAME).writeBytes(bytes)
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val mediaStorePath = saveToMediaStoreDownloads(appContext, bytes)
+                    if (mediaStorePath != null) return@withContext mediaStorePath
+                }
+                for (dir in candidateDirs(appContext)) {
+                    val primary = File(dir, FILE_NAME)
+                    val wrotePrimary = runCatching {
+                        dir.mkdirs()
+                        primary.writeBytes(bytes)
                         true
                     }.getOrDefault(false)
-                    if (ok) return@withContext target
+                    if (wrotePrimary) return@withContext primary.absolutePath
+
+                    // If an unowned file from a previous install blocks overwriting XtraTV-backup.zip in Download/
+                    val timestamped = File(dir, "XtraTV-backup-${System.currentTimeMillis()}.zip")
+                    val wroteTimestamped = runCatching {
+                        dir.mkdirs()
+                        timestamped.writeBytes(bytes)
+                        true
+                    }.getOrDefault(false)
+                    if (wroteTimestamped) return@withContext timestamped.absolutePath
                 }
                 null
             }
-            if (saved != null) {
-                Toast.makeText(appContext, appContext.getString(R.string.tv_backup_saved, saved.absolutePath), Toast.LENGTH_LONG).show()
+            if (savedPath != null) {
+                Toast.makeText(appContext, appContext.getString(R.string.tv_backup_saved, savedPath), Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    /** Restores from a backup file found on the TV, or returns false if none is there yet. */
+    /** Restores from the newest valid backup file found on the TV, or invokes [onNotFound] if none is directly readable. */
     fun restoreFromTv(context: Context, scope: CoroutineScope, onNotFound: () -> Unit) {
         val appContext = context.applicationContext
         scope.launch {
-            val found = withContext(Dispatchers.IO) {
-                for (candidate in candidateFiles(appContext)) {
-                    if (candidate.exists() && candidate.length() > 0) {
-                        return@withContext candidate.readBytes()
-                    }
-                    val dir = candidate.parentFile ?: continue
-                    val prefsFile = File(dir, "${appContext.packageName}_preferences.xml")
-                    val dbFile = File(dir, DB_ENTRY)
-                    if (prefsFile.exists() || dbFile.exists()) {
-                        val out = ByteArrayOutputStream()
-                        ZipOutputStream(out).use { zip ->
-                            if (prefsFile.exists()) {
-                                zip.putNextEntry(ZipEntry(PREFS_ENTRY))
-                                prefsFile.inputStream().use { it.copyTo(zip) }
-                                zip.closeEntry()
-                            }
-                            if (dbFile.exists()) {
-                                zip.putNextEntry(ZipEntry(DB_ENTRY))
-                                dbFile.inputStream().use { it.copyTo(zip) }
-                                zip.closeEntry()
-                            }
+            val restored = withContext(Dispatchers.IO) {
+                val candidates = mutableListOf<Pair<Long, ByteArray>>()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    readLatestFromMediaStoreDownloads(appContext)?.let { candidates += it }
+                }
+                for (dir in candidateDirs(appContext)) {
+                    // Check any XtraTV-backup*.zip files in the folder (sorted newest first) plus direct FILE_NAME
+                    val zipFiles = buildList {
+                        add(File(dir, FILE_NAME))
+                        runCatching {
+                            dir.listFiles()?.filter {
+                                it.isFile && it.name.startsWith("XtraTV-backup", ignoreCase = true) && it.name.endsWith(".zip", ignoreCase = true)
+                            }?.let { addAll(it) }
                         }
-                        return@withContext out.toByteArray()
+                    }.distinctBy { it.absolutePath }
+                    for (zf in zipFiles) {
+                        val data = runCatching {
+                            if (zf.exists() && zf.length() > 4L) zf.readBytes() else null
+                        }.getOrNull()
+                        if (data != null && data.size >= 4 && data[0] == 'P'.code.toByte() && data[1] == 'K'.code.toByte()) {
+                            candidates += zf.lastModified() to data
+                        }
                     }
                 }
-                null
+                val bestZip = candidates.maxByOrNull { it.first }?.second
+                if (bestZip != null && applyBackupBytes(appContext, bestZip)) {
+                    return@withContext true
+                }
+
+                // Fallback: raw preferences XML and/or SQLite database placed next to each other in a candidate folder
+                for (dir in candidateDirs(appContext)) {
+                    val prefsCandidates = buildList {
+                        add(File(dir, "${appContext.packageName}_preferences.xml"))
+                        add(File(dir, PREFS_ENTRY))
+                        runCatching {
+                            dir.listFiles()?.filter { it.isFile && it.name.endsWith("_preferences.xml") && it.name != "prefs2.xml" }?.let { addAll(it) }
+                        }
+                    }.distinctBy { it.absolutePath }
+                    val prefsBytes = prefsCandidates.firstNotNullOfOrNull { f ->
+                        runCatching { if (f.exists() && f.length() > 0L) f.readBytes() else null }.getOrNull()
+                            ?.takeIf { isSharedPrefsXmlBytes(it) }
+                    }
+                    val dbFile = File(dir, DB_ENTRY)
+                    val dbBytes = runCatching {
+                        if (isValidSqliteFile(dbFile)) dbFile.readBytes() else null
+                    }.getOrNull()
+                    if (prefsBytes != null || dbBytes != null) {
+                        if (applyRestoredParts(appContext, mainPrefsXml = prefsBytes, dbBytes = dbBytes)) {
+                            return@withContext true
+                        }
+                    }
+                }
+                false
             }
-            if (found != null) {
-                Toast.makeText(appContext, R.string.tv_backup_restored, Toast.LENGTH_SHORT).show()
-                withContext(Dispatchers.IO) { applyBackupBytes(appContext, found) }
-            } else {
+            if (!restored) {
                 onNotFound()
             }
         }
@@ -356,10 +745,13 @@ object TvBackup {
                         val uploaded = handleImportClient(client, appContext)
                         if (uploaded != null) {
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(appContext, R.string.tv_backup_restored, Toast.LENGTH_SHORT).show()
                                 runCatching { dialogRef?.dismiss() }
                             }
-                            applyBackupBytes(appContext, uploaded)
+                            if (!applyBackupBytes(appContext, uploaded)) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(appContext, R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
+                                }
+                            }
                         }
                     }
                 }
@@ -441,6 +833,9 @@ object TvBackup {
             } else {
                 val title = context.getString(R.string.tv_backup_qr_receive)
                 val doneMsg = context.getString(R.string.tv_backup_restored)
+                    .replace("\\", "\\\\")
+                    .replace("'", "\\'")
+                    .replace("\n", " ")
                 val html = """
                     <!DOCTYPE html><html><head><meta charset="utf-8">
                     <meta name="viewport" content="width=device-width,initial-scale=1">
