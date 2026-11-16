@@ -354,6 +354,7 @@ object C {
     const val CHAT_PUB_SUB_ENABLED = "chat_pubsub_enabled"
     const val CHAT_POINTS_COLLECT = "chat_points_collect"
     const val CHAT_POINTS_NOTIFY = "chat_points_notify"
+    const val CHAT_DROPS_COLLECT = "chat_drops_collect"
     const val CHAT_RAIDS_SHOW = "chat_raids_show"
     const val CHAT_RAIDS_AUTO_SWITCH = "chat_raids_auto_switch"
     const val CHAT_POLLS_SHOW = "chat_polls_show"

@@ -3,6 +3,7 @@
     <style name="BaseDarkTheme" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/primaryBlue</item>
         <item name="chatStatus">@color/chatStatusDark</item>
+        <item name="chatOverlayCard">@drawable/chat_overlay_card_dark</item>
         <item name="sortBarTextColor">?android:textColorSecondary</item>
         <item name="dialogPadding">8dp</item>
         <item name="dialogLayoutPadding">8dp</item>
@@ -26,6 +27,7 @@
     <style name="BaseLightTheme" parent="Theme.Material3.Light.NoActionBar">
         <item name="colorPrimary">@color/accent</item>
         <item name="chatStatus">@color/chatStatusLight</item>
+        <item name="chatOverlayCard">@drawable/chat_overlay_card_light</item>
         <item name="sortBarTextColor">?android:textColorSecondary</item>
         <item name="dialogPadding">8dp</item>
         <item name="dialogLayoutPadding">8dp</item>
@@ -55,6 +57,7 @@
         <item name="colorSurfaceContainerLow">@color/surfaceAmoled</item>
         <item name="colorSurfaceContainer">@color/surfaceContainerAmoled</item>
         <item name="chatStatus">@color/chatStatusDark</item>
+        <item name="chatOverlayCard">@drawable/chat_overlay_card_dark</item>
         <item name="sortBarTextColor">?android:textColorSecondary</item>
         <item name="dialogPadding">8dp</item>
         <item name="dialogLayoutPadding">8dp</item>
@@ -88,6 +91,7 @@
         <item name="colorSurfaceContainerHigh">@color/surfaceContainerHighBlue</item>
         <item name="colorSurfaceContainerHighest">@color/surfaceContainerHighestBlue</item>
         <item name="chatStatus">@color/chatStatusDark</item>
+        <item name="chatOverlayCard">@drawable/chat_overlay_card_dark</item>
         <item name="sortBarTextColor">?android:textColorSecondary</item>
         <item name="dialogPadding">8dp</item>
         <item name="dialogLayoutPadding">8dp</item>
@@ -1225,6 +1229,7 @@
         <item name="android:textColorSecondary">@color/secondaryTextColorDark</item>
         <item name="colorButtonNormal">@color/secondaryDark</item>
         <item name="chatStatus">@color/chatStatusDark</item>
+        <item name="chatOverlayCard">@drawable/chat_overlay_card_dark</item>
         <item name="sortBarTextColor">?attr/colorControlNormal</item>
         <item name="dialogPadding">5dp</item>
         <item name="dialogLayoutPadding">0dp</item>
@@ -1285,6 +1290,7 @@
         <item name="android:textColorSecondary">@color/secondaryTextColorLight</item>
         <item name="colorButtonNormal">@color/secondaryLight</item>
         <item name="chatStatus">@color/chatStatusLight</item>
+        <item name="chatOverlayCard">@drawable/chat_overlay_card_light</item>
         <item name="sortBarTextColor">?attr/colorControlNormal</item>
         <item name="dialogPadding">5dp</item>
         <item name="dialogLayoutPadding">0dp</item>
@@ -1347,6 +1353,7 @@
         <item name="android:textColorSecondary">@color/secondaryTextColorDark</item>
         <item name="colorButtonNormal">@color/secondaryAmoled</item>
         <item name="chatStatus">@color/chatStatusDark</item>
+        <item name="chatOverlayCard">@drawable/chat_overlay_card_dark</item>
         <item name="sortBarTextColor">?attr/colorControlNormal</item>
         <item name="dialogPadding">5dp</item>
         <item name="dialogLayoutPadding">0dp</item>
@@ -1407,6 +1414,7 @@
         <item name="android:textColorSecondary">@color/secondaryTextColorBlue</item>
         <item name="colorButtonNormal">@color/secondaryBlue</item>
         <item name="chatStatus">@color/chatStatusDark</item>
+        <item name="chatOverlayCard">@drawable/chat_overlay_card_dark</item>
         <item name="sortBarTextColor">?attr/colorControlNormal</item>
         <item name="dialogPadding">5dp</item>
         <item name="dialogLayoutPadding">0dp</item>

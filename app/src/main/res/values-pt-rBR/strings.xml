@@ -271,6 +271,9 @@
     <string name="points_earned">%d pontos de canal recebidos</string>
     <string name="points_notify">Notificar ao ganhar pontos de canal</string>
     <string name="points_collect">Coletar pontos de canal automaticamente</string>
+    <string name="drops_collect">Resgatar Drops da Twitch automaticamente</string>
+    <string name="drop_claimed">Drop da Twitch resgatado: %s</string>
+    <string name="drop_claimed_generic">Drop da Twitch resgatado</string>
     <string name="connect_chat">Conecte-se ao chat</string>
     <string name="raid_text">Raidando %1$s com %2$d telespectadores</string>
     <string name="show_raids">Mostrar raids e hosts</string>

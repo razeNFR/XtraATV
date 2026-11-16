@@ -26,6 +26,9 @@ object TwitchClock {
     private var calibrated = false
 
     @Volatile
+    private var hasPreciseSample = false
+
+    @Volatile
     private var anchorServerMs = 0L
 
     @Volatile
@@ -82,6 +85,7 @@ object TwitchClock {
     /** Updates fallback server clock from HTTP `Date` header on official Twitch / CDN hosts. */
     @JvmStatic
     fun onHttpResponse(url: String?, dateHeader: String?) {
+        if (hasPreciseSample) return
         if (url.isNullOrEmpty() || dateHeader.isNullOrBlank()) return
         if (!isTrustedHost(url)) return
         val elapsed = safeElapsedRealtime()
@@ -103,14 +107,20 @@ object TwitchClock {
         val sysNow = System.currentTimeMillis()
         val elapsed = safeElapsedRealtime()
         synchronized(lock) {
-            if (!calibrated) {
+            if (!calibrated || (precise && !hasPreciseSample)) {
                 anchorServerMs = serverMs
                 anchorElapsedMs = elapsed
                 systemOffsetMs = serverMs - sysNow
-                if (precise && elapsed > 0L) {
-                    lastPreciseElapsedMs = elapsed
+                if (precise) {
+                    hasPreciseSample = true
+                    if (elapsed > 0L) {
+                        lastPreciseElapsedMs = elapsed
+                    }
                 }
                 calibrated = true
+                return
+            }
+            if (!precise && hasPreciseSample) {
                 return
             }
             val predictedNow = if (elapsed > 0L && anchorElapsedMs > 0L) {
@@ -128,8 +138,11 @@ object TwitchClock {
             anchorServerMs = adjustedServerMs
             anchorElapsedMs = elapsed
             systemOffsetMs = adjustedServerMs - sysNow
-            if (precise && elapsed > 0L) {
-                lastPreciseElapsedMs = elapsed
+            if (precise) {
+                hasPreciseSample = true
+                if (elapsed > 0L) {
+                    lastPreciseElapsedMs = elapsed
+                }
             }
         }
     }

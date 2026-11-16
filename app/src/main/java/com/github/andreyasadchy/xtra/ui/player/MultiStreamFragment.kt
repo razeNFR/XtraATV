@@ -1356,8 +1356,10 @@ class MultiStreamFragment : Fragment() {
         }
         if (window.isDynamic) {
             val bufferedMs = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)
+            val prefetchMs = (player.currentManifest as? androidx.media3.exoplayer.hls.HlsManifest)
+                ?.mediaPlaylist?.tags?.count { it.startsWith("#EXT-X-TWITCH-PREFETCH") }?.times(2_000L) ?: 0L
             val horizonMs = if (window.durationMs != androidx.media3.common.C.TIME_UNSET && window.durationMs > 0L) {
-                (window.durationMs - player.currentPosition).coerceAtLeast(0L)
+                (window.durationMs - prefetchMs - player.currentPosition).coerceAtLeast(0L)
             } else {
                 0L
             }
@@ -1367,6 +1369,20 @@ class MultiStreamFragment : Fragment() {
             }
         }
         return null
+    }
+
+    fun getStreamWatchMetadata(login: String?): com.github.andreyasadchy.xtra.ui.chat.ChatViewModel.StreamWatchMetadata? {
+        if (login == null) return null
+        val tile = tiles.find { it.stream.channelLogin.equals(login, true) } ?: return null
+        val prefs = context?.prefs()
+        val usingProxy = prefs?.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false) == true ||
+            prefs?.getBoolean(C.PLAYER_USE_STREAM_PROXY, false) == true
+        return com.github.andreyasadchy.xtra.ui.chat.ChatViewModel.StreamWatchMetadata(
+            streamId = tile.stream.id,
+            gameId = tile.stream.gameId,
+            gameName = tile.stream.gameName,
+            needsPresencePing = tile.experimentalVodActive || usingProxy,
+        )
     }
 
     private fun addChat(stream: Stream): FrameLayout {

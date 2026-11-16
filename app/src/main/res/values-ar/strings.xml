@@ -271,6 +271,9 @@
     <string name="points_earned">Received %d channel points</string>
     <string name="points_notify">Notify when earning channel points</string>
     <string name="points_collect">Collect channel points automatically</string>
+    <string name="drops_collect">المطالبة بجوائز Twitch Drops تلقائيًا</string>
+    <string name="drop_claimed">تمت المطالبة بجائزة Twitch Drop: %s</string>
+    <string name="drop_claimed_generic">تمت المطالبة بجائزة Twitch Drop</string>
     <string name="connect_chat">Connect to chat</string>
     <string name="raid_text">Raiding %1$s with %2$d viewers</string>
     <string name="show_raids">Show raids</string>

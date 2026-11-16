@@ -271,6 +271,9 @@
     <string name="points_earned">%d Kanalpunkte verdient</string>
     <string name="points_notify">Benachrichtigen, wenn Kanal Punkte gesammelt wurden</string>
     <string name="points_collect">Kanalpunkte automatisch einsammeln</string>
+    <string name="drops_collect">Twitch-Drops automatisch abholen</string>
+    <string name="drop_claimed">Twitch-Drop abgeholt: %s</string>
+    <string name="drop_claimed_generic">Twitch-Drop abgeholt</string>
     <string name="connect_chat">Mit Chat verbunden</string>
     <string name="raid_text">%1$s wird mit %2$d Zuschauern geraidet</string>
     <string name="show_raids">Raids anzeigen</string>

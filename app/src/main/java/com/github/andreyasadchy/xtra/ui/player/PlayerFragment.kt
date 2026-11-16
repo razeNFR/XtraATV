@@ -320,6 +320,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun getCurrentPosition(): Long? = null
     /** Live: the time of Twitch of the picture shown (the delay of the chat follows it), null when not known. */
     open fun getLivePictureTime(): Long? = null
+
+    fun getStreamWatchMetadata(): com.github.andreyasadchy.xtra.ui.chat.ChatViewModel.StreamWatchMetadata? {
+        val svc = playbackService ?: return null
+        if (svc.type != BasePlaybackService.STREAM) return null
+        return com.github.andreyasadchy.xtra.ui.chat.ChatViewModel.StreamWatchMetadata(
+            streamId = svc.streamId,
+            gameId = svc.gameId,
+            gameName = svc.gameName,
+            needsPresencePing = (svc as? ExoPlayerService)?.isIndirectStreamPlayback() == true,
+        )
+    }
+
     open fun getCurrentSpeed(): Float? = null
     open fun getCurrentVolume(): Float? = null
 
@@ -1115,6 +1127,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         playbackService?.streamId = it
                                         chatFragment?.updateStreamId(it)
                                     }
+                                    chatFragment?.updateStreamMetadata(stream.id, stream.gameId, stream.gameName)
                                     if (requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) ||
                                         !requireContext().prefs().getBoolean(C.CHAT_PUB_SUB_ENABLED, true) ||
                                         viewersText.text.isNullOrBlank()
@@ -1899,8 +1912,38 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var streamOfflineReceived = false
+
+    private fun syncUptimeBadgeElapsedMs(elapsedMs: Long) {
+        if (_binding == null || streamOfflineReceived) {
+            return
+        }
+        with(binding.playerControls) {
+            if (!requireContext().prefs().getBoolean(C.PLAYER_SHOW_UPTIME, true)) {
+                if (uptimeLayout.isVisible) {
+                    uptimeTimer.stop()
+                    uptimeLayout.visibility = View.GONE
+                }
+                return
+            }
+            val safeElapsedMs = elapsedMs.coerceAtLeast(0L)
+            val wasVisible = uptimeLayout.isVisible
+            uptimeLayout.visibility = View.VISIBLE
+            uptimeIcon.visibility = if (requireContext().prefs().getBoolean(C.PLAYER_VIEWER_ICON, true)) View.VISIBLE else View.GONE
+            val nowElapsed = SystemClock.elapsedRealtime()
+            val desiredBase = nowElapsed - safeElapsedMs
+            val currentDisplayedSec = (nowElapsed - uptimeTimer.base) / 1000L
+            val targetSec = safeElapsedMs / 1000L
+            if (!wasVisible || currentDisplayedSec != targetSec || kotlin.math.abs(uptimeTimer.base - desiredBase) > 250L) {
+                uptimeTimer.base = desiredBase
+                uptimeTimer.start()
+            }
+        }
+    }
+
     fun updateLiveStatus(live: Boolean, serverTime: Long?, channelLogin: String?) {
         if (channelLogin == playbackService?.channelLogin) {
+            streamOfflineReceived = !live
             if (live) {
                 restartPlayer()
             }
@@ -1910,17 +1953,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private fun updateUptime(uptimeMs: Long?) {
         with(binding.playerControls) {
-            uptimeTimer.stop()
-            if (uptimeMs != null && requireContext().prefs().getBoolean(C.PLAYER_SHOW_UPTIME, true)) {
-                uptimeLayout.visibility = View.VISIBLE
-                uptimeTimer.base = SystemClock.elapsedRealtime() + uptimeMs - System.currentTimeMillis()
-                uptimeTimer.start()
-                if (requireContext().prefs().getBoolean(C.PLAYER_VIEWER_ICON, true)) {
-                    uptimeIcon.visibility = View.VISIBLE
+            if (uptimeMs != null && !streamOfflineReceived && requireContext().prefs().getBoolean(C.PLAYER_SHOW_UPTIME, true)) {
+                val rawElapsedMs = (com.github.andreyasadchy.xtra.util.TwitchClock.nowMs() - uptimeMs).coerceAtLeast(0L)
+                val effectiveElapsedMs = if (isExperimentalVodActive()) {
+                    (playbackService as? ExoPlayerService)?.getExperimentalDisplayEdgeMs()?.takeIf { it > 0L }
+                        ?: (rawElapsedMs - com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS).coerceAtLeast(0L)
                 } else {
-                    uptimeIcon.visibility = View.GONE
+                    rawElapsedMs
                 }
+                syncUptimeBadgeElapsedMs(effectiveElapsedMs)
             } else {
+                uptimeTimer.stop()
                 uptimeLayout.visibility = View.GONE
             }
         }
@@ -2261,16 +2304,28 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             return false
         }
         if (isExperimentalVodActive()) {
-            val exoService = service as? ExoPlayerService
-            val vodEdge = exoService?.getExperimentalLiveEdgeMs()?.takeIf { it > 0L }
-                ?: return exoService?.experimentalVodUserRewound == true
-            val currentPos = (getCurrentPosition() ?: vodEdge).coerceIn(0L, vodEdge)
+            val exoService = service as? ExoPlayerService ?: return false
+            if (exoService.isLivePaused) {
+                return true
+            }
+            val vodEdge = exoService.getExperimentalLiveEdgeMs().takeIf { it > 0L }
+                ?: return exoService.experimentalVodUserRewound
+            val displayEdge = exoService.getExperimentalDisplayEdgeMs().takeIf { it > 0L } ?: vodEdge
+            val currentPos = (getCurrentPosition() ?: vodEdge).coerceIn(0L, displayEdge)
             val behindMs = (vodEdge - currentPos).coerceAtLeast(0L)
-            val userRewound = exoService?.experimentalVodUserRewound == true
-            val atAdFreeEdge = if (userRewound) behindMs <= 8_000L else behindMs <= 32_000L
+            val displayBehindMs = (displayEdge - currentPos).coerceAtLeast(0L)
+            val userRewound = exoService.experimentalVodUserRewound
+            val atAdFreeEdge = if (userRewound) {
+                behindMs <= 4_500L && displayBehindMs <= 4_500L
+            } else {
+                behindMs <= 32_000L
+            }
             return !atAdFreeEdge
         }
         val exoService = service as? ExoPlayerService
+        if (exoService?.isLivePaused == true) {
+            return true
+        }
         val shiftBehindMs = exoService?.getLiveTimeShiftBehindMs() ?: 0L
         if (shiftBehindMs >= 4_500L) {
             return true
@@ -2312,25 +2367,37 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     duration.visibility = View.GONE
                     return
                 }
+                val displayEdge = exoService?.getExperimentalDisplayEdgeMs()?.takeIf { it > 0L } ?: vodEdge
+                val isPaused = exoService?.isLivePaused == true
                 progressBar.visibility = View.VISIBLE
                 position.visibility = View.VISIBLE
                 duration.visibility = View.VISIBLE
-                val currentPos = (getCurrentPosition() ?: vodEdge).coerceIn(0L, vodEdge)
+                val currentPos = (getCurrentPosition() ?: vodEdge).coerceIn(0L, displayEdge)
                 val behindMs = (vodEdge - currentPos).coerceAtLeast(0L)
+                val displayBehindMs = (displayEdge - currentPos).coerceAtLeast(0L)
                 val userRewound = exoService?.experimentalVodUserRewound == true
-                // 10s VOD segments + live-offset margin naturally fluctuate up to ~25s behind vodEdge without rewinding;
-                // only surface the "Direct" button when the viewer explicitly rewound (> 8s) or paused/drifted > 32s behind.
-                val atAdFreeEdge = if (userRewound) behindMs <= 8_000L else behindMs <= 32_000L
+                // Immediately exit "Direct" state while paused or time-shifted; while playing normally without
+                // rewinding/pausing, tolerate natural 10s segment fluctuations up to 32s.
+                val atAdFreeEdge = if (isPaused) {
+                    false
+                } else if (userRewound) {
+                    behindMs <= 4_500L && displayBehindMs <= 4_500L
+                } else {
+                    behindMs <= 32_000L
+                }
                 if (atAdFreeEdge) {
                     exoService?.clearExperimentalRewoundIfAtEdge()
                 }
                 syncPlayPauseButtonVisibility()
-                syncExperimentalChatReplay(!atAdFreeEdge && (userRewound || behindMs > 45_000L))
-                progressBar.setDuration(vodEdge)
-                progressBar.setPosition(if (atAdFreeEdge) vodEdge else currentPos)
-                progressBar.setBufferedPosition((exoService?.player?.bufferedPosition ?: currentPos).coerceIn(currentPos, vodEdge))
+                syncExperimentalChatReplay(!atAdFreeEdge && ((!isPaused && userRewound && behindMs > 15_000L) || behindMs > 45_000L))
+                progressBar.setDuration(displayEdge)
+                progressBar.setPosition(if (atAdFreeEdge) displayEdge else currentPos)
+                progressBar.setBufferedPosition(
+                    if (atAdFreeEdge) displayEdge else (exoService?.player?.bufferedPosition ?: currentPos).coerceIn(currentPos, displayEdge)
+                )
                 position.text = if (atAdFreeEdge) getString(R.string.tv_live) else DateUtils.formatElapsedTime(currentPos / 1000)
-                duration.text = DateUtils.formatElapsedTime(vodEdge / 1000)
+                duration.text = DateUtils.formatElapsedTime(displayEdge / 1000)
+                syncUptimeBadgeElapsedMs(displayEdge)
                 tvGoLive?.let { button ->
                     if (!atAdFreeEdge) {
                         styleTvGoLiveButton(button)
@@ -2369,23 +2436,25 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val exoService = playbackService as? ExoPlayerService
             val shiftBehindMs = exoService?.getLiveTimeShiftBehindMs() ?: 0L
             val pausedUptime = exoService?.livePausedUptimeMs
+            val isPaused = exoService?.isLivePaused == true
             if (pendingDvr) {
                 val target = pendingDvrPosition.coerceIn(0L, uptime)
                 progressBar.setPosition(target)
                 progressBar.setBufferedPosition(target)
                 position.text = DateUtils.formatElapsedTime(target / 1000)
-            } else if (shiftBehindMs >= 4_500L || pausedUptime != null) {
+            } else if (shiftBehindMs >= 4_500L || pausedUptime != null || isPaused) {
                 val target = if (shiftBehindMs > 0L) {
                     (uptime - shiftBehindMs).coerceIn(0L, uptime)
                 } else {
                     (pausedUptime ?: uptime).coerceIn(0L, uptime)
                 }
                 val behindMs = (uptime - target).coerceAtLeast(0L)
+                val showTimeShiftUi = behindMs >= 4_500L || pausedUptime != null || isPaused
                 progressBar.setPosition(target)
                 progressBar.setBufferedPosition(uptime)
-                position.text = if (behindMs < 4_500L) getString(R.string.tv_live) else DateUtils.formatElapsedTime(target / 1000)
+                position.text = if (!showTimeShiftUi) getString(R.string.tv_live) else DateUtils.formatElapsedTime(target / 1000)
                 tvGoLive?.let { button ->
-                    if (behindMs >= 4_500L) {
+                    if (showTimeShiftUi) {
                         styleTvGoLiveButton(button)
                         button.visibility = View.VISIBLE
                         button.setOnClickListener {
@@ -2417,6 +2486,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             duration.text = DateUtils.formatElapsedTime(uptime / 1000)
+            syncUptimeBadgeElapsedMs(uptime)
         }
     }
 
@@ -2433,14 +2503,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         val exoService = playbackService as? ExoPlayerService ?: return
         val vodEdge = exoService.getExperimentalLiveEdgeMs().takeIf { it > 0L } ?: return
-        val currentPos = (getCurrentPosition() ?: vodEdge).coerceIn(0L, vodEdge)
+        val displayEdge = exoService.getExperimentalDisplayEdgeMs().takeIf { it > 0L } ?: vodEdge
+        val isPaused = exoService.isLivePaused
+        val currentPos = (getCurrentPosition() ?: vodEdge).coerceIn(0L, displayEdge)
         val behindMs = (vodEdge - currentPos).coerceAtLeast(0L)
+        val displayBehindMs = (displayEdge - currentPos).coerceAtLeast(0L)
         val userRewound = exoService.experimentalVodUserRewound
-        val atAdFreeEdge = if (userRewound) behindMs <= 8_000L else behindMs <= 32_000L
+        val atAdFreeEdge = if (isPaused) {
+            false
+        } else if (userRewound) {
+            behindMs <= 4_500L && displayBehindMs <= 4_500L
+        } else {
+            behindMs <= 32_000L
+        }
         if (atAdFreeEdge) {
             exoService.clearExperimentalRewoundIfAtEdge()
         }
-        syncExperimentalChatReplay(!atAdFreeEdge && (userRewound || behindMs > 45_000L))
+        syncExperimentalChatReplay(!atAdFreeEdge && ((!isPaused && userRewound && behindMs > 15_000L) || behindMs > 45_000L))
     }
 
     private fun syncExperimentalChatReplay(wantReplay: Boolean) {
@@ -2540,7 +2619,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val isLive = isTvLiveTimeline()
         val expVod = isLive && isExperimentalVodActive()
         val duration = when {
-            expVod -> (playbackService as? ExoPlayerService)?.getExperimentalLiveEdgeMs()?.takeIf { it > 0L }
+            expVod -> (playbackService as? ExoPlayerService)?.getExperimentalDisplayEdgeMs()?.takeIf { it > 0L }
             isLive -> getStreamUptime()?.takeIf { it > 0 }
             else -> getTotalDuration()?.takeIf { it > 0 }
         } ?: return false
@@ -2970,13 +3049,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 androidx.compose.runtime.key(delayMode.intValue, expVodChat) {
                     when (delayMode.intValue) {
                         1 -> {
-                            val measured by androidx.compose.runtime.produceState(chatFragment?.getAutoDelayMs() ?: 0L) {
+                            val measuredState by androidx.compose.runtime.produceState(
+                                (chatFragment?.getAutoDelayMs() ?: 0L) to (chatFragment?.isAutoDelayMeasured() == true)
+                            ) {
                                 while (true) {
-                                    value = chatFragment?.getAutoDelayMs() ?: 0L
+                                    value = (chatFragment?.getAutoDelayMs() ?: 0L) to (chatFragment?.isAutoDelayMeasured() == true)
                                     kotlinx.coroutines.delay(1000)
                                 }
                             }
-                            val now = if (measured > 0L) {
+                            val (measured, isMeasured) = measuredState
+                            val now = if (measured > 0L || isMeasured) {
                                 getString(R.string.tv_chat_delay_auto_now, "%.1f".format(measured / 1000f))
                             } else {
                                 getString(R.string.tv_chat_delay_auto_measuring)

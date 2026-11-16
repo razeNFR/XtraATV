@@ -1917,4 +1917,126 @@ class GraphQLRepository(
             }
         }.getOrDefault(emptyList())
     }
+
+    enum class DropClaimResult {
+        CLAIMED,
+        ALREADY_CLAIMED,
+        FAILED,
+    }
+
+    data class ClaimableDropItem(
+        val dropInstanceId: String,
+        val dropName: String?,
+        val campaignName: String?,
+    )
+
+    suspend fun claimDropRewards(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        dropInstanceId: String,
+    ): DropClaimResult = withContext(Dispatchers.IO) {
+        if (dropInstanceId.isBlank()) return@withContext DropClaimResult.FAILED
+        val body = buildJsonObject {
+            put("operationName", "DropsPage_ClaimDropRewards")
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", "a455deea71bdc9015b78eb49f4acfbce8baa7ccbedd28e549bb025bd0f751930")
+                }
+            }
+            putJsonObject("variables") {
+                putJsonObject("input") {
+                    put("dropInstanceID", dropInstanceId)
+                }
+            }
+        }.toString()
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val root = json.parseToJsonElement(raw).obj() ?: return@runCatching DropClaimResult.FAILED
+            if (root["errors"].arr()?.isNotEmpty() == true) return@runCatching DropClaimResult.FAILED
+            val dataObj = root["data"].obj() ?: return@runCatching DropClaimResult.FAILED
+            if (dataObj["errors"].arr()?.isNotEmpty() == true) return@runCatching DropClaimResult.FAILED
+            val claimNode = dataObj["claimDropRewards"].obj() ?: return@runCatching DropClaimResult.FAILED
+            when (claimNode["status"].str()) {
+                "ELIGIBLE_FOR_ALL" -> DropClaimResult.CLAIMED
+                "DROP_INSTANCE_ALREADY_CLAIMED" -> DropClaimResult.ALREADY_CLAIMED
+                else -> DropClaimResult.FAILED
+            }
+        }.getOrDefault(DropClaimResult.FAILED)
+    }
+
+    suspend fun loadClaimableDropsFromInventory(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+    ): List<ClaimableDropItem> = withContext(Dispatchers.IO) {
+        fun buildInventoryBody(hash: String): String = buildJsonObject {
+            put("operationName", "Inventory")
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", hash)
+                }
+            }
+            putJsonObject("variables") {
+                put("fetchRewardCampaigns", false)
+            }
+        }.toString()
+
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+            fun JsonElement?.bool(): Boolean? = (this as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull()
+
+            var raw = sendPersistedQuery(
+                networkLibrary,
+                headers,
+                buildInventoryBody("d86775d0ef16a63a33ad52e80eaff963b2d5b72fada7c991504a57496e1d8e4b"),
+            )
+            if (raw.contains("PersistedQueryNotFound")) {
+                raw = sendPersistedQuery(
+                    networkLibrary,
+                    headers,
+                    buildInventoryBody("8337eb8541b314040b0edde0c09c5c7a2783ba1960aa9edfbf3bac16d0fec404"),
+                )
+            }
+            val campaigns = json.parseToJsonElement(raw).obj()
+                ?.get("data").obj()
+                ?.get("currentUser").obj()
+                ?.get("inventory").obj()
+                ?.get("dropCampaignsInProgress").arr()
+                ?: return@runCatching emptyList()
+            val nowMs = System.currentTimeMillis()
+            val claimGraceMs = 24L * 3600L * 1000L
+            val results = ArrayList<ClaimableDropItem>()
+            for (campaignEl in campaigns) {
+                val campaign = campaignEl.obj() ?: continue
+                val campaignName = campaign["name"].str()?.takeIf { it.isNotBlank() }
+                val endAtStr = campaign["endAt"].str()
+                val endAtMs = endAtStr?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                if (endAtMs != null && nowMs > endAtMs + claimGraceMs) continue
+                val drops = campaign["timeBasedDrops"].arr() ?: continue
+                for (dropEl in drops) {
+                    val drop = dropEl.obj() ?: continue
+                    val selfObj = drop["self"].obj() ?: continue
+                    val isClaimed = selfObj["isClaimed"].bool() ?: false
+                    val instanceId = selfObj["dropInstanceID"].str()?.takeIf { it.isNotBlank() } ?: continue
+                    if (!isClaimed) {
+                        results.add(
+                            ClaimableDropItem(
+                                dropInstanceId = instanceId,
+                                dropName = drop["name"].str()?.takeIf { it.isNotBlank() },
+                                campaignName = campaignName,
+                            )
+                        )
+                    }
+                }
+            }
+            results
+        }.getOrDefault(emptyList())
+    }
 }

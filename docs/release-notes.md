@@ -1,20 +1,22 @@
-# Xtra TV 1.4.0
+# Xtra TV 1.4.1
 
 ### ✨ Highlights
-- **True pause & time-shift resume on live streams**: pause any live stream and resume right where you left off — even several minutes later — with automatic chat synchronization and a **Live** button in the player controls to jump back to real time whenever you want.
-- **Unified Adblock & Proxy player panel**: the player's **Adblock & Proxy** button now opens a single quick panel to toggle **Ad blocker (Experimental)** or manage **custom HLS proxies** on the fly without leaving your stream.
+- **Channel Points & Twitch Drops auto-collection across all playback modes**: fixed Channel Points watch-time progression and automatic `+50` bonus chest collection on Android TV accounts, and added **automatic Twitch Drops progression & claiming** (*Settings → Chat → Claim Twitch Drops automatically*, enabled by default) across all playback modes (Standard, Adblock Swap, Proxy, and Ad blocker Experimental).
+- **Exact stream latency & zero-lag Auto chat delay**: refined live latency measurement (*Stats for nerds*) to match Twitch's official Low-Latency player without `+4s` prefetch inflation or `1s` oscillations, and calibrated **Auto chat delay** so ultra-low-latency streams display chat in real time (`0.0s` extra delay) while still synchronizing automatically whenever latency increases or the stream is paused.
 
-### New features & improvements
-- **Highlighted users in chat**: highlight messages from friends, moderators, or favorite regulars with a distinct warm gold highlight in busy chats. Manage your list in *Settings → Chat → Highlighted users* (supports comma-separated usernames) or directly from the player's **Accounts & bots** chat panel (from active chatters or manual entry). Highlighted users' messages are also kept when *Slow chat* filtering is active.
-- **Configurable OK (short & long press) & Small Window shortcuts**: customize both **OK** and **OK (long press)** in *Directional pad shortcuts*, and assign **Small window: swap streams**, **Small window: settings**, or **Small window: close** to any D-pad direction or custom remote button (short or long press). When the small window is closed, small-window shortcuts automatically fall back to standard player controls. *(Thanks to @kvart714 in #73 for the OK short-press shortcut contribution!)*
-- **Removed hardcoded Fast-Forward live action**: pressing the remote's Fast-Forward / Next media button on a live stream no longer triggers an unintended jump unless explicitly assigned in *Custom remote buttons* (fast-forward on VODs and clips is unchanged).
-- **Calibrated stream latency & synchronized chat**:
-  - Calibrated stream latency (*Stats for nerds*) and auto chat delay against Twitch's server clock across standard, Swap, Proxy, and Experimental Adblock modes — eliminating `0.0s` or negative latency values when a TV box's system clock is slightly off.
-  - Synchronized chat right from the first second of stream playback under **Ad blocker (Experimental)** so ahead-of-video messages never appear early.
-- **Fixes & stability**:
-  - Improved live pause & resume in standard / Swap adblock mode: short pauses (up to ~48s) resume instantly in memory at `1.0x` speed without jumping to live or allocating extra buffer RAM, while longer pauses seamlessly resume at the exact paused timestamp.
-  - Fixed automatic video quality (`Auto`) occasionally dropping resolution right after rewinding or seeking in VODs and time-shifted streams.
-  - Fixed an infinite loop on the *"Install unknown apps"* permission screen on some Android TV / Google TV / Fire OS devices when installing an app update, with a direct browser/settings fallback if Android blocks package installation.
+### Improvements & fixes
+- **Channel Points & Twitch Drops**:
+  - Authenticated PubSub (`Hermes`) and watch-time tracking natively with Android TV sign-in credentials.
+  - Updated `minute-watched` tracking with current Twitch category metadata and lightweight `0`-byte presence verification so both Channel Points and multi-tier Twitch Drops progress reliably across Standard, Swap, Proxy, and Experimental Adblock modes without extra memory or bandwidth usage.
+  - Added real-time Drop auto-claim (`user-drop-events`) plus automatic inventory checks so earned Drops are claimed immediately and subsequent campaign tiers unlock automatically.
+- **Pause & live timeline in Ad blocker (Experimental)**:
+  - Pressing **Pause** under **Ad blocker (Experimental)** now immediately displays the paused timestamp, smoothly advances total stream duration second-by-second, surfaces the **Live** button, and keeps time-shifted playback controls visible upon resuming until returning to live — matching Proxy and Swap modes.
+  - Synchronized the live stream uptime badge with the broadcast timeline duration across all playback modes (including **Ad blocker (Experimental)** and server clock calibration) so both counters match to the exact second.
+- **Stream latency & Auto chat delay**:
+  - Locked Twitch server clock calibration to millisecond precision once acquired so coarse HTTP `Date` headers no longer cause `1s` latency jumps.
+  - Accounted for chatter baseline viewing latency in **Auto** chat delay mode and updated the chat panel indicator to display `0.0s` once measured instead of staying on *"Measuring…"*.
+- **Chat overlays readability**:
+  - Replaced the semi-transparent background on **Poll**, **Prediction**, **Raid**, and **Chat status** overlays with a solid, high-contrast bordered card independent of chat window opacity so poll options, percentages, votes, and timers remain clearly readable over active chat.
 
 ### Install
-Download `XtraTV-1.4.0-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.4.1-tv.apk` below and install it over the previous version, your settings and account are kept.

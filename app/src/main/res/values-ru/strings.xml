@@ -271,6 +271,9 @@
     <string name="points_earned">Собраны баллы канала: %d</string>
     <string name="points_notify">Уведомлять о сборе баллов канала</string>
     <string name="points_collect">Автосбор баллов канала</string>
+    <string name="drops_collect">Автополучение Twitch Drops</string>
+    <string name="drop_claimed">Получен Twitch Drop: %s</string>
+    <string name="drop_claimed_generic">Получен Twitch Drop</string>
     <string name="connect_chat">Подключиться к чату</string>
     <string name="raid_text">Происходит рейд %1$s с %2$d зрителями</string>
     <string name="show_raids">Показывать рейды и хосты</string>

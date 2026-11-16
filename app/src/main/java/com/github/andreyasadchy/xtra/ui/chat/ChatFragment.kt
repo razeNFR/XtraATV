@@ -131,6 +131,13 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 else -> false
             }
         }
+        viewModel.streamMetadataProvider = {
+            when (val parent = parentFragment) {
+                is com.github.andreyasadchy.xtra.ui.player.PlayerFragment -> parent.getStreamWatchMetadata()
+                is com.github.andreyasadchy.xtra.ui.player.MultiStreamFragment -> parent.getStreamWatchMetadata(delayLogin)
+                else -> null
+            }
+        }
         (parentFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment)?.onChatFragmentReady(this)
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -596,6 +603,11 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             }
                         }
                     }
+                    if (resources.getBoolean(R.bool.isTv)) {
+                        val accentColor = com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
+                        pollStatus.setTextColor(accentColor)
+                        predictionStatus.setTextColor(accentColor)
+                    }
                     pollClose.setOnClickListener {
                         pollLayout.visibility = View.GONE
                         viewModel.pollSecondsLeft.value = null
@@ -615,7 +627,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                     getString(
                                                         R.string.poll_choice,
                                                         (((it.totalVotes ?: 0).toLong() * 100.0) / max((poll.totalVotes ?: 0), 1)).roundToInt(),
-                                                        it.totalVotes?.let { NumberFormat.getInstance().format(it) },
+                                                        it.totalVotes?.let { NumberFormat.getInstance().format(it) } ?: "0",
                                                         it.title
                                                     )
                                                 }
@@ -633,7 +645,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                             R.string.poll_choice
                                                         },
                                                         (((it.totalVotes ?: 0).toLong() * 100.0) / max((poll.totalVotes ?: 0), 1)).roundToInt(),
-                                                        it.totalVotes?.let { NumberFormat.getInstance().format(it) },
+                                                        it.totalVotes?.let { NumberFormat.getInstance().format(it) } ?: "0",
                                                         it.title
                                                     )
                                                 }
@@ -1098,6 +1110,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     /** The delay of the chat in Auto (ms), 0 while not measured. */
     fun getAutoDelayMs(): Long = if (isAdded) viewModel.effectiveAutoDelayMs() else 0L
 
+    fun isAutoDelayMeasured(): Boolean = isAdded && viewModel.isAutoDelayReady()
+
     fun updateSpeed(speed: Float) {
         if (!isAdded) return
         viewModel.updateSpeed(speed)
@@ -1105,7 +1119,16 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     fun updateStreamId(id: String?) {
         if (!isAdded) return
-        viewModel.streamId = id
+        if (!id.isNullOrBlank()) {
+            viewModel.streamId = id
+        }
+    }
+
+    fun updateStreamMetadata(streamId: String?, gameId: String?, gameName: String?) {
+        if (!isAdded) return
+        if (!streamId.isNullOrBlank()) viewModel.streamId = streamId
+        if (!gameId.isNullOrBlank()) viewModel.gameId = gameId
+        if (!gameName.isNullOrBlank()) viewModel.gameName = gameName
     }
 
     fun getTranslateAllMessages(): Boolean {
