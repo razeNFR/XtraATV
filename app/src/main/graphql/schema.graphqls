@@ -519,7 +519,13 @@ input GameClipsInput {
     sort: ClipsSort
 }
 
+enum GameSort {
+    RELEVANCE
+    VIEWER_COUNT
+}
+
 input GameOptions {
+    sort: GameSort
     tags: [String!]
 }
 

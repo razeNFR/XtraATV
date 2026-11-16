@@ -297,11 +297,6 @@ private class TvDialogBuilder(context: Context) : AlertDialog.Builder(context) {
     override fun create(): AlertDialog = super.create().also { it.focusPositiveButtonOnShow() }
 }
 
-object UpdateInstallHelper {
-    @Volatile var unknownSourcesPromptedInSession = false
-    @Volatile var lastAttemptedUpdateUrl: String? = null
-}
-
 /**
  * Returns true if this app is allowed to request package installs.
  * Some Android TV / Fire OS / OEM firmwares keep returning false from [android.content.pm.PackageManager.canRequestPackageInstalls]
@@ -328,7 +323,11 @@ fun Context.canInstallUnknownAppsCompat(): Boolean {
     }
 }
 
-fun Activity.showInstallBlockedDialog(downloadUrl: String?) {
+/**
+ * Android blocked the installation of the update: download it in the browser, open the settings, or [onRetry] (else
+ * cancel), with the details of what Android answered (a photo of them says why it failed).
+ */
+fun Activity.showInstallBlockedDialog(downloadUrl: String?, onRetry: (() -> Unit)? = null) {
     if (isFinishing || isDestroyed) return
     val openBrowser: (String) -> Unit = { url ->
         try {
@@ -343,8 +342,12 @@ fun Activity.showInstallBlockedDialog(downloadUrl: String?) {
     }
     val builder = getAlertDialogBuilder()
         .setTitle(R.string.update_available)
-        .setMessage(R.string.tv_update_install_blocked)
-        .setNegativeButton(android.R.string.cancel, null)
+        .setMessage(getString(R.string.tv_update_install_blocked) + "\n\n" + UpdateInstallHelper.diagnostics(this))
+    if (onRetry != null) {
+        builder.setNegativeButton(R.string.tv_update_try_again) { _, _ -> onRetry() }
+    } else {
+        builder.setNegativeButton(android.R.string.cancel, null)
+    }
     if (!downloadUrl.isNullOrBlank()) {
         builder.setPositiveButton(R.string.update_using_browser) { _, _ -> openBrowser(downloadUrl) }
         builder.setNeutralButton(R.string.settings) { _, _ -> openUnknownAppSourcesSettings() }

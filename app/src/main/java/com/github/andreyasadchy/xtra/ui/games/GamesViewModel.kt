@@ -41,7 +41,8 @@ class GamesViewModel(
             GamesDataSource(
                 tags = tags.ifEmpty { null }?.mapNotNull { it.id },
                 ascending = ascending,
-                gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext),
+                relevance = relevance,
+                gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, relevance),
                 graphQLRepository = graphQLRepository,
                 helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
                 helixRepository = helixRepository,
@@ -55,13 +56,18 @@ class GamesViewModel(
     val ascending: Boolean
         get() = filter.value?.ascending == true
 
-    fun setFilter(tags: Array<Tag>?, ascending: Boolean = this.ascending) {
-        filter.value = Filter(tags, ascending)
+    /** "Recommended for you": the order Twitch chooses for the logged in user. */
+    val relevance: Boolean
+        get() = filter.value?.relevance == true
+
+    fun setFilter(tags: Array<Tag>?, ascending: Boolean = this.ascending, relevance: Boolean = this.relevance) {
+        filter.value = Filter(tags, ascending, relevance && !ascending)
     }
 
     class Filter(
         val tags: Array<Tag>?,
         val ascending: Boolean = false,
+        val relevance: Boolean = false,
     )
 
     companion object {

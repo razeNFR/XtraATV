@@ -243,6 +243,11 @@ object TwitchApiHelper {
         }
     }
 
+    /** True when the user is logged in to Twitch: "Recommended for you" is only offered then (the same order as the viewers otherwise). */
+    fun isLoggedIn(context: Context): Boolean {
+        return !getGQLHeaders(context, true)[C.HEADER_TOKEN].isNullOrBlank()
+    }
+
     fun getGQLHeaders(context: Context, includeToken: Boolean = false): Map<String, String> {
         return mutableMapOf<String, String>().apply {
             if (context.prefs().getBoolean(C.ENABLE_INTEGRITY, false)) {

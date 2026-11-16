@@ -92,6 +92,7 @@ object C {
     const val TV_HOME_CARDS = "tv_home_cards"
     const val TV_CARD_ZOOM = "tv_card_zoom"
     const val GAMES_SORT_ASCENDING = "games_sort_ascending"
+    const val GAMES_SORT_RELEVANCE = "games_sort_relevance"
     const val TV_MINI_PLAYER_KEEP_ON_HOME = "tv_mini_player_keep_on_home"
     const val TV_AUDIO_ONLY_KEEP_ON_HOME = "tv_audio_only_keep_on_home"
     const val TV_FULLSCREEN_KEEP_ON_HOME = "tv_fullscreen_keep_on_home"

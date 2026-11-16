@@ -1114,6 +1114,7 @@
     <string name="tv_home_no_category_found">找不到分類</string>
     <string name="tv_home_row_favorites">最愛頻道直播中</string>
     <string name="tv_home_row_recommended">推薦頻道</string>
+    <string name="tv_sort_recommended">為你推薦</string>
     <string name="tv_home_row_clips">追隨頻道的熱門剪輯</string>
     <string name="tv_home_row_followed_games">追隨的分類</string>
     <string name="tv_home_row_show">在首頁顯示</string>
@@ -1187,6 +1188,7 @@
     <string name="tv_adblock_and_proxies_title">廣告攔截與代理</string>
     <string name="tv_adblock_and_proxies_subtitle">用於直播的實驗性廣告攔截或自訂 HLS 代理</string>
     <string name="tv_update_install_blocked">Android 封鎖了安裝。請在系統設定中允許 Xtra TV「安裝未知應用程式」，或透過瀏覽器下載更新。</string>
+    <string name="tv_update_try_again">重試</string>
     <string name="tv_remote_action_pip_swap_default">小視窗：交換直播（預設）</string>
     <string name="tv_remote_action_show_controls">顯示控制列</string>
 </resources>

@@ -253,6 +253,13 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    @Deprecated("The installer of Android is started for a result so it knows the app asked for the installation")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        UpdateInstallHelper.onActivityResult(this, requestCode, resultCode)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState?.getBoolean(KEY_CHANGED) == true) {
@@ -1074,16 +1081,9 @@ class SettingsActivity : AppCompatActivity() {
                                     } catch (e: ActivityNotFoundException) {
                                         Toast.makeText(requireContext(), R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                     }
-                                } else if (!requireContext().canInstallUnknownAppsCompat() && !UpdateInstallHelper.unknownSourcesPromptedInSession) {
-                                    UpdateInstallHelper.unknownSourcesPromptedInSession = true
-                                    pendingUpdateUrl = it
-                                    pendingUpdateAt = android.os.SystemClock.elapsedRealtime()
-                                    if (!requireActivity().openUnknownAppSourcesSettings()) {
-                                        pendingUpdateUrl = null
-                                        startUpdateDownload(it)
-                                    }
                                 } else {
-                                    startUpdateDownload(it)
+                                    // the settings "Install unknown apps" at most once an hour, then the ways of installing (never a loop)
+                                    UpdateInstallHelper.startUpdate(requireActivity(), it) { url -> startUpdateDownload(url) }
                                 }
                             }
                             if (TvUi.isTv(requireContext())) {
@@ -1134,10 +1134,14 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
             }
+            viewLifecycleOwner.lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    viewModel.updateInstallApk.collectLatest { apk ->
+                        UpdateInstallHelper.openApkWithInstaller(requireActivity(), apk)
+                    }
+                }
+            }
         }
-
-        private var pendingUpdateUrl: String? = null
-        private var pendingUpdateAt: Long = 0L
 
         private fun startUpdateDownload(url: String) {
             val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
@@ -1173,15 +1177,8 @@ class SettingsActivity : AppCompatActivity() {
                 updateTvAdsAndProxiesState()
             }
             updateTvProxySummary()
-            val url = pendingUpdateUrl
-            if (url != null) {
-                pendingUpdateUrl = null
-                if (requireContext().canInstallUnknownAppsCompat() &&
-                    android.os.SystemClock.elapsedRealtime() - pendingUpdateAt <= 5 * 60_000L
-                ) {
-                    startUpdateDownload(url)
-                }
-            }
+            // back from the settings "Install unknown apps" (also when the TV closed the app meanwhile): the update downloads
+            UpdateInstallHelper.takePendingUpdate(requireContext())?.let { startUpdateDownload(it) }
         }
 
         fun updateTvAdsAndProxiesState() {

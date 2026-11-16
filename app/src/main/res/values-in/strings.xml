@@ -1115,6 +1115,7 @@
     <string name="tv_home_no_category_found">Kategori tidak ditemukan</string>
     <string name="tv_home_row_favorites">Saluran favorit sedang live</string>
     <string name="tv_home_row_recommended">Saluran rekomendasi</string>
+    <string name="tv_sort_recommended">Direkomendasikan untuk Anda</string>
     <string name="tv_home_row_clips">Klip populer saluran yang diikuti</string>
     <string name="tv_home_row_followed_games">Kategori yang diikuti</string>
     <string name="tv_home_row_show">Tampilkan di beranda</string>
@@ -1188,6 +1189,7 @@
     <string name="tv_adblock_and_proxies_title">Pemblokir iklan &amp; proxy</string>
     <string name="tv_adblock_and_proxies_subtitle">Pemblokir iklan eksperimental atau proxy HLS kustom untuk siaran langsung</string>
     <string name="tv_update_install_blocked">Android memblokir pemasangan. Izinkan \"Instal aplikasi tak dikenal\" untuk Xtra TV di pengaturan sistem, atau unduh pembaruan melalui browser.</string>
+    <string name="tv_update_try_again">Coba lagi</string>
     <string name="tv_remote_action_pip_swap_default">Jendela kecil: tukar siaran (bawaan)</string>
     <string name="tv_remote_action_show_controls">Tampilkan kontrol</string>
 </resources>

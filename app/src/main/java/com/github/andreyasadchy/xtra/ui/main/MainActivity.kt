@@ -105,9 +105,7 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.UpdateInstallHelper
 import com.github.andreyasadchy.xtra.util.applyTheme
-import com.github.andreyasadchy.xtra.util.canInstallUnknownAppsCompat
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
-import com.github.andreyasadchy.xtra.util.openUnknownAppSourcesSettings
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.showInstallBlockedDialog
 import com.github.andreyasadchy.xtra.util.tokenPrefs
@@ -549,16 +547,9 @@ class MainActivity : AppCompatActivity() {
                                 } catch (e: ActivityNotFoundException) {
                                     Toast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                 }
-                            } else if (!canInstallUnknownAppsCompat() && !UpdateInstallHelper.unknownSourcesPromptedInSession) {
-                                UpdateInstallHelper.unknownSourcesPromptedInSession = true
-                                pendingUpdateUrl = it
-                                pendingUpdateAt = android.os.SystemClock.elapsedRealtime()
-                                if (!openUnknownAppSourcesSettings()) {
-                                    pendingUpdateUrl = null
-                                    startUpdateDownload(it)
-                                }
                             } else {
-                                startUpdateDownload(it)
+                                // the settings "Install unknown apps" at most once an hour, then the ways of installing (never a loop)
+                                UpdateInstallHelper.startUpdate(this@MainActivity, it) { url -> startUpdateDownload(url) }
                             }
                         }
                         val ignoreUpdate: () -> Unit = {
@@ -609,6 +600,13 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.updateInstallBlocked.collectLatest { blockedUrl ->
                     showInstallBlockedDialog(blockedUrl)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.updateInstallApk.collectLatest { apk ->
+                    UpdateInstallHelper.openApkWithInstaller(this@MainActivity, apk)
                 }
             }
         }
@@ -848,9 +846,6 @@ class MainActivity : AppCompatActivity() {
         setNavBarColor(newConfig.orientation == Configuration.ORIENTATION_PORTRAIT)
     }
 
-    private var pendingUpdateUrl: String? = null
-    private var pendingUpdateAt: Long = 0L
-
     private fun startUpdateDownload(url: String) {
         val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
         updateDownloadDialogBinding = binding
@@ -888,13 +883,8 @@ class MainActivity : AppCompatActivity() {
         if (!isTvPlayerOverContent()) {
             refreshVisibleScreensIfStale(60_000L)
         }
-        val url = pendingUpdateUrl
-        if (url != null) {
-            pendingUpdateUrl = null
-            if (canInstallUnknownAppsCompat() && android.os.SystemClock.elapsedRealtime() - pendingUpdateAt <= 5 * 60_000L) {
-                startUpdateDownload(url)
-            }
-        }
+        // back from the settings "Install unknown apps" (also when the TV closed the app meanwhile): the update downloads
+        UpdateInstallHelper.takePendingUpdate(this)?.let { startUpdateDownload(it) }
     }
 
     override fun onDestroy() {
@@ -910,6 +900,13 @@ class MainActivity : AppCompatActivity() {
             (playerFragment as? PlayerFragment)?.close()
         }
         super.onDestroy()
+    }
+
+    @Deprecated("The installer of Android is started for a result so it knows the app asked for the installation")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        UpdateInstallHelper.onActivityResult(this, requestCode, resultCode)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -2193,6 +2190,12 @@ class MainActivity : AppCompatActivity() {
                 val status = extras?.getInt(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
                     ?: PackageInstaller.STATUS_FAILURE
                 val fallbackUrl = extras?.getString("update_url") ?: UpdateInstallHelper.lastAttemptedUpdateUrl
+                val msg = extras?.getString(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                UpdateInstallHelper.lastInstallerStatus = "session status=$status" + (msg?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
+                // "Try again" in the dialog: the other way of installing, while one is left
+                val retry = fallbackUrl?.takeIf { UpdateInstallHelper.installMethod(this) == UpdateInstallHelper.METHOD_INTENT }?.let { url ->
+                    { startUpdateDownload(url) }
+                }
                 when (status) {
                     PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                         val confirmIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -2203,25 +2206,30 @@ class MainActivity : AppCompatActivity() {
                         }
                         if (confirmIntent != null) {
                             try {
-                                startActivity(confirmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                // started for a result from this screen: Android knows the app asked for the installation
+                                @Suppress("DEPRECATION")
+                                startActivityForResult(confirmIntent, UpdateInstallHelper.REQUEST_CONFIRM_INSTALL)
                             } catch (_: Exception) {
-                                showInstallBlockedDialog(fallbackUrl)
+                                try {
+                                    startActivity(confirmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                } catch (_: Exception) {
+                                    showInstallBlockedDialog(fallbackUrl, retry)
+                                }
                             }
                         } else {
-                            showInstallBlockedDialog(fallbackUrl)
+                            showInstallBlockedDialog(fallbackUrl, retry)
                         }
                     }
                     PackageInstaller.STATUS_SUCCESS,
                     PackageInstaller.STATUS_FAILURE_ABORTED -> Unit
                     PackageInstaller.STATUS_FAILURE_BLOCKED -> {
-                        showInstallBlockedDialog(fallbackUrl)
+                        showInstallBlockedDialog(fallbackUrl, retry)
                     }
                     else -> {
-                        val msg = extras?.getString(PackageInstaller.EXTRA_STATUS_MESSAGE)
                         if (!msg.isNullOrBlank()) {
                             Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                         }
-                        showInstallBlockedDialog(fallbackUrl)
+                        showInstallBlockedDialog(fallbackUrl, retry)
                     }
                 }
             }

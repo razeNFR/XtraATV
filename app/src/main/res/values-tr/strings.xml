@@ -1115,6 +1115,7 @@
     <string name="tv_home_no_category_found">Kategori bulunamadı</string>
     <string name="tv_home_row_favorites">Canlı favori kanallar</string>
     <string name="tv_home_row_recommended">Önerilen kanallar</string>
+    <string name="tv_sort_recommended">Sizin için önerilenler</string>
     <string name="tv_home_row_clips">Takip edilen kanalların popüler klipleri</string>
     <string name="tv_home_row_followed_games">Takip edilen kategoriler</string>
     <string name="tv_home_row_show">Ana ekranda göster</string>
@@ -1188,6 +1189,7 @@
     <string name="tv_adblock_and_proxies_title">Reklam engelleyici ve proxyler</string>
     <string name="tv_adblock_and_proxies_subtitle">Canlı yayınlar için deneysel reklam engelleyici veya özel HLS proxyleri</string>
     <string name="tv_update_install_blocked">Android yüklemeyi engelledi. Sistem ayarlarından Xtra TV için \"Bilinmeyen uygulamaları yükle\" iznini verin veya güncellemeyi tarayıcıdan indirin.</string>
+    <string name="tv_update_try_again">Tekrar dene</string>
     <string name="tv_remote_action_pip_swap_default">Küçük pencere: yayınları değiştir (varsayılan)</string>
     <string name="tv_remote_action_show_controls">Kontrolleri göster</string>
 </resources>

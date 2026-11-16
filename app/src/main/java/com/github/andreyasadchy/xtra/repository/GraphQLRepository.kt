@@ -60,6 +60,7 @@ import com.github.andreyasadchy.xtra.graphql.VideoQuery
 import com.github.andreyasadchy.xtra.graphql.type.BadgeImageSize
 import com.github.andreyasadchy.xtra.graphql.type.BroadcastType
 import com.github.andreyasadchy.xtra.graphql.type.ClipsPeriod
+import com.github.andreyasadchy.xtra.graphql.type.GameSort
 import com.github.andreyasadchy.xtra.graphql.type.Language
 import com.github.andreyasadchy.xtra.graphql.type.StreamSort
 import com.github.andreyasadchy.xtra.graphql.type.VideoSort
@@ -453,8 +454,9 @@ class GraphQLRepository(
         sendQuery(networkLibrary, headers, query)
     }
 
-    suspend fun loadQueryTopGames(networkLibrary: String?, headers: Map<String, String>, tags: List<String>?, first: Int?, after: String?): ApolloResponse<TopGamesQuery.Data> = withContext(Dispatchers.IO) {
+    suspend fun loadQueryTopGames(networkLibrary: String?, headers: Map<String, String>, sort: GameSort?, tags: List<String>?, first: Int?, after: String?): ApolloResponse<TopGamesQuery.Data> = withContext(Dispatchers.IO) {
         val query = TopGamesQuery(
+            sort = if (sort != null) Optional.Present(sort) else Optional.Absent,
             tags = Optional.Present(tags),
             first = Optional.Present(first),
             after = Optional.Present(after),
@@ -827,7 +829,7 @@ class GraphQLRepository(
         json.decodeFromString<TagResponse>(sendPersistedQuery(networkLibrary, headers, body))
     }
 
-    suspend fun loadTopGames(networkLibrary: String?, headers: Map<String, String>, tags: List<String>?, limit: Int?, cursor: String?): GamesResponse = withContext(Dispatchers.IO) {
+    suspend fun loadTopGames(networkLibrary: String?, headers: Map<String, String>, sort: String?, tags: List<String>?, limit: Int?, cursor: String?): GamesResponse = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             putJsonObject("extensions") {
                 putJsonObject("persistedQuery") {
@@ -840,7 +842,7 @@ class GraphQLRepository(
                 put("cursor", cursor)
                 put("limit", limit)
                 putJsonObject("options") {
-                    put("sort", "VIEWER_COUNT")
+                    put("sort", sort ?: "VIEWER_COUNT")
                     putJsonArray("tags") {
                         tags?.forEach {
                             add(it)
