@@ -324,9 +324,12 @@ class SettingsActivity : AppCompatActivity() {
                 openTvCategory(0)
             }
         }
-        // TV: opened from the player on the list of the custom proxies ("All the proxy settings")
-        if (savedInstanceState == null && intent?.getStringExtra(EXTRA_OPEN) == OPEN_CUSTOM_PROXIES) {
-            navController.navigate(SettingsNavGraphDirections.actionGlobalCustomProxySettingsFragment())
+        // TV: opened from the player on the list of the custom or HTTP proxies ("All the proxy settings")
+        if (savedInstanceState == null) {
+            when (intent?.getStringExtra(EXTRA_OPEN)) {
+                OPEN_CUSTOM_PROXIES -> navController.navigate(SettingsNavGraphDirections.actionGlobalCustomProxySettingsFragment())
+                OPEN_STREAM_PROXIES -> navController.navigate(SettingsNavGraphDirections.actionGlobalStreamProxySettingsFragment())
+            }
         }
         if (TvUi.isTv(this)) {
             // under the name of the screen: the app and its version ("Xtra TV 1.2.0", "(debug)" on the test builds)
@@ -652,6 +655,7 @@ class SettingsActivity : AppCompatActivity() {
         private const val KEY_TV_CATEGORY = "tvCategory"
         const val EXTRA_OPEN = "open"
         const val OPEN_CUSTOM_PROXIES = "custom_proxies"
+        const val OPEN_STREAM_PROXIES = "stream_proxies"
         /** TV: the preferences of a category of the left column, for the root screen. */
         const val ARG_TV_XML = "tvXml"
     }
@@ -798,6 +802,20 @@ class SettingsActivity : AppCompatActivity() {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerButtonSettingsFragment())
                 true
+            }
+            findPreference<Preference>(C.TV_SWITCHER_ROWS)?.let { preference ->
+                val context = requireContext()
+                val updateSummary = {
+                    preference.summary = com.github.andreyasadchy.xtra.ui.tv.TvSwitcherRows.summary(context)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvSwitcherRows.showManagerPanel(context) {
+                        updateSummary()
+                        (requireActivity() as? SettingsActivity)?.setResult()
+                    }
+                    true
+                }
             }
             findPreference<Preference>("buffer_settings")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
@@ -2164,6 +2182,20 @@ class SettingsActivity : AppCompatActivity() {
                 preference.setOnPreferenceClickListener {
                     com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamQuality.showPanel(context = context) {
                         updateSummary()
+                    }
+                    true
+                }
+            }
+            findPreference<Preference>(C.TV_SWITCHER_ROWS)?.let { preference ->
+                val context = requireContext()
+                val updateSummary = {
+                    preference.summary = com.github.andreyasadchy.xtra.ui.tv.TvSwitcherRows.summary(context)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvSwitcherRows.showManagerPanel(context) {
+                        updateSummary()
+                        (requireActivity() as? SettingsActivity)?.setResult()
                     }
                     true
                 }

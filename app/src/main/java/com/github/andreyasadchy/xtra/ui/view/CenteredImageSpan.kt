@@ -7,7 +7,12 @@ import android.graphics.drawable.Drawable
 import android.text.style.ImageSpan
 
 
-class CenteredImageSpan(drawable: Drawable) : ImageSpan(drawable) {
+class CenteredImageSpan(
+    drawable: Drawable,
+    val isAnimatedSpan: Boolean = true,
+) : ImageSpan(drawable) {
+
+    var drawableCallback: Drawable.Callback? = null
 
     override fun getSize(paint: Paint, text: CharSequence, start: Int, end: Int, fontMetricsInt: FontMetricsInt?): Int {
         val drawable = drawable

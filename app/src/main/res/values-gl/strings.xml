@@ -1191,4 +1191,8 @@
     <string name="tv_update_try_again">Tentar de novo</string>
     <string name="tv_remote_action_pip_swap_default">Xanela pequena: intercambiar directos (predeterminado)</string>
     <string name="tv_remote_action_show_controls">Amosar controis</string>
+    <string name="tv_switcher_rows">Lapelas de Outros streams e Multistream</string>
+    <string name="tv_switcher_rows_summary">Escolle a orde, oculta ou engade categorías e idiomas (incluído Recomendado para ti) en Outros streams e Multistream</string>
+    <string name="tv_switcher_row_current_game">Categoría do stream actual</string>
+    <string name="tv_emotes_channel">Canle</string>
 </resources>	

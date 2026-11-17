@@ -153,6 +153,9 @@ class ChatViewModel(
     private val _playbackMessage = MutableStateFlow<PubSubUtils.PlaybackMessage?>(null)
     val playbackMessage: StateFlow<PubSubUtils.PlaybackMessage?> = _playbackMessage
     var streamId: String? = null
+    var resolvedChannelId: String? = null
+        private set
+    private var activeChannelLogin: String? = null
     var gameId: String? = null
     var gameName: String? = null
     private val claimedDropIds = LinkedHashSet<String>()
@@ -184,21 +187,52 @@ class ChatViewModel(
     val autoCompleteList = mutableListOf<Any?>()
     private val chatters = ConcurrentHashMap<String, Chatter>()
 
+    private fun isUserLoggedIn(): Boolean {
+        return !applicationContext.tokenPrefs().getString(C.USERNAME, null).isNullOrBlank() &&
+            (!TwitchApiHelper.getGQLHeaders(applicationContext, true)[C.HEADER_TOKEN].isNullOrBlank() ||
+                !TwitchApiHelper.getHelixHeaders(applicationContext)[C.HEADER_TOKEN].isNullOrBlank())
+    }
+
+    private fun onChannelIdResolved(roomId: String, channelLogin: String?) {
+        if (roomId.isBlank() || !resolvedChannelId.isNullOrBlank()) return
+        resolvedChannelId = roomId
+        val login = channelLogin ?: activeChannelLogin
+        loadEmotes(roomId, login)
+        if (isUserLoggedIn()) {
+            loadUserEmotes(roomId)
+        }
+    }
+
     fun startLive(networkLibrary: String?, recentMessagesUrl: String?, channelId: String?, channelLogin: String?, channelName: String?, streamId: String?) {
         if (chatReadIRCSocket == null && chatReadWebSocket == null && eventSub == null && channelLogin != null) {
             messageLimit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
             this.streamId = streamId
-            startLiveChat(channelId, channelLogin)
+            val initialChannelId = channelId?.takeIf { it.isNotBlank() }
+            this.resolvedChannelId = initialChannelId
+            this.activeChannelLogin = channelLogin
+            startLiveChat(initialChannelId, channelLogin)
             addChatter(channelName)
-            loadEmotes(channelId, channelLogin)
+            loadEmotes(initialChannelId, channelLogin)
             if (applicationContext.prefs().getBoolean(C.CHAT_RECENT, true)) {
                 loadRecentMessages(networkLibrary, recentMessagesUrl, channelLogin)
             }
-            val isLoggedIn = !applicationContext.tokenPrefs().getString(C.USERNAME, null).isNullOrBlank() &&
-                    (!TwitchApiHelper.getGQLHeaders(applicationContext, true)[C.HEADER_TOKEN].isNullOrBlank() ||
-                            !TwitchApiHelper.getHelixHeaders(applicationContext)[C.HEADER_TOKEN].isNullOrBlank())
-            if (isLoggedIn) {
-                loadUserEmotes(channelId)
+            if (isUserLoggedIn()) {
+                loadUserEmotes(initialChannelId)
+            }
+            if (initialChannelId == null) {
+                viewModelScope.launch {
+                    val resolved = runCatching {
+                        graphQLRepository.loadQueryUsersStream(
+                            networkLibrary ?: applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                            TwitchApiHelper.getGQLHeaders(applicationContext),
+                            ids = null,
+                            logins = listOf(channelLogin),
+                        ).data?.users?.firstOrNull()?.id
+                    }.getOrNull()
+                    if (!resolved.isNullOrBlank()) {
+                        onChannelIdResolved(resolved, channelLogin)
+                    }
+                }
             }
         }
     }
@@ -206,9 +240,12 @@ class ChatViewModel(
     fun startReplay(channelId: String?, channelLogin: String?, chatUrl: String? = null, videoId: String? = null, createdAt: String?, startTime: Int = 0, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?) {
         if (chatReplayManager == null && chatReplayManagerLocal == null) {
             messageLimit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
-            startReplayChat(videoId, createdAt, startTime, chatUrl, getCurrentPosition, getCurrentSpeed, channelId, channelLogin)
+            val initialChannelId = channelId?.takeIf { it.isNotBlank() }
+            this.resolvedChannelId = initialChannelId
+            this.activeChannelLogin = channelLogin
+            startReplayChat(videoId, createdAt, startTime, chatUrl, getCurrentPosition, getCurrentSpeed, initialChannelId, channelLogin)
             if (videoId != null) {
-                loadEmotes(channelId, channelLogin)
+                loadEmotes(initialChannelId, channelLogin)
             }
         }
     }
@@ -783,38 +820,37 @@ class ChatViewModel(
         }
     }
 
+    private fun mapTwitchEmote(emote: TwitchEmote, targetChannelId: String?): Emote {
+        return Emote(
+            name = emote.name,
+            url1x = emote.url1x,
+            url2x = emote.url2x,
+            url3x = emote.url3x,
+            url4x = emote.url4x,
+            format = emote.format,
+            source = if (!targetChannelId.isNullOrBlank() && emote.ownerId == targetChannelId) Emote.CHANNEL_TWITCH else null,
+        )
+    }
+
     private fun loadUserEmotes(channelId: String?) {
-        val saved = savedUserEmotes
+        val effectiveId = channelId?.takeIf { it.isNotBlank() } ?: resolvedChannelId
+        val accountId = applicationContext.tokenPrefs().getString(C.USER_ID, null)
+        val cacheKey = if (!effectiveId.isNullOrBlank()) "${accountId.orEmpty()}:$effectiveId" else null
+        val saved = if (cacheKey != null) synchronized(savedChannelUserEmotes) { savedChannelUserEmotes[cacheKey] } else null
         if (!saved.isNullOrEmpty()) {
+            val mapped = saved
+                .sortedByDescending { !effectiveId.isNullOrBlank() && it.ownerId == effectiveId }
+                .map { mapTwitchEmote(it, effectiveId) }
             synchronized(userEmotes) {
                 userEmotes.clear()
-                userEmotes.addAll(
-                    saved.sortedByDescending { it.ownerId == channelId }.map {
-                        Emote(
-                            name = it.name,
-                            url1x = it.url1x,
-                            url2x = it.url2x,
-                            url3x = it.url3x,
-                            url4x = it.url4x,
-                            format = it.format
-                        )
-                    }
-                )
+                userEmotes.addAll(mapped)
             }
+            loadedUserEmotes = true
             viewModelScope.launch {
                 userEmotesUpdated.emit(Unit)
             }
             synchronized(autoCompleteList) {
-                autoCompleteList.addAll(saved.map {
-                    Emote(
-                        name = it.name,
-                        url1x = it.url1x,
-                        url2x = it.url2x,
-                        url3x = it.url3x,
-                        url4x = it.url4x,
-                        format = it.format
-                    )
-                }.filter { it !in autoCompleteList })
+                autoCompleteList.addAll(mapped.filter { it !in autoCompleteList })
             }
             synchronized(allEmotes) {
                 allEmotes.addAll(saved.filter { it.name !in allEmotes }.mapNotNull { it.name })
@@ -826,44 +862,36 @@ class ChatViewModel(
                 viewModelScope.launch {
                     try {
                         val networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
-                        val accountId = applicationContext.tokenPrefs().getString(C.USER_ID, null)
-                        val animateGifs =  applicationContext.prefs().getBoolean(C.ANIMATED_EMOTES, true)
+                        val animateGifs = applicationContext.prefs().getBoolean(C.ANIMATED_EMOTES, true)
                         val enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false)
-                        val emotes = playerRepository.loadUserEmotes(networkLibrary, helixHeaders, gqlHeaders, channelId, accountId, animateGifs, enableIntegrity)
+                        val emotes = playerRepository.loadUserEmotes(networkLibrary, helixHeaders, gqlHeaders, effectiveId, accountId, animateGifs, enableIntegrity)
                         if (emotes.isNotEmpty()) {
                             val sorted = emotes.sortedByDescending { it.setId }
+                            if (cacheKey != null) {
+                                synchronized(savedChannelUserEmotes) {
+                                    savedChannelUserEmotes.remove(cacheKey)
+                                    while (savedChannelUserEmotes.size >= 8) {
+                                        val oldest = savedChannelUserEmotes.keys.firstOrNull() ?: break
+                                        savedChannelUserEmotes.remove(oldest)
+                                    }
+                                    savedChannelUserEmotes[cacheKey] = sorted
+                                }
+                            }
+                            val mapped = sorted
+                                .sortedByDescending { !effectiveId.isNullOrBlank() && it.ownerId == effectiveId }
+                                .map { mapTwitchEmote(it, effectiveId) }
                             synchronized(userEmotes) {
                                 userEmotes.clear()
-                                userEmotes.addAll(
-                                    sorted.sortedByDescending { it.ownerId == channelId }.map {
-                                        Emote(
-                                            name = it.name,
-                                            url1x = it.url1x,
-                                            url2x = it.url2x,
-                                            url3x = it.url3x,
-                                            url4x = it.url4x,
-                                            format = it.format
-                                        )
-                                    }
-                                )
+                                userEmotes.addAll(mapped)
                             }
+                            loadedUserEmotes = true
                             userEmotesUpdated.emit(Unit)
                             synchronized(autoCompleteList) {
-                                autoCompleteList.addAll(sorted.map {
-                                    Emote(
-                                        name = it.name,
-                                        url1x = it.url1x,
-                                        url2x = it.url2x,
-                                        url3x = it.url3x,
-                                        url4x = it.url4x,
-                                        format = it.format
-                                    )
-                                }.filter { it !in autoCompleteList })
+                                autoCompleteList.addAll(mapped.filter { it !in autoCompleteList })
                             }
                             synchronized(allEmotes) {
                                 allEmotes.addAll(sorted.filter { it.name !in allEmotes }.mapNotNull { it.name })
                             }
-                            loadedUserEmotes = true
                         }
                     } catch (e: Exception) {
                         if (e.message == C.FAILED_INTEGRITY_CHECK) {
@@ -899,7 +927,16 @@ class ChatViewModel(
         savedGlobalSTVEmotes = null
         savedGlobalBTTVEmotes = null
         savedGlobalFFZEmotes = null
-        loadEmotes(channelId, channelLogin)
+        savedBaseEmoteSetEmotes = null
+        synchronized(savedChannelUserEmotes) {
+            savedChannelUserEmotes.clear()
+        }
+        loadedUserEmotes = false
+        val effectiveId = channelId?.takeIf { it.isNotBlank() } ?: resolvedChannelId
+        loadEmotes(effectiveId, channelLogin ?: activeChannelLogin)
+        if (isUserLoggedIn()) {
+            loadUserEmotes(effectiveId)
+        }
     }
 
     fun loadRecentMessages(networkLibrary: String?, recentMessagesUrl: String?, channelLogin: String) {
@@ -1793,6 +1830,10 @@ class ChatViewModel(
         }
 
         override suspend fun onRoomState(message: ChatUtils.IRCMessage) {
+            val roomId = message.tags["room-id"]
+            if (!roomId.isNullOrBlank()) {
+                onChannelIdResolved(roomId, channelLogin)
+            }
             val state = RoomState(
                 emote = message.tags["emote-only"],
                 followers = message.tags["followers-only"],
@@ -1850,9 +1891,12 @@ class ChatViewModel(
             val emoteSets = message.tags["emote-sets"]?.split(",")
             if (emoteSets != null && savedEmoteSets != emoteSets) {
                 savedEmoteSets = emoteSets
+                savedBaseEmoteSetEmotes = null
                 if (!loadedUserEmotes) {
-                    loadEmoteSets(channelId)
+                    loadEmoteSets(channelId ?: resolvedChannelId)
                 }
+            } else if (!loadedUserEmotes && synchronized(userEmotes) { userEmotes.isEmpty() } && !savedEmoteSets.isNullOrEmpty()) {
+                loadEmoteSets(channelId ?: resolvedChannelId)
             }
         }
 
@@ -2569,46 +2613,63 @@ class ChatViewModel(
     }
 
     private fun loadEmoteSets(channelId: String?) {
+        val effectiveId = channelId?.takeIf { it.isNotBlank() } ?: resolvedChannelId
+        val cachedBase = savedBaseEmoteSetEmotes
+        if (!cachedBase.isNullOrEmpty()) {
+            val mapped = cachedBase
+                .sortedByDescending { !effectiveId.isNullOrBlank() && it.ownerId == effectiveId }
+                .map { mapTwitchEmote(it, effectiveId) }
+            val shouldPopulateFallback = synchronized(userEmotes) {
+                if (!loadedUserEmotes && userEmotes.isEmpty()) {
+                    userEmotes.addAll(mapped)
+                    true
+                } else {
+                    false
+                }
+            }
+            if (shouldPopulateFallback) {
+                viewModelScope.launch {
+                    userEmotesUpdated.emit(Unit)
+                }
+            }
+            synchronized(autoCompleteList) {
+                autoCompleteList.addAll(mapped.filter { it !in autoCompleteList })
+            }
+            synchronized(allEmotes) {
+                allEmotes.addAll(cachedBase.filter { it.name !in allEmotes }.mapNotNull { it.name })
+            }
+            return
+        }
         val helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext)
         if (!savedEmoteSets.isNullOrEmpty() && !helixHeaders[C.HEADER_CLIENT_ID].isNullOrBlank() && !helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
             viewModelScope.launch {
                 try {
                     val networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
-                    val animateGifs =  applicationContext.prefs().getBoolean(C.ANIMATED_EMOTES, true)
+                    val animateGifs = applicationContext.prefs().getBoolean(C.ANIMATED_EMOTES, true)
                     val emotes = mutableListOf<TwitchEmote>()
                     savedEmoteSets?.chunked(25)?.forEach { list ->
                         playerRepository.loadEmotesFromSet(networkLibrary, helixHeaders, list, animateGifs).let { emotes.addAll(it) }
                     }
                     if (emotes.isNotEmpty()) {
                         val sorted = emotes.sortedByDescending { it.setId }
-                        savedUserEmotes = sorted
-                        synchronized(userEmotes) {
-                            userEmotes.clear()
-                            userEmotes.addAll(
-                                sorted.sortedByDescending { it.ownerId == channelId }.map {
-                                    Emote(
-                                        name = it.name,
-                                        url1x = it.url1x,
-                                        url2x = it.url2x,
-                                        url3x = it.url3x,
-                                        url4x = it.url4x,
-                                        format = it.format
-                                    )
-                                }
-                            )
+                        savedBaseEmoteSetEmotes = sorted
+                        val targetId = effectiveId ?: resolvedChannelId
+                        val mapped = sorted
+                            .sortedByDescending { !targetId.isNullOrBlank() && it.ownerId == targetId }
+                            .map { mapTwitchEmote(it, targetId) }
+                        val shouldEmit = synchronized(userEmotes) {
+                            if (!loadedUserEmotes && userEmotes.isEmpty()) {
+                                userEmotes.addAll(mapped)
+                                true
+                            } else {
+                                false
+                            }
                         }
-                        userEmotesUpdated.emit(Unit)
+                        if (shouldEmit) {
+                            userEmotesUpdated.emit(Unit)
+                        }
                         synchronized(autoCompleteList) {
-                            autoCompleteList.addAll(sorted.map {
-                                Emote(
-                                    name = it.name,
-                                    url1x = it.url1x,
-                                    url2x = it.url2x,
-                                    url3x = it.url3x,
-                                    url4x = it.url4x,
-                                    format = it.format
-                                )
-                            }.filter { it !in autoCompleteList })
+                            autoCompleteList.addAll(mapped.filter { it !in autoCompleteList })
                         }
                         synchronized(allEmotes) {
                             allEmotes.addAll(sorted.filter { it.name !in allEmotes }.mapNotNull { it.name })
@@ -3964,7 +4025,8 @@ class ChatViewModel(
 
     companion object {
         private var savedEmoteSets: List<String>? = null
-        private var savedUserEmotes: List<TwitchEmote>? = null
+        private val savedChannelUserEmotes = LinkedHashMap<String, List<TwitchEmote>>()
+        private var savedBaseEmoteSetEmotes: List<TwitchEmote>? = null
         private var savedGlobalBadges: List<TwitchBadge>? = null
         private var savedGlobalSTVEmotes: List<Emote>? = null
         private var savedGlobalBTTVEmotes: List<Emote>? = null

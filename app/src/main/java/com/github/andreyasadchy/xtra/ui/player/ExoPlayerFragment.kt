@@ -562,7 +562,7 @@ class ExoPlayerFragment : PlayerFragment() {
     }
 
     override fun setPlaybackSpeed(speed: Float) {
-        playbackService?.player?.setPlaybackSpeed(speed)
+        playbackService?.updateStreamPlaybackSpeed(speed)
     }
 
     override fun changeVolume(volume: Float) {

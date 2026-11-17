@@ -56,6 +56,14 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
+        <Preference
+            android:key="tv_switcher_rows"
+            android:persistent="false"
+            android:summary="@string/tv_switcher_rows_summary"
+            android:title="@string/tv_switcher_rows"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
     </PreferenceCategory>
 
     <PreferenceCategory

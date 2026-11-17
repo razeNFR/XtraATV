@@ -1192,4 +1192,8 @@
     <string name="tv_update_try_again">Coba lagi</string>
     <string name="tv_remote_action_pip_swap_default">Jendela kecil: tukar siaran (bawaan)</string>
     <string name="tv_remote_action_show_controls">Tampilkan kontrol</string>
+    <string name="tv_switcher_rows">Tab Stream lainnya &amp; Multi-stream</string>
+    <string name="tv_switcher_rows_summary">Atur urutan, sembunyikan, atau tambahkan tab kategori dan bahasa (termasuk Direkomendasikan untuk Anda) di pengalih stream dan multi-stream</string>
+    <string name="tv_switcher_row_current_game">Kategori stream saat ini</string>
+    <string name="tv_emotes_channel">Saluran</string>
 </resources>

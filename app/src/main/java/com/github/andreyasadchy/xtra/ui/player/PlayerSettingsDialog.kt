@@ -52,7 +52,9 @@ class PlayerSettingsDialog : BottomSheetDialogFragment() {
         val arguments = requireArguments()
         val type = arguments.getString(TYPE)
         with(binding) {
-            if (type != BasePlaybackService.STREAM && requireContext().prefs().getBoolean(C.PLAYER_MENU_SPEED, false)) {
+            val isRewoundStream = type == BasePlaybackService.STREAM &&
+                (parentFragment as? PlayerFragment)?.isRewoundBehindLiveOnStream() == true
+            if ((type != BasePlaybackService.STREAM || isRewoundStream) && requireContext().prefs().getBoolean(C.PLAYER_MENU_SPEED, false)) {
                 menuSpeed.visibility = View.VISIBLE
                 menuSpeed.setOnClickListener {
                     (parentFragment as? PlayerFragment)?.showSpeedDialog()

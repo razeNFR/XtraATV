@@ -1191,4 +1191,8 @@
     <string name="tv_update_try_again">إعادة المحاولة</string>
     <string name="tv_remote_action_pip_swap_default">النافذة الصغيرة: تبديل البثوث (افتراضي)</string>
     <string name="tv_remote_action_show_controls">إظهار عناصر التحكم</string>
+    <string name="tv_switcher_rows">علامات تبويب البثوث الأخرى والبث المتعدد</string>
+    <string name="tv_switcher_rows_summary">ترتيب علامات التبويب أو إخفاؤها أو إضافة فئات ولغات (بما في ذلك مقترح لك) في مبدّل البثوث والبث المتعدد</string>
+    <string name="tv_switcher_row_current_game">فئة البث الحالي</string>
+    <string name="tv_emotes_channel">القناة</string>
 </resources>

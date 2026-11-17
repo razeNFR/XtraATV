@@ -13,6 +13,8 @@ class Emote(
     val source: Int? = null,
 ) {
     val thirdParty = source == PERSONAL_STV || source == CHANNEL_STV || source == CHANNEL_BTTV || source == CHANNEL_FFZ || source == GLOBAL_STV || source == GLOBAL_BTTV || source == GLOBAL_FFZ
+    val isChannelEmote: Boolean
+        get() = source == CHANNEL_TWITCH || source == CHANNEL_STV || source == CHANNEL_BTTV || source == CHANNEL_FFZ
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -36,5 +38,6 @@ class Emote(
         const val GLOBAL_STV = 4
         const val GLOBAL_BTTV = 5
         const val GLOBAL_FFZ = 6
+        const val CHANNEL_TWITCH = 7
     }
 }

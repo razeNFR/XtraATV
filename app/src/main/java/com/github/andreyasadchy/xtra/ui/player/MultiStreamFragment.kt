@@ -84,6 +84,7 @@ class MultiStreamFragment : Fragment() {
         var recoveryAttempt = 0
         var infoJob: kotlinx.coroutines.Job? = null
         var chatProbeJob: kotlinx.coroutines.Job? = null
+        var dynamicsProcessing: android.media.audiofx.DynamicsProcessing? = null
         var resolvedChannelId: String? = null
         val effectiveChannelId: String?
             get() = stream.channelId?.takeIf { it.isNotBlank() } ?: resolvedChannelId?.takeIf { it.isNotBlank() }
@@ -95,6 +96,7 @@ class MultiStreamFragment : Fragment() {
     private val roomStateCache = java.util.concurrent.ConcurrentHashMap<String, com.github.andreyasadchy.xtra.model.chat.RoomState>()
     private val userBadgesCache = java.util.concurrent.ConcurrentHashMap<String, Set<String>>()
     private val twitchEmotesCache = java.util.concurrent.ConcurrentHashMap<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>()
+    private val thirdPartyEmotesCache = java.util.concurrent.ConcurrentHashMap<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>()
 
     /** 2 streams: logins whose chat is shown with their stream. */
     private val chatsShown = mutableSetOf<String>()
@@ -342,7 +344,22 @@ class MultiStreamFragment : Fragment() {
         tileView.foreground?.alpha = (chromeAlpha * 255).toInt()
         tile.picture = tileView.findViewById(R.id.tvLoadingPicture)
         tile.texture = texture
+        if (context?.prefs()?.getBoolean(C.PLAYER_AUDIO_COMPRESSOR, false) == true &&
+            player.audioSessionId != androidx.media3.common.C.AUDIO_SESSION_ID_UNSET
+        ) {
+            tile.dynamicsProcessing = createTileDynamicsProcessing(player.audioSessionId)
+        }
         player.addListener(object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                tile.dynamicsProcessing?.let {
+                    runCatching { it.release() }
+                    tile.dynamicsProcessing = null
+                }
+                if (view != null && tile in tiles && context?.prefs()?.getBoolean(C.PLAYER_AUDIO_COMPRESSOR, false) == true) {
+                    tile.dynamicsProcessing = createTileDynamicsProcessing(audioSessionId)
+                }
+            }
+
             override fun onRenderedFirstFrame() {
                 // the video is there: it shows over the picture
                 if (texture.alpha < 1f) {
@@ -883,6 +900,14 @@ class MultiStreamFragment : Fragment() {
             loadFallbackTileEmotes(tile, emoteGroupsState)
         }
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(ctx) { dismiss ->
+            if (chat != null) {
+                androidx.compose.runtime.LaunchedEffect(chat) {
+                    emoteGroupsState.value = chat.getTvEmoteGroups()
+                    chat.observeEmoteUpdates()?.collect {
+                        emoteGroupsState.value = chat.getTvEmoteGroups()
+                    }
+                }
+            }
             com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
                 title = "${getString(R.string.tv_write_message)} · $name",
                 hint = getString(R.string.tv_message_hint),
@@ -903,12 +928,33 @@ class MultiStreamFragment : Fragment() {
     }
 
     private fun buildFallbackTileEmoteGroups(channelId: String?): List<Pair<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>> {
+        val ctx = context ?: return emptyList()
         val twitch = channelId?.let { twitchEmotesCache[it] }.orEmpty()
-        if (twitch.isNotEmpty()) {
-            return listOf("Twitch" to twitch)
+        val channelThirdParty = channelId?.let { thirdPartyEmotesCache[it] }.orEmpty()
+        val mountedGroups = childFragmentManager.fragments
+            .filterIsInstance<ChatFragment>()
+            .firstOrNull { it.isAdded && it.view != null }
+            ?.getTvEmoteGroups()
+            .orEmpty()
+        val fallbackTwitch = twitch.ifEmpty {
+            mountedGroups.firstOrNull { it.first == "Twitch" }?.second.orEmpty()
+                .filter { it.source != com.github.andreyasadchy.xtra.model.chat.Emote.CHANNEL_TWITCH }
         }
-        val anyMounted = childFragmentManager.fragments.filterIsInstance<ChatFragment>().firstOrNull { it.isAdded && it.view != null }
-        return anyMounted?.getTvEmoteGroups()?.filter { it.first == "Twitch" }.orEmpty()
+        val globalThirdParty = mountedGroups
+            .firstOrNull { it.first == "7TV/BTTV/FFZ" }
+            ?.second
+            .orEmpty()
+            .filterNot { it.isChannelEmote }
+        val thirdParty = (channelThirdParty + globalThirdParty).distinctBy { it.name }
+        val channelEmotes = (
+            twitch.filter { it.source == com.github.andreyasadchy.xtra.model.chat.Emote.CHANNEL_TWITCH } +
+                channelThirdParty
+            ).distinctBy { it.name }
+        return buildList {
+            if (channelEmotes.isNotEmpty()) add(ctx.getString(R.string.tv_emotes_channel) to channelEmotes)
+            if (fallbackTwitch.isNotEmpty()) add("Twitch" to fallbackTwitch.distinctBy { it.name })
+            if (thirdParty.isNotEmpty()) add("7TV/BTTV/FFZ" to thirdParty)
+        }
     }
 
     private fun loadFallbackTileEmotes(
@@ -916,45 +962,99 @@ class MultiStreamFragment : Fragment() {
         state: androidx.compose.runtime.MutableState<List<Pair<String, List<com.github.andreyasadchy.xtra.model.chat.Emote>>>>,
     ) {
         val ctx = context ?: return
-        val channelId = tile.effectiveChannelId ?: return
-        if (twitchEmotesCache.containsKey(channelId)) {
-            state.value = buildFallbackTileEmoteGroups(channelId)
-            return
-        }
+        val login = tile.stream.channelLogin ?: return
         val app = ctx.applicationContext as com.github.andreyasadchy.xtra.XtraApp
-        val networkLibrary = ctx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+        val prefs = ctx.prefs()
+        val networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP)
         val gqlHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(ctx, true)
         val helixHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getHelixHeaders(ctx)
         val userId = ctx.tokenPrefs().getString(C.USER_ID, null)
-        val animateGifs = ctx.prefs().getBoolean(C.ANIMATED_EMOTES, true)
-        val enableIntegrity = ctx.prefs().getBoolean(C.ENABLE_INTEGRITY, false)
+        val animateGifs = prefs.getBoolean(C.ANIMATED_EMOTES, true)
+        val enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false)
+        val useWebp = prefs.getBoolean(C.CHAT_USE_WEBP, true)
+        val enableStv = prefs.getBoolean(C.CHAT_ENABLE_STV, true)
+        val enableBttv = prefs.getBoolean(C.CHAT_ENABLE_BTTV, true)
+        val enableFfz = prefs.getBoolean(C.CHAT_ENABLE_FFZ, true)
         viewLifecycleOwner.lifecycleScope.launch {
-            val loaded = runCatching {
-                app.xtraModule.playerRepository.loadUserEmotes(
-                    networkLibrary = networkLibrary,
-                    helixHeaders = helixHeaders,
-                    gqlHeaders = gqlHeaders,
-                    channelId = channelId,
-                    userId = userId,
-                    animateGifs = animateGifs,
-                    enableIntegrity = enableIntegrity,
-                ).sortedByDescending { it.setId }
-                    .sortedByDescending { it.ownerId == channelId }
-                    .map {
-                        com.github.andreyasadchy.xtra.model.chat.Emote(
-                            name = it.name,
-                            url1x = it.url1x,
-                            url2x = it.url2x,
-                            url3x = it.url3x,
-                            url4x = it.url4x,
-                            format = it.format,
-                        )
+            var channelId = tile.effectiveChannelId
+            if (channelId.isNullOrBlank()) {
+                channelId = runCatching {
+                    app.xtraModule.graphQLRepository.loadQueryUsersStream(
+                        networkLibrary,
+                        com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(ctx),
+                        ids = null,
+                        logins = listOf(login),
+                    ).data?.users?.firstOrNull()?.id
+                }.getOrNull()
+                if (!channelId.isNullOrBlank()) {
+                    tile.resolvedChannelId = channelId
+                }
+            }
+            val resolvedId = channelId ?: return@launch
+            if (twitchEmotesCache.containsKey(resolvedId) && thirdPartyEmotesCache.containsKey(resolvedId)) {
+                state.value = buildFallbackTileEmoteGroups(resolvedId)
+                return@launch
+            }
+            if (!twitchEmotesCache.containsKey(resolvedId)) {
+                val loadedTwitch = runCatching {
+                    app.xtraModule.playerRepository.loadUserEmotes(
+                        networkLibrary = networkLibrary,
+                        helixHeaders = helixHeaders,
+                        gqlHeaders = gqlHeaders,
+                        channelId = resolvedId,
+                        userId = userId,
+                        animateGifs = animateGifs,
+                        enableIntegrity = enableIntegrity,
+                    ).sortedByDescending { it.setId }
+                        .sortedByDescending { it.ownerId == resolvedId }
+                        .map {
+                            com.github.andreyasadchy.xtra.model.chat.Emote(
+                                name = it.name,
+                                url1x = it.url1x,
+                                url2x = it.url2x,
+                                url3x = it.url3x,
+                                url4x = it.url4x,
+                                format = it.format,
+                                source = if (it.ownerId == resolvedId) com.github.andreyasadchy.xtra.model.chat.Emote.CHANNEL_TWITCH else null,
+                            )
+                        }
+                        .distinctBy { it.name }
+                }.getOrNull()
+                if (!loadedTwitch.isNullOrEmpty()) {
+                    twitchEmotesCache[resolvedId] = loadedTwitch
+                    if (isAdded) state.value = buildFallbackTileEmoteGroups(resolvedId)
+                }
+            }
+            if (!thirdPartyEmotesCache.containsKey(resolvedId)) {
+                val repo = app.xtraModule.playerRepository
+                val channel3p = mutableListOf<com.github.andreyasadchy.xtra.model.chat.Emote>()
+                if (enableStv) {
+                    runCatching {
+                        val userResp = repo.loadSTVUserResponse(networkLibrary, resolvedId)
+                        val (setId, direct) = repo.loadSTVUser(userResp, useWebp)
+                        when {
+                            !direct.isNullOrEmpty() -> channel3p.addAll(direct)
+                            !setId.isNullOrBlank() -> {
+                                val setResp = repo.loadSTVEmoteSetResponse(networkLibrary, setId)
+                                channel3p.addAll(repo.loadSTVEmoteSet(setResp, useWebp, false).second)
+                            }
+                        }
                     }
-                    .distinctBy { it.name }
-            }.getOrNull()
-            if (!loaded.isNullOrEmpty()) {
-                twitchEmotesCache[channelId] = loaded
-                state.value = listOf("Twitch" to loaded)
+                }
+                if (enableBttv) {
+                    runCatching {
+                        val resp = repo.loadBTTVEmotesResponse(networkLibrary, resolvedId)
+                        channel3p.addAll(repo.loadBTTVEmotes(resp, useWebp))
+                    }
+                }
+                if (enableFfz) {
+                    runCatching {
+                        val resp = repo.loadFFZEmotesResponse(networkLibrary, resolvedId)
+                        channel3p.addAll(repo.loadFFZEmotes(resp, useWebp))
+                    }
+                }
+                thirdPartyEmotesCache[resolvedId] = channel3p.distinctBy { it.name }
+                if (isAdded) state.value = buildFallbackTileEmoteGroups(resolvedId)
             }
         }
     }
@@ -1093,6 +1193,10 @@ class MultiStreamFragment : Fragment() {
         tile.raiseJob?.cancel()
         tile.infoJob?.cancel()
         tile.chatProbeJob?.cancel()
+        tile.dynamicsProcessing?.let {
+            runCatching { it.release() }
+            tile.dynamicsProcessing = null
+        }
         tile.player.release()
         tile.chatContainer?.let { removeChat(it) }
         tile.chatContainer = null
@@ -2060,12 +2164,48 @@ class MultiStreamFragment : Fragment() {
             it.backJob?.cancel()
             it.raiseJob?.cancel()
             it.adPulseAnimator?.cancel()
+            it.dynamicsProcessing?.let { dp ->
+                runCatching { dp.release() }
+                it.dynamicsProcessing = null
+            }
             it.player.release()
         }
         tiles.clear()
         releasePlaybackSignals()
         (activity as? MainActivity)?.onMultiStreamDestroyed()
         super.onDestroyView()
+    }
+
+    private fun createTileDynamicsProcessing(audioSessionId: Int): android.media.audiofx.DynamicsProcessing? {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P &&
+            audioSessionId != androidx.media3.common.C.AUDIO_SESSION_ID_UNSET
+        ) {
+            return try {
+                android.media.audiofx.DynamicsProcessing(0, audioSessionId, null).apply {
+                    for (channelIdx in 0 until channelCount) {
+                        for (bandIdx in 0 until getMbcByChannelIndex(channelIdx).bandCount) {
+                            setMbcBandByChannelIndex(
+                                channelIdx,
+                                bandIdx,
+                                getMbcBandByChannelIndex(channelIdx, bandIdx).apply {
+                                    attackTime = 0f
+                                    releaseTime = 0.25f
+                                    ratio = 1.6f
+                                    threshold = -50f
+                                    kneeWidth = 40f
+                                    preGain = 0f
+                                    postGain = 10f
+                                }
+                            )
+                        }
+                    }
+                    enabled = true
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return null
     }
 
     companion object {

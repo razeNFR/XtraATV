@@ -1191,4 +1191,8 @@
     <string name="tv_update_try_again">Повторить</string>
     <string name="tv_remote_action_pip_swap_default">Маленькое окно: поменять стримы (по умолчанию)</string>
     <string name="tv_remote_action_show_controls">Показать управление</string>
+    <string name="tv_switcher_rows">Вкладки «Другие стримы» и «Мультистрим»</string>
+    <string name="tv_switcher_rows_summary">Меняйте порядок, скрывайте или добавляйте категории и языки (включая «Рекомендовано вам») в переключателе стримов и мультистриме</string>
+    <string name="tv_switcher_row_current_game">Категория текущего стрима</string>
+    <string name="tv_emotes_channel">Канал</string>
 </resources>

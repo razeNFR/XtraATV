@@ -325,6 +325,7 @@ object C {
     const val TV_CUSTOM_KEYS = "tv_custom_keys"
     const val TV_DEFAULTS_REMOTE_MIGRATED = "tv_defaults_remote_migrated"
     const val TV_HOME_ROWS = "tv_home_rows"
+    const val TV_SWITCHER_ROWS = "tv_switcher_rows"
     const val TV_HOME_FOLLOWED_SHOW_ALL = "tv_home_followed_show_all"
     const val TV_HIDE_MENU_STATS = "tv_hide_menu_stats"
     const val TV_BACK_CLOSES_MENU = "tv_back_closes_menu"

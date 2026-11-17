@@ -2298,7 +2298,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     protected open fun syncPlayPauseButtonVisibility() {}
 
-    protected fun isRewoundBehindLiveOnStream(): Boolean {
+    internal fun isRewoundBehindLiveOnStream(): Boolean {
         val service = playbackService ?: return false
         if (service.type != BasePlaybackService.STREAM) {
             return false
@@ -2338,6 +2338,36 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return pendingDvr
     }
 
+    protected fun syncStreamSpeedButtonVisibility() {
+        val binding = _binding ?: return
+        val ctx = context ?: return
+        if (playbackService?.type != BasePlaybackService.STREAM) {
+            return
+        }
+        val speedBtn = binding.playerControls.speed
+        val enabledInPrefs = ctx.prefs().getBoolean(C.PLAYER_SPEED_BUTTON, true)
+        val rewound = isRewoundBehindLiveOnStream()
+        if (!rewound && (getCurrentSpeed() ?: 1f) != 1f) {
+            setPlaybackSpeed(1f)
+        }
+        val shouldShow = enabledInPrefs && rewound
+        if (shouldShow) {
+            if (!speedBtn.isVisible) {
+                speedBtn.visibility = View.VISIBLE
+            }
+            speedBtn.setOnClickListener {
+                showController(force = true)
+                showSpeedDialog()
+            }
+        } else if (speedBtn.isVisible) {
+            val hadFocus = speedBtn.hasFocus()
+            speedBtn.visibility = View.GONE
+            if (hadFocus) {
+                focusAfterHiddenControl()
+            }
+        }
+    }
+
     protected fun shouldHideLivePlayPauseWhenPlaying(): Boolean {
         val ctx = context ?: return false
         if (ctx.prefs().getBoolean(C.PLAYER_PAUSE, false)) {
@@ -2362,6 +2392,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     ?: getStreamUptime()?.let { (it - com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.TARGET_OFFSET_MS).coerceAtLeast(0L) }
                 if (vodEdge == null || vodEdge <= 0L) {
                     syncPlayPauseButtonVisibility()
+                    syncStreamSpeedButtonVisibility()
                     progressBar.visibility = View.GONE
                     position.visibility = View.GONE
                     duration.visibility = View.GONE
@@ -2389,6 +2420,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     exoService?.clearExperimentalRewoundIfAtEdge()
                 }
                 syncPlayPauseButtonVisibility()
+                syncStreamSpeedButtonVisibility()
                 syncExperimentalChatReplay(!atAdFreeEdge && ((!isPaused && userRewound && behindMs > 15_000L) || behindMs > 45_000L))
                 progressBar.setDuration(displayEdge)
                 progressBar.setPosition(if (atAdFreeEdge) displayEdge else currentPos)
@@ -2422,6 +2454,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatFragment?.stopHybridReplay()
             }
             syncPlayPauseButtonVisibility()
+            syncStreamSpeedButtonVisibility()
             val uptime = getStreamUptime()
             if (uptime == null) {
                 progressBar.visibility = View.GONE
@@ -3227,33 +3260,46 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         )
     }
 
-    /** TV: the icon of the adblock & proxy button lights up when Experimental Adblock or Custom Proxy is enabled. */
+    /** TV: the icon of the adblock & proxy button lights up when Experimental Adblock, Custom Proxy, or HTTP Proxy is enabled. */
     private fun updateTvProxyIcon() {
         val context = context ?: return
         val expOn = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(context)
         val customOn = !expOn && context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+        val streamProxyOn = !expOn && context.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
         _binding?.playerControls?.tvProxy?.apply {
-            setImageResource(if (expOn || customOn) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
+            setImageResource(if (expOn || customOn || streamProxyOn) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
             alpha = 1f
         }
     }
 
-    /** TV: unified Ad blocker & custom proxies panel, restarting the stream when closed if settings changed. */
+    /** TV: unified Ad blocker & proxies panel, restarting the stream when closed if settings changed. */
     private fun showTvProxyPanel() {
         val activity = activity as? MainActivity ?: return
         val repository = (activity.application as com.github.andreyasadchy.xtra.XtraApp).xtraModule.playerRepository
         viewLifecycleOwner.lifecycleScope.launch {
             val proxies = repository.getCustomProxies()
+            val streamProxies = repository.getStreamProxies()
             if (_binding == null) {
                 return@launch
             }
+            val swapBefore = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(activity)
             val expBefore = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(activity)
             val useBefore = activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+            val useStreamBefore = activity.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
             val modeBefore = activity.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0")
+            var streamListChanged = false
             com.github.andreyasadchy.xtra.ui.tv.TvProxyPanel.show(
                 activity,
                 proxies,
                 openSettings = { activity.openCustomProxySettings() },
+                streamProxies = streamProxies,
+                openStreamProxySettings = { activity.openStreamProxySettings() },
+                onStreamProxiesClosed = { updatedStream ->
+                    streamListChanged = true
+                    activity.lifecycleScope.launch {
+                        repository.updateStreamProxies(updatedStream)
+                    }
+                },
             ) { changed ->
                 if (_binding != null) {
                     updateTvProxyIcon()
@@ -3261,10 +3307,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (changed != null) {
                     activity.lifecycleScope.launch {
                         repository.updateCustomProxies(changed)
+                        val swapNow = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(activity)
                         val expNow = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(activity)
                         val useNow = activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+                        val useStreamNow = activity.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
                         val modeNow = activity.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0")
-                        if (expNow != expBefore || useNow || useNow != useBefore || modeNow != modeBefore) {
+                        if (swapNow != swapBefore || expNow != expBefore || useNow || useNow != useBefore ||
+                            useStreamNow || useStreamNow != useStreamBefore || streamListChanged || modeNow != modeBefore
+                        ) {
                             activity.restartCurrentStream()
                         }
                     }
@@ -3414,13 +3464,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** TV: write a chat message, with voice input and visual emote picker in the field (no system popup). */
     private fun showChatComposer() {
-        val groups = chatFragment?.getTvEmoteGroups().orEmpty()
+        val emoteGroupsState = androidx.compose.runtime.mutableStateOf(chatFragment?.getTvEmoteGroups().orEmpty())
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                emoteGroupsState.value = chatFragment?.getTvEmoteGroups().orEmpty()
+                chatFragment?.observeEmoteUpdates()?.collect {
+                    emoteGroupsState.value = chatFragment?.getTvEmoteGroups().orEmpty()
+                }
+            }
             com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
                 title = getString(R.string.tv_write_message),
                 hint = getString(R.string.tv_message_hint),
                 sendLabel = getString(R.string.tv_send),
-                emoteGroups = groups,
+                emoteGroups = emoteGroupsState.value,
             ) { text ->
                 if (text.isNotBlank()) {
                     chatFragment?.sendExternalMessage(text)
@@ -4084,6 +4140,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
                 updateAdblockBadge()
                 syncExperimentalChatState()
+                syncStreamSpeedButtonVisibility()
                 if (binding.playerControls.root.isVisible) {
                     binding.playerControls.tvQualityInfo?.let { info ->
                         val label = getCurrentQualityLabel()
@@ -5628,7 +5685,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 requireContext().prefs().getString(C.PLAYER_SPEED_LIST, "0.25\n0.5\n0.75\n1.0\n1.25\n1.5\n1.75\n2.0\n3.0\n4.0\n8.0")?.split("\n")?.let { speeds ->
                     speeds.getOrNull(index)?.toFloatOrNull()?.let { speed ->
                         setPlaybackSpeed(speed)
-                        requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, speed) }
+                        if (playbackService?.type != BasePlaybackService.STREAM && getTvDvrStream() == null) {
+                            requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, speed) }
+                        }
                         (childFragmentManager.findFragmentByTag("closeOnPip") as? PlayerSettingsDialog?)?.setSpeed(speed.toString())
                     }
                 }

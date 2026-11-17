@@ -1191,4 +1191,8 @@
     <string name="tv_update_try_again">Réessayer</string>
     <string name="tv_remote_action_pip_swap_default">Petite fenêtre : inverser les streams (par défaut)</string>
     <string name="tv_remote_action_show_controls">Afficher les contrôles</string>
+    <string name="tv_switcher_rows">Onglets Autres streams et Multi-stream</string>
+    <string name="tv_switcher_rows_summary">Choisir l\'ordre, masquer ou ajouter des catégories et langues (dont Recommandé pour vous) dans les bandeaux Autres streams et Multi-stream</string>
+    <string name="tv_switcher_row_current_game">Catégorie du stream en cours</string>
+    <string name="tv_emotes_channel">Chaîne</string>
 </resources>

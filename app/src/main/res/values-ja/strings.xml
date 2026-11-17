@@ -1191,4 +1191,8 @@
     <string name="tv_update_try_again">再試行</string>
     <string name="tv_remote_action_pip_swap_default">小窓: 配信を入れ替え（デフォルト）</string>
     <string name="tv_remote_action_show_controls">コントロールを表示</string>
+    <string name="tv_switcher_rows">他の配信とマルチ配信のタブ</string>
+    <string name="tv_switcher_rows_summary">配信切り替えやマルチ配信のタブ（おすすめを含む）の並び替え・非表示、カテゴリーや言語の追加を行います</string>
+    <string name="tv_switcher_row_current_game">視聴中の配信カテゴリー</string>
+    <string name="tv_emotes_channel">チャンネル</string>
 </resources>

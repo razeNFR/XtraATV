@@ -1191,4 +1191,8 @@
     <string name="tv_update_try_again">Erneut versuchen</string>
     <string name="tv_remote_action_pip_swap_default">Kleines Fenster: Streams tauschen (Standard)</string>
     <string name="tv_remote_action_show_controls">Steuerung zeigen</string>
+    <string name="tv_switcher_rows">Tabs in Andere Streams &amp; Multi-Stream</string>
+    <string name="tv_switcher_rows_summary">Tabs (inkl. Für dich empfohlen), Kategorien und Sprachen im Stream-Wechsler und Multi-Stream sortieren, ausblenden oder hinzufügen</string>
+    <string name="tv_switcher_row_current_game">Kategorie des aktuellen Streams</string>
+    <string name="tv_emotes_channel">Kanal</string>
 </resources>

@@ -15,6 +15,14 @@
     <PreferenceCategory android:title="@string/tv_settings_cat_buttons" app:iconSpaceReserved="false">
 
         <Preference android:key="player_button_settings" android:title="@string/player_buttons" app:iconSpaceReserved="false" app:singleLineTitle="false" />
+
+        <Preference
+            android:key="tv_switcher_rows"
+            android:persistent="false"
+            android:summary="@string/tv_switcher_rows_summary"
+            android:title="@string/tv_switcher_rows"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
     </PreferenceCategory>
 
 

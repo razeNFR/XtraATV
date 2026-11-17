@@ -81,6 +81,23 @@ class EmotesFragment : Fragment() {
                             }
                         }
                     }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.thirdPartyEmotesUpdated.collectLatest {
+                                updateList(position, adapter)
+                            }
+                        }
+                    }
+                    updateList(position, adapter)
+                }
+                2 -> {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.userEmotesUpdated.collectLatest {
+                                updateList(position, adapter)
+                            }
+                        }
+                    }
                     updateList(position, adapter)
                 }
                 else -> {
@@ -106,15 +123,24 @@ class EmotesFragment : Fragment() {
                             viewModel.personalEmoteSets[setId]
                         }
                     } ?: emptyList()
-                    val list = synchronized(viewModel.userEmotes) { viewModel.userEmotes } +
+                    val list = synchronized(viewModel.userEmotes) { viewModel.userEmotes.toList() } +
                             personalEmotes +
-                            synchronized(viewModel.thirdPartyEmotes) { viewModel.thirdPartyEmotes }
+                            synchronized(viewModel.thirdPartyEmotes) { viewModel.thirdPartyEmotes.toList() }
                     adapter.submitList(recentEmotes.mapNotNull { emote -> list.find { it.name == emote.name } })
                 }
             }
             1 -> {
+                val twitchChannel = synchronized(viewModel.userEmotes) {
+                    viewModel.userEmotes.filter { it.source == com.github.andreyasadchy.xtra.model.chat.Emote.CHANNEL_TWITCH }
+                }
+                val thirdPartyChannel = synchronized(viewModel.thirdPartyEmotes) {
+                    viewModel.thirdPartyEmotes.filter { it.isChannelEmote }
+                }
+                adapter.submitList((twitchChannel + thirdPartyChannel).distinctBy { it.name })
+            }
+            2 -> {
                 synchronized(viewModel.userEmotes) {
-                    adapter.submitList(viewModel.userEmotes)
+                    adapter.submitList(viewModel.userEmotes.toList())
                 }
             }
             else -> {
@@ -124,7 +150,7 @@ class EmotesFragment : Fragment() {
                     }
                 } ?: emptyList()
                 val list = personalEmotes + synchronized(viewModel.thirdPartyEmotes) {
-                    viewModel.thirdPartyEmotes
+                    viewModel.thirdPartyEmotes.toList()
                 }
                 adapter.submitList(list)
             }
