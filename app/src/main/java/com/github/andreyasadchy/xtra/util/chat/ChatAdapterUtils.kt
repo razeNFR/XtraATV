@@ -791,43 +791,147 @@ object ChatAdapterUtils {
         }
     }
 
+    private class ViewDrawableCallback(view: View) : Drawable.Callback {
+        private val viewRef = java.lang.ref.WeakReference(view)
+
+        override fun invalidateDrawable(who: Drawable) {
+            val view = viewRef.get() ?: return
+            if (view.isAttachedToWindow) {
+                view.invalidate()
+            }
+        }
+
+        override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
+            val view = viewRef.get() ?: return
+            val delayMs = (`when` - android.os.SystemClock.uptimeMillis()).coerceAtLeast(0L)
+            view.postDelayed(what, delayMs)
+        }
+
+        override fun unscheduleDrawable(who: Drawable, what: Runnable) {
+            viewRef.get()?.removeCallbacks(what)
+        }
+    }
+
+    private fun independentDrawable(fragment: Fragment, raw: Drawable): Drawable {
+        val cloned = if (fragment.isAdded) {
+            runCatching { raw.constantState?.newDrawable(fragment.resources) }.getOrNull()
+                ?.takeIf { raw !is Animatable || it is Animatable }
+        } else {
+            null
+        }
+        return (cloned ?: raw).mutate()
+    }
+
+    fun bindAnimatedSpans(textView: android.widget.TextView, animateGifs: Boolean) {
+        if (!animateGifs) return
+        val spannable = textView.text as? android.text.Spannable ?: return
+        val spans = spannable.getSpans(0, spannable.length, android.text.style.ImageSpan::class.java)
+        for (span in spans) {
+            if ((span as? CenteredImageSpan)?.isAnimatedSpan == false) continue
+            val d = span.drawable ?: continue
+            if (d is LayerDrawable) {
+                var hasAnimatable = false
+                for (i in 0 until d.numberOfLayers) {
+                    if (d.getDrawable(i) is Animatable) {
+                        hasAnimatable = true
+                        break
+                    }
+                }
+                if (hasAnimatable) {
+                    val cb = ViewDrawableCallback(textView)
+                    (span as? CenteredImageSpan)?.drawableCallback = cb
+                    d.callback = cb
+                    for (i in 0 until d.numberOfLayers) {
+                        val layer = d.getDrawable(i) ?: continue
+                        layer.callback = d
+                        if (textView.isAttachedToWindow && layer is Animatable && !layer.isRunning) {
+                            layer.start()
+                        }
+                    }
+                }
+            } else if (d is Animatable) {
+                val cb = ViewDrawableCallback(textView)
+                (span as? CenteredImageSpan)?.drawableCallback = cb
+                d.callback = cb
+                if (textView.isAttachedToWindow && !d.isRunning) {
+                    d.start()
+                }
+            }
+        }
+        val paintSpans = spannable.getSpans(0, spannable.length, NamePaintImageSpan::class.java)
+        for (span in paintSpans) {
+            val d = span.drawable
+            if (d is Animatable) {
+                val cb = ViewDrawableCallback(textView)
+                span.drawableCallback = cb
+                d.callback = cb
+                if (textView.isAttachedToWindow && !d.isRunning) {
+                    d.start()
+                }
+            }
+        }
+    }
+
+    fun stopAnimatedSpans(textView: android.widget.TextView) {
+        val spannable = textView.text as? android.text.Spannable ?: return
+        val spans = spannable.getSpans(0, spannable.length, android.text.style.ImageSpan::class.java)
+        for (span in spans) {
+            val d = span.drawable ?: continue
+            if (d is LayerDrawable) {
+                for (i in 0 until d.numberOfLayers) {
+                    (d.getDrawable(i) as? Animatable)?.stop()
+                }
+                d.callback = null
+            } else if (d is Animatable) {
+                d.stop()
+                d.callback = null
+            }
+            (span as? CenteredImageSpan)?.drawableCallback = null
+        }
+        val paintSpans = spannable.getSpans(0, spannable.length, NamePaintImageSpan::class.java)
+        for (span in paintSpans) {
+            val d = span.drawable
+            if (d is Animatable) {
+                d.stop()
+                d.callback = null
+            }
+            span.drawableCallback = null
+        }
+    }
+
     fun loadImages(fragment: Fragment, itemView: View, bind: (SpannableStringBuilder) -> Unit, images: List<Image>, imagePaint: NamePaint?, userName: String?, userNameStartIndex: Int?, backgroundColor: Int, imageLibrary: String?, builder: SpannableStringBuilder, translated: Boolean, emoteSize: Int, badgeSize: Int, gifSize: Int, emoteQuality: String, animateGifs: Boolean, enableOverlayEmotes: Boolean, chatMessage: ChatMessage, savedColors: HashMap<String, Int>, useReadableColors: Boolean, isLightTheme: Boolean, showLanguageDownloadDialog: (ChatMessage, String) -> Unit, hideErrors: Boolean) {
+        if (!fragment.isAdded) return
         if (imagePaint != null) {
             if (imageLibrary == "0") {
-                fragment.requireContext().imageLoader.enqueue(
-                    ImageRequest.Builder(fragment.requireContext()).apply {
+                val ctx = fragment.context ?: return
+                ctx.imageLoader.enqueue(
+                    ImageRequest.Builder(ctx).apply {
                         data(imagePaint.imageUrl)
                         httpHeaders(NetworkHeaders.Builder().apply {
                             add("User-Agent", "Xtra/" + BuildConfig.VERSION_NAME)
                         }.build())
                         target(
                             onSuccess = {
-                                (it.asDrawable(fragment.resources)).let { result ->
+                                if (!fragment.isAdded) return@target
+                                independentDrawable(fragment, it.asDrawable(fragment.resources)).let { result ->
+                                    val span = NamePaintImageSpan(
+                                        userName!!,
+                                        imagePaint.shadows,
+                                        (itemView.background as? ColorDrawable)?.color,
+                                        backgroundColor,
+                                        result,
+                                    )
                                     if (result is Animatable && animateGifs) {
-                                        result.callback = object : Drawable.Callback {
-                                            override fun unscheduleDrawable(who: Drawable, what: Runnable) {
-                                                itemView.removeCallbacks(what)
-                                            }
-
-                                            override fun invalidateDrawable(who: Drawable) {
-                                                itemView.invalidate()
-                                            }
-
-                                            override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
-                                                itemView.postDelayed(what, `when`)
-                                            }
+                                        val cb = ViewDrawableCallback(itemView)
+                                        span.drawableCallback = cb
+                                        result.callback = cb
+                                        if (itemView.isAttachedToWindow && !result.isRunning) {
+                                            result.start()
                                         }
-                                        (result as Animatable).start()
                                     }
                                     try {
                                         builder.setSpan(
-                                            NamePaintImageSpan(
-                                                userName!!,
-                                                imagePaint.shadows,
-                                                (itemView.background as? ColorDrawable)?.color,
-                                                backgroundColor,
-                                                result
-                                            ),
+                                            span,
                                             userNameStartIndex!!,
                                             userNameStartIndex + userName.length,
                                             SPAN_EXCLUSIVE_EXCLUSIVE
@@ -849,31 +953,26 @@ object ChatAdapterUtils {
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
                     .into(object : CustomTarget<Drawable>() {
                         override fun onResourceReady(resource: Drawable, transition: Transition<in Drawable>?) {
-                            if (resource is Animatable && animateGifs) {
-                                resource.callback = object : Drawable.Callback {
-                                    override fun unscheduleDrawable(who: Drawable, what: Runnable) {
-                                        itemView.removeCallbacks(what)
-                                    }
-
-                                    override fun invalidateDrawable(who: Drawable) {
-                                        itemView.invalidate()
-                                    }
-
-                                    override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
-                                        itemView.postDelayed(what, `when`)
-                                    }
+                            if (!fragment.isAdded) return
+                            val drawable = independentDrawable(fragment, resource)
+                            val span = NamePaintImageSpan(
+                                userName!!,
+                                imagePaint.shadows,
+                                (itemView.background as? ColorDrawable)?.color,
+                                backgroundColor,
+                                drawable,
+                            )
+                            if (drawable is Animatable && animateGifs) {
+                                val cb = ViewDrawableCallback(itemView)
+                                span.drawableCallback = cb
+                                drawable.callback = cb
+                                if (itemView.isAttachedToWindow && !drawable.isRunning) {
+                                    drawable.start()
                                 }
-                                (resource as Animatable).start()
                             }
                             try {
                                 builder.setSpan(
-                                    NamePaintImageSpan(
-                                        userName!!,
-                                        imagePaint.shadows,
-                                        (itemView.background as? ColorDrawable)?.color,
-                                        backgroundColor,
-                                        resource
-                                    ),
+                                    span,
                                     userNameStartIndex!!,
                                     userNameStartIndex + userName.length,
                                     SPAN_EXCLUSIVE_EXCLUSIVE
@@ -892,7 +991,9 @@ object ChatAdapterUtils {
             }
         }
         images.forEach { image ->
-            loadImage(imageLibrary, fragment, image, emoteQuality) { result ->
+            loadImage(imageLibrary, fragment, image, emoteQuality) { rawResult ->
+                if (!fragment.isAdded) return@loadImage
+                val result = independentDrawable(fragment, rawResult)
                 val imageSize = when (image.size) {
                     Image.IMAGE_SIZE_EMOTE -> emoteSize
                     Image.IMAGE_SIZE_GIF -> gifSize
@@ -905,27 +1006,21 @@ object ChatAdapterUtils {
                     (imageSize * widthRatio).toInt() to imageSize
                 }
                 result.setBounds(0, 0, size.first, size.second)
-                if (result is Animatable && image.isAnimated && animateGifs) {
-                    result.callback = object : Drawable.Callback {
-                        override fun unscheduleDrawable(who: Drawable, what: Runnable) {
-                            itemView.removeCallbacks(what)
-                        }
-
-                        override fun invalidateDrawable(who: Drawable) {
-                            itemView.invalidate()
-                        }
-
-                        override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
-                            itemView.postDelayed(what, `when`)
-                        }
-                    }
-                    (result as Animatable).start()
-                }
+                val shouldAnimate = image.isAnimated && animateGifs
                 if (image.overlayEmote != null) {
                     val drawables = arrayOf(result)
                     nextOverlayEmote(imageLibrary, fragment, drawables, image.overlayEmote!!, image, itemView, bind, builder, translated, emoteSize, emoteQuality, animateGifs, enableOverlayEmotes, chatMessage, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, hideErrors)
                 } else {
-                    builder.setSpan(CenteredImageSpan(result), image.start, image.end, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    val span = CenteredImageSpan(result, isAnimatedSpan = shouldAnimate)
+                    if (result is Animatable && shouldAnimate) {
+                        val cb = ViewDrawableCallback(itemView)
+                        span.drawableCallback = cb
+                        result.callback = cb
+                        if (itemView.isAttachedToWindow && !result.isRunning) {
+                            result.start()
+                        }
+                    }
+                    builder.setSpan(span, image.start, image.end, SPAN_EXCLUSIVE_EXCLUSIVE)
                     if (!translated && chatMessage.translatedMessage != null) {
                         addTranslation(chatMessage, builder, builder.length, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, hideErrors)
                     }
@@ -936,7 +1031,9 @@ object ChatAdapterUtils {
     }
 
     private fun nextOverlayEmote(imageLibrary: String?, fragment: Fragment, drawables: Array<Drawable>, image: Image, bottomImage: Image, itemView: View, bind: (SpannableStringBuilder) -> Unit, builder: SpannableStringBuilder, translated: Boolean, emoteSize: Int, emoteQuality: String, animateGifs: Boolean, enableOverlayEmotes: Boolean, chatMessage: ChatMessage, savedColors: HashMap<String, Int>, useReadableColors: Boolean, isLightTheme: Boolean, showLanguageDownloadDialog: (ChatMessage, String) -> Unit, hideErrors: Boolean) {
-        loadImage(imageLibrary, fragment, image, emoteQuality) { result ->
+        loadImage(imageLibrary, fragment, image, emoteQuality) { rawResult ->
+            if (!fragment.isAdded) return@loadImage
+            val result = independentDrawable(fragment, rawResult)
             val widthRatio = result.intrinsicWidth.toFloat() / result.intrinsicHeight.toFloat()
             val size = if (widthRatio == 1f) {
                 emoteSize to emoteSize
@@ -944,22 +1041,6 @@ object ChatAdapterUtils {
                 (emoteSize * widthRatio).toInt() to emoteSize
             }
             result.setBounds(0, 0, size.first, size.second)
-            if (result is Animatable && image.isAnimated && animateGifs) {
-                result.callback = object : Drawable.Callback {
-                    override fun unscheduleDrawable(who: Drawable, what: Runnable) {
-                        itemView.removeCallbacks(what)
-                    }
-
-                    override fun invalidateDrawable(who: Drawable) {
-                        itemView.invalidate()
-                    }
-
-                    override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
-                        itemView.postDelayed(what, `when`)
-                    }
-                }
-                (result as Animatable).start()
-            }
             val array = drawables.plus(result)
             if (image.overlayEmote != null) {
                 nextOverlayEmote(imageLibrary, fragment, array, image.overlayEmote!!, bottomImage, itemView, bind, builder, translated, emoteSize, emoteQuality, animateGifs, enableOverlayEmotes, chatMessage, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, hideErrors)
@@ -968,7 +1049,21 @@ object ChatAdapterUtils {
                 val width = array.maxOf { it.bounds.right }
                 val height = array.maxOf { it.bounds.bottom }
                 layer.setBounds(0, 0, width, height)
-                builder.setSpan(CenteredImageSpan(layer), bottomImage.start, bottomImage.end, SPAN_EXCLUSIVE_EXCLUSIVE)
+                val hasAnimatedLayer = animateGifs && array.any { it is Animatable }
+                val span = CenteredImageSpan(layer, isAnimatedSpan = hasAnimatedLayer)
+                if (hasAnimatedLayer) {
+                    val cb = ViewDrawableCallback(itemView)
+                    span.drawableCallback = cb
+                    layer.callback = cb
+                    for (i in 0 until layer.numberOfLayers) {
+                        val child = layer.getDrawable(i) ?: continue
+                        child.callback = layer
+                        if (itemView.isAttachedToWindow && child is Animatable && !child.isRunning) {
+                            child.start()
+                        }
+                    }
+                }
+                builder.setSpan(span, bottomImage.start, bottomImage.end, SPAN_EXCLUSIVE_EXCLUSIVE)
                 if (!translated && chatMessage.translatedMessage != null) {
                     addTranslation(chatMessage, builder, builder.length, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, hideErrors)
                 }
@@ -978,6 +1073,7 @@ object ChatAdapterUtils {
     }
 
     private fun loadImage(imageLibrary: String?, fragment: Fragment, image: Image, emoteQuality: String, onLoaded: (Drawable) -> Unit) {
+        if (!fragment.isAdded) return
         if (imageLibrary == "0" || (imageLibrary == "1" && !image.format.equals("webp", true))) {
             loadCoil(fragment, image, emoteQuality, onLoaded)
         } else {
@@ -986,8 +1082,9 @@ object ChatAdapterUtils {
     }
 
     private fun loadCoil(fragment: Fragment, image: Image, emoteQuality: String, onLoaded: (Drawable) -> Unit) {
-        fragment.requireContext().imageLoader.enqueue(
-            ImageRequest.Builder(fragment.requireContext()).apply {
+        val ctx = fragment.context ?: return
+        ctx.imageLoader.enqueue(
+            ImageRequest.Builder(ctx).apply {
                 data(image.localData ?: when (emoteQuality) {
                     "4" -> image.url4x ?: image.url3x ?: image.url2x ?: image.url1x
                     "3" -> image.url3x ?: image.url2x ?: image.url1x
@@ -1001,7 +1098,8 @@ object ChatAdapterUtils {
                 }
                 target(
                     onSuccess = {
-                        onLoaded((it.asDrawable(fragment.resources)))
+                        if (!fragment.isAdded) return@target
+                        onLoaded(it.asDrawable(fragment.resources))
                     },
                 )
             }.build()
@@ -1009,6 +1107,7 @@ object ChatAdapterUtils {
     }
 
     private fun loadGlide(fragment: Fragment, image: Image, emoteQuality: String, onLoaded: (Drawable) -> Unit) {
+        if (!fragment.isAdded) return
         Glide.with(fragment)
             .load(image.localData ?: when (emoteQuality) {
                 "4" -> image.url4x ?: image.url3x ?: image.url2x ?: image.url1x
@@ -1023,6 +1122,7 @@ object ChatAdapterUtils {
             .diskCacheStrategy(DiskCacheStrategy.DATA)
             .into(object : CustomTarget<Drawable>() {
                 override fun onResourceReady(resource: Drawable, transition: Transition<in Drawable>?) {
+                    if (!fragment.isAdded) return
                     onLoaded(resource)
                 }
 

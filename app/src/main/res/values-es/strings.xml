@@ -1196,4 +1196,8 @@
     <string name="tv_update_try_again">Reintentar</string>
     <string name="tv_remote_action_pip_swap_default">Ventana pequeña: intercambiar directos (predeterminado)</string>
     <string name="tv_remote_action_show_controls">Mostrar controles</string>
+    <string name="tv_switcher_rows">Pestañas de Otros streams y Multistream</string>
+    <string name="tv_switcher_rows_summary">Elige el orden, oculta o añade categorías e idiomas (incluido Recomendado para ti) en Otros streams y Multistream</string>
+    <string name="tv_switcher_row_current_game">Categoría del stream actual</string>
+    <string name="tv_emotes_channel">Canal</string>
 </resources>

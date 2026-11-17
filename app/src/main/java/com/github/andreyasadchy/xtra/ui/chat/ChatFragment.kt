@@ -353,18 +353,19 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             messageView.visibility = View.VISIBLE
                         }
                         viewPager.adapter = object : FragmentStateAdapter(this@ChatFragment) {
-                            override fun getItemCount(): Int = 3
+                            override fun getItemCount(): Int = 4
 
                             override fun createFragment(position: Int): Fragment {
                                 return EmotesFragment.newInstance(position)
                             }
                         }
-                        viewPager.offscreenPageLimit = 2
+                        viewPager.offscreenPageLimit = 3
                         viewPager.reduceDragSensitivity()
                         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
                             tab.text = when (position) {
                                 0 -> getString(R.string.recent_emotes)
-                                1 -> "Twitch"
+                                1 -> getString(R.string.tv_emotes_channel)
+                                2 -> "Twitch"
                                 else -> "7TV/BTTV/FFZ"
                             }
                         }.attach()
@@ -1185,7 +1186,19 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     fun getUserRoomBadges(): kotlinx.coroutines.flow.StateFlow<Set<String>?>? =
         if (isAdded) viewModel.userRoomBadges else null
 
-    /** Returns grouped emotes (Recent, 7TV/BTTV/FFZ, Twitch) for the TV ChatComposer emote picker. */
+    /** Flow emitting whenever loaded user, third-party, or recent emotes change. */
+    fun observeEmoteUpdates(): kotlinx.coroutines.flow.Flow<Unit>? {
+        if (!isAdded) return null
+        return kotlinx.coroutines.flow.merge(
+            viewModel.userEmotesUpdated,
+            viewModel.thirdPartyEmotesUpdated,
+            kotlinx.coroutines.flow.flow {
+                viewModel.recentEmotes.collect { emit(Unit) }
+            },
+        )
+    }
+
+    /** Returns grouped emotes (Recent, Channel, Twitch, 7TV/BTTV/FFZ) for the TV ChatComposer emote picker. */
     fun getTvEmoteGroups(): List<Pair<String, List<Emote>>> {
         val ctx = context ?: return emptyList()
         val personal = viewModel.userSTVEmoteSetId?.let { setId ->
@@ -1193,20 +1206,26 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 viewModel.personalEmoteSets[setId]?.toList()
             }
         }.orEmpty()
-        val thirdParty = personal + synchronized(viewModel.thirdPartyEmotes) {
+        val rawThirdParty = synchronized(viewModel.thirdPartyEmotes) {
             viewModel.thirdPartyEmotes.toList()
         }
+        val thirdParty = personal + rawThirdParty
         val twitch = synchronized(viewModel.userEmotes) {
             viewModel.userEmotes.toList()
         }
+        val channelEmotes = (
+            twitch.filter { it.source == Emote.CHANNEL_TWITCH } +
+                rawThirdParty.filter { it.isChannelEmote }
+            ).distinctBy { it.name }
         val combined = (twitch + thirdParty).distinctBy { it.name }
         val recent = latestRecentEmoteNames.mapNotNull { name ->
             combined.find { it.name == name }
         }
         return buildList {
             if (recent.isNotEmpty()) add(ctx.getString(R.string.recent_emotes) to recent)
-            if (thirdParty.isNotEmpty()) add("7TV/BTTV/FFZ" to thirdParty.distinctBy { it.name })
+            if (channelEmotes.isNotEmpty()) add(ctx.getString(R.string.tv_emotes_channel) to channelEmotes)
             if (twitch.isNotEmpty()) add("Twitch" to twitch.distinctBy { it.name })
+            if (thirdParty.isNotEmpty()) add("7TV/BTTV/FFZ" to thirdParty.distinctBy { it.name })
         }
     }
 
@@ -1234,7 +1253,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     gqlHeaders = TwitchApiHelper.getGQLHeaders(requireContext(), true),
                     helixHeaders = TwitchApiHelper.getHelixHeaders(requireContext()),
                     accountId = requireContext().tokenPrefs().getString(C.USER_ID, null),
-                    channelId = requireArguments().getString(KEY_CHANNEL_ID),
+                    channelId = requireArguments().getString(KEY_CHANNEL_ID) ?: viewModel.resolvedChannelId,
                     channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN),
                     useApiCommands = requireContext().prefs().getBoolean(C.DEBUG_API_COMMANDS, true),
                     useApiChatMessages = requireContext().prefs().getBoolean(C.DEBUG_API_CHAT_MESSAGES, true),

@@ -101,6 +101,9 @@ class ChatAdapter(
         val chatMessage = synchronized(messages) {
             messages.getOrNull(position)
         } ?: return
+        if (animateGifs) {
+            ChatAdapterUtils.stopAnimatedSpans(holder.textView)
+        }
         val result = ChatAdapterUtils.prepareChatMessage(
             chatMessage, fragment.requireContext(), holder.textView, enableTimestamps, timestampFormat, firstMsgVisibility, firstChatMsg,
             redeemedChatMsg, redeemedNoMsg, rewardChatMsg, replyMessage, null, useRandomColors, random, useReadableColors, isLightTheme,
@@ -118,7 +121,7 @@ class ChatAdapter(
         }
         holder.bind(chatMessage, result.builder)
         ChatAdapterUtils.loadImages(
-            fragment, holder.textView, { holder.bind(chatMessage, it) }, result.images, result.imagePaint, result.userName, result.userNameStartIndex,
+            fragment, holder.textView, { if (holder.boundMessage === chatMessage) holder.bind(chatMessage, it) }, result.images, result.imagePaint, result.userName, result.userNameStartIndex,
             backgroundColor, imageLibrary, result.builder, result.translated, emoteSize, badgeSize, gifSize, emoteQuality, animateGifs, enableOverlayEmotes,
             chatMessage, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, true
         )
@@ -138,6 +141,7 @@ class ChatAdapter(
                 ChatAdapterUtils.addTranslation(chatMessage, builder, builder.length, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, true)
             }
             item.text = builder
+            ChatAdapterUtils.bindAnimatedSpans(item, animateGifs)
         }
     }
 
@@ -172,45 +176,13 @@ class ChatAdapter(
 
     override fun onViewAttachedToWindow(holder: ViewHolder) {
         super.onViewAttachedToWindow(holder)
-        if (animateGifs) {
-            (holder.textView.text as? Spannable)?.let { view ->
-                view.getSpans<ImageSpan>().forEach {
-                    (it.drawable as? Animatable)?.start() ?:
-                    (it.drawable as? LayerDrawable)?.let {
-                        val lastIndex = it.numberOfLayers - 1
-                        if (lastIndex > -1) {
-                            for (i in 0..lastIndex) {
-                                (it.getDrawable(i) as? Animatable)?.start()
-                            }
-                        }
-                    }
-                }
-                view.getSpans<NamePaintImageSpan>().forEach {
-                    (it.drawable as? Animatable)?.start()
-                }
-            }
-        }
+        ChatAdapterUtils.bindAnimatedSpans(holder.textView, animateGifs)
     }
 
     override fun onViewDetachedFromWindow(holder: ViewHolder) {
         super.onViewDetachedFromWindow(holder)
         if (animateGifs) {
-            (holder.textView.text as? Spannable)?.let { view ->
-                view.getSpans<ImageSpan>().forEach {
-                    (it.drawable as? Animatable)?.stop() ?:
-                    (it.drawable as? LayerDrawable)?.let {
-                        val lastIndex = it.numberOfLayers - 1
-                        if (lastIndex > -1) {
-                            for (i in 0..lastIndex) {
-                                (it.getDrawable(i) as? Animatable)?.stop()
-                            }
-                        }
-                    }
-                }
-                view.getSpans<NamePaintImageSpan>().forEach {
-                    (it.drawable as? Animatable)?.stop()
-                }
-            }
+            ChatAdapterUtils.stopAnimatedSpans(holder.textView)
         }
     }
 
@@ -218,21 +190,8 @@ class ChatAdapter(
         val childCount = recyclerView.childCount
         if (animateGifs) {
             for (i in 0 until childCount) {
-                ((recyclerView.getChildAt(i) as TextView).text as? Spannable)?.let { view ->
-                    view.getSpans<ImageSpan>().forEach {
-                        (it.drawable as? Animatable)?.stop() ?:
-                        (it.drawable as? LayerDrawable)?.let {
-                            val lastIndex = it.numberOfLayers - 1
-                            if (lastIndex > -1) {
-                                for (i in 0..lastIndex) {
-                                    (it.getDrawable(i) as? Animatable)?.stop()
-                                }
-                            }
-                        }
-                    }
-                    view.getSpans<NamePaintImageSpan>().forEach {
-                        (it.drawable as? Animatable)?.stop()
-                    }
+                (recyclerView.getChildAt(i) as? TextView)?.let {
+                    ChatAdapterUtils.stopAnimatedSpans(it)
                 }
             }
         }
@@ -242,10 +201,13 @@ class ChatAdapter(
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
         val textView = itemView as TextView
+        var boundMessage: ChatMessage? = null
 
         fun bind(chatMessage: ChatMessage, formattedMessage: SpannableStringBuilder) {
+            boundMessage = chatMessage
             textView.apply {
                 text = formattedMessage
+                ChatAdapterUtils.bindAnimatedSpans(this, animateGifs)
                 textSize = messageTextSize
                 setHorizontallyScrolling(singleLine)
                 if (chatMessage.type == ChatMessage.REPLY_MESSAGE) {

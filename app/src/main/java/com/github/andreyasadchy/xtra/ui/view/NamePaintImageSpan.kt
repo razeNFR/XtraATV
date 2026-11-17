@@ -19,6 +19,8 @@ class NamePaintImageSpan(
     val drawable: Drawable,
 ) : ReplacementSpan() {
 
+    var drawableCallback: Drawable.Callback? = null
+
     override fun getSize(paint: Paint, text: CharSequence?, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int {
         if (fm != null) {
             val paintFm = paint.fontMetrics

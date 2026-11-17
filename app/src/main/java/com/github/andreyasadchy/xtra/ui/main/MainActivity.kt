@@ -1900,6 +1900,12 @@ class MainActivity : AppCompatActivity() {
         settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_OPEN, SettingsActivity.OPEN_CUSTOM_PROXIES))
     }
 
+    /** TV: the settings of the HTTP stream proxies (from the proxy panel of the player). */
+    fun openStreamProxySettings() {
+        if (isTv) adblockPrefsBeforeSettings = snapshotAdblockPrefs()
+        settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_OPEN, SettingsActivity.OPEN_STREAM_PROXIES))
+    }
+
     /** TV: the stream watched starts again (proxy turned on or off): its last picture stays until it plays again. */
     fun restartCurrentStream() {
         val stream = currentPlayingStream() ?: return

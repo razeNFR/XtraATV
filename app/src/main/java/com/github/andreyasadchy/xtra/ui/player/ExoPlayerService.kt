@@ -167,6 +167,9 @@ class ExoPlayerService : BasePlaybackService() {
     private var liveBehindAtPauseMs = 0L
     @Volatile
     private var liveTimeShiftedBehindMs = 0L
+    @Volatile
+    private var liveCatchUpSpeed = 1.0f
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var liveBufferExpiredWhilePaused = false
     private var activeDvrResume: PendingDvrResume? = null
     private var dvrInitialSeekPending = false
@@ -187,7 +190,17 @@ class ExoPlayerService : BasePlaybackService() {
         livePausedPictureEpochMs = null
         liveBehindAtPauseMs = 0L
         liveTimeShiftedBehindMs = 0L
+        liveCatchUpSpeed = 1.0f
         liveBufferExpiredWhilePaused = false
+    }
+
+    fun updateStreamPlaybackSpeed(speed: Float) {
+        if (type == STREAM) {
+            liveCatchUpSpeed = if (speed > 1.02f) speed else 1.0f
+        } else {
+            liveCatchUpSpeed = 1.0f
+        }
+        player?.setPlaybackSpeed(speed)
     }
 
     private fun createLoadControl(): DefaultLoadControl {
@@ -248,6 +261,23 @@ class ExoPlayerService : BasePlaybackService() {
             }
 
             override fun getAdjustedPlaybackSpeed(liveOffsetUs: Long, bufferedDurationUs: Long): Float {
+                val catchUp = liveCatchUpSpeed
+                if (catchUp > 1.02f) {
+                    if (liveOffsetUs != androidx.media3.common.C.TIME_UNSET && liveOffsetUs <= 3_500_000L) {
+                        liveTimeShiftedBehindMs = 0L
+                        liveCatchUpSpeed = 1.0f
+                        mainHandler.post {
+                            if (liveCatchUpSpeed <= 1.02f && player?.playbackParameters?.speed != 1.0f) {
+                                player?.setPlaybackSpeed(1.0f)
+                            }
+                        }
+                        return 1.0f
+                    }
+                    if (bufferedDurationUs != androidx.media3.common.C.TIME_UNSET && bufferedDurationUs < 1_500_000L) {
+                        return 1.0f
+                    }
+                    return catchUp
+                }
                 if (liveTimeShiftedBehindMs > 0L) {
                     return 1.0f
                 }
@@ -275,6 +305,10 @@ class ExoPlayerService : BasePlaybackService() {
         if (measured != null) {
             if (measured <= 3_500L) {
                 liveTimeShiftedBehindMs = 0L
+                if (liveCatchUpSpeed > 1.02f) {
+                    liveCatchUpSpeed = 1.0f
+                    player?.setPlaybackSpeed(1.0f)
+                }
                 return 0L
             }
             return measured
@@ -400,12 +434,17 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     fun clearExperimentalRewoundIfAtEdge() {
-        if (experimentalVodUserRewound && !isLivePaused) {
-            val pos = player?.currentPosition ?: return
+        if (!isLivePaused) {
+            val p = player ?: return
+            val pos = p.currentPosition
             val rawBehind = getExperimentalLiveEdgeMs() - pos
             val displayBehind = getExperimentalDisplayEdgeMs() - pos
             if (rawBehind <= 4_500L && displayBehind <= 4_500L) {
                 experimentalVodUserRewound = false
+                if (liveCatchUpSpeed > 1.02f || p.playbackParameters.speed != 1f) {
+                    liveCatchUpSpeed = 1.0f
+                    p.setPlaybackSpeed(1f)
+                }
             }
         }
     }
@@ -951,7 +990,7 @@ class ExoPlayerService : BasePlaybackService() {
                                                         playbackPosition
                                                     )
                                                     player.volume = userVolume()
-                                                    player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
+                                                    player.setPlaybackSpeed(if (videoId.isNullOrBlank()) 1f else prefs().getFloat(C.PLAYER_SPEED, 1f))
                                                     player.prepare()
                                                     player.playWhenReady = true
                                                 }
@@ -1398,7 +1437,7 @@ class ExoPlayerService : BasePlaybackService() {
                                         initialPos
                                     )
                                     player.volume = userVolume()
-                                    player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
+                                    player.setPlaybackSpeed(if (videoId.isNullOrBlank()) 1f else prefs().getFloat(C.PLAYER_SPEED, 1f))
                                     player.prepare()
                                     player.playWhenReady = !restorePauseState || !paused
                                 }
@@ -2072,7 +2111,7 @@ class ExoPlayerService : BasePlaybackService() {
                         )
                     )
                     player.volume = userVolume()
-                    player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
+                    player.setPlaybackSpeed(if (videoId.isNullOrBlank()) 1f else prefs().getFloat(C.PLAYER_SPEED, 1f))
                     player.prepare()
                     player.playWhenReady = !restorePauseState || !paused
                     player.seekTo(playbackPosition)
@@ -4158,6 +4197,9 @@ class ExoPlayerService : BasePlaybackService() {
     fun seekToDefaultPosition() {
         lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
         clearLivePauseState()
+        if (type == STREAM && player?.playbackParameters?.speed != 1f) {
+            player?.setPlaybackSpeed(1f)
+        }
         if (type == STREAM && experimentalVodActive) {
             expWasRewoundBeforePause = false
             experimentalVodUserRewound = false
