@@ -155,7 +155,6 @@ class ChatViewModel(
     var streamId: String? = null
     var resolvedChannelId: String? = null
         private set
-    private var activeChannelLogin: String? = null
     var gameId: String? = null
     var gameName: String? = null
     private val claimedDropIds = LinkedHashSet<String>()
