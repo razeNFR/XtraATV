@@ -64,6 +64,8 @@ class HermesWebSocket(
             put(Uuid.random().toHexString().substring(0, 21), "video-playback-by-id.$channelId")
             put(Uuid.random().toHexString().substring(0, 21), "broadcast-settings-update.$channelId")
             put(Uuid.random().toHexString().substring(0, 21), "community-points-channel-v1.$channelId")
+            put(Uuid.random().toHexString().substring(0, 21), "pinned-chat-updates-v1.$channelId")
+            put(Uuid.random().toHexString().substring(0, 21), "shared-chat-session-v1.$channelId")
             if (showRaids) {
                 put(Uuid.random().toHexString().substring(0, 21), "raid.$channelId")
             }
@@ -131,6 +133,8 @@ class HermesWebSocket(
         suspend fun onRaidUpdate(message: JSONObject, openStream: Boolean) {}
         suspend fun onPollUpdate(message: JSONObject) {}
         suspend fun onPredictionUpdate(message: JSONObject) {}
+        suspend fun onPinnedChatUpdate(message: JSONObject) {}
+        suspend fun onSharedChatUpdate(message: JSONObject) {}
         suspend fun onDisconnect(message: String, fullMsg: String?) {}
     }
 
@@ -205,6 +209,8 @@ class HermesWebSocket(
                                 }
                                 topic.startsWith("polls") -> listener.onPollUpdate(message)
                                 topic.startsWith("predictions-channel") -> listener.onPredictionUpdate(message)
+                                topic.startsWith("pinned-chat-updates-v1") -> listener.onPinnedChatUpdate(message)
+                                topic.startsWith("shared-chat-session-v1") -> listener.onSharedChatUpdate(message)
                             }
                         }
                     }

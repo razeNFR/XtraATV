@@ -2045,4 +2045,499 @@ class GraphQLRepository(
             results
         }.getOrDefault(emptyList())
     }
+
+    data class PinnedChatItem(
+        val id: String,
+        val messageText: String,
+        val senderName: String?,
+        val senderLogin: String?,
+        val pinnedByName: String?,
+        val startsAtMs: Long?,
+        val endsAtMs: Long?,
+    )
+
+    suspend fun loadPinnedChatMessage(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        channelId: String?,
+    ): PinnedChatItem? = withContext(Dispatchers.IO) {
+        if (channelId.isNullOrBlank()) return@withContext null
+        val body = buildJsonObject {
+            put(
+                "query",
+                "query(\$id: ID!) { channel(id: \$id) { pinnedChatMessages(first: 1) { edges { node { id startsAt endsAt pinnedBy { login displayName } pinnedMessage { id content { text } sender { login displayName } } } } } } }",
+            )
+            putJsonObject("variables") {
+                put("id", channelId)
+            }
+        }.toString()
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val node = json.parseToJsonElement(raw).obj()
+                ?.get("data").obj()
+                ?.get("channel").obj()
+                ?.get("pinnedChatMessages").obj()
+                ?.get("edges").arr()
+                ?.firstOrNull().obj()
+                ?.get("node").obj()
+                ?: return@runCatching null
+            val id = node["id"].str()?.takeIf { it.isNotBlank() } ?: return@runCatching null
+            val pinnedMsg = node["pinnedMessage"].obj()
+            val text = pinnedMsg?.get("content").obj()?.get("text").str()?.takeIf { it.isNotBlank() }
+                ?: return@runCatching null
+            val sender = pinnedMsg?.get("sender").obj()
+            val pinnedBy = node["pinnedBy"].obj()
+            val startsAtMs = node["startsAt"].str()?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+            val endsAtMs = node["endsAt"].str()?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+            if (endsAtMs != null && endsAtMs > 0L && System.currentTimeMillis() >= endsAtMs) {
+                return@runCatching null
+            }
+            PinnedChatItem(
+                id = id,
+                messageText = text,
+                senderName = sender?.get("displayName").str()?.takeIf { it.isNotBlank() },
+                senderLogin = sender?.get("login").str()?.takeIf { it.isNotBlank() },
+                pinnedByName = pinnedBy?.get("displayName").str()?.takeIf { it.isNotBlank() }
+                    ?: pinnedBy?.get("login").str()?.takeIf { it.isNotBlank() },
+                startsAtMs = startsAtMs,
+                endsAtMs = endsAtMs,
+            )
+        }.getOrNull()
+    }
+
+    /** Returns participant channel IDs in an active Twitch Shared Chat / Stream Together session for [channelId]. */
+    suspend fun loadSharedChatChannelIds(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        channelId: String?,
+    ): List<String> = withContext(Dispatchers.IO) {
+        if (channelId.isNullOrBlank()) return@withContext emptyList()
+        val body = buildJsonObject {
+            put(
+                "query",
+                "query(\$channelID: ID!) { sharedChatSessionByChannelID(channelID: \$channelID) { id status hostChannel { id } participants { status channel { id } } } }",
+            )
+            putJsonObject("variables") {
+                put("channelID", channelId)
+            }
+        }.toString()
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val session = json.parseToJsonElement(raw).obj()
+                ?.get("data").obj()
+                ?.get("sharedChatSessionByChannelID").obj()
+                ?: return@runCatching emptyList()
+            val status = session["status"].str()
+            if (status != null && !status.equals("ACTIVE", ignoreCase = true) && !status.equals("CREATED", ignoreCase = true)) {
+                return@runCatching emptyList()
+            }
+            val ids = LinkedHashSet<String>()
+            session["hostChannel"].obj()?.get("id").str()?.takeIf { it.isNotBlank() && it != channelId }?.let { ids.add(it) }
+            session["participants"].arr()?.forEach { el ->
+                val p = el.obj() ?: return@forEach
+                val pStatus = p["status"].str()
+                if (pStatus == null || pStatus.equals("ACTIVE", ignoreCase = true) || pStatus.equals("JOINED", ignoreCase = true)) {
+                    p["channel"].obj()?.get("id").str()?.takeIf { it.isNotBlank() && it != channelId }?.let { ids.add(it) }
+                }
+            }
+            ids.toList()
+        }.getOrDefault(emptyList())
+    }
+
+    data class CustomRewardItem(
+        val id: String,
+        val title: String,
+        val prompt: String?,
+        val cost: Int,
+        val isEnabled: Boolean,
+        val isPaused: Boolean,
+        val isInStock: Boolean,
+        val isUserInputRequired: Boolean,
+        val isSubOnly: Boolean,
+        val backgroundColor: String?,
+        val cooldownExpiresAtMs: Long?,
+        val imageUrl: String?,
+    )
+
+    data class ChannelPointsStoreData(
+        val channelId: String?,
+        val pointsName: String?,
+        val balance: Int?,
+        val availableClaimId: String?,
+        val rewards: List<CustomRewardItem>,
+    )
+
+    suspend fun loadChannelPointsStore(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        channelLogin: String?,
+    ): ChannelPointsStoreData? = withContext(Dispatchers.IO) {
+        if (channelLogin.isNullOrBlank()) return@withContext null
+        val persistedBody = buildJsonObject {
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("sha256Hash", "33884dcfeab64eb44c2d61255145643cf69ea993e0c6c2ecb0fa46238586a111")
+                    put("version", 1)
+                }
+            }
+            put("operationName", "ChannelPointsContext")
+            putJsonObject("variables") {
+                put("channelLogin", channelLogin)
+                putJsonArray("includeGoalTypes") {
+                    add("CREATOR")
+                    add("BOOST")
+                }
+            }
+        }.toString()
+
+        val rawQueryBody = buildJsonObject {
+            put(
+                "query",
+                "query(\$login: String!) { user(login: \$login, lookupType: ALL) { id channel { id self { communityPoints { balance availableClaim { id } } } communityPointsSettings { name isEnabled customRewards { id title prompt cost isEnabled isPaused isInStock isUserInputRequired isSubOnly backgroundColor cooldownExpiresAt image { url url2x url4x } defaultImage { url url2x url4x } } } } } }",
+            )
+            putJsonObject("variables") {
+                put("login", channelLogin)
+            }
+        }.toString()
+
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+            fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+            fun JsonElement?.bool(): Boolean? = (this as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull()
+
+            var raw = sendPersistedQuery(networkLibrary, headers, persistedBody)
+            var dataObj = json.parseToJsonElement(raw).obj()?.get("data").obj()
+            var channelObj = dataObj?.get("community").obj()?.get("channel").obj()
+            if (channelObj?.get("communityPointsSettings").obj()?.get("customRewards").arr() == null) {
+                val rawFallback = sendPersistedQuery(networkLibrary, headers, rawQueryBody)
+                val fallbackUser = json.parseToJsonElement(rawFallback).obj()?.get("data").obj()?.get("user").obj()
+                if (fallbackUser?.get("channel").obj() != null) {
+                    channelObj = fallbackUser?.get("channel").obj()
+                }
+            }
+            if (channelObj == null) return@runCatching null
+            val resolvedChannelId = channelObj["id"].str()?.takeIf { it.isNotBlank() }
+                ?: dataObj?.get("community").obj()?.get("id").str()?.takeIf { it.isNotBlank() }
+            val selfPoints = channelObj["self"].obj()?.get("communityPoints").obj()
+            val balance = selfPoints?.get("balance").int()
+            val claimId = selfPoints?.get("availableClaim").obj()?.get("id").str()?.takeIf { it.isNotBlank() }
+            val settings = channelObj["communityPointsSettings"].obj()
+            val pointsName = settings?.get("name").str()?.takeIf { it.isNotBlank() }
+            val customRewards = settings?.get("customRewards").arr()?.mapNotNull { el ->
+                val r = el.obj() ?: return@mapNotNull null
+                val id = r["id"].str()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val title = r["title"].str()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val cost = r["cost"].int() ?: return@mapNotNull null
+                val enabled = r["isEnabled"].bool() ?: true
+                if (!enabled) return@mapNotNull null
+                val img = r["image"].obj()
+                val defImg = r["defaultImage"].obj()
+                val imageUrl = img?.get("url4x").str() ?: img?.get("url2x").str() ?: img?.get("url").str()
+                    ?: defImg?.get("url4x").str() ?: defImg?.get("url2x").str() ?: defImg?.get("url").str()
+                val cooldownMs = r["cooldownExpiresAt"].str()?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                CustomRewardItem(
+                    id = id,
+                    title = title,
+                    prompt = r["prompt"].str()?.takeIf { it.isNotBlank() },
+                    cost = cost,
+                    isEnabled = enabled,
+                    isPaused = r["isPaused"].bool() ?: false,
+                    isInStock = r["isInStock"].bool() ?: true,
+                    isUserInputRequired = r["isUserInputRequired"].bool() ?: false,
+                    isSubOnly = r["isSubOnly"].bool() ?: false,
+                    backgroundColor = r["backgroundColor"].str(),
+                    cooldownExpiresAtMs = cooldownMs,
+                    imageUrl = imageUrl,
+                )
+            }?.sortedBy { it.cost } ?: emptyList()
+
+            ChannelPointsStoreData(
+                channelId = resolvedChannelId,
+                pointsName = pointsName,
+                balance = balance,
+                availableClaimId = claimId,
+                rewards = customRewards,
+            )
+        }.getOrNull()
+    }
+
+    data class RedeemRewardResult(
+        val success: Boolean,
+        val errorCode: String? = null,
+    )
+
+    suspend fun redeemCustomReward(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        channelId: String,
+        rewardId: String,
+        title: String,
+        cost: Int,
+        prompt: String?,
+        textInput: String?,
+    ): RedeemRewardResult = withContext(Dispatchers.IO) {
+        val txId = Uuid.random().toHexString()
+        fun buildPersisted(): String = buildJsonObject {
+            put("operationName", "RedeemCustomReward")
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", "d56249a7adb4978898ea3412e196688d4ac3cea1c0c2dfd65561d229ea5dcc42")
+                }
+            }
+            putJsonObject("variables") {
+                putJsonObject("input") {
+                    put("channelID", channelId)
+                    put("cost", cost)
+                    put("prompt", prompt)
+                    put("rewardID", rewardId)
+                    put("title", title)
+                    put("transactionID", txId)
+                    if (!textInput.isNullOrBlank()) {
+                        put("textInput", textInput)
+                    }
+                }
+            }
+        }.toString()
+
+        fun buildRaw(): String = buildJsonObject {
+            put(
+                "query",
+                "mutation(\$input: RedeemCustomRewardInput!) { redeemCustomReward(input: \$input) { redemption { id } error { code } } }",
+            )
+            putJsonObject("variables") {
+                putJsonObject("input") {
+                    put("channelID", channelId)
+                    put("cost", cost)
+                    put("prompt", prompt)
+                    put("rewardID", rewardId)
+                    put("title", title)
+                    put("transactionID", txId)
+                    if (!textInput.isNullOrBlank()) {
+                        put("textInput", textInput)
+                    }
+                }
+            }
+        }.toString()
+
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            var raw = sendPersistedQuery(networkLibrary, headers, buildPersisted())
+            if (raw.contains("PersistedQueryNotFound")) {
+                raw = sendPersistedQuery(networkLibrary, headers, buildRaw())
+            }
+            val root = json.parseToJsonElement(raw).obj() ?: return@runCatching RedeemRewardResult(false, "NETWORK_ERROR")
+            val topErr = root["errors"].arr()?.firstOrNull().obj()?.get("message").str()
+            if (!topErr.isNullOrBlank()) {
+                return@runCatching RedeemRewardResult(false, topErr)
+            }
+            val node = root["data"].obj()?.get("redeemCustomReward").obj()
+                ?: return@runCatching RedeemRewardResult(false, "UNKNOWN")
+            val errCode = node["error"].obj()?.get("code").str()?.takeIf { it.isNotBlank() }
+            if (errCode != null) {
+                RedeemRewardResult(false, errCode)
+            } else {
+                RedeemRewardResult(true, null)
+            }
+        }.getOrDefault(RedeemRewardResult(false, "NETWORK_ERROR"))
+    }
+
+    data class DropProgressItem(
+        val campaignId: String,
+        val campaignName: String,
+        val gameName: String?,
+        val dropId: String,
+        val dropName: String,
+        val imageUrl: String?,
+        val currentMinutes: Int,
+        val requiredMinutes: Int,
+        val isClaimed: Boolean,
+        val dropInstanceId: String?,
+        val endsAtMs: Long?,
+    )
+
+    suspend fun loadDropsProgressFromInventory(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+    ): List<DropProgressItem> = withContext(Dispatchers.IO) {
+        fun buildInventoryBody(hash: String): String = buildJsonObject {
+            put("operationName", "Inventory")
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", hash)
+                }
+            }
+            putJsonObject("variables") {
+                put("fetchRewardCampaigns", false)
+            }
+        }.toString()
+
+        val rawFallbackBody = buildJsonObject {
+            put(
+                "query",
+                "query { currentUser { inventory { dropCampaignsInProgress { id name endAt game { id displayName } timeBasedDrops { id name requiredMinutesWatched benefitEdges { benefit { id name imageAssetURL } } self { isClaimed currentMinutesWatched dropInstanceID } } } } } }",
+            )
+        }.toString()
+
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+            fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+            fun JsonElement?.bool(): Boolean? = (this as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull()
+
+            var raw = sendPersistedQuery(
+                networkLibrary,
+                headers,
+                buildInventoryBody("d86775d0ef16a63a33ad52e80eaff963b2d5b72fada7c991504a57496e1d8e4b"),
+            )
+            if (raw.contains("PersistedQueryNotFound")) {
+                raw = sendPersistedQuery(
+                    networkLibrary,
+                    headers,
+                    buildInventoryBody("8337eb8541b314040b0edde0c09c5c7a2783ba1960aa9edfbf3bac16d0fec404"),
+                )
+            }
+            if (raw.contains("PersistedQueryNotFound")) {
+                raw = sendPersistedQuery(networkLibrary, headers, rawFallbackBody)
+            }
+            val campaigns = json.parseToJsonElement(raw).obj()
+                ?.get("data").obj()
+                ?.get("currentUser").obj()
+                ?.get("inventory").obj()
+                ?.get("dropCampaignsInProgress").arr()
+                ?: return@runCatching emptyList()
+            val nowMs = System.currentTimeMillis()
+            val graceMs = 24L * 3600L * 1000L
+            val items = ArrayList<DropProgressItem>()
+            for (cEl in campaigns) {
+                val c = cEl.obj() ?: continue
+                val campaignId = c["id"].str() ?: ""
+                val campaignName = c["name"].str()?.takeIf { it.isNotBlank() } ?: continue
+                val gameName = c["game"].obj()?.let { g ->
+                    g["displayName"].str()?.takeIf { it.isNotBlank() } ?: g["name"].str()?.takeIf { it.isNotBlank() }
+                }
+                val endAtMs = c["endAt"].str()?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                if (endAtMs != null && nowMs > endAtMs + graceMs) continue
+                val drops = c["timeBasedDrops"].arr() ?: continue
+                for (dEl in drops) {
+                    val d = dEl.obj() ?: continue
+                    val dropId = d["id"].str() ?: continue
+                    val required = d["requiredMinutesWatched"].int() ?: 0
+                    if (required <= 0) continue
+                    val selfObj = d["self"].obj()
+                    val current = selfObj?.get("currentMinutesWatched").int() ?: 0
+                    val isClaimed = selfObj?.get("isClaimed").bool() ?: false
+                    val instanceId = selfObj?.get("dropInstanceID").str()?.takeIf { it.isNotBlank() }
+                    val benefit = d["benefitEdges"].arr()?.firstOrNull().obj()?.get("benefit").obj()
+                    val dropName = benefit?.get("name").str()?.takeIf { it.isNotBlank() }
+                        ?: d["name"].str()?.takeIf { it.isNotBlank() }
+                        ?: campaignName
+                    val imageUrl = benefit?.get("imageAssetURL").str()?.takeIf { it.isNotBlank() }
+                    items.add(
+                        DropProgressItem(
+                            campaignId = campaignId,
+                            campaignName = campaignName,
+                            gameName = gameName,
+                            dropId = dropId,
+                            dropName = dropName,
+                            imageUrl = imageUrl,
+                            currentMinutes = current.coerceIn(0, required),
+                            requiredMinutes = required,
+                            isClaimed = isClaimed,
+                            dropInstanceId = instanceId,
+                            endsAtMs = endAtMs,
+                        )
+                    )
+                }
+            }
+            items.sortedWith(
+                compareBy<DropProgressItem> { it.isClaimed }
+                    .thenByDescending { it.dropInstanceId != null && !it.isClaimed }
+                    .thenByDescending { if (it.requiredMinutes > 0) it.currentMinutes.toFloat() / it.requiredMinutes else 0f }
+            )
+        }.getOrDefault(emptyList())
+    }
+
+    data class CreatedClipResult(
+        val slug: String?,
+        val url: String?,
+        val error: String? = null,
+    )
+
+    suspend fun createClip(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        broadcasterId: String,
+        broadcastId: String? = null,
+        videoId: String? = null,
+        offsetSeconds: Double? = null,
+    ): CreatedClipResult = withContext(Dispatchers.IO) {
+        if (broadcasterId.isBlank()) return@withContext CreatedClipResult(null, null, "MISSING_BROADCASTER")
+        fun buildInputObj() = buildJsonObject {
+            put("broadcasterID", broadcasterId)
+            if (!broadcastId.isNullOrBlank()) put("broadcastID", broadcastId)
+            if (!videoId.isNullOrBlank()) put("videoID", videoId)
+            if (offsetSeconds != null && offsetSeconds > 0.0) put("offsetSeconds", offsetSeconds)
+        }
+        val persistedBody = buildJsonObject {
+            put("operationName", "createClip")
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", "518982ccc596c0783dbfe918a72a7dbca8ef73fb7d5bf18fb48b84f1fb50ab1c")
+                }
+            }
+            putJsonObject("variables") {
+                put("input", buildInputObj())
+            }
+        }.toString()
+        val rawMutationBody = buildJsonObject {
+            put(
+                "query",
+                "mutation(\$input: CreateClipInput!) { createClip(input: \$input) { clip { id slug url } error { code } } }",
+            )
+            putJsonObject("variables") {
+                put("input", buildInputObj())
+            }
+        }.toString()
+
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            var raw = sendPersistedQuery(networkLibrary, headers, persistedBody)
+            if (raw.contains("PersistedQueryNotFound")) {
+                raw = sendPersistedQuery(networkLibrary, headers, rawMutationBody)
+            }
+            val root = json.parseToJsonElement(raw).obj() ?: return@runCatching CreatedClipResult(null, null, "NETWORK_ERROR")
+            val topErr = root["errors"].arr()?.firstOrNull().obj()?.get("message").str()
+            val node = root["data"].obj()?.get("createClip").obj()
+            val errCode = node?.get("error").obj()?.get("code").str()?.takeIf { it.isNotBlank() } ?: topErr
+            val clipObj = node?.get("clip").obj()
+            val slug = clipObj?.get("slug").str()?.takeIf { it.isNotBlank() }
+                ?: clipObj?.get("id").str()?.takeIf { it.isNotBlank() }
+            if (slug != null) {
+                val shortUrl = "https://clips.twitch.tv/$slug"
+                CreatedClipResult(slug = slug, url = shortUrl, error = null)
+            } else {
+                CreatedClipResult(null, null, errCode ?: "UNKNOWN")
+            }
+        }.getOrDefault(CreatedClipResult(null, null, "NETWORK_ERROR"))
+    }
 }

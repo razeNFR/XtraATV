@@ -23,6 +23,8 @@ import coil3.imageLoader
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
+import coil3.request.transformations
+import coil3.transform.CircleCropTransformation
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.load.model.GlideUrl
@@ -232,6 +234,34 @@ object ChatAdapterUtils {
                         builder.setSpan(ForegroundColorSpan(getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)), builderIndex, builderIndex + timestamp.length, SPAN_EXCLUSIVE_EXCLUSIVE)
                         builderIndex += timestamp.length + 1
                     }
+                }
+                if (!chatMessage.sourceChannelAvatar.isNullOrBlank() &&
+                    context.prefs().getBoolean(C.CHAT_SHARED_BADGES, true)
+                ) {
+                    val avatarUrl = chatMessage.sourceChannelAvatar
+                    builder.append(". ")
+                    builder.setSpan(ForegroundColorSpan(Color.TRANSPARENT), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    if (imageClick != null) {
+                        builder.setSpan(object : ClickableSpan() {
+                            override fun onClick(widget: View) {
+                                imageClick(avatarUrl, chatMessage.sourceChannelName, null, null, null, null, null)
+                            }
+
+                            override fun updateDrawState(ds: TextPaint) {}
+                        }, builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                    images.add(
+                        Image(
+                            url1x = avatarUrl,
+                            url2x = avatarUrl,
+                            url3x = avatarUrl,
+                            url4x = avatarUrl,
+                            size = Image.IMAGE_SIZE_BADGE,
+                            circleCrop = true,
+                            start = builderIndex++,
+                            end = builderIndex++,
+                        )
+                    )
                 }
                 chatMessage.badges?.forEach { chatBadge ->
                     val badge = synchronized(channelBadges) {
@@ -1091,6 +1121,9 @@ object ChatAdapterUtils {
                     "2" -> image.url2x ?: image.url1x
                     else -> image.url1x
                 })
+                if (image.circleCrop) {
+                    transformations(CircleCropTransformation())
+                }
                 if (image.thirdParty) {
                     httpHeaders(NetworkHeaders.Builder().apply {
                         add("User-Agent", "Xtra/" + BuildConfig.VERSION_NAME)
@@ -1119,6 +1152,7 @@ object ChatAdapterUtils {
                     GlideUrl(it) { mapOf("User-Agent" to "Xtra/" + BuildConfig.VERSION_NAME) }
                 } else it
             })
+            .let { if (image.circleCrop) it.circleCrop() else it }
             .diskCacheStrategy(DiskCacheStrategy.DATA)
             .into(object : CustomTarget<Drawable>() {
                 override fun onResourceReady(resource: Drawable, transition: Transition<in Drawable>?) {

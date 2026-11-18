@@ -35,6 +35,24 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:key="tv_button_points"
+        android:summary="@string/tv_points_button_summary"
+        android:title="@string/tv_points_and_drops"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_button_clip"
+        android:summary="@string/tv_clip_button_summary"
+        android:title="@string/tv_create_clip"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
         android:key="tv_button_proxy"
         android:summary="@string/tv_proxy_button_summary"
         android:title="@string/tv_proxy_button"

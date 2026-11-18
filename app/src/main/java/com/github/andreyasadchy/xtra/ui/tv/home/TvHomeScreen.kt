@@ -1475,7 +1475,7 @@ private fun MultiStreamCard(
                 .background(Color(0xFF141318))
                 .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
         ) {
-            val tiles = item.liveStreams.take(4)
+            val tiles = item.liveStreams.take(6)
             val gap = 1.5.dp
             when (tiles.size) {
                 0 -> Box(Modifier.fillMaxSize().background(Color(0xFF26252C)))
@@ -1491,7 +1491,7 @@ private fun MultiStreamCard(
                         MultiStreamTileThumb(tiles[2], Modifier.fillMaxWidth().weight(1f))
                     }
                 }
-                else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                4 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
                     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
                         MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
                         MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
@@ -1499,6 +1499,29 @@ private fun MultiStreamCard(
                     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
                         MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
                         MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
+                    }
+                }
+                5 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
+                    }
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[4], Modifier.weight(1f).fillMaxHeight())
+                    }
+                }
+                else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
+                    }
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[4], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[5], Modifier.weight(1f).fillMaxHeight())
                     }
                 }
             }

@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** TV: saved groups of 2 to 4 streamers to launch a multi-stream in one click when they are live. */
+/** TV: saved groups of 2 to 6 streamers to launch a multi-stream in one click when they are live. */
 object TvMultiStreamGroups {
 
     private const val MAX_GROUPS = 8
@@ -73,7 +73,7 @@ object TvMultiStreamGroups {
         val clean = streams
             .filter { !it.channelLogin.isNullOrBlank() }
             .distinctBy { it.channelLogin?.lowercase() }
-            .take(4)
+            .take(6)
         val id = idOf(clean)
         if (id.isEmpty()) return
         val existing = list(context).find { it.id == id }

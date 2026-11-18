@@ -140,6 +140,13 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_shared_badges"
+        android:title="@string/tv_chat_shared_badges"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <Preference
         android:key="chat_highlighted_users"
         android:title="@string/chat_highlighted_users"

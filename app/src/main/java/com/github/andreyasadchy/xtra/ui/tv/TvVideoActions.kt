@@ -79,6 +79,29 @@ object TvVideoActions {
                     activity.openTvGame(video.gameId, video.gameSlug, video.gameName)
                 })
             }
+            if (!id.isNullOrBlank()) {
+                add(TvActionPanel.Action(activity.getString(R.string.tv_share_qr), R.drawable.tv_ic_qr) {
+                    val sharePos = if (started && !finished) positionMs else null
+                    TvQrShare.showQrModal(
+                        context = activity,
+                        title = video.title?.trim()?.takeIf { it.isNotEmpty() } ?: name,
+                        subtitle = activity.getString(R.string.tv_share_qr_subtitle),
+                        url = TvQrShare.buildVideoUrl(id, sharePos),
+                    )
+                })
+                if (started && !finished && positionMs != null && positionMs >= 5_000L) {
+                    add(TvActionPanel.Action(activity.getString(R.string.tv_create_clip), R.drawable.tv_ic_clip) {
+                        TvQrShare.createAndShowClipQr(
+                            context = activity,
+                            broadcasterId = video.channelId,
+                            channelLogin = video.channelLogin,
+                            broadcastId = null,
+                            videoId = id,
+                            offsetSeconds = (positionMs / 1000.0).coerceAtLeast(1.0),
+                        )
+                    })
+                }
+            }
             addAll(extras)
         }
         TvActionPanel.show(activity, video.title?.trim()?.takeIf { it.isNotEmpty() } ?: name, actions)

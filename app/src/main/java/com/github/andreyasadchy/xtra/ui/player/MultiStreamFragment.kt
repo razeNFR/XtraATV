@@ -36,14 +36,14 @@ import com.github.andreyasadchy.xtra.util.tokenPrefs
 import kotlinx.coroutines.launch
 
 /**
- * TV multi-stream: up to 4 live streams on screen at once. The D-pad selects a stream, whose sound is played (or the
+ * TV multi-stream: up to 6 live streams on screen at once. The D-pad selects a stream, whose sound is played (or the
  * sounds of all of them at their own volume, Sound of the panel),
  * OK opens the panel of that stream (open it in the player, its chat, change it, add a stream, its size) and back
  * leaves the multi-stream view.
  *
  * Chats: with 2 streams, the chats of both streams are shown with them, under or above each stream (each one can be
- * hidden or moved). With 3 streams, the empty cell at the bottom right shows the chat of the selected stream, or the one
- * pinned. With 3 or 4 streams, a stream can be removed.
+ * hidden or moved). With 3 or 5 streams, the empty cell at the bottom right shows the chat of the selected stream, or
+ * the one pinned. With 3 to 6 streams, a stream can be removed.
  */
 @OptIn(UnstableApi::class)
 class MultiStreamFragment : Fragment() {
@@ -66,6 +66,7 @@ class MultiStreamFragment : Fragment() {
         var qualityOverrideHeight: Int? = null
         /** Steps under the quality of its place, after real stops of this stream (0: the full quality). */
         var qualityStepsDown = 0
+        var lastDecoderStepDownAt = 0L
         var playingSince = 0L
         val stops = ArrayDeque<Long>()
         var raiseJob: kotlinx.coroutines.Job? = null
@@ -104,13 +105,14 @@ class MultiStreamFragment : Fragment() {
     /** 2 streams: logins whose chat is above their stream instead of under it. */
     private val chatsOnTop = mutableSetOf<String>()
 
-    /** 3 streams: chat of the empty cell, pinned to a stream (else it follows the selected stream). */
+    /** 3 or 5 streams: chat of the empty cell, pinned to a stream (else it follows the selected stream). */
     private var pinnedChat: String? = null
+    private var cellChatHidden = false
     private var cellChatLogin: String? = null
     private var cellChat: FrameLayout? = null
 
     /**
-     * Focus mode (3 or 4 streams): one stream big at the top left with its chat at the right, the others small under it.
+     * Focus mode (3 to 6 streams): one stream big at the top left with its chat at the right, the others small under it.
      * OK on a small stream puts it big.
      */
     private var focusMode = false
@@ -328,7 +330,9 @@ class MultiStreamFragment : Fragment() {
             .setBufferDurationsMs(6_000, 14_000, 1_000, 2_000)
             .setBackBuffer(0, false)
             .build()
-        val player = ExoPlayer.Builder(requireContext())
+        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(requireContext())
+            .setEnableDecoderFallback(true)
+        val player = ExoPlayer.Builder(requireContext(), renderersFactory)
             .setLoadControl(tileLoadControl)
             .setHandleAudioBecomingNoisy(false)
             .build().apply {
@@ -387,7 +391,7 @@ class MultiStreamFragment : Fragment() {
                 updateTileInfo(tile)
                 applySound()
                 showChrome()
-                // 3 streams: the chat of the empty cell follows the selected stream, unless one is pinned
+                // 3 or 5 streams: the chat of the empty cell follows the selected stream, unless one is pinned
                 root.removeCallbacks(followFocus)
                 root.postDelayed(followFocus, 700L)
             }
@@ -422,10 +426,15 @@ class MultiStreamFragment : Fragment() {
                 true
             } else if (event.action == KeyEvent.ACTION_DOWN && keyCode in DIRECTIONS) {
                 // the focus only moves between the streams, never out of them
-                val direction = DIRECTIONS.getValue(keyCode)
-                val next = android.view.FocusFinder.getInstance().findNextFocus(root, tileView, direction)
-                if (next != null && tiles.any { it.view == next }) {
-                    next.requestFocus()
+                val nextTile = findNextTile(tile, keyCode)
+                if (nextTile != null) {
+                    nextTile.view.requestFocus()
+                } else {
+                    val direction = DIRECTIONS.getValue(keyCode)
+                    val next = android.view.FocusFinder.getInstance().findNextFocus(root, tileView, direction)
+                    if (next != null && tiles.any { it.view == next }) {
+                        next.requestFocus()
+                    }
                 }
                 true
             } else false
@@ -433,6 +442,82 @@ class MultiStreamFragment : Fragment() {
         loadStream(tile)
         applySound()
         return tile
+    }
+
+    private fun findNextTile(tile: Tile, keyCode: Int): Tile? {
+        val count = tiles.size
+        if (count <= 1) return null
+        if (isFocusLayout()) {
+            val big = bigTile() ?: return null
+            val smalls = tiles.filter { it !== big }
+            if (tile === big) {
+                return if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) smalls.firstOrNull() else null
+            }
+            val sIdx = smalls.indexOf(tile)
+            if (sIdx < 0) return null
+            return when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP -> big
+                KeyEvent.KEYCODE_DPAD_LEFT -> smalls.getOrNull(sIdx - 1)
+                KeyEvent.KEYCODE_DPAD_RIGHT -> smalls.getOrNull(sIdx + 1)
+                else -> null
+            }
+        }
+        val idx = tiles.indexOf(tile)
+        if (idx < 0) return null
+        if (count == 3 || count == 4) {
+            val row = idx / 2
+            val col = idx % 2
+            return when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (col > 0) tiles.getOrNull(idx - 1) else null
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (col == 0 && idx + 1 < count) tiles.getOrNull(idx + 1) else null
+                KeyEvent.KEYCODE_DPAD_DOWN -> if (row == 0) tiles.getOrNull((2 + col).coerceAtMost(count - 1)) else null
+                KeyEvent.KEYCODE_DPAD_UP -> if (row == 1) tiles.getOrNull(col) else null
+                else -> null
+            }
+        }
+        if (count == 5 || count == 6) {
+            val row = idx / 3
+            val col = idx % 3
+            return when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (col > 0) tiles.getOrNull(idx - 1) else null
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (col < 2 && idx + 1 < count) tiles.getOrNull(idx + 1) else null
+                KeyEvent.KEYCODE_DPAD_DOWN -> if (row == 0) tiles.getOrNull((3 + col).coerceAtMost(count - 1)) else null
+                KeyEvent.KEYCODE_DPAD_UP -> if (row == 1) {
+                    if (count == 5 && cellChat == null) {
+                        if (col == 0) tiles.getOrNull(0) else tiles.getOrNull(2)
+                    } else {
+                        tiles.getOrNull(col)
+                    }
+                } else null
+                else -> null
+            }
+        }
+        return null
+    }
+
+    private fun stepDownOnDecoderFailure(tile: Tile, login: String): Boolean {
+        val ctx = context ?: return false
+        val currentHeight = tile.player.trackSelectionParameters.maxVideoHeight
+        val nextCap = when {
+            currentHeight > 720 -> 720
+            currentHeight > 480 -> 480
+            currentHeight > 360 -> 360
+            currentHeight > 160 -> 160
+            else -> return false
+        }
+        tile.qualityOverrideHeight = nextCap
+        updateVideoSizes()
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - tile.lastDecoderStepDownAt > 12_000L) {
+            tile.lastDecoderStepDownAt = now
+            android.widget.Toast.makeText(
+                ctx,
+                getString(R.string.tv_multistream_decoder_stepdown, tile.stream.channelName ?: login),
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        }
+        playStream(login, tile.player, tile, backup = tile.onBackup)
+        return true
     }
 
     /**
@@ -554,11 +639,20 @@ class MultiStreamFragment : Fragment() {
                         }
                     }
                 }
-                3 -> if (!isFocusLayout()) {
-                    val pinned = pinnedChat == login
-                    actions += TvActionPanel.Action(getString(if (pinned) R.string.tv_multistream_unpin_chat else R.string.tv_multistream_pin_chat), R.drawable.tv_ic_pin) {
-                        pinnedChat = if (pinned) null else login
+                3, 5 -> if (!isFocusLayout()) {
+                    actions += TvActionPanel.Action(
+                        getString(if (cellChatHidden) R.string.tv_multistream_show_chat else R.string.tv_multistream_hide_chat),
+                        R.drawable.tv_ic_chat,
+                    ) {
+                        cellChatHidden = !cellChatHidden
                         updateCellChat()
+                    }
+                    if (!cellChatHidden) {
+                        val pinned = pinnedChat == login
+                        actions += TvActionPanel.Action(getString(if (pinned) R.string.tv_multistream_unpin_chat else R.string.tv_multistream_pin_chat), R.drawable.tv_ic_pin) {
+                            pinnedChat = if (pinned) null else login
+                            updateCellChat()
+                        }
                     }
                 }
             }
@@ -1294,24 +1388,27 @@ class MultiStreamFragment : Fragment() {
         }
         val count = tiles.size
         if (isFocusLayout()) {
-            // the big stream at the top left (2/3 of the width, 16:9), its chat at its right, the others in a row under it
+            // the big stream at the top left (2/3 of the width, 16:9), its chat at its right, the others in a 16:9 row under it
             val big = bigTile()
             val bigWidth = width * 2 / 3
             val bigHeight = minOf(bigWidth * 9 / 16, height * 2 / 3)
             val smalls = tiles.filter { it !== big }
-            val smallHeight = height - bigHeight
-            val smallWidth = minOf(width / smalls.size.coerceAtLeast(1), smallHeight * 16 / 9)
+            val stripHeight = height - bigHeight
+            val smallWidth = minOf(width / smalls.size.coerceAtLeast(1), stripHeight * 16 / 9)
+            val actualSmallHeight = minOf(stripHeight, smallWidth * 9 / 16)
             val start = (width - smallWidth * smalls.size) / 2
+            val smallTop = bigHeight + (stripHeight - actualSmallHeight) / 2
             big?.let { applyParams(it.view, FrameLayout.LayoutParams(bigWidth, bigHeight)) }
             smalls.forEachIndexed { index, tile ->
-                applyParams(tile.view, FrameLayout.LayoutParams(smallWidth, smallHeight).apply {
+                applyParams(tile.view, FrameLayout.LayoutParams(smallWidth, actualSmallHeight).apply {
                     leftMargin = start + index * smallWidth
-                    topMargin = bigHeight
+                    topMargin = smallTop
                 })
             }
             layoutChats()
             return
         }
+        val chatDisabled = context?.prefs()?.getBoolean(C.CHAT_DISABLE, false) == true
         tiles.forEachIndexed { index, tile ->
             val params = when (count) {
                 1 -> FrameLayout.LayoutParams(width, height)
@@ -1330,9 +1427,27 @@ class MultiStreamFragment : Fragment() {
                         }
                     }
                 }
-                else -> FrameLayout.LayoutParams(width / 2, height / 2).apply {
-                    leftMargin = (index % 2) * width / 2
-                    topMargin = (index / 2) * height / 2
+                3, 4 -> {
+                    val hasCellChat = count == 3 && !chatDisabled && !cellChatHidden
+                    val row1Start = if (count == 3 && !hasCellChat) (width - width / 2) / 2 else 0
+                    FrameLayout.LayoutParams(width / 2, height / 2).apply {
+                        leftMargin = if (index >= 2 && count == 3) row1Start else (index % 2) * (width / 2)
+                        topMargin = (index / 2) * (height / 2)
+                    }
+                }
+                else -> {
+                    // 5 or 6 streams: 3x2 grid with exact 16:9 tiles
+                    val tileW = width / 3
+                    val tileH = minOf(height / 2, tileW * 9 / 16)
+                    val blockTop = (height - tileH * 2) / 2
+                    val hasCellChat = count == 5 && !chatDisabled && !cellChatHidden
+                    val row = index / 3
+                    val col = index % 3
+                    val row1Start = if (count == 5 && !hasCellChat) (width - tileW * 2) / 2 else 0
+                    FrameLayout.LayoutParams(tileW, tileH).apply {
+                        leftMargin = if (row == 1 && count == 5) row1Start + col * tileW else col * tileW
+                        topMargin = blockTop + row * tileH
+                    }
                 }
             }
             applyParams(tile.view, params)
@@ -1370,22 +1485,23 @@ class MultiStreamFragment : Fragment() {
         layoutTiles()
     }
 
-    /** 3 streams: the chat of the empty cell, the pinned one or the one of the selected stream. */
+    /** 3 or 5 streams: the chat of the empty cell, the pinned one or the one of the selected stream. */
     private fun updateCellChat() {
         if (view == null) {
             return
         }
-        val focused = tiles.find { it.view.hasFocus() }?.stream
+        val focused = (tiles.find { it.view.hasFocus() } ?: selectedTile?.takeIf { it in tiles } ?: tiles.firstOrNull())?.stream
         val chatDisabled = requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)
         val stream = when {
             chatDisabled -> null
             // focus mode: the chat of the big stream, at its right
             isFocusLayout() -> bigTile()?.stream
-            tiles.size == 3 -> tiles.find { it.stream.channelLogin == pinnedChat }?.stream ?: focused
+            (tiles.size == 3 || tiles.size == 5) && !cellChatHidden -> tiles.find { it.stream.channelLogin == pinnedChat }?.stream ?: focused
             else -> null
         }
         val login = stream?.channelLogin
         if (login == cellChatLogin) {
+            layoutTiles()
             return
         }
         cellChat?.let { removeChat(it) }
@@ -1394,7 +1510,7 @@ class MultiStreamFragment : Fragment() {
         if (stream != null) {
             cellChat = addChat(stream)
         }
-        layoutChats()
+        layoutTiles()
     }
 
     private fun layoutChats() {
@@ -1413,18 +1529,30 @@ class MultiStreamFragment : Fragment() {
             })
         }
         cellChat?.let {
-            if (isFocusLayout()) {
-                val bigWidth = width * 2 / 3
-                val bigHeight = minOf(bigWidth * 9 / 16, height * 2 / 3)
-                applyParams(it, FrameLayout.LayoutParams(width - bigWidth, bigHeight).apply {
-                    leftMargin = bigWidth
-                    topMargin = 0
-                })
-            } else {
-                applyParams(it, FrameLayout.LayoutParams(width / 2, height / 2).apply {
-                    leftMargin = width / 2
-                    topMargin = height / 2
-                })
+            when {
+                isFocusLayout() -> {
+                    val bigWidth = width * 2 / 3
+                    val bigHeight = minOf(bigWidth * 9 / 16, height * 2 / 3)
+                    applyParams(it, FrameLayout.LayoutParams(width - bigWidth, bigHeight).apply {
+                        leftMargin = bigWidth
+                        topMargin = 0
+                    })
+                }
+                tiles.size == 5 -> {
+                    val tileW = width / 3
+                    val tileH = minOf(height / 2, tileW * 9 / 16)
+                    val blockTop = (height - tileH * 2) / 2
+                    applyParams(it, FrameLayout.LayoutParams(width - tileW * 2, tileH).apply {
+                        leftMargin = tileW * 2
+                        topMargin = blockTop + tileH
+                    })
+                }
+                else -> {
+                    applyParams(it, FrameLayout.LayoutParams(width / 2, height / 2).apply {
+                        leftMargin = width / 2
+                        topMargin = height / 2
+                    })
+                }
             }
         }
     }
@@ -1582,6 +1710,16 @@ class MultiStreamFragment : Fragment() {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 if ((error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode == 404) {
                     onStreamEnded(tile, login)
+                } else if (error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED ||
+                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FAILED
+                ) {
+                    if (stepDownOnDecoderFailure(tile, login)) {
+                        return
+                    }
+                    if (!pausedByAudioFocus && !leaveMuted) {
+                        scheduleTileRecovery(tile, login)
+                    }
                 } else if (!pausedByAudioFocus && !leaveMuted) {
                     scheduleTileRecovery(tile, login)
                 }
@@ -2209,7 +2347,7 @@ class MultiStreamFragment : Fragment() {
     }
 
     companion object {
-        private const val MAX = 4
+        private const val MAX = 6
         /** Time the frame of the selected stream and the names stay after the last key. */
         private const val CHROME_HIDE_MS = 5000L
         private val DIRECTIONS = mapOf(

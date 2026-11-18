@@ -233,6 +233,54 @@
             tools:visibility="visible" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
+    <LinearLayout
+        android:id="@+id/pinnedMessageLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="6dp"
+        android:layout_marginBottom="2dp"
+        android:background="?attr/chatOverlayCard"
+        android:clickable="false"
+        android:elevation="4dp"
+        android:focusable="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="5dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="5dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/chatStatus"
+        tools:visibility="visible">
+
+        <ImageView
+            android:id="@+id/pinnedMessageIcon"
+            android:layout_width="15dp"
+            android:layout_height="15dp"
+            android:layout_marginEnd="6dp"
+            android:clickable="false"
+            android:focusable="false"
+            android:importantForAccessibility="no"
+            android:src="@drawable/tv_ic_pin"
+            app:tint="?attr/colorControlNormal" />
+
+        <TextView
+            android:id="@+id/pinnedMessageText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:clickable="false"
+            android:ellipsize="end"
+            android:focusable="false"
+            android:maxLines="2"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            tools:text="Streamer: Welcome to the stream!" />
+    </LinearLayout>
+
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/raidLayout"
         android:layout_width="match_parent"
@@ -248,7 +296,7 @@
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/chatStatus"
+        app:layout_constraintTop_toBottomOf="@id/pinnedMessageLayout"
         tools:visibility="visible">
 
         <ImageView

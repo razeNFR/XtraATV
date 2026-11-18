@@ -44,6 +44,7 @@ fun TvLoginScreen(
     onPage: () -> Unit,
     onLogout: () -> Unit,
     onDone: () -> Unit,
+    onGuest: (() -> Unit)? = null,
 ) {
     val codeRequester = remember { FocusRequester() }
     val pageRequester = remember { FocusRequester() }
@@ -84,6 +85,9 @@ fun TvLoginScreen(
                 Spacer(Modifier.width(24.dp))
                 if (status.code || status.page) {
                     ButtonRow(stringResource(R.string.log_out), Modifier.width(200.dp), onLogout)
+                    Spacer(Modifier.width(12.dp))
+                } else if (onGuest != null) {
+                    ButtonRow(stringResource(R.string.tv_accounts_guest_short), Modifier.width(180.dp), onGuest)
                     Spacer(Modifier.width(12.dp))
                 }
                 ButtonRow(stringResource(R.string.tv_login_done_button), Modifier.width(200.dp).focusRequester(doneRequester), onDone)

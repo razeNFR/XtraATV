@@ -76,6 +76,9 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     private val viewModel: ChatViewModel by viewModels { ChatViewModelFactory }
 
     private var raidAutoSwitchJob: kotlinx.coroutines.Job? = null
+    private var pinnedAutoHideJob: kotlinx.coroutines.Job? = null
+    private var autoCollapsedPinId: String? = null
+    private var manuallyHiddenPinId: String? = null
 
     /** A raid was announced and its stream will be opened (switch to raids on): the player waits for it. */
     fun isRaidPending(): Boolean {
@@ -820,6 +823,13 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     }
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.pinnedMessage.collectLatest {
+                                refreshPinnedBanner()
+                            }
+                        }
+                    }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.newMessage.collect { result ->
                                 val message = result.first
                                 val lastIndex = result.second
@@ -1036,6 +1046,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         adapter.singleLine = enabled
         binding.btnDown.visibility = View.GONE
         binding.chatStatus.visibility = View.GONE
+        refreshPinnedBanner()
         binding.recyclerView.layoutManager = if (enabled) {
             object : LinearLayoutManager(requireContext(), HORIZONTAL, false) {
                 override fun smoothScrollToPosition(recyclerView: RecyclerView, state: RecyclerView.State, position: Int) {
@@ -1526,6 +1537,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     override fun onDestroyView() {
         raidAutoSwitchJob?.cancel()
         raidAutoSwitchJob = null
+        pinnedAutoHideJob?.cancel()
+        pinnedAutoHideJob = null
         super.onDestroyView()
         _binding = null
     }
@@ -1575,6 +1588,77 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     fun getRecentChatters(): List<com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.BlockedUser> =
         if (isAdded) viewModel.getRecentChatters() else emptyList()
+
+    fun getPinnedMessage(): com.github.andreyasadchy.xtra.util.chat.PubSubUtils.PinnedChatData? =
+        if (isAdded) viewModel.pinnedMessage.value else null
+
+    fun getCoStreamers(): List<Stream> =
+        if (isAdded) viewModel.coStreamers.value else emptyList()
+
+    fun isCurrentPinnedHidden(): Boolean {
+        val pin = getPinnedMessage() ?: return true
+        val mode = context?.prefs()?.getInt(C.TV_CHAT_PINNED_MODE, 1) ?: 1
+        if (mode == 0) return true
+        if (manuallyHiddenPinId == pin.id) return true
+        if (mode == 1 && autoCollapsedPinId == pin.id) return true
+        return false
+    }
+
+    fun toggleCurrentPinnedBanner() {
+        val pin = getPinnedMessage() ?: return
+        if (isCurrentPinnedHidden()) {
+            manuallyHiddenPinId = null
+            autoCollapsedPinId = null
+            val ctx = context
+            if (ctx != null && ctx.prefs().getInt(C.TV_CHAT_PINNED_MODE, 1) == 0) {
+                ctx.prefs().edit().putInt(C.TV_CHAT_PINNED_MODE, 1).apply()
+            }
+        } else {
+            manuallyHiddenPinId = pin.id
+        }
+        refreshPinnedBanner()
+    }
+
+    fun refreshPinnedBanner() {
+        val binding = _binding ?: return
+        val ctx = context ?: return
+        pinnedAutoHideJob?.cancel()
+        val pin = viewModel.pinnedMessage.value
+        val mode = ctx.prefs().getInt(C.TV_CHAT_PINNED_MODE, 1)
+        if (pin == null || mode == 0 || adapter?.singleLine == true || manuallyHiddenPinId == pin.id || (mode == 1 && autoCollapsedPinId == pin.id)) {
+            binding.pinnedMessageLayout.visibility = View.GONE
+            return
+        }
+        val sizeModifier = ctx.prefs().getInt(C.CHAT_SIZE_MODIFIER, 100).toFloat() / 100f
+        val baseSize = (ctx.prefs().getString(C.CHAT_TEXT_SIZE, "14")?.toFloatOrNull() ?: 14f) * sizeModifier
+        binding.pinnedMessageText.textSize = (baseSize * 0.92f).coerceIn(11f, 22f)
+        binding.pinnedMessageIcon.setColorFilter(com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
+        val sb = android.text.SpannableStringBuilder()
+        val author = pin.senderName ?: pin.senderLogin
+        if (!author.isNullOrBlank()) {
+            sb.append(author)
+            sb.setSpan(
+                android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
+                0,
+                author.length,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+            sb.append(": ")
+        }
+        sb.append(pin.messageText)
+        binding.pinnedMessageText.text = sb
+        binding.pinnedMessageLayout.visibility = View.VISIBLE
+        if (mode == 1) {
+            val targetId = pin.id
+            pinnedAutoHideJob = viewLifecycleOwner.lifecycleScope.launch {
+                kotlinx.coroutines.delay(20_000L)
+                if (viewModel.pinnedMessage.value?.id == targetId && ctx.prefs().getInt(C.TV_CHAT_PINNED_MODE, 1) == 1) {
+                    autoCollapsedPinId = targetId
+                    _binding?.pinnedMessageLayout?.visibility = View.GONE
+                }
+            }
+        }
+    }
 
     companion object {
         private const val KEY_IS_LIVE = "isLive"

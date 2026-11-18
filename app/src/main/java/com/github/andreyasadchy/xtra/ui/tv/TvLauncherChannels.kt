@@ -13,14 +13,18 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.edit
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.view.TvUi
+import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Android TV / Google TV Home Launcher integration:
@@ -57,6 +61,34 @@ object TvLauncherChannels {
         watchNextJob = scope.launch {
             runCatching { writeWatchNext(appContext) }
         }
+    }
+
+    /**
+     * Background periodic sync of the Android TV / Google TV "Followed Live" channel and "Watch Next" row.
+     * Never overwrites existing launcher cards on transient network failure (`loadPages == null`).
+     */
+    suspend fun syncFollowedLiveBackground(context: Context): Boolean = withContext(Dispatchers.IO) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !TvUi.isTv(context)) return@withContext false
+        val appContext = context.applicationContext
+        val loggedIn = !TwitchApiHelper.getGQLHeaders(appContext, true)[C.HEADER_TOKEN].isNullOrBlank() ||
+            !TwitchApiHelper.getHelixHeaders(appContext)[C.HEADER_TOKEN].isNullOrBlank()
+        val hasLocalFollows = runCatching {
+            (appContext as XtraApp).xtraModule.localChannelFollowsRepository.getAll().isNotEmpty()
+        }.getOrDefault(false)
+        if (!loggedIn && !hasLocalFollows) {
+            runCatching { writeFollowedChannel(appContext, emptyList()) }
+            runCatching { writeWatchNext(appContext) }
+            return@withContext true
+        }
+        val streams = TvStreamSources.loadPages({ TvStreamSources.followed(appContext) }, MAX_LIVE_PROGRAMS * 2)
+            ?: return@withContext false
+        TvFavorites.load(appContext)
+        val sorted = TvFavorites.sort(streams)
+            .filter { !it.channelLogin.isNullOrBlank() }
+            .take(MAX_LIVE_PROGRAMS)
+        runCatching { writeFollowedChannel(appContext, sorted) }
+        runCatching { writeWatchNext(appContext) }
+        true
     }
 
     @RequiresApi(Build.VERSION_CODES.O)

@@ -388,8 +388,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
         loginResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val prevKey = pendingAddAccountPreviousKey
+            pendingAddAccountPreviousKey = null
+            if (isTv) {
+                com.github.andreyasadchy.xtra.ui.tv.TvAccounts.restoreAfterCanceledAdd(this, prevKey)
+                com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
+            }
             if (result.resultCode == RESULT_OK) {
                 restartActivity()
+            } else if (isTv) {
+                updateTvMenuAccount()
             }
         }
         logoutResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -939,7 +947,7 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     null
                 }
-                streams?.take(4)?.let { startMultiStream(it) }
+                streams?.take(6)?.let { startMultiStream(it) }
             }
             else -> (playerFragment as? PlayerFragment)?.runTvTest(action)
         }
@@ -1027,49 +1035,70 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** TV: the small window is open over the full screen player. */
-    fun isTvPipOpen() = isTv && tvPip.stream != null
+    /** TV: small window(s) open over the full screen player. */
+    fun isTvPipOpen() = isTv && tvPip.activeCount > 0
 
-    /** TV: corner, size and sound of the small window changed in its panel. */
+    fun tvPipActiveSlotIndices(): List<Int> = if (isTv) tvPip.activeSlotIndices() else emptyList()
+
+    fun tvPipStreamAt(slotIndex: Int): Stream? = if (isTv) tvPip.streamAt(slotIndex) else null
+
+    fun tvPipActiveStreams(): List<Stream> = if (isTv) tvPip.activeStreams() else emptyList()
+
+    fun isStreamInTvPip(login: String?): Boolean = isTv && tvPip.containsStream(login)
+
+    /** TV: corner, size and sound of the small window(s) changed in its panel. */
     fun applyTvPipSettings() {
-        if (tvPip.stream != null) {
+        if (tvPip.activeCount > 0) {
             tvPip.applyLayout()
             tvPip.applySound()
         }
     }
 
-    /** The controls of the full screen player are shown or hidden: the small window makes room for them. */
+    /** The controls of the full screen player are shown or hidden: the small window(s) make room for them. */
     fun onTvControlsVisibility(visible: Boolean) {
-        if (isTv && tvPip.stream != null) {
+        if (isTv && tvPip.activeCount > 0) {
             tvPip.setControlsShown(visible)
         }
     }
 
-    /** The small window closed: the player takes its button away (and the focus off it). */
+    /** All small windows closed: the player takes its button away (and the focus off it). */
     fun onTvPipClosed() {
         (playerFragment as? PlayerFragment)?.onTvPipClosed()
     }
 
-    fun swapTvPip() {
-        tvPip.swapStreams()
+    fun swapTvPip(slotIndex: Int? = null) {
+        tvPip.swapStreams(slotIndex)
     }
 
-    /** The volume of the full screen stream follows the sound chosen for the small window. */
+    /** The volume of the full screen stream follows the sound chosen for the small window(s). */
     fun refreshPlayerVolume() {
         (playerFragment as? PlayerFragment)?.refreshVolume()
     }
 
-    /** OK held on a stream of the row of the other streams: it plays in a small window, without sound. */
-    fun openTvPip(stream: Stream) {
-        if (stream.channelLogin == currentStreamLogin) {
+    /** OK held on a stream of the row of the other streams: it plays in a small window (up to 2). */
+    fun openTvPip(stream: Stream, targetSlot: Int? = null) {
+        if (stream.channelLogin.equals(currentStreamLogin, ignoreCase = true) || tvPip.containsStream(stream.channelLogin)) {
+            android.widget.Toast.makeText(this, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
-        val first = tvPip.stream == null
-        tvPip.open(stream)
-        // opened while the controls are shown: above them at once
+        val first = tvPip.activeCount == 0
+        tvPip.open(stream, targetSlot)
         tvPip.setControlsShown((playerFragment as? PlayerFragment)?.areControlsShown() == true)
+        (playerFragment as? PlayerFragment)?.onTvPipOpened()
         if (first) {
             com.github.andreyasadchy.xtra.ui.player.TvPip.showHint(this)
+        }
+    }
+
+    fun closeTvPipSlot(slotIndex: Int) {
+        if (isTv) {
+            tvPip.closeSlot(slotIndex)
+        }
+    }
+
+    fun closeLatestTvPip() {
+        if (isTv) {
+            tvPip.closeLatest()
         }
     }
 
@@ -1080,6 +1109,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var lastUserInteractionAt = android.os.SystemClock.elapsedRealtime()
+
+    fun idleDurationMs(): Long =
+        (android.os.SystemClock.elapsedRealtime() - lastUserInteractionAt).coerceAtLeast(0L)
 
     override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
         if (ev?.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
@@ -1672,10 +1704,16 @@ class MainActivity : AppCompatActivity() {
 
     /** The account at the top of the side menu: its name, read again when the app comes back (logged in or out since). */
     private fun updateTvMenuAccount() {
-        val name = tokenPrefs().getString(C.USERNAME, null)?.takeIf { it.isNotBlank() }
+        com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
+        val rawName = tokenPrefs().getString(C.USERNAME, null)?.takeIf { it.isNotBlank() }
+        val name = rawName ?: if (com.github.andreyasadchy.xtra.ui.tv.TvAccounts.isGuestMode(this)) {
+            getString(R.string.tv_accounts_guest_short)
+        } else {
+            null
+        }
         if (name != tvMenuState.accountName) {
             tvMenuState.accountName = name
-            if (name == null) {
+            if (rawName == null) {
                 tvMenuState.accountImage = null
             }
         }
@@ -1684,6 +1722,9 @@ class MainActivity : AppCompatActivity() {
     /** The picture of the account, loaded by the home. */
     fun setTvAccountImage(image: String?) {
         tvMenuState.accountImage = image
+        if (!image.isNullOrBlank()) {
+            com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this, avatarUrl = image)
+        }
     }
 
     /** Opens the side menu from a Compose screen (left on its first card). */
@@ -1912,10 +1953,32 @@ class MainActivity : AppCompatActivity() {
         startStream(stream)
     }
 
+    private var pendingAddAccountPreviousKey: String? = null
+
+    fun onTvAccountSwitched() {
+        restartActivity()
+    }
+
     fun onAccountClicked() {
         if (resources.getBoolean(R.bool.isTv)) {
-            // TV: the page of the account shows what is saved, with its log in and log out buttons
-            loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+            com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this, avatarUrl = tvMenuState.accountImage)
+            val savedAccounts = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.listAccounts(this)
+            if (savedAccounts.isNotEmpty() || com.github.andreyasadchy.xtra.ui.tv.TvAccounts.isGuestMode(this)) {
+                com.github.andreyasadchy.xtra.ui.tv.TvAccounts.showSwitcherPanel(
+                    activity = this,
+                    onOpenCurrentLoginMethods = {
+                        pendingAddAccountPreviousKey = null
+                        loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+                    },
+                    onAddAnotherAccount = {
+                        pendingAddAccountPreviousKey = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.prepareAddAccount(this)
+                        loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+                    },
+                )
+            } else {
+                pendingAddAccountPreviousKey = null
+                loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+            }
             return
         }
         val isLoggedIn = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank() ||
@@ -2753,6 +2816,13 @@ class MainActivity : AppCompatActivity() {
             queueRefreshedAt = System.currentTimeMillis()
             queueRefreshJob?.cancel()
             startQueueCheck()
+        }
+        if (isTv && !stream.channelLogin.isNullOrBlank()) {
+            for (slotIdx in tvPip.activeSlotIndices()) {
+                if (tvPip.streamAt(slotIdx)?.channelLogin.equals(stream.channelLogin, ignoreCase = true)) {
+                    tvPip.closeSlot(slotIdx)
+                }
+            }
         }
         currentStream = stream
         currentStreamLogin = stream.channelLogin

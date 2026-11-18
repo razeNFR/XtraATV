@@ -518,12 +518,23 @@ class LoginActivity : AppCompatActivity() {
                     startPageLogin?.invoke()
                 },
                 onLogout = {
-                    logoutAll(networkLibrary)
+                    val activeKey = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.activeAccountKey(this)
+                    if (activeKey != null) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvAccounts.removeAccount(this, activeKey)
+                    } else {
+                        logoutAll(networkLibrary)
+                    }
                     tvChanged = true
                     Toast.makeText(this, R.string.tv_login_logged_out, Toast.LENGTH_SHORT).show()
                     tvStatus.value = currentTvStatus()
                 },
-                onDone = { finishTv() }
+                onDone = { finishTv() },
+                onGuest = {
+                    com.github.andreyasadchy.xtra.ui.tv.TvAccounts.switchToGuest(this)
+                    tvChanged = true
+                    Toast.makeText(this, R.string.tv_accounts_switched_guest, Toast.LENGTH_SHORT).show()
+                    finishTv()
+                },
             )
         }
         view.isFocusable = false
@@ -1088,6 +1099,7 @@ class LoginActivity : AppCompatActivity() {
                     putString(C.USERNAME, userLogin)
                 }
             }
+            com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
             tvChanged = true
             Toast.makeText(
                 this,

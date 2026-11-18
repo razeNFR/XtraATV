@@ -335,7 +335,9 @@ object TvStreamSwitcher {
         }
         if (selection == null && onPip != null) {
             adapter.onLongClick = { stream ->
-                if (stream.channelLogin != null && stream.channelLogin == currentChannelLogin) {
+                if (stream.channelLogin != null &&
+                    (stream.channelLogin.equals(currentChannelLogin, ignoreCase = true) || activity.isStreamInTvPip(stream.channelLogin))
+                ) {
                     // the stream watched is already on the screen: no small window of it
                     android.widget.Toast.makeText(activity, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
                 } else {

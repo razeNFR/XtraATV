@@ -168,4 +168,88 @@ object PubSubUtils {
         val timestamp: Long? = null,
         val fullMsg: String? = null,
     )
+
+    data class PinnedChatData(
+        val id: String,
+        val messageText: String,
+        val senderName: String?,
+        val senderLogin: String? = null,
+        val pinnedByName: String? = null,
+        val startsAtMs: Long? = null,
+        val endsAtMs: Long? = null,
+    )
+
+    private fun parseEpochFlexible(obj: JSONObject?, key: String): Long? {
+        if (obj == null || obj.isNull(key)) return null
+        val numeric = obj.optLong(key, -1L)
+        if (numeric > 0L) {
+            return if (numeric < 100_000_000_000L) numeric * 1000L else numeric
+        }
+        val str = obj.optString(key).takeIf { it.isNotBlank() } ?: return null
+        return Instant.parseOrNull(str)?.toEpochMilliseconds()
+    }
+
+    fun parsePinnedChatUpdate(message: JSONObject, current: PinnedChatData?): PinnedChatData? {
+        val type = message.optString("type")
+        val data = message.optJSONObject("data") ?: return current
+        return when (type) {
+            "pin-message" -> {
+                val pinId = data.optString("id").takeIf { it.isNotBlank() }
+                val msgObj = data.optJSONObject("message") ?: return current
+                val id = pinId ?: msgObj.optString("id").takeIf { it.isNotBlank() } ?: return current
+                val text = msgObj.optJSONObject("content")?.optString("text")?.takeIf { it.isNotBlank() }
+                    ?: msgObj.optString("message").takeIf { it.isNotBlank() }
+                    ?: return current
+                val senderObj = msgObj.optJSONObject("sender")
+                val senderName = senderObj?.optString("display_name")?.takeIf { it.isNotBlank() }
+                    ?: senderObj?.optString("username")?.takeIf { it.isNotBlank() }
+                val senderLogin = senderObj?.optString("username")?.takeIf { it.isNotBlank() }
+                val pinnedBy = data.optJSONObject("pinned_by")?.optString("display_name")?.takeIf { it.isNotBlank() }
+                val startsAt = parseEpochFlexible(msgObj, "starts_at") ?: parseEpochFlexible(data, "starts_at")
+                val endsAt = parseEpochFlexible(msgObj, "ends_at") ?: parseEpochFlexible(data, "ends_at")
+                PinnedChatData(
+                    id = id,
+                    messageText = text,
+                    senderName = senderName,
+                    senderLogin = senderLogin,
+                    pinnedByName = pinnedBy,
+                    startsAtMs = startsAt,
+                    endsAtMs = endsAt,
+                )
+            }
+            "update-message" -> {
+                if (current == null) null
+                else {
+                    val msgObj = data.optJSONObject("message")
+                    val endsAt = parseEpochFlexible(msgObj, "ends_at") ?: parseEpochFlexible(data, "ends_at") ?: current.endsAtMs
+                    current.copy(endsAtMs = endsAt)
+                }
+            }
+            "unpin-message" -> null
+            else -> current
+        }
+    }
+
+    fun parseSharedChatChannelIds(message: JSONObject, selfChannelId: String?): List<String>? {
+        val type = message.optString("type")
+        if (type.endsWith("ended") || type.endsWith("deleted")) return emptyList()
+        val session = message.optJSONObject("data")?.optJSONObject("session")
+            ?: message.optJSONObject("session")
+            ?: return null
+        val status = session.optString("status")
+        if (status.equals("ENDED", ignoreCase = true)) return emptyList()
+        val ids = LinkedHashSet<String>()
+        session.optString("host_channel_id").takeIf { it.isNotBlank() && it != selfChannelId }?.let { ids.add(it) }
+        val participants = session.optJSONArray("participants")
+        if (participants != null) {
+            for (i in 0 until participants.length()) {
+                val p = participants.optJSONObject(i) ?: continue
+                val pStatus = p.optString("status")
+                if (pStatus.isBlank() || pStatus.equals("ACTIVE", ignoreCase = true) || pStatus.equals("JOINED", ignoreCase = true)) {
+                    p.optString("channel_id").takeIf { it.isNotBlank() && it != selfChannelId }?.let { ids.add(it) }
+                }
+            }
+        }
+        return ids.toList()
+    }
 }

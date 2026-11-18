@@ -40,6 +40,24 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
+        <ListPreference
+            android:defaultValue="home"
+            android:entries="@array/tvStreamEndActionEntries"
+            android:entryValues="@array/tvStreamEndActionValues"
+            android:key="tv_stream_end_action"
+            android:summary="%s"
+            android:title="@string/tv_stream_end_action"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_oled_protection"
+            android:summary="@string/tv_oled_protection_summary"
+            android:title="@string/tv_oled_protection"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
         <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="tv_clips_autoplay"
