@@ -104,6 +104,8 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.NetworkUtils
 import com.github.andreyasadchy.xtra.util.NetworkUtils.executeAsync
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -114,6 +116,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -2130,47 +2133,216 @@ class GraphQLRepository(
         }.getOrNull()
     }
 
-    /** Returns participant channel IDs in an active Twitch Shared Chat / Stream Together session for [channelId]. */
+    data class BatchCoStreamEntry(
+        val partnerIds: List<String>,
+        val partnerLogins: List<String>,
+        val fallbackCount: Int,
+    )
+
+    private val numericChannelIdRegex = Regex("^\\d{1,20}$")
+
+    /**
+     * Batched GraphQL lookup for active Twitch Stream Together (`channel.collaboration`),
+     * Shared Chat (`sharedChatSession`), and official event Co-streams (`stream.costreamDetails`)
+     * across multiple [channelIds] in parallel aliased chunks.
+     */
+    suspend fun loadBatchCoStreamInfo(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        channelIds: List<String>,
+    ): Map<String, BatchCoStreamEntry> = withContext(Dispatchers.IO) {
+        val validIds = channelIds.map { it.trim() }
+            .filter { numericChannelIdRegex.matches(it) }
+            .distinct()
+        if (validIds.isEmpty()) return@withContext emptyMap()
+
+        fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+        fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+        fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+        fun JsonElement?.intVal(): Int? = (this as? JsonPrimitive)?.intOrNull
+
+        val result = LinkedHashMap<String, BatchCoStreamEntry>()
+        for (chunk in validIds.chunked(20)) {
+            val partnerIdsByChannel = chunk.associateWith { LinkedHashSet<String>() }
+            val partnerLoginsByChannel = chunk.associateWith { LinkedHashSet<String>() }
+            val fallbackCountByChannel = HashMap<String, Int>()
+
+            coroutineScope {
+                // 1) Twitch Stream Together / Collaboration roster: channel(id:).collaboration.collaborators
+                val collabDeferred = async {
+                    runCatching {
+                        val varsDecl = chunk.indices.joinToString(", ") { "\$id$it: ID!" }
+                        val fields = chunk.indices.joinToString(" ") { i ->
+                            "c$i: channel(id: \$id$i) { collaboration { collaborators { status user { id login } } } }"
+                        }
+                        val body = buildJsonObject {
+                            put("query", "query CollaborationRoster($varsDecl) { $fields }")
+                            putJsonObject("variables") {
+                                chunk.forEachIndexed { i, id -> put("id$i", id) }
+                            }
+                        }.toString()
+                        val raw = sendPersistedQuery(networkLibrary, headers, body)
+                        val data = json.parseToJsonElement(raw).obj()?.get("data").obj() ?: return@runCatching
+                        chunk.forEachIndexed { i, selfId ->
+                            val collaborators = data["c$i"].obj()
+                                ?.get("collaboration").obj()
+                                ?.get("collaborators").arr()
+                                ?: return@forEachIndexed
+                            collaborators.forEach { el ->
+                                val c = el.obj() ?: return@forEach
+                                val st = c["status"].str()
+                                if (st == null || st.equals("ACTIVE", ignoreCase = true) || st.equals("JOINED", ignoreCase = true)) {
+                                    val userObj = c["user"].obj() ?: return@forEach
+                                    val uid = userObj["id"].str()?.takeIf { it.isNotBlank() }
+                                    val ulogin = userObj["login"].str()?.takeIf { it.isNotBlank() }
+                                    if (uid != null && uid != selfId) {
+                                        partnerIdsByChannel[selfId]?.add(uid)
+                                        if (ulogin != null) partnerLoginsByChannel[selfId]?.add(ulogin.lowercase())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2) Twitch Shared Chat session: sharedChatSession(channelID:) { status host { id } participants { status channel { id } } }
+                val sharedDeferred = async {
+                    runCatching {
+                        val varsDecl = chunk.indices.joinToString(", ") { "\$id$it: ID!" }
+                        val fields = chunk.indices.joinToString(" ") { i ->
+                            "s$i: sharedChatSession(channelID: \$id$i) { status host { id } participants { status channel { id } } }"
+                        }
+                        val body = buildJsonObject {
+                            put("query", "query SharedChatBatch($varsDecl) { $fields }")
+                            putJsonObject("variables") {
+                                chunk.forEachIndexed { i, id -> put("id$i", id) }
+                            }
+                        }.toString()
+                        val raw = sendPersistedQuery(networkLibrary, headers, body)
+                        val data = json.parseToJsonElement(raw).obj()?.get("data").obj() ?: return@runCatching
+                        chunk.forEachIndexed { i, selfId ->
+                            val session = data["s$i"].obj() ?: return@forEachIndexed
+                            val status = session["status"].str()
+                            if (status != null && !status.equals("ACTIVE", ignoreCase = true) && !status.equals("CREATED", ignoreCase = true)) {
+                                return@forEachIndexed
+                            }
+                            session["host"].obj()?.get("id").str()
+                                ?.takeIf { it.isNotBlank() && it != selfId }
+                                ?.let { partnerIdsByChannel[selfId]?.add(it) }
+                            session["participants"].arr()?.forEach { el ->
+                                val p = el.obj() ?: return@forEach
+                                val pStatus = p["status"].str()
+                                if (pStatus == null || pStatus.equals("ACTIVE", ignoreCase = true) || pStatus.equals("JOINED", ignoreCase = true)) {
+                                    p["channel"].obj()?.get("id").str()
+                                        ?.takeIf { it.isNotBlank() && it != selfId }
+                                        ?.let { partnerIdsByChannel[selfId]?.add(it) }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3) Twitch official / organizer co-streams: users(ids:) { stream { costreamDetails { costreamersCount topCostreamers { id login } } } }
+                val costreamDeferred = async {
+                    runCatching {
+                        val body = buildJsonObject {
+                            put(
+                                "query",
+                                "query(\$ids: [ID!]) { users(ids: \$ids) { id stream { costreamDetails { costreamersCount topCostreamers { id login } } } } }",
+                            )
+                            putJsonObject("variables") {
+                                putJsonArray("ids") { chunk.forEach { add(it) } }
+                            }
+                        }.toString()
+                        val raw = sendPersistedQuery(networkLibrary, headers, body)
+                        val users = json.parseToJsonElement(raw).obj()
+                            ?.get("data").obj()
+                            ?.get("users").arr()
+                            ?: return@runCatching
+                        users.forEach { el ->
+                            val u = el.obj() ?: return@forEach
+                            val selfId = u["id"].str()?.takeIf { it.isNotBlank() } ?: return@forEach
+                            val details = u["stream"].obj()?.get("costreamDetails").obj() ?: return@forEach
+                            val count = details["costreamersCount"].intVal() ?: 0
+                            if (count > 0) {
+                                fallbackCountByChannel[selfId] = count
+                            }
+                            details["topCostreamers"].arr()?.forEach { tcEl ->
+                                val tc = tcEl.obj() ?: return@forEach
+                                val tcId = tc["id"].str()?.takeIf { it.isNotBlank() }
+                                val tcLogin = tc["login"].str()?.takeIf { it.isNotBlank() }
+                                if (tcId != null && tcId != selfId) {
+                                    partnerIdsByChannel[selfId]?.add(tcId)
+                                }
+                                if (tcLogin != null) {
+                                    partnerLoginsByChannel[selfId]?.add(tcLogin.lowercase())
+                                }
+                            }
+                        }
+                    }
+                }
+
+                collabDeferred.await()
+                sharedDeferred.await()
+                costreamDeferred.await()
+            }
+
+            chunk.forEach { id ->
+                result[id] = BatchCoStreamEntry(
+                    partnerIds = partnerIdsByChannel[id]?.toList().orEmpty(),
+                    partnerLogins = partnerLoginsByChannel[id]?.toList().orEmpty(),
+                    fallbackCount = fallbackCountByChannel[id] ?: 0,
+                )
+            }
+        }
+        result
+    }
+
+    /** Returns participant channel IDs in an active Twitch Shared Chat / Stream Together / Guest Star session for [channelId]. */
     suspend fun loadSharedChatChannelIds(
         networkLibrary: String?,
         headers: Map<String, String>,
         channelId: String?,
     ): List<String> = withContext(Dispatchers.IO) {
-        if (channelId.isNullOrBlank()) return@withContext emptyList()
-        val body = buildJsonObject {
-            put(
-                "query",
-                "query(\$channelID: ID!) { sharedChatSessionByChannelID(channelID: \$channelID) { id status hostChannel { id } participants { status channel { id } } } }",
-            )
-            putJsonObject("variables") {
-                put("channelID", channelId)
+        val cleanId = channelId?.trim()?.takeIf { it.isNotBlank() } ?: return@withContext emptyList()
+        val ids = LinkedHashSet<String>()
+        coroutineScope {
+            val batchDeferred = async {
+                loadBatchCoStreamInfo(networkLibrary, headers, listOf(cleanId))[cleanId]
             }
-        }.toString()
-        runCatching {
-            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
-            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
-            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+            val guestStarDeferred = async {
+                runCatching {
+                    fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+                    fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+                    fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
 
-            val raw = sendPersistedQuery(networkLibrary, headers, body)
-            val session = json.parseToJsonElement(raw).obj()
-                ?.get("data").obj()
-                ?.get("sharedChatSessionByChannelID").obj()
-                ?: return@runCatching emptyList()
-            val status = session["status"].str()
-            if (status != null && !status.equals("ACTIVE", ignoreCase = true) && !status.equals("CREATED", ignoreCase = true)) {
-                return@runCatching emptyList()
+                    val body = buildJsonObject {
+                        put(
+                            "query",
+                            "query(\$id: ID!) { channel(id: \$id) { guestStarSessionCall { host { id } guests { user { id } } } } }",
+                        )
+                        putJsonObject("variables") { put("id", cleanId) }
+                    }.toString()
+                    val raw = sendPersistedQuery(networkLibrary, headers, body)
+                    val call = json.parseToJsonElement(raw).obj()
+                        ?.get("data").obj()
+                        ?.get("channel").obj()
+                        ?.get("guestStarSessionCall").obj()
+                        ?: return@runCatching emptyList()
+                    val gsIds = LinkedHashSet<String>()
+                    call["host"].obj()?.get("id").str()?.takeIf { it.isNotBlank() && it != cleanId }?.let { gsIds.add(it) }
+                    call["guests"].arr()?.forEach { g ->
+                        g.obj()?.get("user").obj()?.get("id").str()
+                            ?.takeIf { it.isNotBlank() && it != cleanId }
+                            ?.let { gsIds.add(it) }
+                    }
+                    gsIds.toList()
+                }.getOrDefault(emptyList())
             }
-            val ids = LinkedHashSet<String>()
-            session["hostChannel"].obj()?.get("id").str()?.takeIf { it.isNotBlank() && it != channelId }?.let { ids.add(it) }
-            session["participants"].arr()?.forEach { el ->
-                val p = el.obj() ?: return@forEach
-                val pStatus = p["status"].str()
-                if (pStatus == null || pStatus.equals("ACTIVE", ignoreCase = true) || pStatus.equals("JOINED", ignoreCase = true)) {
-                    p["channel"].obj()?.get("id").str()?.takeIf { it.isNotBlank() && it != channelId }?.let { ids.add(it) }
-                }
-            }
-            ids.toList()
-        }.getOrDefault(emptyList())
+            batchDeferred.await()?.partnerIds?.let { ids.addAll(it) }
+            ids.addAll(guestStarDeferred.await())
+        }
+        ids.toList()
     }
 
     data class CustomRewardItem(

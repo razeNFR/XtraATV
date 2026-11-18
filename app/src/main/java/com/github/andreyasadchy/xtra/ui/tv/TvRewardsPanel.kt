@@ -72,7 +72,9 @@ object TvRewardsPanel {
             var claimedKeys by remember { mutableStateOf(emptySet<String>()) }
             var busy by remember { mutableStateOf(false) }
             val firstRequester = remember { FocusRequester() }
-            var focusRequested by remember { mutableStateOf(false) }
+            val closeRequester = remember { FocusRequester() }
+            val scrollState = androidx.compose.foundation.rememberScrollState()
+            var initialFocusDone by remember { mutableStateOf(false) }
 
             LaunchedEffect(refreshTick) {
                 loading = true
@@ -96,6 +98,14 @@ object TvRewardsPanel {
                 title = context.getString(R.string.tv_points_and_drops),
                 width = 480.dp,
                 scrollable = true,
+                scrollState = scrollState,
+                footer = {
+                    ButtonRow(
+                        label = context.getString(R.string.close_player),
+                        modifier = Modifier.focusRequester(closeRequester),
+                        onClick = dismiss,
+                    )
+                },
             ) {
                 var assignedFirstFocus = false
                 fun firstFocusModifier(): Modifier {
@@ -450,17 +460,21 @@ object TvRewardsPanel {
                     }
                 }
 
-                Spacer(Modifier.height(14.dp))
-                ButtonRow(
-                    label = context.getString(R.string.close_player),
-                    modifier = firstFocusModifier(),
-                    onClick = dismiss,
-                )
+                Spacer(Modifier.height(6.dp))
 
-                LaunchedEffect(loading, store, drops) {
-                    if (!focusRequested && assignedFirstFocus) {
-                        focusRequested = true
-                        runCatching { firstRequester.requestFocus() }
+                val hasTopFocusable = assignedFirstFocus
+                LaunchedEffect(loading, hasTopFocusable) {
+                    if (loading && !initialFocusDone) {
+                        runCatching { closeRequester.requestFocus() }
+                    } else if (!loading && !initialFocusDone) {
+                        initialFocusDone = true
+                        androidx.compose.runtime.withFrameNanos { }
+                        if (hasTopFocusable) {
+                            runCatching { firstRequester.requestFocus() }
+                        } else {
+                            runCatching { closeRequester.requestFocus() }
+                        }
+                        scrollState.scrollTo(0)
                     }
                 }
             }

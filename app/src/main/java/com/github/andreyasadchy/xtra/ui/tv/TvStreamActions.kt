@@ -19,17 +19,42 @@ object TvStreamActions {
     fun show(activity: MainActivity, stream: Stream, first: Extra? = null, last: List<Extra> = emptyList()) {
         val channelId = stream.channelId
         activity.lifecycleScope.launch {
-            // the follow entry says what it does: the state is asked first, never for long
-            val following = if (channelId != null && TvFollow.isEnabled(activity)) {
-                withTimeoutOrNull(1500L) { TvFollow.isFollowing(activity, channelId) }
-            } else null
+            val playerFrag = activity.playerFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment
+            val isPlayingThis = playerFrag != null && !stream.channelLogin.isNullOrBlank() &&
+                stream.channelLogin.equals(activity.currentPlayingStream()?.channelLogin, ignoreCase = true)
+
+            val (following, resolvedPartners) = kotlinx.coroutines.coroutineScope {
+                val followDeferred = kotlinx.coroutines.async {
+                    if (channelId != null && TvFollow.isEnabled(activity)) {
+                        withTimeoutOrNull(1500L) { TvFollow.isFollowing(activity, channelId) }
+                    } else null
+                }
+                val partnersDeferred = kotlinx.coroutines.async {
+                    if (stream.channelLogin.isNullOrBlank()) {
+                        emptyList()
+                    } else if (isPlayingThis) {
+                        val existing = playerFrag?.getCoStreamers().orEmpty()
+                        existing.ifEmpty {
+                            withTimeoutOrNull(1200L) {
+                                TvCoStreamCache.loadForChannel(activity, channelId, stream.channelLogin, stream.title)
+                            }.orEmpty()
+                        }
+                    } else {
+                        val cached = TvCoStreamCache.getPartners(channelId, stream.channelLogin)
+                        cached.ifEmpty {
+                            withTimeoutOrNull(1200L) {
+                                TvCoStreamCache.loadForChannel(activity, channelId, stream.channelLogin, stream.title)
+                            }.orEmpty()
+                        }
+                    }
+                }
+                followDeferred.await() to partnersDeferred.await()
+            }
+
             val entries = mutableListOf<Extra>()
             first?.let { entries += it }
-            val playerFrag = activity.playerFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment
-            if (playerFrag != null && !stream.channelLogin.isNullOrBlank() &&
-                stream.channelLogin.equals(activity.currentPlayingStream()?.channelLogin, ignoreCase = true)
-            ) {
-                val coStreamers = playerFrag.getCoStreamers()
+            if (!stream.channelLogin.isNullOrBlank()) {
+                val coStreamers = resolvedPartners
                     .filter { !it.channelLogin.isNullOrBlank() && !it.channelLogin.equals(stream.channelLogin, ignoreCase = true) }
                     .distinctBy { it.channelLogin?.lowercase() }
                     .take(com.github.andreyasadchy.xtra.ui.player.TvMultiStreamPicker.MAX - 1)
@@ -41,7 +66,7 @@ object TvStreamActions {
                     ) {
                         activity.startMultiStream(allCoStreams, stream)
                     }
-                    if (playerFrag.isLiveOrDvrScreen()) {
+                    if (isPlayingThis && playerFrag?.isLiveOrDvrScreen() == true) {
                         coStreamers.take(2).forEach { co ->
                             val coLogin = co.channelLogin ?: return@forEach
                             if (!activity.isStreamInTvPip(coLogin)) {

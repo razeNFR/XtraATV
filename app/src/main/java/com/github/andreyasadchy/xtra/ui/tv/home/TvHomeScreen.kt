@@ -47,6 +47,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
@@ -922,7 +923,9 @@ private fun HeroBanner(
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                CoStreamCountPill(stream = stream, hero = true)
             }
             if (!stream.title.isNullOrBlank()) {
                 Spacer(Modifier.height(8.dp))
@@ -2079,7 +2082,16 @@ private fun StreamCard(
                         )
                         Spacer(Modifier.width(4.dp))
                     }
-                    Text(stream.channelName ?: stream.channelLogin ?: "", fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        stream.channelName ?: stream.channelLogin ?: "",
+                        fontSize = if (small) 13.sp else 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    CoStreamCountPill(stream = stream, small = small)
                 }
                 // the whole title scrolls on the focused card when it is longer than the card
                 Text(
@@ -2102,6 +2114,43 @@ private fun StreamCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CoStreamCountPill(
+    stream: Stream,
+    hero: Boolean = false,
+    small: Boolean = false,
+) {
+    val context = LocalContext.current
+    val tick by com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.version.collectAsState()
+    LaunchedEffect(stream.channelId, stream.channelLogin) {
+        com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.enqueue(context, stream)
+    }
+    val count = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.getCount(stream.channelId, stream.channelLogin, tick)
+    if (count > 0) {
+        Spacer(Modifier.width(if (hero) 10.dp else 5.dp))
+        val corner = RoundedCornerShape(if (hero) 7.dp else 5.dp)
+        Text(
+            text = "+$count",
+            fontSize = when {
+                hero -> 14.sp
+                small -> 10.sp
+                else -> 11.sp
+            },
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1,
+            modifier = Modifier
+                .clip(corner)
+                .background(Color(0x33FFFFFF))
+                .border(1.dp, Color(0x55FFFFFF), corner)
+                .padding(
+                    horizontal = if (hero) 8.dp else 5.dp,
+                    vertical = if (hero) 3.dp else 1.dp,
+                ),
+        )
     }
 }
 

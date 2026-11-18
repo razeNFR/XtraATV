@@ -4195,21 +4195,44 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     showChatLayoutPanel()
                 }
             }
-            if (playbackService?.type == BasePlaybackService.STREAM && prefs.getBoolean(C.TV_BUTTON_MULTI_STREAM, true)) {
-                multiStream?.visibility = View.VISIBLE
-                multiStream?.setOnClickListener {
-                    hideController()
-                    (activity as? MainActivity)?.let { activity ->
-                        TvMultiStreamPicker.show(activity, Stream(
-                            id = playbackService?.streamId,
-                            channelId = playbackService?.channelId,
-                            channelLogin = playbackService?.channelLogin,
-                            channelName = playbackService?.channelName,
-                            gameName = playbackService?.gameName,
-                            title = playbackService?.title,
-                        ))
+            if (isStreamScreen() && prefs.getBoolean(C.TV_BUTTON_MULTI_STREAM, true)) {
+                multiStream?.let { btn ->
+                    btn.visibility = View.VISIBLE
+                    val badge = tvMultiStreamBadge
+                        ?: com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.MultiStreamBadgeDrawable(resources.displayMetrics.density).also { d ->
+                            tvMultiStreamBadge = d
+                            btn.overlay.add(d)
+                            btn.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                                d.setBounds(0, 0, v.width, v.height)
+                            }
+                        }
+                    if (btn.width > 0 && btn.height > 0) {
+                        badge.setBounds(0, 0, btn.width, btn.height)
+                    }
+                    btn.setOnClickListener {
+                        hideController()
+                        (activity as? MainActivity)?.let { activity ->
+                            val cur = activity.currentPlayingStream()
+                            TvMultiStreamPicker.show(activity, Stream(
+                                id = playbackService?.streamId ?: cur?.id,
+                                channelId = playbackService?.channelId ?: cur?.channelId,
+                                channelLogin = playbackService?.channelLogin ?: cur?.channelLogin,
+                                channelName = playbackService?.channelName ?: cur?.channelName,
+                                channelImageURL = cur?.channelImageURL,
+                                gameId = cur?.gameId,
+                                gameSlug = cur?.gameSlug,
+                                gameName = playbackService?.gameName ?: cur?.gameName,
+                                title = playbackService?.title ?: cur?.title,
+                                thumbnailURL = cur?.thumbnailURL,
+                                viewerCount = cur?.viewerCount,
+                            ))
+                        }
                     }
                 }
+                ensurePlayerCoStreamDetection()
+            } else {
+                multiStream?.visibility = View.GONE
+                tvMultiStreamBadge?.count = 0
             }
             // dimming of the stream: OK turns it on / off, OK held opens its level
             tvDim?.let { button ->
@@ -5600,7 +5623,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun refreshTvMinimizedBorderColor(animate: Boolean = true) {
-        if (!isTv || isMaximized || _binding == null) return
+        if (!isTv || _binding == null) return
+        tvMultiStreamBadge?.invalidateSelf()
+        _binding?.playerControls?.multiStream?.invalidate()
+        if (isMaximized) return
         val drawable = tvMinimizedBorderDrawable ?: return
         val strokePx = tvMinimizedBorderStrokePx.takeIf { it > 0 } ?: return
         val targetColor = currentTvMinimizedBorderColor()
@@ -6501,7 +6527,81 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var tvMultiStreamBadge: com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.MultiStreamBadgeDrawable? = null
+    private var tvCoStreamLookupKey: String? = null
+    private var tvCoStreamLookupJob: Job? = null
+    private var tvCoStreamObserveJob: Job? = null
+    private var playerCoStreamers: List<Stream> = emptyList()
+
+    private fun currentCoStreamIdentity(): Triple<String?, String?, String?> {
+        val cur = (activity as? MainActivity)?.currentPlayingStream()
+        val cid = playbackService?.channelId?.takeIf { it.isNotBlank() } ?: cur?.channelId?.takeIf { it.isNotBlank() }
+        val clogin = playbackService?.channelLogin?.takeIf { it.isNotBlank() } ?: cur?.channelLogin?.takeIf { it.isNotBlank() }
+        val ctitle = playbackService?.title?.takeIf { it.isNotBlank() } ?: cur?.title?.takeIf { it.isNotBlank() }
+        return Triple(cid, clogin, ctitle)
+    }
+
+    private fun ensurePlayerCoStreamDetection() {
+        if (!isTv || !isAdded || _binding == null) return
+        if (!isStreamScreen()) {
+            playerCoStreamers = emptyList()
+            tvMultiStreamBadge?.count = 0
+            return
+        }
+        val (cid, clogin, ctitle) = currentCoStreamIdentity()
+        if (cid.isNullOrBlank() && clogin.isNullOrBlank()) return
+
+        if (tvCoStreamObserveJob?.isActive != true) {
+            tvCoStreamObserveJob = viewLifecycleOwner.lifecycleScope.launch {
+                com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.version.collectLatest {
+                    updateTvMultiStreamBadge()
+                }
+            }
+        }
+
+        val key = "${cid.orEmpty()}|${clogin?.lowercase().orEmpty()}"
+        if (key != tvCoStreamLookupKey) {
+            tvCoStreamLookupKey = key
+            playerCoStreamers = emptyList()
+            updateTvMultiStreamBadge()
+            tvCoStreamLookupJob?.cancel()
+            val ctx = requireContext().applicationContext
+            tvCoStreamLookupJob = viewLifecycleOwner.lifecycleScope.launch {
+                val found = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.loadForChannel(ctx, cid, clogin, ctitle)
+                if (tvCoStreamLookupKey == key) {
+                    playerCoStreamers = found
+                    updateTvMultiStreamBadge()
+                }
+            }
+        } else {
+            updateTvMultiStreamBadge()
+        }
+    }
+
+    fun updateTvMultiStreamBadge() {
+        if (!isTv || _binding == null) return
+        val badge = tvMultiStreamBadge ?: return
+        if (!isStreamScreen()) {
+            badge.count = 0
+            _binding?.playerControls?.multiStream?.invalidate()
+            return
+        }
+        val (cid, clogin, _) = currentCoStreamIdentity()
+        val partnersCount = getCoStreamers().size
+        val cachedCount = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.getCount(cid, clogin)
+        badge.count = max(partnersCount, cachedCount)
+        _binding?.playerControls?.multiStream?.invalidate()
+    }
+
     override fun onDestroyView() {
+        tvCoStreamLookupJob?.cancel()
+        tvCoStreamLookupJob = null
+        tvCoStreamObserveJob?.cancel()
+        tvCoStreamObserveJob = null
+        tvCoStreamLookupKey = null
+        playerCoStreamers = emptyList()
+        tvMultiStreamBadge?.let { d -> _binding?.playerControls?.multiStream?.overlay?.remove(d) }
+        tvMultiStreamBadge = null
         tvMinimizedBorderAnimator?.cancel()
         tvMinimizedBorderAnimator = null
         tvMinimizedBorderDrawable = null
@@ -6537,8 +6637,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         _binding = null
     }
 
-    fun getCoStreamers(): List<com.github.andreyasadchy.xtra.model.ui.Stream> =
-        chatFragment?.getCoStreamers().orEmpty()
+    fun getCoStreamers(): List<Stream> {
+        val (cid, clogin, _) = currentCoStreamIdentity()
+        val merged = LinkedHashMap<String, Stream>()
+        fun addAllFrom(list: List<Stream>) {
+            list.forEach { s ->
+                val k = s.channelLogin?.lowercase()?.takeIf { it.isNotBlank() } ?: return@forEach
+                if (s.channelId != cid && !k.equals(clogin, ignoreCase = true)) {
+                    merged.putIfAbsent(k, s)
+                }
+            }
+        }
+        addAllFrom(playerCoStreamers)
+        addAllFrom(chatFragment?.getCoStreamers().orEmpty())
+        addAllFrom(com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.getPartners(cid, clogin))
+        return merged.values.toList()
+    }
 
     companion object {
         private const val REQUEST_CODE_QUALITY = 0

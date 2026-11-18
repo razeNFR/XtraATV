@@ -361,7 +361,9 @@ class ChatViewModel(
         found.forEach { s ->
             s.channelLogin?.lowercase()?.let { merged[it] = s }
         }
-        coStreamers.value = merged.values.take(5)
+        val list = merged.values.take(5)
+        coStreamers.value = list
+        com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.putPartners(resolvedChannelId, activeChannelLogin, list)
     }
 
     private fun onChannelIdResolved(roomId: String, channelLogin: String?) {
@@ -2530,6 +2532,15 @@ class ChatViewModel(
             val ids = PubSubUtils.parseSharedChatChannelIds(message, selfId) ?: return
             if (ids.isEmpty()) {
                 coStreamers.value = emptyList()
+                com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.putPartners(selfId, channelLogin, emptyList(), clearIfEmpty = true)
+                if (!selfId.isNullOrBlank()) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val remaining = graphQLRepository.loadSharedChatChannelIds(networkLibrary, gqlHeaders, selfId)
+                        if (remaining.isNotEmpty()) {
+                            resolveCoStreamersByIds(networkLibrary, gqlHeaders, remaining, selfId, channelLogin)
+                        }
+                    }
+                }
             } else {
                 viewModelScope.launch(Dispatchers.IO) {
                     resolveCoStreamersByIds(networkLibrary, gqlHeaders, ids, selfId, channelLogin)
@@ -2734,7 +2745,7 @@ class ChatViewModel(
             val cached = sourceRoomCache[srcRoom]
             if (cached != null) {
                 message.sourceChannelAvatar = cached.first
-                message.sourceChannelName = cached.second
+                message.sourceChannelName = cached.second ?: message.sourceChannelName
             } else if (pendingSourceRoomLookups.add(srcRoom)) {
                 val netLib = networkLibrary ?: applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
                 viewModelScope.launch(Dispatchers.IO) {
@@ -2751,7 +2762,7 @@ class ChatViewModel(
                             val updated = synchronized(chatMessages) {
                                 chatMessages.filter { it.sourceRoomId == srcRoom }.onEach {
                                     it.sourceChannelAvatar = resolved.first
-                                    it.sourceChannelName = resolved.second
+                                    it.sourceChannelName = resolved.second ?: it.sourceChannelName
                                 }
                             }
                             if (updated.isNotEmpty()) {

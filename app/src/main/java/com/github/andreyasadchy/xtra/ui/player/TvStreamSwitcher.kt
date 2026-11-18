@@ -617,6 +617,15 @@ object TvStreamSwitcher {
 
         override fun getItemCount() = streams.size
 
+        override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+            super.onAttachedToRecyclerView(recyclerView)
+            com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.attachToRecyclerView(recyclerView) {
+                if (itemCount > 0) {
+                    notifyItemRangeChanged(0, itemCount, com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM)
+                }
+            }
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val binding = FragmentStreamsListItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
             binding.root.layoutParams = binding.root.layoutParams.apply { width = itemWidth }
@@ -641,6 +650,23 @@ object TvStreamSwitcher {
                 setMargins(margin, margin, margin, margin)
             })
             return ViewHolder(binding, badge)
+        }
+
+        private fun bindUsername(holder: ViewHolder, stream: Stream) {
+            val context = holder.itemView.context
+            val rawName: CharSequence = stream.channelName ?: stream.channelLogin.orEmpty()
+            com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.enqueue(context, stream)
+            val coCount = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.getCount(stream.channelId, stream.channelLogin)
+            holder.binding.username.visibility = View.VISIBLE
+            holder.binding.username.text = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.formatUsernameWithBadge(context, rawName, coCount)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int, payloads: MutableList<Any>) {
+            if (payloads.isNotEmpty() && payloads.all { it == com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM }) {
+                streams.getOrNull(position)?.let { bindUsername(holder, it) }
+            } else {
+                super.onBindViewHolder(holder, position, payloads)
+            }
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
@@ -694,8 +720,7 @@ object TvStreamSwitcher {
                 }
                 title.visibility = if (stream.title.isNullOrBlank()) View.GONE else View.VISIBLE
                 title.text = stream.title?.trim()
-                username.visibility = View.VISIBLE
-                username.text = stream.channelName ?: stream.channelLogin
+                bindUsername(holder, stream)
                 gameName.visibility = if (stream.gameName.isNullOrBlank()) View.GONE else View.VISIBLE
                 gameName.text = stream.gameName
                 val count = stream.viewerCount

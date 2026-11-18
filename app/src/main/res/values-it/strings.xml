@@ -784,7 +784,7 @@
     <string name="tv_good_evening">Buonasera</string>
     <string name="tv_good_evening_name">Buonasera, %s</string>
     <string name="tv_multistream_stream_ended">%s ha terminato la diretta</string>
-    <string name="tv_switch_pip_hint">Tieni premuto OK su una diretta per guardarla in una finestra piccola</string>
+    <string name="tv_switch_pip_hint">Tieni premuto OK su una diretta per guardare fino a 2 dirette in una finestra piccola</string>
     <string name="tv_pip_already_shown">Questa diretta è già sullo schermo</string>
     <string name="tv_keep_sound_on_leave">Audio quando si esce dall\'app (Home o Indietro)</string>
     <string name="tv_keep_sound_never">Mai</string>
