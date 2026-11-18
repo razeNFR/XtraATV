@@ -5,6 +5,8 @@ import androidx.lifecycle.lifecycleScope
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -23,13 +25,13 @@ object TvStreamActions {
             val isPlayingThis = playerFrag != null && !stream.channelLogin.isNullOrBlank() &&
                 stream.channelLogin.equals(activity.currentPlayingStream()?.channelLogin, ignoreCase = true)
 
-            val (following, resolvedPartners) = kotlinx.coroutines.coroutineScope {
-                val followDeferred = kotlinx.coroutines.async {
+            val (following, resolvedPartners) = coroutineScope {
+                val followDeferred = async {
                     if (channelId != null && TvFollow.isEnabled(activity)) {
                         withTimeoutOrNull(1500L) { TvFollow.isFollowing(activity, channelId) }
                     } else null
                 }
-                val partnersDeferred = kotlinx.coroutines.async {
+                val partnersDeferred = async {
                     if (stream.channelLogin.isNullOrBlank()) {
                         emptyList()
                     } else if (isPlayingThis) {
