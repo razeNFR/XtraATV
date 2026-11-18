@@ -3657,7 +3657,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 } else {
                     com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_pip_close)) {
                         dismiss()
-                        activity.closeTvPip()
+                        activity.closeTvPipSlot(currentSlot)
                     }
                 }
                 androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
@@ -5585,9 +5585,50 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var tvMinimizedBorderDrawable: android.graphics.drawable.GradientDrawable? = null
+    private var tvMinimizedBorderStrokePx: Int = 0
+    private var tvMinimizedBorderColor: Int = Color.WHITE
+    private var tvMinimizedBorderAnimator: android.animation.ValueAnimator? = null
+
+    private fun currentTvMinimizedBorderColor(): Int {
+        val baseColor = if (com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null) {
+            com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
+        } else {
+            Color.WHITE
+        }
+        return androidx.core.graphics.ColorUtils.setAlphaComponent(baseColor, 0xD9)
+    }
+
+    fun refreshTvMinimizedBorderColor(animate: Boolean = true) {
+        if (!isTv || isMaximized || _binding == null) return
+        val drawable = tvMinimizedBorderDrawable ?: return
+        val strokePx = tvMinimizedBorderStrokePx.takeIf { it > 0 } ?: return
+        val targetColor = currentTvMinimizedBorderColor()
+        tvMinimizedBorderAnimator?.cancel()
+        tvMinimizedBorderAnimator = null
+        val startColor = tvMinimizedBorderColor
+        if (startColor == targetColor) return
+        if (!animate) {
+            tvMinimizedBorderColor = targetColor
+            drawable.setStroke(strokePx, targetColor)
+            return
+        }
+        tvMinimizedBorderAnimator = android.animation.ValueAnimator.ofArgb(startColor, targetColor).apply {
+            duration = 420L
+            addUpdateListener { anim ->
+                val c = anim.animatedValue as Int
+                tvMinimizedBorderColor = c
+                drawable.setStroke(strokePx, c)
+            }
+            start()
+        }
+    }
+
     private fun applyTvMinimizedFrame(minimized: Boolean) {
         val b = _binding ?: return
         if (!isTv) return
+        tvMinimizedBorderAnimator?.cancel()
+        tvMinimizedBorderAnimator = null
         if (minimized) {
             val density = resources.displayMetrics.density
             val (scaleX, _) = getScaleValues()
@@ -5604,17 +5645,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             b.slidingLayout.elevation = 20f * density
             b.playerLayout.outlineProvider = outline
             b.playerLayout.clipToOutline = cornerPx > 0f
-            val baseColor = if (com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null) {
-                com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
-            } else {
-                Color.WHITE
-            }
-            val borderColor = androidx.core.graphics.ColorUtils.setAlphaComponent(baseColor, 0xD9)
-            b.dragView.background = android.graphics.drawable.GradientDrawable().apply {
+            val borderColor = currentTvMinimizedBorderColor()
+            tvMinimizedBorderStrokePx = strokePx
+            tvMinimizedBorderColor = borderColor
+            val border = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = cornerPx
                 setStroke(strokePx, borderColor)
             }
+            tvMinimizedBorderDrawable = border
+            b.dragView.background = border
         } else {
+            tvMinimizedBorderDrawable = null
             b.slidingLayout.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
             b.slidingLayout.elevation = 0f
             b.playerLayout.clipToOutline = false
@@ -5940,6 +5981,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val login = activity.currentPlayingStream()?.channelLogin
         // just back from a multi-stream: the next stream of it instead of closing
         activity.takeMultiStreamFallback(login)?.let { next ->
+            activity.dropTvPipForEndedStream(login)
             activity.startStream(next, peekHud = true)
             return
         }
@@ -5976,6 +6018,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     val target = tvStreamEndNextTarget
                     hideTvStreamEndBanner()
                     if (target != null && view != null && activity.currentPlayingStream()?.channelLogin == login && !isPlayingNow()) {
+                        activity.dropTvPipForEndedStream(login)
                         activity.startStream(target, peekHud = true)
                     }
                 }
@@ -6459,6 +6502,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        tvMinimizedBorderAnimator?.cancel()
+        tvMinimizedBorderAnimator = null
+        tvMinimizedBorderDrawable = null
         chatUnlockTimerJob?.cancel()
         chatUnlockTimerJob = null
         isTvChatLocked = null

@@ -1056,7 +1056,7 @@ class MainActivity : AppCompatActivity() {
 
     /** The controls of the full screen player are shown or hidden: the small window(s) make room for them. */
     fun onTvControlsVisibility(visible: Boolean) {
-        if (isTv && tvPip.activeCount > 0) {
+        if (isTv && tvPip.hasAnySlot) {
             tvPip.setControlsShown(visible)
         }
     }
@@ -1093,6 +1093,12 @@ class MainActivity : AppCompatActivity() {
     fun closeTvPipSlot(slotIndex: Int) {
         if (isTv) {
             tvPip.closeSlot(slotIndex)
+        }
+    }
+
+    fun dropTvPipForEndedStream(login: String?) {
+        if (isTv) {
+            tvPip.dropForEndedStream(login)
         }
     }
 
@@ -1300,6 +1306,7 @@ class MainActivity : AppCompatActivity() {
                 com.github.andreyasadchy.xtra.ui.tv.TvAmbient.applyDynamicToView(binding.root, base, color)
             }
             tintTvCards(binding.navHostFragment)
+            (playerFragment as? PlayerFragment)?.refreshTvMinimizedBorderColor()
         }
     }
 
@@ -2817,12 +2824,8 @@ class MainActivity : AppCompatActivity() {
             queueRefreshJob?.cancel()
             startQueueCheck()
         }
-        if (isTv && !stream.channelLogin.isNullOrBlank()) {
-            for (slotIdx in tvPip.activeSlotIndices()) {
-                if (tvPip.streamAt(slotIdx)?.channelLogin.equals(stream.channelLogin, ignoreCase = true)) {
-                    tvPip.closeSlot(slotIdx)
-                }
-            }
+        if (isTv) {
+            tvPip.syncWithMainStream(stream.channelLogin)
         }
         currentStream = stream
         currentStreamLogin = stream.channelLogin
@@ -2960,6 +2963,9 @@ class MainActivity : AppCompatActivity() {
             queueRefreshJob?.cancel()
             queueExtendJob?.cancel()
             neighborJob?.cancel()
+            if (isTv) {
+                tvPip.syncWithMainStream(null)
+            }
         }
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
         val state = PlaybackState(
@@ -3025,8 +3031,10 @@ class MainActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.pendingDvrResume = null
         currentClipId = clip.id
         currentStream = null
+        currentStreamLogin = null
         if (isTv) {
             com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = true
+            tvPip.syncWithMainStream(null)
         }
         dvrStream = null
         dvrChatVideoId = null
@@ -3063,6 +3071,10 @@ class MainActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.pendingDvrResume = null
         currentClipId = null
         currentStream = null
+        currentStreamLogin = null
+        if (isTv) {
+            tvPip.syncWithMainStream(null)
+        }
         dvrStream = null
         dvrChatVideoId = null
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)

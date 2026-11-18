@@ -55,6 +55,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
     private inner class PipSlot(val slotIndex: Int) {
         var stream: Stream? = null
+        var suspendedByMain = false
         var openedAt: Long = 0L
         var view: FrameLayout? = null
         var player: ExoPlayer? = null
@@ -66,21 +67,29 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
     private val slots = arrayOfNulls<PipSlot>(MAX_SLOTS)
 
-    val stream: Stream?
-        get() = slots[0]?.stream ?: slots[1]?.stream
+    private fun PipSlot?.isVisibleSlot(): Boolean = this != null && stream != null && !suspendedByMain
 
-    val activeCount: Int
+    val hasAnySlot: Boolean
+        get() = slots.any { it?.stream != null }
+
+    private val configuredCount: Int
         get() = slots.count { it?.stream != null }
 
-    fun activeSlotIndices(): List<Int> = slots.indices.filter { slots[it]?.stream != null }
+    val stream: Stream?
+        get() = slots.firstOrNull { it.isVisibleSlot() }?.stream
 
-    fun streamAt(slotIndex: Int): Stream? = slots.getOrNull(slotIndex)?.stream
+    val activeCount: Int
+        get() = slots.count { it.isVisibleSlot() }
 
-    fun activeStreams(): List<Stream> = slots.mapNotNull { it?.stream }
+    fun activeSlotIndices(): List<Int> = slots.indices.filter { slots[it].isVisibleSlot() }
+
+    fun streamAt(slotIndex: Int): Stream? = slots.getOrNull(slotIndex)?.takeIf { it.isVisibleSlot() }?.stream
+
+    fun activeStreams(): List<Stream> = slots.mapNotNull { slot -> slot?.takeIf { it.isVisibleSlot() }?.stream }
 
     fun containsStream(login: String?): Boolean {
         if (login.isNullOrBlank()) return false
-        return slots.any { it?.stream?.channelLogin.equals(login, ignoreCase = true) }
+        return slots.any { it.isVisibleSlot() && it?.stream?.channelLogin.equals(login, ignoreCase = true) }
     }
 
     private var noPlayerChecks = 0
@@ -93,16 +102,16 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
     private val followPlayer = object : Runnable {
         override fun run() {
-            val anyOpen = activeCount > 0
+            val anyConfigured = configuredCount > 0
             val maximized = activity.isPlayerMaximized()
             slots.forEach { slot ->
-                val shown = slot?.stream != null && maximized
+                val shown = slot.isVisibleSlot() && maximized
                 slot?.view?.visibility = if (shown) View.VISIBLE else View.GONE
             }
             if (!maximized && selectorActive) {
                 exitSelectorMode()
             }
-            if (anyOpen) {
+            if (anyConfigured) {
                 noPlayerChecks = if (activity.hasPlayer()) 0 else noPlayerChecks + 1
                 if (noPlayerChecks >= 4) {
                     close()
@@ -114,7 +123,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     }
 
     val isShown: Boolean
-        get() = slots.any { it?.stream != null && it.view?.visibility == View.VISIBLE }
+        get() = slots.any { it.isVisibleSlot() && it?.view?.visibility == View.VISIBLE }
 
     fun open(stream: Stream, targetSlot: Int? = null) {
         val login = stream.channelLogin ?: return
@@ -126,10 +135,13 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             targetSlot != null && targetSlot in 0 until MAX_SLOTS -> targetSlot
             slots[0]?.stream == null -> 0
             slots[1]?.stream == null -> 1
+            slots[0]?.suspendedByMain == true -> 0
+            slots[1]?.suspendedByMain == true -> 1
             else -> slots.filterNotNull().maxByOrNull { it.openedAt }?.slotIndex ?: 1
         }
         val slot = ensureSlot(chosenIndex)
         slot.stream = stream
+        slot.suspendedByMain = false
         slot.openedAt = SystemClock.elapsedRealtime()
         slot.decoderSteppedDown = false
 
@@ -154,13 +166,111 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 stream.thumbnail?.also { TvThumbnails.remember(stream) }?.takeUnless { stream.thumbnailURL.isNullOrBlank() },
                 stream.channelImage,
                 activity.lifecycleScope,
-            ) { slot.stream?.channelLogin == login && (texture?.alpha ?: 1f) < 1f }
+            ) { slot.stream?.channelLogin == login && !slot.suspendedByMain && (texture?.alpha ?: 1f) < 1f }
         }
         frame.visibility = if (activity.isPlayerMaximized()) View.VISIBLE else View.GONE
         noPlayerChecks = 0
         load(slot, login)
         container.removeCallbacks(followPlayer)
         container.postDelayed(followPlayer, 500L)
+    }
+
+    /**
+     * Temporarily hides/pauses any PiP slot whose streamer is currently playing on the main screen,
+     * and automatically restores it when switching away to another streamer.
+     */
+    fun syncWithMainStream(mainLogin: String?) {
+        if (!hasAnySlot) return
+        val hadVisibleBefore = activeCount > 0
+        var changed = false
+        for (i in 0 until MAX_SLOTS) {
+            val slot = slots[i] ?: continue
+            val s = slot.stream ?: continue
+            val shouldSuspend = !mainLogin.isNullOrBlank() && s.channelLogin.equals(mainLogin, ignoreCase = true)
+            if (shouldSuspend && !slot.suspendedByMain) {
+                changed = true
+                slot.suspendedByMain = true
+                slot.loadJob?.cancel()
+                slot.loadJob = null
+                slot.expUpgradeJob?.cancel()
+                slot.expUpgradeJob = null
+                slot.experimentalVodActive = false
+                slot.player?.apply {
+                    volume = 0f
+                    playWhenReady = false
+                    stop()
+                    clearMediaItems()
+                }
+                slot.view?.let { frame ->
+                    frame.findViewById<TextureView>(R.id.tvPipTexture)?.let { texture ->
+                        texture.animate().cancel()
+                        texture.alpha = 0f
+                    }
+                    frame.visibility = View.GONE
+                }
+            } else if (!shouldSuspend && slot.suspendedByMain) {
+                changed = true
+                slot.suspendedByMain = false
+                slot.decoderSteppedDown = false
+                val ensured = ensureSlot(i)
+                val login = s.channelLogin ?: continue
+                ensured.view?.let { frame ->
+                    frame.findViewById<TextView>(R.id.tvPipLabel)?.text = s.channelName ?: login
+                    val texture = frame.findViewById<TextureView>(R.id.tvPipTexture)
+                    texture?.animate()?.cancel()
+                    texture?.alpha = 0f
+                    frame.findViewById<ImageView>(R.id.tvLoadingPicture)?.let { picture ->
+                        picture.setImageDrawable(null)
+                        TvLoadingPicture.show(
+                            picture,
+                            login,
+                            s.thumbnail?.also { TvThumbnails.remember(s) }?.takeUnless { s.thumbnailURL.isNullOrBlank() },
+                            s.channelImage,
+                            activity.lifecycleScope,
+                        ) { ensured.stream?.channelLogin == login && !ensured.suspendedByMain && (texture?.alpha ?: 1f) < 1f }
+                    }
+                    frame.visibility = if (activity.isPlayerMaximized()) View.VISIBLE else View.GONE
+                }
+                load(ensured, login)
+            }
+        }
+        if (changed) {
+            exitSelectorMode()
+            val hasVisibleNow = activeCount > 0
+            if (hasVisibleNow) {
+                updateVideoSizeCaps()
+                applyLayout()
+                applySound()
+                applyDim()
+                updateBorders()
+                TvDim.removeListener(dimListener)
+                TvDim.addListener(dimListener)
+                if (!hadVisibleBefore) {
+                    (activity.playerFragment as? PlayerFragment)?.onTvPipOpened()
+                }
+            } else {
+                slots[0]?.player?.volume = 0f
+                slots[1]?.player?.volume = 0f
+                setMainMix(1f)
+                if (hadVisibleBefore) {
+                    activity.onTvPipClosed()
+                }
+            }
+        }
+        noPlayerChecks = 0
+        container.removeCallbacks(followPlayer)
+        if (configuredCount > 0) {
+            container.post(followPlayer)
+        }
+    }
+
+    fun dropForEndedStream(login: String?) {
+        if (login.isNullOrBlank()) return
+        for (i in 0 until MAX_SLOTS) {
+            if (slots[i]?.stream?.channelLogin.equals(login, ignoreCase = true)) {
+                closeSlot(i)
+            }
+        }
     }
 
     private fun ensureSlot(slotIndex: Int): PipSlot {
@@ -233,12 +343,14 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                     private var lastSwitch = 0L
 
                     override fun onRenderedFirstFrame() {
+                        if (slot.suspendedByMain) return
                         slot.view?.findViewById<TextureView>(R.id.tvPipTexture)
                             ?.takeIf { it.alpha < 1f }
                             ?.animate()?.alpha(1f)?.setDuration(250L)?.start()
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
+                        if (slot.suspendedByMain) return
                         if (!slot.decoderSteppedDown && (
                                 error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
                                     error.errorCode == PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED ||
@@ -252,7 +364,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                     }
 
                     override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-                        if (slot.experimentalVodActive) return
+                        if (slot.suspendedByMain || slot.experimentalVodActive) return
                         val playlist = (currentManifest as? HlsManifest)?.mediaPlaylist ?: return
                         val ads = playlist.tags.any { it.contains("stitched-ad", true) || it.contains("X-TV-TWITCH-AD", true) }
                         val now = System.currentTimeMillis()
@@ -302,7 +414,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 val vod = outcome.vod
                 if (vod != null && vod.vodDurationMs >= TvExperimentalAdblock.MIN_INITIAL_VOD_DURATION_MS) {
                     val activePlayer = slot.player
-                    if (activePlayer != null && slot.stream?.channelLogin == login) {
+                    if (activePlayer != null && !slot.suspendedByMain && slot.stream?.channelLogin == login) {
                         slot.experimentalVodActive = true
                         activePlayer.setMediaSource(
                             TvExperimentalAdblock.buildMediaSource(
@@ -318,7 +430,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                     }
                     return@launch
                 }
-                if (outcome.channelIsLive &&
+                if (!slot.suspendedByMain && outcome.channelIsLive &&
                     (outcome.streamUptimeMs == null || outcome.streamUptimeMs < TvExperimentalAdblock.NEW_STREAM_MAX_UPTIME_MS)
                 ) {
                     scheduleExperimentalUpgrade(slot, login, outcome.streamId, outcome.createdAtIso)
@@ -326,7 +438,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             }
             val url = TvPreviewSource.getPlaylistUrl(activity, login)
             val activePlayer = slot.player
-            if (url != null && activePlayer != null && slot.stream?.channelLogin == login) {
+            if (url != null && activePlayer != null && !slot.suspendedByMain && slot.stream?.channelLogin == login) {
                 slot.experimentalVodActive = false
                 activePlayer.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
                 activePlayer.prepare()
@@ -341,7 +453,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             val app = activity.applicationContext as XtraApp
             for (attempt in 1..TvExperimentalAdblock.UPGRADE_MAX_ATTEMPTS) {
                 delay(TvExperimentalAdblock.UPGRADE_POLL_INTERVAL_MS)
-                if (slot.stream?.channelLogin != login || slot.experimentalVodActive || !TvExperimentalAdblock.isExperimentalEnabled(activity)) {
+                if (slot.suspendedByMain || slot.stream?.channelLogin != login || slot.experimentalVodActive || !TvExperimentalAdblock.isExperimentalEnabled(activity)) {
                     return@launch
                 }
                 val next = TvExperimentalAdblock.resolveLiveVod(
@@ -355,7 +467,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 val vod = next.vod
                 if (vod != null && vod.vodDurationMs >= TvExperimentalAdblock.UPGRADE_MIN_VOD_DURATION_MS) {
                     val activePlayer = slot.player
-                    if (activePlayer != null && slot.stream?.channelLogin == login && !slot.experimentalVodActive) {
+                    if (activePlayer != null && !slot.suspendedByMain && slot.stream?.channelLogin == login && !slot.experimentalVodActive) {
                         slot.experimentalVodActive = true
                         activePlayer.setMediaSource(
                             TvExperimentalAdblock.buildMediaSource(
@@ -414,8 +526,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         val vertical = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
         val gap = (10 * density).toInt()
 
-        val slot0Open = slots[0]?.stream != null
-        val slot1Open = slots[1]?.stream != null
+        val slot0Open = slots[0].isVisibleSlot()
+        val slot1Open = slots[1].isVisibleSlot()
         val corner0 = cornerForSlot(0)
         val corner1 = cornerForSlot(1)
         val sameCorner = slot0Open && slot1Open && corner0 == corner1
@@ -424,7 +536,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
         slots.forEachIndexed { idx, slot ->
             val frame = slot?.view ?: return@forEachIndexed
-            if (slot.stream == null) return@forEachIndexed
+            if (!slot.isVisibleSlot()) return@forEachIndexed
             val corner = if (idx == 1) corner1 else corner0
             val (width, height) = dimensionsForSize(sizeForSlot(idx))
             val vGravity = when (corner) {
@@ -466,12 +578,12 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         controlsShown = shown
         val density = activity.resources.displayMetrics.density
         val gap = (10 * density).toInt()
-        val sameCorner = slots[0]?.stream != null && slots[1]?.stream != null && cornerForSlot(0) == cornerForSlot(1)
+        val sameCorner = slots[0].isVisibleSlot() && slots[1].isVisibleSlot() && cornerForSlot(0) == cornerForSlot(1)
         val (_, h0) = dimensionsForSize(sizeForSlot(0))
         val (_, h1) = dimensionsForSize(sizeForSlot(1))
         slots.forEachIndexed { idx, slot ->
             val frame = slot?.view ?: return@forEachIndexed
-            if (slot.stream == null) return@forEachIndexed
+            if (!slot.isVisibleSlot()) return@forEachIndexed
             val corner = cornerForSlot(idx)
             val centerShift = if (sameCorner && (corner == "ml" || corner == "c" || corner == "mr")) {
                 if (idx == 0) -(h1 + gap) / 2f else (h0 + gap) / 2f
@@ -500,6 +612,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
      */
     fun applySound() {
         if (activeCount == 0) {
+            slots[0]?.player?.volume = 0f
+            slots[1]?.player?.volume = 0f
             setMainMix(1f)
             return
         }
@@ -508,15 +622,15 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         val balance = prefs.getInt(C.TV_PIP_BALANCE, 0).coerceIn(-100, 100)
         val mode = prefs.getString(C.TV_PIP_SOUND, "main") ?: "main"
 
-        val s0Open = slots[0]?.stream != null
-        val s1Open = slots[1]?.stream != null
+        val s0Open = slots[0].isVisibleSlot()
+        val s1Open = slots[1].isVisibleSlot()
 
         var mainShare = 1f
         var s0Share = 0f
         var s1Share = 0f
 
         when (mode) {
-            "pip", "pip1" -> {
+            "pip" -> {
                 if (s0Open) {
                     mainShare = 0f
                     s0Share = 1f
@@ -525,10 +639,26 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                     s1Share = 1f
                 }
             }
+            "pip1" -> {
+                if (s0Open) {
+                    mainShare = 0f
+                    s0Share = 1f
+                } else if (slots[0]?.suspendedByMain == true) {
+                    mainShare = 1f
+                } else if (s1Open) {
+                    mainShare = 0f
+                    s1Share = 1f
+                } else {
+                    prefs.edit { putString(C.TV_PIP_SOUND, "main") }
+                    mainShare = 1f
+                }
+            }
             "pip2" -> {
                 if (s1Open) {
                     mainShare = 0f
                     s1Share = 1f
+                } else if (slots[1]?.suspendedByMain == true) {
+                    mainShare = 1f
                 } else {
                     // Window 2 closed: restore main sound automatically
                     prefs.edit { putString(C.TV_PIP_SOUND, "main") }
@@ -598,7 +728,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         selectorActive = true
         selectorCenterDown = false
         backDown = false
-        selectedSlot = if (slots[0]?.stream != null) 0 else 1
+        selectedSlot = if (slots[0].isVisibleSlot()) 0 else 1
         updateBorders()
         showSelectorHint()
         container.removeCallbacks(hideSelectorRunnable)
@@ -653,8 +783,9 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
     fun closeSlot(slotIndex: Int) {
         val slot = slots.getOrNull(slotIndex) ?: return
-        val hadStream = slot.stream != null
+        val hadVisible = slot.isVisibleSlot()
         slot.stream = null
+        slot.suspendedByMain = false
         slot.openedAt = 0L
         slot.loadJob?.cancel()
         slot.loadJob = null
@@ -671,11 +802,13 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         exitSelectorMode()
 
         if (activeCount == 0) {
-            TvDim.removeListener(dimListener)
-            controlsShown = false
             setMainMix(1f)
-            container.removeCallbacks(followPlayer)
-            if (hadStream) {
+            if (configuredCount == 0) {
+                TvDim.removeListener(dimListener)
+                controlsShown = false
+                container.removeCallbacks(followPlayer)
+            }
+            if (hadVisible) {
                 activity.onTvPipClosed()
             }
         } else {
@@ -687,10 +820,10 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     }
 
     fun closeLatest() {
-        val latest = slots.filterNotNull().filter { it.stream != null }.maxByOrNull { it.openedAt }
+        val latest = slots.filterNotNull().filter { it.isVisibleSlot() }.maxByOrNull { it.openedAt }
         if (latest != null) {
             closeSlot(latest.slotIndex)
-        } else {
+        } else if (activeCount > 0) {
             close()
         }
     }
@@ -702,6 +835,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         for (i in 0 until MAX_SLOTS) {
             val slot = slots[i] ?: continue
             slot.stream = null
+            slot.suspendedByMain = false
             slot.loadJob?.cancel()
             slot.expUpgradeJob?.cancel()
             slot.player?.release()
@@ -792,7 +926,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
     private fun chooseNextSelectorSlot(keyCode: Int): Int {
         val other = if (selectedSlot == 0) 1 else 0
-        if (slots.getOrNull(other)?.stream == null) return selectedSlot
+        if (!slots.getOrNull(other).isVisibleSlot()) return selectedSlot
         val vCur = slots.getOrNull(selectedSlot)?.view ?: return other
         val vOth = slots.getOrNull(other)?.view ?: return other
         val curCx = vCur.left + vCur.width / 2
@@ -813,9 +947,18 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         val small = target.stream ?: return
         val canPipMain = (activity.playerFragment as? PlayerFragment)?.isLiveOrDvrScreen() == true
         val main = if (canPipMain) (activity.dvrStream ?: activity.currentPlayingStream()) else null
+        val mainLogin = main?.channelLogin
+        val mainAlreadyInOtherSlot = !mainLogin.isNullOrBlank() && slots.indices.any { idx ->
+            idx != slotIndex && slots[idx]?.stream?.channelLogin.equals(mainLogin, ignoreCase = true)
+        }
+        if (mainAlreadyInOtherSlot) {
+            activity.startStream(small)
+            return
+        }
         target.stream = null
+        target.suspendedByMain = false
         activity.startStream(small)
-        if (main?.channelLogin != null) {
+        if (mainLogin != null) {
             open(main, targetSlot = slotIndex)
         } else {
             closeSlot(slotIndex)
