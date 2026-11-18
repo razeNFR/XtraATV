@@ -748,7 +748,7 @@
     <string name="tv_switch_empty">このリストに配信中のものはありません</string>
     <string name="tv_pip_hint">小窓: OK長押しで入れ替え（リモコン設定で変更可）、戻るで閉じる</string>
     <string name="tv_multistream_focus">フォーカスモード: この配信を大きく</string>
-    <string name="tv_multistream_grid">グリッドに戻る</string>
+    <string name="tv_multistream_grid">グリッドモード</string>
     <string name="tv_followed_videos_need_code">フォロー中の動画にはコードでのログインが必要です: twitch.tv/activate でログイン (アカウント)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">リストを読み込めませんでした。もう一度お試しください</string>
@@ -1247,7 +1247,7 @@
     <string name="tv_oled_protection_summary">リモコン無操作が3分続くと固定表示（時計・チャット・バッジ）を減光し、ピクセルを微細に移動します</string>
     <string name="tv_stream_end_action">ライブ配信終了時の動作</string>
     <string name="tv_stream_end_home">ホームに戻る</string>
-    <string name="tv_stream_end_next">ライブ中の別のフォロー中チャンネルへ切り替え</string>
+    <string name="tv_stream_end_next">ライブ中のフォロー中チャンネルへ切り替え（なければ同じカテゴリ）</string>
     <string name="tv_stream_end_stay">プレーヤーに留まる</string>
     <string name="tv_stream_end_switching">配信終了 · %2$d秒後に %1$s へ切り替え (OK: 今すぐ · 戻る: 留まる)</string>
     <string name="tv_create_clip">クリップ作成 (30秒)</string>
@@ -1271,4 +1271,11 @@
     <string name="tv_accounts_remove">このTVから %1$s を削除</string>
     <string name="tv_accounts_removed">%1$s を削除しました</string>
     <string name="tv_accounts_manage_hint">OK: 切り替え · OK長押し: オプション</string>
+    <string name="tv_drops_none_stream">このカテゴリで進行中のDropsキャンペーンはありません</string>
+    <string name="tv_drops_other_section">進行中のその他のキャンペーン</string>
+    <string name="tv_multistream_mosaic">モザイクモード: 全画面表示</string>
+    <string name="tv_stream_end_raid_note">補足: 配信者がレイドを開始し自動レイド追従が有効な場合、レイドが優先して動作します。</string>
+    <string name="tv_key_or_join">%1$s または %2$s</string>
+    <string name="tv_pip_hint_keys">小窓: %1$s で配信を入れ替え（リモコン設定で変更可）、戻るで閉じる。コントロール内のボタンで位置・サイズ・音量を変更できます。</string>
+    <string name="tv_pip_hint_no_key">小窓: 戻るで閉じる。コントロール内のボタンで配信の入れ替えや位置・サイズ・音量の変更ができます。</string>
 </resources>

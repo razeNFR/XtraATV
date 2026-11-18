@@ -748,7 +748,7 @@
     <string name="tv_switch_empty">لا يوجد بث مباشر في هذه القائمة</string>
     <string name="tv_pip_hint">نافذة صغيرة: اضغط مطولًا على OK للتبديل (قابل للتخصيص في إعدادات الريموت)، ورجوع للإغلاق</string>
     <string name="tv_multistream_focus">وضع التركيز: هذا البث كبيرًا</string>
-    <string name="tv_multistream_grid">العودة إلى الشبكة</string>
+    <string name="tv_multistream_grid">وضع الشبكة</string>
     <string name="tv_followed_videos_need_code">فيديوهات المتابَعين تتطلب تسجيل الدخول بالرمز: سجّل الدخول عبر twitch.tv/activate (الحساب)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">تعذر تحميل القائمة، حاول مرة أخرى</string>
@@ -1247,7 +1247,7 @@
     <string name="tv_oled_protection_summary">يخفف العناصر الثابتة (الساعة والدردشة والشارات) ويحرك البكسلات بلطف بعد 3 دقائق من عدم النشاط</string>
     <string name="tv_stream_end_action">عند انتهاء البث المباشر</string>
     <string name="tv_stream_end_home">العودة إلى الرئيسية</string>
-    <string name="tv_stream_end_next">الانتقال إلى قناة متابَعة أخرى مباشرة</string>
+    <string name="tv_stream_end_next">التبديل إلى قناة متابَعة أخرى مباشرة (أو نفس الفئة)</string>
     <string name="tv_stream_end_stay">البقاء في المشغل</string>
     <string name="tv_stream_end_switching">انتهى البث · الانتقال إلى %1$s خلال %2$d ث (OK: الآن · رجوع: البقاء)</string>
     <string name="tv_create_clip">إنشاء مقطع (30 ث)</string>
@@ -1271,4 +1271,11 @@
     <string name="tv_accounts_remove">إزالة %1$s من هذا التلفاز</string>
     <string name="tv_accounts_removed">تمت إزالة %1$s</string>
     <string name="tv_accounts_manage_hint">OK: تبديل · ضغط مطول على OK: خيارات</string>
+    <string name="tv_drops_none_stream">لا توجد حملة Drops نشطة لهذه الفئة</string>
+    <string name="tv_drops_other_section">حملات أخرى قيد التقدم</string>
+    <string name="tv_multistream_mosaic">وضع الفسيفساء: ملء الشاشة</string>
+    <string name="tv_stream_end_raid_note">ملاحظة: إذا بدأ البث غارة (Raid) وكانت متابعة الغارات التلقائية مفعّلة، فستعمل الغارة أولًا.</string>
+    <string name="tv_key_or_join">%1$s أو %2$s</string>
+    <string name="tv_pip_hint_keys">نافذة صغيرة: %1$s لتبديل البثوث (قابل للتخصيص في إعدادات الريموت)، رجوع للإغلاق. زرّها في عناصر التحكم يغيّر الموضع والحجم والصوت.</string>
+    <string name="tv_pip_hint_no_key">نافذة صغيرة: رجوع للإغلاق. زرّها في عناصر التحكم يبدّل البثوث ويغيّر الموضع والحجم والصوت.</string>
 </resources>

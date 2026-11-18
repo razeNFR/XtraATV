@@ -259,6 +259,25 @@ object TvRemoteKeys {
 
     fun customActionForKey(context: Context, keyCode: Int): String? = customShortActionForKey(context, keyCode)
 
+    fun bindingsForAction(context: Context, action: String): List<String> {
+        ensureMigrated(context)
+        return buildList {
+            if (centerAction(context) == action) add(context.getString(R.string.tv_dpad_center))
+            if (centerLongAction(context) == action) add(context.getString(R.string.tv_dpad_center_long))
+            if (leftAction(context) == action) add(context.getString(R.string.tv_dpad_left))
+            if (rightAction(context) == action) add(context.getString(R.string.tv_dpad_right))
+            if (upAction(context) == action) add(context.getString(R.string.tv_dpad_up))
+            if (upLongAction(context) == action) add(context.getString(R.string.tv_dpad_up_long))
+            if (downAction(context) == action) add(context.getString(R.string.tv_dpad_down))
+            if (downLongAction(context) == action) add(context.getString(R.string.tv_dpad_down_long))
+            loadCustomKeys(context).forEach { binding ->
+                if (binding.action == action) {
+                    add(bindingKeyLabel(context, binding))
+                }
+            }
+        }.distinct()
+    }
+
     fun dpadSummary(context: Context): String {
         ensureMigrated(context)
         val active = buildList {

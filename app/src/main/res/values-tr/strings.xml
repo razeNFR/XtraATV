@@ -749,7 +749,7 @@
     <string name="tv_switch_empty">Bu listede canlı yayın yok</string>
     <string name="tv_pip_hint">Küçük pencere: değiştirmek için OK\'u basılı tutun (Kumanda ayarlarından değiştirilebilir), kapatmak için Geri</string>
     <string name="tv_multistream_focus">Odak modu: bu yayın büyük</string>
-    <string name="tv_multistream_grid">Izgaraya dön</string>
+    <string name="tv_multistream_grid">Izgara modu</string>
     <string name="tv_followed_videos_need_code">Takip edilen videolar için kodla giriş gerekir: twitch.tv/activate ile giriş yapın (Hesap)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Liste yüklenemedi, tekrar deneyin</string>
@@ -1248,7 +1248,7 @@
     <string name="tv_oled_protection_summary">3 dakika kumanda hareketsizliğinden sonra sabit öğeleri (saat, sohbet, rozetler) kısar ve pikselleri hafifçe kaydırır</string>
     <string name="tv_stream_end_action">Canlı yayın bittiğinde</string>
     <string name="tv_stream_end_home">Ana sayfaya dön</string>
-    <string name="tv_stream_end_next">Canlı olan başka bir takip edilen kanala geç</string>
+    <string name="tv_stream_end_next">Canlı başka bir takip edilen kanala geç (yoksa aynı kategori)</string>
     <string name="tv_stream_end_stay">Oynatıcıda kal</string>
     <string name="tv_stream_end_switching">Yayın bitti · %2$d sn içinde %1$s kanalına geçiliyor (OK: şimdi · Geri: kal)</string>
     <string name="tv_create_clip">Klip oluştur (30 sn)</string>
@@ -1272,4 +1272,11 @@
     <string name="tv_accounts_remove">%1$s hesabını bu TV\'den kaldır</string>
     <string name="tv_accounts_removed">%1$s kaldırıldı</string>
     <string name="tv_accounts_manage_hint">OK: geçiş yap · Uzun OK: seçenekler</string>
+    <string name="tv_drops_none_stream">Bu kategori için aktif Drops kampanyası yok</string>
+    <string name="tv_drops_other_section">Devam eden diğer kampanyalar</string>
+    <string name="tv_multistream_mosaic">Mozaik modu: tam ekran</string>
+    <string name="tv_stream_end_raid_note">Not: Yayıncı baskın (raid) başlatırsa ve otomatik baskın takibi açıksa, öncelikli olarak baskın çalışmaya devam eder.</string>
+    <string name="tv_key_or_join">%1$s veya %2$s</string>
+    <string name="tv_pip_hint_keys">Küçük pencere: yayınları değiştirmek için %1$s (Kumanda ayarlarından özelleştirilebilir), kapatmak için Geri. Kontrollerdeki düğmesi konumu, boyutu ve sesi değiştirir.</string>
+    <string name="tv_pip_hint_no_key">Küçük pencere: kapatmak için Geri. Kontrollerdeki düğmesi yayınları değiştirir ve konumu, boyutu ve sesi ayarlar.</string>
 </resources>

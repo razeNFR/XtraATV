@@ -748,7 +748,7 @@
     <string name="tv_switch_empty">В этом списке нет трансляций в эфире</string>
     <string name="tv_pip_hint">Маленькое окно: удерживайте OK для смены (настраивается в «Пульт»), «Назад» — закрыть</string>
     <string name="tv_multistream_focus">Режим фокуса: эта трансляция крупно</string>
-    <string name="tv_multistream_grid">Вернуться к сетке</string>
+    <string name="tv_multistream_grid">Режим сетки</string>
     <string name="tv_followed_videos_need_code">Для видео отслеживаемых нужен вход по коду: войдите через twitch.tv/activate (Аккаунт)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Не удалось загрузить список, попробуйте ещё раз</string>
@@ -1247,7 +1247,7 @@
     <string name="tv_oled_protection_summary">Приглушает статичные элементы (часы, чат, значки) и плавно смещает пиксели после 3 минут бездействия</string>
     <string name="tv_stream_end_action">По окончании трансляции</string>
     <string name="tv_stream_end_home">Вернуться на главную</string>
-    <string name="tv_stream_end_next">Переключить на другой отслеживаемый канал в эфире</string>
+    <string name="tv_stream_end_next">Переключить на другой отслеживаемый канал в эфире (иначе та же категория)</string>
     <string name="tv_stream_end_stay">Остаться в плеере</string>
     <string name="tv_stream_end_switching">Стрим завершён · Переход на %1$s через %2$d с (OK: сейчас · Назад: остаться)</string>
     <string name="tv_create_clip">Создать клип (30 с)</string>
@@ -1271,4 +1271,11 @@
     <string name="tv_accounts_remove">Удалить %1$s с этого ТВ</string>
     <string name="tv_accounts_removed">Аккаунт %1$s удалён</string>
     <string name="tv_accounts_manage_hint">OK: переключить · Удерживать OK: опции</string>
+    <string name="tv_drops_none_stream">Нет активных кампаний Drops для этой категории</string>
+    <string name="tv_drops_other_section">Другие активные кампании</string>
+    <string name="tv_multistream_mosaic">Режим мозаики: полный экран</string>
+    <string name="tv_stream_end_raid_note">Примечание: если стример запустит рейд и включён автопереход по рейдам, рейд всё равно сработает в первую очередь.</string>
+    <string name="tv_key_or_join">%1$s или %2$s</string>
+    <string name="tv_pip_hint_keys">Малое окно: %1$s — поменять стримы местами (настраивается в Пульте), Назад — закрыть. Его кнопка в панели управления меняет позицию, размер и звук.</string>
+    <string name="tv_pip_hint_no_key">Малое окно: Назад — закрыть. Его кнопка в панели управления меняет стримы местами, позицию, размер и звук.</string>
 </resources>

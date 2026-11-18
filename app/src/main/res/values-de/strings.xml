@@ -748,7 +748,7 @@
     <string name="tv_switch_empty">Kein Livestream in dieser Liste</string>
     <string name="tv_pip_hint">Kleines Fenster: OK gedrückt halten zum Tauschen (anpassbar unter Fernbedienung), Zurück zum Schließen</string>
     <string name="tv_multistream_focus">Fokusmodus: dieser Stream groß</string>
-    <string name="tv_multistream_grid">Zurück zum Raster</string>
+    <string name="tv_multistream_grid">Rastermodus</string>
     <string name="tv_followed_videos_need_code">Die Videos gefolgter Kanäle brauchen die Anmeldung mit Code: melde dich über twitch.tv/activate an (Konto)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Die Liste konnte nicht geladen werden, versuche es erneut</string>
@@ -1247,7 +1247,7 @@
     <string name="tv_oled_protection_summary">Dimmt statische Einblendungen (Uhr, Chat, Abzeichen) und verschiebt Pixel sanft nach 3 Minuten Inaktivität</string>
     <string name="tv_stream_end_action">Wenn der Livestream endet</string>
     <string name="tv_stream_end_home">Zur Startseite zurückkehren</string>
-    <string name="tv_stream_end_next">Zu einem anderen gefolgten Live-Kanal wechseln</string>
+    <string name="tv_stream_end_next">Zu einem anderen gefolgten Live-Kanal wechseln (sonst gleiche Kategorie)</string>
     <string name="tv_stream_end_stay">Im Player bleiben</string>
     <string name="tv_stream_end_switching">Stream beendet · Wechsel zu %1$s in %2$d s (OK: sofort · Zurück: bleiben)</string>
     <string name="tv_create_clip">Clip erstellen (30 s)</string>
@@ -1271,4 +1271,11 @@
     <string name="tv_accounts_remove">%1$s von diesem TV entfernen</string>
     <string name="tv_accounts_removed">%1$s entfernt</string>
     <string name="tv_accounts_manage_hint">OK: wechseln · OK gedrückt halten: Optionen</string>
+    <string name="tv_drops_none_stream">Keine aktive Drops-Kampagne für diese Kategorie</string>
+    <string name="tv_drops_other_section">Weitere laufende Kampagnen</string>
+    <string name="tv_multistream_mosaic">Mosaikmodus: Vollbild</string>
+    <string name="tv_stream_end_raid_note">Hinweis: Startet der Streamer einen Raid und ist das automatische Folgen von Raids aktiviert, hat der Raid weiterhin Vorrang.</string>
+    <string name="tv_key_or_join">%1$s oder %2$s</string>
+    <string name="tv_pip_hint_keys">Kleines Fenster: %1$s zum Tauschen der Streams (anpassbar unter Fernbedienung), Zurück zum Schließen. Die Taste in der Steuerung ändert Position, Größe und Ton.</string>
+    <string name="tv_pip_hint_no_key">Kleines Fenster: Zurück zum Schließen. Die Taste in der Steuerung tauscht Streams und ändert Position, Größe und Ton.</string>
 </resources>

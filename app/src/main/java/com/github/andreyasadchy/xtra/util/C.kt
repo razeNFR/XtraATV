@@ -133,6 +133,7 @@ object C {
     const val TV_MULTISTREAM_VOLUME_PREFIX = "tv_multistream_volume_"
     const val TV_MULTISTREAM_SOUND_KEEP = "tv_multistream_sound_keep"
     const val TV_MULTISTREAM_QUALITY = "tv_multistream_quality"
+    const val TV_MULTISTREAM_MOSAIC = "tv_multistream_mosaic"
     const val TV_MULTISTREAM_Q_2 = "tv_multistream_q_2"
     const val TV_MULTISTREAM_Q_3 = "tv_multistream_q_3"
     const val TV_MULTISTREAM_Q_4 = "tv_multistream_q_4"

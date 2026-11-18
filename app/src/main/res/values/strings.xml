@@ -767,7 +767,7 @@
     <string name="tv_switch_empty">No live stream in this list</string>
     <string name="tv_pip_hint">Small window: hold OK to swap streams (customizable in Remote settings), Back to close. Its button in controls changes position, size, and sound.</string>
     <string name="tv_multistream_focus">Focus mode: this stream big</string>
-    <string name="tv_multistream_grid">Back to the grid</string>
+    <string name="tv_multistream_grid">Grid mode</string>
     <string name="tv_followed_videos_need_code">The videos of the followed channels need the login with the code: log in with twitch.tv/activate (Account)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">The list could not be loaded, try again</string>
@@ -1267,7 +1267,7 @@
     <string name="tv_oled_protection_summary">Dims static overlays (clock, chat, badges) and subtly shifts pixels after 3 minutes of remote inactivity</string>
     <string name="tv_stream_end_action">When live stream ends</string>
     <string name="tv_stream_end_home">Return to Home</string>
-    <string name="tv_stream_end_next">Switch to another live followed channel</string>
+    <string name="tv_stream_end_next">Switch to another live followed channel (or same category)</string>
     <string name="tv_stream_end_stay">Stay on player</string>
     <string name="tv_stream_end_switching">Stream ended · Switching to %1$s in %2$d s (OK: now · Back: stay)</string>
     <string name="tv_create_clip">Create clip (30s)</string>
@@ -1291,5 +1291,12 @@
     <string name="tv_accounts_remove">Remove %1$s from this TV</string>
     <string name="tv_accounts_removed">Removed %1$s</string>
     <string name="tv_accounts_manage_hint">OK: switch · Long press OK: options</string>
+    <string name="tv_drops_none_stream">No active Drops campaign for this category</string>
+    <string name="tv_drops_other_section">Other campaigns in progress</string>
+    <string name="tv_multistream_mosaic">Mosaic mode: full screen</string>
+    <string name="tv_stream_end_raid_note">Note: if the streamer launches a raid and automatic raid following is enabled, the raid will still work first.</string>
+    <string name="tv_key_or_join">%1$s or %2$s</string>
+    <string name="tv_pip_hint_keys">Small window: %1$s to swap streams (customizable in Remote settings), Back to close. Its button in controls changes position, size, and sound.</string>
+    <string name="tv_pip_hint_no_key">Small window: Back to close. Its button in controls swaps streams and changes position, size, and sound.</string>
 </resources>
 

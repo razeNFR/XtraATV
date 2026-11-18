@@ -749,7 +749,7 @@
     <string name="tv_switch_empty">Tidak ada siaran langsung di daftar ini</string>
     <string name="tv_pip_hint">Jendela kecil: tahan OK untuk menukar (dapat diatur di Remote), Kembali untuk menutup</string>
     <string name="tv_multistream_focus">Mode fokus: stream ini besar</string>
-    <string name="tv_multistream_grid">Kembali ke grid</string>
+    <string name="tv_multistream_grid">Mode grid</string>
     <string name="tv_followed_videos_need_code">Video yang diikuti memerlukan login dengan kode: login lewat twitch.tv/activate (Akun)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Daftar tidak dapat dimuat, coba lagi</string>
@@ -1248,7 +1248,7 @@
     <string name="tv_oled_protection_summary">Meredupkan elemen statis (jam, obrolan, lencana) dan menggeser piksel secara halus setelah 3 menit tanpa aktivitas</string>
     <string name="tv_stream_end_action">Saat siaran langsung berakhir</string>
     <string name="tv_stream_end_home">Kembali ke Beranda</string>
-    <string name="tv_stream_end_next">Pindah ke saluran diikuti lain yang sedang live</string>
+    <string name="tv_stream_end_next">Pindah ke saluran diikuti yang sedang live (atau kategori sama)</string>
     <string name="tv_stream_end_stay">Tetap di pemutar</string>
     <string name="tv_stream_end_switching">Siaran berakhir · Beralih ke %1$s dalam %2$d dtk (OK: sekarang · Kembali: tetap)</string>
     <string name="tv_create_clip">Buat klip (30 dtk)</string>
@@ -1272,4 +1272,11 @@
     <string name="tv_accounts_remove">Hapus %1$s dari TV ini</string>
     <string name="tv_accounts_removed">%1$s dihapus</string>
     <string name="tv_accounts_manage_hint">OK: ganti · Tekan lama OK: opsi</string>
+    <string name="tv_drops_none_stream">Tidak ada kampanye Drops aktif untuk kategori ini</string>
+    <string name="tv_drops_other_section">Kampanye lain yang sedang berlangsung</string>
+    <string name="tv_multistream_mosaic">Mode mosaik: layar penuh</string>
+    <string name="tv_stream_end_raid_note">Catatan: jika streamer memulai raid dan ikuti raid otomatis diaktifkan, raid tetap akan berjalan lebih dulu.</string>
+    <string name="tv_key_or_join">%1$s atau %2$s</string>
+    <string name="tv_pip_hint_keys">Jendela kecil: %1$s untuk menukar stream (dapat diubah di pengaturan Remote), Kembali untuk menutup. Tombolnya di kontrol mengatur posisi, ukuran, dan suara.</string>
+    <string name="tv_pip_hint_no_key">Jendela kecil: Kembali untuk menutup. Tombolnya di kontrol menukar stream serta mengatur posisi, ukuran, dan suara.</string>
 </resources>

@@ -223,8 +223,10 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
     }
 
     override fun onDisplayPreferenceDialog(preference: Preference) {
-        if (preference.key == C.TV_AMBIENT_COLOR && com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
-            // TV: its own panel with the colors opens from its click listener, not the list of Android as well
+        if ((preference.key == C.TV_AMBIENT_COLOR || preference.key == C.TV_STREAM_END_ACTION) &&
+            com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())
+        ) {
+            // TV: its own panel opens from its click listener, not the list of Android as well
             return
         }
         if (requireContext().prefs().getBoolean(C.UI_THEME_MATERIAL3, true)) {

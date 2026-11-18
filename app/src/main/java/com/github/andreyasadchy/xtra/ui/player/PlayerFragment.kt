@@ -1616,19 +1616,30 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     val (minimizedScaleX, minimizedScaleY) = getScaleValues()
                     slidingLayout.scaleX = minimizedScaleX
                     slidingLayout.scaleY = minimizedScaleY
+                    if (isTv) {
+                        applyTvMinimizedFrame(true)
+                    }
                     slidingLayout.doOnPreDraw {
                         val (minimizedScaleX, minimizedScaleY) = getScaleValues()
-                        val windowInsets = ViewCompat.getRootWindowInsets(requireView())
-                        val insets = windowInsets?.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-                        val keyboardInsets = windowInsets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { if (it > 0) it - (insets?.bottom ?: 0) else it } ?: 0
-                        val playerWidth = slidingLayout.width - getHorizontalInsets(windowInsets)
                         val scaledXDiff = (slidingLayout.width * (1f - minimizedScaleX)) / 2
                         val scaledYDiff = (slidingLayout.height * (1f - minimizedScaleY)) / 2
-                        val navBarHeight = requireView().rootView.findViewById<LinearLayout>(R.id.navBarContainer)?.height?.takeIf { it > 0 }?.let { it - keyboardInsets } ?: (insets?.bottom ?: 0)
-                        val newX = slidingLayout.width - (insets?.right ?: 0) - (playerWidth * minimizedScaleX) - (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20F, resources.displayMetrics) * minimizedScaleX)
-                        val newY = slidingLayout.height - navBarHeight - (slidingLayout.height * minimizedScaleY) - (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 30F, resources.displayMetrics) * minimizedScaleY)
-                        slidingLayout.translationX = 0f - scaledXDiff - ((insets?.left ?: 0) * minimizedScaleX) + newX
-                        slidingLayout.translationY = 0f - scaledYDiff - ((insets?.top ?: 0) * minimizedScaleY) + newY
+                        if (isTv) {
+                            val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
+                            val newX = slidingLayout.width - (slidingLayout.width * minimizedScaleX) - tvMargin
+                            val newY = slidingLayout.height - (slidingLayout.height * minimizedScaleY) - tvMargin
+                            slidingLayout.translationX = -scaledXDiff + newX
+                            slidingLayout.translationY = -scaledYDiff + newY
+                        } else {
+                            val windowInsets = ViewCompat.getRootWindowInsets(requireView())
+                            val insets = windowInsets?.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+                            val keyboardInsets = windowInsets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { if (it > 0) it - (insets?.bottom ?: 0) else it } ?: 0
+                            val playerWidth = slidingLayout.width - getHorizontalInsets(windowInsets)
+                            val navBarHeight = requireView().rootView.findViewById<LinearLayout>(R.id.navBarContainer)?.height?.takeIf { it > 0 }?.let { it - keyboardInsets } ?: (insets?.bottom ?: 0)
+                            val newX = slidingLayout.width - (insets?.right ?: 0) - (playerWidth * minimizedScaleX) - (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20F, resources.displayMetrics) * minimizedScaleX)
+                            val newY = slidingLayout.height - navBarHeight - (slidingLayout.height * minimizedScaleY) - (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 30F, resources.displayMetrics) * minimizedScaleY)
+                            slidingLayout.translationX = 0f - scaledXDiff - ((insets?.left ?: 0) * minimizedScaleX) + newX
+                            slidingLayout.translationY = 0f - scaledYDiff - ((insets?.top ?: 0) * minimizedScaleY) + newY
+                        }
                     }
                 }
                 aspectRatioFrameLayout.resizeMode = resizeMode
@@ -3858,10 +3869,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun showTvRewardsPanel() {
         val ctx = context ?: return
         val dvrStream = getTvDvrStream()
+        val current = (activity as? MainActivity)?.currentPlayingStream()
         com.github.andreyasadchy.xtra.ui.tv.TvRewardsPanel.show(
             context = ctx,
-            channelId = playbackService?.channelId ?: dvrStream?.channelId,
-            channelLogin = playbackService?.channelLogin ?: dvrStream?.channelLogin,
+            channelId = playbackService?.channelId ?: dvrStream?.channelId ?: current?.channelId,
+            channelLogin = playbackService?.channelLogin ?: dvrStream?.channelLogin ?: current?.channelLogin,
+            gameId = playbackService?.gameId ?: dvrStream?.gameId ?: current?.gameId,
+            gameName = playbackService?.gameName ?: dvrStream?.gameName ?: current?.gameName,
         )
     }
 
@@ -5564,10 +5578,48 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun getScaleValues(): Pair<Float, Float> {
-        return if (isPortrait) {
-            0.5f to 0.5f
+        return when {
+            isPortrait -> 0.5f to 0.5f
+            isTv -> 0.3f to 0.3f
+            else -> 0.3f to 0.325f
+        }
+    }
+
+    private fun applyTvMinimizedFrame(minimized: Boolean) {
+        val b = _binding ?: return
+        if (!isTv) return
+        if (minimized) {
+            val density = resources.displayMetrics.density
+            val (scaleX, _) = getScaleValues()
+            val cornerPx = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) (12f * density) / scaleX else 0f
+            val strokePx = ((2.5f * density) / scaleX).toInt().coerceAtLeast(2)
+            val outline = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, cornerPx)
+                }
+            }
+            b.playerBackground.clipChildren = false
+            b.slidingLayout.clipChildren = false
+            b.slidingLayout.outlineProvider = outline
+            b.slidingLayout.elevation = 20f * density
+            b.playerLayout.outlineProvider = outline
+            b.playerLayout.clipToOutline = cornerPx > 0f
+            val baseColor = if (com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null) {
+                com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
+            } else {
+                Color.WHITE
+            }
+            val borderColor = androidx.core.graphics.ColorUtils.setAlphaComponent(baseColor, 0xD9)
+            b.dragView.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = cornerPx
+                setStroke(strokePx, borderColor)
+            }
         } else {
-            0.3f to 0.325f
+            b.slidingLayout.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            b.slidingLayout.elevation = 0f
+            b.playerLayout.clipToOutline = false
+            b.playerLayout.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            b.dragView.background = null
         }
     }
 
@@ -5815,31 +5867,70 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private suspend fun pickNextLiveFollowedStream(activity: MainActivity, currentLogin: String?): Stream? {
         val pipLogins = activity.tvPipActiveStreams().mapNotNull { it.channelLogin?.lowercase() }.toSet()
-        val fetched = runCatching {
+        fun List<Stream>.validCandidates(): List<Stream> = filter { s ->
+            val lg = s.channelLogin?.takeIf { it.isNotBlank() } ?: return@filter false
+            !lg.equals(currentLogin, ignoreCase = true) && lg.lowercase() !in pipLogins
+        }.distinctBy { it.channelLogin?.lowercase() }
+
+        val followed = runCatching {
             kotlinx.coroutines.withTimeoutOrNull(4_500L) {
                 com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.loadPages(
                     { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.followed(activity) },
                     24,
                 )
             }
-        }.getOrNull().orEmpty()
-        val candidates = (fetched + activity.streamQueue)
-            .filter { s ->
-                val lg = s.channelLogin?.takeIf { it.isNotBlank() } ?: return@filter false
-                !lg.equals(currentLogin, ignoreCase = true) && lg.lowercase() !in pipLogins
+        }.getOrNull().orEmpty().validCandidates()
+        if (followed.isNotEmpty()) {
+            return followed.sortedWith(
+                compareByDescending<Stream> { s ->
+                    s.channelLogin?.let { com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(it) } == true
+                }.thenByDescending { it.viewerCount ?: 0 }
+            ).first()
+        }
+
+        // No followed channel is live: fall back to a live stream in the same category
+        val current = activity.currentPlayingStream() ?: getPlayingStream()
+        val gameId = current?.gameId?.takeIf { it.isNotBlank() } ?: playbackService?.gameId?.takeIf { it.isNotBlank() }
+        val gameSlug = current?.gameSlug?.takeIf { it.isNotBlank() } ?: playbackService?.gameSlug?.takeIf { it.isNotBlank() }
+        val gameName = current?.gameName?.takeIf { it.isNotBlank() } ?: playbackService?.gameName?.takeIf { it.isNotBlank() }
+        if (gameId == null && gameSlug == null && gameName == null) {
+            return null
+        }
+        val homeLangs = activity.prefs().getStringSet(C.TV_HOME_LANGUAGES, null)?.filter { it.isNotBlank() }?.ifEmpty { null }
+        val preferred = runCatching {
+            kotlinx.coroutines.withTimeoutOrNull(4_500L) {
+                com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.loadPages(
+                    { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.game(activity, gameId, gameSlug, gameName, fallbackLanguages = homeLangs) },
+                    24,
+                )
             }
-            .distinctBy { it.channelLogin?.lowercase() }
-        return candidates.sortedWith(
-            compareByDescending<Stream> { s ->
-                s.channelLogin?.let { com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(it) } == true
-            }.thenByDescending { it.viewerCount ?: 0 }
-        ).firstOrNull()
+        }.getOrNull().orEmpty().validCandidates()
+        if (preferred.isNotEmpty()) {
+            return preferred.maxByOrNull { it.viewerCount ?: 0 }
+        }
+        val anyLang = runCatching {
+            kotlinx.coroutines.withTimeoutOrNull(4_500L) {
+                com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.loadPages(
+                    {
+                        com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.game(
+                            activity,
+                            gameId,
+                            gameSlug,
+                            gameName,
+                            langMode = com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.LANG_MODE_ALL,
+                        )
+                    },
+                    24,
+                )
+            }
+        }.getOrNull().orEmpty().validCandidates()
+        return anyLang.maxByOrNull { it.viewerCount ?: 0 }
     }
 
     /**
      * TV: the stream stopped (Twitch ended it). After waiting for a potential raid, performs the configured
-     * end-of-stream behavior ("home": close player, "next": 10s countdown to switch to another live followed channel,
-     * "stay": remain on the player).
+     * end-of-stream behavior ("home": close player, "next": 10s countdown to switch to another live followed channel
+     * or same-category stream, "stay": remain on the player).
      */
     protected fun onTvStreamEnded() {
         if (view == null || !isAdded || !isTv || streamEndJob?.isActive == true) {
@@ -5989,32 +6080,44 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             requireActivity().onBackPressedDispatcher.addCallback(this@PlayerFragment, minimizedBackPressedCallback)
             useController = false
             hideController(true)
-            dragView.setBackgroundResource(R.drawable.player_minimized_focus)
+            if (isTv) {
+                applyTvMinimizedFrame(true)
+            } else {
+                dragView.setBackgroundResource(R.drawable.player_minimized_focus)
+            }
             (activity as? MainActivity)?.setMainContentFocusable(true)
             (activity as? MainActivity)?.onPlayerMinimized()
             minimizedBackPressedCallback.isEnabled = dragView.hasFocus()
             fun animate() {
                 val (minimizedScaleX, minimizedScaleY) = getScaleValues()
-                val windowInsets = ViewCompat.getRootWindowInsets(requireView())
-                val insets = windowInsets?.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-                val keyboardInsets = windowInsets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { if (it > 0) it - (insets?.bottom ?: 0) else it } ?: 0
                 val scaledXDiff = (slidingLayout.width * (1f - minimizedScaleX)) / 2
                 val scaledYDiff = (slidingLayout.height * (1f - minimizedScaleY)) / 2
-                val navBarHeight = if (isTv) {
-                    resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+                val targetTx: Float
+                val targetTy: Float
+                if (isTv) {
+                    val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
+                    val newX = slidingLayout.width - (slidingLayout.width * minimizedScaleX) - tvMargin
+                    val newY = slidingLayout.height - (slidingLayout.height * minimizedScaleY) - tvMargin
+                    targetTx = -scaledXDiff + newX
+                    targetTy = -scaledYDiff + newY
                 } else {
-                    requireView().rootView.findViewById<LinearLayout>(R.id.navBarContainer)?.height?.takeIf { it > 0 }?.let { it - keyboardInsets } ?: (insets?.bottom ?: 0)
+                    val windowInsets = ViewCompat.getRootWindowInsets(requireView())
+                    val insets = windowInsets?.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+                    val keyboardInsets = windowInsets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom?.let { if (it > 0) it - (insets?.bottom ?: 0) else it } ?: 0
+                    val navBarHeight = requireView().rootView.findViewById<LinearLayout>(R.id.navBarContainer)?.height?.takeIf { it > 0 }?.let { it - keyboardInsets } ?: (insets?.bottom ?: 0)
+                    val playerWidth = if (isPortrait) {
+                        playerLayout.width
+                    } else {
+                        slidingLayout.width - getHorizontalInsets(windowInsets)
+                    }
+                    val newX = slidingLayout.width - (insets?.right ?: 0) - (playerWidth * minimizedScaleX) - (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20F, resources.displayMetrics) * minimizedScaleX)
+                    val newY = slidingLayout.height - navBarHeight - (playerLayout.height * minimizedScaleY) - (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 30F, resources.displayMetrics) * minimizedScaleY)
+                    targetTx = 0f - scaledXDiff - ((insets?.left ?: 0) * minimizedScaleX) + newX
+                    targetTy = 0f - scaledYDiff - ((insets?.top ?: 0) * minimizedScaleY) + newY
                 }
-                val playerWidth = if (isPortrait) {
-                    playerLayout.width
-                } else {
-                    slidingLayout.width - getHorizontalInsets(windowInsets)
-                }
-                val newX = slidingLayout.width - (insets?.right ?: 0) - (playerWidth * minimizedScaleX) - (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20F, resources.displayMetrics) * minimizedScaleX)
-                val newY = slidingLayout.height - navBarHeight - (playerLayout.height * minimizedScaleY) - (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 30F, resources.displayMetrics) * minimizedScaleY)
                 slidingLayout.animate().apply {
-                    translationX(0f - scaledXDiff - ((insets?.left ?: 0) * minimizedScaleX) + newX)
-                    translationY(0f - scaledYDiff - ((insets?.top ?: 0) * minimizedScaleY) + newY)
+                    translationX(targetTx)
+                    translationY(targetTy)
                     scaleX(minimizedScaleX)
                     scaleY(minimizedScaleY)
                     setDuration(250L)
@@ -6061,6 +6164,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         with(binding) {
             isMaximized = true
             if (isTv) {
+                applyTvMinimizedFrame(false)
                 dragView.isFocusable = true
                 if (tvAudioOnly) {
                     setTvAudioOnly(false)

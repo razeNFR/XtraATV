@@ -145,6 +145,7 @@ object TvStreamSources {
         gameSlug: String?,
         gameName: String?,
         langMode: String? = null,
+        fallbackLanguages: List<String>? = null,
     ): PagingSource<Int, Stream> {
         val app = context.applicationContext as XtraApp
         val prefs = context.prefs()
@@ -156,6 +157,7 @@ object TvStreamSources {
                     ?: runCatching { app.xtraModule.gameSortRepository.getById("default") }.getOrNull()
                 sort?.streamLanguages?.split(',')?.filter { it.isNotBlank() }?.ifEmpty { null }
                     ?: prefs.getStringSet(C.TV_DEFAULT_LANGUAGES, null)?.filter { it.isNotBlank() }?.ifEmpty { null }
+                    ?: fallbackLanguages?.filter { it.isNotBlank() }?.ifEmpty { null }
             }
             GameStreamsDataSource(
                 gameId = gameId,

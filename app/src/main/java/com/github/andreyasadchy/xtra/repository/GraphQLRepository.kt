@@ -1930,6 +1930,9 @@ class GraphQLRepository(
         FAILED,
     }
 
+    private val recentlyClaimedDropInstanceIds: MutableSet<String> =
+        java.util.Collections.synchronizedSet(HashSet())
+
     data class ClaimableDropItem(
         val dropInstanceId: String,
         val dropName: String?,
@@ -1956,12 +1959,26 @@ class GraphQLRepository(
                 }
             }
         }.toString()
-        runCatching {
+        val rawFallbackBody = buildJsonObject {
+            put(
+                "query",
+                "mutation(\$input: ClaimDropRewardsInput!) { claimDropRewards(input: \$input) { status } }",
+            )
+            putJsonObject("variables") {
+                putJsonObject("input") {
+                    put("dropInstanceID", dropInstanceId)
+                }
+            }
+        }.toString()
+        val result = runCatching {
             fun JsonElement?.obj(): JsonObject? = this as? JsonObject
             fun JsonElement?.arr(): JsonArray? = this as? JsonArray
             fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
 
-            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            var raw = sendPersistedQuery(networkLibrary, headers, body)
+            if (raw.contains("PersistedQueryNotFound")) {
+                raw = sendPersistedQuery(networkLibrary, headers, rawFallbackBody)
+            }
             val root = json.parseToJsonElement(raw).obj() ?: return@runCatching DropClaimResult.FAILED
             if (root["errors"].arr()?.isNotEmpty() == true) return@runCatching DropClaimResult.FAILED
             val dataObj = root["data"].obj() ?: return@runCatching DropClaimResult.FAILED
@@ -1973,6 +1990,10 @@ class GraphQLRepository(
                 else -> DropClaimResult.FAILED
             }
         }.getOrDefault(DropClaimResult.FAILED)
+        if (result == DropClaimResult.CLAIMED || result == DropClaimResult.ALREADY_CLAIMED) {
+            recentlyClaimedDropInstanceIds.add(dropInstanceId)
+        }
+        result
     }
 
     suspend fun loadClaimableDropsFromInventory(
@@ -2031,7 +2052,7 @@ class GraphQLRepository(
                     val selfObj = drop["self"].obj() ?: continue
                     val isClaimed = selfObj["isClaimed"].bool() ?: false
                     val instanceId = selfObj["dropInstanceID"].str()?.takeIf { it.isNotBlank() } ?: continue
-                    if (!isClaimed) {
+                    if (!isClaimed && instanceId !in recentlyClaimedDropInstanceIds) {
                         results.add(
                             ClaimableDropItem(
                                 dropInstanceId = instanceId,
@@ -2358,6 +2379,7 @@ class GraphQLRepository(
     data class DropProgressItem(
         val campaignId: String,
         val campaignName: String,
+        val gameId: String? = null,
         val gameName: String?,
         val dropId: String,
         val dropName: String,
@@ -2428,7 +2450,9 @@ class GraphQLRepository(
                 val c = cEl.obj() ?: continue
                 val campaignId = c["id"].str() ?: ""
                 val campaignName = c["name"].str()?.takeIf { it.isNotBlank() } ?: continue
-                val gameName = c["game"].obj()?.let { g ->
+                val gameObj = c["game"].obj()
+                val gameId = gameObj?.get("id").str()?.takeIf { it.isNotBlank() }
+                val gameName = gameObj?.let { g ->
                     g["displayName"].str()?.takeIf { it.isNotBlank() } ?: g["name"].str()?.takeIf { it.isNotBlank() }
                 }
                 val endAtMs = c["endAt"].str()?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
@@ -2443,6 +2467,7 @@ class GraphQLRepository(
                     val current = selfObj?.get("currentMinutesWatched").int() ?: 0
                     val isClaimed = selfObj?.get("isClaimed").bool() ?: false
                     val instanceId = selfObj?.get("dropInstanceID").str()?.takeIf { it.isNotBlank() }
+                    if (isClaimed || (instanceId != null && instanceId in recentlyClaimedDropInstanceIds)) continue
                     val benefit = d["benefitEdges"].arr()?.firstOrNull().obj()?.get("benefit").obj()
                     val dropName = benefit?.get("name").str()?.takeIf { it.isNotBlank() }
                         ?: d["name"].str()?.takeIf { it.isNotBlank() }
@@ -2452,13 +2477,14 @@ class GraphQLRepository(
                         DropProgressItem(
                             campaignId = campaignId,
                             campaignName = campaignName,
+                            gameId = gameId,
                             gameName = gameName,
                             dropId = dropId,
                             dropName = dropName,
                             imageUrl = imageUrl,
                             currentMinutes = current.coerceIn(0, required),
                             requiredMinutes = required,
-                            isClaimed = isClaimed,
+                            isClaimed = false,
                             dropInstanceId = instanceId,
                             endsAtMs = endAtMs,
                         )
@@ -2466,8 +2492,7 @@ class GraphQLRepository(
                 }
             }
             items.sortedWith(
-                compareBy<DropProgressItem> { it.isClaimed }
-                    .thenByDescending { it.dropInstanceId != null && !it.isClaimed }
+                compareByDescending<DropProgressItem> { it.dropInstanceId != null && it.currentMinutes >= it.requiredMinutes }
                     .thenByDescending { if (it.requiredMinutes > 0) it.currentMinutes.toFloat() / it.requiredMinutes else 0f }
             )
         }.getOrDefault(emptyList())

@@ -748,7 +748,7 @@
     <string name="tv_switch_empty">Aucun stream en direct dans cette liste</string>
     <string name="tv_pip_hint">Petite fenêtre : maintiens OK pour inverser les streams (modifiable dans Télécommande), Retour pour fermer. Son bouton dans les contrôles règle sa place, sa taille et le son.</string>
     <string name="tv_multistream_focus">Mode focus : ce stream en grand</string>
-    <string name="tv_multistream_grid">Revenir à la grille</string>
+    <string name="tv_multistream_grid">Mode grille</string>
     <string name="tv_followed_videos_need_code">Les vidéos des suivis demandent la connexion avec le code : connecte-toi avec twitch.tv/activate (Compte)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">La liste n\'a pas pu être chargée, réessaie</string>
@@ -1247,7 +1247,7 @@
     <string name="tv_oled_protection_summary">Estompe les éléments fixes (horloge, chat, badges) et décale légèrement les pixels après 3 minutes sans activité</string>
     <string name="tv_stream_end_action">À la fin d\'un live</string>
     <string name="tv_stream_end_home">Retourner à l\'accueil</string>
-    <string name="tv_stream_end_next">Passer à une autre chaîne suivie en live</string>
+    <string name="tv_stream_end_next">Passer à une chaîne suivie en live (sinon même catégorie)</string>
     <string name="tv_stream_end_stay">Rester sur le lecteur</string>
     <string name="tv_stream_end_switching">Live terminé · Passage à %1$s dans %2$d s (OK : maintenant · Retour : rester)</string>
     <string name="tv_create_clip">Créer un clip (30 s)</string>
@@ -1271,4 +1271,11 @@
     <string name="tv_accounts_remove">Retirer %1$s de cette TV</string>
     <string name="tv_accounts_removed">%1$s retiré</string>
     <string name="tv_accounts_manage_hint">OK : basculer · Appui long OK : options</string>
+    <string name="tv_drops_none_stream">Aucune campagne de Drops active pour cette catégorie</string>
+    <string name="tv_drops_other_section">Autres campagnes en cours</string>
+    <string name="tv_multistream_mosaic">Mode mosaïque : plein écran</string>
+    <string name="tv_stream_end_raid_note">Info : si le streamer lance un raid et que le suivi automatique des raids est activé, le raid continuera à fonctionner en priorité.</string>
+    <string name="tv_key_or_join">%1$s ou %2$s</string>
+    <string name="tv_pip_hint_keys">Petite fenêtre : %1$s pour inverser les streams (modifiable dans Télécommande), Retour pour fermer. Son bouton dans les contrôles règle sa place, sa taille et le son.</string>
+    <string name="tv_pip_hint_no_key">Petite fenêtre : Retour pour fermer. Son bouton dans les contrôles inverse les streams et règle sa place, sa taille et le son.</string>
 </resources>

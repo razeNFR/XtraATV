@@ -748,7 +748,7 @@
     <string name="tv_switch_empty">Ningún stream en directo nesta lista</string>
     <string name="tv_pip_hint">Xanela pequena: mantén OK para intercambiar (configurable no mando), Atrás para pechala</string>
     <string name="tv_multistream_focus">Modo foco: este stream en grande</string>
-    <string name="tv_multistream_grid">Volver á grade</string>
+    <string name="tv_multistream_grid">Modo grade</string>
     <string name="tv_followed_videos_need_code">Os vídeos dos seguidos precisan o inicio de sesión co código: inicia sesión con twitch.tv/activate (Conta)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Non se puido cargar a lista, téntao de novo</string>
@@ -1247,7 +1247,7 @@
     <string name="tv_oled_protection_summary">Atenúa os elementos fixos (reloxo, chat, insignias) e despraza sutilmente os píxeles tras 3 minutos sen usar o mando</string>
     <string name="tv_stream_end_action">Ao rematar o directo</string>
     <string name="tv_stream_end_home">Volver ao inicio</string>
-    <string name="tv_stream_end_next">Cambiar a outra canle seguida en directo</string>
+    <string name="tv_stream_end_next">Cambiar a outra canle seguida en directo (ou mesma categoría)</string>
     <string name="tv_stream_end_stay">Quedar no reprodutor</string>
     <string name="tv_stream_end_switching">Directo rematado · Cambiando a %1$s en %2$d s (OK: agora · Atrás: quedar)</string>
     <string name="tv_create_clip">Crear clip (30 s)</string>
@@ -1271,4 +1271,11 @@
     <string name="tv_accounts_remove">Quitar %1$s deste TV</string>
     <string name="tv_accounts_removed">Quitouse %1$s</string>
     <string name="tv_accounts_manage_hint">OK: cambiar · Manter OK: opcións</string>
+    <string name="tv_drops_none_stream">Non hai ningunha campaña de Drops activa para esta categoría</string>
+    <string name="tv_drops_other_section">Outras campañas en curso</string>
+    <string name="tv_multistream_mosaic">Modo mosaico: pantalla completa</string>
+    <string name="tv_stream_end_raid_note">Nota: se o streamer inicia un raid e o seguimento automático de raids está activado, o raid seguirá funcionando con prioridade.</string>
+    <string name="tv_key_or_join">%1$s ou %2$s</string>
+    <string name="tv_pip_hint_keys">Xanela pequena: %1$s para intercambiar streams (personalizable en Mando), Atrás para pechar. O seu botón nos controis cambia posición, tamaño e son.</string>
+    <string name="tv_pip_hint_no_key">Xanela pequena: Atrás para pechar. O seu botón nos controis intercambia os streams e cambia posición, tamaño e son.</string>
 </resources>	

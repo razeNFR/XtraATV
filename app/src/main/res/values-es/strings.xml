@@ -753,7 +753,7 @@
     <string name="tv_switch_empty">Ningún stream en directo en esta lista</string>
     <string name="tv_pip_hint">Ventana pequeña: mantén OK para intercambiar (configurable en Mando), Atrás para cerrarla</string>
     <string name="tv_multistream_focus">Modo foco: este stream en grande</string>
-    <string name="tv_multistream_grid">Volver a la cuadrícula</string>
+    <string name="tv_multistream_grid">Modo cuadrícula</string>
     <string name="tv_followed_videos_need_code">Los vídeos de los seguidos necesitan el inicio de sesión con código: inicia sesión con twitch.tv/activate (Cuenta)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">No se pudo cargar la lista, inténtalo de nuevo</string>
@@ -1252,7 +1252,7 @@
     <string name="tv_oled_protection_summary">Atenúa elementos fijos (reloj, chat, insignias) y desplaza ligeramente los píxeles tras 3 minutos sin usar el mando</string>
     <string name="tv_stream_end_action">Al terminar el directo</string>
     <string name="tv_stream_end_home">Volver al inicio</string>
-    <string name="tv_stream_end_next">Cambiar a otro canal seguido en directo</string>
+    <string name="tv_stream_end_next">Cambiar a otro canal seguido en directo (o misma categoría)</string>
     <string name="tv_stream_end_stay">Quedarse en el reproductor</string>
     <string name="tv_stream_end_switching">Directo finalizado · Cambiando a %1$s en %2$d s (OK: ahora · Atrás: quedarse)</string>
     <string name="tv_create_clip">Crear clip (30 s)</string>
@@ -1276,4 +1276,11 @@
     <string name="tv_accounts_remove">Quitar %1$s de este TV</string>
     <string name="tv_accounts_removed">Se quitó %1$s</string>
     <string name="tv_accounts_manage_hint">OK: cambiar · Mantener OK: opciones</string>
+    <string name="tv_drops_none_stream">No hay ninguna campaña de Drops activa para esta categoría</string>
+    <string name="tv_drops_other_section">Otras campañas en curso</string>
+    <string name="tv_multistream_mosaic">Modo mosaico: pantalla completa</string>
+    <string name="tv_stream_end_raid_note">Nota: si el streamer inicia un raid y el seguimiento automático de raids está activado, el raid seguirá funcionando con prioridad.</string>
+    <string name="tv_key_or_join">%1$s o %2$s</string>
+    <string name="tv_pip_hint_keys">Ventana pequeña: %1$s para intercambiar streams (personalizable en Mando), Atrás para cerrar. Su botón en los controles cambia posición, tamaño y sonido.</string>
+    <string name="tv_pip_hint_no_key">Ventana pequeña: Atrás para cerrar. Su botón en los controles intercambia los streams y cambia posición, tamaño y sonido.</string>
 </resources>

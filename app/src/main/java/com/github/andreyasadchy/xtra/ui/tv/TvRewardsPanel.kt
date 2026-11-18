@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,6 +55,8 @@ object TvRewardsPanel {
         context: Context,
         channelId: String?,
         channelLogin: String?,
+        gameId: String? = null,
+        gameName: String? = null,
     ) {
         val app = context.applicationContext as XtraApp
         val repo = app.xtraModule.graphQLRepository
@@ -66,6 +69,7 @@ object TvRewardsPanel {
             var loading by remember { mutableStateOf(true) }
             var store by remember { mutableStateOf<GraphQLRepository.ChannelPointsStoreData?>(null) }
             var drops by remember { mutableStateOf<List<GraphQLRepository.DropProgressItem>>(emptyList()) }
+            var claimedKeys by remember { mutableStateOf(emptySet<String>()) }
             var busy by remember { mutableStateOf(false) }
             val firstRequester = remember { FocusRequester() }
             var focusRequested by remember { mutableStateOf(false) }
@@ -331,7 +335,25 @@ object TvRewardsPanel {
                     Spacer(Modifier.height(16.dp))
                 }
 
-                // Twitch Drops Section
+                val visibleDrops = drops.filter { drop ->
+                    !drop.isClaimed &&
+                        drop.dropId !in claimedKeys &&
+                        (drop.dropInstanceId == null || drop.dropInstanceId !in claimedKeys)
+                }
+                val hasStreamCategory = !gameId.isNullOrBlank() || !gameName.isNullOrBlank()
+                fun matchesStreamCategory(drop: GraphQLRepository.DropProgressItem): Boolean {
+                    if (!gameId.isNullOrBlank() && !drop.gameId.isNullOrBlank()) {
+                        return drop.gameId == gameId
+                    }
+                    if (!gameName.isNullOrBlank() && !drop.gameName.isNullOrBlank()) {
+                        return drop.gameName.equals(gameName, ignoreCase = true)
+                    }
+                    return false
+                }
+                val streamDrops = if (hasStreamCategory) visibleDrops.filter(::matchesStreamCategory) else visibleDrops
+                val otherDrops = if (hasStreamCategory) visibleDrops.filterNot(::matchesStreamCategory) else emptyList()
+
+                // Twitch Drops Section (current stream category)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -353,92 +375,78 @@ object TvRewardsPanel {
                     )
                 }
 
-                if (!loading && drops.isEmpty()) {
+                val claimDrop: (GraphQLRepository.DropProgressItem) -> Unit = { drop ->
+                    val instanceId = drop.dropInstanceId
+                    if (!busy && !instanceId.isNullOrBlank()) {
+                        busy = true
+                        scope.launch {
+                            val headers = TwitchApiHelper.getGQLHeaders(context, true)
+                            val res = repo.claimDropRewards(networkLibrary, headers, instanceId)
+                            if (res == GraphQLRepository.DropClaimResult.CLAIMED ||
+                                res == GraphQLRepository.DropClaimResult.ALREADY_CLAIMED
+                            ) {
+                                claimedKeys = claimedKeys + setOf(drop.dropId, instanceId)
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.tv_points_redeemed_ok, drop.dropName),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                            busy = false
+                            refreshTick++
+                        }
+                    }
+                }
+
+                if (!loading && streamDrops.isEmpty()) {
                     Text(
-                        text = context.getString(R.string.tv_drops_none),
+                        text = context.getString(
+                            if (hasStreamCategory && otherDrops.isNotEmpty()) R.string.tv_drops_none_stream else R.string.tv_drops_none,
+                        ),
                         fontSize = 14.sp,
                         color = TvColors.secondaryText,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                     )
                 } else {
-                    drops.forEach { drop ->
-                        val reqMin = drop.requiredMinutes.coerceAtLeast(1)
-                        val curMin = drop.currentMinutes.coerceIn(0, reqMin)
-                        val progress = (curMin.toFloat() / reqMin.toFloat()).coerceIn(0f, 1f)
-                        val pct = (progress * 100f).toInt()
-                        val remaining = (reqMin - curMin).coerceAtLeast(0)
-                        val claimable = !drop.isClaimed && !drop.dropInstanceId.isNullOrBlank() && curMin >= reqMin
-                        val statusText = when {
-                            drop.isClaimed -> context.getString(R.string.tv_drops_claimed_badge)
-                            claimable -> context.getString(R.string.tv_drops_ready_claim)
-                            else -> context.getString(R.string.tv_drops_remaining, pct, remaining)
-                        }
-
-                        FocusRow(
+                    streamDrops.forEach { drop ->
+                        DropItemRow(
+                            context = context,
+                            drop = drop,
                             modifier = firstFocusModifier(),
-                            onClick = {
-                                if (!claimable || busy) return@FocusRow
-                                val instanceId = drop.dropInstanceId ?: return@FocusRow
-                                busy = true
-                                scope.launch {
-                                    val headers = TwitchApiHelper.getGQLHeaders(context, true)
-                                    val res = repo.claimDropRewards(networkLibrary, headers, instanceId)
-                                    if (res == GraphQLRepository.DropClaimResult.CLAIMED ||
-                                        res == GraphQLRepository.DropClaimResult.ALREADY_CLAIMED
-                                    ) {
-                                        Toast.makeText(
-                                            context,
-                                            context.getString(R.string.tv_points_redeemed_ok, drop.dropName),
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
-                                    }
-                                    busy = false
-                                    refreshTick++
-                                }
-                            },
-                        ) { focused ->
-                            val fg = if (focused) TvColors.onFocused else ComposeColor.White
-                            val sub = if (focused) TvColors.onFocused.copy(alpha = 0.8f) else TvColors.secondaryText
-                            Column(Modifier.fillMaxWidth()) {
-                                Text(
-                                    text = buildString {
-                                        if (!drop.gameName.isNullOrBlank()) {
-                                            append(drop.gameName)
-                                            append(" · ")
-                                        }
-                                        append(drop.dropName)
-                                    },
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = fg,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(if (focused) TvColors.onFocused.copy(alpha = 0.22f) else ComposeColor(0x33FFFFFF)),
-                                ) {
-                                    Box(
-                                        Modifier
-                                            .fillMaxWidth(progress)
-                                            .height(6.dp)
-                                            .clip(RoundedCornerShape(3.dp))
-                                            .background(if (focused) TvColors.onFocused else TvColors.accent),
-                                    )
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = statusText,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (claimable) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (claimable && !focused) TvColors.accent else sub,
-                                )
-                            }
-                        }
+                            onClaim = { claimDrop(drop) },
+                        )
+                    }
+                }
+
+                if (otherDrops.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.tv_ic_gift),
+                            contentDescription = null,
+                            tint = TvColors.secondaryText,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = context.getString(R.string.tv_drops_other_section),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ComposeColor.White,
+                        )
+                    }
+                    otherDrops.forEach { drop ->
+                        DropItemRow(
+                            context = context,
+                            drop = drop,
+                            modifier = firstFocusModifier(),
+                            onClaim = { claimDrop(drop) },
+                        )
                     }
                 }
 
@@ -455,6 +463,75 @@ object TvRewardsPanel {
                         runCatching { firstRequester.requestFocus() }
                     }
                 }
+            }
+        }
+    }
+
+    @Composable
+    private fun DropItemRow(
+        context: Context,
+        drop: GraphQLRepository.DropProgressItem,
+        modifier: Modifier,
+        onClaim: () -> Unit,
+    ) {
+        val reqMin = drop.requiredMinutes.coerceAtLeast(1)
+        val curMin = drop.currentMinutes.coerceIn(0, reqMin)
+        val progress = (curMin.toFloat() / reqMin.toFloat()).coerceIn(0f, 1f)
+        val pct = (progress * 100f).toInt()
+        val remaining = (reqMin - curMin).coerceAtLeast(0)
+        val claimable = !drop.isClaimed && !drop.dropInstanceId.isNullOrBlank() && curMin >= reqMin
+        val statusText = if (claimable) {
+            context.getString(R.string.tv_drops_ready_claim)
+        } else {
+            context.getString(R.string.tv_drops_remaining, pct, remaining)
+        }
+
+        FocusRow(
+            modifier = modifier,
+            onClick = {
+                if (claimable) onClaim()
+            },
+        ) { focused ->
+            val fg = if (focused) TvColors.onFocused else ComposeColor.White
+            val sub = if (focused) TvColors.onFocused.copy(alpha = 0.8f) else TvColors.secondaryText
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    text = buildString {
+                        if (!drop.gameName.isNullOrBlank()) {
+                            append(drop.gameName)
+                            append(" · ")
+                        }
+                        append(drop.dropName)
+                    },
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = fg,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(if (focused) TvColors.onFocused.copy(alpha = 0.22f) else ComposeColor(0x33FFFFFF)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(progress)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (focused) TvColors.onFocused else TvColors.accent),
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = statusText,
+                    fontSize = 13.sp,
+                    fontWeight = if (claimable) FontWeight.Bold else FontWeight.Normal,
+                    color = if (claimable && !focused) TvColors.accent else sub,
+                )
             }
         }
     }

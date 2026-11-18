@@ -748,7 +748,7 @@
     <string name="tv_switch_empty">Nessuno stream in diretta in questo elenco</string>
     <string name="tv_pip_hint">Finestra piccola: tieni premuto OK per scambiare (configurabile in Telecomando), Indietro per chiuderla</string>
     <string name="tv_multistream_focus">Modalità focus: questo stream in grande</string>
-    <string name="tv_multistream_grid">Torna alla griglia</string>
+    <string name="tv_multistream_grid">Modalità griglia</string>
     <string name="tv_followed_videos_need_code">I video dei seguiti richiedono l\'accesso con il codice: accedi con twitch.tv/activate (Account)</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">Impossibile caricare l\'elenco, riprova</string>
@@ -1247,7 +1247,7 @@
     <string name="tv_oled_protection_summary">Attenua gli elementi fissi (orologio, chat, stemmi) e sposta leggermente i pixel dopo 3 minuti di inattività</string>
     <string name="tv_stream_end_action">Al termine della live</string>
     <string name="tv_stream_end_home">Torna alla Home</string>
-    <string name="tv_stream_end_next">Passa a un altro canale seguito in live</string>
+    <string name="tv_stream_end_next">Passa a un altro canale seguito in live (o stessa categoria)</string>
     <string name="tv_stream_end_stay">Rimani sul lettore</string>
     <string name="tv_stream_end_switching">Live terminata · Passaggio a %1$s tra %2$d s (OK: ora · Indietro: resta)</string>
     <string name="tv_create_clip">Crea clip (30 s)</string>
@@ -1271,4 +1271,11 @@
     <string name="tv_accounts_remove">Rimuovi %1$s da questa TV</string>
     <string name="tv_accounts_removed">%1$s rimosso</string>
     <string name="tv_accounts_manage_hint">OK: cambia · Tieni premuto OK: opzioni</string>
+    <string name="tv_drops_none_stream">Nessuna campagna Drops attiva per questa categoria</string>
+    <string name="tv_drops_other_section">Altre campagne in corso</string>
+    <string name="tv_multistream_mosaic">Modalità mosaico: schermo intero</string>
+    <string name="tv_stream_end_raid_note">Nota: se lo streamer avvia un raid e il seguito automatico dei raid è attivo, il raid continuerà a funzionare con priorità.</string>
+    <string name="tv_key_or_join">%1$s o %2$s</string>
+    <string name="tv_pip_hint_keys">Finestra piccola: %1$s per scambiare gli stream (personalizzabile in Telecomando), Indietro per chiudere. Il suo pulsante nei controlli regola posizione, dimensione e audio.</string>
+    <string name="tv_pip_hint_no_key">Finestra piccola: Indietro per chiudere. Il suo pulsante nei controlli scambia gli stream e regola posizione, dimensione e audio.</string>
 </resources>

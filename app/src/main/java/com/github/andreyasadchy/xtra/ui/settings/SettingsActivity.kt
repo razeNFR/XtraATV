@@ -2123,6 +2123,26 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
             }
+            findPreference<ListPreference>(C.TV_STREAM_END_ACTION)?.let { preference ->
+                if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
+                    preference.setOnPreferenceClickListener {
+                        val values = preference.entryValues.map { it.toString() }
+                        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.showChoices(
+                            requireContext(),
+                            preference.title.toString(),
+                            preference.entries.map { it.toString() },
+                            values.indexOf(preference.value).coerceAtLeast(0),
+                            subtitle = getString(R.string.tv_stream_end_raid_note),
+                        ) { index ->
+                            val value = values[index]
+                            if (preference.callChangeListener(value)) {
+                                preference.value = value
+                            }
+                        }
+                        true
+                    }
+                }
+            }
             // TV: the colors in a side panel, a dot of each color in front of its name
             findPreference<ListPreference>(C.TV_AMBIENT_COLOR)?.let { preference ->
                 if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {

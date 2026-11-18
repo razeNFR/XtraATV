@@ -748,7 +748,7 @@
     <string name="tv_switch_empty">此列表中没有正在直播的频道</string>
     <string name="tv_pip_hint">小窗口：长按 OK 交换直播（可在遥控器设置中更改），按返回关闭</string>
     <string name="tv_multistream_focus">焦点模式：放大此直播</string>
-    <string name="tv_multistream_grid">返回网格</string>
+    <string name="tv_multistream_grid">网格模式</string>
     <string name="tv_followed_videos_need_code">关注的视频需要使用代码登录：通过 twitch.tv/activate 登录（账户）</string>
     <string name="tv_switch_loading">%1$s…</string>
     <string name="tv_switch_error">无法加载列表，请重试</string>
@@ -1247,7 +1247,7 @@
     <string name="tv_oled_protection_summary">遥控器无操作达 3 分钟后自动调暗静态悬浮层（时钟、聊天、徽章）并微移像素防烧屏</string>
     <string name="tv_stream_end_action">直播结束时</string>
     <string name="tv_stream_end_home">返回首页</string>
-    <string name="tv_stream_end_next">切换到其他正在直播的关注频道</string>
+    <string name="tv_stream_end_next">切换到其他正在直播的关注频道（否则同分类）</string>
     <string name="tv_stream_end_stay">停留在播放器</string>
     <string name="tv_stream_end_switching">直播已结束 · %2$d 秒后切换至 %1$s（确定：立即切换 · 返回：停留）</string>
     <string name="tv_create_clip">创建剪辑 (30 秒)</string>
@@ -1271,4 +1271,11 @@
     <string name="tv_accounts_remove">从此电视移除 %1$s</string>
     <string name="tv_accounts_removed">已移除 %1$s</string>
     <string name="tv_accounts_manage_hint">确定：切换 · 长按确定：更多选项</string>
+    <string name="tv_drops_none_stream">该分类暂无进行中的掉宝活动</string>
+    <string name="tv_drops_other_section">其他进行中的掉宝活动</string>
+    <string name="tv_multistream_mosaic">拼图模式：铺满全屏</string>
+    <string name="tv_stream_end_raid_note">提示：如果主播发起突袭（Raid）且已开启自动跟随突袭，突袭仍会优先正常生效。</string>
+    <string name="tv_key_or_join">%1$s 或 %2$s</string>
+    <string name="tv_pip_hint_keys">小窗：%1$s 切换主副直播（可在遥控器设置中修改），返回关闭。控制栏中的按钮可调整位置、大小和声音。</string>
+    <string name="tv_pip_hint_no_key">小窗：返回关闭。控制栏中的按钮可切换主副直播并调整位置、大小和声音。</string>
 </resources>

@@ -137,9 +137,22 @@ object TvDialogs {
     }
 
     /** One choice among a list (sort, filters...), the focus starts on the current choice. */
-    fun showChoices(context: Context, title: String, options: List<String>, selected: Int, icons: List<Int?>? = null, colors: List<Int?>? = null, onSelected: (Int) -> Unit): ComponentDialog {
+    fun showChoices(
+        context: Context,
+        title: String,
+        options: List<String>,
+        selected: Int,
+        icons: List<Int?>? = null,
+        colors: List<Int?>? = null,
+        subtitle: String? = null,
+        onSelected: (Int) -> Unit,
+    ): ComponentDialog {
         return show(context) { dismiss ->
-            SidePanel(title = title) {
+            SidePanel(
+                title = title,
+                subtitle = subtitle,
+                width = if (subtitle != null) 500.dp else 440.dp,
+            ) {
                 ChoiceList(options, selected, icons, colors) {
                     dismiss()
                     onSelected(it)

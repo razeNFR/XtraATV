@@ -854,7 +854,17 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         var leaveMuted = false
 
         fun showHint(activity: MainActivity) {
-            Toast.makeText(activity, R.string.tv_pip_hint, Toast.LENGTH_LONG).show()
+            val keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.bindingsForAction(
+                activity,
+                com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_PIP_SWAP,
+            )
+            val text = if (keys.isNotEmpty()) {
+                val joined = keys.reduce { acc, key -> activity.getString(R.string.tv_key_or_join, acc, key) }
+                activity.getString(R.string.tv_pip_hint_keys, joined)
+            } else {
+                activity.getString(R.string.tv_pip_hint_no_key)
+            }
+            Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
         }
     }
 }
