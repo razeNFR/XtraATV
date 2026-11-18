@@ -159,7 +159,12 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                 }
             }.attach()
             val navController = findNavController()
-            val appBarConfiguration = AppBarConfiguration(setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment))
+            val topLevelIds = if (isTv) {
+                setOf(R.id.tvHomeFragment, R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment, R.id.searchPagerFragment, R.id.tvStatsFragment, R.id.tvSettingsFragment)
+            } else {
+                setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment)
+            }
+            val appBarConfiguration = AppBarConfiguration(topLevelIds)
             toolbar.setupWithNavController(navController, appBarConfiguration)
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {

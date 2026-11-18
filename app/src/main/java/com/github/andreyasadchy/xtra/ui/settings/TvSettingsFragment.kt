@@ -1,0 +1,2802 @@
+package com.github.andreyasadchy.xtra.ui.settings
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.app.admin.DevicePolicyManager
+import android.content.ActivityNotFoundException
+import android.content.ComponentName
+import android.content.Context
+import android.content.Context.DEVICE_POLICY_SERVICE
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import android.os.ext.SdkExtensions
+import android.text.InputType
+import android.text.format.Formatter
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowInsets
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity.RESULT_OK
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.edit
+import androidx.core.net.toUri
+import androidx.core.os.LocaleListCompat
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.preference.EditTextPreference
+import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
+import androidx.preference.Preference
+import androidx.preference.PreferenceCategory
+import androidx.preference.PreferenceGroup
+import androidx.preference.PreferenceManager
+import androidx.preference.SeekBarPreference
+import androidx.preference.SwitchPreferenceCompat
+import androidx.preference.TwoStatePreference
+import androidx.tv.material3.Icon
+import androidx.tv.material3.Text
+import com.github.andreyasadchy.xtra.BuildConfig
+import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.XtraApp
+import com.github.andreyasadchy.xtra.databinding.DialogCustomProxyEditBinding
+import com.github.andreyasadchy.xtra.databinding.DialogStreamProxyEditBinding
+import com.github.andreyasadchy.xtra.databinding.DialogUpdateDownloadBinding
+import com.github.andreyasadchy.xtra.databinding.DialogVideoSwapEditBinding
+import com.github.andreyasadchy.xtra.model.ui.CustomProxy
+import com.github.andreyasadchy.xtra.model.ui.SettingsDragListItem
+import com.github.andreyasadchy.xtra.model.ui.StreamProxy
+import com.github.andreyasadchy.xtra.model.ui.VideoSwap
+import com.github.andreyasadchy.xtra.receiver.DeviceAdminReceiver
+import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
+import com.github.andreyasadchy.xtra.ui.common.MaterialPreferenceFragment
+import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import com.github.andreyasadchy.xtra.ui.settings.CustomProxySettingsViewModel.Companion.CustomProxySettingsViewModelFactory
+import com.github.andreyasadchy.xtra.ui.settings.SettingsViewModel.Companion.SettingsViewModelFactory
+import com.github.andreyasadchy.xtra.ui.settings.StreamProxySettingsViewModel.Companion.StreamProxySettingsViewModelFactory
+import com.github.andreyasadchy.xtra.ui.settings.VideoSwapSettingsViewModel.Companion.VideoSwapSettingsViewModelFactory
+import com.github.andreyasadchy.xtra.ui.tv.TvAbout
+import com.github.andreyasadchy.xtra.ui.tv.TvActionPanel
+import com.github.andreyasadchy.xtra.ui.tv.TvAmbient
+import com.github.andreyasadchy.xtra.ui.tv.TvBackup
+import com.github.andreyasadchy.xtra.ui.tv.TvBlacklist
+import com.github.andreyasadchy.xtra.ui.tv.TvClockSettings
+import com.github.andreyasadchy.xtra.ui.tv.TvColors
+import com.github.andreyasadchy.xtra.ui.tv.TvDialogs
+import com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock
+import com.github.andreyasadchy.xtra.ui.tv.TvFavorites
+import com.github.andreyasadchy.xtra.ui.tv.TvListPanel
+import com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamQuality
+import com.github.andreyasadchy.xtra.ui.tv.TvProxyPanel
+import com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+import com.github.andreyasadchy.xtra.ui.tv.TvSwitcherRows
+import com.github.andreyasadchy.xtra.ui.tv.TvTheme
+import com.github.andreyasadchy.xtra.ui.tv.TvUpdateDialog
+import com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows
+import com.github.andreyasadchy.xtra.ui.view.TvVoice
+import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.TwitchApiHelper
+import com.github.andreyasadchy.xtra.util.UpdateInstallHelper
+import com.github.andreyasadchy.xtra.util.UpdateInstallHelper.canInstallUnknownAppsCompat
+import com.github.andreyasadchy.xtra.util.UpdateInstallHelper.openUnknownAppSourcesSettings
+import com.github.andreyasadchy.xtra.util.chat.ChatBlocklist
+import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
+import com.github.andreyasadchy.xtra.util.prefs
+import com.github.andreyasadchy.xtra.util.tokenPrefs
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.common.model.RemoteModelManager
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.TranslateRemoteModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import org.chromium.net.CronetProvider
+import java.util.Collections
+import java.util.Locale
+
+/**
+ * Unified 2-column Google TV Compose Settings page integrated inside [MainActivity]'s NavHostFragment.
+ * Supports hover-preview from the side rail without stealing focus, instant category hover switching,
+ * search across all TV settings, sub-screens, and live updates to MainActivity.
+ */
+class TvSettingsFragment : Fragment() {
+
+    private val settingsViewModel: SettingsViewModel by activityViewModels { SettingsViewModelFactory }
+    private val customProxyViewModel: CustomProxySettingsViewModel by viewModels { CustomProxySettingsViewModelFactory }
+    private val streamProxyViewModel: StreamProxySettingsViewModel by viewModels { StreamProxySettingsViewModelFactory }
+    private val videoSwapViewModel: VideoSwapSettingsViewModel by viewModels { VideoSwapSettingsViewModelFactory }
+
+    private val focusLeftTrigger = mutableIntStateOf(0)
+    private val focusRightTrigger = mutableIntStateOf(0)
+    private val refreshStamp = mutableIntStateOf(0)
+    private val customProxyCountState = mutableIntStateOf(0)
+
+    private val selectedCategoryIndex = mutableIntStateOf(0)
+    private val subScreenStack = mutableStateListOf<SubScreen>()
+    private val searchQueryState = mutableStateOf("")
+
+    private var restoreResultLauncher: ActivityResultLauncher<Intent>? = null
+    private var voiceSearchLauncher: ActivityResultLauncher<Intent>? = null
+    private var updateDownloadDialogBinding: DialogUpdateDownloadBinding? = null
+    private var updateDownloadDialog: AlertDialog? = null
+
+    private val subScreenBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            val act = activity as? MainActivity
+            if (act?.isTvMenuOpen() == true) {
+                isEnabled = false
+                act.onBackPressedDispatcher.onBackPressed()
+                return
+            }
+            if (subScreenStack.isNotEmpty()) {
+                subScreenStack.removeAt(subScreenStack.lastIndex)
+                refreshStamp.intValue++
+                updateBackCallback()
+                focusLeftTrigger.intValue++
+            } else if (searchQueryState.value.isNotBlank()) {
+                searchQueryState.value = ""
+                updateBackCallback()
+                focusLeftTrigger.intValue++
+            }
+        }
+    }
+
+    sealed interface SubScreen {
+        val title: String
+
+        data class Xml(val xmlRes: Int, override val title: String, val highlightKey: String? = null) : SubScreen
+        data class CustomProxies(override val title: String) : SubScreen
+        data class StreamProxies(override val title: String) : SubScreen
+        data class VideoSwaps(override val title: String) : SubScreen
+    }
+
+    private data class CategorySpec(
+        val xmlRes: Int,
+        val titleRes: Int,
+        val iconRes: Int,
+    )
+
+    private sealed interface PrefNode {
+        data class Header(val title: String) : PrefNode
+        data class Item(
+            val key: String,
+            val title: String,
+            val summary: String?,
+            val iconRes: Int,
+            val enabled: Boolean,
+            val disabledHint: (() -> String)?,
+            val kind: Kind,
+            val locationBreadcrumb: String? = null,
+            val sourceSubScreen: SubScreen? = null,
+        ) : PrefNode
+    }
+
+    private sealed interface Kind {
+        data class Toggle(val checked: Boolean) : Kind
+        data class Choice(
+            val value: String?,
+            val entries: List<String>,
+            val entryValues: List<String>,
+            val colors: List<Int?>? = null,
+            val subtitle: String? = null,
+        ) : Kind
+        data class MultiChoice(
+            val values: Set<String>,
+            val entries: List<String>,
+            val entryValues: List<String>,
+        ) : Kind
+        data class Slider(val value: Int, val min: Int, val max: Int, val step: Int) : Kind
+        data class TextInput(
+            val currentValue: String,
+            val isNumeric: Boolean = false,
+            val useTokenPrefs: Boolean = false,
+            val tokenKey: String? = null,
+        ) : Kind
+        data class Action(val hasChevron: Boolean = false) : Kind
+    }
+
+    fun requestContentFocus() {
+        if (subScreenStack.isNotEmpty()) {
+            focusRightTrigger.intValue++
+        } else {
+            focusLeftTrigger.intValue++
+        }
+    }
+
+    private fun updateBackCallback() {
+        subScreenBackCallback.isEnabled = subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank()
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        restoreResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val list = mutableListOf<String>()
+                result.data?.clipData?.let { clipData ->
+                    for (i in 0 until clipData.itemCount) {
+                        clipData.getItemAt(i)?.uri?.let { list.add(it.toString()) }
+                    }
+                } ?: result.data?.data?.let { list.add(it.toString()) }
+                settingsViewModel.restoreSettings(
+                    list = list,
+                    networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    gqlHeaders = TwitchApiHelper.getGQLHeaders(requireContext(), true),
+                    helixHeaders = TwitchApiHelper.getHelixHeaders(requireContext()),
+                )
+            }
+        }
+        voiceSearchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            TvVoice.getText(result)?.takeIf { it.isNotBlank() }?.let { spoken ->
+                subScreenStack.clear()
+                searchQueryState.value = spoken.trim()
+                updateBackCallback()
+                focusRightTrigger.intValue++
+            }
+        }
+    }
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?,
+    ): View {
+        val context = requireContext()
+        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, subScreenBackCallback)
+        consumePendingSubScreen(context)
+        val act = activity as? MainActivity
+        if (act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
+            requestContentFocus()
+        }
+        return ComposeView(context).apply {
+            id = R.id.tvSettingsRoot
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                TvTheme {
+                    SettingsScreen()
+                }
+            }
+        }
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        reloadProxyCount()
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                settingsViewModel.updateUrl.collectLatest { url ->
+                    if (url != null) {
+                        UpdateInstallHelper.lastAttemptedUpdateUrl = url
+                        val startUpdate: () -> Unit = {
+                            UpdateInstallHelper.lastAttemptedUpdateUrl = url
+                            if (requireContext().prefs().getBoolean(C.UPDATE_USE_BROWSER, false)) {
+                                try {
+                                    startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).apply {
+                                        addCategory(Intent.CATEGORY_BROWSABLE)
+                                    })
+                                    requireContext().tokenPrefs().edit {
+                                        putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
+                                    }
+                                } catch (_: ActivityNotFoundException) {
+                                    Toast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
+                                }
+                            } else {
+                                UpdateInstallHelper.startUpdate(requireActivity(), url) { u -> startUpdateDownload(u) }
+                            }
+                        }
+                        TvUpdateDialog.show(requireActivity(), settingsViewModel.updateVersion, settingsViewModel.updateNotes, startUpdate) {}
+                    } else {
+                        Toast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                settingsViewModel.updateProgress.collectLatest { bytes ->
+                    updateDownloadDialogBinding?.let { binding ->
+                        val size = settingsViewModel.updateSize
+                        if (size != null && size > 0L) {
+                            binding.textView.text = getString(
+                                R.string.downloading_update_progress,
+                                Formatter.formatFileSize(requireContext(), bytes.toLong()),
+                                Formatter.formatFileSize(requireContext(), size),
+                            )
+                            binding.progressBar.progress = ((bytes.toFloat() / size) * 100).toInt()
+                        }
+                    }
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                settingsViewModel.closeUpdateDialog.collectLatest {
+                    updateDownloadDialog?.dismiss()
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                settingsViewModel.updateInstallApk.collectLatest { apk ->
+                    UpdateInstallHelper.openApkWithInstaller(requireActivity(), apk)
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                customProxyViewModel.statusChanged.collect {
+                    refreshStamp.intValue++
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        context?.let { ctx ->
+            TvExperimentalAdblock.normalizePrefs(ctx)
+            consumePendingSubScreen(ctx)
+            UpdateInstallHelper.takePendingUpdate(ctx)?.let { startUpdateDownload(it) }
+        }
+        reloadProxyCount()
+        refreshStamp.intValue++
+    }
+
+    fun consumePendingSubScreen(context: Context) {
+        val pending = pendingOpenSubScreen ?: return
+        pendingOpenSubScreen = null
+        searchQueryState.value = ""
+        subScreenStack.clear()
+        when (pending) {
+            SettingsActivity.OPEN_CUSTOM_PROXIES -> {
+                selectedCategoryIndex.intValue = CATEGORIES.indexOfFirst { it.xmlRes == R.xml.tv_settings_ads }.coerceAtLeast(0)
+                customProxyViewModel.getProxies(context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP))
+                subScreenStack.add(SubScreen.CustomProxies(context.getString(R.string.custom_proxy_settings)))
+            }
+            SettingsActivity.OPEN_STREAM_PROXIES -> {
+                selectedCategoryIndex.intValue = CATEGORIES.indexOfFirst { it.xmlRes == R.xml.tv_settings_ads }.coerceAtLeast(0)
+                streamProxyViewModel.getProxies()
+                subScreenStack.add(SubScreen.StreamProxies(context.getString(R.string.proxy_settings)))
+            }
+        }
+        updateBackCallback()
+    }
+
+    private fun reloadProxyCount() {
+        val act = activity ?: return
+        val repo = (act.application as XtraApp).xtraModule.playerRepository
+        viewLifecycleOwner.lifecycleScope.launch {
+            customProxyCountState.intValue = runCatching { repo.getCustomProxies().size }.getOrDefault(0)
+        }
+    }
+
+    private fun startUpdateDownload(url: String) {
+        val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
+        updateDownloadDialogBinding = binding
+        val size = settingsViewModel.updateSize
+        if (size != null) {
+            binding.textView.text = getString(
+                R.string.downloading_update_progress,
+                Formatter.formatFileSize(requireContext(), 0),
+                Formatter.formatFileSize(requireContext(), size),
+            )
+        } else {
+            binding.textView.text = getString(R.string.downloading_update)
+            binding.progressBar.visibility = View.GONE
+        }
+        settingsViewModel.downloadUpdate(requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), url)
+        updateDownloadDialog = requireActivity().getAlertDialogBuilder()
+            .setView(binding.root)
+            .setNegativeButton(getString(android.R.string.cancel), null)
+            .setOnDismissListener {
+                settingsViewModel.updateJob?.cancel()
+                updateDownloadDialogBinding = null
+                updateDownloadDialog = null
+            }
+            .show()
+    }
+
+    @Composable
+    private fun SettingsScreen() {
+        val context = LocalContext.current
+        val stamp = refreshStamp.intValue
+        val proxyCount = customProxyCountState.intValue
+        val catIdx = selectedCategoryIndex.intValue
+        val activeSub = subScreenStack.lastOrNull()
+        val query = searchQueryState.value
+
+        val leftCategoryRequesters = remember { List(CATEGORIES.size) { FocusRequester() } }
+        val searchRequester = remember { FocusRequester() }
+        val subBackRequester = remember { FocusRequester() }
+        val rightFirstRequester = remember { FocusRequester() }
+
+        LaunchedEffect(focusLeftTrigger.intValue) {
+            if (focusLeftTrigger.intValue > 0) {
+                if (activeSub != null) {
+                    runCatching { subBackRequester.requestFocus() }
+                } else {
+                    runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
+                }
+            }
+        }
+        LaunchedEffect(focusRightTrigger.intValue) {
+            if (focusRightTrigger.intValue > 0) {
+                delay(30)
+                runCatching { rightFirstRequester.requestFocus() }
+            }
+        }
+
+        val returnToLeftColumn: () -> Unit = {
+            if (activeSub != null) {
+                runCatching { subBackRequester.requestFocus() }
+            } else {
+                runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 12.dp, end = 12.dp, top = 22.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            // Left Column: Title, Search, 9 Categories
+            Column(
+                modifier = Modifier
+                    .width(264.dp)
+                    .fillMaxHeight()
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                            (activity as? MainActivity)?.openTvMenu()
+                            true
+                        } else if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionRight) {
+                            focusRightTrigger.intValue++
+                            true
+                        } else false
+                    }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.baseline_settings_black_24),
+                        contentDescription = null,
+                        tint = TvColors.accent,
+                        modifier = Modifier.size(26.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = context.getString(R.string.settings),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "${context.getString(R.string.app_name)} ${BuildConfig.VERSION_NAME}",
+                            fontSize = 11.sp,
+                            color = TvColors.secondaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Search pill + Voice button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SearchPill(
+                        query = query,
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(searchRequester),
+                        onClick = { showSearchPrompt(context) },
+                    )
+                    if (query.isNotBlank()) {
+                        SmallIconPill(
+                            iconRes = R.drawable.tv_ic_close,
+                            onClick = {
+                                searchQueryState.value = ""
+                                updateBackCallback()
+                            },
+                        )
+                    } else {
+                        SmallIconPill(
+                            iconRes = R.drawable.tv_ic_mic,
+                            onClick = {
+                                runCatching {
+                                    voiceSearchLauncher?.launch(TvVoice.createIntent(context.getString(R.string.search)))
+                                }
+                            },
+                        )
+                    }
+                }
+
+                if (activeSub != null) {
+                    Spacer(Modifier.height(8.dp))
+                    SubScreenBackPill(
+                        title = activeSub.title,
+                        modifier = Modifier.focusRequester(subBackRequester),
+                        onClick = {
+                            if (subScreenStack.isNotEmpty()) {
+                                subScreenStack.removeAt(subScreenStack.lastIndex)
+                                refreshStamp.intValue++
+                                updateBackCallback()
+                                focusLeftTrigger.intValue++
+                            }
+                        },
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                ) {
+                    itemsIndexed(CATEGORIES) { index, cat ->
+                        val isSelected = query.isBlank() && index == catIdx
+                        CategoryRow(
+                            title = context.getString(cat.titleRes),
+                            iconRes = cat.iconRes,
+                            selected = isSelected,
+                            requester = leftCategoryRequesters[index],
+                            onHoverSelect = {
+                                if (selectedCategoryIndex.intValue != index || subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank()) {
+                                    selectedCategoryIndex.intValue = index
+                                    subScreenStack.clear()
+                                    searchQueryState.value = ""
+                                    updateBackCallback()
+                                }
+                            },
+                            onClick = {
+                                selectedCategoryIndex.intValue = index
+                                subScreenStack.clear()
+                                searchQueryState.value = ""
+                                updateBackCallback()
+                                focusRightTrigger.intValue++
+                            },
+                        )
+                    }
+                }
+            }
+
+            // Right Column: Active SubScreen, Search Results, or Category Preferences
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0x12FFFFFF))
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+            ) {
+                when (activeSub) {
+                    is SubScreen.CustomProxies -> CustomProxiesSubScreen(
+                        title = activeSub.title,
+                        firstRequester = rightFirstRequester,
+                        onNavigateLeft = returnToLeftColumn,
+                    )
+                    is SubScreen.StreamProxies -> StreamProxiesSubScreen(
+                        title = activeSub.title,
+                        firstRequester = rightFirstRequester,
+                        onNavigateLeft = returnToLeftColumn,
+                    )
+                    is SubScreen.VideoSwaps -> VideoSwapsSubScreen(
+                        title = activeSub.title,
+                        firstRequester = rightFirstRequester,
+                        onNavigateLeft = returnToLeftColumn,
+                    )
+                    is SubScreen.Xml -> {
+                        val nodes = remember(activeSub.xmlRes, stamp, proxyCount) {
+                            buildNodesForXml(context, activeSub.xmlRes, proxyCount)
+                        }
+                        PreferenceNodesList(
+                            headerTitle = activeSub.title,
+                            nodes = nodes,
+                            listKey = "sub_${activeSub.xmlRes}",
+                            highlightKey = activeSub.highlightKey,
+                            firstRequester = rightFirstRequester,
+                            onNavigateLeft = returnToLeftColumn,
+                        )
+                    }
+                    null -> {
+                        if (query.isNotBlank()) {
+                            val results = remember(query, stamp, proxyCount) {
+                                buildSearchResults(context, query, proxyCount)
+                            }
+                            PreferenceNodesList(
+                                headerTitle = "${context.getString(R.string.search)} · \"$query\"",
+                                nodes = results,
+                                listKey = "search_$query",
+                                highlightKey = null,
+                                firstRequester = rightFirstRequester,
+                                onNavigateLeft = returnToLeftColumn,
+                            )
+                        } else {
+                            val cat = CATEGORIES[catIdx]
+                            val nodes = remember(cat.xmlRes, stamp, proxyCount) {
+                                buildNodesForXml(context, cat.xmlRes, proxyCount)
+                            }
+                            PreferenceNodesList(
+                                headerTitle = context.getString(cat.titleRes),
+                                nodes = nodes,
+                                listKey = "cat_${cat.xmlRes}",
+                                highlightKey = null,
+                                firstRequester = rightFirstRequester,
+                                onNavigateLeft = returnToLeftColumn,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun SearchPill(query: String, modifier: Modifier, onClick: () -> Unit) {
+        val context = LocalContext.current
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+        Row(
+            modifier = modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.baseline_search_black_24),
+                contentDescription = null,
+                tint = if (focused) TvColors.onFocused else TvColors.secondaryText,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = query.ifBlank { context.getString(R.string.search) },
+                fontSize = 13.sp,
+                fontWeight = if (query.isNotBlank() || focused) FontWeight.SemiBold else FontWeight.Normal,
+                color = when {
+                    focused -> TvColors.onFocused
+                    query.isNotBlank() -> Color.White
+                    else -> TvColors.secondaryText
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+
+    @Composable
+    private fun SmallIconPill(iconRes: Int, onClick: () -> Unit) {
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+                .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                tint = if (focused) TvColors.onFocused else Color.White,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+
+    @Composable
+    private fun SubScreenBackPill(title: String, modifier: Modifier, onClick: () -> Unit) {
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (focused) TvColors.focused else TvColors.accent.copy(alpha = 0.22f))
+                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.baseline_arrow_back_black_24),
+                contentDescription = null,
+                tint = if (focused) TvColors.onFocused else TvColors.accent,
+                modifier = Modifier.size(17.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (focused) TvColors.onFocused else Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+
+    @Composable
+    private fun CategoryRow(
+        title: String,
+        iconRes: Int,
+        selected: Boolean,
+        requester: FocusRequester,
+        onHoverSelect: () -> Unit,
+        onClick: () -> Unit,
+    ) {
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+        LaunchedEffect(focused) {
+            if (focused) {
+                delay(60)
+                onHoverSelect()
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(requester)
+                .clip(RoundedCornerShape(11.dp))
+                .background(
+                    when {
+                        focused -> TvColors.focused
+                        selected -> Color(0x24FFFFFF)
+                        else -> Color.Transparent
+                    }
+                )
+                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                tint = when {
+                    focused -> TvColors.onFocused
+                    selected -> TvColors.accent
+                    else -> Color(0xCCFFFFFF)
+                },
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = if (focused || selected) FontWeight.Bold else FontWeight.Medium,
+                color = when {
+                    focused -> TvColors.onFocused
+                    selected -> Color.White
+                    else -> Color(0xCCFFFFFF)
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (selected && !focused) {
+                Box(
+                    Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(TvColors.accent)
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun PreferenceNodesList(
+        headerTitle: String,
+        nodes: List<PrefNode>,
+        listKey: String,
+        highlightKey: String?,
+        firstRequester: FocusRequester,
+        onNavigateLeft: () -> Unit,
+    ) {
+        val listState = rememberLazyListState()
+        val firstInteractiveIndex = remember(nodes, highlightKey) {
+            val highlighted = highlightKey?.let { hk ->
+                nodes.indexOfFirst { it is PrefNode.Item && it.key == hk }.takeIf { it >= 0 }
+            }
+            highlighted ?: nodes.indexOfFirst { it is PrefNode.Item }
+        }
+
+        LaunchedEffect(listKey, highlightKey) {
+            if (highlightKey != null && firstInteractiveIndex > 0) {
+                runCatching { listState.scrollToItem((firstInteractiveIndex - 1).coerceAtLeast(0)) }
+            } else {
+                runCatching { listState.scrollToItem(0) }
+            }
+        }
+
+        Column(Modifier.fillMaxSize()) {
+            Text(
+                text = headerTitle,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+            Spacer(Modifier.height(10.dp))
+            if (nodes.none { it is PrefNode.Item }) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .focusRequester(firstRequester)
+                        .onPreviewKeyEvent { ev ->
+                            if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                                onNavigateLeft()
+                                true
+                            } else false
+                        }
+                        .focusable(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("—", fontSize = 15.sp, color = TvColors.secondaryText)
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                ) {
+                    itemsIndexed(
+                        items = nodes,
+                        key = { idx, node ->
+                            when (node) {
+                                is PrefNode.Header -> "h_${idx}_${node.title}"
+                                is PrefNode.Item -> "i_${idx}_${node.key}_${node.locationBreadcrumb.orEmpty()}"
+                            }
+                        }
+                    ) { index, node ->
+                        when (node) {
+                            is PrefNode.Header -> {
+                                Text(
+                                    text = node.title.uppercase(),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.8.sp,
+                                    color = TvColors.accent,
+                                    modifier = Modifier.padding(
+                                        start = 6.dp,
+                                        top = if (index == 0) 2.dp else 12.dp,
+                                        bottom = 2.dp,
+                                    ),
+                                )
+                            }
+                            is PrefNode.Item -> {
+                                PreferenceItemCard(
+                                    item = node,
+                                    modifier = if (index == firstInteractiveIndex) Modifier.focusRequester(firstRequester) else Modifier,
+                                    onNavigateLeft = onNavigateLeft,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun PreferenceItemCard(
+        item: PrefNode.Item,
+        modifier: Modifier,
+        onNavigateLeft: () -> Unit,
+    ) {
+        val context = LocalContext.current
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .alpha(if (item.enabled) 1f else 0.48f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (focused) TvColors.focused else Color(0x14FFFFFF))
+                .onPreviewKeyEvent { ev ->
+                    if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (ev.key) {
+                        Key.DirectionLeft -> {
+                            val slider = item.kind as? Kind.Slider
+                            if (item.enabled && slider != null && slider.value > slider.min) {
+                                val next = (slider.value - slider.step).coerceAtLeast(slider.min)
+                                applySliderValue(context, item.key, next)
+                                true
+                            } else {
+                                onNavigateLeft()
+                                true
+                            }
+                        }
+                        Key.DirectionRight -> {
+                            val slider = item.kind as? Kind.Slider
+                            if (item.enabled && slider != null && slider.value < slider.max) {
+                                val next = (slider.value + slider.step).coerceAtMost(slider.max)
+                                applySliderValue(context, item.key, next)
+                                true
+                            } else false
+                        }
+                        else -> false
+                    }
+                }
+                .clickable(interactionSource = interaction, indication = null) {
+                    if (!item.enabled) {
+                        item.disabledHint?.invoke()?.let { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                        }
+                        return@clickable
+                    }
+                    if (item.sourceSubScreen != null && subScreenStack.isEmpty() && searchQueryState.value.isNotBlank()) {
+                        searchQueryState.value = ""
+                        subScreenStack.add(item.sourceSubScreen)
+                        updateBackCallback()
+                        focusRightTrigger.intValue++
+                        return@clickable
+                    }
+                    onPreferenceClicked(context, item)
+                }
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(item.iconRes),
+                contentDescription = null,
+                tint = if (focused) TvColors.onFocused else TvColors.accent,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                if (!item.locationBreadcrumb.isNullOrBlank()) {
+                    Text(
+                        text = item.locationBreadcrumb,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (focused) TvColors.onFocused.copy(alpha = 0.7f) else TvColors.accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = item.title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (focused) TvColors.onFocused else Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!item.summary.isNullOrBlank()) {
+                    Text(
+                        text = item.summary,
+                        fontSize = 12.sp,
+                        color = if (focused) TvColors.onFocused.copy(alpha = 0.75f) else TvColors.secondaryText,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (item.kind is Kind.Slider) {
+                    Spacer(Modifier.height(6.dp))
+                    val frac = if (item.kind.max > item.kind.min) {
+                        ((item.kind.value - item.kind.min).toFloat() / (item.kind.max - item.kind.min).toFloat()).coerceIn(0f, 1f)
+                    } else 0f
+                    Box(
+                        Modifier
+                            .fillMaxWidth(0.75f)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (focused) TvColors.onFocused.copy(alpha = 0.22f) else Color(0x26FFFFFF))
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(frac)
+                                .fillMaxHeight()
+                                .background(if (focused) TvColors.onFocused else TvColors.accent)
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            when (val k = item.kind) {
+                is Kind.Toggle -> TvListPanel.Switch(k.checked)
+                is Kind.Slider -> {
+                    Text(
+                        text = k.value.toString(),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (focused) TvColors.onFocused else TvColors.accent,
+                    )
+                }
+                is Kind.Choice -> {
+                    if (item.key == C.TV_AMBIENT_COLOR) {
+                        val colorInt = TvAmbient.colorOf(k.value ?: "violet")
+                        if (colorInt != null) {
+                            Box(
+                                Modifier
+                                    .size(14.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(colorInt))
+                                    .border(1.dp, if (focused) TvColors.onFocused else Color(0x66FFFFFF), CircleShape)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                    }
+                    Text(
+                        text = "›",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (focused) TvColors.onFocused else TvColors.secondaryText,
+                    )
+                }
+                is Kind.MultiChoice -> {
+                    Text(
+                        text = "›",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (focused) TvColors.onFocused else TvColors.secondaryText,
+                    )
+                }
+                is Kind.TextInput -> {
+                    Text(
+                        text = "✎",
+                        fontSize = 14.sp,
+                        color = if (focused) TvColors.onFocused else TvColors.secondaryText,
+                    )
+                }
+                is Kind.Action -> {
+                    if (k.hasChevron) {
+                        Text(
+                            text = "›",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (focused) TvColors.onFocused else TvColors.secondaryText,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // Custom Proxies / Stream Proxies / Video Swaps Compose Sub-Screens
+    // =========================================================================
+
+    @Composable
+    private fun CustomProxiesSubScreen(
+        title: String,
+        firstRequester: FocusRequester,
+        onNavigateLeft: () -> Unit,
+    ) {
+        val context = LocalContext.current
+        val list by customProxyViewModel.list.collectAsState()
+        val stamp = refreshStamp.intValue
+
+        Column(Modifier.fillMaxSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                ActionPillButton(
+                    label = "+ ${context.getString(R.string.add_item)}",
+                    modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                            onNavigateLeft(); true
+                        } else false
+                    },
+                ) {
+                    val item = CustomProxy(position = list.size)
+                    showCustomProxyEditDialog(item) { url, addQueryParams ->
+                        if (!url.isNullOrBlank()) {
+                            item.url = url.trim()
+                            item.addQueryParams = addQueryParams
+                            list.add(item)
+                            customProxyViewModel.saveProxy(item)
+                            customProxyViewModel.updateProxyStatus(context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), item.url)
+                            reloadProxyCount()
+                            refreshStamp.intValue++
+                            (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+            ) {
+                itemsIndexed(list.toList(), key = { idx, p -> "cp_${p.id}_${idx}_$stamp" }) { index, proxy ->
+                    val online = proxy.url?.let { customProxyViewModel.statusMap[it] }
+                    val statusText = when (online) {
+                        true -> "Online"
+                        false -> "Offline"
+                        null -> "…"
+                    }
+                    ManagedEntityRow(
+                        title = proxy.url.orEmpty().ifBlank { "—" },
+                        subtitle = statusText,
+                        statusColor = when (online) {
+                            true -> Color(0xFF4CAF50)
+                            false -> Color(0xFFEF5350)
+                            null -> TvColors.secondaryText
+                        },
+                        enabled = proxy.enabled,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < list.lastIndex,
+                        canDelete = true,
+                        onNavigateLeft = onNavigateLeft,
+                        onToggle = {
+                            proxy.enabled = !proxy.enabled
+                            customProxyViewModel.updateProxy(proxy)
+                            refreshStamp.intValue++
+                            (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                        },
+                        onMoveUp = {
+                            if (index > 0) {
+                                Collections.swap(list, index, index - 1)
+                                customProxyViewModel.updateProxies()
+                                refreshStamp.intValue++
+                            }
+                        },
+                        onMoveDown = {
+                            if (index < list.lastIndex) {
+                                Collections.swap(list, index, index + 1)
+                                customProxyViewModel.updateProxies()
+                                refreshStamp.intValue++
+                            }
+                        },
+                        onEdit = {
+                            showCustomProxyEditDialog(proxy) { url, addQueryParams ->
+                                proxy.url = url?.trim()
+                                proxy.addQueryParams = addQueryParams
+                                customProxyViewModel.updateProxy(proxy)
+                                customProxyViewModel.updateProxyStatus(context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), proxy.url)
+                                refreshStamp.intValue++
+                                (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                            }
+                        },
+                        onDelete = {
+                            val del = context.getString(R.string.delete)
+                            context.getAlertDialogBuilder()
+                                .setTitle(del)
+                                .setMessage(context.getString(R.string.delete_proxy_message))
+                                .setPositiveButton(del) { _, _ ->
+                                    list.remove(proxy)
+                                    customProxyViewModel.deleteProxy(proxy)
+                                    reloadProxyCount()
+                                    refreshStamp.intValue++
+                                    (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                                }
+                                .setNegativeButton(context.getString(android.R.string.cancel), null)
+                                .show()
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun StreamProxiesSubScreen(
+        title: String,
+        firstRequester: FocusRequester,
+        onNavigateLeft: () -> Unit,
+    ) {
+        val context = LocalContext.current
+        val list by streamProxyViewModel.list.collectAsState()
+        val stamp = refreshStamp.intValue
+
+        Column(Modifier.fillMaxSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                ActionPillButton(
+                    label = "+ ${context.getString(R.string.add_item)}",
+                    modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                            onNavigateLeft(); true
+                        } else false
+                    },
+                ) {
+                    val item = StreamProxy(position = list.size)
+                    showStreamProxyEditDialog(item) { host, port, user, pass, tok, multi, media ->
+                        if (!host.isNullOrBlank()) {
+                            item.host = host.trim()
+                            item.port = port?.toIntOrNull()
+                            item.username = user
+                            item.password = pass
+                            item.proxyPlaybackAccessToken = tok
+                            item.proxyMultivariantPlaylist = multi
+                            item.proxyMediaPlaylist = media
+                            list.add(item)
+                            streamProxyViewModel.saveProxy(item)
+                            refreshStamp.intValue++
+                            (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+            ) {
+                itemsIndexed(list.toList(), key = { idx, p -> "sp_${p.id}_${idx}_$stamp" }) { index, proxy ->
+                    val label = buildString {
+                        append(proxy.host.orEmpty().ifBlank { "—" })
+                        proxy.port?.let { append(":$it") }
+                    }
+                    ManagedEntityRow(
+                        title = label,
+                        subtitle = proxy.username?.takeIf { it.isNotBlank() },
+                        statusColor = null,
+                        enabled = proxy.enabled,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < list.lastIndex,
+                        canDelete = true,
+                        onNavigateLeft = onNavigateLeft,
+                        onToggle = {
+                            proxy.enabled = !proxy.enabled
+                            streamProxyViewModel.updateProxy(proxy)
+                            refreshStamp.intValue++
+                            (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                        },
+                        onMoveUp = {
+                            if (index > 0) {
+                                Collections.swap(list, index, index - 1)
+                                streamProxyViewModel.updateProxies()
+                                refreshStamp.intValue++
+                            }
+                        },
+                        onMoveDown = {
+                            if (index < list.lastIndex) {
+                                Collections.swap(list, index, index + 1)
+                                streamProxyViewModel.updateProxies()
+                                refreshStamp.intValue++
+                            }
+                        },
+                        onEdit = {
+                            showStreamProxyEditDialog(proxy) { host, port, user, pass, tok, multi, media ->
+                                proxy.host = host?.trim()
+                                proxy.port = port?.toIntOrNull()
+                                proxy.username = user
+                                proxy.password = pass
+                                proxy.proxyPlaybackAccessToken = tok
+                                proxy.proxyMultivariantPlaylist = multi
+                                proxy.proxyMediaPlaylist = media
+                                streamProxyViewModel.updateProxy(proxy)
+                                refreshStamp.intValue++
+                                (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                            }
+                        },
+                        onDelete = {
+                            val del = context.getString(R.string.delete)
+                            context.getAlertDialogBuilder()
+                                .setTitle(del)
+                                .setMessage(context.getString(R.string.delete_proxy_message))
+                                .setPositiveButton(del) { _, _ ->
+                                    list.remove(proxy)
+                                    streamProxyViewModel.deleteProxy(proxy)
+                                    refreshStamp.intValue++
+                                    (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                                }
+                                .setNegativeButton(context.getString(android.R.string.cancel), null)
+                                .show()
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun VideoSwapsSubScreen(
+        title: String,
+        firstRequester: FocusRequester,
+        onNavigateLeft: () -> Unit,
+    ) {
+        val context = LocalContext.current
+        val list by videoSwapViewModel.list.collectAsState()
+        val stamp = refreshStamp.intValue
+
+        Column(Modifier.fillMaxSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                ActionPillButton(
+                    label = "+ ${context.getString(R.string.add_item)}",
+                    modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                            onNavigateLeft(); true
+                        } else false
+                    },
+                ) {
+                    val item = VideoSwap(position = list.size)
+                    showVideoSwapEditDialog(item) { platform, playerType ->
+                        item.platform = platform?.trim()
+                        item.playerType = playerType?.trim()
+                        list.add(item)
+                        videoSwapViewModel.saveVideoSwap(item)
+                        refreshStamp.intValue++
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+            ) {
+                itemsIndexed(list.toList(), key = { idx, v -> "vs_${v.id}_${idx}_$stamp" }) { index, swap ->
+                    val isPrimary = swap.position == -1 || index == 0
+                    ManagedEntityRow(
+                        title = "${swap.platform.orEmpty()} / ${swap.playerType.orEmpty()}",
+                        subtitle = null,
+                        statusColor = null,
+                        enabled = if (isPrimary) true else swap.enabled,
+                        showToggle = !isPrimary,
+                        canMoveUp = index > 1,
+                        canMoveDown = !isPrimary && index < list.lastIndex,
+                        canDelete = !isPrimary,
+                        onNavigateLeft = onNavigateLeft,
+                        onToggle = {
+                            if (!isPrimary) {
+                                swap.enabled = !swap.enabled
+                                videoSwapViewModel.updateVideoSwap(swap)
+                                refreshStamp.intValue++
+                            }
+                        },
+                        onMoveUp = {
+                            if (index > 1) {
+                                Collections.swap(list, index, index - 1)
+                                videoSwapViewModel.updateVideoSwapItems()
+                                refreshStamp.intValue++
+                            }
+                        },
+                        onMoveDown = {
+                            if (!isPrimary && index < list.lastIndex) {
+                                Collections.swap(list, index, index + 1)
+                                videoSwapViewModel.updateVideoSwapItems()
+                                refreshStamp.intValue++
+                            }
+                        },
+                        onEdit = {
+                            showVideoSwapEditDialog(swap) { platform, playerType ->
+                                swap.platform = platform?.trim()
+                                swap.playerType = playerType?.trim()
+                                if (swap.position == -1) {
+                                    context.prefs().edit {
+                                        putString(C.TOKEN_PLATFORM, swap.platform)
+                                        putString(C.TOKEN_PLAYER_TYPE, swap.playerType)
+                                    }
+                                } else {
+                                    videoSwapViewModel.updateVideoSwap(swap)
+                                }
+                                refreshStamp.intValue++
+                            }
+                        },
+                        onDelete = {
+                            val del = context.getString(R.string.delete)
+                            context.getAlertDialogBuilder()
+                                .setTitle(del)
+                                .setMessage(context.getString(R.string.delete_item_message))
+                                .setPositiveButton(del) { _, _ ->
+                                    list.remove(swap)
+                                    videoSwapViewModel.deleteVideoSwap(swap)
+                                    refreshStamp.intValue++
+                                }
+                                .setNegativeButton(context.getString(android.R.string.cancel), null)
+                                .show()
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ActionPillButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (focused) TvColors.focused else TvColors.accent.copy(alpha = 0.25f))
+                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (focused) TvColors.onFocused else Color.White,
+            )
+        }
+    }
+
+    @Composable
+    private fun ManagedEntityRow(
+        title: String,
+        subtitle: String?,
+        statusColor: Color?,
+        enabled: Boolean,
+        showToggle: Boolean = true,
+        canMoveUp: Boolean,
+        canMoveDown: Boolean,
+        canDelete: Boolean,
+        onNavigateLeft: () -> Unit,
+        onToggle: () -> Unit,
+        onMoveUp: () -> Unit,
+        onMoveDown: () -> Unit,
+        onEdit: () -> Unit,
+        onDelete: () -> Unit,
+    ) {
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0x14FFFFFF))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (focused) TvColors.focused else Color.Transparent)
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                            onNavigateLeft(); true
+                        } else false
+                    }
+                    .clickable(interactionSource = interaction, indication = null, onClick = if (showToggle) onToggle else onEdit)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (statusColor != null) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(statusColor))
+                    Spacer(Modifier.width(10.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (focused) TvColors.onFocused else Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (!subtitle.isNullOrBlank()) {
+                        Text(
+                            text = subtitle,
+                            fontSize = 11.sp,
+                            color = if (focused) TvColors.onFocused.copy(alpha = 0.72f) else TvColors.secondaryText,
+                        )
+                    }
+                }
+                if (showToggle) {
+                    Spacer(Modifier.width(8.dp))
+                    TvListPanel.Switch(enabled)
+                }
+            }
+            if (canMoveUp) SmallTextChip("↑", onMoveUp)
+            if (canMoveDown) SmallTextChip("↓", onMoveDown)
+            SmallTextChip("✎", onEdit)
+            if (canDelete) SmallIconPill(R.drawable.tv_ic_close, onDelete)
+        }
+    }
+
+    @Composable
+    private fun SmallTextChip(text: String, onClick: () -> Unit) {
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+                .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (focused) TvColors.onFocused else Color.White)
+        }
+    }
+
+    // =========================================================================
+    // XML Preference Tree Builder & Action Handlers
+    // =========================================================================
+
+    @SuppressLint("RestrictedApi")
+    private fun buildNodesForXml(context: Context, xmlRes: Int, proxyCount: Int): List<PrefNode> {
+        TvExperimentalAdblock.normalizePrefs(context)
+        val screen = PreferenceManager(context).inflateFromResource(context, xmlRes, null)
+        val result = mutableListOf<PrefNode>()
+
+        fun visitGroup(group: PreferenceGroup) {
+            for (i in 0 until group.preferenceCount) {
+                val pref = group.getPreference(i)
+                if (!pref.isVisible) continue
+                if (pref is PreferenceCategory) {
+                    val before = result.size
+                    val catHeader = pref.title?.toString()?.takeIf { it.isNotBlank() }
+                    val children = mutableListOf<PrefNode>()
+                    for (j in 0 until pref.preferenceCount) {
+                        val child = pref.getPreference(j)
+                        mapPreference(context, child, xmlRes, proxyCount)?.let { children.add(it) }
+                    }
+                    if (children.isNotEmpty()) {
+                        if (catHeader != null) result.add(PrefNode.Header(catHeader))
+                        result.addAll(children)
+                    } else if (result.size > before) {
+                        // no-op
+                    }
+                } else {
+                    mapPreference(context, pref, xmlRes, proxyCount)?.let { result.add(it) }
+                }
+            }
+        }
+
+        visitGroup(screen)
+        return result
+    }
+
+    @SuppressLint("RestrictedApi")
+    private fun buildSearchResults(context: Context, rawQuery: String, proxyCount: Int): List<PrefNode> {
+        val q = rawQuery.trim().lowercase()
+        if (q.isEmpty()) return emptyList()
+        val seenKeys = HashSet<String>()
+        val results = mutableListOf<PrefNode>()
+
+        val sources: List<Triple<Int, String, SubScreen?>> = listOf(
+            Triple(R.xml.xtratv_preferences, context.getString(R.string.xtratv_settings), null),
+            Triple(R.xml.tv_settings_player, context.getString(R.string.player_settings), null),
+            Triple(R.xml.player_preferences, context.getString(R.string.player_settings), SubScreen.Xml(R.xml.player_preferences, context.getString(R.string.player_settings))),
+            Triple(R.xml.playback_preferences, context.getString(R.string.playback_settings), SubScreen.Xml(R.xml.playback_preferences, context.getString(R.string.playback_settings))),
+            Triple(R.xml.buffer_preferences, context.getString(R.string.buffer_settings), SubScreen.Xml(R.xml.buffer_preferences, context.getString(R.string.buffer_settings))),
+            Triple(R.xml.player_button_preferences, context.getString(R.string.player_buttons), SubScreen.Xml(R.xml.player_button_preferences, context.getString(R.string.player_buttons))),
+            Triple(R.xml.player_menu_preferences, context.getString(R.string.player_menu_settings), SubScreen.Xml(R.xml.player_menu_preferences, context.getString(R.string.player_menu_settings))),
+            Triple(R.xml.chat_preferences, context.getString(R.string.chat_settings), null),
+            Triple(R.xml.tv_settings_interface, context.getString(R.string.ui_settings), null),
+            Triple(R.xml.ui_preferences, context.getString(R.string.ui_settings), SubScreen.Xml(R.xml.ui_preferences, context.getString(R.string.ui_settings))),
+            Triple(R.xml.tv_settings_ads, context.getString(R.string.tv_settings_section_ads), null),
+            Triple(R.xml.download_preferences, context.getString(R.string.download_settings), null),
+            Triple(R.xml.tv_settings_updates, context.getString(R.string.update_settings), null),
+            Triple(R.xml.update_preferences, context.getString(R.string.update_settings), SubScreen.Xml(R.xml.update_preferences, context.getString(R.string.update_settings))),
+            Triple(R.xml.tv_settings_advanced, context.getString(R.string.tv_settings_section_advanced), null),
+            Triple(R.xml.api_token_preferences, context.getString(R.string.api_token_settings), SubScreen.Xml(R.xml.api_token_preferences, context.getString(R.string.api_token_settings))),
+            Triple(R.xml.debug_preferences, context.getString(R.string.debug_settings), SubScreen.Xml(R.xml.debug_preferences, context.getString(R.string.debug_settings))),
+            Triple(R.xml.tv_settings_about, context.getString(R.string.tv_settings_section_about), null),
+        )
+
+        sources.forEach { (xmlRes, breadcrumb, sub) ->
+            buildNodesForXml(context, xmlRes, proxyCount).filterIsInstance<PrefNode.Item>().forEach { item ->
+                val dedupKey = "${item.key}:${sub?.title.orEmpty()}"
+                if (item.key.isNotBlank() && seenKeys.contains(item.key)) return@forEach
+                val matches = item.title.lowercase().contains(q) ||
+                    item.summary.orEmpty().lowercase().contains(q) ||
+                    breadcrumb.lowercase().contains(q)
+                if (matches && seenKeys.add(item.key.ifBlank { dedupKey })) {
+                    val targetSub = (sub as? SubScreen.Xml)?.copy(highlightKey = item.key) ?: sub
+                    results.add(item.copy(locationBreadcrumb = breadcrumb, sourceSubScreen = targetSub))
+                }
+            }
+        }
+        return results
+    }
+
+    private fun mapPreference(
+        context: Context,
+        pref: Preference,
+        xmlRes: Int,
+        proxyCount: Int,
+    ): PrefNode.Item? {
+        val key = pref.key.orEmpty()
+        if (key in MaterialPreferenceFragment.TV_HIDDEN_KEYS) return null
+        if (xmlRes == R.xml.adblock_preferences && key == "video_swap_settings") return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !context.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+            if (key == C.PLAYER_PICTURE_IN_PICTURE || key == C.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED || key == C.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED) {
+                return null
+            }
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && key == C.PLAYER_ROUNDED_CORNER_PADDING) return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P && (key == C.UI_DRAW_BEHIND_CUTOUTS || key == C.PLAYER_AUDIO_COMPRESSOR_BUTTON)) return null
+
+        val arm64 = Build.SUPPORTED_64_BIT_ABIS.firstOrNull() == "arm64-v8a"
+        if (!arm64 && (key == "chat_translate" || key == "downloaded_languages" || key == "chat_translate_target")) {
+            return null
+        }
+
+        val httpEngine = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7
+        val cronet = runCatching { CronetProvider.getAllProviders(context).any { it.isEnabled } }.getOrDefault(false)
+        if (key == C.NETWORK_LIBRARY && !httpEngine && !cronet) return null
+
+        val prefs = context.prefs()
+        val expOn = prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
+        val customProxyOn = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+        val streamProxyOn = prefs.getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
+        val anyProxyOn = !expOn && (customProxyOn || streamProxyOn)
+
+        var enabled = pref.isEnabled
+        var disabledHint: (() -> String)? = null
+        val depKey = pref.dependency
+        if (!depKey.isNullOrBlank()) {
+            enabled = enabled && prefs.getBoolean(depKey, false)
+        }
+
+        when (key) {
+            C.PLAYER_ADBLOCK -> {
+                enabled = anyProxyOn
+                disabledHint = {
+                    context.getString(if (expOn) R.string.tv_adblock_swap_locked_exp_hint else R.string.tv_adblock_swap_locked_hint)
+                }
+            }
+            C.TV_EXPERIMENTAL_ADBLOCK -> {
+                enabled = !anyProxyOn
+                disabledHint = { context.getString(R.string.tv_adblock_exp_disabled_by_proxy) }
+            }
+            "custom_proxy_settings", C.PLAYER_USE_STREAM_PROXY, "stream_proxy_settings" -> {
+                enabled = !expOn
+                disabledHint = { context.getString(R.string.tv_adblock_exp_proxies_disabled) }
+            }
+        }
+
+        val iconRes = PLAYER_BUTTON_ICONS[key] ?: TvSettingIcons.iconOf(pref)
+
+        var title = when (key) {
+            C.PLAYER_ADBLOCK -> context.getString(R.string.tv_adblock_swap_title)
+            "about_app" -> "${context.getString(R.string.app_name)} ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+            else -> pref.title?.toString().orEmpty()
+        }
+        if (title.isBlank()) return null
+
+        var summary: String? = pref.summary?.toString()
+        val kind: Kind = when (pref) {
+            is TwoStatePreference -> {
+                val checked = when (key) {
+                    C.PLAYER_ADBLOCK -> if (!anyProxyOn) true else prefs.getBoolean(C.PLAYER_ADBLOCK, true)
+                    C.TV_EXPERIMENTAL_ADBLOCK -> expOn
+                    C.PLAYER_USE_STREAM_PROXY -> !expOn && streamProxyOn
+                    else -> if (key.isNotBlank() && prefs.contains(key)) prefs.getBoolean(key, pref.isChecked) else pref.isChecked
+                }
+                if (key == C.PLAYER_ADBLOCK) {
+                    summary = context.getString(R.string.tv_adblock_summary_1440p)
+                }
+                Kind.Toggle(checked)
+            }
+            is ListPreference -> {
+                var entries = pref.entries?.map { it.toString() }.orEmpty()
+                var values = pref.entryValues?.map { it.toString() }.orEmpty()
+                var currentValue = if (key.isNotBlank() && prefs.contains(key)) prefs.getString(key, pref.value) else pref.value
+
+                when (key) {
+                    C.UI_LANGUAGE -> {
+                        val lang = AppCompatDelegate.getApplicationLocales()
+                        currentValue = if (lang.isEmpty) {
+                            "auto"
+                        } else {
+                            val tag = lang.toLanguageTags()
+                            if (tag in values) tag
+                            else {
+                                val short = when (tag.substringBefore("-")) {
+                                    "id" -> "in"
+                                    "pt" -> "pt-BR"
+                                    "zh" -> "zh-TW"
+                                    else -> tag.substringBefore("-")
+                                }
+                                if (short in values) short else "en"
+                            }
+                        }
+                    }
+                    C.TV_KEEP_SOUND_ON_LEAVE -> {
+                        val back = prefs.getString(C.TV_BACK_ACTION, "mini")
+                        when (back) {
+                            "mini" -> {
+                                entries = listOf(context.getString(R.string.tv_keep_sound_never), context.getString(R.string.tv_keep_sound_mini_only), context.getString(R.string.tv_keep_sound_always))
+                                values = listOf("never", "minimized", "always")
+                            }
+                            "audio" -> {
+                                entries = listOf(context.getString(R.string.tv_keep_sound_never), context.getString(R.string.tv_keep_sound_audio_only), context.getString(R.string.tv_keep_sound_always))
+                                values = listOf("never", "minimized", "always")
+                            }
+                            else -> {
+                                entries = listOf(context.getString(R.string.tv_keep_sound_never), context.getString(R.string.tv_keep_sound_fullscreen))
+                                values = listOf("never", "always")
+                            }
+                        }
+                        summary = context.getString(
+                            when {
+                                currentValue == "always" && back != "mini" && back != "audio" -> R.string.tv_keep_sound_fullscreen_summary
+                                currentValue == "always" -> R.string.tv_keep_sound_always_summary
+                                currentValue == "minimized" && back == "mini" -> R.string.tv_keep_sound_mini_summary
+                                currentValue == "minimized" && back == "audio" -> R.string.tv_keep_sound_audio_summary
+                                else -> R.string.tv_keep_sound_never_summary
+                            }
+                        )
+                    }
+                    C.CHAT_IMAGE_LIBRARY -> {
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                            entries = context.resources.getStringArray(R.array.imageLibraryEntriesNoWebp).toList()
+                            values = context.resources.getStringArray(R.array.imageLibraryValuesNoWebp).toList()
+                        }
+                    }
+                    "chat_translate_target" -> {
+                        val langs = TranslateLanguage.getAllLanguages()
+                        entries = langs.map { Locale.forLanguageTag(it).displayLanguage }
+                        values = langs
+                    }
+                    C.NETWORK_LIBRARY -> {
+                        if (!cronet) {
+                            entries = context.resources.getStringArray(R.array.networkLibraryEntriesNoCronet).toList()
+                            values = entries
+                        } else if (!httpEngine) {
+                            entries = context.resources.getStringArray(R.array.networkLibraryEntriesNoHttpEngine).toList()
+                            values = entries
+                        }
+                    }
+                }
+                if (key != C.TV_KEEP_SOUND_ON_LEAVE && (summary.isNullOrBlank() || summary == "%s")) {
+                    val idx = values.indexOf(currentValue)
+                    summary = entries.getOrNull(idx)
+                } else if (key != C.TV_KEEP_SOUND_ON_LEAVE) {
+                    val idx = values.indexOf(currentValue)
+                    entries.getOrNull(idx)?.let { summary = it }
+                }
+                val colors = if (key == C.TV_AMBIENT_COLOR) values.map { TvAmbient.colorOf(it) } else null
+                val subtitle = if (key == C.TV_STREAM_END_ACTION) context.getString(R.string.tv_stream_end_raid_note) else null
+                Kind.Choice(currentValue, entries, values, colors, subtitle)
+            }
+            is MultiSelectListPreference -> {
+                val entries = pref.entries?.map { it.toString() }.orEmpty()
+                val values = pref.entryValues?.map { it.toString() }.orEmpty()
+                val selected = if (key.isNotBlank() && prefs.contains(key)) {
+                    prefs.getStringSet(key, pref.values).orEmpty()
+                } else pref.values.orEmpty()
+                if (summary.isNullOrBlank()) {
+                    val labels = values.mapIndexedNotNull { idx, v -> if (v in selected) entries.getOrNull(idx) else null }
+                    summary = if (labels.isEmpty()) context.getString(R.string.disabled_setting) else labels.joinToString(", ")
+                }
+                Kind.MultiChoice(selected, entries, values)
+            }
+            is SeekBarPreference -> {
+                val cur = if (key.isNotBlank() && prefs.contains(key)) prefs.getInt(key, pref.value) else pref.value
+                val step = pref.seekBarIncrement.takeIf { it > 0 } ?: 1
+                Kind.Slider(cur, pref.min, pref.max, step)
+            }
+            is EditTextPreference -> {
+                val tokenMapping = TOKEN_PREF_KEYS[key]
+                val cur = if (tokenMapping != null) {
+                    context.tokenPrefs().getString(tokenMapping, "").orEmpty()
+                } else {
+                    prefs.getString(key, pref.text).orEmpty()
+                }
+                when (key) {
+                    C.PLAYER_REWIND -> summary = context.getString(R.string.seconds_full, cur.ifBlank { "10" })
+                    C.PLAYER_FORWARD -> summary = context.getString(R.string.seconds_full, cur.ifBlank { "10" })
+                    "update_check_frequency" -> summary = context.getString(R.string.update_check_frequency_summary, cur.ifBlank { "24" })
+                    else -> if (summary.isNullOrBlank() && cur.isNotBlank() && tokenMapping == null) summary = cur
+                }
+                val numeric = key == C.PLAYER_REWIND || key == C.PLAYER_FORWARD || key == "update_check_frequency"
+                Kind.TextInput(cur, isNumeric = numeric, useTokenPrefs = tokenMapping != null, tokenKey = tokenMapping)
+            }
+            else -> {
+                when (key) {
+                    "tv_favorites" -> {
+                        TvFavorites.load(context)
+                        val count = TvFavorites.items.value.size
+                        summary = if (count == 0) context.getString(R.string.tv_favorites_empty) else context.getString(R.string.tv_favorites_count, count)
+                    }
+                    "tv_blacklist" -> summary = TvBlacklist.summary(context)
+                    C.TV_PLAYER_CLOCK -> summary = TvClockSettings.summary(context)
+                    C.TV_MULTISTREAM_QUALITY -> summary = TvMultiStreamQuality.summary(context)
+                    C.TV_SWITCHER_ROWS -> summary = TvSwitcherRows.summary(context)
+                    "tv_dpad_shortcuts" -> summary = TvRemoteKeys.dpadSummary(context)
+                    C.TV_CUSTOM_KEYS -> summary = TvRemoteKeys.customKeysSummary(context)
+                    C.TV_HOME_ROWS -> summary = TvHomeRows.summary(context)
+                    C.CHAT_HIGHLIGHTED_USERS -> summary = ChatBlocklist.highlightedSummary(context)
+                    C.CHAT_BLOCKED_USERS -> summary = ChatBlocklist.summary(context)
+                    "custom_proxy_settings" -> {
+                        val on = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+                        val adsOnly = prefs.getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1"
+                        summary = listOf(
+                            context.getString(if (on) R.string.tv_proxies_on else R.string.tv_proxies_off),
+                            context.getString(if (adsOnly) R.string.tv_proxy_mode_ads else R.string.tv_proxy_mode_always).lowercase(),
+                            if (proxyCount == 1) context.getString(R.string.tv_proxies_count_one) else context.getString(R.string.tv_proxies_count, proxyCount),
+                        ).joinToString(" · ") + "\n" + context.getString(R.string.tv_proxies_1440p)
+                    }
+                    "about_app" -> summary = TvAbout.CREDIT_TEXT
+                    "about_device" -> summary = TvAbout.deviceSummary()
+                }
+                Kind.Action(hasChevron = key in CHEVRON_KEYS)
+            }
+        }
+
+        return PrefNode.Item(
+            key = key,
+            title = title,
+            summary = summary,
+            iconRes = iconRes,
+            enabled = enabled,
+            disabledHint = disabledHint,
+            kind = kind,
+        )
+    }
+
+    private fun applySliderValue(context: Context, key: String, value: Int) {
+        context.prefs().edit {
+            putInt(key, value)
+            if (key == "chatWidth") {
+                val dm = context.resources.displayMetrics
+                val maxSide = maxOf(dm.widthPixels, dm.heightPixels)
+                putInt(C.LANDSCAPE_CHAT_WIDTH, (maxSide * (value / 100f)).toInt())
+            }
+        }
+        refreshStamp.intValue++
+    }
+
+    private fun onPreferenceClicked(context: Context, item: PrefNode.Item) {
+        val key = item.key
+        when (val kind = item.kind) {
+            is Kind.Toggle -> {
+                val next = !kind.checked
+                when (key) {
+                    C.TV_EXPERIMENTAL_ADBLOCK -> {
+                        if (next && TvExperimentalAdblock.isAnyProxyEnabled(context)) {
+                            Toast.makeText(context, R.string.tv_adblock_exp_disabled_by_proxy, Toast.LENGTH_LONG).show()
+                            return
+                        }
+                        context.prefs().edit { putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, next) }
+                        (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                    }
+                    C.PLAYER_USE_STREAM_PROXY -> {
+                        if (next && context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                            Toast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
+                            return
+                        }
+                        context.prefs().edit { putBoolean(C.PLAYER_USE_STREAM_PROXY, next) }
+                        (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                    }
+                    C.PLAYER_ADBLOCK -> {
+                        if (!next && !TvExperimentalAdblock.isAnyProxyEnabled(context)) {
+                            val hintRes = if (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                                R.string.tv_adblock_swap_locked_exp_hint
+                            } else {
+                                R.string.tv_adblock_swap_locked_hint
+                            }
+                            Toast.makeText(context, hintRes, Toast.LENGTH_LONG).show()
+                            return
+                        }
+                        context.prefs().edit { putBoolean(C.PLAYER_ADBLOCK, next) }
+                        (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                    }
+                    "live_notifications_enabled" -> {
+                        context.prefs().edit { putBoolean(key, next) }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ActivityCompat.checkSelfPermission(requireActivity(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            ActivityCompat.requestPermissions(requireActivity(), arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                        }
+                        settingsViewModel.toggleNotifications(
+                            enabled = next,
+                            networkLibrary = context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                            gqlHeaders = TwitchApiHelper.getGQLHeaders(context, true),
+                            helixHeaders = TwitchApiHelper.getHelixHeaders(context),
+                        )
+                    }
+                    "sleep_timer_lock" -> {
+                        context.prefs().edit { putBoolean(key, next) }
+                        if (next) {
+                            val dpm = context.getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                            val admin = ComponentName(context, DeviceAdminReceiver::class.java)
+                            if (!dpm.isAdminActive(admin)) {
+                                runCatching {
+                                    startActivity(Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                                        putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
+                                    })
+                                }
+                            }
+                        }
+                    }
+                    "update_check_enabled" -> {
+                        context.prefs().edit { putBoolean(key, next) }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                            next &&
+                            !context.prefs().getBoolean(C.UPDATE_USE_BROWSER, false) &&
+                            !context.canInstallUnknownAppsCompat()
+                        ) {
+                            requireActivity().openUnknownAppSourcesSettings()
+                        }
+                    }
+                    "update_use_browser" -> {
+                        context.prefs().edit { putBoolean(key, next) }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                            !next &&
+                            context.prefs().getBoolean(C.UPDATE_CHECK_ENABLED, true) &&
+                            !context.canInstallUnknownAppsCompat()
+                        ) {
+                            requireActivity().openUnknownAppSourcesSettings()
+                        }
+                    }
+                    C.CHAT_HIDE_BOTS -> {
+                        context.prefs().edit { putBoolean(key, next) }
+                        ChatBlocklist.notifyPrefsChanged()
+                    }
+                    C.UI_DRAW_BEHIND_CUTOUTS -> {
+                        context.prefs().edit { putBoolean(key, next) }
+                        requireActivity().recreate()
+                    }
+                    else -> {
+                        context.prefs().edit { putBoolean(key, next) }
+                        if (key == C.TV_COMPACT_RAIL || key == C.TV_HIDE_MENU_STATS) {
+                            (activity as? MainActivity)?.refreshTvNavigationUi()
+                        }
+                    }
+                }
+                refreshStamp.intValue++
+            }
+            is Kind.Choice -> {
+                if (kind.entries.isEmpty() || kind.entryValues.isEmpty()) return
+                TvDialogs.showChoices(
+                    context = context,
+                    title = item.title,
+                    entries = kind.entries,
+                    selected = kind.entryValues.indexOf(kind.value).coerceAtLeast(0),
+                    colors = kind.colors,
+                    subtitle = kind.subtitle,
+                ) { idx ->
+                    val chosen = kind.entryValues.getOrNull(idx) ?: return@showChoices
+                    if (key == C.UI_LANGUAGE) {
+                        context.prefs().edit { putString(key, chosen) }
+                        AppCompatDelegate.setApplicationLocales(
+                            LocaleListCompat.forLanguageTags(if (chosen == "auto") null else chosen)
+                        )
+                    } else {
+                        val previous = context.prefs().getString(key, null)
+                        context.prefs().edit { putString(key, chosen) }
+                        if (key == C.TV_AMBIENT_COLOR && chosen != previous) {
+                            (activity as? MainActivity)?.refreshTvAmbientColor()
+                        }
+                    }
+                    refreshStamp.intValue++
+                }
+            }
+            is Kind.MultiChoice -> {
+                showMultiSelectPanel(context, item.title, kind) { selected ->
+                    context.prefs().edit { putStringSet(key, selected) }
+                    if (key == C.TV_HOME_LANGUAGE_ROWS) {
+                        TvHomeRows.syncFromLanguageRowsPref(context, selected)
+                    }
+                    refreshStamp.intValue++
+                }
+            }
+            is Kind.Slider -> {
+                val next = if (kind.value + kind.step <= kind.max) kind.value + kind.step else kind.min
+                applySliderValue(context, key, next)
+            }
+            is Kind.TextInput -> {
+                showTextInputDialog(context, item.title, kind) { newText ->
+                    if (kind.useTokenPrefs && kind.tokenKey != null) {
+                        context.tokenPrefs().edit { putString(kind.tokenKey, newText) }
+                    } else {
+                        context.prefs().edit { putString(key, newText) }
+                    }
+                    refreshStamp.intValue++
+                }
+            }
+            is Kind.Action -> handleActionClick(context, item)
+        }
+    }
+
+    private fun handleActionClick(context: Context, item: PrefNode.Item) {
+        when (item.key) {
+            // Sub-screens
+            "player_settings" -> pushXmlSubScreen(R.xml.player_preferences, context.getString(R.string.player_settings))
+            "playback_settings" -> pushXmlSubScreen(R.xml.playback_preferences, context.getString(R.string.playback_settings))
+            "buffer_settings" -> pushXmlSubScreen(R.xml.buffer_preferences, context.getString(R.string.buffer_settings))
+            "player_button_settings" -> pushXmlSubScreen(R.xml.player_button_preferences, context.getString(R.string.player_buttons))
+            "player_menu_settings" -> pushXmlSubScreen(R.xml.player_menu_preferences, context.getString(R.string.player_menu_settings))
+            "ui_settings" -> pushXmlSubScreen(R.xml.ui_preferences, context.getString(R.string.ui_settings))
+            "adblock_settings" -> pushXmlSubScreen(R.xml.adblock_preferences, context.getString(R.string.adblock))
+            "update_settings" -> pushXmlSubScreen(R.xml.update_preferences, context.getString(R.string.update_settings))
+            "api_token_settings" -> pushXmlSubScreen(R.xml.api_token_preferences, context.getString(R.string.api_token_settings))
+            "debug_settings" -> pushXmlSubScreen(R.xml.debug_preferences, context.getString(R.string.debug_settings))
+            "video_swap_settings" -> {
+                videoSwapViewModel.getVideoSwapItems(
+                    context.applicationContext,
+                    VideoSwap(
+                        platform = context.prefs().getString(C.TOKEN_PLATFORM, "web"),
+                        playerType = context.prefs().getString(C.TOKEN_PLAYER_TYPE, "site"),
+                        position = -1,
+                    )
+                )
+                subScreenStack.add(SubScreen.VideoSwaps(item.title))
+                updateBackCallback()
+                focusRightTrigger.intValue++
+            }
+            "stream_proxy_settings" -> {
+                if (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                    Toast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
+                    return
+                }
+                streamProxyViewModel.getProxies()
+                subScreenStack.add(SubScreen.StreamProxies(item.title))
+                updateBackCallback()
+                focusRightTrigger.intValue++
+            }
+            "custom_proxy_settings" -> {
+                if (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                    Toast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
+                    return
+                }
+                val activity = requireActivity()
+                val repository = (activity.application as XtraApp).xtraModule.playerRepository
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val proxies = repository.getCustomProxies()
+                    TvProxyPanel.show(
+                        activity,
+                        proxies,
+                        openSettings = {
+                            if (isAdded) {
+                                customProxyViewModel.getProxies(context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP))
+                                subScreenStack.add(SubScreen.CustomProxies(item.title))
+                                updateBackCallback()
+                                focusRightTrigger.intValue++
+                            }
+                        },
+                        manage = TvProxyPanel.Manage(activity.lifecycleScope, repository),
+                    ) { changed ->
+                        activity.lifecycleScope.launch {
+                            if (changed != null) {
+                                repository.updateCustomProxies(changed)
+                            }
+                            if (isAdded) {
+                                reloadProxyCount()
+                                refreshStamp.intValue++
+                                (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Xtra TV Panels
+            "tv_favorites" -> {
+                TvFavorites.load(context)
+                val favorites = TvFavorites.items.value
+                if (favorites.isEmpty()) {
+                    Toast.makeText(context, R.string.tv_favorites_how, Toast.LENGTH_LONG).show()
+                } else {
+                    val items = favorites.map {
+                        SettingsDragListItem(key = it.login, text = it.name ?: it.login, default = false, enabled = true)
+                    }
+                    TvListPanel.show(context, item.title, items, showDefault = false) { saved ->
+                        val names = favorites.associate { it.login to it.name }
+                        TvFavorites.reorder(
+                            context,
+                            saved.filter { it.enabled }.map { TvFavorites.Favorite(it.key, names[it.key]) }
+                        )
+                        refreshStamp.intValue++
+                    }
+                }
+            }
+            "tv_blacklist" -> {
+                TvBlacklist.showManagerPanel(context) {
+                    refreshStamp.intValue++
+                }
+            }
+            C.TV_HOME_ROWS -> {
+                TvHomeRows.showManagerPanel(context) {
+                    refreshStamp.intValue++
+                }
+            }
+            C.TV_PLAYER_CLOCK -> {
+                TvClockSettings.showPanel(context) {
+                    refreshStamp.intValue++
+                }
+            }
+            C.TV_MULTISTREAM_QUALITY -> {
+                TvMultiStreamQuality.showPanel(context = context) {
+                    refreshStamp.intValue++
+                }
+            }
+            C.TV_SWITCHER_ROWS -> {
+                TvSwitcherRows.showManagerPanel(context) {
+                    refreshStamp.intValue++
+                }
+            }
+            "tv_dpad_shortcuts" -> {
+                TvRemoteKeys.showDpadPanel(context) {
+                    refreshStamp.intValue++
+                }
+            }
+            C.TV_CUSTOM_KEYS -> {
+                TvRemoteKeys.showCustomKeysPanel(context) {
+                    refreshStamp.intValue++
+                }
+            }
+
+            // Tab List Reorder Panels
+            "ui_navigation_tab_list_dialog" -> showNavigationTabsPanel(context, item.title)
+            "ui_following_tabs_dialog" -> showSimpleTabsPanel(
+                context, item.title, C.UI_FOLLOWING_TABS, C.DEFAULT_FOLLOWING_TABS
+            ) { k ->
+                when (k) {
+                    "0" -> getString(R.string.games)
+                    "1" -> getString(R.string.live)
+                    "2" -> getString(R.string.videos)
+                    "3" -> getString(R.string.channels)
+                    else -> getString(R.string.live)
+                }
+            }
+            "ui_saved_tabs_dialog" -> showSimpleTabsPanel(
+                context, item.title, C.UI_SAVED_TABS, C.DEFAULT_SAVED_TABS
+            ) { k ->
+                when (k) {
+                    "0" -> getString(R.string.bookmarks)
+                    "1" -> getString(R.string.downloads)
+                    "2" -> getString(R.string.filters)
+                    else -> getString(R.string.downloads)
+                }
+            }
+            "ui_game_tabs_dialog" -> showSimpleTabsPanel(
+                context, item.title, C.UI_GAME_TABS, C.DEFAULT_GAME_TABS
+            ) { k ->
+                when (k) {
+                    "0" -> getString(R.string.videos)
+                    "1" -> getString(R.string.live)
+                    "2" -> getString(R.string.clips)
+                    else -> getString(R.string.live)
+                }
+            }
+            "ui_search_tabs_dialog" -> showSimpleTabsPanel(
+                context, item.title, C.UI_SEARCH_TABS, C.DEFAULT_SEARCH_TABS
+            ) { k ->
+                when (k) {
+                    "0" -> getString(R.string.videos)
+                    "1" -> getString(R.string.streams)
+                    "2" -> getString(R.string.channels)
+                    "3" -> getString(R.string.games)
+                    else -> getString(R.string.channels)
+                }
+            }
+            "ui_channel_tabs_dialog" -> showChannelTabsPanel(context, item.title)
+
+            // Chat & MLKit
+            C.CHAT_HIGHLIGHTED_USERS -> {
+                ChatBlocklist.showHighlightedSettingsDialog(requireActivity()) {
+                    refreshStamp.intValue++
+                }
+            }
+            C.CHAT_BLOCKED_USERS -> {
+                ChatBlocklist.showSettingsDialog(requireActivity()) {
+                    refreshStamp.intValue++
+                }
+            }
+            "downloaded_languages" -> {
+                val languages = TranslateLanguage.getAllLanguages()
+                val names = languages.map { Locale.forLanguageTag(it).displayLanguage }
+                val modelManager = RemoteModelManager.getInstance()
+                modelManager.getDownloadedModels(TranslateRemoteModel::class.java)
+                    .addOnSuccessListener { models ->
+                        if (!isAdded) return@addOnSuccessListener
+                        val downloaded = models.map { it.language }.toSet()
+                        showMultiSelectPanel(
+                            context,
+                            item.title,
+                            Kind.MultiChoice(downloaded, names, languages),
+                        ) { selected ->
+                            downloaded.filter { it !in selected }.forEach {
+                                modelManager.deleteDownloadedModel(TranslateRemoteModel.Builder(it).build())
+                            }
+                            selected.filter { it !in downloaded }.forEach {
+                                modelManager.download(
+                                    TranslateRemoteModel.Builder(it).build(),
+                                    DownloadConditions.Builder().build()
+                                )
+                            }
+                        }
+                    }
+            }
+
+            // Maintenance & Updates & Backup & About
+            "delete_video_positions" -> {
+                requireActivity().getAlertDialogBuilder()
+                    .setMessage(getString(R.string.delete_video_positions_message))
+                    .setPositiveButton(getString(R.string.yes)) { _, _ -> settingsViewModel.deletePositions() }
+                    .setNegativeButton(getString(R.string.no), null)
+                    .show()
+            }
+            "delete_recent_searches" -> {
+                requireActivity().getAlertDialogBuilder()
+                    .setMessage(getString(R.string.delete_recent_searches_message))
+                    .setPositiveButton(getString(R.string.yes)) { _, _ -> settingsViewModel.deleteRecentSearches() }
+                    .setNegativeButton(getString(R.string.no), null)
+                    .show()
+            }
+            "import_app_downloads" -> {
+                settingsViewModel.importDownloads()
+                Toast.makeText(context, android.R.string.ok, Toast.LENGTH_SHORT).show()
+            }
+            "admin_settings" -> {
+                runCatching {
+                    startActivity(Intent().setComponent(ComponentName("com.android.settings", "com.android.settings.DeviceAdminSettings")))
+                }
+            }
+            "check_updates" -> {
+                settingsViewModel.checkUpdates(
+                    context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    context.prefs().getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraATV/releases/latest",
+                    context.tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0),
+                )
+            }
+            "backup_settings" -> {
+                TvActionPanel.show(
+                    context,
+                    getString(R.string.backup_settings),
+                    listOf(
+                        TvActionPanel.Action(getString(R.string.tv_backup_save_tv), R.drawable.tv_ic_download) {
+                            TvBackup.saveToTv(context, lifecycleScope)
+                        },
+                        TvActionPanel.Action(getString(R.string.tv_backup_qr_send), R.drawable.tv_ic_share) {
+                            TvBackup.showQrExport(context, lifecycleScope)
+                        },
+                    )
+                )
+            }
+            "restore_settings" -> {
+                TvActionPanel.show(
+                    context,
+                    getString(R.string.restore_settings),
+                    listOf(
+                        TvActionPanel.Action(getString(R.string.tv_backup_restore_tv), R.drawable.tv_ic_history) {
+                            TvBackup.restoreFromTv(context, lifecycleScope) {
+                                try {
+                                    restoreResultLauncher?.launch(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                        type = "*/*"
+                                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                                    })
+                                } catch (_: ActivityNotFoundException) {
+                                    Toast.makeText(context, R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        TvActionPanel.Action(getString(R.string.tv_backup_qr_receive), R.drawable.tv_ic_wifi) {
+                            TvBackup.showQrImport(context, lifecycleScope)
+                        },
+                    )
+                )
+            }
+            "get_integrity_token" -> {
+                IntegrityDialog.newInstance(null).show(childFragmentManager, null)
+            }
+            "about_app", "about_github", "about_device" -> TvAbout.show(context)
+            "about_discord" -> TvAbout.show(context, discord = true)
+        }
+    }
+
+    private fun pushXmlSubScreen(xmlRes: Int, title: String) {
+        subScreenStack.add(SubScreen.Xml(xmlRes, title))
+        updateBackCallback()
+        focusRightTrigger.intValue++
+    }
+
+    // =========================================================================
+    // Helper Dialogs & Side Panels
+    // =========================================================================
+
+    private fun parseTabSpecList(rawPref: String?, defaultCsv: String): List<String> {
+        val defaultTabs = defaultCsv.split(',')
+        if (rawPref == null) return defaultTabs
+        val list = rawPref.split(',').filter { item ->
+            defaultTabs.any { it.first() == item.first() }
+        }.toMutableList()
+        defaultTabs.forEachIndexed { index, item ->
+            if (list.none { it.first() == item.first() }) {
+                list.add(index.coerceAtMost(list.size), item)
+            }
+        }
+        return list
+    }
+
+    private fun showNavigationTabsPanel(context: Context, title: String) {
+        val tabList = parseTabSpecList(context.prefs().getString(C.UI_NAVIGATION_TAB_LIST, null), C.DEFAULT_NAVIGATION_TAB_LIST)
+        val startPage = context.prefs().getString(C.TV_START_PAGE, "home")
+        val extras = context.prefs().getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
+        val tabs = tabList.map {
+            val split = it.split(':')
+            SettingsDragListItem(
+                key = split[0],
+                text = when (split[0]) {
+                    "0" -> getString(R.string.games)
+                    "1" -> getString(R.string.popular)
+                    "2" -> getString(R.string.following)
+                    "3" -> getString(R.string.saved)
+                    else -> getString(R.string.popular)
+                },
+                default = split[0] == startPage,
+                enabled = split[2] != "0",
+            )
+        }
+        val home = SettingsDragListItem(
+            key = "home",
+            text = getString(R.string.tv_home),
+            default = startPage == "home",
+            enabled = true,
+            locked = true,
+        )
+        val rows = listOf(home) + tabs.flatMap { tab ->
+            if (tab.key == "2") {
+                listOf(tab) + listOf(
+                    "videos" to R.string.tv_menu_followed_videos,
+                    "channels" to R.string.tv_menu_followed_channels,
+                    "games" to R.string.tv_menu_followed_games,
+                ).map { (k, labelRes) ->
+                    SettingsDragListItem(key = k, text = getString(labelRes), default = false, enabled = k in extras, parent = "2")
+                }
+            } else listOf(tab)
+        }
+        TvListPanel.show(context, title, rows, showDefault = true) { saved ->
+            context.prefs().edit {
+                putString(C.UI_NAVIGATION_TAB_LIST, saved.filter { it.parent == null && !it.locked }.joinToString(",") {
+                    "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
+                })
+                putString(C.TV_START_PAGE, saved.firstOrNull { it.default && it.enabled && it.parent == null }?.key ?: "home")
+                putStringSet(C.TV_MENU_EXTRAS, saved.filter { it.parent != null && it.enabled }.map { it.key }.toSet())
+            }
+            (activity as? MainActivity)?.refreshTvNavigationUi()
+            refreshStamp.intValue++
+        }
+    }
+
+    private fun showSimpleTabsPanel(
+        context: Context,
+        title: String,
+        prefKey: String,
+        defaultCsv: String,
+        labelOf: (String) -> String,
+    ) {
+        val tabList = parseTabSpecList(context.prefs().getString(prefKey, null), defaultCsv)
+        val tabs = tabList.map {
+            val split = it.split(':')
+            SettingsDragListItem(
+                key = split[0],
+                text = labelOf(split[0]),
+                default = split[1] != "0",
+                enabled = split[2] != "0",
+            )
+        }
+        TvListPanel.show(context, title, tabs, showDefault = true) { saved ->
+            context.prefs().edit {
+                putString(prefKey, saved.joinToString(",") {
+                    "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
+                })
+            }
+            refreshStamp.intValue++
+        }
+    }
+
+    private fun showChannelTabsPanel(context: Context, title: String) {
+        val tabList = parseTabSpecList(context.prefs().getString(C.UI_CHANNEL_TABS, null), C.DEFAULT_CHANNEL_TABS)
+        val tabs = tabList.map {
+            val split = it.split(':')
+            SettingsDragListItem(
+                key = split[0],
+                text = when (split[0]) {
+                    "0" -> getString(R.string.suggestions)
+                    "1" -> getString(R.string.videos)
+                    "2" -> getString(R.string.clips)
+                    "3" -> getString(R.string.chat)
+                    "4" -> getString(R.string.about)
+                    "5" -> getString(R.string.tv_schedule)
+                    else -> getString(R.string.videos)
+                },
+                default = split[1] != "0",
+                enabled = split[2] != "0",
+            )
+        }
+        val hidden = context.prefs().getStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, C.DEFAULT_CHANNEL_HIDDEN_BUTTONS).orEmpty()
+        val rows = tabs + listOf(
+            "download" to R.string.channel_button_download,
+            "share" to R.string.channel_button_share,
+            "notifications" to R.string.channel_button_notifications,
+        ).map { (k, labelRes) ->
+            SettingsDragListItem(key = k, text = getString(labelRes), default = false, enabled = k !in hidden, parent = "buttons")
+        }
+        TvListPanel.show(context, title, rows, showDefault = true) { saved ->
+            context.prefs().edit {
+                putString(C.UI_CHANNEL_TABS, saved.filter { it.parent == null }.joinToString(",") {
+                    "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
+                })
+                putStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, saved.filter { it.parent != null && !it.enabled }.map { it.key }.toSet())
+            }
+            refreshStamp.intValue++
+        }
+    }
+
+    private fun showMultiSelectPanel(
+        context: Context,
+        title: String,
+        kind: Kind.MultiChoice,
+        onSave: (Set<String>) -> Unit,
+    ) {
+        var current by mutableStateOf(kind.values)
+        val dialog = TvDialogs.show(context) { dlg ->
+            val firstReq = remember { FocusRequester() }
+            TvDialogs.SidePanel(title = title) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    itemsIndexed(kind.entries) { idx, label ->
+                        val v = kind.entryValues.getOrNull(idx) ?: return@itemsIndexed
+                        val checked = v in current
+                        TvDialogs.FocusRow(
+                            onClick = {
+                                current = if (checked) current - v else current + v
+                            },
+                            modifier = if (idx == 0) Modifier.focusRequester(firstReq) else Modifier,
+                        ) { focused ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (checked || focused) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (focused) TvColors.onFocused else Color.White,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                TvListPanel.Switch(checked)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                TvDialogs.DialogButton(context.getString(R.string.close_player), Modifier.fillMaxWidth()) {
+                    dlg.dismiss()
+                }
+            }
+            LaunchedEffect(Unit) { runCatching { firstReq.requestFocus() } }
+        }
+        dialog.setOnDismissListener { onSave(current) }
+    }
+
+    private fun showSearchPrompt(context: Context) {
+        val density = context.resources.displayMetrics.density
+        val disableSoftKeyboard = context.prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
+        val edit = EditText(context).apply {
+            hint = context.getString(R.string.search)
+            setText(searchQueryState.value)
+            setSelection(text.length)
+            isSingleLine = true
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
+        }
+        val container = FrameLayout(context).apply {
+            val h = (22 * density).toInt()
+            val v = (8 * density).toInt()
+            setPadding(h, v, h, 0)
+            addView(edit)
+        }
+        val dialog = context.getAlertDialogBuilder()
+            .setTitle(R.string.search)
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val q = edit.text?.toString()?.trim().orEmpty()
+                subScreenStack.clear()
+                searchQueryState.value = q
+                updateBackCallback()
+                if (q.isNotEmpty()) focusRightTrigger.intValue++
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        edit.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE) {
+                val q = edit.text?.toString()?.trim().orEmpty()
+                subScreenStack.clear()
+                searchQueryState.value = q
+                updateBackCallback()
+                dialog.dismiss()
+                if (q.isNotEmpty()) focusRightTrigger.intValue++
+                true
+            } else false
+        }
+        dialog.show()
+        if (edit.requestFocus() && !disableSoftKeyboard && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            dialog.window?.decorView?.windowInsetsController?.show(WindowInsets.Type.ime())
+        }
+    }
+
+    private fun showTextInputDialog(
+        context: Context,
+        title: String,
+        kind: Kind.TextInput,
+        onSave: (String) -> Unit,
+    ) {
+        val density = context.resources.displayMetrics.density
+        val disableSoftKeyboard = context.prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
+        val edit = EditText(context).apply {
+            setText(kind.currentValue)
+            setSelection(text.length)
+            inputType = if (kind.isNumeric) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT
+            isSingleLine = true
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
+        }
+        val container = FrameLayout(context).apply {
+            val h = (22 * density).toInt()
+            val v = (8 * density).toInt()
+            setPadding(h, v, h, 0)
+            addView(edit)
+        }
+        val dialog = context.getAlertDialogBuilder()
+            .setTitle(title)
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                onSave(edit.text?.toString().orEmpty())
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        edit.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                onSave(edit.text?.toString().orEmpty())
+                dialog.dismiss()
+                true
+            } else false
+        }
+        dialog.show()
+        if (edit.requestFocus() && !disableSoftKeyboard && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            dialog.window?.decorView?.windowInsetsController?.show(WindowInsets.Type.ime())
+        }
+    }
+
+    private fun showCustomProxyEditDialog(item: CustomProxy, onSave: (String?, Boolean) -> Unit) {
+        val binding = DialogCustomProxyEditBinding.inflate(layoutInflater)
+        val dialog = requireContext().getAlertDialogBuilder()
+            .setView(binding.root)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                onSave(binding.editText.editText?.text?.toString(), binding.checkBox.isChecked)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        val disableSoftKeyboard = requireContext().prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
+        binding.editText.editText?.apply {
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
+            val url = item.url.orEmpty()
+            text.replace(0, length(), url, 0, url.length)
+            inputType = InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            isSingleLine = false
+            maxLines = 3
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_DONE) {
+                    onSave(binding.editText.editText?.text?.toString(), binding.checkBox.isChecked)
+                    dialog.dismiss()
+                    true
+                } else false
+            }
+        }
+        binding.checkBox.isChecked = item.addQueryParams
+        dialog.show()
+        if (binding.editText.editText?.requestFocus() == true && !disableSoftKeyboard && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            dialog.window?.decorView?.windowInsetsController?.show(WindowInsets.Type.ime())
+        }
+    }
+
+    private fun showStreamProxyEditDialog(
+        item: StreamProxy,
+        onSave: (String?, String?, String?, String?, Boolean, Boolean, Boolean) -> Unit,
+    ) {
+        val binding = DialogStreamProxyEditBinding.inflate(layoutInflater)
+        val dialog = requireContext().getAlertDialogBuilder()
+            .setView(binding.root)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                onSave(
+                    binding.hostInput.editText?.text?.toString(),
+                    binding.portInput.editText?.text?.toString(),
+                    binding.userInput.editText?.text?.toString(),
+                    binding.passwordInput.editText?.text?.toString(),
+                    binding.proxyPlaybackAccessTokenCheckBox.isChecked,
+                    binding.proxyMultivariantPlaylistCheckBox.isChecked,
+                    binding.proxyMediaPlaylistCheckBox.isChecked,
+                )
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        val disableSoftKeyboard = requireContext().prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
+        listOf(
+            binding.hostInput.editText to item.host.orEmpty(),
+            binding.portInput.editText to (item.port?.toString().orEmpty()),
+            binding.userInput.editText to item.username.orEmpty(),
+            binding.passwordInput.editText to item.password.orEmpty(),
+        ).forEach { (et, initial) ->
+            et?.apply {
+                if (disableSoftKeyboard) showSoftInputOnFocus = false
+                text.replace(0, length(), initial, 0, initial.length)
+            }
+        }
+        binding.proxyPlaybackAccessTokenCheckBox.isChecked = item.proxyPlaybackAccessToken
+        binding.proxyMultivariantPlaylistCheckBox.isChecked = item.proxyMultivariantPlaylist
+        binding.proxyMediaPlaylistCheckBox.isChecked = item.proxyMediaPlaylist
+        dialog.show()
+        if (binding.hostInput.editText?.requestFocus() == true && !disableSoftKeyboard && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            dialog.window?.decorView?.windowInsetsController?.show(WindowInsets.Type.ime())
+        }
+    }
+
+    private fun showVideoSwapEditDialog(item: VideoSwap, onSave: (String?, String?) -> Unit) {
+        val binding = DialogVideoSwapEditBinding.inflate(layoutInflater)
+        val dialog = requireContext().getAlertDialogBuilder()
+            .setView(binding.root)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                onSave(
+                    binding.platformInput.editText?.text?.toString(),
+                    binding.playerTypeInput.editText?.text?.toString(),
+                )
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        val disableSoftKeyboard = requireContext().prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
+        binding.platformInput.editText?.apply {
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
+            val s = item.platform.orEmpty()
+            text.replace(0, length(), s, 0, s.length)
+        }
+        binding.playerTypeInput.editText?.apply {
+            if (disableSoftKeyboard) showSoftInputOnFocus = false
+            val s = item.playerType.orEmpty()
+            text.replace(0, length(), s, 0, s.length)
+        }
+        dialog.show()
+        if (binding.platformInput.editText?.requestFocus() == true && !disableSoftKeyboard && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            dialog.window?.decorView?.windowInsetsController?.show(WindowInsets.Type.ime())
+        }
+    }
+
+    companion object {
+        @Volatile
+        var pendingOpenSubScreen: String? = null
+
+        private val CATEGORIES = listOf(
+            CategorySpec(R.xml.xtratv_preferences, R.string.app_name, R.drawable.tv_ic_tv_small),
+            CategorySpec(R.xml.tv_settings_player, R.string.player_settings, R.drawable.tv_ic_play),
+            CategorySpec(R.xml.chat_preferences, R.string.chat_settings, R.drawable.tv_ic_chat),
+            CategorySpec(R.xml.tv_settings_interface, R.string.ui_settings, R.drawable.tv_ic_view_quilt),
+            CategorySpec(R.xml.tv_settings_ads, R.string.tv_settings_section_ads, R.drawable.tv_ic_shield),
+            CategorySpec(R.xml.download_preferences, R.string.download_settings, R.drawable.tv_ic_download),
+            CategorySpec(R.xml.tv_settings_updates, R.string.tv_settings_section_updates, R.drawable.tv_ic_cloud),
+            CategorySpec(R.xml.tv_settings_advanced, R.string.tv_settings_section_advanced, R.drawable.tv_ic_tune),
+            CategorySpec(R.xml.tv_settings_about, R.string.tv_settings_section_about, R.drawable.tv_ic_info),
+        )
+
+        private val TOKEN_PREF_KEYS = mapOf(
+            "user_id" to C.USER_ID,
+            "username" to C.USERNAME,
+            "token" to C.TOKEN,
+            "gql_token2" to C.GQL_TOKEN2,
+            "gql_token_web" to C.GQL_TOKEN_WEB,
+            "gql_headers" to C.GQL_HEADERS,
+        )
+
+        private val CHEVRON_KEYS = setOf(
+            "player_settings", "playback_settings", "buffer_settings", "player_button_settings",
+            "player_menu_settings", "ui_settings", "adblock_settings", "update_settings",
+            "api_token_settings", "debug_settings", "video_swap_settings", "stream_proxy_settings",
+            "custom_proxy_settings", "tv_favorites", "tv_blacklist", C.TV_HOME_ROWS, C.TV_PLAYER_CLOCK,
+            C.TV_MULTISTREAM_QUALITY, C.TV_SWITCHER_ROWS, "tv_dpad_shortcuts", C.TV_CUSTOM_KEYS,
+            "ui_navigation_tab_list_dialog", "ui_following_tabs_dialog", "ui_saved_tabs_dialog",
+            "ui_game_tabs_dialog", "ui_search_tabs_dialog", "ui_channel_tabs_dialog",
+            C.CHAT_HIGHLIGHTED_USERS, C.CHAT_BLOCKED_USERS, "downloaded_languages",
+            "backup_settings", "restore_settings",
+        )
+
+        private val PLAYER_BUTTON_ICONS = mapOf(
+            C.TV_BUTTON_STREAM_LIST to R.drawable.tv_ic_streamers,
+            C.TV_BUTTON_MULTI_STREAM to R.drawable.tv_ic_multistream,
+            C.TV_BUTTON_CHAT_MESSAGE to R.drawable.tv_ic_chat_send,
+            C.TV_BUTTON_CHAT_LAYOUT to R.drawable.tv_ic_chat_layout,
+            C.TV_BUTTON_POINTS to R.drawable.tv_ic_diamond,
+            C.TV_BUTTON_CLIP to R.drawable.tv_ic_clip,
+            C.TV_BUTTON_STATS to R.drawable.tv_ic_stats,
+            C.TV_BUTTON_DIM to R.drawable.tv_ic_dim,
+            C.TV_BUTTON_PROXY to R.drawable.tv_ic_proxy,
+            "player_download" to R.drawable.ic_file_download_black_24dp,
+            "player_follow" to R.drawable.baseline_favorite_border_black_24,
+            "player_sleep" to R.drawable.baseline_alarm_black_24,
+            "player_speedbutton" to androidx.media3.ui.R.drawable.exo_ic_speed,
+            "player_settings" to R.drawable.tv_ic_hd,
+            "player_menu" to R.drawable.baseline_settings_black_24,
+            "player_gamesbutton" to R.drawable.baseline_format_list_bulleted_black_24,
+            "player_restart" to R.drawable.baseline_replay_black_24,
+            "player_seeklive" to androidx.media3.ui.R.drawable.exo_icon_fastforward,
+            "player_volumebutton" to R.drawable.baseline_volume_up_black_24,
+            "player_audio_compressor_button" to R.drawable.baseline_audio_compressor_off_24dp,
+            "player_mode" to R.drawable.baseline_audiotrack_black_24,
+            "player_subtitles" to androidx.media3.ui.R.drawable.exo_ic_subtitle_off,
+            "player_chattoggle" to R.drawable.baseline_speaker_notes_black_24,
+            "player_viewericon" to R.drawable.baseline_person_black_24,
+            "player_pause" to R.drawable.baseline_play_arrow_black_48,
+        )
+    }
+}

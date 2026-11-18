@@ -89,6 +89,21 @@ abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.Listen
                     }
                 }
             }
+            viewLifecycleOwner.lifecycleScope.launch {
+                val initialGen = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.changes.value
+                var seenGen = initialGen
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.changes.collectLatest { gen ->
+                        if (gen != seenGen) {
+                            seenGen = gen
+                            if (this@PagedListFragment !is com.github.andreyasadchy.xtra.ui.search.Searchable) {
+                                silentRefresh = context?.resources?.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv) == true
+                                pagingAdapter.refresh()
+                            }
+                        }
+                    }
+                }
+            }
             if (enableSwipeRefresh) {
                 swipeRefresh.isEnabled = true
                 swipeRefresh.setOnRefreshListener {

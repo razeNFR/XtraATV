@@ -179,7 +179,12 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             sweepCount = { homeSweep.intValue },
             statsBadges = { statsBadges() },
             openStats = {
-                activity?.let { com.github.andreyasadchy.xtra.ui.tv.TvStatsPage.show(it) { loadStats() } }
+                val act = activity as? MainActivity
+                if (act != null && !context.prefs().getBoolean(C.TV_HIDE_MENU_STATS, false)) {
+                    act.openTvSection(R.id.tvStatsFragment)
+                } else if (act != null) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvStatsPage.show(act) { loadStats() }
+                }
             },
             uptime = { stream ->
                 context.takeIf { it.prefs().getBoolean(C.UI_UPTIME, true) }?.let { com.github.andreyasadchy.xtra.ui.tv.TvUptime.format(it, stream.createdAt) }
@@ -532,6 +537,24 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                             ),
                             android.widget.Toast.LENGTH_SHORT,
                         ).show()
+                    }
+                )
+            }
+            if (!game.id.isNullOrBlank() || !game.slug.isNullOrBlank() || !game.name.isNullOrBlank()) {
+                val catBlocked = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(game.id, game.slug, game.name)
+                val catLabel = game.name ?: game.slug ?: ""
+                add(
+                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                        getString(if (catBlocked) R.string.tv_blacklist_unhide_category else R.string.tv_blacklist_hide_category, catLabel),
+                        R.drawable.tv_ic_block,
+                    ) {
+                        if (catBlocked) {
+                            com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.unblockCategory(activity, game.id, game.slug, game.name)
+                            android.widget.Toast.makeText(activity, getString(R.string.tv_blacklist_category_unhidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.blockCategory(activity, game.id, game.slug, game.name, game.boxArtURL)
+                            android.widget.Toast.makeText(activity, getString(R.string.tv_blacklist_category_hidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     }
                 )
             }

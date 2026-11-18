@@ -1375,7 +1375,9 @@ class MainActivity : AppCompatActivity() {
         if (grid != null && position != RecyclerView.NO_POSITION && ::navController.isInitialized) {
             tvFocusKey()?.let { tvFocusMemory[it] = position }
         }
-        if (child != null && grid != null && com.github.andreyasadchy.xtra.ui.tv.TvAmbient.isDynamic(this)) {
+        if (child != null && grid != null && com.github.andreyasadchy.xtra.ui.tv.TvAmbient.isDynamic(this) &&
+            !(::navController.isInitialized && navController.currentDestination?.id == R.id.channelPagerFragment)
+        ) {
             // dynamic ambiance: the pictures of the item of the card (thumbnail, then avatar), the same way on every
             // list; the picture drawn in the card only for a list whose items are not known
             val item = try {
@@ -1544,7 +1546,7 @@ class MainActivity : AppCompatActivity() {
             binding.navBarContainer.defaultFocusHighlightEnabled = false
         }
         val icons = mapOf(
-            R.id.tvNavSearch to R.drawable.baseline_search_black_24,
+            R.id.searchPagerFragment to R.drawable.baseline_search_black_24,
             R.id.tvHomeFragment to R.drawable.baseline_home_black_24,
             R.id.rootGamesFragment to R.drawable.ic_games_black_24dp,
             R.id.rootTopFragment to R.drawable.ic_trending_up_black_24dp,
@@ -1552,8 +1554,8 @@ class MainActivity : AppCompatActivity() {
             R.id.followMediaFragment to R.drawable.ic_favorite_black_24dp,
             R.id.savedPagerFragment to R.drawable.ic_file_download_black_24dp,
             R.id.savedMediaFragment to R.drawable.ic_file_download_black_24dp,
-            R.id.tvNavStats to R.drawable.tv_ic_bar_chart,
-            R.id.tvNavSettings to R.drawable.baseline_settings_black_24,
+            R.id.tvStatsFragment to R.drawable.tv_ic_bar_chart,
+            R.id.tvSettingsFragment to R.drawable.baseline_settings_black_24,
             R.id.tvNavAccount to R.drawable.baseline_person_black_24,
             R.id.tvNavFollowedVideos to R.drawable.tv_ic_video_library,
             R.id.tvNavFollowedChannels to R.drawable.tv_ic_person,
@@ -1570,8 +1572,8 @@ class MainActivity : AppCompatActivity() {
                 title = item.title.toString(),
                 icon = icons[item.itemId],
                 group = when (item.itemId) {
-                    R.id.tvNavSearch -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_TOP
-                    R.id.tvNavStats, R.id.tvNavSettings, R.id.tvNavAccount -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_BOTTOM
+                    R.id.searchPagerFragment -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_TOP
+                    R.id.tvStatsFragment, R.id.tvSettingsFragment, R.id.tvNavAccount -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_BOTTOM
                     else -> com.github.andreyasadchy.xtra.ui.tv.TvMenuState.GROUP_MAIN
                 },
                 sub = sub,
@@ -1595,13 +1597,11 @@ class MainActivity : AppCompatActivity() {
         tvMenuState.selected = binding.navBar.selectedItemId
         tvMenuState.accountId = R.id.tvNavAccount
         updateTvMenuAccount()
-        // option: the page of the focused entry is shown without OK (not search, stats, settings nor account, they open screens)
+        // option: the page of the focused entry is shown without OK (all integrated pages except Account switcher dialog)
         tvMenuState.onFocusItem = { id ->
             binding.root.removeCallbacks(tvMenuAutoNav)
             tvMenuPendingId = 0
-            if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavSearch && id != R.id.tvNavStats && id != R.id.tvNavSettings && id != R.id.tvNavAccount &&
-                id != tvMenuState.selected
-            ) {
+            if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavAccount && id != tvMenuState.selected) {
                 tvMenuPendingId = id
                 binding.root.postDelayed(tvMenuAutoNav, 150L)
             }
@@ -1638,9 +1638,10 @@ class MainActivity : AppCompatActivity() {
                     tvMenuAutoNavAt = 0L
                     binding.navBar.selectedItemId = id
                     tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
-                    if (id != R.id.tvNavStats && id != R.id.tvNavSettings && id != R.id.tvNavAccount) {
+                    if (id != R.id.tvNavAccount) {
                         // the chosen screen gets the focus, the menu folds away
-                        focusContentAfterMenu(id == R.id.tvNavSearch)
+                        hideTvMenu()
+                        focusContentAfterMenu(id == R.id.searchPagerFragment)
                     }
                 }
             }
@@ -1702,6 +1703,12 @@ class MainActivity : AppCompatActivity() {
                 launchSingleTop = true
                 restoreState = false
                 popUpTo(navController.graph.findStartDestination().id) { saveState = false }
+                anim {
+                    enter = R.anim.tv_section_fade_in
+                    exit = R.anim.tv_section_fade_out
+                    popEnter = R.anim.tv_section_fade_in
+                    popExit = R.anim.tv_section_fade_out
+                }
             })
             true
         } catch (e: IllegalArgumentException) {
@@ -1759,6 +1766,20 @@ class MainActivity : AppCompatActivity() {
             home.requestFocus()
             return
         }
+        val statsView = binding.navHostFragment.findViewById<View>(R.id.tvStatsRoot)
+        if (statsView != null && statsView.isShown) {
+            hideTvMenu()
+            currentTvStats()?.requestContentFocus()
+            statsView.requestFocus()
+            return
+        }
+        val settingsView = binding.navHostFragment.findViewById<View>(R.id.tvSettingsRoot)
+        if (settingsView != null && settingsView.isShown) {
+            hideTvMenu()
+            currentTvSettings()?.requestContentFocus()
+            settingsView.requestFocus()
+            return
+        }
         // from the menu, go back to the item last selected in the screen, else to its first item
         val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(binding.navHostFragment) }
         if (last != null && last.requestFocus()) {
@@ -1787,9 +1808,10 @@ class MainActivity : AppCompatActivity() {
 
     /** Goes to a section of the side menu ("see all" of the TV home). */
     fun openTvSection(id: Int) {
+        hideTvMenu()
         binding.navBar.selectedItemId = id
         tvMenuState.selected = binding.navBar.selectedItemId
-        focusContentAfterMenu(false)
+        focusContentAfterMenu(id == R.id.searchPagerFragment)
     }
 
     private fun focusContentAfterMenu(search: Boolean, tries: Int = 0, maxTries: Int = 15) {
@@ -1801,12 +1823,22 @@ class MainActivity : AppCompatActivity() {
             } else {
                 TvUi.findVisibleGrid(binding.navHostFragment)?.takeIf { (it.adapter?.itemCount ?: 0) > 0 && it.childCount > 0 }
                     ?: binding.navHostFragment.findViewById<View>(R.id.tvHome)
+                    ?: binding.navHostFragment.findViewById<View>(R.id.tvStatsRoot)
+                    ?: binding.navHostFragment.findViewById<View>(R.id.tvSettingsRoot)
             }
             when {
                 target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> focusRememberedItem(target)
                 target != null && target.id == R.id.tvHome -> {
                     // the home: the card that had the focus (else the first stream of the first row), never "refresh"
                     currentTvHome()?.focusLastCard()
+                    target.requestFocus()
+                }
+                target != null && target.id == R.id.tvStatsRoot -> {
+                    currentTvStats()?.requestContentFocus()
+                    target.requestFocus()
+                }
+                target != null && target.id == R.id.tvSettingsRoot -> {
+                    currentTvSettings()?.requestContentFocus()
                     target.requestFocus()
                 }
                 target != null -> target.requestFocus()
@@ -1937,21 +1969,77 @@ class MainActivity : AppCompatActivity() {
         prefs.getBoolean(C.PLAYER_USE_STREAM_PROXY, false),
     )
 
+    private fun openIntegratedTvSettings(subScreen: String?) {
+        com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment.pendingOpenSubScreen = subScreen
+        if (isPlayerMaximized()) {
+            (playerFragment as? PlayerFragment)?.let { pf ->
+                if (prefs.getString(C.TV_BACK_ACTION, "mini") == "audio") pf.leaveForBrowsing() else pf.minimize()
+            }
+        }
+        openTvSection(R.id.tvSettingsFragment)
+        currentTvSettings()?.consumePendingSubScreen(this)
+    }
+
     fun openSettings() {
-        if (isTv) adblockPrefsBeforeSettings = snapshotAdblockPrefs()
+        if (isTv) {
+            openIntegratedTvSettings(null)
+            return
+        }
         settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java))
     }
 
     /** TV: the settings of the custom proxies (from the proxy panel of the player). */
     fun openCustomProxySettings() {
-        if (isTv) adblockPrefsBeforeSettings = snapshotAdblockPrefs()
+        if (isTv) {
+            openIntegratedTvSettings(SettingsActivity.OPEN_CUSTOM_PROXIES)
+            return
+        }
         settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_OPEN, SettingsActivity.OPEN_CUSTOM_PROXIES))
     }
 
     /** TV: the settings of the HTTP stream proxies (from the proxy panel of the player). */
     fun openStreamProxySettings() {
-        if (isTv) adblockPrefsBeforeSettings = snapshotAdblockPrefs()
+        if (isTv) {
+            openIntegratedTvSettings(SettingsActivity.OPEN_STREAM_PROXIES)
+            return
+        }
         settingsResultLauncher?.launch(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_OPEN, SettingsActivity.OPEN_STREAM_PROXIES))
+    }
+
+    fun refreshTvAmbientColor() {
+        if (!isTv) return
+        com.github.andreyasadchy.xtra.ui.tv.TvAccent.init(this)
+        tvBaseBackgroundColor?.let { base ->
+            binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
+        }
+        tintTvCards(binding.navHostFragment)
+        (playerFragment as? PlayerFragment)?.refreshTvMinimizedBorderColor()
+        setupTvSideMenu()
+    }
+
+    fun refreshTvNavigationUi() {
+        if (!isTv) return
+        val prevSelected = binding.navBar.selectedItemId
+        populateNavBarMenu(parseNavigationTabList())
+        if (binding.navBar.menu.findItem(prevSelected) != null) {
+            binding.navBar.selectedItemId = prevSelected
+        }
+        setupTvSideMenu()
+        applyTvNavHostPadding(::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment)
+        if (!isTvMenuShown) {
+            hideTvMenu()
+        }
+    }
+
+    fun onTvAdblockOrProxyChanged() {
+        if (!isTv || currentPlayingStream() == null) return
+        val wasMaximized = isPlayerMaximized()
+        restartCurrentStream()
+        if (!wasMaximized) {
+            (playerFragment as? PlayerFragment)?.let { pf ->
+                if (prefs.getString(C.TV_BACK_ACTION, "mini") == "audio") pf.leaveForBrowsing() else pf.minimize()
+            }
+        }
     }
 
     /** TV: the stream watched starts again (proxy turned on or off): its last picture stays until it plays again. */
@@ -2829,6 +2917,9 @@ class MainActivity : AppCompatActivity() {
         }
         currentStream = stream
         currentStreamLogin = stream.channelLogin
+        if (isTv) {
+            syncTvPlaybackState()
+        }
         dvrStream = null
         dvrChatVideoId = null
         // TV, no player open: the playback service starts as soon as the stream is saved, while the screen of the
@@ -2965,6 +3056,7 @@ class MainActivity : AppCompatActivity() {
             neighborJob?.cancel()
             if (isTv) {
                 tvPip.syncWithMainStream(null)
+                syncTvPlaybackState()
             }
         }
         (playerFragment as? ExoPlayerFragment)?.close(deleteStates = false)
@@ -3035,6 +3127,7 @@ class MainActivity : AppCompatActivity() {
         if (isTv) {
             com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = true
             tvPip.syncWithMainStream(null)
+            syncTvPlaybackState()
         }
         dvrStream = null
         dvrChatVideoId = null
@@ -3074,6 +3167,7 @@ class MainActivity : AppCompatActivity() {
         currentStreamLogin = null
         if (isTv) {
             tvPip.syncWithMainStream(null)
+            syncTvPlaybackState()
         }
         dvrStream = null
         dvrChatVideoId = null
@@ -3291,15 +3385,34 @@ class MainActivity : AppCompatActivity() {
             ?.firstOrNull { it.isVisible } as? com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment
     }
 
+    private fun currentTvStats(): com.github.andreyasadchy.xtra.ui.tv.TvStatsFragment? {
+        return supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments
+            ?.firstOrNull { it.isVisible } as? com.github.andreyasadchy.xtra.ui.tv.TvStatsFragment
+    }
+
+    private fun currentTvSettings(): com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment? {
+        return supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments
+            ?.firstOrNull { it.isVisible } as? com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment
+    }
+
+    fun syncTvPlaybackState() {
+        if (!isTv) return
+        val mainLogin = if (playerFragment != null || currentStream != null) currentStreamLogin else null
+        val pipLogins = tvPipActiveStreams().map { it.channelLogin }
+        com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.update(mainLogin, pipLogins)
+    }
+
     fun closePlayer(focusHome: Boolean = true) {
         binding.root.removeCallbacks(keepFocusInPlayerAction)
         currentClipId = null
         currentStream = null
+        currentStreamLogin = null
         neighborJob?.cancel()
         com.github.andreyasadchy.xtra.ui.player.TvStreamPrefetch.clear()
         closeTvPip()
         val fragmentToRemove = supportFragmentManager.findFragmentById(R.id.playerContainer)
         playerFragment = null
+        syncTvPlaybackState()
         setMainContentFocusable(true)
         // back on the home: the card of the stream that was watched, else the first stream (not when a multi-stream
         // takes the place of the player: its streams keep the focus)
@@ -3397,22 +3510,8 @@ class MainActivity : AppCompatActivity() {
         navController.navigateUp()
     }
 
-    private fun initNavigation() {
-        navController = (supportFragmentManager.findFragmentById(R.id.navHostFragment) as NavHostFragment).navController
-        if (isTv) {
-            onBackPressedDispatcher.addCallback(this, tvLeaveBackCallback)
-            onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
-            onBackPressedDispatcher.addCallback(this, tvGridBackCallback)
-            navController.addOnDestinationChangedListener { _, destination, _ ->
-                applyTvNavHostPadding(destination.id == R.id.tvHomeFragment)
-                updateTvMenuBackCallback()
-                if (destination.id != R.id.followPagerFragment) {
-                    tvMenuExtraSelected = null
-                }
-                binding.root.post { tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId }
-            }
-        }
-        val tabList = prefs.getString(C.UI_NAVIGATION_TAB_LIST, null).let { tabPref ->
+    private fun parseNavigationTabList(): List<String> {
+        return prefs.getString(C.UI_NAVIGATION_TAB_LIST, null).let { tabPref ->
             val defaultTabs = C.DEFAULT_NAVIGATION_TAB_LIST.split(',')
             if (tabPref != null) {
                 val list = tabPref.split(',').filter { item ->
@@ -3426,6 +3525,90 @@ class MainActivity : AppCompatActivity() {
                 list
             } else defaultTabs
         }
+    }
+
+    private fun populateNavBarMenu(tabList: List<String>) {
+        binding.navBar.menu.clear()
+        with(binding.navBar) {
+            if (isTv) {
+                menu.add(Menu.NONE, R.id.searchPagerFragment, Menu.NONE, R.string.search).setIcon(R.drawable.baseline_search_black_24)
+                menu.add(Menu.NONE, R.id.tvHomeFragment, Menu.NONE, R.string.tv_home).setIcon(R.drawable.baseline_home_black_24)
+            }
+            if (isTv || tabList.any { it.split(':')[2] != "0" }) {
+                tabList.forEach {
+                    val split = it.split(':')
+                    val key = split[0]
+                    val enabled = split[2] != "0"
+                    if (enabled) {
+                        when (key) {
+                            "0" -> menu.add(Menu.NONE, R.id.rootGamesFragment, Menu.NONE, R.string.games).setIcon(R.drawable.ic_games_black_24dp)
+                            "1" -> menu.add(Menu.NONE, R.id.rootTopFragment, Menu.NONE, R.string.popular).setIcon(R.drawable.ic_trending_up_black_24dp)
+                            "2" -> {
+                                if (prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
+                                    menu.add(Menu.NONE, R.id.followPagerFragment, Menu.NONE, R.string.following).setIcon(R.drawable.ic_favorite_black_24dp)
+                                } else {
+                                    menu.add(Menu.NONE, R.id.followMediaFragment, Menu.NONE, R.string.following).setIcon(R.drawable.ic_favorite_black_24dp)
+                                }
+                            }
+                            "3" -> {
+                                if (prefs.getBoolean(C.UI_SAVED_PAGER, true)) {
+                                    menu.add(Menu.NONE, R.id.savedPagerFragment, Menu.NONE, R.string.saved).setIcon(R.drawable.ic_file_download_black_24dp)
+                                } else {
+                                    menu.add(Menu.NONE, R.id.savedMediaFragment, Menu.NONE, R.string.saved).setIcon(R.drawable.ic_file_download_black_24dp)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                binding.navBarContainer.visibility = View.GONE
+            }
+            if (isTv && prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
+                val extras = prefs.getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
+                if ("videos" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedVideos, Menu.NONE, R.string.tv_menu_followed_videos).setIcon(R.drawable.tv_ic_video_library)
+                if ("channels" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedChannels, Menu.NONE, R.string.tv_menu_followed_channels).setIcon(R.drawable.tv_ic_person)
+                if ("games" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedGames, Menu.NONE, R.string.tv_menu_followed_games).setIcon(R.drawable.tv_ic_gamepad)
+            }
+            if (isTv) {
+                if (!prefs.getBoolean(C.TV_HIDE_MENU_STATS, false)) {
+                    menu.add(Menu.NONE, R.id.tvStatsFragment, Menu.NONE, R.string.tv_nav_stats).setIcon(R.drawable.tv_ic_bar_chart)
+                }
+                menu.add(Menu.NONE, R.id.tvSettingsFragment, Menu.NONE, R.string.settings).setIcon(R.drawable.baseline_settings_black_24)
+                menu.add(Menu.NONE, R.id.tvNavAccount, Menu.NONE, R.string.tv_account).setIcon(R.drawable.baseline_person_black_24)
+            }
+        }
+    }
+
+    private fun initNavigation() {
+        navController = (supportFragmentManager.findFragmentById(R.id.navHostFragment) as NavHostFragment).navController
+        if (isTv) {
+            onBackPressedDispatcher.addCallback(this, tvLeaveBackCallback)
+            onBackPressedDispatcher.addCallback(this, tvMenuBackCallback)
+            onBackPressedDispatcher.addCallback(this, tvGridBackCallback)
+            navController.addOnDestinationChangedListener { _, destination, _ ->
+                if (destination.id != R.id.channelPagerFragment &&
+                    com.github.andreyasadchy.xtra.ui.tv.TvAmbient.clearChannelOverride(this@MainActivity)
+                ) {
+                    tvBaseBackgroundColor?.let { base ->
+                        val restored = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.color(this@MainActivity)
+                        if (restored != null) {
+                            com.github.andreyasadchy.xtra.ui.tv.TvAmbient.applyDynamicToView(binding.root, base, restored)
+                        } else {
+                            binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this@MainActivity, base)
+                        }
+                    }
+                    tintTvCards(binding.navHostFragment)
+                    (playerFragment as? PlayerFragment)?.refreshTvMinimizedBorderColor()
+                }
+                applyTvNavHostPadding(destination.id == R.id.tvHomeFragment)
+                updateTvMenuBackCallback()
+                if (destination.id != R.id.followPagerFragment) {
+                    tvMenuExtraSelected = null
+                }
+                binding.root.post { tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId }
+            }
+        }
+        val tabList = parseNavigationTabList()
         navController.setGraph(navController.navInflater.inflate(R.navigation.nav_graph).also {
             val startOnFollowed = prefs.getString(C.UI_START_ON_FOLLOWED, "1")?.toIntOrNull() ?: 1
             val isLoggedIn = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank() ||
@@ -3433,8 +3616,6 @@ class MainActivity : AppCompatActivity() {
             val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
             when {
                 isTv -> {
-                    // TV: the page with the house in the navigation tabs (the home at first); a tab unchecked since then
-                    // can't be opened, the home is
                     val startPage = prefs.getString(C.TV_START_PAGE, "home")
                     val shown = tabList.any { tab -> tab.split(':').let { it[0] == startPage && it[2] != "0" } }
                     it.setStartDestination(
@@ -3469,53 +3650,7 @@ class MainActivity : AppCompatActivity() {
             if (!prefs.getBoolean(C.UI_THEME_BOTTOM_NAV_COLOR, true) && prefs.getBoolean(C.UI_THEME_MATERIAL3, true)) {
                 setBackgroundColor(MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface))
             }
-            if (isTv) {
-                menu.add(Menu.NONE, R.id.tvNavSearch, Menu.NONE, R.string.search).setIcon(R.drawable.baseline_search_black_24)
-                menu.add(Menu.NONE, R.id.tvHomeFragment, Menu.NONE, R.string.tv_home).setIcon(R.drawable.baseline_home_black_24)
-            }
-            if (isTv || tabList.any { it.split(':')[2] != "0" }) {
-                tabList.forEach {
-                    val split = it.split(':')
-                    val key = split[0]
-                    val enabled = split[2] != "0"
-                    if (enabled) {
-                        when (key) {
-                            "0" -> menu.add(Menu.NONE, R.id.rootGamesFragment, Menu.NONE, R.string.games).setIcon(R.drawable.ic_games_black_24dp)
-                            "1" -> menu.add(Menu.NONE, R.id.rootTopFragment, Menu.NONE, R.string.popular).setIcon(R.drawable.ic_trending_up_black_24dp)
-                            "2" -> {
-                                if (prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
-                                    menu.add(Menu.NONE, R.id.followPagerFragment, Menu.NONE, R.string.following).setIcon(R.drawable.ic_favorite_black_24dp)
-                                } else {
-                                    menu.add(Menu.NONE, R.id.followMediaFragment, Menu.NONE, R.string.following).setIcon(R.drawable.ic_favorite_black_24dp)
-                                }
-                            }
-                            "3" -> {
-                                if (prefs.getBoolean(C.UI_SAVED_PAGER, true)) {
-                                    menu.add(Menu.NONE, R.id.savedPagerFragment, Menu.NONE, R.string.saved).setIcon(R.drawable.ic_file_download_black_24dp)
-                                } else {
-                                    menu.add(Menu.NONE, R.id.savedMediaFragment, Menu.NONE, R.string.saved).setIcon(R.drawable.ic_file_download_black_24dp)
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                binding.navBarContainer.visibility = View.GONE
-            }
-            if (isTv && prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
-                // shortcuts to the tabs of the followed channels, chosen in the Xtra TV settings
-                val extras = prefs.getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
-                if ("videos" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedVideos, Menu.NONE, R.string.tv_menu_followed_videos).setIcon(R.drawable.tv_ic_video_library)
-                if ("channels" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedChannels, Menu.NONE, R.string.tv_menu_followed_channels).setIcon(R.drawable.tv_ic_person)
-                if ("games" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedGames, Menu.NONE, R.string.tv_menu_followed_games).setIcon(R.drawable.tv_ic_gamepad)
-            }
-            if (isTv) {
-                if (!prefs.getBoolean(C.TV_HIDE_MENU_STATS, false)) {
-                    menu.add(Menu.NONE, R.id.tvNavStats, Menu.NONE, R.string.tv_nav_stats).setIcon(R.drawable.tv_ic_bar_chart)
-                }
-                menu.add(Menu.NONE, R.id.tvNavSettings, Menu.NONE, R.string.settings).setIcon(R.drawable.baseline_settings_black_24)
-                menu.add(Menu.NONE, R.id.tvNavAccount, Menu.NONE, R.string.tv_account).setIcon(R.drawable.baseline_person_black_24)
-            }
+            populateNavBarMenu(tabList)
             setupWithNavController(navController)
             if (isTv) {
                 setupTvSideMenu()
@@ -3528,7 +3663,6 @@ class MainActivity : AppCompatActivity() {
                         sideMenu.alpha = 1f
                         sideMenu.visibility = View.VISIBLE
                     } else {
-                        // the side menu stays closed when the app starts: folded away before anything is drawn, no animation
                         sideMenu.alpha = 0f
                         sideMenu.visibility = View.INVISIBLE
                         sideMenu.doOnLayout { if (!isTvMenuShown) it.translationX = -it.width.toFloat() }
@@ -3537,18 +3671,6 @@ class MainActivity : AppCompatActivity() {
             }
             setOnItemSelectedListener {
                 when (it.itemId) {
-                    R.id.tvNavSearch -> {
-                        navController.navigate(SearchPagerFragmentDirections.actionGlobalSearchPagerFragment())
-                        return@setOnItemSelectedListener false
-                    }
-                    R.id.tvNavStats -> {
-                        com.github.andreyasadchy.xtra.ui.tv.TvStatsPage.show(this@MainActivity) {}
-                        return@setOnItemSelectedListener false
-                    }
-                    R.id.tvNavSettings -> {
-                        openSettings()
-                        return@setOnItemSelectedListener false
-                    }
                     R.id.tvNavAccount -> {
                         onAccountClicked()
                         return@setOnItemSelectedListener false

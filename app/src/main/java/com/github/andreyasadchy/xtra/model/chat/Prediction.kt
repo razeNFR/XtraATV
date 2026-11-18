@@ -14,5 +14,6 @@ class Prediction(
         val title: String?,
         val totalPoints: Int?,
         val totalUsers: Int?,
+        val color: String? = null,
     )
 }

@@ -73,6 +73,7 @@ object TvBackup {
     private const val PREFS_ENTRY = "preferences.xml"
     private const val TV_FAVORITES_ENTRY = "tv_favorites.xml"
     private const val TV_STATS_ENTRY = "tv_stats.xml"
+    private const val TV_BLACKLIST_ENTRY = "tv_blacklist.xml"
     private const val DB_ENTRY = "database"
     private val SQLITE_MAGIC = "SQLite format 3".toByteArray(Charsets.US_ASCII)
 
@@ -276,6 +277,7 @@ object TvBackup {
         val mainPrefsBytes = exportDefaultPrefsXml(appContext)
         val tvFavPrefs = appContext.getSharedPreferences("tv_favorites", Context.MODE_PRIVATE)
         val tvStatsPrefs = appContext.getSharedPreferences("tv_stats", Context.MODE_PRIVATE)
+        val tvBlacklistPrefs = appContext.getSharedPreferences(TvBlacklist.FILE, Context.MODE_PRIVATE)
 
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
@@ -291,6 +293,11 @@ object TvBackup {
             if (tvStatsPrefs.all.isNotEmpty()) {
                 zip.putNextEntry(ZipEntry(TV_STATS_ENTRY))
                 zip.write(exportSharedPrefsXml(tvStatsPrefs))
+                zip.closeEntry()
+            }
+            if (tvBlacklistPrefs.all.isNotEmpty()) {
+                zip.putNextEntry(ZipEntry(TV_BLACKLIST_ENTRY))
+                zip.write(exportSharedPrefsXml(tvBlacklistPrefs))
                 zip.closeEntry()
             }
             if (isValidSqliteFile(dbFile)) {
@@ -311,6 +318,7 @@ object TvBackup {
         mainPrefsXml: ByteArray? = null,
         tvFavoritesXml: ByteArray? = null,
         tvStatsXml: ByteArray? = null,
+        tvBlacklistXml: ByteArray? = null,
         dbBytes: ByteArray? = null,
         onPostPrefsCommit: ((Map<String, Any>) -> Unit)? = null,
     ): Boolean {
@@ -336,6 +344,13 @@ object TvBackup {
         if (tvStatsXml != null && isSharedPrefsXmlBytes(tvStatsXml)) {
             val statsPrefs = appContext.getSharedPreferences("tv_stats", Context.MODE_PRIVATE)
             if (commitSharedPrefsXml(statsPrefs, tvStatsXml) != null) {
+                restoredAny = true
+            }
+        }
+        if (tvBlacklistXml != null && isSharedPrefsXmlBytes(tvBlacklistXml)) {
+            val blPrefs = appContext.getSharedPreferences(TvBlacklist.FILE, Context.MODE_PRIVATE)
+            if (commitSharedPrefsXml(blPrefs, tvBlacklistXml) != null) {
+                runCatching { TvBlacklist.reload(appContext) }
                 restoredAny = true
             }
         }
@@ -393,6 +408,7 @@ object TvBackup {
             var mainPrefsXml: ByteArray? = null
             var tvFavoritesXml: ByteArray? = null
             var tvStatsXml: ByteArray? = null
+            var tvBlacklistXml: ByteArray? = null
             var dbBytes: ByteArray? = null
             runCatching {
                 ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
@@ -403,6 +419,7 @@ object TvBackup {
                             when {
                                 name == TV_FAVORITES_ENTRY -> tvFavoritesXml = zip.readBytes()
                                 name == TV_STATS_ENTRY -> tvStatsXml = zip.readBytes()
+                                name == TV_BLACKLIST_ENTRY -> tvBlacklistXml = zip.readBytes()
                                 name == "prefs2.xml" -> Unit
                                 name == PREFS_ENTRY || name.endsWith("_preferences.xml") -> mainPrefsXml = zip.readBytes()
                                 name == DB_ENTRY -> dbBytes = zip.readBytes()
@@ -413,7 +430,7 @@ object TvBackup {
                     }
                 }
             }
-            return applyRestoredParts(context, mainPrefsXml, tvFavoritesXml, tvStatsXml, dbBytes, onPostPrefsCommit)
+            return applyRestoredParts(context, mainPrefsXml, tvFavoritesXml, tvStatsXml, tvBlacklistXml, dbBytes, onPostPrefsCommit)
         }
         if (isValidSqliteBytes(bytes)) {
             return applyRestoredParts(context, dbBytes = bytes, onPostPrefsCommit = onPostPrefsCommit)

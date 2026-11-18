@@ -173,6 +173,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         load(slot, login)
         container.removeCallbacks(followPlayer)
         container.postDelayed(followPlayer, 500L)
+        activity.syncTvPlaybackState()
     }
 
     /**
@@ -256,6 +257,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                     activity.onTvPipClosed()
                 }
             }
+            activity.syncTvPlaybackState()
         }
         noPlayerChecks = 0
         container.removeCallbacks(followPlayer)
@@ -817,6 +819,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             applySound()
             updateBorders()
         }
+        activity.syncTvPlaybackState()
     }
 
     fun closeLatest() {
@@ -848,6 +851,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         if (wasOpen) {
             activity.onTvPipClosed()
         }
+        activity.syncTvPlaybackState()
     }
 
     private var backDown = false

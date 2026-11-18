@@ -64,28 +64,46 @@ import kotlinx.coroutines.launch
 object TvStatsPage {
 
     fun show(context: Context, onReset: () -> Unit) {
-        TvDialogs.show(context) { _ -> Page(onReset) }
+        TvDialogs.show(context) { _ ->
+            Screen(
+                isEmbeddedPage = false,
+                focusTrigger = 1,
+                refreshStamp = 0,
+                onOpenSideMenu = {},
+                onReset = onReset,
+            )
+        }
     }
 
     private fun time(context: Context, ms: Long) = context.getString(R.string.tv_stats_hours, ms / 3_600_000L, (ms / 60_000L) % 60)
 
     @Composable
-    private fun Page(onReset: () -> Unit) {
+    fun Screen(
+        isEmbeddedPage: Boolean,
+        focusTrigger: Int,
+        refreshStamp: Int = 0,
+        onOpenSideMenu: () -> Unit = {},
+        onReset: () -> Unit = {},
+    ) {
         val context = LocalContext.current
         var period by remember { mutableIntStateOf(1) }
         var version by remember { mutableIntStateOf(0) }
-        val detail = remember(period, version) {
+        val detail = remember(period, version, refreshStamp) {
             TvStats.detail(context, when (period) { 0 -> 7; 1 -> 30; else -> null })
         }
         val first = remember { FocusRequester() }
         val scroll = rememberScrollState()
         val scope = rememberCoroutineScope()
-        Box(
+        val rootModifier = if (isEmbeddedPage) {
+            Modifier.fillMaxSize()
+        } else {
             Modifier
                 .fillMaxSize()
                 .background(Brush.linearGradient(listOf(TvColors.accent.copy(alpha = 0.30f).compositeOver(Color(0xFF17131F)), Color(0xFF1E1630), Color(0xFF17131F))))
-        ) {
-            Column(Modifier.fillMaxSize().padding(start = 60.dp, end = 60.dp, top = 26.dp)) {
+        }
+        val horizontalPad = if (isEmbeddedPage) 12.dp else 60.dp
+        Box(rootModifier) {
+            Column(Modifier.fillMaxSize().padding(start = horizontalPad, end = horizontalPad, top = 26.dp)) {
                 // title, period, reset
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(painterResource(R.drawable.tv_ic_bar_chart), contentDescription = null, tint = TvColors.accent, modifier = Modifier.size(28.dp))
@@ -118,7 +136,19 @@ object TvStatsPage {
                         }
                     ) {
                         listOf(R.string.tv_stats_period_7, R.string.tv_stats_period_30, R.string.tv_stats_period_all).forEachIndexed { index, label ->
-                            Chip(context.getString(label), index == period, if (index == 1) Modifier.focusRequester(first) else Modifier) { period = index }
+                            val chipMod = when (index) {
+                                0 -> if (isEmbeddedPage) {
+                                    Modifier.onPreviewKeyEvent { ev ->
+                                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                                            onOpenSideMenu()
+                                            true
+                                        } else false
+                                    }
+                                } else Modifier
+                                1 -> Modifier.focusRequester(first)
+                                else -> Modifier
+                            }
+                            Chip(context.getString(label), index == period, chipMod) { period = index }
                         }
                         Spacer(Modifier.width(14.dp))
                         Chip(context.getString(R.string.tv_stats_reset), false, Modifier) {
@@ -162,7 +192,11 @@ object TvStatsPage {
                 }
             }
         }
-        LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+        LaunchedEffect(focusTrigger) {
+            if (focusTrigger > 0) {
+                runCatching { first.requestFocus() }
+            }
+        }
     }
 
     private fun Color.compositeOver(background: Color): Color {

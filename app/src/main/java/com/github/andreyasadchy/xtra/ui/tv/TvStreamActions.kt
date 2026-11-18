@@ -146,6 +146,44 @@ object TvStreamActions {
                     }
                 }
             }
+            if (!stream.channelId.isNullOrBlank() || !stream.channelLogin.isNullOrBlank()) {
+                val chBlocked = TvBlacklist.isChannelBlocked(stream.channelId, stream.channelLogin)
+                entries += Extra(
+                    activity.getString(
+                        if (chBlocked) R.string.tv_blacklist_unhide_channel else R.string.tv_blacklist_hide_channel,
+                        name.ifBlank { stream.channelLogin.orEmpty() },
+                    ),
+                    R.drawable.tv_ic_block,
+                ) {
+                    val label = name.ifBlank { stream.channelLogin.orEmpty() }
+                    if (chBlocked) {
+                        TvBlacklist.unblockChannel(activity, stream.channelId, stream.channelLogin)
+                        Toast.makeText(activity, activity.getString(R.string.tv_blacklist_channel_unhidden, label), Toast.LENGTH_SHORT).show()
+                    } else {
+                        TvBlacklist.blockChannel(activity, stream.channelId, stream.channelLogin, stream.channelName, stream.channelImageURL)
+                        Toast.makeText(activity, activity.getString(R.string.tv_blacklist_channel_hidden, label), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            if (!stream.gameName.isNullOrBlank()) {
+                val gName = stream.gameName!!
+                val catBlocked = TvBlacklist.isCategoryBlocked(stream.gameId, stream.gameSlug, gName)
+                entries += Extra(
+                    activity.getString(
+                        if (catBlocked) R.string.tv_blacklist_unhide_category else R.string.tv_blacklist_hide_category,
+                        gName,
+                    ),
+                    R.drawable.tv_ic_block,
+                ) {
+                    if (catBlocked) {
+                        TvBlacklist.unblockCategory(activity, stream.gameId, stream.gameSlug, gName)
+                        Toast.makeText(activity, activity.getString(R.string.tv_blacklist_category_unhidden, gName), Toast.LENGTH_SHORT).show()
+                    } else {
+                        TvBlacklist.blockCategory(activity, stream.gameId, stream.gameSlug, gName)
+                        Toast.makeText(activity, activity.getString(R.string.tv_blacklist_category_hidden, gName), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
             entries += last
             TvDialogs.showChoices(activity, stream.title?.trim()?.takeIf { it.isNotEmpty() } ?: name, entries.map { it.label }, -1, entries.map { it.icon }) {
                 entries[it].run()

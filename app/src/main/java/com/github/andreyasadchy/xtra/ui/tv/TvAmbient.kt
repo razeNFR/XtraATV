@@ -184,6 +184,70 @@ object TvAmbient {
         updateFromPictures(context, scope, listOf(url))
     }
 
+    @Volatile
+    private var channelOverrideActive = false
+    private var channelOverrideJob: Job? = null
+
+    /**
+     * Applies a subtle dynamic ambient tint derived from a channel's banner/avatar on [ChannelPagerFragment]
+     * whenever TV ambient is not disabled ("none"), even when a fixed ambient color is selected.
+     */
+    fun applyChannelOverride(context: Context, scope: CoroutineScope, urls: List<String?>) {
+        val prefKey = context.prefs().getString(C.TV_AMBIENT_COLOR, "violet") ?: "violet"
+        if (prefKey == "none") return
+        val list = urls.filterNot { it.isNullOrBlank() }.map { it!! }.distinct()
+        if (list.isEmpty()) return
+        channelOverrideActive = true
+        channelOverrideJob?.cancel()
+        val app = context.applicationContext
+        channelOverrideJob = scope.launch {
+            for (url in list) {
+                val cached = colorCache.get(url)
+                val color = if (cached != null) cached else {
+                    val extracted = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val result = app.imageLoader.execute(
+                                ImageRequest.Builder(app)
+                                    .data(url)
+                                    .size(64, 64)
+                                    .allowHardware(false)
+                                    .build()
+                            )
+                            if (result is SuccessResult) {
+                                extractColor(result.image.asDrawable(app.resources).toBitmap(48, 48, Bitmap.Config.ARGB_8888)) ?: NO_COLOR
+                            } else null
+                        }.getOrNull()
+                    }
+                    if (extracted != null) colorCache.put(url, extracted)
+                    extracted
+                }
+                if (color != null && color != NO_COLOR) {
+                    handler.post {
+                        if (!channelOverrideActive) return@post
+                        if (isDynamic(app)) {
+                            dynamicColor = color
+                            dynamicLoaded = true
+                            app.prefs().edit().putInt(C.TV_AMBIENT_DYNAMIC_LAST, color).apply()
+                        }
+                        TvAccent.update(color)
+                        dynamicListener?.invoke(color)
+                    }
+                    return@launch
+                }
+            }
+        }
+    }
+
+    /** Restores the user's configured ambient color when leaving [ChannelPagerFragment]. */
+    fun clearChannelOverride(context: Context): Boolean {
+        if (!channelOverrideActive) return false
+        channelOverrideActive = false
+        channelOverrideJob?.cancel()
+        channelOverrideJob = null
+        TvAccent.init(context)
+        return true
+    }
+
     /**
      * The one way every screen gives the picture that has the focus: its addresses, the best first (the thumbnail, then
      * the avatar of the channel). The first one that has a color gives it; when none has (grey or black pictures, no

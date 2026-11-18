@@ -99,7 +99,7 @@ class GamesDataSource(
         offset = items.lastOrNull()?.cursor?.toString()
         val nextPage = data.pageInfo?.hasNextPage != false
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterGames(list),
             prevKey = null,
             nextKey = if (!offset.isNullOrBlank() && nextPage) {
                 (params.key ?: 1) + 1
@@ -134,7 +134,7 @@ class GamesDataSource(
         offset = items.lastOrNull()?.cursor
         val nextPage = data.pageInfo?.hasNextPage != false
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterGames(list),
             prevKey = null,
             nextKey = if (!offset.isNullOrBlank() && nextPage) {
                 (params.key ?: 1) + 1
@@ -158,7 +158,7 @@ class GamesDataSource(
         }
         offset = response.pagination?.cursor
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterGames(list),
             prevKey = null,
             nextKey = if (!offset.isNullOrBlank()) {
                 (params.key ?: 1) + 1

@@ -4095,6 +4095,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 syncPlayPauseButtonVisibility()
                 // the button of the small window, only while it is open
                 playerControls.tvPipSettings?.visibility = if ((activity as? MainActivity)?.isTvPipOpen() == true) View.VISIBLE else View.GONE
+                syncTvPollsPredictionsButton()
                 playerControls.tvQualityInfo?.let { info ->
                     val label = getCurrentQualityLabel()
                     info.text = label
@@ -4155,7 +4156,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.contentDescription = getString(label)
                 }
                 button
-            } + listOfNotNull(tvGoLive, streamList, statsForNerds, chatMessage, multiStream, tvDim, tvProxy, tvPipSettings, chatLayoutSettings, tvPoints, tvClip)
+            } + listOfNotNull(tvGoLive, streamList, statsForNerds, chatMessage, multiStream, tvDim, tvProxy, tvPipSettings, chatLayoutSettings, tvPollsPredictions, tvPoints, tvClip)
             buttons.forEach { button ->
                 button.setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
@@ -4270,6 +4271,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 showController(force = true)
                 showTvPipPanel()
             }
+            tvPollsPredictions?.setOnClickListener {
+                showController(force = true)
+                showTvPollsPredictionsPanel()
+            }
+            ensurePlayerLiveEventsLoaded()
+            syncTvPollsPredictionsButton()
             val isLoggedIn = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
                     !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank()
             if (playbackService?.type == BasePlaybackService.STREAM && isLoggedIn && !prefs.getBoolean(C.CHAT_DISABLE, false) && prefs.getBoolean(C.TV_BUTTON_CHAT_MESSAGE, true)) {
@@ -4690,8 +4697,193 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private val tvActivePoll = kotlinx.coroutines.flow.MutableStateFlow<com.github.andreyasadchy.xtra.model.chat.Poll?>(null)
+    private val tvActivePollSeconds = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
+    private val tvActivePrediction = kotlinx.coroutines.flow.MutableStateFlow<com.github.andreyasadchy.xtra.model.chat.Prediction?>(null)
+    private val tvActivePredictionSeconds = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
+    private val tvSelfBetOutcomeId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private val tvSelfBetPoints = kotlinx.coroutines.flow.MutableStateFlow(0)
+    private val tvSelfVotedPollChoices = kotlinx.coroutines.flow.MutableStateFlow<Map<String, String>>(emptyMap())
+    private var tvLiveEventsLookupKey: String? = null
+    private var tvLiveEventsLookupJob: Job? = null
+    private var tvLiveEventsTickerJob: Job? = null
+
+    private fun resetTvLiveEventsState() {
+        tvActivePoll.value = null
+        tvActivePollSeconds.value = null
+        tvActivePrediction.value = null
+        tvActivePredictionSeconds.value = null
+        tvSelfBetOutcomeId.value = null
+        tvSelfBetPoints.value = 0
+        tvLiveEventsTickerJob?.cancel()
+        tvLiveEventsTickerJob = null
+        syncTvPollsPredictionsButton()
+    }
+
+    private fun startTvLiveEventsLocalTickerIfNeeded() {
+        if (tvLiveEventsTickerJob?.isActive == true || !isAdded) return
+        tvLiveEventsTickerJob = viewLifecycleOwner.lifecycleScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1000L)
+                val poll = tvActivePoll.value
+                val pSec = tvActivePollSeconds.value
+                if (poll != null && poll.status == "ACTIVE" && pSec != null) {
+                    val next = pSec - 1
+                    if (next <= 0) {
+                        tvActivePoll.value = null
+                        tvActivePollSeconds.value = null
+                        syncTvPollsPredictionsButton()
+                    } else {
+                        tvActivePollSeconds.value = next
+                    }
+                }
+                val pred = tvActivePrediction.value
+                val prSec = tvActivePredictionSeconds.value
+                if (pred != null && pred.status == "ACTIVE" && prSec != null) {
+                    val next = prSec - 1
+                    tvActivePredictionSeconds.value = if (next > 0) next else null
+                }
+                if (tvActivePoll.value == null && tvActivePrediction.value == null) {
+                    break
+                }
+            }
+        }
+    }
+
+    private fun ensurePlayerLiveEventsLoaded() {
+        if (!isTv || !isAdded || _binding == null) return
+        if (!isStreamScreen()) {
+            tvLiveEventsLookupKey = null
+            resetTvLiveEventsState()
+            return
+        }
+        val (_, clogin, _) = currentCoStreamIdentity()
+        if (clogin.isNullOrBlank()) return
+        val key = clogin.lowercase()
+        if (key == tvLiveEventsLookupKey) {
+            syncTvPollsPredictionsButton()
+            return
+        }
+        tvLiveEventsLookupKey = key
+        resetTvLiveEventsState()
+        tvLiveEventsLookupJob?.cancel()
+        val ctx = requireContext().applicationContext
+        val app = ctx as? com.github.andreyasadchy.xtra.XtraApp ?: return
+        tvLiveEventsLookupJob = viewLifecycleOwner.lifecycleScope.launch {
+            val netLib = ctx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+            val headers = TwitchApiHelper.getGQLHeaders(ctx, true)
+            val loaded = app.xtraModule.graphQLRepository.loadActivePollAndPrediction(netLib, headers, clogin)
+            if (tvLiveEventsLookupKey != key) return@launch
+            if (loaded.poll != null && tvActivePoll.value == null) {
+                tvActivePoll.value = loaded.poll
+                tvActivePollSeconds.value = loaded.poll.remainingMilliseconds?.let { (it / 1000).coerceAtLeast(1) }
+            }
+            if (loaded.prediction != null && tvActivePrediction.value == null) {
+                tvActivePrediction.value = loaded.prediction
+                val created = loaded.prediction.createdAt
+                val win = loaded.prediction.predictionWindowSeconds
+                if (loaded.prediction.status == "ACTIVE" && created != null && win != null && win > 0) {
+                    val remSec = (((created + win * 1000L) - System.currentTimeMillis()) / 1000L).toInt()
+                    if (remSec > 0) tvActivePredictionSeconds.value = remSec
+                }
+            }
+            if (loaded.selfBetOutcomeId != null && tvSelfBetOutcomeId.value == null) {
+                tvSelfBetOutcomeId.value = loaded.selfBetOutcomeId
+                tvSelfBetPoints.value = loaded.selfBetPoints
+            }
+            if (tvActivePoll.value != null || tvActivePrediction.value != null) {
+                startTvLiveEventsLocalTickerIfNeeded()
+            }
+            syncTvPollsPredictionsButton()
+        }
+    }
+
+    private fun syncTvPollsPredictionsButton() {
+        if (!isTv || _binding == null) return
+        val btn = _binding?.playerControls?.tvPollsPredictions ?: return
+        val poll = tvActivePoll.value
+        val pred = tvActivePrediction.value
+        val shouldShow = isStreamScreen() && (
+            (poll != null && poll.status == "ACTIVE") ||
+                (pred != null && (pred.status == "ACTIVE" || pred.status == "LOCKED"))
+            )
+        val wasFocused = btn.hasFocus()
+        btn.visibility = if (shouldShow) View.VISIBLE else View.GONE
+        if (!shouldShow && wasFocused) {
+            focusAfterHiddenControl()
+        }
+    }
+
+    fun showTvPollsPredictionsPanel() {
+        val ctx = context ?: return
+        val (_, clogin, _) = currentCoStreamIdentity()
+        com.github.andreyasadchy.xtra.ui.tv.TvPollsPredictionsPanel.show(
+            context = ctx,
+            channelLogin = clogin,
+            pollFlow = tvActivePoll,
+            pollSecondsFlow = tvActivePollSeconds,
+            predictionFlow = tvActivePrediction,
+            predictionSecondsFlow = tvActivePredictionSeconds,
+            selfBetOutcomeIdFlow = tvSelfBetOutcomeId,
+            selfBetPointsFlow = tvSelfBetPoints,
+            selfVotedPollChoicesFlow = tvSelfVotedPollChoices,
+            onOptimisticPollUpdate = { updated -> tvActivePoll.value = updated },
+            onOptimisticPredictionUpdate = { updated -> tvActivePrediction.value = updated },
+        )
+    }
+
+    fun onTvPollEvent(poll: com.github.andreyasadchy.xtra.model.chat.Poll) {
+        if (!isTv) return
+        if (poll.status == "ACTIVE") {
+            tvActivePoll.value = poll
+            if (poll.remainingMilliseconds != null && poll.remainingMilliseconds > 0) {
+                tvActivePollSeconds.value = (poll.remainingMilliseconds / 1000).coerceAtLeast(1)
+            }
+            startTvLiveEventsLocalTickerIfNeeded()
+        } else {
+            tvActivePoll.value = null
+            tvActivePollSeconds.value = null
+        }
+        syncTvPollsPredictionsButton()
+    }
+
+    fun onTvPollSecondsLeft(seconds: Int?) {
+        if (!isTv) return
+        tvActivePollSeconds.value = seconds
+    }
+
+    fun onTvPollHidden() {
+        if (!isTv) return
+        tvActivePoll.value = null
+        tvActivePollSeconds.value = null
+        syncTvPollsPredictionsButton()
+    }
+
     fun onTvPredictionEvent(prediction: com.github.andreyasadchy.xtra.model.chat.Prediction) {
         val ctx = context ?: return
+        if (isTv) {
+            when (prediction.status) {
+                "ACTIVE", "LOCKED" -> {
+                    val prevId = tvActivePrediction.value?.id
+                    if (prevId != null && prevId != prediction.id) {
+                        tvSelfBetOutcomeId.value = null
+                        tvSelfBetPoints.value = 0
+                    }
+                    tvActivePrediction.value = prediction
+                    if (prediction.status == "LOCKED") {
+                        tvActivePredictionSeconds.value = null
+                    }
+                    startTvLiveEventsLocalTickerIfNeeded()
+                }
+                else -> {
+                    tvActivePrediction.value = null
+                    tvActivePredictionSeconds.value = null
+                    tvSelfBetOutcomeId.value = null
+                    tvSelfBetPoints.value = 0
+                }
+            }
+            syncTvPollsPredictionsButton()
+        }
         if (!isTv || _binding == null || isChatOpen || !isMaximized || !ctx.prefs().getBoolean(C.TV_CHAT_PREDICTIONS_POPUP, false)) {
             hideTvPredictionPopup()
             return
@@ -4733,12 +4925,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     fun onTvPredictionSecondsLeft(seconds: Int?) {
         tvPredictionSeconds = seconds
+        tvActivePredictionSeconds.value = seconds
         if (tvPredictionView?.isVisible == true) {
             renderTvPredictionPopup()
         }
     }
 
-    fun onTvPredictionHidden() {
+    fun onTvPredictionHidden(clearActive: Boolean = true) {
+        if (clearActive) {
+            tvActivePrediction.value = null
+            tvActivePredictionSeconds.value = null
+            syncTvPollsPredictionsButton()
+        }
         hideTvPredictionPopup()
     }
 
@@ -6594,6 +6792,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        tvLiveEventsLookupJob?.cancel()
+        tvLiveEventsLookupJob = null
+        tvLiveEventsTickerJob?.cancel()
+        tvLiveEventsTickerJob = null
+        tvLiveEventsLookupKey = null
         tvCoStreamLookupJob?.cancel()
         tvCoStreamLookupJob = null
         tvCoStreamObserveJob?.cancel()

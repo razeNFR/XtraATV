@@ -17,6 +17,12 @@
         android:id="@+id/tvHomeFragment"
         android:name="com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment" />
     <fragment
+        android:id="@+id/tvStatsFragment"
+        android:name="com.github.andreyasadchy.xtra.ui.tv.TvStatsFragment" />
+    <fragment
+        android:id="@+id/tvSettingsFragment"
+        android:name="com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment" />
+    <fragment
         android:id="@+id/rootTopFragment"
         android:name="com.github.andreyasadchy.xtra.ui.top.TopStreamsFragment">
         <argument

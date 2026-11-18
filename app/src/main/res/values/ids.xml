@@ -26,4 +26,7 @@
     <item name="tvLoadingPicture" type="id" />
     <item name="tvPipTexture" type="id" />
     <item name="tvPipDim" type="id" />
+    <item name="tvStatsRoot" type="id" />
+    <item name="tvSettingsRoot" type="id" />
+    <item name="tvPlayingBadge" type="id" />
 </resources>

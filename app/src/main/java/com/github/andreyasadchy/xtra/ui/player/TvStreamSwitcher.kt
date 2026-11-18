@@ -690,6 +690,11 @@ object TvStreamSwitcher {
                     notifyItemRangeChanged(0, itemCount, com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM)
                 }
             }
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.attachToRecyclerView(recyclerView) {
+                if (itemCount > 0) {
+                    notifyItemRangeChanged(0, itemCount, com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.PAYLOAD_PLAYBACK)
+                }
+            }
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -727,9 +732,24 @@ object TvStreamSwitcher {
             holder.binding.username.text = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.formatUsernameWithBadge(context, rawName, coCount)
         }
 
+        private fun bindPlaybackBadge(holder: ViewHolder, stream: Stream) {
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.bindView(holder.binding.tvPlayingBadge, stream.channelLogin)
+        }
+
         override fun onBindViewHolder(holder: ViewHolder, position: Int, payloads: MutableList<Any>) {
-            if (payloads.isNotEmpty() && payloads.all { it == com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM }) {
-                streams.getOrNull(position)?.let { bindUsername(holder, it) }
+            val validPayloads = setOf(
+                com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM,
+                com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.PAYLOAD_PLAYBACK,
+            )
+            if (payloads.isNotEmpty() && payloads.all { it in validPayloads }) {
+                streams.getOrNull(position)?.let { stream ->
+                    if (com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM in payloads) {
+                        bindUsername(holder, stream)
+                    }
+                    if (com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.PAYLOAD_PLAYBACK in payloads) {
+                        bindPlaybackBadge(holder, stream)
+                    }
+                }
             } else {
                 super.onBindViewHolder(holder, position, payloads)
             }
@@ -741,6 +761,7 @@ object TvStreamSwitcher {
             val number = checked?.indexOf(stream.channelLogin)?.takeIf { it >= 0 }?.plus(1)
             holder.badge.visibility = if (number != null) View.VISIBLE else View.GONE
             holder.badge.text = number?.toString()
+            bindPlaybackBadge(holder, stream)
             with(holder.binding) {
                 root.setOnClickListener { onClick(stream) }
                 val longClick = onLongClick

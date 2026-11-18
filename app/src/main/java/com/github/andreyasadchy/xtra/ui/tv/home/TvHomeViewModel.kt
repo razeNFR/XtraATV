@@ -137,8 +137,48 @@ class TvHomeViewModel(
         )
     }
 
+    private fun applyBlacklistToMemory() {
+        followed.value?.let { list ->
+            val filtered = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list)
+            followed.value = filtered
+            favorites.value = computeFavorites(filtered)
+        }
+        popular.value?.let { popular.value = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(it) }
+        recommended.value?.let { recommended.value = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(it) }
+        followedGames.value?.let { followedGames.value = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterGames(it) }
+        games.value?.let { games.value = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterGames(it) }
+        followedVideos.value?.let { list ->
+            followedVideos.value = list.filterNot { v ->
+                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(v.channelId, v.channelLogin) ||
+                    com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(v.gameId, v.gameSlug, v.gameName)
+            }
+        }
+        followedClips.value?.let { list ->
+            followedClips.value = list.filterNot { c ->
+                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(c.channelId, c.channelLogin) ||
+                    com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(c.gameId, c.gameSlug, c.gameName)
+            }
+        }
+        offlineChannels.value?.let { list ->
+            offlineChannels.value = list.filterNot { u ->
+                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(u.id, u.login)
+            }
+        }
+        if (languageRows.value.isNotEmpty()) {
+            languageRows.value = languageRows.value.mapValues { (_, list) ->
+                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list)
+            }.filterValues { it.isNotEmpty() }
+        }
+        if (categoryRows.value.isNotEmpty()) {
+            categoryRows.value = categoryRows.value.mapValues { (_, list) ->
+                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list, ignoreCategory = true)
+            }.filterValues { it.isNotEmpty() }
+        }
+    }
+
     init {
         TvFavorites.load(applicationContext)
+        com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.load(applicationContext)
         // a channel added to the favorites or removed: the followed row and favorites row update at once
         viewModelScope.launch {
             TvFavorites.items.collect {
@@ -149,6 +189,25 @@ class TvHomeViewModel(
                 }
                 offlineChannels.value?.let { list ->
                     offlineChannels.value = sortOfflineChannels(list)
+                }
+            }
+        }
+        viewModelScope.launch {
+            var first = true
+            var lastTotal = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.totalCount(applicationContext)
+            com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.changes.collect {
+                val nowTotal = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.totalCount(applicationContext)
+                if (first) {
+                    first = false
+                    lastTotal = nowTotal
+                } else {
+                    val unhidden = nowTotal < lastTotal
+                    lastTotal = nowTotal
+                    applyBlacklistToMemory()
+                    loadedAt = 0L
+                    if (unhidden) {
+                        load(force = true)
+                    }
                 }
             }
         }
@@ -258,7 +317,10 @@ class TvHomeViewModel(
                         enableIntegrity = enableIntegrity,
                         networkLibrary = networkLibrary,
                     )
-                )
+                ).filterNot { v ->
+                    com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(v.channelId, v.channelLogin) ||
+                        com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(v.gameId, v.gameSlug, v.gameName)
+                }
             }
         } else {
             followedVideos.value = emptyList()
@@ -295,13 +357,15 @@ class TvHomeViewModel(
 
         if (TvHomeRows.ROW_FOLLOWED_GAMES in activeSet) {
             jobs += viewModelScope.launch {
-                followedGames.value = loadPage(
-                    FollowedGamesDataSource(
-                        localGameFollowsRepository = localGameFollowsRepository,
-                        gqlHeaders = gqlAccountHeaders,
-                        graphQLRepository = graphQLRepository,
-                        enableIntegrity = enableIntegrity,
-                        networkLibrary = networkLibrary,
+                followedGames.value = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterGames(
+                    loadPage(
+                        FollowedGamesDataSource(
+                            localGameFollowsRepository = localGameFollowsRepository,
+                            gqlHeaders = gqlAccountHeaders,
+                            graphQLRepository = graphQLRepository,
+                            enableIntegrity = enableIntegrity,
+                            networkLibrary = networkLibrary,
+                        )
                     )
                 )
             }
@@ -341,7 +405,8 @@ class TvHomeViewModel(
                     .filter { u ->
                         u.liveViewers == null &&
                             (u.id == null || u.id !in liveIds) &&
-                            (u.login == null || u.login.lowercase() !in liveLogins)
+                            (u.login == null || u.login.lowercase() !in liveLogins) &&
+                            !com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(u.id, u.login)
                     }
                     .distinctBy { it.id ?: it.login }
                 offlineChannels.value = sortOfflineChannels(offline)
@@ -422,7 +487,7 @@ class TvHomeViewModel(
                 }
             }
         }
-        return seeds.take(maxSeeds)
+        return seeds.filterNot { com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(null, it) }.take(maxSeeds)
     }
 
     private suspend fun loadRecommendedStreams(
@@ -445,7 +510,7 @@ class TvHomeViewModel(
                     }
                 }
             }
-        }.distinct().take(2)
+        }.distinct().filterNot { com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(null, it) }.take(2)
         if (seeds.isEmpty()) return emptyList()
 
         val followedLogins = followedStreams.mapNotNull { it.channelLogin?.lowercase() }.toSet()
@@ -466,6 +531,7 @@ class TvHomeViewModel(
         for (s in rawSuggestions) {
             val login = s.channelLogin?.takeIf { it.isNotBlank() }?.lowercase() ?: continue
             if (login in followedLogins) continue
+            if (com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(s.channelId, login)) continue
             if (login !in deduped) {
                 deduped[login] = s
             }
@@ -496,24 +562,26 @@ class TvHomeViewModel(
                     )
                 }
         }
-        return deduped.map { (login, fallback) ->
-            enrichedByLogin[login] ?: Stream(
-                id = fallback.id,
-                channelId = fallback.channelId,
-                channelLogin = fallback.channelLogin,
-                channelName = fallback.channelName,
-                channelImageURL = fallback.channelImageURL,
-                gameId = fallback.gameId,
-                gameSlug = fallback.gameSlug,
-                gameName = fallback.gameName,
-                title = fallback.title,
-                thumbnailURL = fallback.thumbnailURL
-                    ?: "https://static-cdn.jtvnw.net/previews-ttv/live_user_${login}-{width}x{height}.jpg",
-                createdAt = fallback.createdAt,
-                viewerCount = fallback.viewerCount,
-                tags = fallback.tags,
-            )
-        }.sortedByDescending { it.viewerCount ?: 0 }
+        return com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(
+            deduped.map { (login, fallback) ->
+                enrichedByLogin[login] ?: Stream(
+                    id = fallback.id,
+                    channelId = fallback.channelId,
+                    channelLogin = fallback.channelLogin,
+                    channelName = fallback.channelName,
+                    channelImageURL = fallback.channelImageURL,
+                    gameId = fallback.gameId,
+                    gameSlug = fallback.gameSlug,
+                    gameName = fallback.gameName,
+                    title = fallback.title,
+                    thumbnailURL = fallback.thumbnailURL
+                        ?: "https://static-cdn.jtvnw.net/previews-ttv/live_user_${login}-{width}x{height}.jpg",
+                    createdAt = fallback.createdAt,
+                    viewerCount = fallback.viewerCount,
+                    tags = fallback.tags,
+                )
+            }
+        ).sortedByDescending { it.viewerCount ?: 0 }
     }
 
     private suspend fun loadFollowedTopClips(
@@ -552,7 +620,9 @@ class TvHomeViewModel(
         return fetched
             .filter { clip ->
                 val key = clip.id ?: clip.thumbnailURL ?: return@filter false
-                seen.add(key)
+                !com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(clip.channelId, clip.channelLogin) &&
+                    !com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(clip.gameId, clip.gameSlug, clip.gameName) &&
+                    seen.add(key)
             }
             .sortedByDescending { it.viewCount ?: 0 }
             .take(24)

@@ -242,6 +242,14 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
+        <Preference
+            android:key="tv_blacklist"
+            android:persistent="false"
+            android:summary="@string/tv_blacklist_summary_empty"
+            android:title="@string/tv_blacklist_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
         <ListPreference
             android:defaultValue="violet"
             android:entries="@array/tvAmbientColorEntries"

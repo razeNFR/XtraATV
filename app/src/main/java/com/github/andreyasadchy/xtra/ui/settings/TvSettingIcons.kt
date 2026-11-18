@@ -79,6 +79,7 @@ object TvSettingIcons {
         "tv_home_multistream" to R.drawable.tv_ic_multistream,
         "tv_home_followed_videos" to R.drawable.tv_ic_video_library,
         "tv_favorites" to R.drawable.tv_ic_star,
+        "tv_blacklist" to R.drawable.tv_ic_block,
         "tv_ambient_color" to R.drawable.tv_ic_palette,
         "tv_home_cards" to R.drawable.tv_ic_view_quilt,
         "tv_stream_columns" to R.drawable.tv_ic_view_quilt,
@@ -188,7 +189,7 @@ object TvSettingIcons {
         }
     }
 
-    private fun iconOf(preference: Preference): Int {
+    fun iconOf(preference: Preference): Int {
         val key = preference.key.orEmpty()
         keys[key]?.let { return it }
         val lower = key.lowercase()

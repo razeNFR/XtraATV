@@ -37,6 +37,20 @@
                 tools:text="13.3K viewers"
                 tools:visibility="visible" />
 
+            <TextView
+                android:id="@+id/tvPlayingBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginBottom="8dp"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:visibility="gone"
+                app:layout_constraintBottom_toBottomOf="@+id/thumbnail"
+                app:layout_constraintStart_toStartOf="@+id/thumbnail"
+                tools:text="▶ Playing"
+                tools:visibility="visible" />
+
             <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
                 android:id="@+id/uptime"
                 style="@style/TvThumbnailBadge"

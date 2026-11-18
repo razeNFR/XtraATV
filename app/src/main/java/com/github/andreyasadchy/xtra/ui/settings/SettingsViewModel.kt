@@ -544,6 +544,7 @@ class SettingsViewModel(
             var mainPrefsXml: ByteArray? = null
             var tvFavoritesXml: ByteArray? = null
             var tvStatsXml: ByteArray? = null
+            var tvBlacklistXml: ByteArray? = null
             var dbBytes: ByteArray? = null
 
             for (rawUri in list) {
@@ -579,6 +580,7 @@ class SettingsViewModel(
                     when {
                         displayName.equals("tv_favorites.xml", ignoreCase = true) -> tvFavoritesXml = bytes
                         displayName.equals("tv_stats.xml", ignoreCase = true) -> tvStatsXml = bytes
+                        displayName.equals("tv_blacklist.xml", ignoreCase = true) -> tvBlacklistXml = bytes
                         displayName.equals("prefs2.xml", ignoreCase = true) -> Unit
                         else -> mainPrefsXml = bytes
                     }
@@ -590,6 +592,7 @@ class SettingsViewModel(
                 mainPrefsXml = mainPrefsXml,
                 tvFavoritesXml = tvFavoritesXml,
                 tvStatsXml = tvStatsXml,
+                tvBlacklistXml = tvBlacklistXml,
                 dbBytes = dbBytes,
                 onPostPrefsCommit = postPrefsCallback
             )

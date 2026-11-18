@@ -2737,4 +2737,364 @@ class GraphQLRepository(
             }
         }.getOrDefault(CreatedClipResult(null, null, "NETWORK_ERROR"))
     }
+
+    data class ActiveLiveEventsData(
+        val poll: com.github.andreyasadchy.xtra.model.chat.Poll? = null,
+        val prediction: com.github.andreyasadchy.xtra.model.chat.Prediction? = null,
+        val selfBetOutcomeId: String? = null,
+        val selfBetPoints: Int = 0,
+    )
+
+    data class PollPredictionActionResult(
+        val success: Boolean,
+        val errorCode: String? = null,
+    )
+
+    suspend fun loadActivePollAndPrediction(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        channelLogin: String?,
+    ): ActiveLiveEventsData = withContext(Dispatchers.IO) {
+        if (channelLogin.isNullOrBlank()) return@withContext ActiveLiveEventsData()
+        fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+        fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+        fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+        fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+        fun JsonElement?.bool(): Boolean? = (this as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull()
+
+        coroutineScope {
+            val pollDef = async {
+                runCatching {
+                    val persistedBody = buildJsonObject {
+                        put("operationName", "ChannelPollContext_GetViewablePoll")
+                        putJsonObject("extensions") {
+                            putJsonObject("persistedQuery") {
+                                put("version", 1)
+                                put("sha256Hash", "e83188a3836c636393df3191665e543a03733d7c51d3ade3d85e42aa46c2bf55")
+                            }
+                        }
+                        putJsonObject("variables") {
+                            put("login", channelLogin)
+                        }
+                    }.toString()
+                    val rawBody = buildJsonObject {
+                        put(
+                            "query",
+                            "query(\$login: String!) { channel(name: \$login) { viewablePoll { id title status startedAt durationSeconds votes { total } choices { id title votes { total } totalVoters } settings { communityPointsVotes { isEnabled cost } } } } }",
+                        )
+                        putJsonObject("variables") {
+                            put("login", channelLogin)
+                        }
+                    }.toString()
+
+                    var raw = sendPersistedQuery(networkLibrary, headers, persistedBody)
+                    if (raw.contains("PersistedQueryNotFound")) {
+                        raw = sendPersistedQuery(networkLibrary, headers, rawBody)
+                    }
+                    val parsed = json.parseToJsonElement(raw)
+                    val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
+                    val p = root?.get("data").obj()?.get("channel").obj()?.get("viewablePoll").obj()
+                        ?: root?.get("data").obj()?.get("user").obj()?.get("viewablePoll").obj()
+                        ?: return@runCatching null
+                    val pollId = p["id"].str()?.takeIf { it.isNotBlank() } ?: return@runCatching null
+                    val rawStatus = p["status"].str()?.uppercase() ?: "ACTIVE"
+                    if (rawStatus != "ACTIVE") return@runCatching null
+
+                    val startedAtMs = p["startedAt"].str()?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                    val durationSec = p["durationSeconds"].int() ?: p["duration"].int()
+                    val remainingMs = if (startedAtMs != null && durationSec != null && durationSec > 0) {
+                        val rem = (startedAtMs + durationSec * 1000L) - System.currentTimeMillis()
+                        if (rem <= 0L) return@runCatching null
+                        rem.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                    } else {
+                        null
+                    }
+
+                    val choices = p["choices"].arr()?.mapNotNull { cEl ->
+                        val c = cEl.obj() ?: return@mapNotNull null
+                        val cId = c["id"].str()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                        val cTitle = c["title"].str()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                        val votes = c["votes"].obj()?.get("total").int() ?: c["totalVoters"].int() ?: 0
+                        com.github.andreyasadchy.xtra.model.chat.Poll.PollChoice(
+                            id = cId,
+                            title = cTitle,
+                            totalVotes = votes,
+                        )
+                    } ?: emptyList()
+                    if (choices.isEmpty()) return@runCatching null
+                    val totalVotes = p["votes"].obj()?.get("total").int() ?: choices.sumOf { it.totalVotes ?: 0 }
+                    val cpv = p["settings"].obj()?.get("communityPointsVotes").obj()
+                    val cpEnabled = cpv?.get("isEnabled").bool() ?: false
+                    val cpCost = cpv?.get("cost").int() ?: 0
+
+                    com.github.andreyasadchy.xtra.model.chat.Poll(
+                        id = pollId,
+                        title = p["title"].str() ?: "",
+                        status = "ACTIVE",
+                        choices = choices,
+                        totalVotes = totalVotes,
+                        remainingMilliseconds = remainingMs,
+                        pointsVotingEnabled = cpEnabled,
+                        pointsPerVote = cpCost,
+                    )
+                }.getOrNull()
+            }
+
+            val predDef = async {
+                runCatching {
+                    val persistedBody = buildJsonObject {
+                        put("operationName", "ChannelPointsPredictionContext")
+                        putJsonObject("extensions") {
+                            putJsonObject("persistedQuery") {
+                                put("version", 1)
+                                put("sha256Hash", "beb846598256b75bd7c1fe54a80431335996153e358ca9c7837ce7bb83d7d383")
+                            }
+                        }
+                        putJsonObject("variables") {
+                            put("count", 1)
+                            put("channelLogin", channelLogin)
+                        }
+                    }.toString()
+                    val rawBody = buildJsonObject {
+                        put(
+                            "query",
+                            "query(\$login: String!) { channel(name: \$login) { activePredictionEvents { id title status createdAt predictionWindowSeconds winningOutcome { id } outcomes { id title color totalPoints totalUsers } self { prediction { points outcome { id } } } } lockedPredictionEvents { id title status createdAt predictionWindowSeconds winningOutcome { id } outcomes { id title color totalPoints totalUsers } self { prediction { points outcome { id } } } } } }",
+                        )
+                        putJsonObject("variables") {
+                            put("login", channelLogin)
+                        }
+                    }.toString()
+
+                    var raw = sendPersistedQuery(networkLibrary, headers, persistedBody)
+                    if (raw.contains("PersistedQueryNotFound")) {
+                        raw = sendPersistedQuery(networkLibrary, headers, rawBody)
+                    }
+                    val parsed = json.parseToJsonElement(raw)
+                    val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
+                    val chan = root?.get("data").obj()?.get("community").obj()?.get("channel").obj()
+                        ?: root?.get("data").obj()?.get("channel").obj()
+                        ?: return@runCatching Triple(null, null, 0)
+
+                    val activeObj = chan["activePredictionEvents"].arr()?.firstOrNull().obj()
+                    val lockedObj = chan["lockedPredictionEvents"].arr()?.firstOrNull().obj()
+                    val (ev, resolvedStatus) = when {
+                        activeObj != null -> activeObj to "ACTIVE"
+                        lockedObj != null -> lockedObj to "LOCKED"
+                        else -> return@runCatching Triple(null, null, 0)
+                    }
+                    val predId = ev["id"].str()?.takeIf { it.isNotBlank() } ?: return@runCatching Triple(null, null, 0)
+                    val createdAtMs = ev["createdAt"].str()?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                    val windowSec = ev["predictionWindowSeconds"].int()
+                    // Discard stale ACTIVE event whose window expired without lock
+                    if (resolvedStatus == "ACTIVE" && createdAtMs != null && windowSec != null && windowSec > 0) {
+                        if (System.currentTimeMillis() > createdAtMs + (windowSec + 30L) * 1000L) {
+                            return@runCatching Triple(null, null, 0)
+                        }
+                    }
+                    val outcomes = ev["outcomes"].arr()?.mapNotNull { oEl ->
+                        val o = oEl.obj() ?: return@mapNotNull null
+                        val oId = o["id"].str()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                        val oTitle = o["title"].str()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                        com.github.andreyasadchy.xtra.model.chat.Prediction.PredictionOutcome(
+                            id = oId,
+                            title = oTitle,
+                            totalPoints = o["totalPoints"].int() ?: 0,
+                            totalUsers = o["totalUsers"].int() ?: 0,
+                            color = o["color"].str()?.takeIf { it.isNotBlank() },
+                        )
+                    } ?: emptyList()
+                    if (outcomes.isEmpty()) return@runCatching Triple(null, null, 0)
+
+                    var selfOutcomeId = ev["self"].obj()?.get("prediction").obj()?.get("outcome").obj()?.get("id").str()?.takeIf { it.isNotBlank() }
+                    var selfPoints = ev["self"].obj()?.get("prediction").obj()?.get("points").int() ?: 0
+
+                    if (selfOutcomeId == null && !headers[C.HEADER_TOKEN].isNullOrBlank()) {
+                        runCatching {
+                            val selfQuery = buildJsonObject {
+                                put(
+                                    "query",
+                                    "query(\$l: String!) { channel(name: \$l) { activePredictionEvents { id self { prediction { points outcome { id } } } } lockedPredictionEvents { id self { prediction { points outcome { id } } } } } }",
+                                )
+                                putJsonObject("variables") { put("l", channelLogin) }
+                            }.toString()
+                            val selfRaw = sendPersistedQuery(networkLibrary, headers, selfQuery)
+                            val selfChan = json.parseToJsonElement(selfRaw).obj()?.get("data").obj()?.get("channel").obj()
+                            val allEvents = (selfChan?.get("activePredictionEvents").arr().orEmpty() +
+                                selfChan?.get("lockedPredictionEvents").arr().orEmpty())
+                            for (eEl in allEvents) {
+                                val eObj = eEl.obj() ?: continue
+                                if (eObj["id"].str() == predId) {
+                                    val sp = eObj["self"].obj()?.get("prediction").obj()
+                                    selfOutcomeId = sp?.get("outcome").obj()?.get("id").str()?.takeIf { it.isNotBlank() }
+                                    selfPoints = sp?.get("points").int() ?: 0
+                                    break
+                                }
+                            }
+                        }
+                    }
+
+                    val prediction = com.github.andreyasadchy.xtra.model.chat.Prediction(
+                        id = predId,
+                        createdAt = createdAtMs,
+                        outcomes = outcomes,
+                        predictionWindowSeconds = windowSec,
+                        status = resolvedStatus,
+                        title = ev["title"].str() ?: "",
+                        winningOutcomeId = ev["winningOutcome"].obj()?.get("id").str()?.takeIf { it.isNotBlank() },
+                    )
+                    Triple(prediction, selfOutcomeId, selfPoints)
+                }.getOrDefault(Triple(null, null, 0))
+            }
+
+            val poll = pollDef.await()
+            val (pred, selfOutcomeId, selfPoints) = predDef.await()
+            ActiveLiveEventsData(
+                poll = poll,
+                prediction = pred,
+                selfBetOutcomeId = selfOutcomeId,
+                selfBetPoints = selfPoints,
+            )
+        }
+    }
+
+    suspend fun voteInPoll(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        pollId: String,
+        choiceId: String,
+        userId: String,
+        channelPointsCost: Int? = null,
+    ): PollPredictionActionResult = withContext(Dispatchers.IO) {
+        if (pollId.isBlank() || choiceId.isBlank() || userId.isBlank()) {
+            return@withContext PollPredictionActionResult(false, "INVALID_INPUT")
+        }
+        val voteId = Uuid.random().toHexString()
+        fun buildInputObj() = buildJsonObject {
+            put("pollID", pollId)
+            put("choiceID", choiceId)
+            put("userID", userId)
+            put("voteID", voteId)
+            if (channelPointsCost != null && channelPointsCost > 0) {
+                putJsonObject("tokens") {
+                    put("bits", 0)
+                    put("channelPoints", channelPointsCost)
+                }
+            } else {
+                put("tokens", kotlinx.serialization.json.JsonNull)
+            }
+        }
+        val persistedBody = buildJsonObject {
+            put("operationName", "ChannelPollContext_VoteInPoll")
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", "1280e27b0f3c7ae60b5714bd569771ea50635778473182e6e959e2dcfcc16e3c")
+                }
+            }
+            putJsonObject("variables") {
+                put("input", buildInputObj())
+            }
+        }.toString()
+        val rawBody = buildJsonObject {
+            put(
+                "query",
+                "mutation(\$input: VotePollInput!) { voteInPoll(input: \$input) { poll { id } error { code } } }",
+            )
+            putJsonObject("variables") {
+                put("input", buildInputObj())
+            }
+        }.toString()
+
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            var raw = sendPersistedQuery(networkLibrary, headers, persistedBody)
+            if (raw.contains("PersistedQueryNotFound")) {
+                raw = sendPersistedQuery(networkLibrary, headers, rawBody)
+            }
+            val parsed = json.parseToJsonElement(raw)
+            val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
+                ?: return@runCatching PollPredictionActionResult(false, "NETWORK_ERROR")
+            val topErr = root["errors"].arr()?.firstOrNull().obj()?.get("message").str()
+            if (!topErr.isNullOrBlank()) {
+                return@runCatching PollPredictionActionResult(false, topErr)
+            }
+            val node = root["data"].obj()?.get("voteInPoll")
+                ?: return@runCatching PollPredictionActionResult(false, "UNKNOWN")
+            val errCode = node.obj()?.get("error").obj()?.get("code").str()?.takeIf { it.isNotBlank() }
+            if (errCode != null) {
+                PollPredictionActionResult(false, errCode)
+            } else {
+                PollPredictionActionResult(true, null)
+            }
+        }.getOrDefault(PollPredictionActionResult(false, "NETWORK_ERROR"))
+    }
+
+    suspend fun makePrediction(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        eventId: String,
+        outcomeId: String,
+        points: Int,
+    ): PollPredictionActionResult = withContext(Dispatchers.IO) {
+        if (eventId.isBlank() || outcomeId.isBlank() || points < 10) {
+            return@withContext PollPredictionActionResult(false, "INVALID_INPUT")
+        }
+        val txId = Uuid.random().toHexString()
+        fun buildInputObj() = buildJsonObject {
+            put("eventID", eventId)
+            put("outcomeID", outcomeId)
+            put("points", points)
+            put("transactionID", txId)
+        }
+        val persistedBody = buildJsonObject {
+            put("operationName", "MakePrediction")
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", "b44682ecc88358817009f20e69d75081b1e58825bb40aa53d5dbadcc17c881d8")
+                }
+            }
+            putJsonObject("variables") {
+                put("input", buildInputObj())
+            }
+        }.toString()
+        val rawBody = buildJsonObject {
+            put(
+                "query",
+                "mutation(\$input: MakePredictionInput!) { makePrediction(input: \$input) { prediction { id } error { code } } }",
+            )
+            putJsonObject("variables") {
+                put("input", buildInputObj())
+            }
+        }.toString()
+
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            var raw = sendPersistedQuery(networkLibrary, headers, persistedBody)
+            if (raw.contains("PersistedQueryNotFound")) {
+                raw = sendPersistedQuery(networkLibrary, headers, rawBody)
+            }
+            val parsed = json.parseToJsonElement(raw)
+            val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
+                ?: return@runCatching PollPredictionActionResult(false, "NETWORK_ERROR")
+            val topErr = root["errors"].arr()?.firstOrNull().obj()?.get("message").str()
+            if (!topErr.isNullOrBlank()) {
+                return@runCatching PollPredictionActionResult(false, topErr)
+            }
+            val node = root["data"].obj()?.get("makePrediction").obj()
+                ?: return@runCatching PollPredictionActionResult(false, "UNKNOWN")
+            val errCode = node["error"].obj()?.get("code").str()?.takeIf { it.isNotBlank() }
+            if (errCode != null) {
+                PollPredictionActionResult(false, errCode)
+            } else {
+                PollPredictionActionResult(true, null)
+            }
+        }.getOrDefault(PollPredictionActionResult(false, "NETWORK_ERROR"))
+    }
 }
