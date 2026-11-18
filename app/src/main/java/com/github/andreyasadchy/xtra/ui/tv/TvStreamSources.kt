@@ -20,8 +20,16 @@ import com.github.andreyasadchy.xtra.util.tokenPrefs
  */
 object TvStreamSources {
 
-    /** [kind]: "followed", "favorites", "recommended", "popular", "language:<code>" or "game:<id or slug>", to find the row a list comes from. */
-    class Row(val title: String, val source: () -> PagingSource<Int, Stream>, val kind: String? = null)
+    const val KIND_COSTREAM = "costream"
+
+    /** [kind]: "costream", "followed", "favorites", "recommended", "popular", "language:<code>" or "game:<id or slug>", to find the row a list comes from. */
+    class Row(
+        val title: String,
+        val source: () -> PagingSource<Int, Stream>,
+        val kind: String? = null,
+        val iconRes: Int? = null,
+        val preloaded: List<Stream>? = null,
+    )
 
     /**
      * The row the list of a stream comes from, made with the same kind of source (followed, recommended, popular in the
@@ -275,13 +283,54 @@ object TvStreamSources {
         return name.takeIf { it.isNotBlank() && it != code }?.replaceFirstChar { it.titlecase(locale) } ?: code.uppercase()
     }
 
+    private fun fixedStreams(list: List<Stream>): PagingSource<Int, Stream> = object : PagingSource<Int, Stream>() {
+        override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Stream> {
+            val data = if (params.key == null) list else emptyList()
+            return LoadResult.Page(data, prevKey = null, nextKey = null)
+        }
+
+        override fun getRefreshKey(state: androidx.paging.PagingState<Int, Stream>): Int? = null
+    }
+
+    private suspend fun coStreamPartners(context: Context, current: Stream?): List<Stream> {
+        if (current == null || current.channelLogin.isNullOrBlank()) return emptyList()
+        val fromPlayer = (context as? com.github.andreyasadchy.xtra.ui.main.MainActivity)?.let { act ->
+            if (current.channelLogin.equals(act.currentPlayingStream()?.channelLogin, ignoreCase = true)) {
+                (act.playerFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment)?.getCoStreamers()
+            } else {
+                null
+            }
+        }.orEmpty()
+        var merged = (fromPlayer + TvCoStreamCache.getPartners(current.channelId, current.channelLogin))
+            .filter { !it.channelLogin.isNullOrBlank() && !it.channelLogin.equals(current.channelLogin, ignoreCase = true) && (current.channelId.isNullOrBlank() || it.channelId != current.channelId) }
+            .distinctBy { it.channelLogin?.lowercase() }
+        if (merged.isEmpty() && (!TvCoStreamCache.isCached(current.channelId, current.channelLogin) || TvCoStreamCache.getCount(current.channelId, current.channelLogin) > 0)) {
+            merged = kotlinx.coroutines.withTimeoutOrNull(650L) {
+                TvCoStreamCache.loadForChannel(context, current.channelId, current.channelLogin, current.title)
+            }.orEmpty()
+                .filter { !it.channelLogin.isNullOrBlank() && !it.channelLogin.equals(current.channelLogin, ignoreCase = true) && (current.channelId.isNullOrBlank() || it.channelId != current.channelId) }
+                .distinctBy { it.channelLogin?.lowercase() }
+        }
+        return merged
+    }
+
     /**
      * Rows the "Other streams" banner and "Multi-stream" picker show besides their own list, in the order configured
-     * by the user in [TvSwitcherRows].
+     * by the user in [TvSwitcherRows] (with "Stream Together" prepended when the current streamer is in a co-stream).
      */
     suspend fun rows(context: Context, current: Stream?): List<Row> {
         val rows = mutableListOf<Row>()
         val seenKinds = HashSet<String>()
+        val coStreams = coStreamPartners(context, current)
+        if (coStreams.isNotEmpty() && seenKinds.add(KIND_COSTREAM)) {
+            rows += Row(
+                title = context.getString(com.github.andreyasadchy.xtra.R.string.tv_costream_tab),
+                source = { fixedStreams(coStreams) },
+                kind = KIND_COSTREAM,
+                iconRes = com.github.andreyasadchy.xtra.R.drawable.tv_ic_streamers,
+                preloaded = coStreams,
+            )
+        }
         val gqlLoggedIn = TwitchApiHelper.isLoggedIn(context)
         val loggedIn = gqlLoggedIn || !TwitchApiHelper.getHelixHeaders(context)[C.HEADER_TOKEN].isNullOrBlank()
         val hasFollows = loggedIn || runCatching {

@@ -1222,6 +1222,7 @@
     <string name="tv_costream_watch_multistream">Stream Together: tümünü izle (%1$d)</string>
     <string name="tv_costream_open_pip">Stream Together: %1$s yayınını küçük pencerede aç</string>
     <string name="tv_costream_section">Stream Together (birlikte canlı)</string>
+    <string name="tv_costream_tab">Stream Together</string>
     <string name="tv_chat_shared_badges">Paylaşılan sohbet rozetleri</string>
     <string name="tv_points_and_drops">Puanlar ve Drops</string>
     <string name="tv_points_button_summary">Kanal puanı ödüllerini kullanın ve etkin Twitch Drops ilerlemesini takip edin</string>

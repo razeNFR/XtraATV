@@ -1221,6 +1221,7 @@
     <string name="tv_costream_watch_multistream">Stream Together：同時觀看全部 (%1$d)</string>
     <string name="tv_costream_open_pip">Stream Together：在小視窗開啟 %1$s</string>
     <string name="tv_costream_section">Stream Together（共同直播）</string>
+    <string name="tv_costream_tab">Stream Together</string>
     <string name="tv_chat_shared_badges">共用聊天室徽章</string>
     <string name="tv_points_and_drops">忠誠點數與掉寶</string>
     <string name="tv_points_button_summary">兌換頻道忠誠點數獎勵並查看進行中的 Twitch 掉寶進度</string>

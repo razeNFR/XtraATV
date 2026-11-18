@@ -1221,6 +1221,7 @@
     <string name="tv_costream_watch_multistream">Stream Together : tout regarder (%1$d)</string>
     <string name="tv_costream_open_pip">Stream Together : ouvrir %1$s en petite fenêtre</string>
     <string name="tv_costream_section">Stream Together (en live ensemble)</string>
+    <string name="tv_costream_tab">Stream Together</string>
     <string name="tv_chat_shared_badges">Badges de chat partagé</string>
     <string name="tv_points_and_drops">Points et Drops</string>
     <string name="tv_points_button_summary">Échanger vos points de chaîne contre des récompenses et suivre vos Twitch Drops actifs</string>

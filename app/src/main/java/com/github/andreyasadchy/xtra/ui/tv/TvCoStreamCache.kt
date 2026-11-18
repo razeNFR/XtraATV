@@ -91,6 +91,17 @@ object TvCoStreamCache {
         return emptyList()
     }
 
+    fun isCached(channelId: String?, channelLogin: String?): Boolean {
+        val now = System.currentTimeMillis()
+        if (!channelId.isNullOrBlank()) {
+            byId[channelId]?.takeIf { now - it.fetchedAt < TTL_MS }?.let { return true }
+        }
+        if (!channelLogin.isNullOrBlank()) {
+            byLogin[channelLogin.lowercase()]?.takeIf { now - it.fetchedAt < TTL_MS }?.let { return true }
+        }
+        return false
+    }
+
     /** Updates cached live co-stream partners (e.g. from Player or ChatViewModel) and notifies UI. */
     fun putPartners(channelId: String?, channelLogin: String?, partners: List<Stream>, clearIfEmpty: Boolean = false) {
         val cleanPartners = partners

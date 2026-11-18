@@ -56,8 +56,16 @@ object TvStreamSwitcher {
         val exclude: Set<String> = emptySet(),
     )
 
+    private class TabEntry(
+        val title: String,
+        val row: com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Row? = null,
+        val isOrigin: Boolean = false,
+        val isSearch: Boolean = false,
+        val iconRes: Int? = null,
+    )
+
     /**
-     * [rows]: other lists the row can show (followed, popular, languages, category), picked with tabs above the cards:
+     * [rows]: other lists the row can show (Stream Together, followed, popular, languages, category), picked with tabs above the cards:
      * up from the cards goes to the tabs, a tab shows its list, down goes back to the cards.
      * [onPip]: OK held on a card opens it in a small window over the stream (not in selection mode).
      */
@@ -71,30 +79,82 @@ object TvStreamSwitcher {
         /** Source of [streams], to load more of them at the end of the row. */
         source: (() -> androidx.paging.PagingSource<Int, Stream>)? = null,
     ) {
-        if (streams.isEmpty() && rows.isEmpty()) {
+        val exclude = selection?.exclude.orEmpty()
+        val effectiveRows = rows.filter { row ->
+            row.preloaded == null || row.preloaded.any { !it.channelLogin.isNullOrBlank() && it.channelLogin !in exclude }
+        }
+        if (streams.isEmpty() && effectiveRows.isEmpty()) {
             return
         }
         val checked = selection?.preselected?.toMutableSet()
-        // tab shown (0: the list given), the lists already loaded, every stream shown (the checked ones of all the tabs)
-        // the list of the stream has a tab of its own when it is one of the rows (followed, popular...): that tab shows it
-        // and is selected, no "This list" tab next to the same list (picking streams of a multi-stream keeps it)
-        val omitEmptyCurrentTab = selection == null && streams.isEmpty() && source == null && rows.isNotEmpty()
-        val originRow = if (selection == null && !omitEmptyCurrentTab) com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.originRow(activity, source, rows) else -1
-        val originTab = when {
-            omitEmptyCurrentTab -> -1
-            originRow >= 0 -> originRow
-            else -> 0
+        // tab shown (Stream Together first when active, else the list of the stream), the lists already loaded, every stream shown
+        val omitEmptyCurrentTab = selection == null && streams.isEmpty() && source == null && effectiveRows.isNotEmpty()
+        val originRow = if (selection == null && !omitEmptyCurrentTab) {
+            com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.originRow(activity, source, effectiveRows)
+        } else {
+            -1
         }
-        // the row a tab shows, null for the list of the stream
-        val rowOf: (Int) -> com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Row? = { index ->
-            when {
-                omitEmptyCurrentTab -> rows.getOrNull(index)
-                originRow >= 0 -> if (index == originRow) null else rows.getOrNull(index)
-                else -> rows.getOrNull(index - 1)
+        val originFallbackTitle = activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)
+        val baseEntries = when {
+            effectiveRows.isEmpty() -> listOf(TabEntry(originFallbackTitle, isOrigin = true))
+            selection != null -> listOf(TabEntry(originFallbackTitle, isOrigin = true)) + effectiveRows.map {
+                TabEntry(it.title, row = it, iconRes = it.iconRes)
+            }
+            omitEmptyCurrentTab -> effectiveRows.map {
+                TabEntry(it.title, row = it, iconRes = it.iconRes)
+            }
+            originRow >= 0 -> effectiveRows.mapIndexed { idx, r ->
+                if (idx == originRow) {
+                    TabEntry(r.title, row = null, isOrigin = true, iconRes = r.iconRes)
+                } else {
+                    TabEntry(r.title, row = r, iconRes = r.iconRes)
+                }
+            }
+            else -> {
+                val coStreamRow = effectiveRows.firstOrNull { it.kind == com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.KIND_COSTREAM }
+                val restRows = effectiveRows.filter { it.kind != com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.KIND_COSTREAM }
+                buildList {
+                    if (coStreamRow != null) {
+                        add(TabEntry(coStreamRow.title, row = coStreamRow, iconRes = coStreamRow.iconRes))
+                    }
+                    add(TabEntry(originFallbackTitle, isOrigin = true))
+                    restRows.forEach { add(TabEntry(it.title, row = it, iconRes = it.iconRes)) }
+                }
             }
         }
-        var currentTab = originTab.coerceAtLeast(0)
-        val loadedTabs = if (omitEmptyCurrentTab) mutableMapOf() else mutableMapOf(originTab to streams)
+        val tabEntries = baseEntries + TabEntry(
+            title = activity.getString(R.string.search),
+            isSearch = true,
+            iconRes = R.drawable.baseline_search_black_24,
+        )
+        val tabTitles = tabEntries.map { it.title }
+        val searchTabIndex = tabEntries.indexOfFirst { it.isSearch }
+        val originTab = tabEntries.indexOfFirst { it.isOrigin }
+        // the row a tab shows, null for the list of the stream or Search
+        val rowOf: (Int) -> com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Row? = { index ->
+            tabEntries.getOrNull(index)?.row
+        }
+        val loadedTabs = mutableMapOf<Int, List<Stream>>()
+        if (originTab >= 0) {
+            loadedTabs[originTab] = streams
+        }
+        tabEntries.forEachIndexed { idx, entry ->
+            entry.row?.preloaded?.let { pre ->
+                loadedTabs[idx] = pre.filter { !it.channelLogin.isNullOrBlank() && it.channelLogin !in exclude }
+            }
+        }
+        val coStreamTabIndex = if (selection == null) {
+            tabEntries.indexOfFirst { it.row?.kind == com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.KIND_COSTREAM }
+        } else {
+            -1
+        }
+        val initialTab = if (coStreamTabIndex >= 0 && !loadedTabs[coStreamTabIndex].isNullOrEmpty()) {
+            coStreamTabIndex
+        } else {
+            originTab.coerceAtLeast(0)
+        }
+        var currentTab = initialTab
+        val initialStreams = loadedTabs[initialTab].orEmpty()
         val seen = LinkedHashMap<String, Stream>()
         val dialog = AppCompatDialog(activity)
         val density = activity.resources.displayMetrics.density
@@ -167,16 +227,9 @@ object TvStreamSwitcher {
                 setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (2 * density).toInt())
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        // tabs of the lists: the list of the stream first, then the other rows, and Search at the end
-        val baseTitles = when {
-            rows.isEmpty() -> listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current))
-            originRow >= 0 || omitEmptyCurrentTab -> rows.map { it.title }
-            else -> listOf(activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)) + rows.map { it.title }
-        }
-        val tabTitles = baseTitles + activity.getString(R.string.search)
-        val searchTabIndex = tabTitles.lastIndex
+        // tabs of the lists: Stream Together first when active, the list of the stream, the other rows, and Search at the end
         val tabViews = mutableListOf<TextView>()
-        if (tabTitles.size > 1) {
+        if (tabEntries.size > 1) {
             val tabsLayout = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -187,9 +240,9 @@ object TvStreamSwitcher {
                     marginEnd = (18 * density).toInt()
                 })
             }
-            tabTitles.forEachIndexed { index, title ->
+            tabEntries.forEach { entry ->
                 tabViews += TextView(activity).apply {
-                    text = title
+                    text = entry.title
                     textSize = 15f
                     isFocusable = true
                     setTextColor(activity.getColorStateList(R.color.tv_pill_text))
@@ -197,8 +250,8 @@ object TvStreamSwitcher {
                     val padding = (8 * density).toInt()
                     setPadding(padding * 2, padding, padding * 2, padding)
                     setShadowLayer(4 * density, 0f, 1 * density, 0x99000000.toInt())
-                    if (index == searchTabIndex) {
-                        val icon = activity.getDrawable(R.drawable.baseline_search_black_24)?.mutate()?.apply {
+                    entry.iconRes?.let { iconId ->
+                        val icon = activity.getDrawable(iconId)?.mutate()?.apply {
                             setTintList(activity.getColorStateList(R.color.tv_pill_text))
                             setBounds(0, 0, (18 * density).toInt(), (18 * density).toInt())
                         }
@@ -207,7 +260,9 @@ object TvStreamSwitcher {
                     }
                 }.also { tabsLayout.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = (10 * density).toInt() }) }
             }
-            tabViews.getOrNull(originTab)?.isSelected = true
+            if (!omitEmptyCurrentTab || initialStreams.isNotEmpty()) {
+                tabViews.getOrNull(initialTab)?.isSelected = true
+            }
             root.addView(android.widget.HorizontalScrollView(activity).apply {
                 isHorizontalScrollBarEnabled = false
                 isFocusable = false
@@ -300,7 +355,7 @@ object TvStreamSwitcher {
             } else false
         }
         // multi-stream: smaller cards, more streams in sight
-        adapter = Adapter(streams, ((if (selection != null) 175 else 250) * density).toInt(), preview, checked) { stream ->
+        adapter = Adapter(initialStreams, ((if (selection != null) 175 else 250) * density).toInt(), preview, checked) { stream ->
             if (selection != null && checked != null) {
                 val login = stream.channelLogin ?: return@Adapter
                 when {
@@ -325,7 +380,7 @@ object TvStreamSwitcher {
                 // the info of the stream reached for a moment, like left / right
                 PlayerFragment.peekHudOnStart = true
                 val row = rowOf(currentTab)
-                if (row != null) {
+                if (row != null && row.kind != com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.KIND_COSTREAM) {
                     // a stream of another list: that list becomes the one of left / right and of this row
                     activity.startStream(stream, adapter.streams, row.source)
                 } else {
@@ -349,7 +404,7 @@ object TvStreamSwitcher {
         recyclerView.adapter = adapter
         // more of the list near its end (30 streams by page), for the list of the stream and the other tabs
         val pages = mutableMapOf<Int, com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages>()
-        if (source != null) {
+        if (source != null && originTab >= 0) {
             pages[originTab] = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(source)
         }
         var moreJob: kotlinx.coroutines.Job? = null
@@ -496,6 +551,7 @@ object TvStreamSwitcher {
                 } else false
             }
         }
+        initialStreams.forEach { stream -> stream.channelLogin?.let { seen.putIfAbsent(it, stream) } }
         streams.forEach { stream -> stream.channelLogin?.let { seen.putIfAbsent(it, stream) } }
         // left / right held: one card at a time at a pace the row can follow
         var lastMove = 0L
@@ -517,23 +573,27 @@ object TvStreamSwitcher {
             setGravity(Gravity.BOTTOM)
             setDimAmount(0f)
         }
-        val currentIndex = streams.indexOfFirst { it.channelLogin != null && it.channelLogin == currentChannelLogin }.coerceAtLeast(0)
+        val currentIndex = if (initialTab == originTab) {
+            initialStreams.indexOfFirst { it.channelLogin != null && it.channelLogin == currentChannelLogin }.coerceAtLeast(0)
+        } else {
+            0
+        }
         recyclerView.scrollToPosition(currentIndex)
         dialog.setOnShowListener {
-            if (omitEmptyCurrentTab) {
+            if (initialStreams.isEmpty() && omitEmptyCurrentTab) {
                 tabViews.firstOrNull()?.requestFocus()
                 tabJob?.cancel()
                 tabJob = activity.lifecycleScope.launch {
                     var chosenTab = 0
                     var list: List<Stream>? = null
-                    for (candidate in rows.indices) {
+                    for (candidate in tabEntries.indices) {
+                        val row = tabEntries[candidate].row ?: continue
                         val tabView = tabViews.getOrNull(candidate)
                         tabView?.text = activity.getString(R.string.tv_switch_loading, tabTitles[candidate])
-                        val row = rows[candidate]
                         val rowPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(row.source)
                         pages[candidate] = rowPages
                         val fetched = rowPages.next()?.distinctBy { it.channelLogin }
-                            ?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }
+                            ?.filter { it.channelLogin !in exclude }
                             ?.also { loadedTabs[candidate] = it }
                         tabView?.text = tabTitles[candidate]
                         if (!dialog.isShowing) return@launch
@@ -559,10 +619,13 @@ object TvStreamSwitcher {
         }
         val update: (List<Stream>) -> Unit = update@{ list ->
             // only when streamers came or went or moved, not for new viewer counts: the row does not move for nothing
-            if (!dialog.isShowing || list.isEmpty() || currentTab != originTab || list.map { it.channelLogin } == adapter.streams.map { it.channelLogin }) {
+            if (!dialog.isShowing || list.isEmpty() || originTab < 0 || list.map { it.channelLogin } == loadedTabs[originTab]?.map { it.channelLogin }) {
                 return@update
             }
             loadedTabs[originTab] = list
+            if (currentTab != originTab) {
+                return@update
+            }
             val old = adapter.streams
             if (list.size > old.size && list.subList(0, old.size).map { it.channelLogin } == old.map { it.channelLogin }) {
                 // only more streams at the end: added after the row, the focus does not move
@@ -592,9 +655,12 @@ object TvStreamSwitcher {
             moreJob?.cancel()
         }
         dialog.show()
-        if (streams.isEmpty()) {
-            // nothing in the list of the stream: the first other row is shown
-            tabViews.getOrNull(1)?.post { tabViews[1].requestFocus(); tabViews[1].performClick() }
+        if (initialStreams.isEmpty() && !omitEmptyCurrentTab) {
+            // nothing in the list shown: the next non-search tab is opened
+            val fallbackTab = (initialTab + 1).takeIf { it in 0 until searchTabIndex }
+            if (fallbackTab != null) {
+                tabViews.getOrNull(fallbackTab)?.post { tabViews[fallbackTab].requestFocus(); tabViews[fallbackTab].performClick() }
+            }
         }
     }
 

@@ -1221,6 +1221,7 @@
     <string name="tv_costream_watch_multistream">Stream Together: مشاهدة الكل (%1$d)</string>
     <string name="tv_costream_open_pip">Stream Together: فتح %1$s في نافذة صغيرة</string>
     <string name="tv_costream_section">Stream Together (بث مشترك مباشر)</string>
+    <string name="tv_costream_tab">Stream Together</string>
     <string name="tv_chat_shared_badges">شارات الدردشة المشتركة</string>
     <string name="tv_points_and_drops">النقاط و Drops</string>
     <string name="tv_points_button_summary">استبدل مكافآت نقاط القناة وتابع تقدم حملات Twitch Drops النشطة</string>

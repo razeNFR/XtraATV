@@ -1222,6 +1222,7 @@
     <string name="tv_costream_watch_multistream">Stream Together: tonton semua (%1$d)</string>
     <string name="tv_costream_open_pip">Stream Together: buka %1$s di jendela kecil</string>
     <string name="tv_costream_section">Stream Together (siaran bersama)</string>
+    <string name="tv_costream_tab">Stream Together</string>
     <string name="tv_chat_shared_badges">Lencana obrolan bersama</string>
     <string name="tv_points_and_drops">Poin &amp; Drops</string>
     <string name="tv_points_button_summary">Tukarkan hadiah poin saluran dan pantau progres Twitch Drops yang aktif</string>

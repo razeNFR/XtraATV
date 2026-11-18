@@ -1221,6 +1221,7 @@
     <string name="tv_costream_watch_multistream">Stream Together: смотреть все (%1$d)</string>
     <string name="tv_costream_open_pip">Stream Together: открыть %1$s в маленьком окне</string>
     <string name="tv_costream_section">Stream Together (совместный эфир)</string>
+    <string name="tv_costream_tab">Stream Together</string>
     <string name="tv_chat_shared_badges">Значки общего чата</string>
     <string name="tv_points_and_drops">Баллы и Drops</string>
     <string name="tv_points_button_summary">Обменивайте баллы канала на награды и следите за прогрессом активных Twitch Drops</string>
