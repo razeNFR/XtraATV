@@ -188,11 +188,17 @@ object TvHomeRows {
         else -> false
     }
 
+    fun notifyAccountSwitched() {
+        changes.value = System.currentTimeMillis()
+    }
+
     fun load(context: Context): List<Entry> {
+        val suffix = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.storageSuffix(context)
+        val isPrimary = suffix.isEmpty()
         val prefs = context.prefs()
-        val raw = prefs.getString(C.TV_HOME_ROWS, null)
+        val raw = prefs.getString(C.TV_HOME_ROWS + suffix, null)
         if (raw.isNullOrBlank()) {
-            val initial = defaultEntries(context, includeLegacyPrefs = true)
+            val initial = defaultEntries(context, includeLegacyPrefs = isPrimary)
             persist(context, initial, notify = false)
             return initial
         }
@@ -211,7 +217,7 @@ object TvHomeRows {
             }
         }.getOrNull()
         if (parsed.isNullOrEmpty()) {
-            val fallback = defaultEntries(context, includeLegacyPrefs = true)
+            val fallback = defaultEntries(context, includeLegacyPrefs = isPrimary)
             persist(context, fallback, notify = false)
             return fallback
         }
@@ -233,6 +239,7 @@ object TvHomeRows {
     }
 
     private fun persist(context: Context, entries: List<Entry>, notify: Boolean) {
+        val suffix = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.storageSuffix(context)
         val arr = JSONArray()
         entries.forEach { e ->
             arr.put(JSONObject().put("id", e.id).put("enabled", e.enabled))
@@ -244,10 +251,12 @@ object TvHomeRows {
         val multiEnabled = entries.find { it.id == ROW_MULTISTREAMS }?.enabled ?: true
         val videosEnabled = entries.find { it.id == ROW_FOLLOWED_VIDEOS }?.enabled ?: true
         context.prefs().edit {
-            putString(C.TV_HOME_ROWS, arr.toString())
-            putStringSet(C.TV_HOME_LANGUAGE_ROWS, activeLangs)
-            putBoolean(C.TV_HOME_MULTISTREAM, multiEnabled)
-            putBoolean(C.TV_HOME_FOLLOWED_VIDEOS, videosEnabled)
+            putString(C.TV_HOME_ROWS + suffix, arr.toString())
+            if (suffix.isEmpty()) {
+                putStringSet(C.TV_HOME_LANGUAGE_ROWS, activeLangs)
+                putBoolean(C.TV_HOME_MULTISTREAM, multiEnabled)
+                putBoolean(C.TV_HOME_FOLLOWED_VIDEOS, videosEnabled)
+            }
         }
         if (notify) {
             changes.value = System.currentTimeMillis()

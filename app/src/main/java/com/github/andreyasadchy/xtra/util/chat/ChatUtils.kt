@@ -159,7 +159,9 @@ object ChatUtils {
                 )
             },
             timestamp = message.tags["tmi-sent-ts"]?.toLongOrNull() ?: message.tags["rm-received-ts"]?.toLongOrNull(),
-            fullMsg = message.fullMessage
+            fullMsg = message.fullMessage,
+            roomId = message.tags["room-id"],
+            sourceRoomId = message.tags["source-room-id"],
         )
     }
 

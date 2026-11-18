@@ -478,4 +478,14 @@
         <item>1</item>
         <item>2</item>
     </string-array>
+    <string-array name="tvStreamEndActionEntries">
+        <item>@string/tv_stream_end_home</item>
+        <item>@string/tv_stream_end_next</item>
+        <item>@string/tv_stream_end_stay</item>
+    </string-array>
+    <string-array name="tvStreamEndActionValues" translatable="false">
+        <item>home</item>
+        <item>next</item>
+        <item>stay</item>
+    </string-array>
 </resources>

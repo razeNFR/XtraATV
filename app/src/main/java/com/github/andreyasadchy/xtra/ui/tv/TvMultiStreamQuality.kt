@@ -26,7 +26,7 @@ import com.github.andreyasadchy.xtra.util.prefs
  * TV multi-stream video quality profiles & custom per-count / per-stream caps.
  *
  * Profiles adapt maximum video height and frame rate (30fps vs 60fps hardware decode load)
- * according to the number of active streams (2, 3, or 4) and Focus mode.
+ * according to the number of active streams (2 to 6) and Focus mode.
  */
 object TvMultiStreamQuality {
 
@@ -42,6 +42,14 @@ object TvMultiStreamQuality {
     const val CAP_MAX = Int.MAX_VALUE
 
     data class CapSpec(val maxHeight: Int, val maxFrameRate: Int)
+
+    data class ProfileCaps(
+        val c2: Int,
+        val c3: Int,
+        val c4: Int,
+        val c5: Int,
+        val c6: Int,
+    )
 
     private val PROFILES = listOf(
         PROFILE_POTATO,
@@ -88,15 +96,27 @@ object TvMultiStreamQuality {
     fun customCap4(context: Context): Int =
         normalizeCap(context.prefs().getInt(C.TV_MULTISTREAM_Q_4, 720))
 
-    /** Returns the `(2 streams, 3 streams, 4 streams)` cap tokens for [prof]. */
-    fun capsForProfile(context: Context, prof: String = profile(context)): Triple<Int, Int, Int> = when (prof) {
-        PROFILE_POTATO -> Triple(720, 480, 360)
-        PROFILE_LOW -> Triple(1080, 720, 360)
-        PROFILE_MEDIUM -> Triple(1080, 720, 480)
-        PROFILE_BALANCED -> Triple(CAP_MAX, 720, CAP_720P30)
-        PROFILE_MAX -> Triple(CAP_MAX, CAP_MAX, CAP_MAX)
-        PROFILE_CUSTOM -> Triple(customCap2(context), customCap3(context), customCap4(context))
-        else -> Triple(CAP_MAX, 720, 720) // PROFILE_HIGH (default)
+    fun customCap5(context: Context): Int =
+        normalizeCap(context.prefs().getInt(C.TV_MULTISTREAM_Q_5, 480))
+
+    fun customCap6(context: Context): Int =
+        normalizeCap(context.prefs().getInt(C.TV_MULTISTREAM_Q_6, 480))
+
+    /** Returns the `(2, 3, 4, 5, 6 streams)` cap tokens for [prof]. */
+    fun capsForProfile(context: Context, prof: String = profile(context)): ProfileCaps = when (prof) {
+        PROFILE_POTATO -> ProfileCaps(720, 480, 360, 360, 160)
+        PROFILE_LOW -> ProfileCaps(1080, 720, 360, 360, 360)
+        PROFILE_MEDIUM -> ProfileCaps(1080, 720, 480, 360, 360)
+        PROFILE_BALANCED -> ProfileCaps(CAP_MAX, 720, CAP_720P30, 480, 360)
+        PROFILE_MAX -> ProfileCaps(CAP_MAX, CAP_MAX, CAP_MAX, CAP_MAX, CAP_MAX)
+        PROFILE_CUSTOM -> ProfileCaps(
+            customCap2(context),
+            customCap3(context),
+            customCap4(context),
+            customCap5(context),
+            customCap6(context),
+        )
+        else -> ProfileCaps(CAP_MAX, 720, 720, 480, 480) // PROFILE_HIGH (default)
     }
 
     /** Target cap token for a tile in `MultiStreamFragment`. */
@@ -108,6 +128,14 @@ object TvMultiStreamQuality {
     ): Int {
         val prof = profile(context)
         if (isFocusLayout) {
+            if (!isBigTile && streamCount >= 5) {
+                return when (prof) {
+                    PROFILE_POTATO -> 160
+                    PROFILE_MAX -> 480
+                    PROFILE_CUSTOM -> if (streamCount >= 6) customCap6(context) else customCap5(context)
+                    else -> 360
+                }
+            }
             return when (prof) {
                 PROFILE_POTATO -> if (isBigTile) 720 else 360
                 PROFILE_LOW -> if (isBigTile) 1080 else 360
@@ -118,11 +146,13 @@ object TvMultiStreamQuality {
                 else -> if (isBigTile) CAP_MAX else 480 // PROFILE_HIGH
             }
         }
-        val (c2, c3, c4) = capsForProfile(context, prof)
+        val caps = capsForProfile(context, prof)
         return when {
-            streamCount <= 2 -> c2
-            streamCount == 3 -> c3
-            else -> c4
+            streamCount <= 2 -> caps.c2
+            streamCount == 3 -> caps.c3
+            streamCount == 4 -> caps.c4
+            streamCount == 5 -> caps.c5
+            else -> caps.c6
         }
     }
 
@@ -145,8 +175,8 @@ object TvMultiStreamQuality {
 
     fun summary(context: Context): String {
         val prof = profile(context)
-        val (c2, c3, c4) = capsForProfile(context, prof)
-        return "${profileLabel(context, prof)} (${capLabel(context, c2)} · ${capLabel(context, c3)} · ${capLabel(context, c4)})"
+        val caps = capsForProfile(context, prof)
+        return "${profileLabel(context, prof)} (${capLabel(context, caps.c2)} · ${capLabel(context, caps.c3)} · ${capLabel(context, caps.c4)} · ${capLabel(context, caps.c5)} · ${capLabel(context, caps.c6)})"
     }
 
     fun showPanel(
@@ -165,6 +195,8 @@ object TvMultiStreamQuality {
         val s2Label = context.getString(R.string.tv_multistream_quality_streams_2)
         val s3Label = context.getString(R.string.tv_multistream_quality_streams_3)
         val s4Label = context.getString(R.string.tv_multistream_quality_streams_4)
+        val s5Label = context.getString(R.string.tv_multistream_quality_streams_5)
+        val s6Label = context.getString(R.string.tv_multistream_quality_streams_6)
 
         TvDialogs.show(context) {
             val firstFocus = remember { FocusRequester() }
@@ -172,17 +204,21 @@ object TvMultiStreamQuality {
             var c2 by remember { mutableIntStateOf(customCap2(context)) }
             var c3 by remember { mutableIntStateOf(customCap3(context)) }
             var c4 by remember { mutableIntStateOf(customCap4(context)) }
+            var c5 by remember { mutableIntStateOf(customCap5(context)) }
+            var c6 by remember { mutableIntStateOf(customCap6(context)) }
             var streamOverride by remember { mutableStateOf(initialStreamOverride) }
             var resetTick by remember { mutableIntStateOf(0) }
 
-            val activeTriple = if (currentProfile == PROFILE_CUSTOM) {
-                Triple(c2, c3, c4)
+            val activeCaps = if (currentProfile == PROFILE_CUSTOM) {
+                ProfileCaps(c2, c3, c4, c5, c6)
             } else {
                 capsForProfile(context, currentProfile)
             }
-            val breakdownText = "$s2Label: ${capLabel(context, activeTriple.first)}  ·  " +
-                "$s3Label: ${capLabel(context, activeTriple.second)}  ·  " +
-                "$s4Label: ${capLabel(context, activeTriple.third)}"
+            val breakdownText = "$s2Label: ${capLabel(context, activeCaps.c2)}  ·  " +
+                "$s3Label: ${capLabel(context, activeCaps.c3)}  ·  " +
+                "$s4Label: ${capLabel(context, activeCaps.c4)}  ·  " +
+                "$s5Label: ${capLabel(context, activeCaps.c5)}  ·  " +
+                "$s6Label: ${capLabel(context, activeCaps.c6)}"
 
             SidePanel(
                 title = context.getString(R.string.tv_multistream_quality),
@@ -194,7 +230,7 @@ object TvMultiStreamQuality {
                     text = breakdownText,
                     fontSize = 14.sp,
                     color = TvColors.secondaryText,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(10.dp))
@@ -241,6 +277,26 @@ object TvMultiStreamQuality {
                             prefs.edit { putInt(C.TV_MULTISTREAM_Q_4, chosen) }
                             onChanged()
                         }
+                        SelectorRow(
+                            label = s5Label,
+                            options = capOptions,
+                            selected = CAPS.indexOf(c5).coerceAtLeast(0),
+                        ) { idx ->
+                            val chosen = CAPS.getOrElse(idx) { 480 }
+                            c5 = chosen
+                            prefs.edit { putInt(C.TV_MULTISTREAM_Q_5, chosen) }
+                            onChanged()
+                        }
+                        SelectorRow(
+                            label = s6Label,
+                            options = capOptions,
+                            selected = CAPS.indexOf(c6).coerceAtLeast(0),
+                        ) { idx ->
+                            val chosen = CAPS.getOrElse(idx) { 480 }
+                            c6 = chosen
+                            prefs.edit { putInt(C.TV_MULTISTREAM_Q_6, chosen) }
+                            onChanged()
+                        }
                     }
                     if (!streamTitle.isNullOrBlank() && onStreamOverride != null) {
                         SelectorRow(
@@ -260,11 +316,15 @@ object TvMultiStreamQuality {
                             putInt(C.TV_MULTISTREAM_Q_2, CAP_MAX)
                             putInt(C.TV_MULTISTREAM_Q_3, 720)
                             putInt(C.TV_MULTISTREAM_Q_4, 720)
+                            putInt(C.TV_MULTISTREAM_Q_5, 480)
+                            putInt(C.TV_MULTISTREAM_Q_6, 480)
                         }
                         currentProfile = PROFILE_HIGH
                         c2 = CAP_MAX
                         c3 = 720
                         c4 = 720
+                        c5 = 480
+                        c6 = 480
                         if (streamOverride != null && onStreamOverride != null) {
                             streamOverride = null
                             onStreamOverride(null)

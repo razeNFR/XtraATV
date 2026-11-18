@@ -1828,6 +1828,8 @@ class SettingsActivity : AppCompatActivity() {
                     C.TV_BUTTON_MULTI_STREAM to R.drawable.tv_ic_multistream,
                     C.TV_BUTTON_CHAT_MESSAGE to R.drawable.tv_ic_chat_send,
                     C.TV_BUTTON_CHAT_LAYOUT to R.drawable.tv_ic_chat_layout,
+                    C.TV_BUTTON_POINTS to R.drawable.tv_ic_diamond,
+                    C.TV_BUTTON_CLIP to R.drawable.tv_ic_clip,
                     C.TV_BUTTON_STATS to R.drawable.tv_ic_stats,
                     C.TV_BUTTON_DIM to R.drawable.tv_ic_dim,
                     C.TV_BUTTON_PROXY to R.drawable.tv_ic_proxy,
@@ -2119,6 +2121,26 @@ class SettingsActivity : AppCompatActivity() {
                         }
                     }
                     true
+                }
+            }
+            findPreference<ListPreference>(C.TV_STREAM_END_ACTION)?.let { preference ->
+                if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
+                    preference.setOnPreferenceClickListener {
+                        val values = preference.entryValues.map { it.toString() }
+                        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.showChoices(
+                            requireContext(),
+                            preference.title.toString(),
+                            preference.entries.map { it.toString() },
+                            values.indexOf(preference.value).coerceAtLeast(0),
+                            subtitle = getString(R.string.tv_stream_end_raid_note),
+                        ) { index ->
+                            val value = values[index]
+                            if (preference.callChangeListener(value)) {
+                                preference.value = value
+                            }
+                        }
+                        true
+                    }
                 }
             }
             // TV: the colors in a side panel, a dot of each color in front of its name

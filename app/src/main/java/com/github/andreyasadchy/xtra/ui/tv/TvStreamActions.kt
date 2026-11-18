@@ -5,6 +5,8 @@ import androidx.lifecycle.lifecycleScope
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -19,12 +21,69 @@ object TvStreamActions {
     fun show(activity: MainActivity, stream: Stream, first: Extra? = null, last: List<Extra> = emptyList()) {
         val channelId = stream.channelId
         activity.lifecycleScope.launch {
-            // the follow entry says what it does: the state is asked first, never for long
-            val following = if (channelId != null && TvFollow.isEnabled(activity)) {
-                withTimeoutOrNull(1500L) { TvFollow.isFollowing(activity, channelId) }
-            } else null
+            val playerFrag = activity.playerFragment as? com.github.andreyasadchy.xtra.ui.player.PlayerFragment
+            val isPlayingThis = playerFrag != null && !stream.channelLogin.isNullOrBlank() &&
+                stream.channelLogin.equals(activity.currentPlayingStream()?.channelLogin, ignoreCase = true)
+
+            val (following, resolvedPartners) = coroutineScope {
+                val followDeferred = async {
+                    if (channelId != null && TvFollow.isEnabled(activity)) {
+                        withTimeoutOrNull(1500L) { TvFollow.isFollowing(activity, channelId) }
+                    } else null
+                }
+                val partnersDeferred = async {
+                    if (stream.channelLogin.isNullOrBlank()) {
+                        emptyList()
+                    } else if (isPlayingThis) {
+                        val existing = playerFrag?.getCoStreamers().orEmpty()
+                        existing.ifEmpty {
+                            withTimeoutOrNull(1200L) {
+                                TvCoStreamCache.loadForChannel(activity, channelId, stream.channelLogin, stream.title)
+                            }.orEmpty()
+                        }
+                    } else {
+                        val cached = TvCoStreamCache.getPartners(channelId, stream.channelLogin)
+                        cached.ifEmpty {
+                            withTimeoutOrNull(1200L) {
+                                TvCoStreamCache.loadForChannel(activity, channelId, stream.channelLogin, stream.title)
+                            }.orEmpty()
+                        }
+                    }
+                }
+                followDeferred.await() to partnersDeferred.await()
+            }
+
             val entries = mutableListOf<Extra>()
             first?.let { entries += it }
+            if (!stream.channelLogin.isNullOrBlank()) {
+                val coStreamers = resolvedPartners
+                    .filter { !it.channelLogin.isNullOrBlank() && !it.channelLogin.equals(stream.channelLogin, ignoreCase = true) }
+                    .distinctBy { it.channelLogin?.lowercase() }
+                    .take(com.github.andreyasadchy.xtra.ui.player.TvMultiStreamPicker.MAX - 1)
+                if (coStreamers.isNotEmpty()) {
+                    val allCoStreams = (listOf(stream) + coStreamers).take(com.github.andreyasadchy.xtra.ui.player.TvMultiStreamPicker.MAX)
+                    entries += Extra(
+                        activity.getString(R.string.tv_costream_watch_multistream, allCoStreams.size),
+                        R.drawable.tv_ic_streamers,
+                    ) {
+                        activity.startMultiStream(allCoStreams, stream)
+                    }
+                    if (isPlayingThis && playerFrag?.isLiveOrDvrScreen() == true) {
+                        coStreamers.take(2).forEach { co ->
+                            val coLogin = co.channelLogin ?: return@forEach
+                            if (!activity.isStreamInTvPip(coLogin)) {
+                                val coName = co.channelName ?: coLogin
+                                entries += Extra(
+                                    activity.getString(R.string.tv_costream_open_pip, coName),
+                                    R.drawable.tv_ic_pip,
+                                ) {
+                                    activity.openTvPip(co)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             val name = stream.channelName ?: stream.channelLogin ?: ""
             entries += Extra(activity.getString(R.string.tv_open_channel, name), R.drawable.tv_ic_person) { activity.openTvChannel(stream, null) }
             entries += Extra(activity.getString(R.string.tv_channel_videos), R.drawable.tv_ic_video_library) { activity.openTvChannel(stream, "1") }
@@ -57,6 +116,33 @@ object TvStreamActions {
                     } else {
                         TvFavorites.add(activity, login, stream.channelName)
                         Toast.makeText(activity, activity.getString(R.string.tv_favorite_added, name), Toast.LENGTH_SHORT).show()
+                    }
+                }
+                if (playerFrag != null && login.equals(activity.currentPlayingStream()?.channelLogin, ignoreCase = true)) {
+                    entries += Extra(activity.getString(R.string.tv_create_clip), R.drawable.tv_ic_clip) {
+                        playerFrag.triggerTvCreateClip()
+                    }
+                    entries += Extra(activity.getString(R.string.tv_share_qr), R.drawable.tv_ic_qr) {
+                        playerFrag.showTvShareQr()
+                    }
+                } else {
+                    entries += Extra(activity.getString(R.string.tv_create_clip), R.drawable.tv_ic_clip) {
+                        TvQrShare.createAndShowClipQr(
+                            context = activity,
+                            broadcasterId = stream.channelId,
+                            channelLogin = login,
+                            broadcastId = stream.id,
+                            videoId = null,
+                            offsetSeconds = null,
+                        )
+                    }
+                    entries += Extra(activity.getString(R.string.tv_share_qr), R.drawable.tv_ic_qr) {
+                        TvQrShare.showQrModal(
+                            context = activity,
+                            title = name.ifBlank { login },
+                            subtitle = activity.getString(R.string.tv_share_qr_subtitle),
+                            url = "https://www.twitch.tv/$login",
+                        )
                     }
                 }
             }

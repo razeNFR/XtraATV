@@ -137,9 +137,22 @@ object TvDialogs {
     }
 
     /** One choice among a list (sort, filters...), the focus starts on the current choice. */
-    fun showChoices(context: Context, title: String, options: List<String>, selected: Int, icons: List<Int?>? = null, colors: List<Int?>? = null, onSelected: (Int) -> Unit): ComponentDialog {
+    fun showChoices(
+        context: Context,
+        title: String,
+        options: List<String>,
+        selected: Int,
+        icons: List<Int?>? = null,
+        colors: List<Int?>? = null,
+        subtitle: String? = null,
+        onSelected: (Int) -> Unit,
+    ): ComponentDialog {
         return show(context) { dismiss ->
-            SidePanel(title = title) {
+            SidePanel(
+                title = title,
+                subtitle = subtitle,
+                width = if (subtitle != null) 500.dp else 440.dp,
+            ) {
                 ChoiceList(options, selected, icons, colors) {
                     dismiss()
                     onSelected(it)
@@ -184,6 +197,8 @@ fun SidePanel(
     width: Dp = 440.dp,
     // true for panels made of plain rows; lists that scroll by themselves (LazyColumn) must not be put in a scrolling panel
     scrollable: Boolean = false,
+    scrollState: androidx.compose.foundation.ScrollState? = null,
+    footer: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart) {
@@ -205,16 +220,25 @@ fun SidePanel(
             }
             Spacer(Modifier.height(24.dp))
             if (scrollable) {
+                val effectiveScroll = scrollState ?: androidx.compose.foundation.rememberScrollState()
                 // the rows scroll, the focused one is always brought into the screen
                 Column(
                     Modifier
                         .weight(1f)
-                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                        .verticalScroll(effectiveScroll)
                 ) {
+                    content()
+                }
+            } else if (footer != null) {
+                Column(Modifier.weight(1f)) {
                     content()
                 }
             } else {
                 content()
+            }
+            if (footer != null) {
+                Spacer(Modifier.height(12.dp))
+                footer()
             }
         }
     }

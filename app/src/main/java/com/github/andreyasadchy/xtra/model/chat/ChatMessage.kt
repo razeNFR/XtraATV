@@ -27,6 +27,12 @@ class ChatMessage(
     var messageLanguage: String? = null,
     /** Icon of a short notice line (subscription, gift, raid, timeout...): the line is smaller and grey, with this icon. */
     val noticeIcon: Int? = null,
+    val roomId: String? = null,
+    val sourceRoomId: String? = null,
+    @Volatile
+    var sourceChannelAvatar: String? = null,
+    @Volatile
+    var sourceChannelName: String? = null,
 ) {
     /** Deleted by a moderator (or its author timed out / banned): shown grey and struck through, or hidden. */
     @Volatile

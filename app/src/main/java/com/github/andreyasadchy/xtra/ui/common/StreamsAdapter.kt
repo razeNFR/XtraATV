@@ -52,6 +52,17 @@ class StreamsAdapter(
                     oldItem.title == newItem.title
     }) {
 
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(recyclerView.context)) {
+            com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.attachToRecyclerView(recyclerView) {
+                if (itemCount > 0) {
+                    notifyItemRangeChanged(0, itemCount, com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM)
+                }
+            }
+        }
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PagingViewHolder {
         val binding = FragmentStreamsListItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return PagingViewHolder(binding, fragment, showGame)
@@ -61,11 +72,52 @@ class StreamsAdapter(
         holder.bind(getItem(position))
     }
 
+    override fun onBindViewHolder(holder: PagingViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isNotEmpty() && payloads.all { it == com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM }) {
+            holder.bindUsernameOnly(getItem(position))
+        } else {
+            super.onBindViewHolder(holder, position, payloads)
+        }
+    }
+
     inner class PagingViewHolder(
         private val binding: FragmentStreamsListItemBinding,
         private val fragment: Fragment,
         private val showGame: Boolean,
     ) : RecyclerView.ViewHolder(binding.root) {
+
+        fun bindUsernameOnly(item: Stream?) {
+            if (item == null) return
+            val context = binding.root.context
+            if (item.channelName != null) {
+                binding.username.visibility = View.VISIBLE
+                var base: CharSequence = if (item.channelLogin != null && !item.channelLogin.equals(item.channelName, true)) {
+                    when (context.prefs().getString(C.UI_NAME_DISPLAY, "0")) {
+                        "0" -> "${item.channelName}(${item.channelLogin})"
+                        "1" -> item.channelName
+                        else -> item.channelLogin
+                    }
+                } else {
+                    item.channelName
+                }
+                val isTv = context.resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)
+                if (isTv && com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.channelLogin)) {
+                    base = android.text.SpannableStringBuilder("★ ").apply {
+                        setSpan(android.text.style.ForegroundColorSpan(0xFFFACC15.toInt()), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        append(base)
+                    }
+                }
+                if (isTv) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.enqueue(context, item)
+                    val coCount = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.getCount(item.channelId, item.channelLogin)
+                    base = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.formatUsernameWithBadge(context, base, coCount)
+                }
+                binding.username.text = base
+            } else {
+                binding.username.visibility = View.GONE
+            }
+        }
+
         fun bind(item: Stream?) {
             with(binding) {
                 if (item != null) {
@@ -100,27 +152,9 @@ class StreamsAdapter(
                     } else {
                         userImage.visibility = View.GONE
                     }
+                    bindUsernameOnly(item)
                     if (item.channelName != null) {
-                        username.visibility = View.VISIBLE
-                        username.text = if (item.channelLogin != null && !item.channelLogin.equals(item.channelName, true)) {
-                            when (context.prefs().getString(C.UI_NAME_DISPLAY, "0")) {
-                                "0" -> "${item.channelName}(${item.channelLogin})"
-                                "1" -> item.channelName
-                                else -> item.channelLogin
-                            }
-                        } else {
-                            item.channelName
-                        }
-                        // TV: a yellow star before the name of a favorite channel
-                        if (com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.channelLogin) && context.resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)) {
-                            username.text = android.text.SpannableStringBuilder("★ ").apply {
-                                setSpan(android.text.style.ForegroundColorSpan(0xFFFACC15.toInt()), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                                append(username.text)
-                            }
-                        }
                         username.setOnClickListener(channelListener)
-                    } else {
-                        username.visibility = View.GONE
                     }
                     if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
                         root.setOnFocusChangeListener { _, hasFocus ->

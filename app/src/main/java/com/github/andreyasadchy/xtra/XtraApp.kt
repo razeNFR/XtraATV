@@ -44,6 +44,9 @@ class XtraApp : Application(), SingletonImageLoader.Factory {
         com.github.andreyasadchy.xtra.ui.tv.TvAccent.init(this)
         INSTANCE = this
         xtraModule = XtraModule(this)
+        if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(this)) {
+            com.github.andreyasadchy.xtra.ui.tv.TvLauncherSyncWorker.schedule(this)
+        }
         if (BuildConfig.DEBUG) {
             // debug builds: the error of a crash is kept, the app shows it when it starts again (no logcat needed)
             val previous = Thread.getDefaultUncaughtExceptionHandler()

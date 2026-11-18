@@ -52,10 +52,19 @@ object TvStats {
         val since: Long,
     )
 
-    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(FILE + TvAccounts.storageSuffix(context), Context.MODE_PRIVATE)
 
     /** Changes each time a statistic is counted: the home shows them again even when it never left the screen. */
     val changes = kotlinx.coroutines.flow.MutableStateFlow(0L)
+
+    @Synchronized
+    fun notifyAccountSwitched() {
+        sessionLogin = null
+        sessionMs = 0L
+        sessionLastAt = 0L
+        changes.value = System.nanoTime()
+    }
 
     private fun ensureSince(context: Context) {
         val prefs = prefs(context)

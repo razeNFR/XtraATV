@@ -10,6 +10,7 @@ class Image(
     val isAnimated: Boolean = false,
     val size: String? = null,
     val thirdParty: Boolean = false,
+    val circleCrop: Boolean = false,
     var overlayEmote: Image? = null,
     var start: Int,
     var end: Int,

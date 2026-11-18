@@ -118,19 +118,27 @@ object C {
     /** TV: banner at the top when a followed streamer goes live while the app is open, and its time on screen (s). */
     const val TV_LIVE_ALERTS = "tv_live_alerts"
     const val TV_LIVE_ALERTS_DURATION = "tv_live_alerts_duration"
-    /** TV small window over the player: corner ("tl", "tr", "bl", "br"), size (0..2), sound ("main" / "pip"), balance (-100..100). */
+    /** TV small window over the player: corner ("tl", "tr", "bl", "br"), size (0..2), sound ("main" / "pip" / "pip2" / "both"), balance (-100..100). */
     const val TV_PIP_CORNER = "tv_pip_corner"
     const val TV_PIP_SIZE = "tv_pip_size"
     const val TV_PIP_SOUND = "tv_pip_sound"
+    const val TV_PIP2_CORNER = "tv_pip2_corner"
+    const val TV_PIP2_SIZE = "tv_pip2_size"
+    const val TV_PIP_VOL_MAIN = "tv_pip_vol_main"
+    const val TV_PIP_VOL_1 = "tv_pip_vol_1"
+    const val TV_PIP_VOL_2 = "tv_pip_vol_2"
     // multi-stream: the sounds of all the streams at their own volume (else the selected one only), volume of each by login,
     // kept for the next multi-streams only with the box ticked
     const val TV_MULTISTREAM_SOUND_MIX = "tv_multistream_sound_mix"
     const val TV_MULTISTREAM_VOLUME_PREFIX = "tv_multistream_volume_"
     const val TV_MULTISTREAM_SOUND_KEEP = "tv_multistream_sound_keep"
     const val TV_MULTISTREAM_QUALITY = "tv_multistream_quality"
+    const val TV_MULTISTREAM_MOSAIC = "tv_multistream_mosaic"
     const val TV_MULTISTREAM_Q_2 = "tv_multistream_q_2"
     const val TV_MULTISTREAM_Q_3 = "tv_multistream_q_3"
     const val TV_MULTISTREAM_Q_4 = "tv_multistream_q_4"
+    const val TV_MULTISTREAM_Q_5 = "tv_multistream_q_5"
+    const val TV_MULTISTREAM_Q_6 = "tv_multistream_q_6"
     const val TV_PIP_BALANCE = "tv_pip_balance"
     const val UI_TAGS = "ui_tags"
     const val UI_SCROLL_TOP = "ui_scrolltop"
@@ -332,6 +340,17 @@ object C {
     const val TV_DISABLE_SOFT_KEYBOARD = "tv_disable_soft_keyboard"
     const val TV_FOLLOWED_LIVE_SORT = "tv_followed_live_sort"
     const val TV_CHAT_PREDICTIONS_POPUP = "tv_chat_predictions_popup"
+    /** TV: pinned chat message banner mode: 0 = hidden, 1 = temporary (20 s, default), 2 = always visible. */
+    const val TV_CHAT_PINNED_MODE = "tv_chat_pinned_mode"
+    /** Show source-channel avatar badge on Shared Chat (Stream Together) messages. */
+    const val CHAT_SHARED_BADGES = "chat_shared_badges"
+    /** TV player HUD buttons for Channel Points / Drops store and 30 s Clip creation. */
+    const val TV_BUTTON_POINTS = "tv_button_points"
+    const val TV_BUTTON_CLIP = "tv_button_clip"
+    /** TV: dim static HUD/chat overlays and shift pixels slightly after 3 min of remote inactivity. */
+    const val TV_OLED_PROTECTION = "tv_oled_protection"
+    /** TV: what happens when a live stream ends without a raid: "home" (default), "next", or "stay". */
+    const val TV_STREAM_END_ACTION = "tv_stream_end_action"
     const val TV_EXPERIMENTAL_ADBLOCK = "tv_experimental_adblock"
     /** Custom proxies: "0" for the whole stream, "1" only while an ad plays. */
     const val PLAYER_CUSTOM_PROXY_MODE = "custom_proxy_mode"

@@ -70,6 +70,9 @@ object TvRemoteKeys {
     const val ACTION_PIP_SWAP = "pip_swap"
     const val ACTION_PIP_SETTINGS = "pip_settings"
     const val ACTION_PIP_CLOSE = "pip_close"
+    const val ACTION_POINTS = "points_drops"
+    const val ACTION_CLIP = "create_clip"
+    const val ACTION_SHARE_QR = "share_qr"
 
     val ALL_ACTIONS = listOf(
         ACTION_DEFAULT,
@@ -85,6 +88,9 @@ object TvRemoteKeys {
         ACTION_MUTE,
         ACTION_QUALITY,
         ACTION_STATS,
+        ACTION_POINTS,
+        ACTION_CLIP,
+        ACTION_SHARE_QR,
         ACTION_PIP_SWAP,
         ACTION_PIP_SETTINGS,
         ACTION_PIP_CLOSE,
@@ -170,6 +176,9 @@ object TvRemoteKeys {
         ACTION_MUTE -> context.getString(R.string.tv_remote_action_mute)
         ACTION_QUALITY -> context.getString(R.string.tv_remote_action_quality)
         ACTION_STATS -> context.getString(R.string.tv_remote_action_stats)
+        ACTION_POINTS -> context.getString(R.string.tv_remote_action_points)
+        ACTION_CLIP -> context.getString(R.string.tv_remote_action_clip)
+        ACTION_SHARE_QR -> context.getString(R.string.tv_remote_action_share_qr)
         ACTION_PIP_SWAP -> context.getString(R.string.tv_remote_action_pip_swap)
         ACTION_PIP_SETTINGS -> context.getString(R.string.tv_remote_action_pip_settings)
         ACTION_PIP_CLOSE -> context.getString(R.string.tv_remote_action_pip_close)
@@ -249,6 +258,25 @@ object TvRemoteKeys {
     }
 
     fun customActionForKey(context: Context, keyCode: Int): String? = customShortActionForKey(context, keyCode)
+
+    fun bindingsForAction(context: Context, action: String): List<String> {
+        ensureMigrated(context)
+        return buildList {
+            if (centerAction(context) == action) add(context.getString(R.string.tv_dpad_center))
+            if (centerLongAction(context) == action) add(context.getString(R.string.tv_dpad_center_long))
+            if (leftAction(context) == action) add(context.getString(R.string.tv_dpad_left))
+            if (rightAction(context) == action) add(context.getString(R.string.tv_dpad_right))
+            if (upAction(context) == action) add(context.getString(R.string.tv_dpad_up))
+            if (upLongAction(context) == action) add(context.getString(R.string.tv_dpad_up_long))
+            if (downAction(context) == action) add(context.getString(R.string.tv_dpad_down))
+            if (downLongAction(context) == action) add(context.getString(R.string.tv_dpad_down_long))
+            loadCustomKeys(context).forEach { binding ->
+                if (binding.action == action) {
+                    add(bindingKeyLabel(context, binding))
+                }
+            }
+        }.distinct()
+    }
 
     fun dpadSummary(context: Context): String {
         ensureMigrated(context)

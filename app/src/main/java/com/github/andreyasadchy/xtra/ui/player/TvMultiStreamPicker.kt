@@ -7,23 +7,42 @@ import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import kotlinx.coroutines.launch
 
-/** TV: choice of up to 4 streams (followed channels live and streams of the list) for the multi-stream view, in the row of the other streams. */
+/** TV: choice of up to 6 streams (followed channels live and streams of the list) for the multi-stream view, in the row of the other streams. */
 object TvMultiStreamPicker {
 
-    private const val MAX = 4
+    const val MAX = 6
 
     fun show(activity: MainActivity, current: Stream?) {
         val groups = com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.list(activity)
-        if (groups.isEmpty()) {
-            openPicker(activity, current)
+        val coStreamers = if (current != null && !current.channelLogin.isNullOrBlank() &&
+            current.channelLogin.equals(activity.currentPlayingStream()?.channelLogin, ignoreCase = true)
+        ) {
+            (activity.playerFragment as? PlayerFragment)?.getCoStreamers().orEmpty()
+                .filter { !it.channelLogin.isNullOrBlank() && !it.channelLogin.equals(current.channelLogin, ignoreCase = true) }
+                .distinctBy { it.channelLogin?.lowercase() }
+                .take(MAX - 1)
+        } else {
+            emptyList()
+        }
+        if (groups.isEmpty() && coStreamers.isEmpty()) {
+            openPicker(activity, current, emptyList())
             return
         }
         val actions = mutableListOf<com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action>()
+        if (coStreamers.isNotEmpty() && current != null) {
+            val allCoStreams = (listOf(current) + coStreamers).take(MAX)
+            actions += com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                activity.getString(R.string.tv_costream_watch_multistream, allCoStreams.size),
+                R.drawable.tv_ic_streamers,
+            ) {
+                activity.startMultiStream(allCoStreams, current)
+            }
+        }
         actions += com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
             activity.getString(R.string.tv_multistream_new),
             R.drawable.tv_ic_add,
         ) {
-            openPicker(activity, current)
+            openPicker(activity, current, coStreamers)
         }
         groups.forEach { group ->
             actions += com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
@@ -33,21 +52,23 @@ object TvMultiStreamPicker {
                 com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.launchGroup(activity, group, current)
             }
         }
-        actions += com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
-            activity.getString(R.string.tv_multistream_remove_group),
-            R.drawable.tv_ic_delete,
-        ) {
-            val deleteActions = groups.map { group ->
-                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(group.label, R.drawable.tv_ic_delete) {
-                    com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(activity, group.id)
-                    Toast.makeText(activity, R.string.tv_multistream_group_removed, Toast.LENGTH_SHORT).show()
-                }
-            }
-            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
-                activity,
+        if (groups.isNotEmpty()) {
+            actions += com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
                 activity.getString(R.string.tv_multistream_remove_group),
-                deleteActions,
-            )
+                R.drawable.tv_ic_delete,
+            ) {
+                val deleteActions = groups.map { group ->
+                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(group.label, R.drawable.tv_ic_delete) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(activity, group.id)
+                        Toast.makeText(activity, R.string.tv_multistream_group_removed, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
+                    activity,
+                    activity.getString(R.string.tv_multistream_remove_group),
+                    deleteActions,
+                )
+            }
         }
         com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
             activity,
@@ -56,7 +77,7 @@ object TvMultiStreamPicker {
         )
     }
 
-    private fun openPicker(activity: MainActivity, current: Stream?) {
+    private fun openPicker(activity: MainActivity, current: Stream?, coStreamers: List<Stream> = emptyList()) {
         activity.lifecycleScope.launch {
             val gameSource = current?.takeIf { !it.gameName.isNullOrBlank() || !it.gameId.isNullOrBlank() || !it.gameSlug.isNullOrBlank() }?.let {
                 { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.game(activity, it.gameId, it.gameSlug, it.gameName) }
@@ -64,10 +85,10 @@ object TvMultiStreamPicker {
             val followed = loadFollowed(activity)
             val sameGame = gameSource?.let { com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.load(it()) }.orEmpty()
                 .sortedByDescending { it.viewerCount ?: 0 }
-            // Suggested: followed channels live first (account and local), then streams of the same category sorted by viewers and the list of the stream
-            val candidates = (listOfNotNull(current) + followed + sameGame + activity.liveStreamsOnly(activity.streamQueue))
+            // Suggested: current + co-streamers first, then followed channels live, then streams of the same category sorted by viewers and the list of the stream
+            val candidates = (listOfNotNull(current) + coStreamers + followed + sameGame + activity.liveStreamsOnly(activity.streamQueue))
                 .filter { !it.channelLogin.isNullOrBlank() }
-                .distinctBy { it.channelLogin }
+                .distinctBy { it.channelLogin?.lowercase() }
             if (candidates.isEmpty()) {
                 return@launch
             }

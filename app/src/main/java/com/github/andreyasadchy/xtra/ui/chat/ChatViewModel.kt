@@ -192,6 +192,180 @@ class ChatViewModel(
                 !TwitchApiHelper.getHelixHeaders(applicationContext)[C.HEADER_TOKEN].isNullOrBlank())
     }
 
+    val pinnedMessage = MutableStateFlow<PubSubUtils.PinnedChatData?>(null)
+    private var pinnedExpiryJob: Job? = null
+    val coStreamers = MutableStateFlow<List<com.github.andreyasadchy.xtra.model.ui.Stream>>(emptyList())
+    private val sourceRoomCache = ConcurrentHashMap<String, Pair<String?, String?>>()
+    private val pendingSourceRoomLookups = ConcurrentHashMap.newKeySet<String>()
+
+    private fun updatePinnedMessage(data: PubSubUtils.PinnedChatData?) {
+        pinnedExpiryJob?.cancel()
+        val now = System.currentTimeMillis()
+        if (data != null && data.endsAtMs != null && data.endsAtMs > 0L && now >= data.endsAtMs) {
+            pinnedMessage.value = null
+            return
+        }
+        pinnedMessage.value = data
+        val endsAt = data?.endsAtMs
+        if (data != null && endsAt != null && endsAt > now) {
+            val waitMs = (endsAt - now).coerceAtLeast(500L)
+            pinnedExpiryJob = viewModelScope.launch {
+                delay(waitMs)
+                if (pinnedMessage.value?.id == data.id) {
+                    pinnedMessage.value = null
+                }
+            }
+        }
+    }
+
+    private fun loadInitialPinnedAndCoStreamers(networkLibrary: String?, channelId: String?, channelLogin: String?) {
+        if (channelId.isNullOrBlank() && channelLogin.isNullOrBlank()) return
+        val netLib = networkLibrary ?: applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+        val headers = TwitchApiHelper.getGQLHeaders(applicationContext)
+        if (!channelId.isNullOrBlank()) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val item = graphQLRepository.loadPinnedChatMessage(netLib, headers, channelId)
+                if (item != null && pinnedMessage.value == null) {
+                    updatePinnedMessage(
+                        PubSubUtils.PinnedChatData(
+                            id = item.id,
+                            messageText = item.messageText,
+                            senderName = item.senderName,
+                            senderLogin = item.senderLogin,
+                            pinnedByName = item.pinnedByName,
+                            startsAtMs = item.startsAtMs,
+                            endsAtMs = item.endsAtMs,
+                        )
+                    )
+                }
+            }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val sharedIds = if (!channelId.isNullOrBlank()) {
+                graphQLRepository.loadSharedChatChannelIds(netLib, headers, channelId)
+            } else {
+                emptyList()
+            }
+            if (sharedIds.isNotEmpty()) {
+                resolveCoStreamersByIds(netLib, headers, sharedIds, channelId, channelLogin)
+            }
+            // Also check current stream title for @login co-streamers that are live right now
+            if (!channelLogin.isNullOrBlank()) {
+                runCatching {
+                    val selfResp = graphQLRepository.loadQueryUsersStream(netLib, headers, logins = listOf(channelLogin))
+                    val selfTitle = selfResp.data?.users?.firstOrNull()?.stream?.broadcaster?.broadcastSettings?.title
+                    if (!selfTitle.isNullOrBlank()) {
+                        discoverMentionedCoStreamers(netLib, headers, selfTitle, channelId, channelLogin)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun discoverMentionedCoStreamers(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        title: String,
+        selfChannelId: String?,
+        selfChannelLogin: String?,
+    ) {
+        val mentions = Regex("@([A-Za-z0-9_]{3,25})")
+            .findAll(title)
+            .map { it.groupValues[1].lowercase() }
+            .filter { !it.equals(selfChannelLogin, ignoreCase = true) }
+            .distinct()
+            .take(6)
+            .toList()
+        if (mentions.isEmpty()) return
+        runCatching {
+            val resp = graphQLRepository.loadQueryUsersStream(networkLibrary, headers, logins = mentions)
+            val liveFound = resp.data?.users?.mapNotNull { user ->
+                val st = user?.stream ?: return@mapNotNull null
+                val uid = user.id?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val login = user.login ?: return@mapNotNull null
+                if (uid == selfChannelId || login.equals(selfChannelLogin, ignoreCase = true)) return@mapNotNull null
+                sourceRoomCache[uid] = Pair(user.profileImageURL, user.displayName ?: login)
+                com.github.andreyasadchy.xtra.model.ui.Stream(
+                    id = st.id,
+                    channelId = uid,
+                    channelLogin = login,
+                    channelName = user.displayName ?: login,
+                    channelImageURL = user.profileImageURL,
+                    gameId = st.game?.id,
+                    gameSlug = st.game?.slug,
+                    gameName = st.game?.displayName,
+                    title = st.broadcaster?.broadcastSettings?.title,
+                    thumbnailURL = st.previewImageURL,
+                    createdAt = st.createdAt?.toString(),
+                    viewerCount = st.viewersCount,
+                    tags = st.freeformTags?.mapNotNull { it?.name },
+                )
+            }.orEmpty()
+            if (liveFound.isNotEmpty()) {
+                mergeCoStreamers(liveFound)
+            }
+        }
+    }
+
+    private suspend fun resolveCoStreamersByIds(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        ids: List<String>,
+        selfChannelId: String?,
+        selfChannelLogin: String?,
+    ) {
+        val cleanIds = ids.filter { it.isNotBlank() && it != selfChannelId }.distinct().take(6)
+        if (cleanIds.isEmpty()) return
+        runCatching {
+            val resp = graphQLRepository.loadQueryUsersStream(networkLibrary, headers, ids = cleanIds)
+            val liveFound = mutableListOf<com.github.andreyasadchy.xtra.model.ui.Stream>()
+            resp.data?.users?.forEach { user ->
+                if (user == null) return@forEach
+                val uid = user.id?.takeIf { it.isNotBlank() } ?: return@forEach
+                val login = user.login ?: return@forEach
+                val displayName = user.displayName ?: login
+                sourceRoomCache[uid] = Pair(user.profileImageURL, displayName)
+                val st = user.stream
+                if (st != null && uid != selfChannelId && !login.equals(selfChannelLogin, ignoreCase = true)) {
+                    liveFound.add(
+                        com.github.andreyasadchy.xtra.model.ui.Stream(
+                            id = st.id,
+                            channelId = uid,
+                            channelLogin = login,
+                            channelName = displayName,
+                            channelImageURL = user.profileImageURL,
+                            gameId = st.game?.id,
+                            gameSlug = st.game?.slug,
+                            gameName = st.game?.displayName,
+                            title = st.broadcaster?.broadcastSettings?.title,
+                            thumbnailURL = st.previewImageURL,
+                            createdAt = st.createdAt?.toString(),
+                            viewerCount = st.viewersCount,
+                            tags = st.freeformTags?.mapNotNull { it?.name },
+                        )
+                    )
+                }
+            }
+            if (liveFound.isNotEmpty()) {
+                mergeCoStreamers(liveFound)
+            }
+        }
+    }
+
+    private fun mergeCoStreamers(found: List<com.github.andreyasadchy.xtra.model.ui.Stream>) {
+        if (found.isEmpty()) return
+        val merged = LinkedHashMap<String, com.github.andreyasadchy.xtra.model.ui.Stream>()
+        coStreamers.value.forEach { s ->
+            s.channelLogin?.lowercase()?.let { merged[it] = s }
+        }
+        found.forEach { s ->
+            s.channelLogin?.lowercase()?.let { merged[it] = s }
+        }
+        val list = merged.values.take(5)
+        coStreamers.value = list
+        com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.putPartners(resolvedChannelId, activeChannelLogin, list)
+    }
+
     private fun onChannelIdResolved(roomId: String, channelLogin: String?) {
         if (roomId.isBlank() || !resolvedChannelId.isNullOrBlank()) return
         resolvedChannelId = roomId
@@ -200,6 +374,7 @@ class ChatViewModel(
         if (isUserLoggedIn()) {
             loadUserEmotes(roomId)
         }
+        loadInitialPinnedAndCoStreamers(null, roomId, login)
     }
 
     fun startLive(networkLibrary: String?, recentMessagesUrl: String?, channelId: String?, channelLogin: String?, channelName: String?, streamId: String?) {
@@ -209,9 +384,14 @@ class ChatViewModel(
             val initialChannelId = channelId?.takeIf { it.isNotBlank() }
             this.resolvedChannelId = initialChannelId
             this.activeChannelLogin = channelLogin
+            pinnedMessage.value = null
+            coStreamers.value = emptyList()
             startLiveChat(initialChannelId, channelLogin)
             addChatter(channelName)
             loadEmotes(initialChannelId, channelLogin)
+            if (initialChannelId != null) {
+                loadInitialPinnedAndCoStreamers(networkLibrary, initialChannelId, channelLogin)
+            }
             if (applicationContext.prefs().getBoolean(C.CHAT_RECENT, true)) {
                 loadRecentMessages(networkLibrary, recentMessagesUrl, channelLogin)
             }
@@ -2092,6 +2272,11 @@ class ChatViewModel(
             _streamInfo.value = info
             if (!info.gameId.isNullOrBlank()) gameId = info.gameId
             if (!info.gameName.isNullOrBlank()) gameName = info.gameName
+            if (!info.title.isNullOrBlank()) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    discoverMentionedCoStreamers(networkLibrary, gqlHeaders, info.title, channelId ?: resolvedChannelId, channelLogin)
+                }
+            }
         }
 
         override suspend fun onRewardMessage(message: JSONObject) {
@@ -2338,6 +2523,31 @@ class ChatViewModel(
             }
         }
 
+        override suspend fun onPinnedChatUpdate(message: JSONObject) {
+            updatePinnedMessage(PubSubUtils.parsePinnedChatUpdate(message, pinnedMessage.value))
+        }
+
+        override suspend fun onSharedChatUpdate(message: JSONObject) {
+            val selfId = channelId ?: resolvedChannelId
+            val ids = PubSubUtils.parseSharedChatChannelIds(message, selfId) ?: return
+            if (ids.isEmpty()) {
+                coStreamers.value = emptyList()
+                com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.putPartners(selfId, channelLogin, emptyList(), clearIfEmpty = true)
+                if (!selfId.isNullOrBlank()) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val remaining = graphQLRepository.loadSharedChatChannelIds(networkLibrary, gqlHeaders, selfId)
+                        if (remaining.isNotEmpty()) {
+                            resolveCoStreamersByIds(networkLibrary, gqlHeaders, remaining, selfId, channelLogin)
+                        }
+                    }
+                }
+            } else {
+                viewModelScope.launch(Dispatchers.IO) {
+                    resolveCoStreamersByIds(networkLibrary, gqlHeaders, ids, selfId, channelLogin)
+                }
+            }
+        }
+
         override suspend fun onDisconnect(message: String, fullMsg: String?) {
             if (showWebSocketDebugInfo) {
                 onMessage(ChatMessage(
@@ -2529,6 +2739,42 @@ class ChatViewModel(
     }
 
     private suspend fun onChatMessage(message: ChatMessage, networkLibrary: String?, isLoggedIn: Boolean, accountId: String?, channelId: String?) {
+        val srcRoom = message.sourceRoomId?.takeIf { it.isNotBlank() }
+        val curRoom = message.roomId?.takeIf { it.isNotBlank() } ?: channelId?.takeIf { it.isNotBlank() } ?: resolvedChannelId
+        if (srcRoom != null && srcRoom != curRoom) {
+            val cached = sourceRoomCache[srcRoom]
+            if (cached != null) {
+                message.sourceChannelAvatar = cached.first
+                message.sourceChannelName = cached.second ?: message.sourceChannelName
+            } else if (pendingSourceRoomLookups.add(srcRoom)) {
+                val netLib = networkLibrary ?: applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        resolveCoStreamersByIds(
+                            netLib,
+                            TwitchApiHelper.getGQLHeaders(applicationContext),
+                            listOf(srcRoom),
+                            curRoom,
+                            activeChannelLogin,
+                        )
+                        val resolved = sourceRoomCache[srcRoom]
+                        if (resolved != null && !resolved.first.isNullOrBlank()) {
+                            val updated = synchronized(chatMessages) {
+                                chatMessages.filter { it.sourceRoomId == srcRoom }.onEach {
+                                    it.sourceChannelAvatar = resolved.first
+                                    it.sourceChannelName = resolved.second ?: it.sourceChannelName
+                                }
+                            }
+                            if (updated.isNotEmpty()) {
+                                updateMessages.emit(updated)
+                            }
+                        }
+                    } finally {
+                        pendingSourceRoomLookups.remove(srcRoom)
+                    }
+                }
+            }
+        }
         onMessage(message)
         addChatter(message.userName)
         if (isLoggedIn && !accountId.isNullOrBlank() && message.userId == accountId) {
@@ -2603,6 +2849,8 @@ class ChatViewModel(
                         ),
                         timestamp = message.timestamp ?: item.timestamp,
                         fullMsg = message.fullMsg ?: item.fullMsg,
+                        roomId = message.roomId ?: item.roomId,
+                        sourceRoomId = message.sourceRoomId ?: item.sourceRoomId,
                     ), networkLibrary, isLoggedIn, accountId, channelId)
                 }
             }

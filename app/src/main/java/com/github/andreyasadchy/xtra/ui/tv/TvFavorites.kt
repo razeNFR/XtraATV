@@ -21,16 +21,19 @@ object TvFavorites {
     /** The favorites in their order, loaded once with [load]. */
     val items = MutableStateFlow<List<Favorite>>(emptyList())
 
-    private var loaded = false
+    private var loadedFile: String? = null
 
-    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+    private fun fileName(context: Context): String = FILE + TvAccounts.storageSuffix(context)
+
+    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(fileName(context), Context.MODE_PRIVATE)
 
     @Synchronized
     fun load(context: Context) {
-        if (loaded) {
+        val currentFile = fileName(context)
+        if (loadedFile == currentFile) {
             return
         }
-        loaded = true
+        loadedFile = currentFile
         val array = JSONArray(prefs(context).getString(ITEMS, null) ?: "[]")
         items.value = (0 until array.length()).mapNotNull { index ->
             array.optJSONObject(index)?.let { item ->
@@ -41,7 +44,7 @@ object TvFavorites {
 
     @Synchronized
     fun reload(context: Context) {
-        loaded = false
+        loadedFile = null
         load(context)
     }
 

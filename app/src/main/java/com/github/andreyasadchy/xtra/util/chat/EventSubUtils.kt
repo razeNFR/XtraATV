@@ -53,6 +53,9 @@ object EventSubUtils {
                 }
             }
         }
+        val roomId = if (!json.isNull("broadcaster_user_id")) json.optString("broadcaster_user_id").takeIf { it.isNotBlank() } else null
+        val sourceRoomId = if (!json.isNull("source_broadcaster_user_id")) json.optString("source_broadcaster_user_id").takeIf { it.isNotBlank() } else null
+        val sourceChannelName = if (!json.isNull("source_broadcaster_user_name")) json.optString("source_broadcaster_user_name").takeIf { it.isNotBlank() } else null
         return ChatMessage(
             type = ChatMessage.USER_MESSAGE,
             id = if (!json.isNull("message_id")) json.optString("message_id").takeIf { it.isNotBlank() } else null,
@@ -68,7 +71,10 @@ object EventSubUtils {
             msgId = if (!json.isNull("message_type")) json.optString("message_type").takeIf { it.isNotBlank() && !it.equals("text", true) } else null,
             reward = if (!json.isNull("channel_points_custom_reward_id")) json.optString("channel_points_custom_reward_id").takeIf { it.isNotBlank() }?.let { ChannelPointReward(id = it) } else null,
             timestamp = timestamp?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } },
-            fullMsg = json.toString()
+            fullMsg = json.toString(),
+            roomId = roomId,
+            sourceRoomId = sourceRoomId,
+            sourceChannelName = sourceChannelName,
         )
     }
 
@@ -79,6 +85,9 @@ object EventSubUtils {
         // our short translated line (TvChatNotices) when the kind is known, else the sentence of Twitch
         val systemMsg = notice?.first ?: if (!json.isNull("system_message")) json.optString("system_message").takeIf { it.isNotBlank() } else null
         val noticeIcon = notice?.second ?: com.github.andreyasadchy.xtra.R.drawable.tv_ic_info
+        val roomId = if (!json.isNull("broadcaster_user_id")) json.optString("broadcaster_user_id").takeIf { it.isNotBlank() } else null
+        val sourceRoomId = if (!json.isNull("source_broadcaster_user_id")) json.optString("source_broadcaster_user_id").takeIf { it.isNotBlank() } else null
+        val sourceChannelName = if (!json.isNull("source_broadcaster_user_name")) json.optString("source_broadcaster_user_name").takeIf { it.isNotBlank() } else null
         return if (messageText != null) {
             val emotesList = mutableListOf<TwitchEmote>()
             val fragments = messageObj?.optJSONArray("fragments")
@@ -132,7 +141,10 @@ object EventSubUtils {
                 msgId = if (!json.isNull("notice_type")) json.optString("notice_type").takeIf { it.isNotBlank() } else null,
                 noticeIcon = noticeIcon,
                 timestamp = timestamp?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } },
-                fullMsg = json.toString()
+                fullMsg = json.toString(),
+                roomId = roomId,
+                sourceRoomId = sourceRoomId,
+                sourceChannelName = sourceChannelName,
             )
         } else {
             ChatMessage(
@@ -143,7 +155,10 @@ object EventSubUtils {
                 systemMsg = systemMsg,
                 noticeIcon = noticeIcon,
                 timestamp = timestamp?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } },
-                fullMsg = json.toString()
+                fullMsg = json.toString(),
+                roomId = roomId,
+                sourceRoomId = sourceRoomId,
+                sourceChannelName = sourceChannelName,
             )
         }
     }
