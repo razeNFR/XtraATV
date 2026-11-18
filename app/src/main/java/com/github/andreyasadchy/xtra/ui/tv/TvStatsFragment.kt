@@ -34,11 +34,16 @@ class TvStatsFragment : Fragment() {
         if (act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
             focusTrigger.intValue++
         }
+        val accent = com.google.android.material.color.MaterialColors.getColor(
+            context,
+            androidx.appcompat.R.attr.colorPrimary,
+            android.graphics.Color.rgb(145, 71, 255),
+        )
         return ComposeView(context).apply {
             id = R.id.tvStatsRoot
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                TvTheme {
+                TvTheme(accent) {
                     TvStatsPage.Screen(
                         isEmbeddedPage = true,
                         focusTrigger = focusTrigger.intValue,

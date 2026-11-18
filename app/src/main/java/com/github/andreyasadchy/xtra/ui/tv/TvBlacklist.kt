@@ -170,10 +170,10 @@ object TvBlacklist {
 
         val parsedKeywords = runCatching {
             val arr = JSONArray(sp.getString(KEY_KEYWORDS, null) ?: "[]")
-            buildList {
+            buildList<String> {
                 for (i in 0 until arr.length()) {
                     val kw = arr.optString(i).trim().removePrefix("#").trim()
-                    if (kw.isNotEmpty() && none { it.equals(kw, ignoreCase = true) }) {
+                    if (kw.isNotEmpty() && this.none { s: String -> s.equals(kw, ignoreCase = true) }) {
                         add(kw)
                     }
                 }

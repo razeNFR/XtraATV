@@ -766,7 +766,7 @@ private fun PlaybackBadgePill(
             Icon(
                 painterResource(R.drawable.baseline_play_arrow_black_48),
                 contentDescription = null,
-                tint = TvColors.onAccent,
+                tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(if (small) 11.dp else 12.dp),
             )
             Spacer(Modifier.width(2.dp))
@@ -774,7 +774,7 @@ private fun PlaybackBadgePill(
                 badge.label,
                 fontSize = if (small) 10.sp else 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = TvColors.onAccent,
+                color = MaterialTheme.colorScheme.onPrimary,
                 maxLines = 1,
             )
         } else {

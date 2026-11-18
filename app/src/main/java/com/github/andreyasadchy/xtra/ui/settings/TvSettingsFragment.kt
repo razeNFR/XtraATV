@@ -114,14 +114,16 @@ import com.github.andreyasadchy.xtra.model.ui.CustomProxy
 import com.github.andreyasadchy.xtra.model.ui.SettingsDragListItem
 import com.github.andreyasadchy.xtra.model.ui.StreamProxy
 import com.github.andreyasadchy.xtra.model.ui.VideoSwap
-import com.github.andreyasadchy.xtra.receiver.DeviceAdminReceiver
+import android.app.admin.DeviceAdminReceiver
 import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
-import com.github.andreyasadchy.xtra.ui.common.MaterialPreferenceFragment
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.settings.CustomProxySettingsViewModel.Companion.CustomProxySettingsViewModelFactory
 import com.github.andreyasadchy.xtra.ui.settings.SettingsViewModel.Companion.SettingsViewModelFactory
 import com.github.andreyasadchy.xtra.ui.settings.StreamProxySettingsViewModel.Companion.StreamProxySettingsViewModelFactory
 import com.github.andreyasadchy.xtra.ui.settings.VideoSwapSettingsViewModel.Companion.VideoSwapSettingsViewModelFactory
+import com.github.andreyasadchy.xtra.ui.tv.ButtonRow
+import com.github.andreyasadchy.xtra.ui.tv.FocusRow
+import com.github.andreyasadchy.xtra.ui.tv.SidePanel
 import com.github.andreyasadchy.xtra.ui.tv.TvAbout
 import com.github.andreyasadchy.xtra.ui.tv.TvActionPanel
 import com.github.andreyasadchy.xtra.ui.tv.TvAmbient
@@ -144,12 +146,13 @@ import com.github.andreyasadchy.xtra.ui.view.TvVoice
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.UpdateInstallHelper
-import com.github.andreyasadchy.xtra.util.UpdateInstallHelper.canInstallUnknownAppsCompat
-import com.github.andreyasadchy.xtra.util.UpdateInstallHelper.openUnknownAppSourcesSettings
+import com.github.andreyasadchy.xtra.util.canInstallUnknownAppsCompat
 import com.github.andreyasadchy.xtra.util.chat.ChatBlocklist
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
+import com.github.andreyasadchy.xtra.util.openUnknownAppSourcesSettings
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
+import com.google.android.material.color.MaterialColors
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -314,11 +317,16 @@ class TvSettingsFragment : Fragment() {
         if (act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
             requestContentFocus()
         }
+        val accent = MaterialColors.getColor(
+            context,
+            androidx.appcompat.R.attr.colorPrimary,
+            android.graphics.Color.rgb(145, 71, 255),
+        )
         return ComposeView(context).apply {
             id = R.id.tvSettingsRoot
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                TvTheme {
+                TvTheme(accent) {
                     SettingsScreen()
                 }
             }
@@ -2018,7 +2026,7 @@ class TvSettingsFragment : Fragment() {
                 TvDialogs.showChoices(
                     context = context,
                     title = item.title,
-                    entries = kind.entries,
+                    options = kind.entries,
                     selected = kind.entryValues.indexOf(kind.value).coerceAtLeast(0),
                     colors = kind.colors,
                     subtitle = kind.subtitle,
@@ -2500,17 +2508,24 @@ class TvSettingsFragment : Fragment() {
         onSave: (Set<String>) -> Unit,
     ) {
         var current by mutableStateOf(kind.values)
-        val dialog = TvDialogs.show(context) { dlg ->
+        val dialog = TvDialogs.show(context) { dismiss ->
             val firstReq = remember { FocusRequester() }
-            TvDialogs.SidePanel(title = title) {
+            SidePanel(
+                title = title,
+                footer = {
+                    ButtonRow(
+                        label = context.getString(R.string.close_player),
+                        onClick = dismiss,
+                    )
+                },
+            ) {
                 LazyColumn(
-                    modifier = Modifier.weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     itemsIndexed(kind.entries) { idx, label ->
                         val v = kind.entryValues.getOrNull(idx) ?: return@itemsIndexed
                         val checked = v in current
-                        TvDialogs.FocusRow(
+                        FocusRow(
                             onClick = {
                                 current = if (checked) current - v else current + v
                             },
@@ -2532,10 +2547,6 @@ class TvSettingsFragment : Fragment() {
                             }
                         }
                     }
-                }
-                Spacer(Modifier.height(12.dp))
-                TvDialogs.DialogButton(context.getString(R.string.close_player), Modifier.fillMaxWidth()) {
-                    dlg.dismiss()
                 }
             }
             LaunchedEffect(Unit) { runCatching { firstReq.requestFocus() } }
