@@ -34,10 +34,16 @@ class XtraTimeBar : DefaultTimeBar {
     private var currentPosMs: Long = 0L
     private var scrubberShown: Boolean = true
     private var mutedSegments: List<Pair<Long, Long>> = emptyList()
+    private var chapterTimesMs: LongArray = LongArray(0)
+    private var chapterTickWidthPx: Float = 0f
 
     private val mutedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = 0xDCFF4D4D.toInt()
+        color = 0xF0FF3B3B.toInt()
+    }
+    private val chapterOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0xEBFFFFFF.toInt()
     }
     private val segmentRect = RectF()
     private val scrubberClipPath = Path()
@@ -60,7 +66,8 @@ class XtraTimeBar : DefaultTimeBar {
         val defaultEnabled = (12f * density + 0.5f).toInt()
         val defaultDisabled = 0
         val defaultDragged = (16f * density + 0.5f).toInt()
-        minSegmentWidthPx = max(3f * density, 3f)
+        minSegmentWidthPx = max(3.5f * density, 3.5f)
+        chapterTickWidthPx = max(3f * density, 3f)
 
         if (attrs != null) {
             val a = context.theme.obtainStyledAttributes(
@@ -109,6 +116,19 @@ class XtraTimeBar : DefaultTimeBar {
         invalidate()
     }
 
+    override fun setAdGroupTimesMs(
+        adGroupTimesMs: LongArray?,
+        playedAdGroups: BooleanArray?,
+        adGroupCount: Int,
+    ) {
+        chapterTimesMs = if (adGroupTimesMs != null && adGroupCount > 0) {
+            adGroupTimesMs.copyOf(adGroupCount.coerceAtMost(adGroupTimesMs.size))
+        } else {
+            LongArray(0)
+        }
+        super.setAdGroupTimesMs(adGroupTimesMs, playedAdGroups, adGroupCount)
+    }
+
     override fun setDuration(duration: Long) {
         totalDurationMs = duration
         super.setDuration(duration)
@@ -155,9 +175,10 @@ class XtraTimeBar : DefaultTimeBar {
         } else {
             paddingTop + (height - paddingTop - paddingBottom) / 2f
         }
-        val barTop = barCenterY - barHeightPx / 2f
-        val barBottom = barTop + barHeightPx
-        val corner = barHeightPx / 2f
+        val drawHeight = max(barHeightPx.toFloat(), 4.5f * resources.displayMetrics.density)
+        val barTop = barCenterY - drawHeight / 2f
+        val barBottom = barTop + drawHeight
+        val corner = drawHeight / 2f
 
         val saveCount = canvas.save()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && (scrubberShown || isPressed || isFocused) && isEnabled) {
@@ -187,6 +208,17 @@ class XtraTimeBar : DefaultTimeBar {
             if (x2 > x1) {
                 segmentRect.set(x1, barTop, x2, barBottom)
                 canvas.drawRoundRect(segmentRect, corner, corner, mutedPaint)
+            }
+        }
+        if (chapterTimesMs.isNotEmpty()) {
+            val halfTick = chapterTickWidthPx / 2f
+            for (markerMs in chapterTimesMs) {
+                if (markerMs <= 0L || markerMs >= duration) continue
+                val inMuted = segments.any { (s, e) -> markerMs in s..e }
+                if (!inMuted) continue
+                val tx = (barLeft + (barWidth * (markerMs.toDouble() / durDouble)).toFloat())
+                    .coerceIn(barLeft + halfTick, barRight - halfTick)
+                canvas.drawRect(tx - halfTick, barTop, tx + halfTick, barBottom, chapterOverlayPaint)
             }
         }
         canvas.restoreToCount(saveCount)

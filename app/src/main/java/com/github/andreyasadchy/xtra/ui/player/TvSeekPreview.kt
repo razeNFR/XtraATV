@@ -15,7 +15,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.graphics.ColorUtils
+import java.util.Locale
+import kotlin.math.abs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,6 +89,10 @@ class TvSeekPreview(
     private val sprites = HashMap<String, Bitmap>()
     private val loading = HashSet<String>()
     private var lastPosition = -1L
+    private var lastDuration = 0L
+    private var lastDeltaMs: Long? = null
+    private var lastTargetLabel: String? = null
+    private var hasPreviewBitmap = false
     private val density = container.resources.displayMetrics.density
     private val frame = FrameLayout(container.context).apply {
         background = GradientDrawable().apply {
@@ -118,6 +126,44 @@ class TvSeekPreview(
         elevation = 2 * density
         visibility = View.GONE
     }
+    private val deltaTextView = TextView(container.context).apply {
+        setTextColor(Color.WHITE)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+        typeface = Typeface.DEFAULT_BOLD
+        includeFontPadding = false
+        maxLines = 1
+    }
+    private val separatorTextView = TextView(container.context).apply {
+        text = "  ·  "
+        setTextColor(0x80FFFFFF.toInt())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        includeFontPadding = false
+        maxLines = 1
+    }
+    private val targetTimeTextView = TextView(container.context).apply {
+        setTextColor(0xEBFFFFFF.toInt())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+        typeface = Typeface.DEFAULT_BOLD
+        includeFontPadding = false
+        maxLines = 1
+    }
+    private val seekInfoBox = LinearLayout(container.context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        background = GradientDrawable().apply {
+            setColor(0xED14141D.toInt())
+            setStroke(maxOf(1, (1.2f * density).toInt()), 0x54FFFFFF)
+            cornerRadius = 16 * density
+        }
+        val hPad = (13 * density).toInt()
+        val vPad = (5.5f * density).toInt()
+        setPadding(hPad, vPad, hPad, vPad)
+        visibility = View.GONE
+        elevation = 8 * density
+        addView(deltaTextView)
+        addView(separatorTextView)
+        addView(targetTimeTextView)
+    }
     private val previewWidth = (240 * density).toInt()
     private val previewHeight = (135 * density).toInt()
     private val hideAction = Runnable { hide() }
@@ -132,6 +178,7 @@ class TvSeekPreview(
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
         )
         container.addView(frame, ViewGroup.LayoutParams(previewWidth, previewHeight))
+        container.addView(seekInfoBox, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
     fun setChapters(list: List<Game>?) {
@@ -202,6 +249,9 @@ class TvSeekPreview(
                 if (refresh) {
                     loaded.images.lastOrNull()?.let { sprites.remove(it) }
                 }
+                if (seekInfoBox.isShown && lastPosition >= 0L && lastDuration > 0L) {
+                    show(lastPosition, lastDuration, lastDeltaMs, lastTargetLabel)
+                }
             } else if (missing) {
                 // a VOD being recorded: no storyboard until the end of the broadcast
                 useVideo()
@@ -244,8 +294,8 @@ class TvSeekPreview(
             log("video frames $url")
             if (url != null) {
                 videoBase = url
-                if (frame.isShown && lastPosition >= 0) {
-                    showVideo(lastPosition)
+                if ((frame.isShown || seekInfoBox.isShown) && lastPosition >= 0 && lastDuration > 0L) {
+                    show(lastPosition, lastDuration, lastDeltaMs, lastTargetLabel)
                 }
             }
         }
@@ -257,42 +307,81 @@ class TvSeekPreview(
         }
     }
 
-    fun show(position: Long, duration: Long) {
+    private fun formatSignedDelta(deltaMs: Long): String {
+        val totalSeconds = (abs(deltaMs) + 500L) / 1000L
+        val sign = if (deltaMs >= 0L) "+" else "-"
+        val hours = totalSeconds / 3600L
+        val minutes = (totalSeconds % 3600L) / 60L
+        val seconds = totalSeconds % 60L
+        return if (hours > 0L) {
+            String.format(Locale.US, "%s%d:%02d:%02d", sign, hours, minutes, seconds)
+        } else {
+            String.format(Locale.US, "%s%d:%02d", sign, minutes, seconds)
+        }
+    }
+
+    fun show(
+        position: Long,
+        duration: Long,
+        deltaMs: Long? = null,
+        targetLabel: String? = null,
+    ) {
         container.removeCallbacks(hideAction)
         container.removeCallbacks(releaseAction)
         if (duration <= 0) {
             return
         }
         lastPosition = position
+        lastDuration = duration
+        lastDeltaMs = deltaMs
+        lastTargetLabel = targetLabel
+
+        if (deltaMs != null) {
+            deltaTextView.text = formatSignedDelta(deltaMs)
+            val baseAccent = if (com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null) {
+                com.github.andreyasadchy.xtra.ui.tv.TvAccent.color
+            } else {
+                0xFFA970FF.toInt()
+            }
+            deltaTextView.setTextColor(ColorUtils.blendARGB(baseAccent, Color.WHITE, 0.42f))
+            targetTimeTextView.text = targetLabel ?: DateUtils.formatElapsedTime((position / 1000L).coerceAtLeast(0L))
+            seekInfoBox.visibility = View.VISIBLE
+        } else {
+            seekInfoBox.visibility = View.GONE
+        }
+
         if (videoBase != null) {
             showVideo(position)
-            place(position, duration)
+            place(position, duration, showThumbnail = true)
             return
         }
         if (infoUrl != null && (board == null || (refresh && System.currentTimeMillis() - boardLoadedAt > 60_000L))) {
             loadBoard()
         }
-        val board = board ?: return
-        if (board.interval <= 0) {
+        val currentBoard = board
+        if (currentBoard == null || currentBoard.interval <= 0) {
+            place(position, duration, showThumbnail = false)
             return
         }
-        val perImage = board.cols * board.rows
-        val index = (position / 1000.0 / board.interval).toInt()
-        val url = board.images.getOrNull(index / perImage)
+        val perImage = currentBoard.cols * currentBoard.rows
+        val index = (position / 1000.0 / currentBoard.interval).toInt()
+        val url = currentBoard.images.getOrNull(index / perImage)
         if (url == null) {
             // past the end of the storyboard of a growing video: the frames of the video
             if (refresh) {
                 useVideo()
             }
-            return hide()
+            place(position, duration, showThumbnail = false)
+            return
         }
         val cell = index % perImage
         val sprite = sprites[url]
         if (sprite != null) {
-            val x = (cell % board.cols) * board.width
-            val y = (cell / board.cols) * board.height
-            if (x + board.width <= sprite.width && y + board.height <= sprite.height) {
-                imageView.setImageBitmap(Bitmap.createBitmap(sprite, x, y, board.width, board.height))
+            val x = (cell % currentBoard.cols) * currentBoard.width
+            val y = (cell / currentBoard.cols) * currentBoard.height
+            if (x + currentBoard.width <= sprite.width && y + currentBoard.height <= sprite.height) {
+                imageView.setImageBitmap(Bitmap.createBitmap(sprite, x, y, currentBoard.width, currentBoard.height))
+                hasPreviewBitmap = true
             }
         } else if (loading.add(url)) {
             scope.launch {
@@ -308,13 +397,13 @@ class TvSeekPreview(
                 loading.remove(url)
                 if (bitmap != null) {
                     sprites[url] = bitmap
-                    if (frame.isShown) {
-                        show(lastPosition, duration)
+                    if (frame.isShown || seekInfoBox.isShown) {
+                        show(lastPosition, lastDuration, lastDeltaMs, lastTargetLabel)
                     }
                 }
             }
         }
-        place(position, duration)
+        place(position, duration, showThumbnail = hasPreviewBitmap)
     }
 
     private fun showVideo(position: Long) {
@@ -339,27 +428,49 @@ class TvSeekPreview(
     }
 
     /** Above the timeline, following the scrubber. */
-    private fun place(position: Long, duration: Long) {
-        val activeChapter = chapters.lastOrNull { (it.vodPosition ?: 0).toLong() <= position }?.name?.takeIf { it.isNotBlank() }
-        if (activeChapter != null) {
-            chapterLabel.text = activeChapter
-            chapterLabel.visibility = View.VISIBLE
-        } else {
-            chapterLabel.visibility = View.GONE
-        }
+    private fun place(position: Long, duration: Long, showThumbnail: Boolean) {
         val barLocation = IntArray(2)
         val containerLocation = IntArray(2)
         timeBar.getLocationInWindow(barLocation)
         container.getLocationInWindow(containerLocation)
-        val scrubberX = barLocation[0] - containerLocation[0] + timeBar.width * (position.toFloat() / duration)
-        frame.translationX = (scrubberX - previewWidth / 2f).coerceIn(0f, (container.width - previewWidth).toFloat().coerceAtLeast(0f))
-        frame.translationY = barLocation[1] - containerLocation[1] - previewHeight - 12 * density
-        frame.visibility = View.VISIBLE
+        val barLeft = (barLocation[0] - containerLocation[0] + timeBar.paddingLeft).toFloat()
+        val barTrackWidth = (timeBar.width - timeBar.paddingLeft - timeBar.paddingRight).coerceAtLeast(1).toFloat()
+        val frac = (position.toDouble() / duration.toDouble()).toFloat().coerceIn(0f, 1f)
+        val scrubberX = barLeft + barTrackWidth * frac
+
+        var nextBottomY = (barLocation[1] - containerLocation[1]).toFloat() - 8f * density
+        if (seekInfoBox.visibility == View.VISIBLE) {
+            seekInfoBox.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+            val pillW = seekInfoBox.measuredWidth.coerceAtLeast(1)
+            val pillH = seekInfoBox.measuredHeight.coerceAtLeast(1)
+            val edgeMargin = 16f * density
+            val maxPillX = (container.width - pillW - edgeMargin).coerceAtLeast(edgeMargin)
+            seekInfoBox.translationX = (scrubberX - pillW / 2f).coerceIn(edgeMargin, maxPillX)
+            val pillY = nextBottomY - pillH
+            seekInfoBox.translationY = pillY
+            nextBottomY = pillY - 6f * density
+        }
+
+        if (showThumbnail) {
+            val activeChapter = chapters.lastOrNull { (it.vodPosition ?: 0).toLong() <= position }?.name?.takeIf { it.isNotBlank() }
+            if (activeChapter != null) {
+                chapterLabel.text = activeChapter
+                chapterLabel.visibility = View.VISIBLE
+            } else {
+                chapterLabel.visibility = View.GONE
+            }
+            frame.translationX = (scrubberX - previewWidth / 2f).coerceIn(0f, (container.width - previewWidth).toFloat().coerceAtLeast(0f))
+            frame.translationY = nextBottomY - previewHeight
+            frame.visibility = View.VISIBLE
+        } else {
+            frame.visibility = View.GONE
+        }
     }
 
     fun hide() {
         container.removeCallbacks(hideAction)
         frame.visibility = View.GONE
+        seekInfoBox.visibility = View.GONE
         if (videoPlayer != null) {
             container.removeCallbacks(releaseAction)
             container.postDelayed(releaseAction, 15_000L)
@@ -374,9 +485,9 @@ class TvSeekPreview(
     }
 
     /** After a short press the thumbnail stays a moment, long enough to see it. */
-    fun hideLater(delay: Long = 1500L) {
+    fun hideLater(delay: Long = 1200L) {
         container.removeCallbacks(hideAction)
-        if (frame.isShown) {
+        if (frame.isShown || seekInfoBox.isShown) {
             container.postDelayed(hideAction, delay)
         }
     }
@@ -384,6 +495,7 @@ class TvSeekPreview(
     fun release() {
         container.removeCallbacks(hideAction)
         container.removeCallbacks(releaseAction)
+        hide()
         releaseVideo()
     }
 

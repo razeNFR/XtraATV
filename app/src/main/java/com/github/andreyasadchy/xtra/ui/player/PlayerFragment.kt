@@ -170,13 +170,35 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private var hlsMutedSegments: List<Pair<Long, Long>> = emptyList()
 
+    private fun combineMutedSegments(
+        gqlSegments: List<Pair<Long, Long>>,
+        manifestSegments: List<Pair<Long, Long>>,
+    ): List<Pair<Long, Long>> {
+        if (gqlSegments.isEmpty()) return manifestSegments
+        if (manifestSegments.isEmpty()) return gqlSegments
+        val combined = ArrayList<Pair<Long, Long>>(gqlSegments.size + manifestSegments.size)
+        combined.addAll(gqlSegments)
+        combined.addAll(manifestSegments)
+        combined.sortBy { it.first }
+        val merged = ArrayList<Pair<Long, Long>>(combined.size)
+        for ((startMs, endMs) in combined) {
+            val last = merged.lastOrNull()
+            if (last != null && startMs <= last.second + 2_000L) {
+                merged[merged.lastIndex] = last.first to maxOf(last.second, endMs)
+            } else {
+                merged.add(startMs to endMs)
+            }
+        }
+        return merged
+    }
+
     protected fun updateHlsMutedSegments(segments: List<Pair<Long, Long>>) {
         hlsMutedSegments = segments
         val bar = _binding?.playerControls?.progressBar ?: return
-        val effective = when {
-            playbackService?.type != BasePlaybackService.VIDEO -> emptyList()
-            segments.isNotEmpty() -> segments
-            else -> viewModel.mutedSegments.value
+        val effective = if (playbackService?.type != BasePlaybackService.VIDEO) {
+            emptyList()
+        } else {
+            combineMutedSegments(viewModel.mutedSegments.value, segments)
         }
         bar.setMutedSegments(effective)
     }
@@ -303,6 +325,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private val backPressedCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
+            if (isTv && cancelTvScrub()) {
+                return
+            }
             if (isTv && cancelTvStreamEndCountdown()) {
                 return
             }
@@ -861,10 +886,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                         // down from the timeline: back to the button the focus was on, not the nearest one
                         if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN && _binding != null) {
+                            if (tvScrubPosition >= 0L) {
+                                commitTvScrub()
+                            }
                             val last = findLastControl()
                             if (last != null && last.isShown && last.isFocusable && last.requestFocus()) {
                                 return@setOnKeyListener true
                             }
+                        }
+                        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) && tvScrubPosition >= 0L) {
+                            if (event.action == KeyEvent.ACTION_DOWN) {
+                                commitTvScrub()
+                            }
+                            return@setOnKeyListener true
                         }
                         onTimeBarKey(keyCode, event)
                     }
@@ -882,6 +916,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             progressBar.showScrubber()
                             progressBar.setPlayedColor(playedColor)
                         } else {
+                            if (tvScrubPosition >= 0L) {
+                                commitTvScrub()
+                            }
                             progressBar.hideScrubber(false)
                             progressBar.setPlayedColor(0xE6FFFFFF.toInt())
                         }
@@ -957,6 +994,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 )
                 when (playbackService?.type) {
                     BasePlaybackService.STREAM -> {
+                        viewModel.loadMutedSegments(null, null, emptyMap(), emptyMap())
                         playbackService?.channelLogin?.let {
                             viewModel.loadStreamInfo(
                                 channelId = playbackService?.channelId,
@@ -974,13 +1012,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     BasePlaybackService.VIDEO -> {
                         val videoId = playbackService?.videoId
                         if (!videoId.isNullOrBlank()) {
+                            val includeVideoToken = requireContext().prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_VIDEO, true)
                             viewModel.loadMutedSegments(
                                 videoId,
                                 requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                                TwitchApiHelper.getGQLHeaders(requireContext()),
+                                TwitchApiHelper.getGQLWebHeaders(requireContext(), includeVideoToken),
+                                TwitchApiHelper.getGQLHeaders(requireContext(), includeVideoToken),
                             )
                         } else {
-                            viewModel.loadMutedSegments(null, null, emptyMap())
+                            viewModel.loadMutedSegments(null, null, emptyMap(), emptyMap())
                         }
                         if (!videoId.isNullOrBlank() && (isTv || requireContext().prefs().getBoolean(C.PLAYER_GAMES_BUTTON, true) || requireContext().prefs().getBoolean(C.PLAYER_MENU_GAMES, false))) {
                             viewModel.loadGamesList(
@@ -992,7 +1032,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                     else -> {
-                        viewModel.loadMutedSegments(null, null, emptyMap())
+                        viewModel.loadMutedSegments(null, null, emptyMap(), emptyMap())
                     }
                 }
             }
@@ -1318,7 +1358,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.mutedSegments.collectLatest { segments ->
-                                val effective = if (hlsMutedSegments.isNotEmpty()) hlsMutedSegments else segments
+                                val effective = combineMutedSegments(segments, hlsMutedSegments)
                                 progressBar.setMutedSegments(effective)
                             }
                         }
@@ -2305,6 +2345,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private var tvScrubPosition = -1L
+    private var tvScrubOriginPosition = -1L
+    private var tvScrubDuration = 0L
+    private val tvScrubCommitRunnable = Runnable { commitTvScrub() }
     private var pendingDvr = false
     private var pendingDvrPosition = 0L
     private var pendingDvrResumeFromPause = false
@@ -2729,8 +2772,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     /**
-     * D-pad seeking on the time bar: a short press moves 10 seconds (a minute back from the live), holding the key moves faster and faster.
-     * The player seeks once, when the key is released.
+     * D-pad seeking on the time bar: a short press moves 10 seconds (a minute back from the live), holding the key
+     * ramps up smoothly in predictable human-friendly steps, and releasing leaves a brief 700ms grace window (like Kodi)
+     * so the user can tap Left/Right to fine-tune the exact skip amount before committing a single seek.
      */
     private fun onTimeBarKey(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) {
@@ -2746,81 +2790,126 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         with(binding.playerControls) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> {
+                    root.removeCallbacks(tvScrubCommitRunnable)
                     if (tvScrubPosition < 0) {
                         val shiftBehindMs = if (isLive && !expVod) {
                             (playbackService as? ExoPlayerService)?.getLiveTimeShiftBehindMs() ?: 0L
                         } else {
                             0L
                         }
-                        tvScrubPosition = when {
+                        val initialPos = when {
                             expVod -> (getCurrentPosition() ?: duration).coerceIn(0L, duration)
                             isLive -> (duration - shiftBehindMs).coerceIn(0L, duration)
-                            else -> getCurrentPosition() ?: 0
+                            else -> (getCurrentPosition() ?: 0L).coerceIn(0L, duration)
                         }
+                        tvScrubOriginPosition = initialPos
+                        tvScrubPosition = initialPos
                         progressBar.isPressed = true
                     }
-                    // the longer the key is held, the faster it goes, relative to the length of the video
+                    tvScrubDuration = duration
+                    val stepCap = maxOf(30_000L, duration / 30L)
                     val step = when {
-                        event.repeatCount < 4 -> 10_000L
-                        event.repeatCount < 12 -> maxOf(30_000L, duration / 300)
-                        event.repeatCount < 24 -> maxOf(60_000L, duration / 120)
-                        else -> maxOf(120_000L, duration / 50)
-                    }.let {
+                        event.repeatCount == 0 -> 10_000L
+                        event.repeatCount < 6 -> 15_000L
+                        event.repeatCount < 14 -> 30_000L
+                        event.repeatCount < 26 -> 60_000L
+                        event.repeatCount < 42 -> 120_000L
+                        else -> 180_000L
+                    }.coerceAtMost(stepCap).coerceAtLeast(10_000L).let {
                         // on the live: the first step back goes a minute back, right into the VOD, small steps never get past its edge
                         if (isLive && !expVod && keyCode == KeyEvent.KEYCODE_DPAD_LEFT && tvScrubPosition >= duration - LIVE_EDGE_MS) maxOf(it, LIVE_FIRST_STEP_MS) else it
                     }
                     tvScrubPosition = (tvScrubPosition + if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -step else step).coerceIn(0, duration)
                     progressBar.setDuration(duration)
                     progressBar.setPosition(tvScrubPosition)
-                    position.text = if (expVod && tvScrubPosition >= duration - 8_000L) {
-                        getString(R.string.tv_live)
-                    } else {
-                        DateUtils.formatElapsedTime(tvScrubPosition / 1000)
-                    }
-                    seekPreview?.show(tvScrubPosition, duration)
+                    val isAtExpLiveEdge = expVod && tvScrubPosition >= duration - 8_000L
+                    val targetLabel = if (isAtExpLiveEdge) getString(R.string.tv_live) else null
+                    position.text = targetLabel ?: DateUtils.formatElapsedTime(tvScrubPosition / 1000)
+                    val originPos = if (tvScrubOriginPosition >= 0L) tvScrubOriginPosition else tvScrubPosition
+                    (seekPreview ?: createSeekPreview()).show(
+                        position = tvScrubPosition,
+                        duration = duration,
+                        deltaMs = tvScrubPosition - originPos,
+                        targetLabel = targetLabel,
+                    )
                     root.removeCallbacks(controllerHideAction)
                 }
                 KeyEvent.ACTION_UP -> {
                     if (tvScrubPosition >= 0) {
-                        val newPosition = tvScrubPosition
-                        tvScrubPosition = -1
-                        progressBar.isPressed = false
-                        seekPreview?.hideLater()
-                        val dvrStream = getTvDvrStream()
-                        when {
-                            expVod -> {
-                                if (newPosition >= duration - 8_000L) {
-                                    seekToLivePosition()
-                                } else {
-                                    seek(newPosition.coerceIn(0L, duration))
-                                }
-                                updateTvLiveTimeline()
-                                showController()
-                            }
-                            isLive -> {
-                                val wasShifted = ((playbackService as? ExoPlayerService)?.getLiveTimeShiftBehindMs() ?: 0L) > 0L
-                                if (newPosition < duration - LIVE_EDGE_MS) {
-                                    startTvDvr(newPosition)
-                                    updateTvLiveTimeline()
-                                    showController()
-                                } else {
-                                    if (wasShifted && newPosition >= duration - 8_000L) {
-                                        seekToLivePosition()
-                                    }
-                                    updateTvLiveTimeline()
-                                    showController()
-                                }
-                            }
-                            dvrStream != null && newPosition >= duration - LIVE_EDGE_MS -> (activity as? MainActivity)?.startStream(dvrStream)
-                            else -> {
-                                seek(newPosition)
-                                showController()
-                            }
-                        }
+                        root.removeCallbacks(tvScrubCommitRunnable)
+                        root.postDelayed(tvScrubCommitRunnable, 700L)
                     }
                 }
             }
         }
+        return true
+    }
+
+    private fun commitTvScrub() {
+        val controls = _binding?.playerControls ?: return
+        controls.root.removeCallbacks(tvScrubCommitRunnable)
+        val newPosition = tvScrubPosition
+        if (newPosition < 0L) return
+        val isLive = isTvLiveTimeline()
+        val expVod = isLive && isExperimentalVodActive()
+        val duration = tvScrubDuration.takeIf { it > 0L } ?: when {
+            expVod -> (playbackService as? ExoPlayerService)?.getExperimentalDisplayEdgeMs()?.takeIf { it > 0L }
+            isLive -> getStreamUptime()?.takeIf { it > 0 }
+            else -> getTotalDuration()?.takeIf { it > 0 }
+        } ?: 0L
+        tvScrubPosition = -1L
+        tvScrubOriginPosition = -1L
+        tvScrubDuration = 0L
+        controls.progressBar.isPressed = false
+        seekPreview?.hideLater(900L)
+        if (duration <= 0L) return
+        val dvrStream = getTvDvrStream()
+        when {
+            expVod -> {
+                if (newPosition >= duration - 8_000L) {
+                    seekToLivePosition()
+                } else {
+                    seek(newPosition.coerceIn(0L, duration))
+                }
+                updateTvLiveTimeline()
+                showController()
+            }
+            isLive -> {
+                val wasShifted = ((playbackService as? ExoPlayerService)?.getLiveTimeShiftBehindMs() ?: 0L) > 0L
+                if (newPosition < duration - LIVE_EDGE_MS) {
+                    startTvDvr(newPosition)
+                    updateTvLiveTimeline()
+                    showController()
+                } else {
+                    if (wasShifted && newPosition >= duration - 8_000L) {
+                        seekToLivePosition()
+                    }
+                    updateTvLiveTimeline()
+                    showController()
+                }
+            }
+            dvrStream != null && newPosition >= duration - LIVE_EDGE_MS -> (activity as? MainActivity)?.startStream(dvrStream)
+            else -> {
+                seek(newPosition)
+                showController()
+            }
+        }
+    }
+
+    private fun cancelTvScrub(): Boolean {
+        val controls = _binding?.playerControls ?: return false
+        if (tvScrubPosition < 0L) return false
+        controls.root.removeCallbacks(tvScrubCommitRunnable)
+        tvScrubPosition = -1L
+        tvScrubOriginPosition = -1L
+        tvScrubDuration = 0L
+        controls.progressBar.isPressed = false
+        seekPreview?.hide()
+        updateProgress()
+        if (isTvLiveTimeline()) {
+            updateTvLiveTimeline()
+        }
+        showController()
         return true
     }
 
@@ -6929,6 +7018,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         expArchiveLookupJob?.cancel()
         expArchiveLookupJob = null
         resetFrameRateMatching()
+        _binding?.playerControls?.root?.removeCallbacks(tvScrubCommitRunnable)
+        tvScrubPosition = -1L
+        tvScrubOriginPosition = -1L
+        tvScrubDuration = 0L
         seekPreview?.release()
         seekPreview = null
         tvPredictionView?.removeCallbacks(tvPredictionHideRunnable)

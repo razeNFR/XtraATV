@@ -194,11 +194,44 @@ class TvSettingsFragment : Fragment() {
     private val selectedCategoryIndex = mutableIntStateOf(0)
     private val subScreenStack = mutableStateListOf<SubScreen>()
     private val searchQueryState = mutableStateOf("")
+    private val returnFocusKeyState = mutableStateOf<String?>(null)
+    private val rightColumnFocusedState = mutableStateOf(false)
 
     private var restoreResultLauncher: ActivityResultLauncher<Intent>? = null
     private var voiceSearchLauncher: ActivityResultLauncher<Intent>? = null
     private var updateDownloadDialogBinding: DialogUpdateDownloadBinding? = null
     private var updateDownloadDialog: AlertDialog? = null
+
+    fun canHandleTvBackPress(): Boolean {
+        return isAdded && !isHidden && (subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank() || rightColumnFocusedState.value)
+    }
+
+    fun handleTvBackPress(): Boolean {
+        if (subScreenStack.isNotEmpty()) {
+            val popped = subScreenStack.removeAt(subScreenStack.lastIndex)
+            returnFocusKeyState.value = popped.parentItemKey
+            refreshStamp.intValue++
+            updateBackCallback()
+            focusRightTrigger.intValue++
+            return true
+        }
+        if (searchQueryState.value.isNotBlank()) {
+            searchQueryState.value = ""
+            returnFocusKeyState.value = null
+            rightColumnFocusedState.value = false
+            updateBackCallback()
+            focusLeftTrigger.intValue++
+            return true
+        }
+        if (rightColumnFocusedState.value) {
+            returnFocusKeyState.value = null
+            rightColumnFocusedState.value = false
+            updateBackCallback()
+            focusLeftTrigger.intValue++
+            return true
+        }
+        return false
+    }
 
     private val subScreenBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -208,26 +241,26 @@ class TvSettingsFragment : Fragment() {
                 act.onBackPressedDispatcher.onBackPressed()
                 return
             }
-            if (subScreenStack.isNotEmpty()) {
-                subScreenStack.removeAt(subScreenStack.lastIndex)
-                refreshStamp.intValue++
-                updateBackCallback()
-                focusLeftTrigger.intValue++
-            } else if (searchQueryState.value.isNotBlank()) {
-                searchQueryState.value = ""
-                updateBackCallback()
-                focusLeftTrigger.intValue++
+            if (!handleTvBackPress()) {
+                isEnabled = false
+                act?.onBackPressedDispatcher?.onBackPressed()
             }
         }
     }
 
     sealed interface SubScreen {
         val title: String
+        val parentItemKey: String?
 
-        data class Xml(val xmlRes: Int, override val title: String, val highlightKey: String? = null) : SubScreen
-        data class CustomProxies(override val title: String) : SubScreen
-        data class StreamProxies(override val title: String) : SubScreen
-        data class VideoSwaps(override val title: String) : SubScreen
+        data class Xml(
+            val xmlRes: Int,
+            override val title: String,
+            val highlightKey: String? = null,
+            override val parentItemKey: String? = null,
+        ) : SubScreen
+        data class CustomProxies(override val title: String, override val parentItemKey: String? = null) : SubScreen
+        data class StreamProxies(override val title: String, override val parentItemKey: String? = null) : SubScreen
+        data class VideoSwaps(override val title: String, override val parentItemKey: String? = null) : SubScreen
     }
 
     private data class CategorySpec(
@@ -285,7 +318,8 @@ class TvSettingsFragment : Fragment() {
     }
 
     private fun updateBackCallback() {
-        subScreenBackCallback.isEnabled = isResumed && !isHidden && (subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank())
+        subScreenBackCallback.isEnabled = isResumed && !isHidden &&
+            (subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank() || rightColumnFocusedState.value)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -494,37 +528,35 @@ class TvSettingsFragment : Fragment() {
         val catIdx = selectedCategoryIndex.intValue
         val activeSub = subScreenStack.lastOrNull()
         val query = searchQueryState.value
+        val returnKey = returnFocusKeyState.value
 
         val leftCategoryRequesters = remember { List(CATEGORIES.size) { FocusRequester() } }
         val searchRequester = remember { FocusRequester() }
         val micRequester = remember { FocusRequester() }
-        val subBackRequester = remember { FocusRequester() }
         val rightFirstRequester = remember { FocusRequester() }
         var focusedLeftSlot by remember { mutableIntStateOf(catIdx) }
         var focusedOnMic by remember { mutableStateOf(false) }
 
         LaunchedEffect(focusLeftTrigger.intValue) {
             if (focusLeftTrigger.intValue > 0) {
-                if (activeSub != null) {
-                    runCatching { subBackRequester.requestFocus() }
-                } else {
-                    runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
-                }
+                runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
             }
         }
         LaunchedEffect(focusRightTrigger.intValue) {
             if (focusRightTrigger.intValue > 0) {
-                delay(30)
-                runCatching { rightFirstRequester.requestFocus() }
+                delay(35)
+                val focusedOk = runCatching { rightFirstRequester.requestFocus() }.getOrDefault(false)
+                if (!focusedOk) {
+                    delay(60)
+                    runCatching { rightFirstRequester.requestFocus() }
+                }
             }
         }
 
         val returnToLeftColumn: () -> Unit = {
-            if (activeSub != null) {
-                runCatching { subBackRequester.requestFocus() }
-            } else {
-                runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
-            }
+            rightColumnFocusedState.value = false
+            updateBackCallback()
+            runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
         }
 
         Row(
@@ -538,6 +570,12 @@ class TvSettingsFragment : Fragment() {
                 modifier = Modifier
                     .width(264.dp)
                     .fillMaxHeight()
+                    .onFocusChanged {
+                        if (it.hasFocus) {
+                            rightColumnFocusedState.value = false
+                            updateBackCallback()
+                        }
+                    }
                     .onPreviewKeyEvent { ev ->
                         if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         when (ev.key) {
@@ -560,19 +598,13 @@ class TvSettingsFragment : Fragment() {
                             Key.DirectionUp -> {
                                 when {
                                     focusedLeftSlot > 0 -> runCatching { leftCategoryRequesters[focusedLeftSlot - 1].requestFocus() }
-                                    focusedLeftSlot == 0 -> runCatching {
-                                        (if (activeSub != null) subBackRequester else searchRequester).requestFocus()
-                                    }
-                                    focusedLeftSlot == -1 -> runCatching { searchRequester.requestFocus() }
+                                    focusedLeftSlot == 0 -> runCatching { searchRequester.requestFocus() }
                                 }
                                 true
                             }
                             Key.DirectionDown -> {
                                 when {
-                                    focusedLeftSlot == -2 -> runCatching {
-                                        (if (activeSub != null) subBackRequester else leftCategoryRequesters.firstOrNull())?.requestFocus()
-                                    }
-                                    focusedLeftSlot == -1 -> runCatching { leftCategoryRequesters.firstOrNull()?.requestFocus() }
+                                    focusedLeftSlot == -2 -> runCatching { leftCategoryRequesters.firstOrNull()?.requestFocus() }
                                     focusedLeftSlot in 0 until CATEGORIES.lastIndex -> runCatching {
                                         leftCategoryRequesters[focusedLeftSlot + 1].requestFocus()
                                     }
@@ -648,6 +680,7 @@ class TvSettingsFragment : Fragment() {
                             modifier = micMod,
                             onClick = {
                                 searchQueryState.value = ""
+                                returnFocusKeyState.value = null
                                 updateBackCallback()
                             },
                         )
@@ -662,29 +695,6 @@ class TvSettingsFragment : Fragment() {
                             },
                         )
                     }
-                }
-
-                if (activeSub != null) {
-                    Spacer(Modifier.height(8.dp))
-                    SubScreenBackPill(
-                        title = activeSub.title,
-                        modifier = Modifier
-                            .focusRequester(subBackRequester)
-                            .onFocusChanged {
-                                if (it.isFocused) {
-                                    focusedLeftSlot = -1
-                                    focusedOnMic = false
-                                }
-                            },
-                        onClick = {
-                            if (subScreenStack.isNotEmpty()) {
-                                subScreenStack.removeAt(subScreenStack.lastIndex)
-                                refreshStamp.intValue++
-                                updateBackCallback()
-                                focusLeftTrigger.intValue++
-                            }
-                        },
-                    )
                 }
 
                 Spacer(Modifier.height(10.dp))
@@ -708,9 +718,10 @@ class TvSettingsFragment : Fragment() {
                                 focusedOnMic = false
                             },
                             onHoverSelect = {
-                                if (selectedCategoryIndex.intValue != index || subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank()) {
+                                if (selectedCategoryIndex.intValue != index || searchQueryState.value.isNotBlank()) {
                                     selectedCategoryIndex.intValue = index
                                     subScreenStack.clear()
+                                    returnFocusKeyState.value = null
                                     searchQueryState.value = ""
                                     updateBackCallback()
                                 }
@@ -718,6 +729,7 @@ class TvSettingsFragment : Fragment() {
                             onClick = {
                                 selectedCategoryIndex.intValue = index
                                 subScreenStack.clear()
+                                returnFocusKeyState.value = null
                                 searchQueryState.value = ""
                                 updateBackCallback()
                                 focusRightTrigger.intValue++
@@ -728,10 +740,23 @@ class TvSettingsFragment : Fragment() {
             }
 
             // Right Column: Active SubScreen, Search Results, or Category Preferences
+            val subBreadcrumb = if (activeSub != null) {
+                buildList {
+                    add(context.getString(CATEGORIES[catIdx].titleRes))
+                    subScreenStack.dropLast(1).forEach { add(it.title) }
+                }.joinToString("  ›  ")
+            } else null
+
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .onFocusChanged {
+                        if (it.hasFocus) {
+                            rightColumnFocusedState.value = true
+                            updateBackCallback()
+                        }
+                    }
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color(0x12FFFFFF))
                     .padding(horizontal = 20.dp, vertical = 16.dp),
@@ -739,16 +764,19 @@ class TvSettingsFragment : Fragment() {
                 when (activeSub) {
                     is SubScreen.CustomProxies -> CustomProxiesSubScreen(
                         title = activeSub.title,
+                        parentBreadcrumb = subBreadcrumb,
                         firstRequester = rightFirstRequester,
                         onNavigateLeft = returnToLeftColumn,
                     )
                     is SubScreen.StreamProxies -> StreamProxiesSubScreen(
                         title = activeSub.title,
+                        parentBreadcrumb = subBreadcrumb,
                         firstRequester = rightFirstRequester,
                         onNavigateLeft = returnToLeftColumn,
                     )
                     is SubScreen.VideoSwaps -> VideoSwapsSubScreen(
                         title = activeSub.title,
+                        parentBreadcrumb = subBreadcrumb,
                         firstRequester = rightFirstRequester,
                         onNavigateLeft = returnToLeftColumn,
                     )
@@ -758,9 +786,10 @@ class TvSettingsFragment : Fragment() {
                         }
                         PreferenceNodesList(
                             headerTitle = activeSub.title,
+                            parentBreadcrumb = subBreadcrumb,
                             nodes = nodes,
                             listKey = "sub_${activeSub.xmlRes}",
-                            highlightKey = activeSub.highlightKey,
+                            highlightKey = returnKey ?: activeSub.highlightKey,
                             firstRequester = rightFirstRequester,
                             onNavigateLeft = returnToLeftColumn,
                         )
@@ -772,6 +801,7 @@ class TvSettingsFragment : Fragment() {
                             }
                             PreferenceNodesList(
                                 headerTitle = "${context.getString(R.string.search)} · \"$query\"",
+                                parentBreadcrumb = null,
                                 nodes = results,
                                 listKey = "search_$query",
                                 highlightKey = null,
@@ -785,9 +815,10 @@ class TvSettingsFragment : Fragment() {
                             }
                             PreferenceNodesList(
                                 headerTitle = context.getString(cat.titleRes),
+                                parentBreadcrumb = null,
                                 nodes = nodes,
                                 listKey = "cat_${cat.xmlRes}",
-                                highlightKey = null,
+                                highlightKey = returnKey,
                                 firstRequester = rightFirstRequester,
                                 onNavigateLeft = returnToLeftColumn,
                             )
@@ -850,37 +881,6 @@ class TvSettingsFragment : Fragment() {
                 contentDescription = null,
                 tint = if (focused) TvColors.onFocused else Color.White,
                 modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-
-    @Composable
-    private fun SubScreenBackPill(title: String, modifier: Modifier, onClick: () -> Unit) {
-        val interaction = remember { MutableInteractionSource() }
-        val focused by interaction.collectIsFocusedAsState()
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (focused) TvColors.focused else TvColors.accent.copy(alpha = 0.22f))
-                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.baseline_arrow_back_black_24),
-                contentDescription = null,
-                tint = if (focused) TvColors.onFocused else TvColors.accent,
-                modifier = Modifier.size(17.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (focused) TvColors.onFocused else Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -956,8 +956,36 @@ class TvSettingsFragment : Fragment() {
     }
 
     @Composable
+    private fun SubScreenHeaderTitle(headerTitle: String, parentBreadcrumb: String?, modifier: Modifier = Modifier) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+        ) {
+            if (!parentBreadcrumb.isNullOrBlank()) {
+                Text(
+                    text = "$parentBreadcrumb  ›  ",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TvColors.secondaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = headerTitle,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+
+    @Composable
     private fun PreferenceNodesList(
         headerTitle: String,
+        parentBreadcrumb: String?,
         nodes: List<PrefNode>,
         listKey: String,
         highlightKey: String?,
@@ -981,15 +1009,7 @@ class TvSettingsFragment : Fragment() {
         }
 
         Column(Modifier.fillMaxSize()) {
-            Text(
-                text = headerTitle,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-            )
+            SubScreenHeaderTitle(headerTitle = headerTitle, parentBreadcrumb = parentBreadcrumb)
             Spacer(Modifier.height(10.dp))
             if (nodes.none { it is PrefNode.Item }) {
                 Box(
@@ -1322,6 +1342,7 @@ class TvSettingsFragment : Fragment() {
     @Composable
     private fun CustomProxiesSubScreen(
         title: String,
+        parentBreadcrumb: String?,
         firstRequester: FocusRequester,
         onNavigateLeft: () -> Unit,
     ) {
@@ -1337,7 +1358,7 @@ class TvSettingsFragment : Fragment() {
 
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
                 ActionPillButton(
                     label = "+ ${context.getString(R.string.add_item)}",
                     modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
@@ -1441,6 +1462,7 @@ class TvSettingsFragment : Fragment() {
     @Composable
     private fun StreamProxiesSubScreen(
         title: String,
+        parentBreadcrumb: String?,
         firstRequester: FocusRequester,
         onNavigateLeft: () -> Unit,
     ) {
@@ -1450,7 +1472,7 @@ class TvSettingsFragment : Fragment() {
 
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
                 ActionPillButton(
                     label = "+ ${context.getString(R.string.add_item)}",
                     modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
@@ -1554,6 +1576,7 @@ class TvSettingsFragment : Fragment() {
     @Composable
     private fun VideoSwapsSubScreen(
         title: String,
+        parentBreadcrumb: String?,
         firstRequester: FocusRequester,
         onNavigateLeft: () -> Unit,
     ) {
@@ -1563,7 +1586,7 @@ class TvSettingsFragment : Fragment() {
 
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
                 ActionPillButton(
                     label = "+ ${context.getString(R.string.add_item)}",
                     modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
@@ -2248,16 +2271,16 @@ class TvSettingsFragment : Fragment() {
     private fun handleActionClick(context: Context, item: PrefNode.Item) {
         when (item.key) {
             // Sub-screens
-            "player_settings" -> pushXmlSubScreen(R.xml.player_preferences, context.getString(R.string.player_settings))
-            "playback_settings" -> pushXmlSubScreen(R.xml.playback_preferences, context.getString(R.string.playback_settings))
-            "buffer_settings" -> pushXmlSubScreen(R.xml.buffer_preferences, context.getString(R.string.buffer_settings))
-            "player_button_settings" -> pushXmlSubScreen(R.xml.player_button_preferences, context.getString(R.string.player_buttons))
-            "player_menu_settings" -> pushXmlSubScreen(R.xml.player_menu_preferences, context.getString(R.string.player_menu_settings))
-            "ui_settings" -> pushXmlSubScreen(R.xml.ui_preferences, context.getString(R.string.ui_settings))
-            "adblock_settings" -> pushXmlSubScreen(R.xml.adblock_preferences, context.getString(R.string.adblock))
-            "update_settings" -> pushXmlSubScreen(R.xml.update_preferences, context.getString(R.string.update_settings))
-            "api_token_settings" -> pushXmlSubScreen(R.xml.api_token_preferences, context.getString(R.string.api_token_settings))
-            "debug_settings" -> pushXmlSubScreen(R.xml.debug_preferences, context.getString(R.string.debug_settings))
+            "player_settings" -> pushXmlSubScreen(R.xml.player_preferences, context.getString(R.string.player_settings), item.key)
+            "playback_settings" -> pushXmlSubScreen(R.xml.playback_preferences, context.getString(R.string.playback_settings), item.key)
+            "buffer_settings" -> pushXmlSubScreen(R.xml.buffer_preferences, context.getString(R.string.buffer_settings), item.key)
+            "player_button_settings" -> pushXmlSubScreen(R.xml.player_button_preferences, context.getString(R.string.player_buttons), item.key)
+            "player_menu_settings" -> pushXmlSubScreen(R.xml.player_menu_preferences, context.getString(R.string.player_menu_settings), item.key)
+            "ui_settings" -> pushXmlSubScreen(R.xml.ui_preferences, context.getString(R.string.ui_settings), item.key)
+            "adblock_settings" -> pushXmlSubScreen(R.xml.adblock_preferences, context.getString(R.string.adblock), item.key)
+            "update_settings" -> pushXmlSubScreen(R.xml.update_preferences, context.getString(R.string.update_settings), item.key)
+            "api_token_settings" -> pushXmlSubScreen(R.xml.api_token_preferences, context.getString(R.string.api_token_settings), item.key)
+            "debug_settings" -> pushXmlSubScreen(R.xml.debug_preferences, context.getString(R.string.debug_settings), item.key)
             "video_swap_settings" -> {
                 videoSwapViewModel.getVideoSwapItems(
                     context.applicationContext,
@@ -2267,7 +2290,8 @@ class TvSettingsFragment : Fragment() {
                         position = -1,
                     )
                 )
-                subScreenStack.add(SubScreen.VideoSwaps(item.title))
+                returnFocusKeyState.value = null
+                subScreenStack.add(SubScreen.VideoSwaps(item.title, item.key))
                 updateBackCallback()
                 focusRightTrigger.intValue++
             }
@@ -2277,7 +2301,8 @@ class TvSettingsFragment : Fragment() {
                     return
                 }
                 streamProxyViewModel.getProxies()
-                subScreenStack.add(SubScreen.StreamProxies(item.title))
+                returnFocusKeyState.value = null
+                subScreenStack.add(SubScreen.StreamProxies(item.title, item.key))
                 updateBackCallback()
                 focusRightTrigger.intValue++
             }
@@ -2296,7 +2321,8 @@ class TvSettingsFragment : Fragment() {
                         openSettings = {
                             if (isAdded) {
                                 customProxyViewModel.getProxies(context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP))
-                                subScreenStack.add(SubScreen.CustomProxies(item.title))
+                                returnFocusKeyState.value = null
+                                subScreenStack.add(SubScreen.CustomProxies(item.title, item.key))
                                 updateBackCallback()
                                 focusRightTrigger.intValue++
                             }
@@ -2533,8 +2559,9 @@ class TvSettingsFragment : Fragment() {
         }
     }
 
-    private fun pushXmlSubScreen(xmlRes: Int, title: String) {
-        subScreenStack.add(SubScreen.Xml(xmlRes, title))
+    private fun pushXmlSubScreen(xmlRes: Int, title: String, parentItemKey: String? = null) {
+        returnFocusKeyState.value = null
+        subScreenStack.add(SubScreen.Xml(xmlRes, title, parentItemKey = parentItemKey))
         updateBackCallback()
         focusRightTrigger.intValue++
     }

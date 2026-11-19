@@ -1235,6 +1235,15 @@ class MainActivity : AppCompatActivity() {
             return true
         }
         if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot() && !tvGridBackCallback.isEnabled) {
+            val settingsFrag = if (::navController.isInitialized && navController.currentDestination?.id == R.id.tvSettingsFragment) {
+                currentTvSettings()
+            } else null
+            if (settingsFrag != null && settingsFrag.canHandleTvBackPress()) {
+                if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+                    settingsFrag.handleTvBackPress()
+                }
+                return true
+            }
             if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
                 val onHome = ::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment
                 if (onHome && prefs.getBoolean(C.TV_CONFIRM_EXIT, true)) {

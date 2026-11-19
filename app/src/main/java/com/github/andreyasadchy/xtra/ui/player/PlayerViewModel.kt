@@ -93,6 +93,7 @@ class PlayerViewModel(
     val gamesList = MutableStateFlow<List<Game>?>(null)
     val mutedSegments = MutableStateFlow<List<Pair<Long, Long>>>(emptyList())
     private var mutedSegmentsVideoId: String? = null
+    private var mutedSegmentsLoadedOk: Boolean = false
     private var mutedSegmentsJob: Job? = null
     private val _isFollowing = MutableStateFlow<Boolean?>(null)
     val isFollowing: StateFlow<Boolean?> = _isFollowing
@@ -375,24 +376,32 @@ class PlayerViewModel(
         }
     }
 
-    fun loadMutedSegments(videoId: String?, networkLibrary: String?, gqlHeaders: Map<String, String>) {
+    fun loadMutedSegments(
+        videoId: String?,
+        networkLibrary: String?,
+        webHeaders: Map<String, String>,
+        fallbackHeaders: Map<String, String>,
+    ) {
         if (videoId.isNullOrBlank()) {
             mutedSegmentsJob?.cancel()
             mutedSegmentsVideoId = null
+            mutedSegmentsLoadedOk = false
             mutedSegments.value = emptyList()
             return
         }
-        if (videoId == mutedSegmentsVideoId && (mutedSegmentsJob?.isActive == true || mutedSegments.value.isNotEmpty())) {
+        if (videoId == mutedSegmentsVideoId && (mutedSegmentsJob?.isActive == true || mutedSegmentsLoadedOk)) {
             return
         }
         mutedSegmentsJob?.cancel()
         if (videoId != mutedSegmentsVideoId) {
             mutedSegmentsVideoId = videoId
+            mutedSegmentsLoadedOk = false
             mutedSegments.value = emptyList()
         }
         mutedSegmentsJob = viewModelScope.launch {
-            val segments = graphQLRepository.loadVideoMutedSegments(networkLibrary, gqlHeaders, videoId)
-            if (mutedSegmentsVideoId == videoId) {
+            val segments = graphQLRepository.loadVideoMutedSegments(networkLibrary, webHeaders, fallbackHeaders, videoId)
+            if (mutedSegmentsVideoId == videoId && segments != null) {
+                mutedSegmentsLoadedOk = true
                 mutedSegments.value = segments
             }
         }
