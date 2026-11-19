@@ -575,6 +575,13 @@ class ExoPlayerService : BasePlaybackService() {
                 override fun onRenderedFirstFrame() {
                     TvLoadTimer.finish(isSwapping)?.let { serviceListener?.toast(it, Toast.LENGTH_LONG) }
                     mainFrameRendered = true
+                    pendingSeekPosition?.let { pending ->
+                        val ageMs = android.os.SystemClock.elapsedRealtime() - pendingSeekAtElapsedMs
+                        val cur = player?.currentPosition ?: 0L
+                        if (ageMs >= 60L && (pending <= 1_000L || cur > 500L)) {
+                            pendingSeekPosition = null
+                        }
+                    }
                     checkStreamPictureShown()
                 }
 
@@ -918,40 +925,7 @@ class ExoPlayerService : BasePlaybackService() {
                                         skipAccessToken = true
                                         videoAnimatedPreviewURL?.let { preview ->
                                             val backupQualities = backupQualities
-                                            val list = (backupQualities ?: TwitchApiHelper.defaultQualityList).map { quality ->
-                                                val split = quality.split("p")
-                                                val resolution = split.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
-                                                val frameRate = split.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-                                                val url = preview
-                                                    .replace("storyboards", quality)
-                                                    .replaceAfterLast(
-                                                        "/",
-                                                        if (videoType?.lowercase() == "highlight") {
-                                                            "highlight-${preview.substringAfterLast("/").substringBefore("-")}.m3u8"
-                                                        } else {
-                                                            "index-dvr.m3u8"
-                                                        }
-                                                    )
-                                                val name = if (quality == "chunked") {
-                                                    "source"
-                                                } else {
-                                                    quality
-                                                }
-                                                VideoQuality(name, resolution, frameRate.toFloat(), url = url)
-                                            }
-                                            qualities = list
-                                                .sortedByDescending { it.bitrate }
-                                                .sortedByDescending { it.frameRate }
-                                                .sortedByDescending { it.resolution }
-                                                .toMutableList().apply {
-                                                    find { it.name.equals("source", true) }?.let { source ->
-                                                        remove(source)
-                                                        add(0, VideoQuality(VideoQuality.SOURCE_QUALITY, source.resolution, source.frameRate, source.bitrate, source.codecs, source.url))
-                                                    }
-                                                    val audio = find { it.name?.startsWith("audio", true) == true }
-                                                    audio?.let { remove(it) }
-                                                    add(VideoQuality(VideoQuality.AUDIO_ONLY_QUALITY, audio?.resolution, audio?.frameRate, audio?.bitrate, audio?.codecs, audio?.url))
-                                                }
+                                            qualities = buildVodCdnQualities(preview, backupQualities)
                                             if (backupQualities != null) {
                                                 setDefaultQuality()
                                             } else {
@@ -2052,13 +2026,79 @@ class ExoPlayerService : BasePlaybackService() {
     var videoStartPosition: Long? = null
         private set
 
+    /** Target position of an in-flight user seek so the progress bar never flashes back to 00:00 while buffering. */
+    var pendingSeekPosition: Long? = null
+        private set
+    private var pendingSeekAtElapsedMs: Long = 0L
+
+    private fun markPendingSeek(targetMs: Long) {
+        pendingSeekPosition = targetMs.coerceAtLeast(0L)
+        pendingSeekAtElapsedMs = android.os.SystemClock.elapsedRealtime()
+    }
+
+    fun getDisplayPositionMs(): Long? {
+        videoStartPosition?.let { return it }
+        val pending = pendingSeekPosition
+        if (pending != null) {
+            val p = player
+            val ageMs = android.os.SystemClock.elapsedRealtime() - pendingSeekAtElapsedMs
+            val current = p?.currentPosition ?: 0L
+            val settled = p != null &&
+                p.playbackState == Player.STATE_READY &&
+                ageMs >= 150L &&
+                (pending <= 1_000L || current > 500L)
+            if (settled || ageMs > 6_000L) {
+                pendingSeekPosition = null
+            } else {
+                return pending
+            }
+        }
+        if (type == VIDEO && player?.currentMediaItem == null) {
+            return savedPosition
+        }
+        return player?.currentPosition
+    }
+
+    private fun buildVodCdnQualities(preview: String, qualityNames: List<String>?): MutableList<VideoQuality> {
+        val list = (qualityNames?.takeIf { it.isNotEmpty() } ?: TwitchApiHelper.defaultQualityList).map { qName ->
+            val split = qName.split("p")
+            val resolution = split.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
+            val frameRate = split.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
+            val url = preview
+                .replace("storyboards", qName)
+                .replaceAfterLast(
+                    "/",
+                    if (videoType?.lowercase() == "highlight") {
+                        "highlight-${preview.substringAfterLast("/").substringBefore("-")}.m3u8"
+                    } else {
+                        "index-dvr.m3u8"
+                    }
+                )
+            val name = if (qName == "chunked") "source" else qName
+            VideoQuality(name, resolution, frameRate.toFloat(), url = url)
+        }
+        return list
+            .sortedByDescending { it.bitrate }
+            .sortedByDescending { it.frameRate }
+            .sortedByDescending { it.resolution }
+            .toMutableList().apply {
+                find { it.name.equals("source", true) }?.let { source ->
+                    remove(source)
+                    add(0, VideoQuality(VideoQuality.SOURCE_QUALITY, source.resolution, source.frameRate, source.bitrate, source.codecs, source.url))
+                }
+                val audio = find { it.name?.startsWith("audio", true) == true }
+                audio?.let { remove(it) }
+                add(VideoQuality(VideoQuality.AUDIO_ONLY_QUALITY, audio?.resolution, audio?.frameRate, audio?.bitrate, audio?.codecs, audio?.url))
+            }
+    }
+
     private suspend fun loadVideo(restorePauseState: Boolean = false) {
         videoId?.let { videoId ->
-            val playbackPosition = if (prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
+            val playbackPosition = (if (prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
                 videoId.toLongOrNull()?.let { xtraModule.playerRepository.getVideoPosition(it)?.position }
             } else {
                 null
-            } ?: savedPosition ?: 0
+            } ?: savedPosition ?: 0L).coerceAtLeast(0L)
             videoStartPosition = playbackPosition
             if (qualities.isNullOrEmpty()) {
                 val result = try {
@@ -2079,6 +2119,29 @@ class ExoPlayerService : BasePlaybackService() {
                     playlistUrl = result.first
                     backupQualities = result.second
                 }
+                val restricted = backupQualities
+                val isSubRestrictedVod = !skipAccessToken &&
+                    !restricted.isNullOrEmpty() &&
+                    restricted.any { it.equals("chunked", true) } &&
+                    restricted.any { it.startsWith("160p", true) || it.startsWith("360p", true) || it.startsWith("audio", true) }
+                if (isSubRestrictedVod) {
+                    if (videoAnimatedPreviewURL == null && !videoPreviewLookupDone) {
+                        videoPreviewLookupDone = true
+                        videoAnimatedPreviewURL = runCatching {
+                            xtraModule.graphQLRepository.loadQueryVideo(
+                                networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                                headers = TwitchApiHelper.getGQLHeaders(this@ExoPlayerService),
+                                id = videoId,
+                            ).data?.video?.animatedPreviewURL
+                        }.getOrNull()
+                    }
+                    videoAnimatedPreviewURL?.let { preview ->
+                        skipAccessToken = true
+                        qualities = buildVodCdnQualities(preview, restricted)
+                        setDefaultQuality()
+                        serviceListener?.changePlayerMode()
+                    }
+                }
             }
             val url = if (skipAccessToken) {
                 quality?.url
@@ -2087,6 +2150,24 @@ class ExoPlayerService : BasePlaybackService() {
             }
             if (url != null) {
                 player?.let { player ->
+                    if (!skipAccessToken) {
+                        val savedQual = prefs().getString(C.PLAYER_QUALITY, VideoQuality.SOURCE_QUALITY)
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                            if (savedQual == VideoQuality.AUDIO_ONLY_QUALITY) {
+                                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                            } else {
+                                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
+                                val targetHeight = if (savedQual != null && savedQual != VideoQuality.AUTO_QUALITY && savedQual != VideoQuality.SOURCE_QUALITY) {
+                                    savedQual.substringBefore("p").takeWhile { it.isDigit() }.toIntOrNull()
+                                } else null
+                                if (targetHeight != null && targetHeight > 0) {
+                                    setMaxVideoSize(Int.MAX_VALUE, targetHeight)
+                                } else {
+                                    clearVideoSizeConstraints()
+                                }
+                            }
+                        }.build()
+                    }
                     val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
                     player.setMediaSource(
                         HlsMediaSource.Factory(
@@ -2108,13 +2189,13 @@ class ExoPlayerService : BasePlaybackService() {
                             setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
                         }.createMediaSource(
                             MediaItem.fromUri(url)
-                        )
+                        ),
+                        playbackPosition
                     )
                     player.volume = userVolume()
                     player.setPlaybackSpeed(if (videoId.isNullOrBlank()) 1f else prefs().getFloat(C.PLAYER_SPEED, 1f))
                     player.prepare()
                     player.playWhenReady = !restorePauseState || !paused
-                    player.seekTo(playbackPosition)
                 }
             } else {
                 videoStartPosition = null
@@ -2334,11 +2415,12 @@ class ExoPlayerService : BasePlaybackService() {
                                         setStreamMediaUri(player, mediaItem, uri, position)
                                     }
                                 }
-                            } else {
+                            } else if (player.playbackState == Player.STATE_IDLE) {
                                 player.prepare()
                             }
                             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                                 setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
+                                clearVideoSizeConstraints()
                                 clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_VIDEO)
                             }.build()
                         }
@@ -2372,11 +2454,12 @@ class ExoPlayerService : BasePlaybackService() {
                                         val position = player.currentPosition
                                         setStreamMediaUri(player, mediaItem, uri, position)
                                     }
-                                } else {
+                                } else if (player.playbackState == Player.STATE_IDLE) {
                                     player.prepare()
                                 }
                                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
+                                    clearVideoSizeConstraints()
                                     if (!player.currentTracks.isEmpty) {
                                         player.currentTracks.groups.find { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }?.let { trackGroup ->
                                             if (trackGroup.mediaTrackGroup.length > 0) {
@@ -3766,6 +3849,7 @@ class ExoPlayerService : BasePlaybackService() {
         chatUrl = null
         savedPosition = null
         videoStartPosition = null
+        pendingSeekPosition = null
         videoPreviewLookupDone = false
         paused = false
         player?.let { player ->
@@ -4141,15 +4225,22 @@ class ExoPlayerService : BasePlaybackService() {
 
     fun seekBack() {
         lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
+        val p = player
         if (type == STREAM && experimentalVodActive) {
             experimentalVodUserRewound = true
-            player?.seekBack()
+            if (p != null) {
+                markPendingSeek((p.currentPosition - p.seekBackIncrement).coerceAtLeast(0L))
+                p.seekBack()
+            }
             return
+        }
+        if (p != null && type != STREAM) {
+            markPendingSeek((p.currentPosition - p.seekBackIncrement).coerceAtLeast(0L))
         }
         if (secondaryPlayer != null) {
             secondaryPlayer?.seekBack()
         }
-        player?.seekBack()
+        p?.seekBack()
     }
 
     fun seekForward() {
@@ -4159,13 +4250,20 @@ class ExoPlayerService : BasePlaybackService() {
             val edge = getExperimentalLiveEdgeMs()
             val target = (p.currentPosition + p.seekForwardIncrement).coerceAtMost(edge)
             experimentalVodUserRewound = (edge - target) > 4_500L
+            markPendingSeek(target)
             p.seekTo(target)
             return
+        }
+        val p = player
+        if (p != null && type != STREAM) {
+            val dur = p.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0L }
+            val rawTarget = p.currentPosition + p.seekForwardIncrement
+            markPendingSeek(if (dur != null) rawTarget.coerceAtMost(dur) else rawTarget)
         }
         if (secondaryPlayer != null) {
             secondaryPlayer?.seekForward()
         }
-        player?.seekForward()
+        p?.seekForward()
         if (type == STREAM && !experimentalVodActive && liveTimeShiftedBehindMs > 0L) {
             val behind = getLiveLatencyMs() ?: 0L
             liveTimeShiftedBehindMs = if (behind <= 4_000L) 0L else behind
@@ -4178,8 +4276,12 @@ class ExoPlayerService : BasePlaybackService() {
             val edge = getExperimentalLiveEdgeMs()
             val clamped = position.coerceIn(0L, edge)
             experimentalVodUserRewound = (edge - clamped) > 4_500L
+            markPendingSeek(clamped)
             player?.seekTo(clamped)
             return
+        }
+        if (type != STREAM) {
+            markPendingSeek(position)
         }
         if (type == VIDEO && player?.playbackState != Player.STATE_READY) {
             videoStartPosition = position
@@ -4196,6 +4298,7 @@ class ExoPlayerService : BasePlaybackService() {
 
     fun seekToDefaultPosition() {
         lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
+        pendingSeekPosition = null
         clearLivePauseState()
         if (type == STREAM && player?.playbackParameters?.speed != 1f) {
             player?.setPlaybackSpeed(1f)

@@ -1750,6 +1750,32 @@ class MainActivity : AppCompatActivity() {
     /** Entry of the side menu shown as chosen instead of its screen ("Followed videos" rather than "Following"). */
     private var tvMenuExtraSelected: Int? = null
 
+    private fun followMenuEntryForKey(key: String?): Int? = when (key) {
+        "2" -> R.id.tvNavFollowedVideos
+        "3" -> R.id.tvNavFollowedChannels
+        "0" -> R.id.tvNavFollowedGames
+        else -> null
+    }?.takeIf { id -> tvMenuState.items.any { it.id == id } }
+
+    private fun resolveFollowMenuEntryId(): Int {
+        tvMenuExtraSelected?.takeIf { id -> tvMenuState.items.any { it.id == id } }?.let { return it }
+        val followFrag = currentVisibleNavFragment() as? com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment
+        val activeEntry = followMenuEntryForKey(followFrag?.standaloneTabKey() ?: followFrag?.activeTabKey())
+        if (activeEntry != null) {
+            tvMenuExtraSelected = activeEntry
+            return activeEntry
+        }
+        return R.id.followPagerFragment
+    }
+
+    fun onFollowTabChanged(key: String?) {
+        if (!isTv || isTvMenuShown) return
+        if (!::navController.isInitialized || navController.currentDestination?.id != R.id.followPagerFragment) return
+        val extra = followMenuEntryForKey(key)
+        tvMenuExtraSelected = extra
+        tvMenuState.selected = extra ?: R.id.followPagerFragment
+    }
+
     /** TV side menu: a tab of the followed channels (videos, channels, categories), switched in place when already open. */
     private fun openFollowedTab(key: String, entry: Int, fromAutoHover: Boolean = tvMenuAutoHovering) {
         val loggedInWithCode = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank()
@@ -1961,13 +1987,16 @@ class MainActivity : AppCompatActivity() {
         val menu = binding.navBarContainer
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         menu.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-        if (tvMenuExtraSelected == null && ::navController.isInitialized) {
+        if (::navController.isInitialized) {
             navController.currentDestination?.id?.let { destId ->
-                if (tvMenuState.items.any { it.id == destId }) {
+                if (destId == R.id.followPagerFragment) {
+                    tvMenuState.selected = resolveFollowMenuEntryId()
+                } else if (tvMenuExtraSelected == null && tvMenuState.items.any { it.id == destId }) {
                     tvMenuState.selected = destId
                 }
             }
         }
+        val wasCollapsed = tvMenuState.collapsed
         tvMenuState.collapsed = false
         if (!isTvMenuShown) {
             isTvMenuShown = true
@@ -1979,11 +2008,12 @@ class MainActivity : AppCompatActivity() {
         if (focus) {
             val sideMenu = binding.tvSideMenu
             if (sideMenu != null) {
+                val alreadyOpenWithFocus = !wasCollapsed && sideMenu.hasFocus()
                 tvMenuState.requestFocusSelected()
                 if (!sideMenu.hasFocus()) {
                     sideMenu.requestFocus()
                 }
-                if (tvMenuState.focusSelected() && tvMenuState.focusedId == tvMenuState.selected) {
+                if (alreadyOpenWithFocus && tvMenuState.focusSelected() && tvMenuState.focusedId == tvMenuState.selected) {
                     tvMenuState.pendingFocus = false
                     tvMenuState.suppressFocusCallback = false
                 }
@@ -3774,14 +3804,18 @@ class MainActivity : AppCompatActivity() {
                     (playerFragment as? PlayerFragment)?.refreshTvMinimizedBorderColor()
                 }
                 updateTvMenuBackCallback()
-                if (destination.id != R.id.followPagerFragment) {
+                if (destination.id in tvRootDestinations && destination.id != R.id.followPagerFragment) {
                     tvMenuExtraSelected = null
                 }
                 val destId = destination.id
                 binding.root.post {
-                    tvMenuState.selected = tvMenuExtraSelected
-                        ?: destId.takeIf { id -> tvMenuState.items.any { it.id == id } }
-                        ?: binding.navBar.selectedItemId
+                    tvMenuState.selected = if (destId == R.id.followPagerFragment) {
+                        resolveFollowMenuEntryId()
+                    } else {
+                        tvMenuExtraSelected
+                            ?: destId.takeIf { id -> tvMenuState.items.any { it.id == id } }
+                            ?: binding.navBar.selectedItemId
+                    }
                     currentVisibleNavFragment()?.view?.let { com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(it) }
                 }
             }

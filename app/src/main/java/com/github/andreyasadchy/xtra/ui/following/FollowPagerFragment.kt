@@ -92,6 +92,13 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
         }
     }
 
+    fun activeTabKey(): String? {
+        val b = _binding ?: return standaloneTab
+        return standaloneTab ?: pagerTabs.getOrNull(b.viewPager.currentItem)
+    }
+
+    fun standaloneTabKey(): String? = standaloneTab
+
     /** TV side menu: goes to a tab of the screen already open, false when it is not shown there. */
     fun showTab(key: String): Boolean {
         val index = pagerTabs.indexOf(key)
@@ -393,7 +400,9 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
             viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
                     if (isTv()) {
-                        syncTvHeaderSelection(pagerTabs.getOrNull(position))
+                        val key = pagerTabs.getOrNull(position)
+                        syncTvHeaderSelection(key)
+                        (activity as? MainActivity)?.onFollowTabChanged(key)
                     }
                     syncSortBarForPosition(position)
                 }

@@ -103,6 +103,7 @@ class TvMenuState {
     var suppressFocusCallback = false
 
     fun requestFocusSelected() {
+        focusedId = 0
         suppressFocusCallback = true
         pendingFocus = true
         focusRequestToken++
@@ -129,11 +130,18 @@ class TvMenuState {
     }
 }
 
+private data class MenuItemBounds(
+    val topY: Int,
+    val heightPx: Int,
+    val collapsedLayout: Boolean,
+)
+
 private data class MenuPillBounds(
     val topY: Float,
     val heightPx: Float,
     val startXPx: Float,
     val cornerPx: Float,
+    val collapsedLayout: Boolean,
 )
 
 /**
@@ -148,7 +156,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     var scrollJob by remember { mutableStateOf<Job?>(null) }
-    val itemBounds = remember { mutableMapOf<Int, Pair<Int, Int>>() }
+    val itemBounds = remember { mutableMapOf<Int, MenuItemBounds>() }
     val slotBounds = remember { mutableMapOf<FocusRequester, Pair<Int, Int>>() }
     val entryPillBounds = remember { mutableStateMapOf<Int, MenuPillBounds>() }
     // 0: the rail of icons, 1: the menu open — read strictly inside Draw/graphicsLayer lambdas to avoid per-frame relayout
@@ -200,18 +208,28 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     val pillCorner = remember { Animatable(0f) }
     var pillInitialized by remember { mutableStateOf(false) }
 
+    LaunchedEffect(collapsed) {
+        if (collapsed) {
+            pillInitialized = false
+        }
+    }
+
     val displayFocusId = when {
         !menuHasFocus || collapsed -> 0
         state.pendingFocus && state.selected != 0 -> state.selected
         else -> focusedEntryId
     }
-    val activePillBounds = if (displayFocusId != 0) entryPillBounds[displayFocusId] else null
-    LaunchedEffect(activePillBounds) {
+    val activePillBounds = if (displayFocusId != 0) {
+        entryPillBounds[displayFocusId]?.takeIf { !it.collapsedLayout }
+    } else {
+        null
+    }
+    LaunchedEffect(activePillBounds, state.pendingFocus) {
         if (activePillBounds == null) {
             pillInitialized = false
             return@LaunchedEffect
         }
-        if (!pillInitialized) {
+        if (!pillInitialized || state.pendingFocus) {
             pillTop.snapTo(activePillBounds.topY)
             pillHeight.snapTo(activePillBounds.heightPx)
             pillStart.snapTo(activePillBounds.startXPx)
@@ -226,38 +244,6 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         }
     }
 
-    LaunchedEffect(state.focusRequestToken, collapsed) {
-        if (!state.pendingFocus || collapsed) return@LaunchedEffect
-        try {
-            repeat(20) {
-                if (state.focusSelected() && (state.focusedId == state.selected || state.requesters[state.selected] == null)) {
-                    state.pendingFocus = false
-                    return@LaunchedEffect
-                }
-                withFrameNanos { }
-                if (!state.pendingFocus || collapsed) return@LaunchedEffect
-                val targetId = state.selected
-                itemBounds[targetId]?.let { (topY, h) ->
-                    val viewport = scrollState.viewportSize
-                    if (viewport > 0) {
-                        val topInScroll = topY + verticalPadPx
-                        val bottomInScroll = topInScroll + h + 32
-                        val desired = when {
-                            bottomInScroll > scrollState.value + viewport -> (bottomInScroll - viewport).coerceAtMost(scrollState.maxValue)
-                            topInScroll < scrollState.value -> (topInScroll - 24).coerceAtLeast(0)
-                            else -> scrollState.value
-                        }
-                        if (desired != scrollState.value) {
-                            scrollState.scrollTo(desired)
-                        }
-                    }
-                }
-            }
-        } finally {
-            state.suppressFocusCallback = false
-            state.pendingFocus = false
-        }
-    }
     // the account first (its picture and its name at the top), then the entries in their order; the shortcuts under an
     // entry only in the menu open
     val account = state.items.find { it.id == state.accountId }
@@ -273,6 +259,56 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 add(nowPlayingCloseRequester)
             }
             add(state.requesters.getOrPut(item.id) { FocusRequester() })
+        }
+    }
+
+    LaunchedEffect(state.focusRequestToken, collapsed) {
+        if (!state.pendingFocus || collapsed) return@LaunchedEffect
+        try {
+            var confirmedFrames = 0
+            repeat(24) {
+                withFrameNanos { }
+                if (!state.pendingFocus || collapsed) return@LaunchedEffect
+                val targetId = state.selected.takeIf { id -> id != 0 && items.any { it.id == id } }
+                    ?: items.firstOrNull()?.id
+                    ?: return@LaunchedEffect
+                val bounds = itemBounds[targetId]?.takeIf { !it.collapsedLayout }
+                if (bounds != null) {
+                    val viewport = scrollState.viewportSize
+                    if (viewport > 0) {
+                        val targetRequester = state.requesters[targetId]
+                        val slotIdx = if (targetRequester != null) slots.indexOf(targetRequester) else -1
+                        val topInScroll = bounds.topY + verticalPadPx
+                        val bottomInScroll = topInScroll + bounds.heightPx
+                        val desired = when {
+                            slotIdx == 0 -> 0
+                            slotIdx == slots.lastIndex && scrollState.maxValue > 0 -> scrollState.maxValue
+                            bottomInScroll + scrollMarginPx > scrollState.value + viewport ->
+                                (bottomInScroll + scrollMarginPx - viewport).coerceAtMost(scrollState.maxValue)
+                            topInScroll - scrollMarginPx < scrollState.value ->
+                                (topInScroll - scrollMarginPx).coerceAtLeast(0)
+                            else -> scrollState.value
+                        }
+                        if (desired != scrollState.value) {
+                            scrollJob?.cancel()
+                            scrollState.scrollTo(desired)
+                        }
+                    }
+                    val focusedOk = state.focusSelected() && focusedEntryId == targetId && menuHasFocus
+                    if (focusedOk) {
+                        confirmedFrames++
+                        if (confirmedFrames >= 2) {
+                            state.pendingFocus = false
+                            return@LaunchedEffect
+                        }
+                    } else {
+                        confirmedFrames = 0
+                    }
+                }
+            }
+        } finally {
+            state.suppressFocusCallback = false
+            state.pendingFocus = false
         }
     }
     fun smoothKeepSlotVisible(nextIndex: Int, requester: FocusRequester) {
@@ -321,7 +357,15 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         Modifier
             .width(boxWidth)
             .fillMaxHeight()
-            .onFocusChanged { menuHasFocus = it.hasFocus }
+            .onFocusChanged {
+                menuHasFocus = it.hasFocus
+                if (!it.hasFocus) {
+                    focusedRequester = null
+                    focusedEntryId = 0
+                    state.focusedId = 0
+                    pillInitialized = false
+                }
+            }
             .drawWithContent {
                 val p = openState.value.coerceIn(0f, 1f)
                 val railPx = RAIL_WIDTH.toPx()
@@ -395,13 +439,19 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 .verticalScroll(scrollState)
                 .padding(horizontal = MENU_PADDING, vertical = 24.dp)
                 .drawBehind {
-                    val target = activePillBounds
+                    val targetId = when {
+                        !menuHasFocus || collapsed -> 0
+                        state.pendingFocus && state.selected != 0 -> state.selected
+                        else -> focusedEntryId
+                    }
+                    val target = if (targetId != 0) entryPillBounds[targetId]?.takeIf { !it.collapsedLayout } else null
                     if (target != null) {
                         val p = openState.value.coerceIn(0f, 1f)
-                        val topY = if (pillInitialized) pillTop.value else target.topY
-                        val h = if (pillInitialized) pillHeight.value else target.heightPx
-                        val startX = if (pillInitialized) pillStart.value else target.startXPx
-                        val corner = if (pillInitialized) pillCorner.value else target.cornerPx
+                        val useAnimated = pillInitialized && !state.pendingFocus
+                        val topY = if (useAnimated) pillTop.value else target.topY
+                        val h = if (useAnimated) pillHeight.value else target.heightPx
+                        val startX = if (useAnimated) pillStart.value else target.startXPx
+                        val corner = if (useAnimated) pillCorner.value else target.cornerPx
                         val fullRowW = (size.width - startX).coerceAtLeast(0f)
                         val minW = ENTRY_HEIGHT.toPx().coerceAtMost(fullRowW)
                         val pillW = minW + (fullRowW - minW) * p
@@ -442,17 +492,24 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             state = state,
                             openRequester = nowPlayingOpenRequester,
                             closeRequester = nowPlayingCloseRequester,
+                            suppressVisualFocus = state.pendingFocus && state.selected != 0,
                             onBoundsChanged = { openBounds, closeBounds ->
                                 slotBounds[nowPlayingOpenRequester] = openBounds
                                 slotBounds[nowPlayingCloseRequester] = closeBounds
                             },
                             onOpenFocused = {
-                                focusedRequester = nowPlayingOpenRequester
-                                focusedEntryId = 0
+                                if (!state.pendingFocus || state.selected == 0) {
+                                    focusedRequester = nowPlayingOpenRequester
+                                    focusedEntryId = 0
+                                    state.focusedId = 0
+                                }
                             },
                             onCloseFocused = {
-                                focusedRequester = nowPlayingCloseRequester
-                                focusedEntryId = 0
+                                if (!state.pendingFocus || state.selected == 0) {
+                                    focusedRequester = nowPlayingCloseRequester
+                                    focusedEntryId = 0
+                                    state.focusedId = 0
+                                }
                             },
                         )
                     }
@@ -466,19 +523,20 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 }
                 val requester = state.requesters.getOrPut(item.id) { FocusRequester() }
                 val isAccount = item === account
-                val hasPillBounds = entryPillBounds.containsKey(item.id)
+                val hasPillBounds = !collapsed && entryPillBounds[item.id]?.collapsedLayout == false
+                val visuallyFocused = item.id == displayFocusId
                 val entryModifier = Modifier
                     .onGloballyPositioned { coords ->
                         val y = coords.positionInParent().y
                         val h = coords.size.height
-                        val intBounds = y.toInt() to h
-                        itemBounds[item.id] = intBounds
-                        slotBounds[requester] = intBounds
+                        itemBounds[item.id] = MenuItemBounds(y.toInt(), h, collapsed)
+                        slotBounds[requester] = y.toInt() to h
                         val pillBounds = MenuPillBounds(
                             topY = y,
                             heightPx = h.toFloat(),
                             startXPx = if (!isAccount && item.sub) subIndentPx else 0f,
                             cornerPx = if (isAccount) accountCornerPx else itemCornerPx,
+                            collapsedLayout = collapsed,
                         )
                         if (entryPillBounds[item.id] != pillBounds) {
                             entryPillBounds[item.id] = pillBounds
@@ -497,13 +555,18 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                                 state.suppressFocusCallback = false
                                 state.onFocusItem(item.id)
                             }
+                        } else if (focusedEntryId == item.id) {
+                            focusedEntryId = 0
+                            if (state.focusedId == item.id) {
+                                state.focusedId = 0
+                            }
                         }
                     }
                 val suppressVisualFocus = state.pendingFocus && state.selected != 0 && item.id != state.selected
                 if (isAccount) {
-                    AccountEntry(item, state, openProvider, hasPillBounds, suppressVisualFocus, entryModifier) { onClick(item.id) }
+                    AccountEntry(item, state, openProvider, hasPillBounds, visuallyFocused, suppressVisualFocus, entryModifier) { onClick(item.id) }
                 } else {
-                    MenuEntry(item, item.id == activeId, openProvider, hasPillBounds, suppressVisualFocus, entryModifier) { onClick(item.id) }
+                    MenuEntry(item, item.id == activeId, openProvider, hasPillBounds, visuallyFocused, suppressVisualFocus, entryModifier) { onClick(item.id) }
                 }
             }
         }
@@ -522,13 +585,14 @@ private fun AccountEntry(
     state: TvMenuState,
     openProvider: () -> Float,
     useGlidingPill: Boolean,
+    visuallyFocused: Boolean,
     suppressVisualFocus: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val rawFocused by interaction.collectIsFocusedAsState()
-    val focused = rawFocused && !suppressVisualFocus
+    var rawFocused by remember { mutableStateOf(false) }
+    val focused = if (useGlidingPill) visuallyFocused else (rawFocused && !suppressVisualFocus)
     val name = state.accountName
     val image = state.accountImage
     val content = if (focused) TvColors.onFocused else Color.White
@@ -538,6 +602,7 @@ private fun AccountEntry(
             .height(56.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(if (focused && !useGlidingPill) TvColors.focused else Color.Transparent)
+            .onFocusChanged { rawFocused = it.isFocused }
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -591,6 +656,7 @@ private fun NowPlayingCard(
     state: TvMenuState,
     openRequester: FocusRequester,
     closeRequester: FocusRequester,
+    suppressVisualFocus: Boolean,
     onBoundsChanged: (openBounds: Pair<Int, Int>, closeBounds: Pair<Int, Int>) -> Unit,
     onOpenFocused: () -> Unit,
     onCloseFocused: () -> Unit,
@@ -613,6 +679,7 @@ private fun NowPlayingCard(
             playing = playing,
             state = state,
             requester = openRequester,
+            suppressVisualFocus = suppressVisualFocus,
             onLocalBounds = { bounds ->
                 openLocalBounds = bounds
                 onBoundsChanged(
@@ -623,7 +690,8 @@ private fun NowPlayingCard(
             onFocused = onOpenFocused,
         )
         val interaction = remember { MutableInteractionSource() }
-        val focused by interaction.collectIsFocusedAsState()
+        val rawFocused by interaction.collectIsFocusedAsState()
+        val focused = rawFocused && !suppressVisualFocus
         Row(
             Modifier
                 .padding(top = 6.dp)
@@ -659,11 +727,13 @@ private fun NowPlayingContent(
     playing: TvNowPlaying,
     state: TvMenuState,
     requester: FocusRequester,
+    suppressVisualFocus: Boolean,
     onLocalBounds: (Pair<Int, Int>) -> Unit,
     onFocused: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
+    val rawFocused by interaction.collectIsFocusedAsState()
+    val focused = rawFocused && !suppressVisualFocus
     Column(
         Modifier
             .fillMaxWidth()
@@ -724,13 +794,14 @@ private fun MenuEntry(
     selected: Boolean,
     openProvider: () -> Float,
     useGlidingPill: Boolean,
+    visuallyFocused: Boolean,
     suppressVisualFocus: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val rawFocused by interaction.collectIsFocusedAsState()
-    val focused = rawFocused && !suppressVisualFocus
+    var rawFocused by remember { mutableStateOf(false) }
+    val focused = if (useGlidingPill) visuallyFocused else (rawFocused && !suppressVisualFocus)
     val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
     val selectedPillColor = accent.copy(alpha = 0.22f)
     val content = when {
@@ -773,6 +844,7 @@ private fun MenuEntry(
                     }
                 }
             }
+            .onFocusChanged { rawFocused = it.isFocused }
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {

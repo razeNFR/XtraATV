@@ -541,7 +541,7 @@ class ExoPlayerFragment : PlayerFragment() {
         return lines.joinToString("\n")
     }
 
-    override fun getCurrentPosition() = playbackService?.videoStartPosition ?: playbackService?.player?.currentPosition
+    override fun getCurrentPosition() = playbackService?.getDisplayPositionMs()
 
     override fun getLivePictureTime(): Long? {
         val service = playbackService ?: return null
@@ -624,13 +624,7 @@ class ExoPlayerFragment : PlayerFragment() {
                 if (isVideo) {
                     syncVodMutedSegmentsFromManifest()
                 }
-                // a video still loading (its playlist, or its first segments): the position it starts at, not 00:00
-                val startPosition = if (isVideo && (service.player?.currentMediaItem == null || service.player?.playbackState != Player.STATE_READY)) {
-                    service.videoStartPosition ?: service.savedPosition
-                } else {
-                    service?.videoStartPosition
-                }
-                val currentPosition = startPosition ?: service?.player?.currentPosition ?: 0
+                val currentPosition = service?.getDisplayPositionMs() ?: 0L
                 val totalDuration = getTotalDuration()?.takeIf { it > 0 }
                 totalDuration?.let { maxOf(it, currentPosition) }?.let {
                     progressBar.setDuration(it)
@@ -638,7 +632,10 @@ class ExoPlayerFragment : PlayerFragment() {
                 }
                 position.text = DateUtils.formatElapsedTime(currentPosition / 1000)
                 progressBar.setPosition(currentPosition)
-                progressBar.setBufferedPosition(playbackService?.player?.bufferedPosition ?: 0)
+                val rawBuffered = playbackService?.player?.bufferedPosition ?: 0L
+                progressBar.setBufferedPosition(
+                    if (service?.pendingSeekPosition != null) maxOf(currentPosition, rawBuffered) else rawBuffered
+                )
                 root.removeCallbacks(updateProgressAction)
                 if (root.isVisible) {
                     val player = playbackService?.player
