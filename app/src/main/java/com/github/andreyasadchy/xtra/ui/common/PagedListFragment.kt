@@ -144,10 +144,25 @@ abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.Listen
         super.onResume()
         val isTv = context?.resources?.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv) == true
         if (isTv) {
-            view?.postDelayed({ if (isResumed) refreshIfStale(20_000L) }, 160L)
+            scheduleTvStaleRefresh(160L)
         } else {
             refreshIfStale(60_000L)
         }
+    }
+
+    private fun scheduleTvStaleRefresh(delayMs: Long) {
+        val v = view ?: return
+        v.postDelayed(object : Runnable {
+            override fun run() {
+                if (!isResumed || view == null) return
+                val act = activity as? MainActivity
+                if (act != null && act.isTvMenuOpen() && act.idleDurationMs() < 380L) {
+                    view?.postDelayed(this, 320L)
+                    return
+                }
+                refreshIfStale(20_000L)
+            }
+        }, delayMs)
     }
 
     /** Refreshes the list silently when stale, without disrupting active scrolling or deep focus on TV. */

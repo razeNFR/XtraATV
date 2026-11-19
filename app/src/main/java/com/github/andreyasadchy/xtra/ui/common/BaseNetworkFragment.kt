@@ -98,16 +98,14 @@ abstract class BaseNetworkFragment : Fragment() {
                 onNetworkRestored()
                 shouldRestore = false
             }
-        } else {
-            initialize()
+        } else if (!isInitialized) {
+            init()
         }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        if (enableNetworkCheck) {
-            isInitialized = false
-        }
+        isInitialized = false
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

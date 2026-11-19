@@ -282,7 +282,7 @@ class TvSettingsFragment : Fragment() {
     }
 
     private fun updateBackCallback() {
-        subScreenBackCallback.isEnabled = subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank()
+        subScreenBackCallback.isEnabled = isResumed && !isHidden && (subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank())
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -323,7 +323,7 @@ class TvSettingsFragment : Fragment() {
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, subScreenBackCallback)
         consumePendingSubScreen(context)
         val act = activity as? MainActivity
-        if (act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
+        if (!isHidden && act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
             requestContentFocus()
         }
         val accent = MaterialColors.getColor(
@@ -416,6 +416,17 @@ class TvSettingsFragment : Fragment() {
         }
         reloadProxyCount()
         refreshStamp.intValue++
+        updateBackCallback()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        updateBackCallback()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        updateBackCallback()
     }
 
     fun consumePendingSubScreen(context: Context) {

@@ -79,7 +79,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val context = requireContext()
         val act = activity as? MainActivity
-        if (homeFocus.lastRow != null && act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
+        if (!isHidden && homeFocus.lastRow != null && act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
             homeFocus.focusLast()
         }
         val accent = MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, 0xFF9147FF.toInt())
@@ -638,10 +638,25 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         loadLocalRows()
         val hasWarmData = viewModel.followed.value != null || viewModel.popular.value != null || viewModel.games.value != null
         if (hasWarmData) {
-            view?.postDelayed({ if (isResumed) viewModel.load(force = false, maxAgeMs = 20_000L) }, 160L)
+            scheduleWarmStaleRefresh(160L)
         } else {
             viewModel.load(force = false, maxAgeMs = 20_000L)
         }
+    }
+
+    private fun scheduleWarmStaleRefresh(delayMs: Long) {
+        val v = view ?: return
+        v.postDelayed(object : Runnable {
+            override fun run() {
+                if (!isResumed || view == null) return
+                val act = activity as? MainActivity
+                if (act != null && act.isTvMenuOpen() && act.idleDurationMs() < 380L) {
+                    view?.postDelayed(this, 320L)
+                    return
+                }
+                viewModel.load(force = false, maxAgeMs = 20_000L)
+            }
+        }, delayMs)
     }
 
     fun refreshIfStale(maxAgeMs: Long = 20_000L) {

@@ -147,7 +147,7 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                 )
                 firstLaunch = false
             }
-            viewPager.offscreenPageLimit = adapter.itemCount
+            viewPager.offscreenPageLimit = if (isTv) 1 else adapter.itemCount
             viewPager.reduceDragSensitivity()
             TabLayoutMediator(tabLayout, viewPager) { tab, position ->
                 tab.text = when (tabs.getOrNull(position)) {

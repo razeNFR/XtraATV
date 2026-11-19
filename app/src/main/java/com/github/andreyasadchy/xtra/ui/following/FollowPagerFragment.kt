@@ -305,6 +305,45 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        val ctx = context ?: return
+        val showVideosTab = !TwitchApiHelper.getGQLHeaders(ctx, true)[C.HEADER_TOKEN].isNullOrBlank()
+        val tabList = ctx.prefs().getString(C.UI_FOLLOWING_TABS, null).let { tabPref ->
+            val defaultTabs = C.DEFAULT_FOLLOWING_TABS.split(',')
+            if (tabPref != null) {
+                val list = tabPref.split(',').filter { item ->
+                    defaultTabs.find { it.first() == item.first() } != null
+                }.toMutableList()
+                defaultTabs.forEachIndexed { index, item ->
+                    if (list.find { it.first() == item.first() } == null) {
+                        list.add(index, item)
+                    }
+                }
+                list
+            } else defaultTabs
+        }
+        enabledTabsList = tabList.mapNotNull {
+            val split = it.split(':')
+            val key = split[0]
+            val enabled = split[2] != "0"
+            if (enabled && (key != "2" || showVideosTab)) key else null
+        }
+        defaultTabKey = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
+        val req = requestedTab
+        if (req != null) {
+            requestedTab = null
+            clearStandalone = false
+            selectMenuTab(req)
+        } else if (clearStandalone) {
+            clearStandalone = false
+            selectMenuTab(null)
+        } else if (_binding != null && standaloneTab == null && shownTabs != enabledTabsList) {
+            bindTabs(enabledTabsList, defaultTabKey)
+            com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(binding.root)
+        }
+    }
+
     override fun scrollToTop() {
         binding.appBar.setExpanded(true, true)
         (currentFragment as? Scrollable)?.scrollToTop()
