@@ -201,6 +201,7 @@ class GridRecyclerView : RecyclerView {
             setPadding(paddingLeft, padding, paddingRight, padding * 2)
             clipToPadding = false
             descendantFocusability = FOCUS_AFTER_DESCENDANTS
+            setItemViewCacheSize(8)
             addOnChildAttachStateChangeListener(object : OnChildAttachStateChangeListener {
                 override fun onChildViewAttachedToWindow(view: View) {
                     TvCards.prepare(view)
@@ -666,6 +667,14 @@ class GridRecyclerView : RecyclerView {
         super.onAttachedToWindow()
         if (isTv) {
             viewTreeObserver.addOnGlobalFocusChangeListener(focusWatcher)
+        }
+    }
+
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        if (visibility != View.VISIBLE) {
+            cancelPress()
+            preview?.stop()
         }
     }
 

@@ -318,9 +318,12 @@ class MainActivity : AppCompatActivity() {
                 binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
             }
             com.github.andreyasadchy.xtra.ui.tv.TvAmbient.setDynamicListener(tvAmbientListener)
-            applyTvNavHostPadding(false)
+            applyTvNavHostPadding()
             supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
+                    if (f.parentFragment is NavHostFragment && f !is androidx.fragment.app.DialogFragment) {
+                        applyTvFragmentPadding(f, v)
+                    }
                     TvUi.adapt(v, hideToolbarActions = true)
                     if (f is androidx.fragment.app.DialogFragment) {
                         v.post { TvUi.adaptDialog(v) }
@@ -339,16 +342,42 @@ class MainActivity : AppCompatActivity() {
                         return
                     }
                     binding.root.post {
-                        // a list of streams shown again after a while: the streamers that stopped go away (deferred past the 120ms fade)
+                        if (f.parentFragment is NavHostFragment) {
+                            f.view?.let { v ->
+                                com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(v)
+                                tintTvCards(v, onlyVisible = true)
+                            }
+                        }
+                        // a list of streams shown again after a while: the streamers that stopped go away (deferred past fade & active menu input)
                         f.view?.let { v ->
-                            v.postDelayed({
-                                if (f.isResumed) {
+                            val refreshAction = object : Runnable {
+                                override fun run() {
+                                    if (!f.isResumed || !v.isShown) return
+                                    if (isTvMenuOpen() && idleDurationMs() < 380L) {
+                                        v.postDelayed(this, 320L)
+                                        return
+                                    }
                                     refreshStaleStreamLists(v, 20_000L)
                                 }
-                            }, 160L)
+                            }
+                            v.postDelayed(refreshAction, 160L)
                         }
                         if (tvInitialFocusDone && !isTvMenuShown && f.parentFragment is NavHostFragment && !isTvPlayerOverContent()) {
-                            restoreTvScreenFocus()
+                            when (f) {
+                                is com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment -> {
+                                    f.focusLastCard()
+                                    f.view?.requestFocus()
+                                }
+                                is com.github.andreyasadchy.xtra.ui.tv.TvStatsFragment -> {
+                                    f.requestContentFocus()
+                                    f.view?.requestFocus()
+                                }
+                                is com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment -> {
+                                    f.requestContentFocus()
+                                    f.view?.requestFocus()
+                                }
+                                else -> restoreTvScreenFocus()
+                            }
                         }
                         if (!tvInitialFocusDone && f.view?.isShown == true && f.parentFragment is NavHostFragment && !isTvPlayerOverContent()) {
                             tvInitialFocusDone = true
@@ -359,6 +388,7 @@ class MainActivity : AppCompatActivity() {
                                 // the side menu stays closed: the focus on the start page (its list may still be loading)
                                 focusContentAfterMenu(false, maxTries = 60)
                             }
+                            scheduleTvRootPrewarm()
                         } else {
                             ensureFocus()
                         }
@@ -498,7 +528,7 @@ class MainActivity : AppCompatActivity() {
                                         }
                                         startService(intent)
                                     }
-                                    val currentFragment = supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.getOrNull(0)
+                                    val currentFragment = currentVisibleNavFragment()
                                     if (currentFragment is SavedPagerFragment || currentFragment is SavedMediaFragment) {
                                         val fragment = currentFragment.childFragmentManager.fragments.find { it is DownloadsFragment }
                                         if (downloads.any { it.live }) {
@@ -534,7 +564,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         startService(intent)
                     }
-                    val currentFragment = supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.getOrNull(0)
+                    val currentFragment = currentVisibleNavFragment()
                     if (currentFragment is SavedPagerFragment || currentFragment is SavedMediaFragment) {
                         val fragment = currentFragment.childFragmentManager.fragments.find { it is DownloadsFragment }
                         if (live) {
@@ -1205,6 +1235,15 @@ class MainActivity : AppCompatActivity() {
             return true
         }
         if (isTv && event.keyCode == KeyEvent.KEYCODE_BACK && !isTvMenuShown && isBrowsingRoot() && !tvGridBackCallback.isEnabled) {
+            val settingsFrag = if (::navController.isInitialized && navController.currentDestination?.id == R.id.tvSettingsFragment) {
+                currentTvSettings()
+            } else null
+            if (settingsFrag != null && settingsFrag.canHandleTvBackPress()) {
+                if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+                    settingsFrag.handleTvBackPress()
+                }
+                return true
+            }
             if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
                 val onHome = ::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment
                 if (onHome && prefs.getBoolean(C.TV_CONFIRM_EXIT, true)) {
@@ -1315,15 +1354,16 @@ class MainActivity : AppCompatActivity() {
             tvBaseBackgroundColor?.let { base ->
                 com.github.andreyasadchy.xtra.ui.tv.TvAmbient.applyDynamicToView(binding.root, base, color)
             }
-            tintTvCards(binding.navHostFragment)
+            tintTvCards(binding.navHostFragment, onlyVisible = true)
             (playerFragment as? PlayerFragment)?.refreshTvMinimizedBorderColor()
         }
     }
 
-    private fun tintTvCards(view: View) {
+    private fun tintTvCards(view: View, onlyVisible: Boolean = false) {
+        if (onlyVisible && !view.isShown) return
         when (view) {
             is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> view.tintCards()
-            is ViewGroup -> for (i in 0 until view.childCount) tintTvCards(view.getChildAt(i))
+            is ViewGroup -> for (i in 0 until view.childCount) tintTvCards(view.getChildAt(i), onlyVisible)
         }
     }
     private var isTvMenuShown = true
@@ -1331,8 +1371,9 @@ class MainActivity : AppCompatActivity() {
     fun isTvMenuOpen() = isTv && isTvMenuShown
     private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, true)
 
-    private fun applyTvNavHostPadding(isHome: Boolean) {
+    private fun applyTvFragmentPadding(f: Fragment, v: View) {
         if (!isTv) return
+        val isHome = f is com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment
         val density = resources.displayMetrics.density
         val overscan = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
         val start = when {
@@ -1342,14 +1383,34 @@ class MainActivity : AppCompatActivity() {
             else -> overscan
         }
         val end = if (isHome) 0 else overscan
-        if (binding.navHostFragment.paddingStart != start || binding.navHostFragment.paddingEnd != end) {
+        (v as? ViewGroup)?.apply {
+            clipToPadding = false
+            clipChildren = false
+        }
+        if (v.paddingStart != start || v.paddingEnd != end) {
+            v.setPaddingRelative(start, v.paddingTop, end, v.paddingBottom)
+        }
+    }
+
+    private fun applyTvNavHostPadding() {
+        if (!isTv) return
+        binding.navHostFragment.clipToPadding = false
+        binding.navHostFragment.clipChildren = false
+        if (binding.navHostFragment.paddingStart != 0 || binding.navHostFragment.paddingEnd != 0) {
             binding.navHostFragment.setPaddingRelative(
-                start,
+                0,
                 binding.navHostFragment.paddingTop,
-                end,
+                0,
                 binding.navHostFragment.paddingBottom,
             )
         }
+        supportFragmentManager.findFragmentById(R.id.navHostFragment)
+            ?.childFragmentManager?.fragments
+            ?.forEach { f ->
+                if (f !is androidx.fragment.app.DialogFragment) {
+                    f.view?.let { v -> applyTvFragmentPadding(f, v) }
+                }
+            }
     }
     private var tvInitialFocusDone = false
 
@@ -1659,18 +1720,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val tvRootDestinations = setOf(
-        R.id.searchPagerFragment,
-        R.id.tvHomeFragment,
-        R.id.rootGamesFragment,
-        R.id.rootTopFragment,
-        R.id.followPagerFragment,
-        R.id.followMediaFragment,
-        R.id.savedPagerFragment,
-        R.id.savedMediaFragment,
-        R.id.tvStatsFragment,
-        R.id.tvSettingsFragment,
-    )
+    private val tvRootDestinations = com.github.andreyasadchy.xtra.ui.tv.TvNavHostFragment.TV_ROOT_DESTINATIONS
 
     /** Last key pressed (and when): a move of the focus asked by the user, not by a page that loaded. */
     private var lastTvKeyCode = 0
@@ -1700,6 +1750,32 @@ class MainActivity : AppCompatActivity() {
     /** Entry of the side menu shown as chosen instead of its screen ("Followed videos" rather than "Following"). */
     private var tvMenuExtraSelected: Int? = null
 
+    private fun followMenuEntryForKey(key: String?): Int? = when (key) {
+        "2" -> R.id.tvNavFollowedVideos
+        "3" -> R.id.tvNavFollowedChannels
+        "0" -> R.id.tvNavFollowedGames
+        else -> null
+    }?.takeIf { id -> tvMenuState.items.any { it.id == id } }
+
+    private fun resolveFollowMenuEntryId(): Int {
+        tvMenuExtraSelected?.takeIf { id -> tvMenuState.items.any { it.id == id } }?.let { return it }
+        val followFrag = currentVisibleNavFragment() as? com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment
+        val activeEntry = followMenuEntryForKey(followFrag?.standaloneTabKey() ?: followFrag?.activeTabKey())
+        if (activeEntry != null) {
+            tvMenuExtraSelected = activeEntry
+            return activeEntry
+        }
+        return R.id.followPagerFragment
+    }
+
+    fun onFollowTabChanged(key: String?) {
+        if (!isTv || isTvMenuShown) return
+        if (!::navController.isInitialized || navController.currentDestination?.id != R.id.followPagerFragment) return
+        val extra = followMenuEntryForKey(key)
+        tvMenuExtraSelected = extra
+        tvMenuState.selected = extra ?: R.id.followPagerFragment
+    }
+
     /** TV side menu: a tab of the followed channels (videos, channels, categories), switched in place when already open. */
     private fun openFollowedTab(key: String, entry: Int, fromAutoHover: Boolean = tvMenuAutoHovering) {
         val loggedInWithCode = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank()
@@ -1712,8 +1788,7 @@ class MainActivity : AppCompatActivity() {
         }
         tvMenuExtraSelected = entry
         tvMenuState.selected = entry
-        val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)
-            ?.childFragmentManager?.fragments?.firstOrNull { it.isVisible }
+        val current = currentVisibleNavFragment()
         if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment && current.selectMenuTab(key)) {
             return
         }
@@ -1723,33 +1798,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * TV: a section of the side menu opens at its root while keeping root ViewModels & state warm in memory.
-     * Sub-screens opened inside another section (a channel, a category) are popped first so coming back to that
-     * section shows its root, and stale content silently refreshes in the background right after the crossfade.
+     * TV: switches to a side-menu root section with zero view re-inflation via [com.github.andreyasadchy.xtra.ui.tv.TvKeepStateFragmentNavigator],
+     * popping any transient sub-screens (category, channel) and keeping the back stack flat (`previousBackStackEntry == null`)
+     * so Back on any root section cleanly opens the side menu.
      */
     private fun openTvSectionRoot(id: Int): Boolean {
         return try {
-            while (navController.currentDestination?.id?.let { it !in tvRootDestinations } == true && navController.popBackStack()) {
-                // pop transient sub-screens (category, channel) before saving root state
-            }
             if (id == R.id.followPagerFragment && tvMenuExtraSelected == null) {
                 com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.clearStandalone = true
                 com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.requestedTab = null
-                val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)
-                    ?.childFragmentManager?.fragments?.firstOrNull { it.isVisible }
-                if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment && current.selectMenuTab(null)) {
+                val current = currentVisibleNavFragment()
+                if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment &&
+                    navController.previousBackStackEntry == null &&
+                    current.selectMenuTab(null)
+                ) {
                     com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.clearStandalone = false
                     return true
                 }
             }
-            if (navController.currentDestination?.id == id) {
+            if (navController.currentDestination?.id == id && navController.previousBackStackEntry == null) {
                 binding.root.postDelayed({ refreshVisibleScreensIfStale(20_000L) }, 160L)
                 return true
             }
             navController.navigate(id, null, androidx.navigation.navOptions {
                 launchSingleTop = true
-                restoreState = true
-                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                popUpTo(navController.graph.id) { inclusive = false }
                 anim {
                     enter = R.anim.tv_section_fade_in
                     exit = R.anim.tv_section_fade_out
@@ -1811,41 +1884,42 @@ class MainActivity : AppCompatActivity() {
             focusContentAfterMenu(pendingId == R.id.searchPagerFragment)
             return
         }
+        val activeRoot = currentVisibleNavFragment()?.view ?: binding.navHostFragment
         // the home first: giving the focus back to its view would put it on its banner. The card that had the
         // focus is asked before the view takes the focus (the banner focused meanwhile is not remembered)
-        val home = binding.navHostFragment.findViewById<View>(R.id.tvHome)
-        if (home != null && home.isShown) {
+        val home = activeRoot.findViewById<View>(R.id.tvHome)?.takeIf { it.isShown }
+        if (home != null) {
             hideTvMenu()
             currentTvHome()?.focusLastCard()
             home.requestFocus()
             return
         }
-        val statsView = binding.navHostFragment.findViewById<View>(R.id.tvStatsRoot)
-        if (statsView != null && statsView.isShown) {
+        val statsView = activeRoot.findViewById<View>(R.id.tvStatsRoot)?.takeIf { it.isShown }
+        if (statsView != null) {
             hideTvMenu()
             currentTvStats()?.requestContentFocus()
             statsView.requestFocus()
             return
         }
-        val settingsView = binding.navHostFragment.findViewById<View>(R.id.tvSettingsRoot)
-        if (settingsView != null && settingsView.isShown) {
+        val settingsView = activeRoot.findViewById<View>(R.id.tvSettingsRoot)?.takeIf { it.isShown }
+        if (settingsView != null) {
             hideTvMenu()
             currentTvSettings()?.requestContentFocus()
             settingsView.requestFocus()
             return
         }
         // from the menu, go back to the item last selected in the screen, else to its first item
-        val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(binding.navHostFragment) }
+        val last = lastContentFocus?.takeIf { it.isAttachedToWindow && it.isShown && it.isInside(activeRoot) }
         if (last != null && last.requestFocus()) {
             hideTvMenu()
             return
         }
-        val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+        val grid = TvUi.findVisibleGrid(activeRoot)
         if (grid != null && focusRememberedItem(grid)) {
             hideTvMenu()
             return
         }
-        if (binding.navHostFragment.requestFocus(View.FOCUS_RIGHT)) {
+        if (activeRoot.requestFocus(View.FOCUS_RIGHT)) {
             hideTvMenu()
             return
         }
@@ -1854,6 +1928,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshStaleStreamLists(view: View, maxAgeMs: Long = 20_000L) {
+        if (!view.isShown) return
         when (view) {
             is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> view.refreshIfStale(maxAgeMs)
             is ViewGroup -> for (i in 0 until view.childCount) refreshStaleStreamLists(view.getChildAt(i), maxAgeMs)
@@ -1872,13 +1947,15 @@ class MainActivity : AppCompatActivity() {
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         binding.root.postDelayed({
             binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            val activeRoot = currentVisibleNavFragment()?.view ?: binding.navHostFragment
             val target = if (search) {
-                binding.navHostFragment.findViewById<View>(R.id.tvSearchBar) ?: binding.navHostFragment.findViewById<View>(R.id.tvHeaderCompose)
+                activeRoot.findViewById<View>(R.id.tvSearchBar)?.takeIf { it.isShown }
+                    ?: activeRoot.findViewById<View>(R.id.tvHeaderCompose)?.takeIf { it.isShown }
             } else {
-                TvUi.findVisibleGrid(binding.navHostFragment)?.takeIf { (it.adapter?.itemCount ?: 0) > 0 && it.childCount > 0 }
-                    ?: binding.navHostFragment.findViewById<View>(R.id.tvHome)
-                    ?: binding.navHostFragment.findViewById<View>(R.id.tvStatsRoot)
-                    ?: binding.navHostFragment.findViewById<View>(R.id.tvSettingsRoot)
+                TvUi.findVisibleGrid(activeRoot)?.takeIf { (it.adapter?.itemCount ?: 0) > 0 && it.childCount > 0 }
+                    ?: activeRoot.findViewById<View>(R.id.tvHome)?.takeIf { it.isShown }
+                    ?: activeRoot.findViewById<View>(R.id.tvStatsRoot)?.takeIf { it.isShown }
+                    ?: activeRoot.findViewById<View>(R.id.tvSettingsRoot)?.takeIf { it.isShown }
             }
             when {
                 target is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> focusRememberedItem(target)
@@ -1910,13 +1987,16 @@ class MainActivity : AppCompatActivity() {
         val menu = binding.navBarContainer
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         menu.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-        if (tvMenuExtraSelected == null && ::navController.isInitialized) {
+        if (::navController.isInitialized) {
             navController.currentDestination?.id?.let { destId ->
-                if (tvMenuState.items.any { it.id == destId }) {
+                if (destId == R.id.followPagerFragment) {
+                    tvMenuState.selected = resolveFollowMenuEntryId()
+                } else if (tvMenuExtraSelected == null && tvMenuState.items.any { it.id == destId }) {
                     tvMenuState.selected = destId
                 }
             }
         }
+        val wasCollapsed = tvMenuState.collapsed
         tvMenuState.collapsed = false
         if (!isTvMenuShown) {
             isTvMenuShown = true
@@ -1928,11 +2008,15 @@ class MainActivity : AppCompatActivity() {
         if (focus) {
             val sideMenu = binding.tvSideMenu
             if (sideMenu != null) {
-                tvMenuState.suppressFocusCallback = true
+                val alreadyOpenWithFocus = !wasCollapsed && sideMenu.hasFocus()
+                tvMenuState.requestFocusSelected()
                 if (!sideMenu.hasFocus()) {
                     sideMenu.requestFocus()
                 }
-                tvMenuState.requestFocusSelected()
+                if (alreadyOpenWithFocus && tvMenuState.focusSelected() && tvMenuState.focusedId == tvMenuState.selected) {
+                    tvMenuState.pendingFocus = false
+                    tvMenuState.suppressFocusCallback = false
+                }
             } else {
                 val selected = binding.navBar.findViewById<View>(binding.navBar.selectedItemId)
                 if (selected == null || !selected.requestFocus()) {
@@ -2086,7 +2170,7 @@ class MainActivity : AppCompatActivity() {
             binding.navBar.selectedItemId = prevSelected
         }
         setupTvSideMenu()
-        applyTvNavHostPadding(::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment)
+        applyTvNavHostPadding()
         if (!isTvMenuShown) {
             hideTvMenu()
         }
@@ -3440,20 +3524,78 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun currentVisibleNavFragment(): Fragment? {
+        return supportFragmentManager.findFragmentById(R.id.navHostFragment)
+            ?.childFragmentManager?.fragments
+            ?.firstOrNull { it !is androidx.fragment.app.DialogFragment && it.isVisible }
+    }
+
     /** The home, when it is the screen shown. */
     private fun currentTvHome(): com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment? {
-        return supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments
-            ?.firstOrNull { it.isVisible } as? com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment
+        return currentVisibleNavFragment() as? com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment
     }
 
     private fun currentTvStats(): com.github.andreyasadchy.xtra.ui.tv.TvStatsFragment? {
-        return supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments
-            ?.firstOrNull { it.isVisible } as? com.github.andreyasadchy.xtra.ui.tv.TvStatsFragment
+        return currentVisibleNavFragment() as? com.github.andreyasadchy.xtra.ui.tv.TvStatsFragment
     }
 
     private fun currentTvSettings(): com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment? {
-        return supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments
-            ?.firstOrNull { it.isVisible } as? com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment
+        return currentVisibleNavFragment() as? com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment
+    }
+
+    private var tvPrewarmScheduled = false
+
+    /**
+     * Pre-warms unvisited TV side-rail root sections one by one during main-thread idle windows
+     * so even the first hover/visit to any category is instant (`0 ms` layout inflation).
+     */
+    private fun scheduleTvRootPrewarm() {
+        if (!isTv || tvPrewarmScheduled || !::navController.isInitialized) return
+        val tvNavHost = supportFragmentManager.findFragmentById(R.id.navHostFragment) as? com.github.andreyasadchy.xtra.ui.tv.TvNavHostFragment ?: return
+        val navigator = tvNavHost.keepStateNavigator ?: return
+        tvPrewarmScheduled = true
+        val candidates = listOf(
+            R.id.tvHomeFragment,
+            R.id.rootGamesFragment,
+            R.id.rootTopFragment,
+            R.id.followPagerFragment,
+            R.id.followMediaFragment,
+            R.id.tvStatsFragment,
+            R.id.tvSettingsFragment,
+            R.id.savedPagerFragment,
+            R.id.savedMediaFragment,
+            R.id.searchPagerFragment,
+        ).filter { id -> binding.navBar.menu.findItem(id) != null }
+        val queue = ArrayDeque(candidates)
+        fun pump(delayMs: Long) {
+            if (queue.isEmpty() || isFinishing || isDestroyed) return
+            binding.root.postDelayed({
+                if (queue.isEmpty() || isFinishing || isDestroyed) return@postDelayed
+                android.os.Looper.myQueue().addIdleHandler {
+                    if (queue.isEmpty() || isFinishing || isDestroyed) return@addIdleHandler false
+                    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) ||
+                        isTvPlayerOverContent() ||
+                        tvMenuPendingId != 0 ||
+                        idleDurationMs() < 700L
+                    ) {
+                        pump(900L)
+                        return@addIdleHandler false
+                    }
+                    var warmed = false
+                    while (queue.isNotEmpty() && !warmed) {
+                        val nextId = queue.removeFirst()
+                        if (navController.currentDestination?.id != nextId) {
+                            warmed = navigator.prewarmRoot(nextId, navController.graph)
+                        }
+                    }
+                    if (queue.isNotEmpty()) {
+                        pump(650L)
+                    }
+                    false
+                }
+            }, delayMs)
+        }
+        pump(1400L)
     }
 
     fun syncTvPlaybackState() {
@@ -3658,19 +3800,23 @@ class MainActivity : AppCompatActivity() {
                             binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this@MainActivity, base)
                         }
                     }
-                    tintTvCards(binding.navHostFragment)
+                    tintTvCards(binding.navHostFragment, onlyVisible = true)
                     (playerFragment as? PlayerFragment)?.refreshTvMinimizedBorderColor()
                 }
-                applyTvNavHostPadding(destination.id == R.id.tvHomeFragment)
                 updateTvMenuBackCallback()
-                if (destination.id != R.id.followPagerFragment) {
+                if (destination.id in tvRootDestinations && destination.id != R.id.followPagerFragment) {
                     tvMenuExtraSelected = null
                 }
                 val destId = destination.id
                 binding.root.post {
-                    tvMenuState.selected = tvMenuExtraSelected
-                        ?: destId.takeIf { id -> tvMenuState.items.any { it.id == id } }
-                        ?: binding.navBar.selectedItemId
+                    tvMenuState.selected = if (destId == R.id.followPagerFragment) {
+                        resolveFollowMenuEntryId()
+                    } else {
+                        tvMenuExtraSelected
+                            ?: destId.takeIf { id -> tvMenuState.items.any { it.id == id } }
+                            ?: binding.navBar.selectedItemId
+                    }
+                    currentVisibleNavFragment()?.view?.let { com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(it) }
                 }
             }
         }
@@ -3767,8 +3913,7 @@ class MainActivity : AppCompatActivity() {
                     tvMenuState.selected = it.itemId
                     com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.clearStandalone = true
                     com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.requestedTab = null
-                    val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)
-                        ?.childFragmentManager?.fragments?.firstOrNull { f -> f.isVisible }
+                    val current = currentVisibleNavFragment()
                     if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment && current.selectMenuTab(null)) {
                         com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.clearStandalone = false
                     } else {
@@ -3777,8 +3922,7 @@ class MainActivity : AppCompatActivity() {
                     return@setOnItemReselectedListener
                 }
                 if (!navController.popBackStack(it.itemId, false)) {
-                    val currentFragment = supportFragmentManager.findFragmentById(R.id.navHostFragment)
-                        ?.childFragmentManager?.fragments?.firstOrNull { f -> f.isVisible }
+                    val currentFragment = currentVisibleNavFragment()
                     if (currentFragment is Scrollable) {
                         currentFragment.scrollToTop()
                     }

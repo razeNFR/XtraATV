@@ -443,7 +443,7 @@
         android:layout_toStartOf="@id/duration"
         android:layout_toEndOf="@id/position">
 
-        <androidx.media3.ui.DefaultTimeBar
+        <com.github.andreyasadchy.xtra.ui.view.XtraTimeBar
             android:id="@+id/progressBar"
             android:background="@drawable/player_control_background"
             android:layout_width="match_parent"

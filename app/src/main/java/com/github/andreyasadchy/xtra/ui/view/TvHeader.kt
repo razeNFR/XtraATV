@@ -171,7 +171,9 @@ object TvHeader {
         appBar.addView(view, AppBarLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             scrollFlags = 0
         })
-        appBar.viewTreeObserver.addOnGlobalLayoutListener { update() }
+        appBar.viewTreeObserver.addOnGlobalLayoutListener {
+            if (appBar.isShown) update()
+        }
         searchView?.findViewById<TextView>(androidx.appcompat.R.id.search_src_text)?.let { input ->
             input.addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -183,7 +185,9 @@ object TvHeader {
         val ticker = object : Runnable {
             override fun run() {
                 if (appBar.isAttachedToWindow) {
-                    update()
+                    if (appBar.isShown) {
+                        update()
+                    }
                     appBar.postDelayed(this, 1000L)
                 }
             }
@@ -341,7 +345,8 @@ object TvHeader {
             (0 until tabLayout.tabCount).mapNotNull { index ->
                 tabLayout.getTabAt(index)?.let { tab ->
                     Action("tab$index", tab.text?.toString() ?: "", null, tab.isSelected) {
-                        screenRoot(appBar).findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.viewPager)?.setCurrentItem(index, false)
+                        val pagerIndex = (tab.tag as? Int) ?: index
+                        screenRoot(appBar).findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.viewPager)?.setCurrentItem(pagerIndex, false)
                         tab.select()
                     }
                 }
@@ -435,7 +440,7 @@ object TvHeader {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
         val all = snapshot.left + snapshot.tabs + snapshot.afterTabs + snapshot.right
-        if (snapshot.isSearch) {
+        if (snapshot.isSearch && (context as? MainActivity)?.isTvMenuOpen() != true) {
             LaunchedEffect(Unit) {
                 runCatching { searchRequester.requestFocus() }
             }

@@ -438,6 +438,8 @@ class ChatViewModel(
     fun resumeReplay(channelId: String?, channelLogin: String?, chatUrl: String?, videoId: String?, createdAt: String?, startTime: Int, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?) {
         if (chatReplayManager?.isActive == false || chatReplayManagerLocal?.isActive == false) {
             startReplayChat(videoId, createdAt, startTime, chatUrl, getCurrentPosition, getCurrentSpeed, channelId, channelLogin)
+        } else {
+            syncReplayWithPlayer()
         }
     }
 
@@ -3681,6 +3683,7 @@ class ChatViewModel(
                 listener = ChatReplayListener(),
             )
             readChatFile(chatUrl, channelId, channelLogin)
+            chatReplayManagerLocal?.startWhenReady()
         } else {
             if (!videoId.isNullOrBlank()) {
                 chatReplayManager = ChatReplayManager(
@@ -3696,13 +3699,17 @@ class ChatViewModel(
                     getCurrentSpeed = getCurrentSpeed,
                     coroutineScope = viewModelScope,
                     listener = ChatReplayListener(),
-                )
+                ).also { it.startWhenReady() }
             }
         }
     }
 
     fun startReplayChatLoad() {
         chatReplayManager?.start() ?: chatReplayManagerLocal?.startLoad()
+    }
+
+    fun syncReplayWithPlayer() {
+        chatReplayManager?.syncWithPlayer() ?: chatReplayManagerLocal?.syncWithPlayer()
     }
 
     fun startHybridReplay(
@@ -3792,13 +3799,36 @@ class ChatViewModel(
             onMessage(message, fromReplay = true)
         }
 
-        override suspend fun clearMessages() {
+        override suspend fun onReplayBatch(messages: List<ChatMessage>) {
+            val filtered = messages.filter { msg ->
+                recordSeenChatter(msg, activeChannelLogin, ownUserId, ownUserLogin)
+                !com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.shouldFilter(
+                    applicationContext, msg, activeChannelLogin, ownUserId, ownUserLogin
+                )
+            }
+            if (filtered.isEmpty()) return
             synchronized(chatMessages) {
-                val size = chatMessages.size
+                val existingIds = chatMessages.mapNotNullTo(HashSet()) { it.id }
+                val deduped = filtered.filter { it.id == null || it.id !in existingIds }
+                val left = messageLimit - chatMessages.size
+                if (left > 0 && deduped.isNotEmpty()) {
+                    val items = deduped.takeLast(left)
+                    chatMessages.addAll(0, items)
+                    Pair(items, chatMessages.lastIndex)
+                } else null
+            }?.let { inserted ->
+                addMessages.emit(inserted)
+            }
+        }
+
+        override suspend fun clearMessages() {
+            val size = synchronized(chatMessages) {
+                val s = chatMessages.size
                 chatMessages.clear()
-                size
-            }.let {
-                removeMessages.emit(it)
+                s
+            }
+            if (size > 0) {
+                removeMessages.emit(size)
             }
         }
 

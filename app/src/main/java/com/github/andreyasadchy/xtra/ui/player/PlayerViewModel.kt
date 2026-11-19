@@ -26,18 +26,21 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.NetworkUtils
 import com.github.andreyasadchy.xtra.util.NetworkUtils.executeAsync
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.encodeToJsonElement
@@ -91,6 +94,10 @@ class PlayerViewModel(
     }
     val isBookmarked = MutableStateFlow<Boolean?>(null)
     val gamesList = MutableStateFlow<List<Game>?>(null)
+    val mutedSegments = MutableStateFlow<List<Pair<Long, Long>>>(emptyList())
+    private var mutedSegmentsVideoId: String? = null
+    private var mutedSegmentsLoadedOk: Boolean = false
+    private var mutedSegmentsJob: Job? = null
     private val _isFollowing = MutableStateFlow<Boolean?>(null)
     val isFollowing: StateFlow<Boolean?> = _isFollowing
     private val _accountFollowedAtMs = MutableStateFlow<Long?>(null)
@@ -205,102 +212,97 @@ class PlayerViewModel(
         }
     }
 
+    @SuppressLint("NewApi")
     fun findUnlistedVideo(networkLibrary: String?, qualities: List<VideoQuality>?, streamId: String?, channelLogin: String?, streamCreatedAt: String?) {
         val createdAtSeconds = streamCreatedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { time -> time > 0 }?.div(1000) }
         if (!qualities.isNullOrEmpty() && streamId != null && channelLogin != null && createdAtSeconds != null) {
             viewModelScope.launch(Dispatchers.IO) {
                 val semaphore = Semaphore(10)
-                val jobs = mutableListOf<Job>()
-                val result = MutableStateFlow<String?>(null)
-                val offsetList = listOf(0, -1)
-                for (offset in offsetList) {
-                    if (result.value != null) {
-                        break
-                    }
-                    val data = "${channelLogin}_${streamId}_${createdAtSeconds + offset}"
-                    val messageDigest = MessageDigest.getInstance("SHA-1")
-                    messageDigest.update(data.toByteArray())
-                    val hash = messageDigest.digest().toHexString().take(20)
-                    for (domain in TwitchApiHelper.vodDomains.reversed()) {
-                        semaphore.acquire()
-                        if (result.value != null) {
-                            break
-                        }
-                        val url = "${domain}/${hash}_${data}/chunked/index-dvr.m3u8"
-                        jobs.add(
-                            viewModelScope.launch(Dispatchers.IO) {
-                                try {
-                                    when {
-                                        networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> @SuppressLint("NewApi") {
-                                            val response = suspendCancellableCoroutine { continuation ->
-                                                val timeout = NetworkUtils.HttpEngineTimeout()
-                                                val request = httpEngine.value!!.newUrlRequestBuilder(
-                                                    url,
-                                                    cronetExecutor.value,
-                                                    NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
-                                                ).build()
-                                                timeout.start(request, continuation)
-                                                request.start()
-                                                continuation.invokeOnCancellation {
-                                                    request.cancel()
-                                                    timeout.stop()
-                                                }
-                                            }
-                                            if (response.info.httpStatusCode in 200..299) {
-                                                result.value = url
-                                                jobs.forEach {
-                                                    it.cancel()
-                                                }
-                                            }
-                                        }
-                                        networkLibrary == C.CRONET && cronetEngine.value != null -> {
-                                            val response = suspendCancellableCoroutine { continuation ->
-                                                val timeout = NetworkUtils.CronetTimeout()
-                                                val request = cronetEngine.value!!.newUrlRequestBuilder(
-                                                    url,
-                                                    NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
-                                                    cronetExecutor.value
-                                                ).build()
-                                                timeout.start(request, continuation)
-                                                request.start()
-                                                continuation.invokeOnCancellation {
-                                                    request.cancel()
-                                                    timeout.stop()
-                                                }
-                                            }
-                                            if (response.info.httpStatusCode in 200..299) {
-                                                result.value = url
-                                                jobs.forEach {
-                                                    it.cancel()
-                                                }
-                                            }
-                                        }
-                                        else -> {
-                                            okHttpClient.value.newCall(Request.Builder().url(url).build()).executeAsync().use { response ->
-                                                if (response.isSuccessful) {
-                                                    result.value = url
-                                                    jobs.forEach {
-                                                        it.cancel()
+                val winner = java.util.concurrent.atomic.AtomicReference<String?>(null)
+                coroutineScope {
+                    val probeJob = SupervisorJob(coroutineContext[Job])
+                    val probeScope = CoroutineScope(Dispatchers.IO + probeJob)
+                    val offsetList = listOf(0, -1)
+                    for (offset in offsetList) {
+                        if (winner.get() != null) break
+                        val data = "${channelLogin}_${streamId}_${createdAtSeconds + offset}"
+                        val messageDigest = MessageDigest.getInstance("SHA-1")
+                        messageDigest.update(data.toByteArray())
+                        val hash = messageDigest.digest().toHexString().take(20)
+                        for (domain in TwitchApiHelper.vodDomains) {
+                            if (winner.get() != null) break
+                            val url = "${domain}/${hash}_${data}/chunked/index-dvr.m3u8"
+                            probeScope.launch {
+                                semaphore.withPermit {
+                                    if (winner.get() != null) return@withPermit
+                                    val found = try {
+                                        when {
+                                            networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> {
+                                                val response = suspendCancellableCoroutine { continuation ->
+                                                    val timeout = NetworkUtils.HttpEngineTimeout()
+                                                    val request = httpEngine.value!!.newUrlRequestBuilder(
+                                                        url,
+                                                        cronetExecutor.value,
+                                                        NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
+                                                    ).apply {
+                                                        addHeader("Range", "bytes=0-63")
+                                                    }.build()
+                                                    timeout.start(request, continuation)
+                                                    request.start()
+                                                    continuation.invokeOnCancellation {
+                                                        request.cancel()
+                                                        timeout.stop()
                                                     }
                                                 }
+                                                response.info.httpStatusCode in 200..299
+                                            }
+                                            networkLibrary == C.CRONET && cronetEngine.value != null -> {
+                                                val response = suspendCancellableCoroutine { continuation ->
+                                                    val timeout = NetworkUtils.CronetTimeout()
+                                                    val request = cronetEngine.value!!.newUrlRequestBuilder(
+                                                        url,
+                                                        NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
+                                                        cronetExecutor.value
+                                                    ).apply {
+                                                        addHeader("Range", "bytes=0-63")
+                                                    }.build()
+                                                    timeout.start(request, continuation)
+                                                    request.start()
+                                                    continuation.invokeOnCancellation {
+                                                        request.cancel()
+                                                        timeout.stop()
+                                                    }
+                                                }
+                                                response.info.httpStatusCode in 200..299
+                                            }
+                                            else -> {
+                                                okHttpClient.value.newCall(
+                                                    Request.Builder()
+                                                        .url(url)
+                                                        .header("Range", "bytes=0-63")
+                                                        .build()
+                                                ).executeAsync().use { response ->
+                                                    response.isSuccessful
+                                                }
                                             }
                                         }
+                                    } catch (e: CancellationException) {
+                                        ensureActive()
+                                        false
+                                    } catch (_: Exception) {
+                                        false
                                     }
-                                } catch (e: CancellationException) {
-                                    ensureActive()
-                                } catch (e: Exception) {
-
-                                }
-                            }.also {
-                                it.invokeOnCompletion {
-                                    semaphore.release()
+                                    if (found && winner.compareAndSet(null, url)) {
+                                        probeJob.cancel()
+                                    }
                                 }
                             }
-                        )
+                        }
                     }
+                    probeJob.complete()
+                    probeJob.join()
                 }
-                jobs.joinAll()
-                val resultUrl = result.value
+                val resultUrl = winner.get()
                 unlistedVideoQualities.value = if (resultUrl != null) {
                     val videoQualities = qualities.mapIndexed { index, quality ->
                         val url = if (index == 0) {
@@ -368,6 +370,37 @@ class PlayerViewModel(
 
                     }
                 }
+            }
+        }
+    }
+
+    fun loadMutedSegments(
+        videoId: String?,
+        networkLibrary: String?,
+        webHeaders: Map<String, String>,
+        fallbackHeaders: Map<String, String>,
+    ) {
+        if (videoId.isNullOrBlank()) {
+            mutedSegmentsJob?.cancel()
+            mutedSegmentsVideoId = null
+            mutedSegmentsLoadedOk = false
+            mutedSegments.value = emptyList()
+            return
+        }
+        if (videoId == mutedSegmentsVideoId && (mutedSegmentsJob?.isActive == true || mutedSegmentsLoadedOk)) {
+            return
+        }
+        mutedSegmentsJob?.cancel()
+        if (videoId != mutedSegmentsVideoId) {
+            mutedSegmentsVideoId = videoId
+            mutedSegmentsLoadedOk = false
+            mutedSegments.value = emptyList()
+        }
+        mutedSegmentsJob = viewModelScope.launch {
+            val segments = graphQLRepository.loadVideoMutedSegments(networkLibrary, webHeaders, fallbackHeaders, videoId)
+            if (mutedSegmentsVideoId == videoId && segments != null) {
+                mutedSegmentsLoadedOk = true
+                mutedSegments.value = segments
             }
         }
     }

@@ -38,6 +38,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -48,6 +49,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -192,11 +194,44 @@ class TvSettingsFragment : Fragment() {
     private val selectedCategoryIndex = mutableIntStateOf(0)
     private val subScreenStack = mutableStateListOf<SubScreen>()
     private val searchQueryState = mutableStateOf("")
+    private val returnFocusKeyState = mutableStateOf<String?>(null)
+    private val rightColumnFocusedState = mutableStateOf(false)
 
     private var restoreResultLauncher: ActivityResultLauncher<Intent>? = null
     private var voiceSearchLauncher: ActivityResultLauncher<Intent>? = null
     private var updateDownloadDialogBinding: DialogUpdateDownloadBinding? = null
     private var updateDownloadDialog: AlertDialog? = null
+
+    fun canHandleTvBackPress(): Boolean {
+        return isAdded && !isHidden && (subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank() || rightColumnFocusedState.value)
+    }
+
+    fun handleTvBackPress(): Boolean {
+        if (subScreenStack.isNotEmpty()) {
+            val popped = subScreenStack.removeAt(subScreenStack.lastIndex)
+            returnFocusKeyState.value = popped.parentItemKey
+            refreshStamp.intValue++
+            updateBackCallback()
+            focusRightTrigger.intValue++
+            return true
+        }
+        if (searchQueryState.value.isNotBlank()) {
+            searchQueryState.value = ""
+            returnFocusKeyState.value = null
+            rightColumnFocusedState.value = false
+            updateBackCallback()
+            focusLeftTrigger.intValue++
+            return true
+        }
+        if (rightColumnFocusedState.value) {
+            returnFocusKeyState.value = null
+            rightColumnFocusedState.value = false
+            updateBackCallback()
+            focusLeftTrigger.intValue++
+            return true
+        }
+        return false
+    }
 
     private val subScreenBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -206,26 +241,26 @@ class TvSettingsFragment : Fragment() {
                 act.onBackPressedDispatcher.onBackPressed()
                 return
             }
-            if (subScreenStack.isNotEmpty()) {
-                subScreenStack.removeAt(subScreenStack.lastIndex)
-                refreshStamp.intValue++
-                updateBackCallback()
-                focusLeftTrigger.intValue++
-            } else if (searchQueryState.value.isNotBlank()) {
-                searchQueryState.value = ""
-                updateBackCallback()
-                focusLeftTrigger.intValue++
+            if (!handleTvBackPress()) {
+                isEnabled = false
+                act?.onBackPressedDispatcher?.onBackPressed()
             }
         }
     }
 
     sealed interface SubScreen {
         val title: String
+        val parentItemKey: String?
 
-        data class Xml(val xmlRes: Int, override val title: String, val highlightKey: String? = null) : SubScreen
-        data class CustomProxies(override val title: String) : SubScreen
-        data class StreamProxies(override val title: String) : SubScreen
-        data class VideoSwaps(override val title: String) : SubScreen
+        data class Xml(
+            val xmlRes: Int,
+            override val title: String,
+            val highlightKey: String? = null,
+            override val parentItemKey: String? = null,
+        ) : SubScreen
+        data class CustomProxies(override val title: String, override val parentItemKey: String? = null) : SubScreen
+        data class StreamProxies(override val title: String, override val parentItemKey: String? = null) : SubScreen
+        data class VideoSwaps(override val title: String, override val parentItemKey: String? = null) : SubScreen
     }
 
     private data class CategorySpec(
@@ -240,6 +275,7 @@ class TvSettingsFragment : Fragment() {
             val key: String,
             val title: String,
             val summary: String?,
+            val valueBadge: String? = null,
             val iconRes: Int,
             val enabled: Boolean,
             val disabledHint: (() -> String)?,
@@ -282,7 +318,8 @@ class TvSettingsFragment : Fragment() {
     }
 
     private fun updateBackCallback() {
-        subScreenBackCallback.isEnabled = subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank()
+        subScreenBackCallback.isEnabled = isResumed && !isHidden &&
+            (subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank() || rightColumnFocusedState.value)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -323,7 +360,7 @@ class TvSettingsFragment : Fragment() {
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, subScreenBackCallback)
         consumePendingSubScreen(context)
         val act = activity as? MainActivity
-        if (act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
+        if (!isHidden && act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
             requestContentFocus()
         }
         val accent = MaterialColors.getColor(
@@ -416,6 +453,17 @@ class TvSettingsFragment : Fragment() {
         }
         reloadProxyCount()
         refreshStamp.intValue++
+        updateBackCallback()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        updateBackCallback()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        updateBackCallback()
     }
 
     fun consumePendingSubScreen(context: Context) {
@@ -480,37 +528,35 @@ class TvSettingsFragment : Fragment() {
         val catIdx = selectedCategoryIndex.intValue
         val activeSub = subScreenStack.lastOrNull()
         val query = searchQueryState.value
+        val returnKey = returnFocusKeyState.value
 
         val leftCategoryRequesters = remember { List(CATEGORIES.size) { FocusRequester() } }
         val searchRequester = remember { FocusRequester() }
         val micRequester = remember { FocusRequester() }
-        val subBackRequester = remember { FocusRequester() }
         val rightFirstRequester = remember { FocusRequester() }
         var focusedLeftSlot by remember { mutableIntStateOf(catIdx) }
         var focusedOnMic by remember { mutableStateOf(false) }
 
         LaunchedEffect(focusLeftTrigger.intValue) {
             if (focusLeftTrigger.intValue > 0) {
-                if (activeSub != null) {
-                    runCatching { subBackRequester.requestFocus() }
-                } else {
-                    runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
-                }
+                runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
             }
         }
         LaunchedEffect(focusRightTrigger.intValue) {
             if (focusRightTrigger.intValue > 0) {
-                delay(30)
-                runCatching { rightFirstRequester.requestFocus() }
+                delay(35)
+                val focusedOk = runCatching { rightFirstRequester.requestFocus() }.getOrDefault(false)
+                if (!focusedOk) {
+                    delay(60)
+                    runCatching { rightFirstRequester.requestFocus() }
+                }
             }
         }
 
         val returnToLeftColumn: () -> Unit = {
-            if (activeSub != null) {
-                runCatching { subBackRequester.requestFocus() }
-            } else {
-                runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
-            }
+            rightColumnFocusedState.value = false
+            updateBackCallback()
+            runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
         }
 
         Row(
@@ -524,6 +570,12 @@ class TvSettingsFragment : Fragment() {
                 modifier = Modifier
                     .width(264.dp)
                     .fillMaxHeight()
+                    .onFocusChanged {
+                        if (it.hasFocus) {
+                            rightColumnFocusedState.value = false
+                            updateBackCallback()
+                        }
+                    }
                     .onPreviewKeyEvent { ev ->
                         if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         when (ev.key) {
@@ -546,19 +598,13 @@ class TvSettingsFragment : Fragment() {
                             Key.DirectionUp -> {
                                 when {
                                     focusedLeftSlot > 0 -> runCatching { leftCategoryRequesters[focusedLeftSlot - 1].requestFocus() }
-                                    focusedLeftSlot == 0 -> runCatching {
-                                        (if (activeSub != null) subBackRequester else searchRequester).requestFocus()
-                                    }
-                                    focusedLeftSlot == -1 -> runCatching { searchRequester.requestFocus() }
+                                    focusedLeftSlot == 0 -> runCatching { searchRequester.requestFocus() }
                                 }
                                 true
                             }
                             Key.DirectionDown -> {
                                 when {
-                                    focusedLeftSlot == -2 -> runCatching {
-                                        (if (activeSub != null) subBackRequester else leftCategoryRequesters.firstOrNull())?.requestFocus()
-                                    }
-                                    focusedLeftSlot == -1 -> runCatching { leftCategoryRequesters.firstOrNull()?.requestFocus() }
+                                    focusedLeftSlot == -2 -> runCatching { leftCategoryRequesters.firstOrNull()?.requestFocus() }
                                     focusedLeftSlot in 0 until CATEGORIES.lastIndex -> runCatching {
                                         leftCategoryRequesters[focusedLeftSlot + 1].requestFocus()
                                     }
@@ -634,6 +680,7 @@ class TvSettingsFragment : Fragment() {
                             modifier = micMod,
                             onClick = {
                                 searchQueryState.value = ""
+                                returnFocusKeyState.value = null
                                 updateBackCallback()
                             },
                         )
@@ -648,29 +695,6 @@ class TvSettingsFragment : Fragment() {
                             },
                         )
                     }
-                }
-
-                if (activeSub != null) {
-                    Spacer(Modifier.height(8.dp))
-                    SubScreenBackPill(
-                        title = activeSub.title,
-                        modifier = Modifier
-                            .focusRequester(subBackRequester)
-                            .onFocusChanged {
-                                if (it.isFocused) {
-                                    focusedLeftSlot = -1
-                                    focusedOnMic = false
-                                }
-                            },
-                        onClick = {
-                            if (subScreenStack.isNotEmpty()) {
-                                subScreenStack.removeAt(subScreenStack.lastIndex)
-                                refreshStamp.intValue++
-                                updateBackCallback()
-                                focusLeftTrigger.intValue++
-                            }
-                        },
-                    )
                 }
 
                 Spacer(Modifier.height(10.dp))
@@ -694,9 +718,10 @@ class TvSettingsFragment : Fragment() {
                                 focusedOnMic = false
                             },
                             onHoverSelect = {
-                                if (selectedCategoryIndex.intValue != index || subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank()) {
+                                if (selectedCategoryIndex.intValue != index || searchQueryState.value.isNotBlank()) {
                                     selectedCategoryIndex.intValue = index
                                     subScreenStack.clear()
+                                    returnFocusKeyState.value = null
                                     searchQueryState.value = ""
                                     updateBackCallback()
                                 }
@@ -704,6 +729,7 @@ class TvSettingsFragment : Fragment() {
                             onClick = {
                                 selectedCategoryIndex.intValue = index
                                 subScreenStack.clear()
+                                returnFocusKeyState.value = null
                                 searchQueryState.value = ""
                                 updateBackCallback()
                                 focusRightTrigger.intValue++
@@ -714,10 +740,23 @@ class TvSettingsFragment : Fragment() {
             }
 
             // Right Column: Active SubScreen, Search Results, or Category Preferences
+            val subBreadcrumb = if (activeSub != null) {
+                buildList {
+                    add(context.getString(CATEGORIES[catIdx].titleRes))
+                    subScreenStack.dropLast(1).forEach { add(it.title) }
+                }.joinToString("  ›  ")
+            } else null
+
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .onFocusChanged {
+                        if (it.hasFocus) {
+                            rightColumnFocusedState.value = true
+                            updateBackCallback()
+                        }
+                    }
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color(0x12FFFFFF))
                     .padding(horizontal = 20.dp, vertical = 16.dp),
@@ -725,16 +764,19 @@ class TvSettingsFragment : Fragment() {
                 when (activeSub) {
                     is SubScreen.CustomProxies -> CustomProxiesSubScreen(
                         title = activeSub.title,
+                        parentBreadcrumb = subBreadcrumb,
                         firstRequester = rightFirstRequester,
                         onNavigateLeft = returnToLeftColumn,
                     )
                     is SubScreen.StreamProxies -> StreamProxiesSubScreen(
                         title = activeSub.title,
+                        parentBreadcrumb = subBreadcrumb,
                         firstRequester = rightFirstRequester,
                         onNavigateLeft = returnToLeftColumn,
                     )
                     is SubScreen.VideoSwaps -> VideoSwapsSubScreen(
                         title = activeSub.title,
+                        parentBreadcrumb = subBreadcrumb,
                         firstRequester = rightFirstRequester,
                         onNavigateLeft = returnToLeftColumn,
                     )
@@ -744,9 +786,10 @@ class TvSettingsFragment : Fragment() {
                         }
                         PreferenceNodesList(
                             headerTitle = activeSub.title,
+                            parentBreadcrumb = subBreadcrumb,
                             nodes = nodes,
                             listKey = "sub_${activeSub.xmlRes}",
-                            highlightKey = activeSub.highlightKey,
+                            highlightKey = returnKey ?: activeSub.highlightKey,
                             firstRequester = rightFirstRequester,
                             onNavigateLeft = returnToLeftColumn,
                         )
@@ -758,6 +801,7 @@ class TvSettingsFragment : Fragment() {
                             }
                             PreferenceNodesList(
                                 headerTitle = "${context.getString(R.string.search)} · \"$query\"",
+                                parentBreadcrumb = null,
                                 nodes = results,
                                 listKey = "search_$query",
                                 highlightKey = null,
@@ -771,9 +815,10 @@ class TvSettingsFragment : Fragment() {
                             }
                             PreferenceNodesList(
                                 headerTitle = context.getString(cat.titleRes),
+                                parentBreadcrumb = null,
                                 nodes = nodes,
                                 listKey = "cat_${cat.xmlRes}",
-                                highlightKey = null,
+                                highlightKey = returnKey,
                                 firstRequester = rightFirstRequester,
                                 onNavigateLeft = returnToLeftColumn,
                             )
@@ -836,37 +881,6 @@ class TvSettingsFragment : Fragment() {
                 contentDescription = null,
                 tint = if (focused) TvColors.onFocused else Color.White,
                 modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-
-    @Composable
-    private fun SubScreenBackPill(title: String, modifier: Modifier, onClick: () -> Unit) {
-        val interaction = remember { MutableInteractionSource() }
-        val focused by interaction.collectIsFocusedAsState()
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (focused) TvColors.focused else TvColors.accent.copy(alpha = 0.22f))
-                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.baseline_arrow_back_black_24),
-                contentDescription = null,
-                tint = if (focused) TvColors.onFocused else TvColors.accent,
-                modifier = Modifier.size(17.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (focused) TvColors.onFocused else Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -942,8 +956,36 @@ class TvSettingsFragment : Fragment() {
     }
 
     @Composable
+    private fun SubScreenHeaderTitle(headerTitle: String, parentBreadcrumb: String?, modifier: Modifier = Modifier) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+        ) {
+            if (!parentBreadcrumb.isNullOrBlank()) {
+                Text(
+                    text = "$parentBreadcrumb  ›  ",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TvColors.secondaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = headerTitle,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+
+    @Composable
     private fun PreferenceNodesList(
         headerTitle: String,
+        parentBreadcrumb: String?,
         nodes: List<PrefNode>,
         listKey: String,
         highlightKey: String?,
@@ -967,15 +1009,7 @@ class TvSettingsFragment : Fragment() {
         }
 
         Column(Modifier.fillMaxSize()) {
-            Text(
-                text = headerTitle,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-            )
+            SubScreenHeaderTitle(headerTitle = headerTitle, parentBreadcrumb = parentBreadcrumb)
             Spacer(Modifier.height(10.dp))
             if (nodes.none { it is PrefNode.Item }) {
                 Box(
@@ -1105,33 +1139,80 @@ class TvSettingsFragment : Fragment() {
                 modifier = Modifier.size(22.dp),
             )
             Spacer(Modifier.width(14.dp))
+            val inlineRightBadge = item.valueBadge?.takeIf { item.summary.isNullOrBlank() && it.length <= 26 && '\n' !in it }
+            val subTitleBadge = item.valueBadge?.takeIf { inlineRightBadge == null }
             Column(Modifier.weight(1f)) {
                 if (!item.locationBreadcrumb.isNullOrBlank()) {
                     Text(
                         text = item.locationBreadcrumb,
                         fontSize = 10.sp,
+                        lineHeight = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (focused) TvColors.onFocused.copy(alpha = 0.7f) else TvColors.accent,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    Spacer(Modifier.height(1.dp))
                 }
                 Text(
                     text = item.title,
                     fontSize = 14.sp,
+                    lineHeight = 18.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (focused) TvColors.onFocused else Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (!subTitleBadge.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                if (focused) TvColors.onFocused.copy(alpha = 0.12f)
+                                else TvColors.accent.copy(alpha = 0.18f)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 2.5.dp)
+                    ) {
+                        Text(
+                            text = subTitleBadge,
+                            fontSize = 11.sp,
+                            lineHeight = 14.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (focused) TvColors.onFocused else TvColors.accent,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
                 if (!item.summary.isNullOrBlank()) {
-                    Text(
-                        text = item.summary,
-                        fontSize = 12.sp,
-                        color = if (focused) TvColors.onFocused.copy(alpha = 0.75f) else TvColors.secondaryText,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Spacer(Modifier.height(5.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier
+                                .width(2.dp)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(1.dp))
+                                .background(
+                                    if (focused) TvColors.onFocused.copy(alpha = 0.30f)
+                                    else TvColors.accent.copy(alpha = 0.48f)
+                                )
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = item.summary,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            color = if (focused) TvColors.onFocused.copy(alpha = 0.78f) else Color(0xBDFFFFFF),
+                            maxLines = 5,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 if (item.kind is Kind.Slider) {
                     Spacer(Modifier.height(6.dp))
@@ -1155,18 +1236,56 @@ class TvSettingsFragment : Fragment() {
                 }
             }
             Spacer(Modifier.width(12.dp))
+            if (!inlineRightBadge.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier
+                        .widthIn(max = 195.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(
+                            if (focused) TvColors.onFocused.copy(alpha = 0.12f)
+                            else Color(0x1EFFFFFF)
+                        )
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (item.key == C.TV_AMBIENT_COLOR && item.kind is Kind.Choice) {
+                        val colorInt = TvAmbient.colorOf(item.kind.value ?: "violet")
+                        if (colorInt != null) {
+                            Box(
+                                Modifier
+                                    .size(11.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(colorInt))
+                                    .border(1.dp, if (focused) TvColors.onFocused else Color(0x66FFFFFF), CircleShape)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                    }
+                    Text(
+                        text = inlineRightBadge,
+                        fontSize = 11.5.sp,
+                        lineHeight = 14.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (focused) TvColors.onFocused else Color(0xEBFFFFFF),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+            }
             when (val k = item.kind) {
-                is Kind.Toggle -> TvListPanel.Switch(k.checked)
+                is Kind.Toggle -> TvListPanel.Switch(k.checked, focused)
                 is Kind.Slider -> {
                     Text(
                         text = k.value.toString(),
                         fontSize = 13.sp,
+                        lineHeight = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (focused) TvColors.onFocused else TvColors.accent,
                     )
                 }
                 is Kind.Choice -> {
-                    if (item.key == C.TV_AMBIENT_COLOR) {
+                    if (inlineRightBadge == null && item.key == C.TV_AMBIENT_COLOR) {
                         val colorInt = TvAmbient.colorOf(k.value ?: "violet")
                         if (colorInt != null) {
                             Box(
@@ -1182,6 +1301,7 @@ class TvSettingsFragment : Fragment() {
                     Text(
                         text = "›",
                         fontSize = 18.sp,
+                        lineHeight = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (focused) TvColors.onFocused else TvColors.secondaryText,
                     )
@@ -1222,6 +1342,7 @@ class TvSettingsFragment : Fragment() {
     @Composable
     private fun CustomProxiesSubScreen(
         title: String,
+        parentBreadcrumb: String?,
         firstRequester: FocusRequester,
         onNavigateLeft: () -> Unit,
     ) {
@@ -1237,7 +1358,7 @@ class TvSettingsFragment : Fragment() {
 
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
                 ActionPillButton(
                     label = "+ ${context.getString(R.string.add_item)}",
                     modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
@@ -1341,6 +1462,7 @@ class TvSettingsFragment : Fragment() {
     @Composable
     private fun StreamProxiesSubScreen(
         title: String,
+        parentBreadcrumb: String?,
         firstRequester: FocusRequester,
         onNavigateLeft: () -> Unit,
     ) {
@@ -1350,7 +1472,7 @@ class TvSettingsFragment : Fragment() {
 
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
                 ActionPillButton(
                     label = "+ ${context.getString(R.string.add_item)}",
                     modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
@@ -1454,6 +1576,7 @@ class TvSettingsFragment : Fragment() {
     @Composable
     private fun VideoSwapsSubScreen(
         title: String,
+        parentBreadcrumb: String?,
         firstRequester: FocusRequester,
         onNavigateLeft: () -> Unit,
     ) {
@@ -1463,7 +1586,7 @@ class TvSettingsFragment : Fragment() {
 
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
                 ActionPillButton(
                     label = "+ ${context.getString(R.string.add_item)}",
                     modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
@@ -1626,6 +1749,7 @@ class TvSettingsFragment : Fragment() {
                     Text(
                         text = title,
                         fontSize = 14.sp,
+                        lineHeight = 18.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (focused) TvColors.onFocused else Color.White,
                         maxLines = 1,
@@ -1635,13 +1759,14 @@ class TvSettingsFragment : Fragment() {
                         Text(
                             text = subtitle,
                             fontSize = 11.sp,
+                            lineHeight = 15.sp,
                             color = if (focused) TvColors.onFocused.copy(alpha = 0.72f) else TvColors.secondaryText,
                         )
                     }
                 }
                 if (showToggle) {
                     Spacer(Modifier.width(8.dp))
-                    TvListPanel.Switch(enabled)
+                    TvListPanel.Switch(enabled, focused)
                 }
             }
             if (canMoveUp) SmallTextChip("↑", onMoveUp)
@@ -1731,6 +1856,7 @@ class TvSettingsFragment : Fragment() {
                 if (item.key.isNotBlank() && seenKeys.contains(item.key)) return@forEach
                 val matches = item.title.lowercase().contains(q) ||
                     item.summary.orEmpty().lowercase().contains(q) ||
+                    item.valueBadge.orEmpty().lowercase().contains(q) ||
                     breadcrumb.lowercase().contains(q)
                 if (matches && seenKeys.add(item.key.ifBlank { dedupKey })) {
                     val targetSub = (sub as? SubScreen.Xml)?.copy(highlightKey = item.key) ?: sub
@@ -1802,7 +1928,8 @@ class TvSettingsFragment : Fragment() {
         }
         if (title.isBlank()) return null
 
-        var summary: String? = raw.summary
+        var summary: String? = raw.summary?.takeIf { it.isNotBlank() && it != "%s" }
+        var valueBadge: String? = null
         val kind: Kind = when (val rk = raw.rawKind) {
             is RawKind.Toggle -> {
                 val checked = when (key) {
@@ -1886,12 +2013,10 @@ class TvSettingsFragment : Fragment() {
                         }
                     }
                 }
-                if (key != C.TV_KEEP_SOUND_ON_LEAVE && (summary.isNullOrBlank() || summary == "%s")) {
-                    val idx = values.indexOf(currentValue)
-                    summary = entries.getOrNull(idx)
-                } else if (key != C.TV_KEEP_SOUND_ON_LEAVE) {
-                    val idx = values.indexOf(currentValue)
-                    entries.getOrNull(idx)?.let { summary = it }
+                val selectedLabel = values.indexOf(currentValue).takeIf { it >= 0 }?.let { entries.getOrNull(it) }
+                valueBadge = selectedLabel
+                if (summary == selectedLabel) {
+                    summary = null
                 }
                 val colors = if (key == C.TV_AMBIENT_COLOR) values.map { TvAmbient.colorOf(it) } else null
                 val subtitle = if (key == C.TV_STREAM_END_ACTION) context.getString(R.string.tv_stream_end_raid_note) else null
@@ -1903,10 +2028,8 @@ class TvSettingsFragment : Fragment() {
                 val selected = if (key.isNotBlank() && prefs.contains(key)) {
                     prefs.getStringSet(key, rk.defaultValues).orEmpty()
                 } else rk.defaultValues
-                if (summary.isNullOrBlank()) {
-                    val labels = values.mapIndexedNotNull { idx, v -> if (v in selected) entries.getOrNull(idx) else null }
-                    summary = if (labels.isEmpty()) context.getString(R.string.disabled_setting) else labels.joinToString(", ")
-                }
+                val labels = values.mapIndexedNotNull { idx, v -> if (v in selected) entries.getOrNull(idx) else null }
+                valueBadge = if (labels.isEmpty()) context.getString(R.string.disabled_setting) else labels.joinToString(", ")
                 Kind.MultiChoice(selected, entries, values)
             }
             is RawKind.Slider -> {
@@ -1921,10 +2044,10 @@ class TvSettingsFragment : Fragment() {
                     prefs.getString(key, rk.defaultText).orEmpty()
                 }
                 when (key) {
-                    C.PLAYER_REWIND -> summary = context.getString(R.string.seconds_full, cur.ifBlank { "10" })
-                    C.PLAYER_FORWARD -> summary = context.getString(R.string.seconds_full, cur.ifBlank { "10" })
+                    C.PLAYER_REWIND -> valueBadge = context.getString(R.string.seconds_full, cur.ifBlank { "10" })
+                    C.PLAYER_FORWARD -> valueBadge = context.getString(R.string.seconds_full, cur.ifBlank { "10" })
                     "update_check_frequency" -> summary = context.getString(R.string.update_check_frequency_summary, cur.ifBlank { "24" })
-                    else -> if (summary.isNullOrBlank() && cur.isNotBlank() && tokenMapping == null) summary = cur
+                    else -> if (cur.isNotBlank() && tokenMapping == null) valueBadge = cur
                 }
                 val numeric = key == C.PLAYER_REWIND || key == C.PLAYER_FORWARD || key == "update_check_frequency"
                 Kind.TextInput(cur, isNumeric = numeric, useTokenPrefs = tokenMapping != null, tokenKey = tokenMapping)
@@ -1933,25 +2056,33 @@ class TvSettingsFragment : Fragment() {
                 when (key) {
                     "tv_favorites" -> {
                         val count = TvFavorites.items.value.size
-                        summary = if (count == 0) context.getString(R.string.tv_favorites_empty) else context.getString(R.string.tv_favorites_count, count)
+                        valueBadge = if (count == 0) context.getString(R.string.tv_favorites_empty) else context.getString(R.string.tv_favorites_count, count)
                     }
-                    "tv_blacklist" -> summary = TvBlacklist.summary(context)
-                    C.TV_PLAYER_CLOCK -> summary = TvClockSettings.summary(context)
-                    C.TV_MULTISTREAM_QUALITY -> summary = TvMultiStreamQuality.summary(context)
-                    C.TV_SWITCHER_ROWS -> summary = TvSwitcherRows.summary(context)
-                    "tv_dpad_shortcuts" -> summary = TvRemoteKeys.dpadSummary(context)
-                    C.TV_CUSTOM_KEYS -> summary = TvRemoteKeys.customKeysSummary(context)
-                    C.TV_HOME_ROWS -> summary = TvHomeRows.summary(context)
-                    C.CHAT_HIGHLIGHTED_USERS -> summary = ChatBlocklist.highlightedSummary(context)
-                    C.CHAT_BLOCKED_USERS -> summary = ChatBlocklist.summary(context)
+                    "tv_blacklist" -> {
+                        val status = TvBlacklist.summary(context)
+                        if (status == context.getString(R.string.tv_blacklist_summary_empty)) {
+                            summary = status
+                        } else {
+                            valueBadge = status
+                        }
+                    }
+                    C.TV_PLAYER_CLOCK -> valueBadge = TvClockSettings.summary(context)
+                    C.TV_MULTISTREAM_QUALITY -> valueBadge = TvMultiStreamQuality.summary(context)
+                    C.TV_SWITCHER_ROWS -> valueBadge = TvSwitcherRows.summary(context)
+                    "tv_dpad_shortcuts" -> valueBadge = TvRemoteKeys.dpadSummary(context)
+                    C.TV_CUSTOM_KEYS -> valueBadge = TvRemoteKeys.customKeysSummary(context)
+                    C.TV_HOME_ROWS -> valueBadge = TvHomeRows.summary(context)
+                    C.CHAT_HIGHLIGHTED_USERS -> valueBadge = ChatBlocklist.highlightedSummary(context)
+                    C.CHAT_BLOCKED_USERS -> valueBadge = ChatBlocklist.summary(context)
                     "custom_proxy_settings" -> {
                         val on = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                         val adsOnly = prefs.getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1"
-                        summary = listOf(
+                        valueBadge = listOf(
                             context.getString(if (on) R.string.tv_proxies_on else R.string.tv_proxies_off),
                             context.getString(if (adsOnly) R.string.tv_proxy_mode_ads else R.string.tv_proxy_mode_always).lowercase(),
                             if (proxyCount == 1) context.getString(R.string.tv_proxies_count_one) else context.getString(R.string.tv_proxies_count, proxyCount),
-                        ).joinToString(" · ") + "\n" + context.getString(R.string.tv_proxies_1440p)
+                        ).joinToString(" · ")
+                        summary = context.getString(R.string.tv_proxies_1440p)
                     }
                     "about_app" -> summary = TvAbout.CREDIT_TEXT
                     "about_device" -> summary = caps.deviceSummary
@@ -1964,6 +2095,7 @@ class TvSettingsFragment : Fragment() {
             key = key,
             title = title,
             summary = summary,
+            valueBadge = valueBadge,
             iconRes = raw.iconRes,
             enabled = enabled,
             disabledHint = disabledHint,
@@ -2139,16 +2271,16 @@ class TvSettingsFragment : Fragment() {
     private fun handleActionClick(context: Context, item: PrefNode.Item) {
         when (item.key) {
             // Sub-screens
-            "player_settings" -> pushXmlSubScreen(R.xml.player_preferences, context.getString(R.string.player_settings))
-            "playback_settings" -> pushXmlSubScreen(R.xml.playback_preferences, context.getString(R.string.playback_settings))
-            "buffer_settings" -> pushXmlSubScreen(R.xml.buffer_preferences, context.getString(R.string.buffer_settings))
-            "player_button_settings" -> pushXmlSubScreen(R.xml.player_button_preferences, context.getString(R.string.player_buttons))
-            "player_menu_settings" -> pushXmlSubScreen(R.xml.player_menu_preferences, context.getString(R.string.player_menu_settings))
-            "ui_settings" -> pushXmlSubScreen(R.xml.ui_preferences, context.getString(R.string.ui_settings))
-            "adblock_settings" -> pushXmlSubScreen(R.xml.adblock_preferences, context.getString(R.string.adblock))
-            "update_settings" -> pushXmlSubScreen(R.xml.update_preferences, context.getString(R.string.update_settings))
-            "api_token_settings" -> pushXmlSubScreen(R.xml.api_token_preferences, context.getString(R.string.api_token_settings))
-            "debug_settings" -> pushXmlSubScreen(R.xml.debug_preferences, context.getString(R.string.debug_settings))
+            "player_settings" -> pushXmlSubScreen(R.xml.player_preferences, context.getString(R.string.player_settings), item.key)
+            "playback_settings" -> pushXmlSubScreen(R.xml.playback_preferences, context.getString(R.string.playback_settings), item.key)
+            "buffer_settings" -> pushXmlSubScreen(R.xml.buffer_preferences, context.getString(R.string.buffer_settings), item.key)
+            "player_button_settings" -> pushXmlSubScreen(R.xml.player_button_preferences, context.getString(R.string.player_buttons), item.key)
+            "player_menu_settings" -> pushXmlSubScreen(R.xml.player_menu_preferences, context.getString(R.string.player_menu_settings), item.key)
+            "ui_settings" -> pushXmlSubScreen(R.xml.ui_preferences, context.getString(R.string.ui_settings), item.key)
+            "adblock_settings" -> pushXmlSubScreen(R.xml.adblock_preferences, context.getString(R.string.adblock), item.key)
+            "update_settings" -> pushXmlSubScreen(R.xml.update_preferences, context.getString(R.string.update_settings), item.key)
+            "api_token_settings" -> pushXmlSubScreen(R.xml.api_token_preferences, context.getString(R.string.api_token_settings), item.key)
+            "debug_settings" -> pushXmlSubScreen(R.xml.debug_preferences, context.getString(R.string.debug_settings), item.key)
             "video_swap_settings" -> {
                 videoSwapViewModel.getVideoSwapItems(
                     context.applicationContext,
@@ -2158,7 +2290,8 @@ class TvSettingsFragment : Fragment() {
                         position = -1,
                     )
                 )
-                subScreenStack.add(SubScreen.VideoSwaps(item.title))
+                returnFocusKeyState.value = null
+                subScreenStack.add(SubScreen.VideoSwaps(item.title, item.key))
                 updateBackCallback()
                 focusRightTrigger.intValue++
             }
@@ -2168,7 +2301,8 @@ class TvSettingsFragment : Fragment() {
                     return
                 }
                 streamProxyViewModel.getProxies()
-                subScreenStack.add(SubScreen.StreamProxies(item.title))
+                returnFocusKeyState.value = null
+                subScreenStack.add(SubScreen.StreamProxies(item.title, item.key))
                 updateBackCallback()
                 focusRightTrigger.intValue++
             }
@@ -2187,7 +2321,8 @@ class TvSettingsFragment : Fragment() {
                         openSettings = {
                             if (isAdded) {
                                 customProxyViewModel.getProxies(context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP))
-                                subScreenStack.add(SubScreen.CustomProxies(item.title))
+                                returnFocusKeyState.value = null
+                                subScreenStack.add(SubScreen.CustomProxies(item.title, item.key))
                                 updateBackCallback()
                                 focusRightTrigger.intValue++
                             }
@@ -2424,8 +2559,9 @@ class TvSettingsFragment : Fragment() {
         }
     }
 
-    private fun pushXmlSubScreen(xmlRes: Int, title: String) {
-        subScreenStack.add(SubScreen.Xml(xmlRes, title))
+    private fun pushXmlSubScreen(xmlRes: Int, title: String, parentItemKey: String? = null) {
+        returnFocusKeyState.value = null
+        subScreenStack.add(SubScreen.Xml(xmlRes, title, parentItemKey = parentItemKey))
         updateBackCallback()
         focusRightTrigger.intValue++
     }
@@ -2600,12 +2736,13 @@ class TvSettingsFragment : Fragment() {
                                 Text(
                                     text = label,
                                     fontSize = 14.sp,
+                                    lineHeight = 18.5.sp,
                                     fontWeight = if (checked || focused) FontWeight.SemiBold else FontWeight.Normal,
                                     color = if (focused) TvColors.onFocused else Color.White,
                                     modifier = Modifier.weight(1f),
                                 )
                                 Spacer(Modifier.width(10.dp))
-                                TvListPanel.Switch(checked)
+                                TvListPanel.Switch(checked, focused)
                             }
                         }
                     }

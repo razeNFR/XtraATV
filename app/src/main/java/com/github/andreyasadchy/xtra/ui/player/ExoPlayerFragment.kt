@@ -31,6 +31,7 @@ import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.hls.HlsManifest
+import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
 import androidx.navigation.fragment.findNavController
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.VideoQuality
@@ -51,9 +52,43 @@ class ExoPlayerFragment : PlayerFragment() {
     private var serviceConnection: ServiceConnection? = null
     private var playerListener: Player.Listener? = null
     private val updateProgressAction = Runnable { if (view != null) updateProgress() }
+    private var lastMutedScanPlaylist: HlsMediaPlaylist? = null
 
     /** TV: the settings or the login were opened over the app, the stream went on and the service stayed bound. */
     private var keptAcrossStop = false
+
+    private fun syncVodMutedSegmentsFromManifest() {
+        val service = playbackService
+        if (service?.type != BasePlaybackService.VIDEO) {
+            if (lastMutedScanPlaylist != null) {
+                lastMutedScanPlaylist = null
+                updateHlsMutedSegments(emptyList())
+            }
+            return
+        }
+        val playlist = (service.player?.currentManifest as? HlsManifest)?.mediaPlaylist ?: return
+        if (playlist === lastMutedScanPlaylist) return
+        lastMutedScanPlaylist = playlist
+        val segments = playlist.segments
+        if (segments.isEmpty()) {
+            updateHlsMutedSegments(emptyList())
+            return
+        }
+        val merged = ArrayList<Pair<Long, Long>>()
+        for (seg in segments) {
+            if (!seg.url.contains("-muted", ignoreCase = true)) continue
+            val startMs = (seg.relativeStartTimeUs / 1_000L).coerceAtLeast(0L)
+            val endMs = ((seg.relativeStartTimeUs + seg.durationUs) / 1_000L).coerceAtLeast(startMs)
+            if (endMs <= startMs) continue
+            val last = merged.lastOrNull()
+            if (last != null && startMs <= last.second + 1_000L) {
+                merged[merged.lastIndex] = last.first to maxOf(last.second, endMs)
+            } else {
+                merged.add(startMs to endMs)
+            }
+        }
+        updateHlsMutedSegments(merged)
+    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -211,6 +246,7 @@ class ExoPlayerFragment : PlayerFragment() {
                         binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
                     }
                 }
+                syncVodMutedSegmentsFromManifest()
                 updateProgress()
             }
 
@@ -245,6 +281,7 @@ class ExoPlayerFragment : PlayerFragment() {
 
             override fun loaded() {
                 if (view != null) {
+                    syncVodMutedSegmentsFromManifest()
                     with(binding.playerControls) {
                         quality.isEnabled = true
                         quality.setColorFilter(Color.WHITE)
@@ -504,7 +541,7 @@ class ExoPlayerFragment : PlayerFragment() {
         return lines.joinToString("\n")
     }
 
-    override fun getCurrentPosition() = playbackService?.videoStartPosition ?: playbackService?.player?.currentPosition
+    override fun getCurrentPosition() = playbackService?.getDisplayPositionMs()
 
     override fun getLivePictureTime(): Long? {
         val service = playbackService ?: return null
@@ -584,13 +621,10 @@ class ExoPlayerFragment : PlayerFragment() {
             if (!progressBar.isPressed) {
                 val service = playbackService
                 val isVideo = service?.type == BasePlaybackService.VIDEO
-                // a video still loading (its playlist, or its first segments): the position it starts at, not 00:00
-                val startPosition = if (isVideo && (service.player?.currentMediaItem == null || service.player?.playbackState != Player.STATE_READY)) {
-                    service.videoStartPosition ?: service.savedPosition
-                } else {
-                    service?.videoStartPosition
+                if (isVideo) {
+                    syncVodMutedSegmentsFromManifest()
                 }
-                val currentPosition = startPosition ?: service?.player?.currentPosition ?: 0
+                val currentPosition = service?.getDisplayPositionMs() ?: 0L
                 val totalDuration = getTotalDuration()?.takeIf { it > 0 }
                 totalDuration?.let { maxOf(it, currentPosition) }?.let {
                     progressBar.setDuration(it)
@@ -598,7 +632,10 @@ class ExoPlayerFragment : PlayerFragment() {
                 }
                 position.text = DateUtils.formatElapsedTime(currentPosition / 1000)
                 progressBar.setPosition(currentPosition)
-                progressBar.setBufferedPosition(playbackService?.player?.bufferedPosition ?: 0)
+                val rawBuffered = playbackService?.player?.bufferedPosition ?: 0L
+                progressBar.setBufferedPosition(
+                    if (service?.pendingSeekPosition != null) maxOf(currentPosition, rawBuffered) else rawBuffered
+                )
                 root.removeCallbacks(updateProgressAction)
                 if (root.isVisible) {
                     val player = playbackService?.player
@@ -818,6 +855,7 @@ class ExoPlayerFragment : PlayerFragment() {
     }
 
     override fun onDestroyView() {
+        lastMutedScanPlaylist = null
         binding.playerControls.root.removeCallbacks(updateProgressAction)
         if (keptAcrossStop) {
             // the screen is made again (a setting changed): the service is let go here, the new player binds it again

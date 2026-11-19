@@ -31,7 +31,7 @@ class TvStatsFragment : Fragment() {
     ): View {
         val context = requireContext()
         val act = activity as? MainActivity
-        if (act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
+        if (!isHidden && act?.isTvMenuOpen() != true && act?.isTvPlayerOverContent() != true) {
             focusTrigger.intValue++
         }
         val accent = com.google.android.material.color.MaterialColors.getColor(

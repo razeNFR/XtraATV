@@ -211,7 +211,7 @@ class SavedPagerFragment : Fragment(), Scrollable, FragmentHost {
                 )
                 firstLaunch = false
             }
-            viewPager.offscreenPageLimit = adapter.itemCount
+            viewPager.offscreenPageLimit = if (resources.getBoolean(R.bool.isTv)) 1 else adapter.itemCount
             viewPager.reduceDragSensitivity()
             TabLayoutMediator(tabLayout, viewPager) { tab, position ->
                 tab.text = when (tabs.getOrNull(position)) {

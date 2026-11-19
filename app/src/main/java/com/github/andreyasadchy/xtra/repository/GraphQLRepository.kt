@@ -641,8 +641,8 @@ class GraphQLRepository(
         val query = VideoCommentsQuery(
             id = Optional.Present(videoId),
             first = Optional.Present(100),
-            after = Optional.Present(cursor),
-            offset = if (offset != null) Optional.Present(offset) else Optional.Absent,
+            after = if (!cursor.isNullOrBlank()) Optional.Present(cursor) else Optional.Absent,
+            offset = if (offset != null && cursor.isNullOrBlank()) Optional.Present(offset) else Optional.Absent,
         )
         sendQuery(networkLibrary, headers, query)
     }
@@ -652,8 +652,8 @@ class GraphQLRepository(
         val query = VideoCommentsQuery(
             id = Optional.Present(videoId),
             first = Optional.Present(100),
-            after = Optional.Present(cursor),
-            offset = if (offset != null) Optional.Present(offset) else Optional.Absent,
+            after = if (!cursor.isNullOrBlank()) Optional.Present(cursor) else Optional.Absent,
+            offset = if (offset != null && cursor.isNullOrBlank()) Optional.Present(offset) else Optional.Absent,
         )
         val body = buildJsonString {
             query.apply {
@@ -1231,9 +1231,12 @@ class GraphQLRepository(
             }
             put("operationName", "VideoCommentsByOffsetOrCursor")
             putJsonObject("variables") {
-                put("cursor", cursor)
-                put("contentOffsetSeconds", offset)
                 put("videoID", videoId)
+                if (!cursor.isNullOrBlank()) {
+                    put("cursor", cursor)
+                } else if (offset != null) {
+                    put("contentOffsetSeconds", offset)
+                }
             }
         }.toString()
     }
@@ -1257,6 +1260,97 @@ class GraphQLRepository(
             }
         }.toString()
         json.decodeFromString<VideoGamesResponse>(sendPersistedQuery(networkLibrary, headers, body))
+    }
+
+    private fun parseMutedSegmentsResponse(rawText: String): List<Pair<Long, Long>>? {
+        val parsed = runCatching { json.parseToJsonElement(rawText) }.getOrNull() ?: return null
+        val root = (parsed as? JsonObject) ?: ((parsed as? JsonArray)?.firstOrNull() as? JsonObject) ?: return null
+        val hasErrors = (root["errors"] as? JsonArray)?.isNotEmpty() == true
+        val videoObj = (root["data"] as? JsonObject)?.get("video") as? JsonObject
+        if (videoObj == null) {
+            return if (hasErrors) null else emptyList()
+        }
+        if ("muteInfo" !in videoObj) {
+            return null
+        }
+        val muteInfoObj = videoObj["muteInfo"] as? JsonObject ?: return emptyList()
+        val connObj = muteInfoObj["mutedSegmentConnection"] as? JsonObject ?: return emptyList()
+        val nodes = connObj["nodes"] as? JsonArray ?: return emptyList()
+        val rawRanges = ArrayList<Pair<Long, Long>>(nodes.size)
+        for (element in nodes) {
+            val node = element as? JsonObject ?: continue
+            val offsetSec = (node["offset"] as? JsonPrimitive)?.intOrNull ?: continue
+            val durationSec = (node["duration"] as? JsonPrimitive)?.intOrNull ?: continue
+            if (offsetSec >= 0 && durationSec > 0) {
+                val startMs = offsetSec * 1000L
+                val endMs = (offsetSec + durationSec) * 1000L
+                rawRanges.add(startMs to endMs)
+            }
+        }
+        if (rawRanges.isEmpty()) return emptyList()
+        rawRanges.sortBy { it.first }
+        val merged = ArrayList<Pair<Long, Long>>(rawRanges.size)
+        for ((startMs, endMs) in rawRanges) {
+            val last = merged.lastOrNull()
+            if (last != null && startMs <= last.second + 2_000L) {
+                merged[merged.lastIndex] = last.first to maxOf(last.second, endMs)
+            } else {
+                merged.add(startMs to endMs)
+            }
+        }
+        return merged
+    }
+
+    suspend fun loadVideoMutedSegments(
+        networkLibrary: String?,
+        webHeaders: Map<String, String>,
+        fallbackHeaders: Map<String, String>,
+        videoId: String?,
+    ): List<Pair<Long, Long>>? = withContext(Dispatchers.IO) {
+        if (videoId.isNullOrBlank()) return@withContext emptyList()
+        val persistedBody = buildJsonObject {
+            put("operationName", "VideoPlayer_MutedSegmentsAlertOverlay")
+            putJsonObject("variables") {
+                put("vodID", videoId)
+                put("includePrivate", false)
+            }
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", "c36e7400657815f4704e6063d265dff766ed8fc1590361c6d71e4368805e0b49")
+                }
+            }
+        }.toString()
+
+        runCatching {
+            parseMutedSegmentsResponse(sendPersistedQuery(networkLibrary, webHeaders, persistedBody))
+        }.getOrNull()?.let { return@withContext it }
+
+        if (fallbackHeaders.isNotEmpty() && fallbackHeaders[C.HEADER_CLIENT_ID] != webHeaders[C.HEADER_CLIENT_ID]) {
+            runCatching {
+                parseMutedSegmentsResponse(sendPersistedQuery(networkLibrary, fallbackHeaders, persistedBody))
+            }.getOrNull()?.let { return@withContext it }
+        }
+
+        val rawBody = buildJsonObject {
+            put("operationName", "VodMuteInfo")
+            put("query", "query VodMuteInfo(\$id: ID!) { video(id: \$id) { id muteInfo { mutedSegmentConnection { nodes { offset duration } } } } }")
+            putJsonObject("variables") {
+                put("id", videoId)
+            }
+        }.toString()
+
+        runCatching {
+            parseMutedSegmentsResponse(sendPersistedQuery(networkLibrary, webHeaders, rawBody))
+        }.getOrNull()?.let { return@withContext it }
+
+        val mobileHeaders = webHeaders.toMutableMap().apply {
+            put(C.HEADER_CLIENT_ID, "ue6666qo983tsx6so1t0vnawi233wa")
+            remove(C.HEADER_TOKEN)
+        }
+        runCatching {
+            parseMutedSegmentsResponse(sendPersistedQuery(networkLibrary, mobileHeaders, rawBody))
+        }.getOrNull()
     }
 
     suspend fun loadChannelViewerList(networkLibrary: String?, headers: Map<String, String>, channelLogin: String?): ChannelViewerListResponse = withContext(Dispatchers.IO) {
