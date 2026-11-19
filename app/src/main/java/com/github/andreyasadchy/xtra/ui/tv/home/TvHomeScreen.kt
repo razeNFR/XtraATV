@@ -428,7 +428,7 @@ fun TvHomeScreen(
             done()
         }
     }
-    val compactRail = remember { homeContext.prefs().getBoolean(C.TV_COMPACT_RAIL, true) }
+    val compactRail = homeContext.prefs().getBoolean(C.TV_COMPACT_RAIL, true)
     val startInset = if (compactRail) 16.dp else 48.dp
     val endInset = 48.dp
     LaunchedEffect(showStatsBadge) {

@@ -318,9 +318,12 @@ class MainActivity : AppCompatActivity() {
                 binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
             }
             com.github.andreyasadchy.xtra.ui.tv.TvAmbient.setDynamicListener(tvAmbientListener)
-            applyTvNavHostPadding(false)
+            applyTvNavHostPadding()
             supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
+                    if (f.parentFragment is NavHostFragment && f !is androidx.fragment.app.DialogFragment) {
+                        applyTvFragmentPadding(f, v)
+                    }
                     TvUi.adapt(v, hideToolbarActions = true)
                     if (f is androidx.fragment.app.DialogFragment) {
                         v.post { TvUi.adaptDialog(v) }
@@ -1359,8 +1362,9 @@ class MainActivity : AppCompatActivity() {
     fun isTvMenuOpen() = isTv && isTvMenuShown
     private fun isCompactRailEnabled() = isTv && prefs.getBoolean(C.TV_COMPACT_RAIL, true)
 
-    private fun applyTvNavHostPadding(isHome: Boolean) {
+    private fun applyTvFragmentPadding(f: Fragment, v: View) {
         if (!isTv) return
+        val isHome = f is com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment
         val density = resources.displayMetrics.density
         val overscan = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
         val start = when {
@@ -1370,14 +1374,34 @@ class MainActivity : AppCompatActivity() {
             else -> overscan
         }
         val end = if (isHome) 0 else overscan
-        if (binding.navHostFragment.paddingStart != start || binding.navHostFragment.paddingEnd != end) {
+        (v as? ViewGroup)?.apply {
+            clipToPadding = false
+            clipChildren = false
+        }
+        if (v.paddingStart != start || v.paddingEnd != end) {
+            v.setPaddingRelative(start, v.paddingTop, end, v.paddingBottom)
+        }
+    }
+
+    private fun applyTvNavHostPadding() {
+        if (!isTv) return
+        binding.navHostFragment.clipToPadding = false
+        binding.navHostFragment.clipChildren = false
+        if (binding.navHostFragment.paddingStart != 0 || binding.navHostFragment.paddingEnd != 0) {
             binding.navHostFragment.setPaddingRelative(
-                start,
+                0,
                 binding.navHostFragment.paddingTop,
-                end,
+                0,
                 binding.navHostFragment.paddingBottom,
             )
         }
+        supportFragmentManager.findFragmentById(R.id.navHostFragment)
+            ?.childFragmentManager?.fragments
+            ?.forEach { f ->
+                if (f !is androidx.fragment.app.DialogFragment) {
+                    f.view?.let { v -> applyTvFragmentPadding(f, v) }
+                }
+            }
     }
     private var tvInitialFocusDone = false
 
@@ -2104,7 +2128,7 @@ class MainActivity : AppCompatActivity() {
             binding.navBar.selectedItemId = prevSelected
         }
         setupTvSideMenu()
-        applyTvNavHostPadding(::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment)
+        applyTvNavHostPadding()
         if (!isTvMenuShown) {
             hideTvMenu()
         }
@@ -3737,7 +3761,6 @@ class MainActivity : AppCompatActivity() {
                     tintTvCards(binding.navHostFragment, onlyVisible = true)
                     (playerFragment as? PlayerFragment)?.refreshTvMinimizedBorderColor()
                 }
-                applyTvNavHostPadding(destination.id == R.id.tvHomeFragment)
                 updateTvMenuBackCallback()
                 if (destination.id != R.id.followPagerFragment) {
                     tvMenuExtraSelected = null

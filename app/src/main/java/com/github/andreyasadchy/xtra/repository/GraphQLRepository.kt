@@ -641,8 +641,8 @@ class GraphQLRepository(
         val query = VideoCommentsQuery(
             id = Optional.Present(videoId),
             first = Optional.Present(100),
-            after = Optional.Present(cursor),
-            offset = if (offset != null) Optional.Present(offset) else Optional.Absent,
+            after = if (!cursor.isNullOrBlank()) Optional.Present(cursor) else Optional.Absent,
+            offset = if (offset != null && cursor.isNullOrBlank()) Optional.Present(offset) else Optional.Absent,
         )
         sendQuery(networkLibrary, headers, query)
     }
@@ -652,8 +652,8 @@ class GraphQLRepository(
         val query = VideoCommentsQuery(
             id = Optional.Present(videoId),
             first = Optional.Present(100),
-            after = Optional.Present(cursor),
-            offset = if (offset != null) Optional.Present(offset) else Optional.Absent,
+            after = if (!cursor.isNullOrBlank()) Optional.Present(cursor) else Optional.Absent,
+            offset = if (offset != null && cursor.isNullOrBlank()) Optional.Present(offset) else Optional.Absent,
         )
         val body = buildJsonString {
             query.apply {
@@ -1231,9 +1231,12 @@ class GraphQLRepository(
             }
             put("operationName", "VideoCommentsByOffsetOrCursor")
             putJsonObject("variables") {
-                put("cursor", cursor)
-                put("contentOffsetSeconds", offset)
                 put("videoID", videoId)
+                if (!cursor.isNullOrBlank()) {
+                    put("cursor", cursor)
+                } else if (offset != null) {
+                    put("contentOffsetSeconds", offset)
+                }
             }
         }.toString()
     }

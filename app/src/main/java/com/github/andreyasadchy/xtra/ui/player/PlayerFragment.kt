@@ -1523,6 +1523,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             .replace(R.id.chatFragmentContainer, fragment)
             .commitAllowingStateLoss()
         chatFragment = fragment
+        binding.root.post {
+            if (chatFragment === fragment && fragment.isAdded) {
+                if (playbackService?.type != BasePlaybackService.STREAM) {
+                    fragment.startReplayChatLoad()
+                }
+                fragment.onChatShown()
+            }
+        }
         Toast.makeText(ctx, R.string.tv_chat_restarted, Toast.LENGTH_SHORT).show()
     }
 
@@ -1909,6 +1917,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 applyTvChatLayout()
                 chatLayout.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 chatLayout.visibility = View.VISIBLE
+                chatFragment?.onChatShown()
                 return
             }
             playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
@@ -1922,6 +1931,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 gravity = Gravity.END
             }
             chatLayout.visibility = View.VISIBLE
+            chatFragment?.onChatShown()
         }
     }
 

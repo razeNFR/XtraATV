@@ -992,6 +992,39 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        syncAdapterAndScroll()
+    }
+
+    @Suppress("NotifyDataSetChanged")
+    private fun syncAdapterAndScroll() {
+        val b = _binding ?: return
+        val ad = adapter ?: return
+        ad.notifyDataSetChanged()
+        if (!isChatTouched && b.btnDown.isGone) {
+            val lastIndex = synchronized(viewModel.chatMessages) { viewModel.chatMessages.lastIndex }
+            if (lastIndex >= 0) {
+                b.recyclerView.post {
+                    if (_binding != null && !isChatTouched && b.btnDown.isGone) {
+                        val idx = synchronized(viewModel.chatMessages) { viewModel.chatMessages.lastIndex }
+                        if (idx >= 0) {
+                            b.recyclerView.scrollToPosition(idx)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun onChatShown() {
+        if (!isAdded) return
+        syncAdapterAndScroll()
+        if (!requireArguments().getBoolean(KEY_IS_LIVE)) {
+            viewModel.syncReplayWithPlayer()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         val args = requireArguments()

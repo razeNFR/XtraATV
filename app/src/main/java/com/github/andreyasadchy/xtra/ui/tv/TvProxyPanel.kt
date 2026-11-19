@@ -137,7 +137,7 @@ object TvProxyPanel {
                                 color = if (focused) TvColors.onFocused else Color.White,
                                 modifier = Modifier.weight(1f),
                             )
-                            TvListPanel.Switch(if (!anyProxyOn) true else swapAdblock)
+                            TvListPanel.Switch(if (!anyProxyOn) true else swapAdblock, focused)
                         }
                     }
                     Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp), {
@@ -164,7 +164,7 @@ object TvProxyPanel {
                                 color = if (focused) TvColors.onFocused else Color.White,
                                 modifier = Modifier.weight(1f),
                             )
-                            TvListPanel.Switch(expAdblock)
+                            TvListPanel.Switch(expAdblock, focused)
                         }
                     }
                 }
@@ -196,7 +196,7 @@ object TvProxyPanel {
                             color = if (focused) TvColors.onFocused else Color.White,
                             modifier = Modifier.weight(1f),
                         )
-                        TvListPanel.Switch(useProxies)
+                        TvListPanel.Switch(useProxies, focused)
                     }
                 }
                 if (!expAdblock) {
@@ -301,7 +301,7 @@ object TvProxyPanel {
                                 color = if (focused) TvColors.onFocused else Color.White,
                                 modifier = Modifier.weight(1f),
                             )
-                            TvListPanel.Switch(useStreamProxies)
+                            TvListPanel.Switch(useStreamProxies, focused)
                         }
                     }
                     if (!expAdblock) {

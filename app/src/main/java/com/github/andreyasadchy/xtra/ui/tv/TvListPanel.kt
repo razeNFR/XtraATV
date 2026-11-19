@@ -188,7 +188,7 @@ object TvListPanel {
                     )
                     if (showSwitch) {
                         Spacer(Modifier.size(10.dp))
-                        Switch(enabled)
+                        Switch(enabled, focused)
                     }
                 }
             }
@@ -217,15 +217,25 @@ object TvListPanel {
     }
 
     @Composable
-    fun Switch(on: Boolean) {
+    fun Switch(on: Boolean, focused: Boolean = false) {
+        val trackColor = when {
+            on -> TvColors.accent
+            focused -> TvColors.onFocused.copy(alpha = 0.24f)
+            else -> Color(0x55FFFFFF)
+        }
+        val thumbColor = when {
+            on -> Color.White
+            focused -> TvColors.onFocused
+            else -> Color.White
+        }
         Box(
             Modifier
                 .size(width = 40.dp, height = 22.dp)
                 .clip(RoundedCornerShape(11.dp))
-                .background(if (on) TvColors.accent else Color(0x55FFFFFF)),
+                .background(trackColor),
             contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
         ) {
-            Box(Modifier.padding(3.dp).size(16.dp).clip(RoundedCornerShape(8.dp)).background(Color.White))
+            Box(Modifier.padding(3.dp).size(16.dp).clip(RoundedCornerShape(8.dp)).background(thumbColor))
         }
     }
 
