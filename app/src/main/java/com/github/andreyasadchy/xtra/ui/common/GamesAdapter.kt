@@ -109,6 +109,35 @@ class GamesAdapter(
                                         }
                                     )
                                 }
+                                if (!item.id.isNullOrBlank() || !item.slug.isNullOrBlank() || !item.name.isNullOrBlank()) {
+                                    val catBlocked = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(item.id, item.slug, item.name)
+                                    val catLabel = item.name ?: item.slug ?: ""
+                                    add(
+                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                                            context.getString(
+                                                if (catBlocked) R.string.tv_blacklist_unhide_category else R.string.tv_blacklist_hide_category,
+                                                catLabel,
+                                            ),
+                                            R.drawable.tv_ic_block,
+                                        ) {
+                                            if (catBlocked) {
+                                                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.unblockCategory(context, item.id, item.slug, item.name)
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.tv_blacklist_category_unhidden, catLabel),
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                            } else {
+                                                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.blockCategory(context, item.id, item.slug, item.name, item.boxArtURL)
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.tv_blacklist_category_hidden, catLabel),
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                            }
+                                        }
+                                    )
+                                }
                             }
                             com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(context, item.name ?: "", actions)
                             true

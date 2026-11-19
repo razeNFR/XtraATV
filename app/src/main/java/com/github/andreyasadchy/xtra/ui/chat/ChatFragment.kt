@@ -603,6 +603,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                     viewModel.pollTimer?.cancel()
                                     viewModel.pollClosed = true
                                     viewModel.hidePoll.value = false
+                                    (parentFragment as? PlayerFragment)?.onTvPollHidden()
                                 }
                             }
                         }
@@ -622,7 +623,9 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.poll.collectLatest { poll ->
                                 if (poll != null) {
-                                    if (!viewModel.pollClosed) {
+                                    (parentFragment as? PlayerFragment)?.onTvPollEvent(poll)
+                                    val showChatBanner = requireContext().prefs().getBoolean(C.CHAT_POLLS_SHOW, true)
+                                    if (!viewModel.pollClosed && showChatBanner) {
                                         when (poll.status) {
                                             "ACTIVE" -> {
                                                 pollLayout.visibility = View.VISIBLE
@@ -674,6 +677,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.pollSecondsLeft.collectLatest {
+                                (parentFragment as? PlayerFragment)?.onTvPollSecondsLeft(it)
                                 if (it != null) {
                                     pollStatus.text = getString(R.string.remaining_time, DateUtils.formatElapsedTime(it.toLong()))
                                     if (it <= 0) {
@@ -692,7 +696,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                     viewModel.predictionTimer?.cancel()
                                     viewModel.predictionClosed = true
                                     viewModel.hidePrediction.value = false
-                                    (parentFragment as? PlayerFragment)?.onTvPredictionHidden()
+                                    (parentFragment as? PlayerFragment)?.onTvPredictionHidden(clearActive = true)
                                 }
                             }
                         }
@@ -702,14 +706,15 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         viewModel.predictionSecondsLeft.value = null
                         viewModel.predictionTimer?.cancel()
                         viewModel.predictionClosed = true
-                        (parentFragment as? PlayerFragment)?.onTvPredictionHidden()
+                        (parentFragment as? PlayerFragment)?.onTvPredictionHidden(clearActive = false)
                     }
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.prediction.collectLatest { prediction ->
                                 if (prediction != null) {
-                                    if (!viewModel.predictionClosed) {
-                                        (parentFragment as? PlayerFragment)?.onTvPredictionEvent(prediction)
+                                    (parentFragment as? PlayerFragment)?.onTvPredictionEvent(prediction)
+                                    val showChatBanner = requireContext().prefs().getBoolean(C.CHAT_PREDICTIONS_SHOW, true)
+                                    if (!viewModel.predictionClosed && showChatBanner) {
                                         when (prediction.status) {
                                             "ACTIVE" -> {
                                                 predictionLayout.visibility = View.VISIBLE
@@ -778,7 +783,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                 viewModel.predictionSecondsLeft.value = null
                                                 viewModel.predictionTimer?.cancel()
                                                 viewModel.predictionClosed = true
-                                                (parentFragment as? PlayerFragment)?.onTvPredictionHidden()
+                                                (parentFragment as? PlayerFragment)?.onTvPredictionHidden(clearActive = true)
                                             }
                                         }
                                     }

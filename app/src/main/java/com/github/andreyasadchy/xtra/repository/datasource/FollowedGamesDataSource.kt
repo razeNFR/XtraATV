@@ -64,7 +64,7 @@ class FollowedGamesDataSource(
         }
         list.sortBy { it.name }
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterGames(list),
             prevKey = null,
             nextKey = null
         )

@@ -1,7 +1,11 @@
 package com.github.andreyasadchy.xtra.ui.tv
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -17,29 +21,46 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +68,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /** [sub]: an entry of the section above it (the tabs of the followed channels under "Following"), smaller and moved in, named [label]. */
 class TvMenuItem(val id: Int, val title: String, val icon: Int?, val group: Int, val sub: Boolean = false, val label: String = title)
@@ -72,10 +95,18 @@ class TvMenuState {
     var onFocusItem: (Int) -> Unit = {}
 
     /**
-     * The focus is wanted in the menu while its entries are not there yet (the icon rail is unfolding): they take it
-     * as soon as they are shown. Without it the first "left" opened the menu and a second one was needed to enter it.
+     * The focus is wanted in the menu while its entries are not there yet (the icon rail is unfolding) or while the
+     * AndroidComposeView is acquiring View focus from a Compose page: they take it cleanly on the next frame.
      */
     var pendingFocus by mutableStateOf(false)
+    var focusRequestToken by mutableIntStateOf(0)
+    var suppressFocusCallback = false
+
+    fun requestFocusSelected() {
+        suppressFocusCallback = true
+        pendingFocus = true
+        focusRequestToken++
+    }
 
     /** Moves the focus to the screen being shown, else to the first entry. False when no entry could take it. */
     fun focusSelected(): Boolean {
@@ -98,6 +129,13 @@ class TvMenuState {
     }
 }
 
+private data class MenuPillBounds(
+    val topY: Float,
+    val heightPx: Float,
+    val startXPx: Float,
+    val cornerPx: Float,
+)
+
 /**
  * Leanback side menu: the account at the top, search, the sections, then the settings.
  * It scrolls with the focus, up and down stop at its ends, right goes back to the screen (handled by the activity).
@@ -107,12 +145,20 @@ class TvMenuState {
 @Composable
 fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     val collapsed = state.collapsed
-    // 0: the rail of icons, 1: the menu open
-    val open by androidx.compose.animation.core.animateFloatAsState(
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    var scrollJob by remember { mutableStateOf<Job?>(null) }
+    val itemBounds = remember { mutableMapOf<Int, Pair<Int, Int>>() }
+    val slotBounds = remember { mutableMapOf<FocusRequester, Pair<Int, Int>>() }
+    val entryPillBounds = remember { mutableStateMapOf<Int, MenuPillBounds>() }
+    // 0: the rail of icons, 1: the menu open — read strictly inside Draw/graphicsLayer lambdas to avoid per-frame relayout
+    val openState = animateFloatAsState(
         targetValue = if (collapsed) 0f else 1f,
-        animationSpec = androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        animationSpec = tween(200, easing = FastOutSlowInEasing),
         label = "menuOpen"
     )
+    val settledCollapsed by remember { derivedStateOf { collapsed && openState.value <= 0.001f } }
+    val openProvider: () -> Float = { openState.value }
     // as wide as its longest name needs, no more (the names differ with the language and the shortcuts shown)
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -136,21 +182,74 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         }
         (widest + MENU_PADDING * 2).coerceIn(212.dp, 320.dp)
     }
-    val menuWidth = RAIL_WIDTH + (fullWidth - RAIL_WIDTH) * open
+    val verticalPadPx = with(density) { 24.dp.roundToPx() }
+    val scrollMarginPx = with(density) { 56.dp.roundToPx() }
+    val subIndentPx = with(density) { 30.dp.toPx() }
+    val accountCornerPx = with(density) { 16.dp.toPx() }
+    val itemCornerPx = with(density) { 14.dp.toPx() }
     // the entry that has the focus, by its requester: its place among the entries is looked up when a key comes. A place
     // kept as a number went wrong when the menu opened with a stream kept playing: the focus came before the "now
     // playing" card was put in, the number was 2 short and up / down jumped over entries
     var focusedRequester by remember { mutableStateOf<FocusRequester?>(null) }
-    if (state.pendingFocus && !collapsed) {
-        // the entries were just put back (rail unfolded): the focus as soon as one of them can take it
-        androidx.compose.runtime.LaunchedEffect(Unit) {
+    var focusedEntryId by remember { mutableIntStateOf(0) }
+    var menuHasFocus by remember { mutableStateOf(false) }
+
+    val pillTop = remember { Animatable(0f) }
+    val pillHeight = remember { Animatable(0f) }
+    val pillStart = remember { Animatable(0f) }
+    val pillCorner = remember { Animatable(0f) }
+    var pillInitialized by remember { mutableStateOf(false) }
+
+    val activePillBounds = if (menuHasFocus && !collapsed && focusedEntryId != 0) entryPillBounds[focusedEntryId] else null
+    LaunchedEffect(activePillBounds) {
+        if (activePillBounds == null) {
+            pillInitialized = false
+            return@LaunchedEffect
+        }
+        if (!pillInitialized) {
+            pillTop.snapTo(activePillBounds.topY)
+            pillHeight.snapTo(activePillBounds.heightPx)
+            pillStart.snapTo(activePillBounds.startXPx)
+            pillCorner.snapTo(activePillBounds.cornerPx)
+            pillInitialized = true
+        } else {
+            val spec = spring<Float>(stiffness = 1400f, dampingRatio = 0.92f)
+            launch { pillTop.animateTo(activePillBounds.topY, spec) }
+            launch { pillHeight.animateTo(activePillBounds.heightPx, spec) }
+            launch { pillStart.animateTo(activePillBounds.startXPx, spec) }
+            launch { pillCorner.animateTo(activePillBounds.cornerPx, spec) }
+        }
+    }
+
+    LaunchedEffect(state.focusRequestToken, collapsed) {
+        if (!state.pendingFocus || collapsed) return@LaunchedEffect
+        try {
             repeat(20) {
-                androidx.compose.runtime.withFrameNanos { }
-                if (!state.pendingFocus || state.focusSelected()) {
+                withFrameNanos { }
+                if (!state.pendingFocus || collapsed) return@LaunchedEffect
+                val targetId = state.selected
+                itemBounds[targetId]?.let { (topY, h) ->
+                    val viewport = scrollState.viewportSize
+                    if (viewport > 0) {
+                        val topInScroll = topY + verticalPadPx
+                        val bottomInScroll = topInScroll + h + 32
+                        val desired = when {
+                            bottomInScroll > scrollState.value + viewport -> (bottomInScroll - viewport).coerceAtMost(scrollState.maxValue)
+                            topInScroll < scrollState.value -> (topInScroll - 24).coerceAtLeast(0)
+                            else -> scrollState.value
+                        }
+                        if (desired != scrollState.value) {
+                            scrollState.scrollTo(desired)
+                        }
+                    }
+                }
+                if (state.focusSelected() && (state.focusedId == targetId || state.requesters[targetId] == null)) {
                     state.pendingFocus = false
                     return@LaunchedEffect
                 }
             }
+        } finally {
+            state.suppressFocusCallback = false
             state.pendingFocus = false
         }
     }
@@ -171,6 +270,33 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
             add(state.requesters.getOrPut(item.id) { FocusRequester() })
         }
     }
+    fun smoothKeepSlotVisible(nextIndex: Int, requester: FocusRequester) {
+        val viewport = scrollState.viewportSize
+        val maxScroll = scrollState.maxValue
+        if (viewport <= 0 || maxScroll <= 0) return
+        val desired = when {
+            nextIndex <= 0 -> 0
+            nextIndex >= slots.lastIndex -> maxScroll
+            else -> {
+                val bounds = slotBounds[requester] ?: return
+                val topInScroll = bounds.first + verticalPadPx
+                val bottomInScroll = topInScroll + bounds.second
+                when {
+                    topInScroll - scrollMarginPx < scrollState.value ->
+                        (topInScroll - scrollMarginPx).coerceAtLeast(0)
+                    bottomInScroll + scrollMarginPx > scrollState.value + viewport ->
+                        (bottomInScroll + scrollMarginPx - viewport).coerceAtMost(maxScroll)
+                    else -> scrollState.value
+                }
+            }
+        }
+        if (desired != scrollState.value) {
+            scrollJob?.cancel()
+            scrollJob = scope.launch {
+                scrollState.animateScrollTo(desired, tween(140, easing = FastOutSlowInEasing))
+            }
+        }
+    }
     // the entry of the section shown, for a shortcut hidden in the rail: its section
     val activeId = if (collapsed) {
         state.items.find { it.id == state.selected }?.let { chosen ->
@@ -184,15 +310,49 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     // tinted with the ambiance color when unfolded so labels stay readable over the content
     val top = androidx.compose.ui.graphics.lerp(Color(0xFF15141B), ambient, if (hasAmbient) 0.32f else 0.15f)
     val bottom = androidx.compose.ui.graphics.lerp(Color(0xFF100F15), ambient, if (hasAmbient) 0.14f else 0.05f)
-    val alpha = 0.92f * open
-    val menuShape = RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp)
+    val clipPath = remember { Path() }
+    val boxWidth = if (settledCollapsed) RAIL_WIDTH else fullWidth
     Box(
         Modifier
-            .width(menuWidth)
+            .width(boxWidth)
             .fillMaxHeight()
-            .clip(menuShape)
-            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(top.copy(alpha = alpha), bottom.copy(alpha = alpha))))
-            .border(1.dp, Color.White.copy(alpha = 0.07f * open), menuShape)
+            .onFocusChanged { menuHasFocus = it.hasFocus }
+            .drawWithContent {
+                val p = openState.value.coerceIn(0f, 1f)
+                val railPx = RAIL_WIDTH.toPx()
+                val visibleW = (railPx + (size.width - railPx) * p).coerceAtMost(size.width)
+                val cornerPx = 22.dp.toPx()
+                clipPath.rewind()
+                clipPath.addRoundRect(
+                    RoundRect(
+                        left = 0f,
+                        top = 0f,
+                        right = visibleW,
+                        bottom = size.height,
+                        topLeftCornerRadius = CornerRadius.Zero,
+                        bottomLeftCornerRadius = CornerRadius.Zero,
+                        topRightCornerRadius = CornerRadius(cornerPx, cornerPx),
+                        bottomRightCornerRadius = CornerRadius(cornerPx, cornerPx),
+                    )
+                )
+                if (p > 0.001f) {
+                    val bgAlpha = 0.92f * p
+                    drawPath(
+                        path = clipPath,
+                        brush = Brush.verticalGradient(listOf(top.copy(alpha = bgAlpha), bottom.copy(alpha = bgAlpha)))
+                    )
+                }
+                clipPath(clipPath) {
+                    this@drawWithContent.drawContent()
+                }
+                if (p > 0.001f) {
+                    drawPath(
+                        path = clipPath,
+                        color = Color.White.copy(alpha = 0.07f * p),
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                }
+            }
     ) {
         Column(
             Modifier
@@ -206,14 +366,20 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                         Key.DirectionUp -> {
                             val slot = slots.indexOf(focusedRequester)
                             if (slot > 0) {
-                                runCatching { slots[slot - 1].requestFocus() }
+                                val nextIndex = slot - 1
+                                val nextRequester = slots[nextIndex]
+                                runCatching { nextRequester.requestFocus() }
+                                smoothKeepSlotVisible(nextIndex, nextRequester)
                             }
                             true
                         }
                         Key.DirectionDown -> {
                             val slot = slots.indexOf(focusedRequester)
                             if (slot in 0 until slots.lastIndex) {
-                                runCatching { slots[slot + 1].requestFocus() }
+                                val nextIndex = slot + 1
+                                val nextRequester = slots[nextIndex]
+                                runCatching { nextRequester.requestFocus() }
+                                smoothKeepSlotVisible(nextIndex, nextRequester)
                             }
                             true
                         }
@@ -221,8 +387,27 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                         else -> false
                     }
                 }
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = MENU_PADDING, vertical = 24.dp)
+                .drawBehind {
+                    val target = activePillBounds
+                    if (target != null) {
+                        val p = openState.value.coerceIn(0f, 1f)
+                        val topY = if (pillInitialized) pillTop.value else target.topY
+                        val h = if (pillInitialized) pillHeight.value else target.heightPx
+                        val startX = if (pillInitialized) pillStart.value else target.startXPx
+                        val corner = if (pillInitialized) pillCorner.value else target.cornerPx
+                        val fullRowW = (size.width - startX).coerceAtLeast(0f)
+                        val minW = ENTRY_HEIGHT.toPx().coerceAtMost(fullRowW)
+                        val pillW = minW + (fullRowW - minW) * p
+                        drawRoundRect(
+                            color = TvColors.focused,
+                            topLeft = Offset(startX, topY),
+                            size = Size(pillW, h),
+                            cornerRadius = CornerRadius(corner, corner),
+                        )
+                    }
+                }
         ) {
             items.forEachIndexed { index, item ->
                 if (index == nowPlayingAt && playing != null) {
@@ -252,8 +437,18 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             state = state,
                             openRequester = nowPlayingOpenRequester,
                             closeRequester = nowPlayingCloseRequester,
-                            onOpenFocused = { focusedRequester = nowPlayingOpenRequester },
-                            onCloseFocused = { focusedRequester = nowPlayingCloseRequester },
+                            onBoundsChanged = { openBounds, closeBounds ->
+                                slotBounds[nowPlayingOpenRequester] = openBounds
+                                slotBounds[nowPlayingCloseRequester] = closeBounds
+                            },
+                            onOpenFocused = {
+                                focusedRequester = nowPlayingOpenRequester
+                                focusedEntryId = 0
+                            },
+                            onCloseFocused = {
+                                focusedRequester = nowPlayingCloseRequester
+                                focusedEntryId = 0
+                            },
                         )
                     }
                     Spacer(Modifier.height(10.dp))
@@ -265,19 +460,41 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                     Spacer(Modifier.height(if (newGroup) 18.dp else 4.dp))
                 }
                 val requester = state.requesters.getOrPut(item.id) { FocusRequester() }
+                val isAccount = item === account
+                val hasPillBounds = entryPillBounds.containsKey(item.id)
                 val entryModifier = Modifier
+                    .onGloballyPositioned { coords ->
+                        val y = coords.positionInParent().y
+                        val h = coords.size.height
+                        val intBounds = y.toInt() to h
+                        itemBounds[item.id] = intBounds
+                        slotBounds[requester] = intBounds
+                        val pillBounds = MenuPillBounds(
+                            topY = y,
+                            heightPx = h.toFloat(),
+                            startXPx = if (!isAccount && item.sub) subIndentPx else 0f,
+                            cornerPx = if (isAccount) accountCornerPx else itemCornerPx,
+                        )
+                        if (entryPillBounds[item.id] != pillBounds) {
+                            entryPillBounds[item.id] = pillBounds
+                        }
+                    }
                     .focusRequester(requester)
                     .onFocusChanged {
                         if (it.isFocused) {
                             focusedRequester = requester
+                            focusedEntryId = item.id
                             state.focusedId = item.id
-                            state.onFocusItem(item.id)
+                            if (!state.suppressFocusCallback || item.id == state.selected) {
+                                state.suppressFocusCallback = false
+                                state.onFocusItem(item.id)
+                            }
                         }
                     }
-                if (item === account) {
-                    AccountEntry(item, state, open, fullWidth, entryModifier) { onClick(item.id) }
+                if (isAccount) {
+                    AccountEntry(item, state, openProvider, hasPillBounds, entryModifier) { onClick(item.id) }
                 } else {
-                    MenuEntry(item, item.id == activeId, open, fullWidth, entryModifier) { onClick(item.id) }
+                    MenuEntry(item, item.id == activeId, openProvider, hasPillBounds, entryModifier) { onClick(item.id) }
                 }
             }
         }
@@ -291,19 +508,25 @@ private val ENTRY_HEIGHT = 44.dp
 
 /** The account at the top of the menu: its picture and its name, the entry that opens the account screen. */
 @Composable
-private fun AccountEntry(item: TvMenuItem, state: TvMenuState, open: Float, menuWidth: androidx.compose.ui.unit.Dp, modifier: Modifier, onClick: () -> Unit) {
+private fun AccountEntry(
+    item: TvMenuItem,
+    state: TvMenuState,
+    openProvider: () -> Float,
+    useGlidingPill: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val name = state.accountName
     val image = state.accountImage
     val content = if (focused) TvColors.onFocused else Color.White
-    val full = menuWidth - MENU_PADDING * 2
     Row(
         modifier
-            .width(ENTRY_HEIGHT + (full - ENTRY_HEIGHT) * open)
+            .fillMaxWidth()
             .height(56.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(if (focused) TvColors.focused else Color.Transparent)
+            .background(if (focused && !useGlidingPill) TvColors.focused else Color.Transparent)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -326,7 +549,7 @@ private fun AccountEntry(item: TvMenuItem, state: TvMenuState, open: Float, menu
                 }
             }
         }
-        Column(Modifier.padding(start = 10.dp, end = 12.dp).graphicsLayer { alpha = open }) {
+        Column(Modifier.padding(start = 10.dp, end = 12.dp).graphicsLayer { alpha = openProvider() }) {
             Text(
                 name ?: item.label,
                 fontSize = 17.sp,
@@ -357,17 +580,50 @@ private fun NowPlayingCard(
     state: TvMenuState,
     openRequester: FocusRequester,
     closeRequester: FocusRequester,
+    onBoundsChanged: (openBounds: Pair<Int, Int>, closeBounds: Pair<Int, Int>) -> Unit,
     onOpenFocused: () -> Unit,
     onCloseFocused: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        NowPlayingContent(playing, state, openRequester, onOpenFocused)
+    var cardTopY by remember { mutableIntStateOf(0) }
+    var openLocalBounds by remember { mutableStateOf(0 to 0) }
+    var closeLocalBounds by remember { mutableStateOf(0 to 0) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { coords ->
+                cardTopY = coords.positionInParent().y.toInt()
+                onBoundsChanged(
+                    (cardTopY + openLocalBounds.first) to openLocalBounds.second,
+                    (cardTopY + closeLocalBounds.first) to closeLocalBounds.second,
+                )
+            }
+    ) {
+        NowPlayingContent(
+            playing = playing,
+            state = state,
+            requester = openRequester,
+            onLocalBounds = { bounds ->
+                openLocalBounds = bounds
+                onBoundsChanged(
+                    (cardTopY + openLocalBounds.first) to openLocalBounds.second,
+                    (cardTopY + closeLocalBounds.first) to closeLocalBounds.second,
+                )
+            },
+            onFocused = onOpenFocused,
+        )
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
         Row(
             Modifier
                 .padding(top = 6.dp)
                 .fillMaxWidth()
+                .onGloballyPositioned { coords ->
+                    closeLocalBounds = coords.positionInParent().y.toInt() to coords.size.height
+                    onBoundsChanged(
+                        (cardTopY + openLocalBounds.first) to openLocalBounds.second,
+                        (cardTopY + closeLocalBounds.first) to closeLocalBounds.second,
+                    )
+                }
                 .clip(RoundedCornerShape(10.dp))
                 .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
                 .focusRequester(closeRequester)
@@ -392,6 +648,7 @@ private fun NowPlayingContent(
     playing: TvNowPlaying,
     state: TvMenuState,
     requester: FocusRequester,
+    onLocalBounds: (Pair<Int, Int>) -> Unit,
     onFocused: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -399,6 +656,9 @@ private fun NowPlayingContent(
     Column(
         Modifier
             .fillMaxWidth()
+            .onGloballyPositioned { coords ->
+                onLocalBounds(coords.positionInParent().y.toInt() to coords.size.height)
+            }
             .clip(RoundedCornerShape(12.dp))
             .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
             .focusRequester(requester)
@@ -444,19 +704,22 @@ private fun NowPlayingContent(
 
 
 /**
- * An entry. [open] from 0 (the rail: only its icon, in a square) to 1 (the menu: its icon at the same place, its name
- * next to it). The section shown: a pill of the accent color, its icon in the accent color.
+ * An entry. [openProvider] from 0 (the rail: only its icon, in a square) to 1 (the menu: its icon at the same place,
+ * its name next to it). The section shown: a pill of the accent color, its icon in the accent color.
  */
 @Composable
-private fun MenuEntry(item: TvMenuItem, selected: Boolean, open: Float, menuWidth: androidx.compose.ui.unit.Dp, modifier: Modifier, onClick: () -> Unit) {
+private fun MenuEntry(
+    item: TvMenuItem,
+    selected: Boolean,
+    openProvider: () -> Float,
+    useGlidingPill: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
-    val background = when {
-        focused -> TvColors.focused
-        selected -> accent.copy(alpha = 0.22f)
-        else -> Color.Transparent
-    }
+    val selectedPillColor = accent.copy(alpha = 0.22f)
     val content = when {
         focused -> TvColors.onFocused
         selected -> Color.White
@@ -465,14 +728,38 @@ private fun MenuEntry(item: TvMenuItem, selected: Boolean, open: Float, menuWidt
     val iconTint = if (selected && !focused) accent else content
     val indent = if (item.sub) 30.dp else 0.dp
     val height = if (item.sub) 38.dp else ENTRY_HEIGHT
-    val full = menuWidth - MENU_PADDING * 2 - indent
     Row(
         modifier
             .padding(start = indent)
-            .width(ENTRY_HEIGHT + (full - ENTRY_HEIGHT) * open)
+            .fillMaxWidth()
             .height(height)
             .clip(RoundedCornerShape(14.dp))
-            .background(background)
+            .drawBehind {
+                when {
+                    focused && !useGlidingPill -> {
+                        val p = openProvider().coerceIn(0f, 1f)
+                        val minW = ENTRY_HEIGHT.toPx().coerceAtMost(size.width)
+                        val pillW = minW + (size.width - minW) * p
+                        val r = 14.dp.toPx()
+                        drawRoundRect(
+                            color = TvColors.focused,
+                            size = Size(pillW, size.height),
+                            cornerRadius = CornerRadius(r, r),
+                        )
+                    }
+                    selected && !focused -> {
+                        val p = openProvider().coerceIn(0f, 1f)
+                        val minW = ENTRY_HEIGHT.toPx().coerceAtMost(size.width)
+                        val pillW = minW + (size.width - minW) * p
+                        val r = 14.dp.toPx()
+                        drawRoundRect(
+                            color = selectedPillColor,
+                            size = Size(pillW, size.height),
+                            cornerRadius = CornerRadius(r, r),
+                        )
+                    }
+                }
+            }
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -489,7 +776,7 @@ private fun MenuEntry(item: TvMenuItem, selected: Boolean, open: Float, menuWidt
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 8.dp, end = 12.dp).graphicsLayer { alpha = open }
+            modifier = Modifier.padding(start = 8.dp, end = 12.dp).graphicsLayer { alpha = openProvider() }
         )
     }
 }

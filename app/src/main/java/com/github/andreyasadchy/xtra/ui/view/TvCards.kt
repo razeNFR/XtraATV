@@ -72,6 +72,10 @@ object TvCards {
         if (options != null && options.isVisible && options.hasOnClickListeners()) {
             add(context.getString(R.string.tv_more_options)) { options.performClick() }
         } else if (card.isLongClickable) {
+            if (entries.isEmpty()) {
+                card.performLongClick()
+                return
+            }
             add(context.getString(R.string.tv_more_actions)) { card.performLongClick() }
         }
         if (entries.isEmpty()) {

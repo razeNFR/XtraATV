@@ -60,6 +60,11 @@ class StreamsAdapter(
                     notifyItemRangeChanged(0, itemCount, com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM)
                 }
             }
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.attachToRecyclerView(recyclerView) {
+                if (itemCount > 0) {
+                    notifyItemRangeChanged(0, itemCount, com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.PAYLOAD_PLAYBACK)
+                }
+            }
         }
     }
 
@@ -73,8 +78,18 @@ class StreamsAdapter(
     }
 
     override fun onBindViewHolder(holder: PagingViewHolder, position: Int, payloads: MutableList<Any>) {
-        if (payloads.isNotEmpty() && payloads.all { it == com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM }) {
-            holder.bindUsernameOnly(getItem(position))
+        val validPayloads = setOf(
+            com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM,
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.PAYLOAD_PLAYBACK,
+        )
+        if (payloads.isNotEmpty() && payloads.all { it in validPayloads }) {
+            val item = getItem(position)
+            if (com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM in payloads) {
+                holder.bindUsernameOnly(item)
+            }
+            if (com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.PAYLOAD_PLAYBACK in payloads) {
+                holder.bindPlaybackBadgeOnly(item)
+            }
         } else {
             super.onBindViewHolder(holder, position, payloads)
         }
@@ -85,6 +100,15 @@ class StreamsAdapter(
         private val fragment: Fragment,
         private val showGame: Boolean,
     ) : RecyclerView.ViewHolder(binding.root) {
+
+        fun bindPlaybackBadgeOnly(item: Stream?) {
+            val badgeView = binding.tvPlayingBadge ?: return
+            if (item == null || !com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(badgeView.context)) {
+                badgeView.visibility = View.GONE
+                return
+            }
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.bindView(badgeView, item.channelLogin)
+        }
 
         fun bindUsernameOnly(item: Stream?) {
             if (item == null) return
@@ -285,6 +309,9 @@ class StreamsAdapter(
                     } else {
                         tagsLayout.visibility = View.GONE
                     }
+                    bindPlaybackBadgeOnly(item)
+                } else {
+                    tvPlayingBadge?.visibility = View.GONE
                 }
             }
         }

@@ -61,20 +61,29 @@ object TvFollow {
         return null
     }
 
-    /** Follows or unfollows, returns false when it failed. */
-    suspend fun setFollowing(context: Context, channelId: String, channelLogin: String?, channelName: String?, follow: Boolean): Boolean {
+    /** Follows or unfollows; returns null on success, or a localized error message when it failed. */
+    suspend fun setFollowingWithMessage(context: Context, channelId: String, channelLogin: String?, channelName: String?, follow: Boolean): String? {
         val module = (context.applicationContext as XtraApp).xtraModule
         val prefs = context.prefs()
         return try {
             if (useAccount(context, channelId)) {
                 val networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP)
                 val headers = TwitchApiHelper.getGQLHeaders(context, true)
-                val response = if (follow) {
-                    module.graphQLRepository.loadFollowUser(networkLibrary, headers, channelId, !prefs.getBoolean(C.UI_ACTIVATE_NOTIFICATIONS_WHEN_FOLLOWING, true))
+                val err = if (follow) {
+                    module.graphQLRepository.loadFollowUser(
+                        networkLibrary,
+                        headers,
+                        channelId,
+                        !prefs.getBoolean(C.UI_ACTIVATE_NOTIFICATIONS_WHEN_FOLLOWING, true),
+                    ).extractErrorOrRejection()
                 } else {
-                    module.graphQLRepository.loadUnfollowUser(networkLibrary, headers, channelId)
+                    module.graphQLRepository.loadUnfollowUser(networkLibrary, headers, channelId).errors?.firstOrNull()?.message
                 }
-                response.errors.isNullOrEmpty()
+                when {
+                    err.isNullOrBlank() -> null
+                    err.startsWith(C.FOLLOW_REJECTED_PREFIX) -> context.getString(com.github.andreyasadchy.xtra.R.string.tv_follow_rejected_verification)
+                    else -> err
+                }
             } else {
                 if (follow) {
                     module.localChannelFollowsRepository.save(LocalChannelFollow(channelId, channelLogin, channelName))
@@ -85,10 +94,14 @@ object TvFollow {
                     module.localChannelFollowsRepository.getById(channelId)?.let { module.localChannelFollowsRepository.delete(it) }
                     module.notificationsRepository.deleteUser(NotificationUser(channelId))
                 }
-                true
+                null
             }
         } catch (e: Exception) {
-            false
+            context.getString(com.github.andreyasadchy.xtra.R.string.tv_follow_failed)
         }
     }
+
+    /** Follows or unfollows, returns false when it failed. */
+    suspend fun setFollowing(context: Context, channelId: String, channelLogin: String?, channelName: String?, follow: Boolean): Boolean =
+        setFollowingWithMessage(context, channelId, channelLogin, channelName, follow) == null
 }

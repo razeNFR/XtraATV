@@ -1761,10 +1761,11 @@ class ChatViewModel(
             val gqlWebClientId = applicationContext.prefs().getString(C.GQL_CLIENT_ID_WEB, "kimne78kx3ncx6brgo4mv6wki5h1ko")
             val gqlWebToken = applicationContext.tokenPrefs().getString(C.GQL_TOKEN_WEB, null)
             val notifyPoints = applicationContext.prefs().getBoolean(C.CHAT_POINTS_NOTIFY, false)
+            val isTvDevice = applicationContext.resources.getBoolean(R.bool.isTv)
             val showRaids = applicationContext.prefs().getBoolean(C.CHAT_RAIDS_SHOW, true)
-            val showPolls = applicationContext.prefs().getBoolean(C.CHAT_POLLS_SHOW, true)
+            val showPolls = applicationContext.prefs().getBoolean(C.CHAT_POLLS_SHOW, true) || isTvDevice
             val showPredictions = applicationContext.prefs().getBoolean(C.CHAT_PREDICTIONS_SHOW, true) ||
-                applicationContext.prefs().getBoolean(C.TV_CHAT_PREDICTIONS_POPUP, false)
+                C.getTvPredictionsPopupMode(applicationContext.prefs()) != 0 || isTvDevice
             val primaryGqlToken = gqlHeaders[C.HEADER_TOKEN]?.removePrefix("OAuth ")?.takeIf { it.isNotBlank() }
             val primaryGqlClientId = gqlHeaders[C.HEADER_CLIENT_ID]?.takeIf { it.isNotBlank() }
             val webTokenClean = gqlWebToken?.removePrefix("OAuth ")?.takeIf { it.isNotBlank() }

@@ -98,7 +98,9 @@ class FollowedStreamsDataSource(
             }
             LoadResult.Page(
                 // TV: the favorite channels live first (none on the phone and tablet)
-                data = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.sort(list),
+                data = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.sort(
+                    com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list)
+                ),
                 prevKey = null,
                 nextKey = finalNextKey
             )
@@ -143,7 +145,7 @@ class FollowedStreamsDataSource(
         offset = items.lastOrNull()?.cursor?.toString()
         val nextPage = data.pageInfo?.hasNextPage != false
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list),
             prevKey = null,
             nextKey = if (!offset.isNullOrBlank() && nextPage) {
                 (params.key ?: 1) + 1
@@ -180,7 +182,7 @@ class FollowedStreamsDataSource(
         offset = items.lastOrNull()?.cursor
         val nextPage = data.pageInfo?.hasNextPage != false
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list),
             prevKey = null,
             nextKey = if (!offset.isNullOrBlank() && nextPage) {
                 (params.key ?: 1) + 1
@@ -223,7 +225,7 @@ class FollowedStreamsDataSource(
         }
         offset = response.pagination?.cursor
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list),
             prevKey = null,
             nextKey = if (!offset.isNullOrBlank()) {
                 (params.key ?: 1) + 1

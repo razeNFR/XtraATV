@@ -10,7 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
 /** TV home written with Compose: rows of cards like the YouTube app, the focus is handled by Compose. */
 class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.Previewer {
 
-    private val viewModel: TvHomeViewModel by viewModels { TvHomeViewModelFactory }
+    private val viewModel: TvHomeViewModel by activityViewModels { TvHomeViewModelFactory }
     private val previewLogin = mutableStateOf<String?>(null)
     private val previewPlayer = mutableStateOf<ExoPlayer?>(null)
     private var previewJob: Job? = null
@@ -179,7 +179,12 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             sweepCount = { homeSweep.intValue },
             statsBadges = { statsBadges() },
             openStats = {
-                activity?.let { com.github.andreyasadchy.xtra.ui.tv.TvStatsPage.show(it) { loadStats() } }
+                val act = activity as? MainActivity
+                if (act != null && !context.prefs().getBoolean(C.TV_HIDE_MENU_STATS, false)) {
+                    act.openTvSection(R.id.tvStatsFragment)
+                } else if (act != null) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvStatsPage.show(act) { loadStats() }
+                }
             },
             uptime = { stream ->
                 context.takeIf { it.prefs().getBoolean(C.UI_UPTIME, true) }?.let { com.github.andreyasadchy.xtra.ui.tv.TvUptime.format(it, stream.createdAt) }
@@ -535,6 +540,24 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     }
                 )
             }
+            if (!game.id.isNullOrBlank() || !game.slug.isNullOrBlank() || !game.name.isNullOrBlank()) {
+                val catBlocked = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(game.id, game.slug, game.name)
+                val catLabel = game.name ?: game.slug ?: ""
+                add(
+                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
+                        getString(if (catBlocked) R.string.tv_blacklist_unhide_category else R.string.tv_blacklist_hide_category, catLabel),
+                        R.drawable.tv_ic_block,
+                    ) {
+                        if (catBlocked) {
+                            com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.unblockCategory(activity, game.id, game.slug, game.name)
+                            android.widget.Toast.makeText(activity, getString(R.string.tv_blacklist_category_unhidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.blockCategory(activity, game.id, game.slug, game.name, game.boxArtURL)
+                            android.widget.Toast.makeText(activity, getString(R.string.tv_blacklist_category_hidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
         }
         com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(activity, game.name ?: "", actions)
     }
@@ -612,11 +635,16 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     override fun onResume() {
         super.onResume()
         context?.let { syncHomePrefs(it) }
-        viewModel.load()
         loadLocalRows()
+        val hasWarmData = viewModel.followed.value != null || viewModel.popular.value != null || viewModel.games.value != null
+        if (hasWarmData) {
+            view?.postDelayed({ if (isResumed) viewModel.load(force = false, maxAgeMs = 20_000L) }, 160L)
+        } else {
+            viewModel.load(force = false, maxAgeMs = 20_000L)
+        }
     }
 
-    fun refreshIfStale(maxAgeMs: Long = 60_000L) {
+    fun refreshIfStale(maxAgeMs: Long = 20_000L) {
         context?.let { syncHomePrefs(it) }
         viewModel.load(force = false, maxAgeMs = maxAgeMs)
         loadLocalRows()

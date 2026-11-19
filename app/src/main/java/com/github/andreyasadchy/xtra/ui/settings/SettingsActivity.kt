@@ -2123,6 +2123,22 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
             }
+            findPreference<Preference>("tv_blacklist")?.let { preference ->
+                val context = requireContext()
+                val updateSummary = {
+                    preference.summary = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.summary(context)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.showManagerPanel(context) {
+                        if (isAdded) {
+                            updateSummary()
+                            (requireActivity() as? SettingsActivity)?.setResult()
+                        }
+                    }
+                    true
+                }
+            }
             findPreference<ListPreference>(C.TV_STREAM_END_ACTION)?.let { preference ->
                 if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
                     preference.setOnPreferenceClickListener {

@@ -96,8 +96,14 @@ object PubSubUtils {
                 val choice = choices.get(i) as? JSONObject
                 val title = if (choice?.isNull("title") == false) choice.optString("title").takeIf { it.isNotBlank() } else null
                 if (!title.isNullOrBlank()) {
+                    val choiceId = choice?.let { c ->
+                        (if (!c.isNull("choice_id")) c.optString("choice_id") else "").ifBlank {
+                            if (!c.isNull("id")) c.optString("id") else ""
+                        }.takeIf { it.isNotBlank() }
+                    }
                     choicesList.add(
                         Poll.PollChoice(
+                            id = choiceId,
                             title = title,
                             totalVotes = choice?.optJSONObject("votes")?.let { votes -> if (!votes.isNull("total")) votes.optInt("total") else null },
                         )
@@ -106,6 +112,17 @@ object PubSubUtils {
             }
         }
         return if (poll != null) {
+            val cpSettings = poll.optJSONObject("settings")?.let { s ->
+                s.optJSONObject("community_points") ?: s.optJSONObject("communityPointsVotes")
+            }
+            val cpEnabled = cpSettings?.let { cp ->
+                if (!cp.isNull("is_enabled")) cp.optBoolean("is_enabled", false)
+                else if (!cp.isNull("isEnabled")) cp.optBoolean("isEnabled", false)
+                else false
+            } ?: false
+            val cpCost = cpSettings?.let { cp ->
+                if (!cp.isNull("cost")) cp.optInt("cost", 0) else 0
+            } ?: 0
             Poll(
                 id = if (!poll.isNull("poll_id")) poll.optString("poll_id").takeIf { it.isNotBlank() } else null,
                 title = if (!poll.isNull("title")) poll.optString("title").takeIf { it.isNotBlank() } else null,
@@ -113,6 +130,8 @@ object PubSubUtils {
                 choices = choicesList,
                 totalVotes = poll.optJSONObject("votes")?.let { votes -> if (!votes.isNull("total")) votes.optInt("total") else null },
                 remainingMilliseconds = if (!poll.isNull("remaining_duration_milliseconds")) poll.optInt("remaining_duration_milliseconds") else null,
+                pointsVotingEnabled = cpEnabled,
+                pointsPerVote = cpCost,
             )
         } else null
     }
@@ -133,6 +152,7 @@ object PubSubUtils {
                             title = title,
                             totalPoints = if (outcome?.isNull("total_points") == false) outcome.optInt("total_points") else null,
                             totalUsers = if (outcome?.isNull("total_users") == false) outcome.optInt("total_users") else null,
+                            color = if (outcome?.isNull("color") == false) outcome.optString("color").takeIf { it.isNotBlank() } else null,
                         )
                     )
                 }

@@ -22,6 +22,20 @@ abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.Listen
     private var lastRefreshedAt = 0L
     private var silentRefresh = false
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (savedInstanceState != null) {
+            lastRefreshedAt = savedInstanceState.getLong(STATE_LAST_REFRESHED_AT, 0L)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: android.os.Bundle) {
+        super.onSaveInstanceState(outState)
+        if (lastRefreshedAt > 0L) {
+            outState.putLong(STATE_LAST_REFRESHED_AT, lastRefreshedAt)
+        }
+    }
+
     fun <T : Any, VH : RecyclerView.ViewHolder> setAdapter(recyclerView: RecyclerView, adapter: PagingDataAdapter<T, VH>) {
         boundRecyclerView = recyclerView
         boundAdapter = adapter
@@ -89,6 +103,21 @@ abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.Listen
                     }
                 }
             }
+            viewLifecycleOwner.lifecycleScope.launch {
+                val initialGen = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.changes.value
+                var seenGen = initialGen
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.changes.collectLatest { gen ->
+                        if (gen != seenGen) {
+                            seenGen = gen
+                            if (this@PagedListFragment !is com.github.andreyasadchy.xtra.ui.search.Searchable) {
+                                silentRefresh = context?.resources?.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv) == true
+                                pagingAdapter.refresh()
+                            }
+                        }
+                    }
+                }
+            }
             if (enableSwipeRefresh) {
                 swipeRefresh.isEnabled = true
                 swipeRefresh.setOnRefreshListener {
@@ -113,7 +142,12 @@ abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.Listen
 
     override fun onResume() {
         super.onResume()
-        refreshIfStale(60_000L)
+        val isTv = context?.resources?.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv) == true
+        if (isTv) {
+            view?.postDelayed({ if (isResumed) refreshIfStale(20_000L) }, 160L)
+        } else {
+            refreshIfStale(60_000L)
+        }
     }
 
     /** Refreshes the list silently when stale, without disrupting active scrolling or deep focus on TV. */
@@ -144,5 +178,9 @@ abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.Listen
         boundAdapter = null
         silentRefresh = false
         super.onDestroyView()
+    }
+
+    companion object {
+        private const val STATE_LAST_REFRESHED_AT = "state_last_refreshed_at"
     }
 }

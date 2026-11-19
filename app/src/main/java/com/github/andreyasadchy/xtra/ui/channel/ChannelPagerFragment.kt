@@ -186,6 +186,13 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                             target(userImage)
                         }.build()
                     )
+                    if (resources.getBoolean(R.bool.isTv)) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.applyChannelOverride(
+                            requireContext(),
+                            viewLifecycleOwner.lifecycleScope,
+                            listOf(it),
+                        )
+                    }
                 } else {
                     userImage.visibility = View.GONE
                 }
@@ -417,7 +424,12 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                                 val following = pair.first
                                 val errorMessage = pair.second
                                 if (!errorMessage.isNullOrBlank()) {
-                                    Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show()
+                                    val msg = if (errorMessage.startsWith(C.FOLLOW_REJECTED_PREFIX)) {
+                                        getString(R.string.tv_follow_rejected_verification)
+                                    } else {
+                                        errorMessage
+                                    }
+                                    Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show()
                                 } else {
                                     if (following) {
                                         Toast.makeText(requireContext(),
@@ -765,6 +777,13 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
             } else {
                 bannerImage.setTag(R.id.bannerImage, null)
                 bannerImage.visibility = View.GONE
+            }
+            if (resources.getBoolean(R.bool.isTv)) {
+                com.github.andreyasadchy.xtra.ui.tv.TvAmbient.applyChannelOverride(
+                    requireContext(),
+                    viewLifecycleOwner.lifecycleScope,
+                    listOf(user.bannerImageURL, user.profileImage, args.channelImage),
+                )
             }
             if (user.createdAt != null) {
                 val text = Instant.parseOrNull(user.createdAt)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 }?.let {

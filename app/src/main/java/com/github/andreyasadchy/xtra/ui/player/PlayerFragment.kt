@@ -1452,7 +1452,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         val following = pair.first
                                         val errorMessage = pair.second
                                         if (!errorMessage.isNullOrBlank()) {
-                                            Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show()
+                                            val rejected = errorMessage.startsWith(C.FOLLOW_REJECTED_PREFIX)
+                                            val msg = if (rejected) getString(R.string.tv_follow_rejected_verification) else errorMessage
+                                            Toast.makeText(requireContext(), msg, if (rejected) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
                                         } else {
                                             if (following) {
                                                 Toast.makeText(requireContext(), getString(R.string.now_following, displayName), Toast.LENGTH_SHORT).show()
@@ -1473,42 +1475,61 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatFragment = currentChatFragment
                 onChatFragmentReady(currentChatFragment)
             } else {
-                val fragment = when (playbackService?.type) {
-                    BasePlaybackService.STREAM -> ChatFragment.newInstance(
-                        playbackService?.channelId,
-                        playbackService?.channelLogin,
-                        playbackService?.channelName,
-                        playbackService?.streamId,
-                    )
-                    BasePlaybackService.VIDEO -> ChatFragment.newInstance(
-                        playbackService?.channelId,
-                        playbackService?.channelLogin,
-                        // a live watched back in time: the chat of the VOD being recorded
-                        playbackService?.videoId ?: (activity as? MainActivity)?.takeIf { it.dvrStream != null }?.dvrChatVideoId,
-                        playbackService?.createdAt,
-                        0,
-                    )
-                    BasePlaybackService.CLIP -> ChatFragment.newInstance(
-                        playbackService?.channelId,
-                        playbackService?.channelLogin,
-                        playbackService?.videoId,
-                        playbackService?.videoCreatedAt,
-                        playbackService?.videoOffsetSeconds.takeIf { it != -1 },
-                    )
-                    BasePlaybackService.OFFLINE_VIDEO -> ChatFragment.newLocalInstance(
-                        playbackService?.channelId,
-                        playbackService?.channelLogin,
-                        playbackService?.videoCreatedAt ?: playbackService?.createdAt?.takeIf { playbackService?.clipId == null },
-                        playbackService?.chatUrl,
-                    )
-                    else -> null
-                }
+                val fragment = createChatFragmentForCurrentPlayback()
                 if (fragment != null) {
                     childFragmentManager.beginTransaction().replace(R.id.chatFragmentContainer, fragment).commit()
                 }
                 chatFragment = fragment
             }
         }
+    }
+
+    private fun createChatFragmentForCurrentPlayback(): ChatFragment? = when (playbackService?.type) {
+        BasePlaybackService.STREAM -> ChatFragment.newInstance(
+            playbackService?.channelId,
+            playbackService?.channelLogin,
+            playbackService?.channelName,
+            playbackService?.streamId,
+        )
+        BasePlaybackService.VIDEO -> ChatFragment.newInstance(
+            playbackService?.channelId,
+            playbackService?.channelLogin,
+            // a live watched back in time: the chat of the VOD being recorded
+            playbackService?.videoId ?: (activity as? MainActivity)?.takeIf { it.dvrStream != null }?.dvrChatVideoId,
+            playbackService?.createdAt,
+            0,
+        )
+        BasePlaybackService.CLIP -> ChatFragment.newInstance(
+            playbackService?.channelId,
+            playbackService?.channelLogin,
+            playbackService?.videoId,
+            playbackService?.videoCreatedAt,
+            playbackService?.videoOffsetSeconds.takeIf { it != -1 },
+        )
+        BasePlaybackService.OFFLINE_VIDEO -> ChatFragment.newLocalInstance(
+            playbackService?.channelId,
+            playbackService?.channelLogin,
+            playbackService?.videoCreatedAt ?: playbackService?.createdAt?.takeIf { playbackService?.clipId == null },
+            playbackService?.chatUrl,
+        )
+        else -> null
+    }
+
+    fun restartTvChat() {
+        val ctx = context ?: return
+        if (ctx.prefs().getBoolean(C.CHAT_DISABLE, false) || !isAdded || _binding == null) return
+        val fragment = createChatFragmentForCurrentPlayback() ?: return
+        childFragmentManager.beginTransaction()
+            .replace(R.id.chatFragmentContainer, fragment)
+            .commitAllowingStateLoss()
+        chatFragment = fragment
+        Toast.makeText(ctx, R.string.tv_chat_restarted, Toast.LENGTH_SHORT).show()
+    }
+
+    fun restartTvPlayer() {
+        val ctx = context ?: return
+        restartPlayer()
+        Toast.makeText(ctx, R.string.tv_player_restarted, Toast.LENGTH_SHORT).show()
     }
 
     private fun initLayout() {
@@ -1841,6 +1862,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
         }
         requireContext().prefs().edit { putBoolean(C.KEY_CHAT_OPENED, false) }
+        if (isTv && isMaximized && C.getTvPredictionsPopupMode(requireContext().prefs()) == 2) {
+            tvActivePrediction.value?.takeIf { it.status == "ACTIVE" }?.let { onTvPredictionEvent(it) }
+        }
     }
 
     fun showChat() {
@@ -3062,6 +3086,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         recentChatters = chatFragment?.getRecentChatters().orEmpty(),
                     )
                 }
+                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_restart_chat)) {
+                    restartTvChat()
+                    dismiss()
+                }
                 // slow chat: off or max normal messages per second (1, 2, 4, 6), priority messages stay shown
                 val slowRateValues = listOf("0", "1", "2", "4", "6")
                 val slowRateLabels = listOf(
@@ -3103,18 +3131,30 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     chatFragment?.refreshPinnedBanner()
                 }
                 val predPopup = androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableIntStateOf(if (prefs.getBoolean(C.TV_CHAT_PREDICTIONS_POPUP, false)) 1 else 0)
+                    androidx.compose.runtime.mutableIntStateOf(C.getTvPredictionsPopupMode(prefs))
                 }
                 com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
                     getString(R.string.tv_chat_predictions_popup),
-                    listOf(getString(R.string.tv_chat_delay_off), getString(R.string.tv_option_on)),
+                    listOf(
+                        getString(R.string.tv_chat_delay_off),
+                        getString(R.string.tv_chat_predictions_30s),
+                        getString(R.string.tv_chat_predictions_full),
+                    ),
                     predPopup.intValue,
                 ) {
                     predPopup.intValue = it
-                    val enabled = it == 1
-                    prefs.edit { putBoolean(C.TV_CHAT_PREDICTIONS_POPUP, enabled) }
-                    if (!enabled) {
+                    prefs.edit {
+                        putInt(C.TV_CHAT_PREDICTIONS_MODE, it)
+                        putBoolean(C.TV_CHAT_PREDICTIONS_POPUP, it != 0)
+                    }
+                    if (it == 0) {
                         hideTvPredictionPopup()
+                    } else if (!isChatOpen) {
+                        if (it == 2) {
+                            tvActivePrediction.value?.takeIf { p -> p.status == "ACTIVE" }?.let { p -> onTvPredictionEvent(p) }
+                        } else if (it == 1 && tvPredictionView?.isVisible == true && tvPredictionCurrent?.status == "ACTIVE") {
+                            showTvPredictionPopup(autoHideMs = 30_000L)
+                        }
                     }
                 }
                 // delay of the live chat: off, auto (the latency of the stream) or 1 to 60 s
@@ -3247,6 +3287,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         remove(C.TV_CHAT_BAND_OVERLAY)
                         remove(C.CHAT_DELAY_SECONDS)
                         remove(C.TV_CHAT_PREDICTIONS_POPUP)
+                        remove(C.TV_CHAT_PREDICTIONS_MODE)
                         remove(C.TV_CHAT_PINNED_MODE)
                         remove(C.CHAT_SHARED_BADGES)
                     }
@@ -3336,7 +3377,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    /** TV: the stream and its chat as dark as the dimming says, the icon of its button shows if it is on. */
+    /** TV: the stream and its chat as dark/warm as the filter says, the icon of its button shows if it is on. */
     private val tvDimListener: () -> Unit = { applyTvDim() }
 
     private fun applyTvDim() {
@@ -3344,10 +3385,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (!isTv) {
             return
         }
+        val context = context ?: return
         com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(binding.aspectRatioFrameLayout)
         com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(binding.chatLayout)
         binding.playerControls.tvDim?.setImageResource(
-            if (com.github.andreyasadchy.xtra.ui.tv.TvDim.active) R.drawable.tv_ic_dim_on else R.drawable.tv_ic_dim
+            if (com.github.andreyasadchy.xtra.ui.tv.TvDim.isEffectivelyOn(context)) R.drawable.tv_ic_dim_on else R.drawable.tv_ic_dim
         )
     }
 
@@ -3414,7 +3456,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    /** TV: level of the dimming (OK held on its button), the stream gets darker while it changes. */
+    /** TV: dimming and Night Shift (warm light) levels (OK held on its button), seen live while adjusted. */
     private fun showTvDimPanel() {
         val context = requireContext()
         // set while choosing it: seen at once
@@ -3425,12 +3467,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 com.github.andreyasadchy.xtra.ui.tv.SliderRow(
                     getString(R.string.tv_dim_level),
                     com.github.andreyasadchy.xtra.ui.tv.TvDim.level(context),
-                    10..90,
+                    0..90,
                     step = 10,
                     valueText = { "$it %" },
                     modifier = androidx.compose.ui.Modifier.focusRequester(requester),
                 ) {
                     com.github.andreyasadchy.xtra.ui.tv.TvDim.setLevel(context, it)
+                }
+                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(10.dp))
+                com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                    getString(R.string.tv_night_shift_level),
+                    com.github.andreyasadchy.xtra.ui.tv.TvDim.warmLevel(context),
+                    0..80,
+                    step = 10,
+                    valueText = { "$it %" },
+                ) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvDim.setWarmLevel(context, it)
                 }
                 androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
                 com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_dim_off)) {
@@ -3831,6 +3883,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             Keys.ACTION_PLAY_PAUSE -> playPause()
+            Keys.ACTION_RESTART_PLAYER -> restartTvPlayer()
+            Keys.ACTION_RESTART_CHAT -> {
+                if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
+                    restartTvChat()
+                }
+            }
             Keys.ACTION_MUTE -> togglePlayerMute()
             Keys.ACTION_QUALITY -> showQualityDialog()
             Keys.ACTION_STATS -> toggleStatsForNerds()
@@ -4095,6 +4153,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 syncPlayPauseButtonVisibility()
                 // the button of the small window, only while it is open
                 playerControls.tvPipSettings?.visibility = if ((activity as? MainActivity)?.isTvPipOpen() == true) View.VISIBLE else View.GONE
+                syncTvPollsPredictionsButton()
                 playerControls.tvQualityInfo?.let { info ->
                     val label = getCurrentQualityLabel()
                     info.text = label
@@ -4155,7 +4214,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     button.contentDescription = getString(label)
                 }
                 button
-            } + listOfNotNull(tvGoLive, streamList, statsForNerds, chatMessage, multiStream, tvDim, tvProxy, tvPipSettings, chatLayoutSettings, tvPoints, tvClip)
+            } + listOfNotNull(tvGoLive, streamList, statsForNerds, chatMessage, multiStream, tvDim, tvProxy, tvPipSettings, chatLayoutSettings, tvPollsPredictions, tvPoints, tvClip)
             buttons.forEach { button ->
                 button.setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
@@ -4234,12 +4293,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 multiStream?.visibility = View.GONE
                 tvMultiStreamBadge?.count = 0
             }
-            // dimming of the stream: OK turns it on / off, OK held opens its level
+            // dimming / Night Shift of the stream: OK turns it on / off, OK held opens its sliders
             tvDim?.let { button ->
                 button.visibility = if (prefs.getBoolean(C.TV_BUTTON_DIM, false)) View.VISIBLE else View.GONE
                 button.setOnClickListener {
                     showController(force = true)
-                    com.github.andreyasadchy.xtra.ui.tv.TvDim.setActive(!com.github.andreyasadchy.xtra.ui.tv.TvDim.active)
+                    com.github.andreyasadchy.xtra.ui.tv.TvDim.toggle(requireContext())
                 }
                 button.setOnLongClickListener {
                     showController(force = true)
@@ -4270,6 +4329,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 showController(force = true)
                 showTvPipPanel()
             }
+            tvPollsPredictions?.setOnClickListener {
+                showController(force = true)
+                showTvPollsPredictionsPanel()
+            }
+            ensurePlayerLiveEventsLoaded()
+            syncTvPollsPredictionsButton()
             val isLoggedIn = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
                     !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank()
             if (playbackService?.type == BasePlaybackService.STREAM && isLoggedIn && !prefs.getBoolean(C.CHAT_DISABLE, false) && prefs.getBoolean(C.TV_BUTTON_CHAT_MESSAGE, true)) {
@@ -4690,40 +4755,228 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private val tvActivePoll = kotlinx.coroutines.flow.MutableStateFlow<com.github.andreyasadchy.xtra.model.chat.Poll?>(null)
+    private val tvActivePollSeconds = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
+    private val tvActivePrediction = kotlinx.coroutines.flow.MutableStateFlow<com.github.andreyasadchy.xtra.model.chat.Prediction?>(null)
+    private val tvActivePredictionSeconds = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
+    private val tvSelfBetOutcomeId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private val tvSelfBetPoints = kotlinx.coroutines.flow.MutableStateFlow(0)
+    private val tvSelfVotedPollChoices = kotlinx.coroutines.flow.MutableStateFlow<Map<String, String>>(emptyMap())
+    private var tvLiveEventsLookupKey: String? = null
+    private var tvLiveEventsLookupJob: Job? = null
+    private var tvLiveEventsTickerJob: Job? = null
+
+    private fun resetTvLiveEventsState() {
+        tvActivePoll.value = null
+        tvActivePollSeconds.value = null
+        tvActivePrediction.value = null
+        tvActivePredictionSeconds.value = null
+        tvSelfBetOutcomeId.value = null
+        tvSelfBetPoints.value = 0
+        tvLiveEventsTickerJob?.cancel()
+        tvLiveEventsTickerJob = null
+        syncTvPollsPredictionsButton()
+    }
+
+    private fun startTvLiveEventsLocalTickerIfNeeded() {
+        if (tvLiveEventsTickerJob?.isActive == true || !isAdded) return
+        tvLiveEventsTickerJob = viewLifecycleOwner.lifecycleScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1000L)
+                val poll = tvActivePoll.value
+                val pSec = tvActivePollSeconds.value
+                if (poll != null && poll.status == "ACTIVE" && pSec != null) {
+                    val next = pSec - 1
+                    if (next <= 0) {
+                        tvActivePoll.value = null
+                        tvActivePollSeconds.value = null
+                        syncTvPollsPredictionsButton()
+                    } else {
+                        tvActivePollSeconds.value = next
+                    }
+                }
+                val pred = tvActivePrediction.value
+                val prSec = tvActivePredictionSeconds.value
+                if (pred != null && pred.status == "ACTIVE" && prSec != null) {
+                    val next = prSec - 1
+                    tvActivePredictionSeconds.value = if (next > 0) next else null
+                }
+                if (tvActivePoll.value == null && tvActivePrediction.value == null) {
+                    break
+                }
+            }
+        }
+    }
+
+    private fun ensurePlayerLiveEventsLoaded() {
+        if (!isTv || !isAdded || _binding == null) return
+        if (!isStreamScreen()) {
+            tvLiveEventsLookupKey = null
+            resetTvLiveEventsState()
+            return
+        }
+        val (_, clogin, _) = currentCoStreamIdentity()
+        if (clogin.isNullOrBlank()) return
+        val key = clogin.lowercase()
+        if (key == tvLiveEventsLookupKey) {
+            syncTvPollsPredictionsButton()
+            return
+        }
+        tvLiveEventsLookupKey = key
+        resetTvLiveEventsState()
+        tvLiveEventsLookupJob?.cancel()
+        val ctx = requireContext().applicationContext
+        val app = ctx as? com.github.andreyasadchy.xtra.XtraApp ?: return
+        tvLiveEventsLookupJob = viewLifecycleOwner.lifecycleScope.launch {
+            val netLib = ctx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+            val headers = TwitchApiHelper.getGQLHeaders(ctx, true)
+            val loaded = app.xtraModule.graphQLRepository.loadActivePollAndPrediction(netLib, headers, clogin)
+            if (tvLiveEventsLookupKey != key) return@launch
+            if (loaded.poll != null && tvActivePoll.value == null) {
+                tvActivePoll.value = loaded.poll
+                tvActivePollSeconds.value = loaded.poll.remainingMilliseconds?.let { (it / 1000).coerceAtLeast(1) }
+            }
+            if (loaded.prediction != null && tvActivePrediction.value == null) {
+                tvActivePrediction.value = loaded.prediction
+                val created = loaded.prediction.createdAt
+                val win = loaded.prediction.predictionWindowSeconds
+                if (loaded.prediction.status == "ACTIVE" && created != null && win != null && win > 0) {
+                    val remSec = (((created + win * 1000L) - System.currentTimeMillis()) / 1000L).toInt()
+                    if (remSec > 0) tvActivePredictionSeconds.value = remSec
+                }
+            }
+            if (loaded.selfBetOutcomeId != null && tvSelfBetOutcomeId.value == null) {
+                tvSelfBetOutcomeId.value = loaded.selfBetOutcomeId
+                tvSelfBetPoints.value = loaded.selfBetPoints
+            }
+            if (tvActivePoll.value != null || tvActivePrediction.value != null) {
+                startTvLiveEventsLocalTickerIfNeeded()
+            }
+            syncTvPollsPredictionsButton()
+        }
+    }
+
+    private fun syncTvPollsPredictionsButton() {
+        if (!isTv || _binding == null) return
+        val btn = _binding?.playerControls?.tvPollsPredictions ?: return
+        val poll = tvActivePoll.value
+        val pred = tvActivePrediction.value
+        val shouldShow = isStreamScreen() && (
+            (poll != null && poll.status == "ACTIVE") ||
+                (pred != null && (pred.status == "ACTIVE" || pred.status == "LOCKED"))
+            )
+        val wasFocused = btn.hasFocus()
+        btn.visibility = if (shouldShow) View.VISIBLE else View.GONE
+        if (!shouldShow && wasFocused) {
+            focusAfterHiddenControl()
+        }
+    }
+
+    fun showTvPollsPredictionsPanel() {
+        val ctx = context ?: return
+        val (_, clogin, _) = currentCoStreamIdentity()
+        com.github.andreyasadchy.xtra.ui.tv.TvPollsPredictionsPanel.show(
+            context = ctx,
+            channelLogin = clogin,
+            pollFlow = tvActivePoll,
+            pollSecondsFlow = tvActivePollSeconds,
+            predictionFlow = tvActivePrediction,
+            predictionSecondsFlow = tvActivePredictionSeconds,
+            selfBetOutcomeIdFlow = tvSelfBetOutcomeId,
+            selfBetPointsFlow = tvSelfBetPoints,
+            selfVotedPollChoicesFlow = tvSelfVotedPollChoices,
+            onOptimisticPollUpdate = { updated -> tvActivePoll.value = updated },
+            onOptimisticPredictionUpdate = { updated -> tvActivePrediction.value = updated },
+        )
+    }
+
+    fun onTvPollEvent(poll: com.github.andreyasadchy.xtra.model.chat.Poll) {
+        if (!isTv) return
+        if (poll.status == "ACTIVE") {
+            tvActivePoll.value = poll
+            if (poll.remainingMilliseconds != null && poll.remainingMilliseconds > 0) {
+                tvActivePollSeconds.value = (poll.remainingMilliseconds / 1000).coerceAtLeast(1)
+            }
+            startTvLiveEventsLocalTickerIfNeeded()
+        } else {
+            tvActivePoll.value = null
+            tvActivePollSeconds.value = null
+        }
+        syncTvPollsPredictionsButton()
+    }
+
+    fun onTvPollSecondsLeft(seconds: Int?) {
+        if (!isTv) return
+        tvActivePollSeconds.value = seconds
+    }
+
+    fun onTvPollHidden() {
+        if (!isTv) return
+        tvActivePoll.value = null
+        tvActivePollSeconds.value = null
+        syncTvPollsPredictionsButton()
+    }
+
     fun onTvPredictionEvent(prediction: com.github.andreyasadchy.xtra.model.chat.Prediction) {
         val ctx = context ?: return
-        if (!isTv || _binding == null || isChatOpen || !isMaximized || !ctx.prefs().getBoolean(C.TV_CHAT_PREDICTIONS_POPUP, false)) {
+        if (isTv) {
+            when (prediction.status) {
+                "ACTIVE", "LOCKED" -> {
+                    val prevId = tvActivePrediction.value?.id
+                    if (prevId != null && prevId != prediction.id) {
+                        tvSelfBetOutcomeId.value = null
+                        tvSelfBetPoints.value = 0
+                    }
+                    tvActivePrediction.value = prediction
+                    if (prediction.status == "LOCKED") {
+                        tvActivePredictionSeconds.value = null
+                    }
+                    startTvLiveEventsLocalTickerIfNeeded()
+                }
+                else -> {
+                    tvActivePrediction.value = null
+                    tvActivePredictionSeconds.value = null
+                    tvSelfBetOutcomeId.value = null
+                    tvSelfBetPoints.value = 0
+                }
+            }
+            syncTvPollsPredictionsButton()
+        }
+        val predMode = C.getTvPredictionsPopupMode(ctx.prefs())
+        if (!isTv || _binding == null || isChatOpen || !isMaximized || predMode == 0) {
             hideTvPredictionPopup()
             return
         }
         val predId = prediction.id ?: prediction.title ?: return
         when (prediction.status) {
             "ACTIVE" -> {
-                if (tvPredictionStartShownId != predId) {
+                if (predMode == 2) {
                     tvPredictionStartShownId = predId
                     tvPredictionEndShownId = null
                     tvPredictionCurrent = prediction
-                    showTvPredictionPopup(autoHideMs = 12_000L)
-                } else if (tvPredictionView?.isVisible == true) {
+                    showTvPredictionPopup(autoHideMs = 0L)
+                } else if (tvPredictionStartShownId != predId) {
+                    tvPredictionStartShownId = predId
+                    tvPredictionEndShownId = null
                     tvPredictionCurrent = prediction
-                    renderTvPredictionPopup()
-                }
-            }
-            "RESOLVED", "RESOLVE_PENDING", "CANCELED", "CANCEL_PENDING" -> {
-                if (tvPredictionEndShownId != predId) {
-                    tvPredictionEndShownId = predId
-                    tvPredictionCurrent = prediction
-                    tvPredictionSeconds = null
-                    showTvPredictionPopup(autoHideMs = 12_000L)
+                    showTvPredictionPopup(autoHideMs = 30_000L)
                 } else if (tvPredictionView?.isVisible == true) {
                     tvPredictionCurrent = prediction
                     renderTvPredictionPopup()
                 }
             }
             "LOCKED" -> {
-                if (tvPredictionView?.isVisible == true) {
+                tvPredictionSeconds = null
+                hideTvPredictionPopup()
+            }
+            "RESOLVED", "RESOLVE_PENDING", "CANCELED", "CANCEL_PENDING" -> {
+                if (tvPredictionEndShownId != predId) {
+                    tvPredictionEndShownId = predId
                     tvPredictionCurrent = prediction
                     tvPredictionSeconds = null
+                    showTvPredictionPopup(autoHideMs = 15_000L)
+                } else if (tvPredictionView?.isVisible == true) {
+                    tvPredictionCurrent = prediction
                     renderTvPredictionPopup()
                 }
             }
@@ -4733,12 +4986,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     fun onTvPredictionSecondsLeft(seconds: Int?) {
         tvPredictionSeconds = seconds
+        tvActivePredictionSeconds.value = seconds
         if (tvPredictionView?.isVisible == true) {
             renderTvPredictionPopup()
         }
     }
 
-    fun onTvPredictionHidden() {
+    fun onTvPredictionHidden(clearActive: Boolean = true) {
+        if (clearActive) {
+            tvActivePrediction.value = null
+            tvActivePredictionSeconds.value = null
+            syncTvPollsPredictionsButton()
+        }
         hideTvPredictionPopup()
     }
 
@@ -4761,7 +5020,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         renderTvPredictionPopup()
         card.visibility = View.VISIBLE
         card.removeCallbacks(tvPredictionHideRunnable)
-        card.postDelayed(tvPredictionHideRunnable, autoHideMs)
+        if (autoHideMs > 0L) {
+            card.postDelayed(tvPredictionHideRunnable, autoHideMs)
+        }
     }
 
     private fun renderTvPredictionPopup() {
@@ -6594,6 +6855,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        tvLiveEventsLookupJob?.cancel()
+        tvLiveEventsLookupJob = null
+        tvLiveEventsTickerJob?.cancel()
+        tvLiveEventsTickerJob = null
+        tvLiveEventsLookupKey = null
         tvCoStreamLookupJob?.cancel()
         tvCoStreamLookupJob = null
         tvCoStreamObserveJob?.cancel()

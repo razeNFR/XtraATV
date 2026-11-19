@@ -246,6 +246,7 @@ object TvAccounts {
 
     private fun notifyStoresChanged(context: Context) {
         TvFavorites.reload(context)
+        TvBlacklist.reload(context)
         TvStats.notifyAccountSwitched()
         TvHomeRows.notifyAccountSwitched()
     }

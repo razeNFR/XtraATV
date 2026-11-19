@@ -340,8 +340,21 @@ object C {
     const val TV_DISABLE_SOFT_KEYBOARD = "tv_disable_soft_keyboard"
     const val TV_FOLLOWED_LIVE_SORT = "tv_followed_live_sort"
     const val TV_CHAT_PREDICTIONS_POPUP = "tv_chat_predictions_popup"
+    /** TV: hidden-chat predictions popup mode: 0 = off, 1 = 30 s display, 2 = full open-voting duration. */
+    const val TV_CHAT_PREDICTIONS_MODE = "tv_chat_predictions_mode"
+    const val TV_DIM_WARM_LEVEL = "tv_dim_warm_level"
+    const val TV_MULTISTREAM_2_STACKED = "tv_multistream_2_stacked"
+    const val TV_MULTISTREAM_2_SWAP_CHATS = "tv_multistream_2_swap_chats"
+    const val FOLLOW_REJECTED_PREFIX = "FOLLOW_REJECTED:"
     /** TV: pinned chat message banner mode: 0 = hidden, 1 = temporary (20 s, default), 2 = always visible. */
     const val TV_CHAT_PINNED_MODE = "tv_chat_pinned_mode"
+
+    fun getTvPredictionsPopupMode(prefs: android.content.SharedPreferences): Int {
+        if (prefs.contains(TV_CHAT_PREDICTIONS_MODE)) {
+            return prefs.getInt(TV_CHAT_PREDICTIONS_MODE, 0).coerceIn(0, 2)
+        }
+        return if (prefs.getBoolean(TV_CHAT_PREDICTIONS_POPUP, false)) 1 else 0
+    }
     /** Show source-channel avatar badge on Shared Chat (Stream Together) messages. */
     const val CHAT_SHARED_BADGES = "chat_shared_badges"
     /** TV player HUD buttons for Channel Points / Drops store and 30 s Clip creation. */

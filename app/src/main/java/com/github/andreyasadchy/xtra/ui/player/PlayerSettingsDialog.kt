@@ -143,6 +143,17 @@ class PlayerSettingsDialog : BottomSheetDialogFragment() {
                     (parentFragment as? PlayerFragment)?.checkBookmark()
                 }
             }
+            if ((type == BasePlaybackService.VIDEO || type == BasePlaybackService.CLIP) &&
+                !requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) &&
+                requireContext().prefs().getBoolean(C.PLAYER_MENU_CHAT_DISCONNECT, true)
+            ) {
+                menuChatDisconnect.visibility = View.VISIBLE
+                menuChatDisconnect.text = getString(R.string.tv_restart_chat)
+                menuChatDisconnect.setOnClickListener {
+                    (parentFragment as? PlayerFragment)?.restartTvChat()
+                    dismiss()
+                }
+            }
             if (type != BasePlaybackService.OFFLINE_VIDEO && requireContext().prefs().getBoolean(C.PLAYER_MENU_DOWNLOAD, true)) {
                 menuDownload.visibility = View.VISIBLE
                 menuDownload.setOnClickListener {

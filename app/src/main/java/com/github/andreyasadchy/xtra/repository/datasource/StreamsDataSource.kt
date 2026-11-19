@@ -92,7 +92,7 @@ class StreamsDataSource(
         offset = items.lastOrNull()?.cursor?.toString()
         val nextPage = data.pageInfo?.hasNextPage != false
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list),
             prevKey = null,
             nextKey = if (!offset.isNullOrBlank() && nextPage) {
                 (params.key ?: 1) + 1
@@ -131,7 +131,7 @@ class StreamsDataSource(
         offset = items.lastOrNull()?.cursor
         val nextPage = data.pageInfo?.hasNextPage != false
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list),
             prevKey = null,
             nextKey = if (!offset.isNullOrBlank() && nextPage) {
                 (params.key ?: 1) + 1
@@ -175,7 +175,7 @@ class StreamsDataSource(
         }
         offset = response.pagination?.cursor
         return LoadResult.Page(
-            data = list,
+            data = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list),
             prevKey = null,
             nextKey = if (!offset.isNullOrBlank()) {
                 (params.key ?: 1) + 1

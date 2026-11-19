@@ -118,6 +118,8 @@ class MultiStreamFragment : Fragment() {
      */
     private var focusMode = false
     private var mosaic56 = true
+    private var stacked2 = false
+    private var swapSideChats2 = false
     private var bigLogin: String? = null
 
     /** 2 streams: width of the first stream, in percent of the screen. */
@@ -205,7 +207,10 @@ class MultiStreamFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        mosaic56 = requireContext().prefs().getBoolean(C.TV_MULTISTREAM_MOSAIC, true)
+        val prefs = requireContext().prefs()
+        mosaic56 = prefs.getBoolean(C.TV_MULTISTREAM_MOSAIC, true)
+        stacked2 = prefs.getBoolean(C.TV_MULTISTREAM_2_STACKED, false)
+        swapSideChats2 = prefs.getBoolean(C.TV_MULTISTREAM_2_SWAP_CHATS, false)
         val streams = BundleCompat.getParcelableArrayList(requireArguments(), KEY_STREAMS, Stream::class.java).orEmpty().take(MAX)
         streams.forEach { addTile(it) }
         // the dimming of the streams covers the cells and their chats (the panels are over it, not dimmed)
@@ -508,6 +513,21 @@ class MultiStreamFragment : Fragment() {
         }
         val idx = tiles.indexOf(tile)
         if (idx < 0) return null
+        if (count == 2) {
+            return if (stacked2) {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_DOWN -> if (idx == 0) tiles.getOrNull(1) else null
+                    KeyEvent.KEYCODE_DPAD_UP -> if (idx == 1) tiles.getOrNull(0) else null
+                    else -> null
+                }
+            } else {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> if (idx == 0) tiles.getOrNull(1) else null
+                    KeyEvent.KEYCODE_DPAD_LEFT -> if (idx == 1) tiles.getOrNull(0) else null
+                    else -> null
+                }
+            }
+        }
         if (count == 3 || count == 4) {
             val row = idx / 2
             val col = idx % 2
@@ -682,11 +702,19 @@ class MultiStreamFragment : Fragment() {
                         updateChats()
                     }
                     if (shown) {
-                        // this stream only: its chat above or under it
-                        val onTop = login in chatsOnTop
-                        actions += TvActionPanel.Action(getString(if (onTop) R.string.tv_multistream_chat_bottom else R.string.tv_multistream_chat_top), R.drawable.tv_ic_forum) {
-                            if (onTop) chatsOnTop.remove(login) else chatsOnTop.add(login)
-                            layoutTiles()
+                        if (stacked2) {
+                            actions += TvActionPanel.Action(getString(R.string.tv_multistream_swap_side_chats), R.drawable.tv_ic_swap) {
+                                swapSideChats2 = !swapSideChats2
+                                context?.prefs()?.edit()?.putBoolean(C.TV_MULTISTREAM_2_SWAP_CHATS, swapSideChats2)?.apply()
+                                layoutTiles()
+                            }
+                        } else {
+                            // this stream only: its chat above or under it
+                            val onTop = login in chatsOnTop
+                            actions += TvActionPanel.Action(getString(if (onTop) R.string.tv_multistream_chat_bottom else R.string.tv_multistream_chat_top), R.drawable.tv_ic_forum) {
+                                if (onTop) chatsOnTop.remove(login) else chatsOnTop.add(login)
+                                layoutTiles()
+                            }
                         }
                     }
                 }
@@ -728,7 +756,16 @@ class MultiStreamFragment : Fragment() {
                 }
             }
         }
-        if (tiles.size == 5 || tiles.size == 6) {
+        if (tiles.size == 2) {
+            actions += TvActionPanel.Action(
+                getString(if (stacked2) R.string.tv_multistream_2_side_by_side else R.string.tv_multistream_2_stacked),
+                R.drawable.tv_ic_fullscreen,
+            ) {
+                stacked2 = !stacked2
+                context?.prefs()?.edit()?.putBoolean(C.TV_MULTISTREAM_2_STACKED, stacked2)?.apply()
+                layoutTiles()
+            }
+        } else if (tiles.size == 5 || tiles.size == 6) {
             when {
                 isFocusLayout() -> {
                     actions += TvActionPanel.Action(getString(R.string.tv_multistream_mosaic), R.drawable.tv_ic_fullscreen) {
@@ -826,7 +863,7 @@ class MultiStreamFragment : Fragment() {
             }
         }
         // 2 streams side by side: the share of the screen of this stream
-        val slider = if (tiles.size == 2) {
+        val slider = if (tiles.size == 2 && !stacked2) {
             val index = tiles.indexOf(tile)
             TvActionPanel.Slider(
                 label = getString(R.string.tv_multistream_size),
@@ -1573,17 +1610,29 @@ class MultiStreamFragment : Fragment() {
             val params = when (count) {
                 1 -> FrameLayout.LayoutParams(width, height)
                 2 -> {
-                    // side by side, each in 16:9 with its share of the width; its chat under it, or above it
-                    val first = width * split / 100
-                    val tileWidth = if (index == 0) first else width - first
-                    val tileHeight = minOf(tileWidth * 9 / 16, height)
-                    val login = tile.stream.channelLogin
-                    FrameLayout.LayoutParams(tileWidth, tileHeight).apply {
-                        leftMargin = if (index == 0) 0 else first
-                        topMargin = when {
-                            tile.chatContainer == null -> (height - tileHeight) / 2
-                            login in chatsOnTop -> height - tileHeight
-                            else -> 0
+                    if (stacked2) {
+                        // S0undTV-style double stream: 2 16:9 streams stacked vertically in the center, full-height chats on the sides
+                        val topH = height / 2
+                        val tileH = if (index == 0) topH else height - topH
+                        val refH = maxOf(topH, height - topH)
+                        val tileW = minOf(refH * 16 / 9, width)
+                        FrameLayout.LayoutParams(tileW, tileH).apply {
+                            leftMargin = (width - tileW) / 2
+                            topMargin = if (index == 0) 0 else topH
+                        }
+                    } else {
+                        // side by side, each in 16:9 with its share of the width; its chat under it, or above it
+                        val first = width * split / 100
+                        val tileWidth = if (index == 0) first else width - first
+                        val tileHeight = minOf(tileWidth * 9 / 16, height)
+                        val login = tile.stream.channelLogin
+                        FrameLayout.LayoutParams(tileWidth, tileHeight).apply {
+                            leftMargin = if (index == 0) 0 else first
+                            topMargin = when {
+                                tile.chatContainer == null -> (height - tileHeight) / 2
+                                login in chatsOnTop -> height - tileHeight
+                                else -> 0
+                            }
                         }
                     }
                 }
@@ -1679,14 +1728,25 @@ class MultiStreamFragment : Fragment() {
         if (width == 0 || height == 0) {
             return
         }
-        tiles.forEach { tile ->
-            val container = tile.chatContainer ?: return@forEach
-            val tileParams = tile.view.layoutParams as? FrameLayout.LayoutParams ?: return@forEach
-            val onTop = tile.stream.channelLogin in chatsOnTop
-            applyParams(container, FrameLayout.LayoutParams(tileParams.width, height - tileParams.height).apply {
-                leftMargin = tileParams.leftMargin
-                topMargin = if (onTop) 0 else tileParams.height
-            })
+        tiles.forEachIndexed { index, tile ->
+            val container = tile.chatContainer ?: return@forEachIndexed
+            val tileParams = tile.view.layoutParams as? FrameLayout.LayoutParams ?: return@forEachIndexed
+            if (tiles.size == 2 && stacked2) {
+                val sideWidth = ((width - tileParams.width) / 2).coerceAtLeast(0)
+                val onLeft = if (!swapSideChats2) index == 0 else index == 1
+                val chatW = if (onLeft) sideWidth else (width - tileParams.width - sideWidth).coerceAtLeast(0)
+                val chatLeft = if (onLeft) 0 else sideWidth + tileParams.width
+                applyParams(container, FrameLayout.LayoutParams(chatW, height).apply {
+                    leftMargin = chatLeft
+                    topMargin = 0
+                })
+            } else {
+                val onTop = tile.stream.channelLogin in chatsOnTop
+                applyParams(container, FrameLayout.LayoutParams(tileParams.width, height - tileParams.height).apply {
+                    leftMargin = tileParams.leftMargin
+                    topMargin = if (onTop) 0 else tileParams.height
+                })
+            }
         }
         cellChat?.let {
             when {

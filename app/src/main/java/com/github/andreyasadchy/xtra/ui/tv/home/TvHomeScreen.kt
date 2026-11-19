@@ -745,6 +745,52 @@ fun TvHomeScreen(
     }
 }
 
+@Composable
+private fun PlaybackBadgePill(
+    badge: com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.Badge,
+    small: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(5.dp)
+    val isPlaying = badge.kind == com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.Kind.PLAYING
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(if (isPlaying) accent else Color(0xE618181B))
+            .then(if (isPlaying) Modifier else Modifier.border(1.dp, accent.copy(alpha = 0.80f), shape))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isPlaying) {
+            Icon(
+                painterResource(R.drawable.baseline_play_arrow_black_48),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(if (small) 11.dp else 12.dp),
+            )
+            Spacer(Modifier.width(2.dp))
+            Text(
+                badge.label,
+                fontSize = if (small) 10.sp else 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                maxLines = 1,
+            )
+        } else {
+            Box(Modifier.size(if (small) 5.dp else 6.dp).background(accent, CircleShape))
+            Spacer(Modifier.width(4.dp))
+            Text(
+                badge.label,
+                fontSize = if (small) 10.sp else 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
 /**
  * Top spotlight ("À la une") blended seamlessly into the ambient background via multi-edge DstIn alpha feathering
  * (zero hard edges or dark cutout boxes).
@@ -865,6 +911,10 @@ private fun HeroBanner(
                     Box(Modifier.size(6.dp).background(Color.White, CircleShape))
                     Spacer(Modifier.width(5.dp))
                     Text("LIVE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                }
+                val heroPlaybackSnapshot by com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.state.collectAsState()
+                com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.badgeFor(context, stream.channelLogin, heroPlaybackSnapshot)?.let { badge ->
+                    PlaybackBadgePill(badge = badge, small = false)
                 }
                 Text(
                     context.getString(R.string.tv_featured_live),
@@ -2040,6 +2090,18 @@ private fun StreamCard(
                     .height(36.dp)
                     .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0x80000000))))
             )
+            // discreet Playing / PiP pill at bottom-start of the thumbnail
+            val playbackContext = LocalContext.current
+            val playbackSnapshot by com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.state.collectAsState()
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.badgeFor(playbackContext, stream.channelLogin, playbackSnapshot)?.let { badge ->
+                PlaybackBadgePill(
+                    badge = badge,
+                    small = small,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp),
+                )
+            }
             // how long the stream is live, at the bottom right
             actions.uptime(stream)?.let { uptime ->
                 Text(
