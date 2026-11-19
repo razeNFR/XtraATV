@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Context.DEVICE_POLICY_SERVICE
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.ext.SdkExtensions
@@ -50,8 +51,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -67,6 +70,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -157,12 +161,16 @@ import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.TranslateRemoteModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.chromium.net.CronetProvider
 import java.util.Collections
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Unified 2-column Google TV Compose Settings page integrated inside [MainActivity]'s NavHostFragment.
@@ -311,6 +319,7 @@ class TvSettingsFragment : Fragment() {
         savedInstanceState: Bundle?,
     ): View {
         val context = requireContext()
+        TvExperimentalAdblock.normalizePrefs(context)
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, subScreenBackCallback)
         consumePendingSubScreen(context)
         val act = activity as? MainActivity
@@ -396,13 +405,6 @@ class TvSettingsFragment : Fragment() {
                 }
             }
         }
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                customProxyViewModel.statusChanged.collect {
-                    refreshStamp.intValue++
-                }
-            }
-        }
     }
 
     override fun onResume() {
@@ -481,8 +483,11 @@ class TvSettingsFragment : Fragment() {
 
         val leftCategoryRequesters = remember { List(CATEGORIES.size) { FocusRequester() } }
         val searchRequester = remember { FocusRequester() }
+        val micRequester = remember { FocusRequester() }
         val subBackRequester = remember { FocusRequester() }
         val rightFirstRequester = remember { FocusRequester() }
+        var focusedLeftSlot by remember { mutableIntStateOf(catIdx) }
+        var focusedOnMic by remember { mutableStateOf(false) }
 
         LaunchedEffect(focusLeftTrigger.intValue) {
             if (focusLeftTrigger.intValue > 0) {
@@ -520,13 +525,48 @@ class TvSettingsFragment : Fragment() {
                     .width(264.dp)
                     .fillMaxHeight()
                     .onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                            (activity as? MainActivity)?.openTvMenu()
-                            true
-                        } else if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionRight) {
-                            focusRightTrigger.intValue++
-                            true
-                        } else false
+                        if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (ev.key) {
+                            Key.DirectionLeft -> {
+                                if (focusedOnMic) {
+                                    runCatching { searchRequester.requestFocus() }
+                                } else {
+                                    (activity as? MainActivity)?.openTvMenu()
+                                }
+                                true
+                            }
+                            Key.DirectionRight -> {
+                                if (focusedLeftSlot == -2 && !focusedOnMic) {
+                                    runCatching { micRequester.requestFocus() }
+                                } else {
+                                    focusRightTrigger.intValue++
+                                }
+                                true
+                            }
+                            Key.DirectionUp -> {
+                                when {
+                                    focusedLeftSlot > 0 -> runCatching { leftCategoryRequesters[focusedLeftSlot - 1].requestFocus() }
+                                    focusedLeftSlot == 0 -> runCatching {
+                                        (if (activeSub != null) subBackRequester else searchRequester).requestFocus()
+                                    }
+                                    focusedLeftSlot == -1 -> runCatching { searchRequester.requestFocus() }
+                                }
+                                true
+                            }
+                            Key.DirectionDown -> {
+                                when {
+                                    focusedLeftSlot == -2 -> runCatching {
+                                        (if (activeSub != null) subBackRequester else leftCategoryRequesters.firstOrNull())?.requestFocus()
+                                    }
+                                    focusedLeftSlot == -1 -> runCatching { leftCategoryRequesters.firstOrNull()?.requestFocus() }
+                                    focusedLeftSlot in 0 until CATEGORIES.lastIndex -> runCatching {
+                                        leftCategoryRequesters[focusedLeftSlot + 1].requestFocus()
+                                    }
+                                }
+                                true
+                            }
+                            else -> false
+                        }
                     }
             ) {
                 Row(
@@ -571,12 +611,27 @@ class TvSettingsFragment : Fragment() {
                         query = query,
                         modifier = Modifier
                             .weight(1f)
-                            .focusRequester(searchRequester),
+                            .focusRequester(searchRequester)
+                            .onFocusChanged {
+                                if (it.isFocused) {
+                                    focusedLeftSlot = -2
+                                    focusedOnMic = false
+                                }
+                            },
                         onClick = { showSearchPrompt(context) },
                     )
+                    val micMod = Modifier
+                        .focusRequester(micRequester)
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                focusedLeftSlot = -2
+                                focusedOnMic = true
+                            }
+                        }
                     if (query.isNotBlank()) {
                         SmallIconPill(
                             iconRes = R.drawable.tv_ic_close,
+                            modifier = micMod,
                             onClick = {
                                 searchQueryState.value = ""
                                 updateBackCallback()
@@ -585,6 +640,7 @@ class TvSettingsFragment : Fragment() {
                     } else {
                         SmallIconPill(
                             iconRes = R.drawable.tv_ic_mic,
+                            modifier = micMod,
                             onClick = {
                                 runCatching {
                                     voiceSearchLauncher?.launch(TvVoice.createIntent(context.getString(R.string.search)))
@@ -598,7 +654,14 @@ class TvSettingsFragment : Fragment() {
                     Spacer(Modifier.height(8.dp))
                     SubScreenBackPill(
                         title = activeSub.title,
-                        modifier = Modifier.focusRequester(subBackRequester),
+                        modifier = Modifier
+                            .focusRequester(subBackRequester)
+                            .onFocusChanged {
+                                if (it.isFocused) {
+                                    focusedLeftSlot = -1
+                                    focusedOnMic = false
+                                }
+                            },
                         onClick = {
                             if (subScreenStack.isNotEmpty()) {
                                 subScreenStack.removeAt(subScreenStack.lastIndex)
@@ -612,18 +675,24 @@ class TvSettingsFragment : Fragment() {
 
                 Spacer(Modifier.height(10.dp))
 
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp),
                 ) {
-                    itemsIndexed(CATEGORIES) { index, cat ->
+                    CATEGORIES.forEachIndexed { index, cat ->
                         val isSelected = query.isBlank() && index == catIdx
                         CategoryRow(
                             title = context.getString(cat.titleRes),
                             iconRes = cat.iconRes,
                             selected = isSelected,
                             requester = leftCategoryRequesters[index],
+                            onFocused = {
+                                focusedLeftSlot = index
+                                focusedOnMic = false
+                            },
                             onHoverSelect = {
                                 if (selectedCategoryIndex.intValue != index || subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank()) {
                                     selectedCategoryIndex.intValue = index
@@ -751,11 +820,11 @@ class TvSettingsFragment : Fragment() {
     }
 
     @Composable
-    private fun SmallIconPill(iconRes: Int, onClick: () -> Unit) {
+    private fun SmallIconPill(iconRes: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
@@ -808,6 +877,7 @@ class TvSettingsFragment : Fragment() {
         iconRes: Int,
         selected: Boolean,
         requester: FocusRequester,
+        onFocused: () -> Unit,
         onHoverSelect: () -> Unit,
         onClick: () -> Unit,
     ) {
@@ -815,7 +885,7 @@ class TvSettingsFragment : Fragment() {
         val focused by interaction.collectIsFocusedAsState()
         LaunchedEffect(focused) {
             if (focused) {
-                delay(60)
+                delay(130)
                 onHoverSelect()
             }
         }
@@ -823,6 +893,7 @@ class TvSettingsFragment : Fragment() {
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(requester)
+                .onFocusChanged { if (it.isFocused) onFocused() }
                 .clip(RoundedCornerShape(11.dp))
                 .background(
                     when {
@@ -1157,6 +1228,12 @@ class TvSettingsFragment : Fragment() {
         val context = LocalContext.current
         val list by customProxyViewModel.list.collectAsState()
         val stamp = refreshStamp.intValue
+
+        LaunchedEffect(Unit) {
+            customProxyViewModel.statusChanged.collect {
+                refreshStamp.intValue++
+            }
+        }
 
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -1594,37 +1671,29 @@ class TvSettingsFragment : Fragment() {
     // XML Preference Tree Builder & Action Handlers
     // =========================================================================
 
-    @SuppressLint("RestrictedApi")
     private fun buildNodesForXml(context: Context, xmlRes: Int, proxyCount: Int): List<PrefNode> {
         TvExperimentalAdblock.normalizePrefs(context)
-        val screen = PreferenceManager(context).inflateFromResource(context, xmlRes, null)
-        val result = mutableListOf<PrefNode>()
+        val rawEntries = parseXmlEntries(context, xmlRes)
+        val caps = deviceCaps(context)
+        val result = ArrayList<PrefNode>(rawEntries.size * 4)
 
-        fun visitGroup(group: PreferenceGroup) {
-            for (i in 0 until group.preferenceCount) {
-                val pref = group.getPreference(i)
-                if (!pref.isVisible) continue
-                if (pref is PreferenceCategory) {
-                    val before = result.size
-                    val catHeader = pref.title?.toString()?.takeIf { it.isNotBlank() }
-                    val children = mutableListOf<PrefNode>()
-                    for (j in 0 until pref.preferenceCount) {
-                        val child = pref.getPreference(j)
-                        mapPreference(context, child, xmlRes, proxyCount)?.let { children.add(it) }
+        for (entry in rawEntries) {
+            when (entry) {
+                is RawXmlEntry.HeaderGroup -> {
+                    val children = ArrayList<PrefNode>(entry.children.size)
+                    for (child in entry.children) {
+                        mapRawPreference(context, child, xmlRes, proxyCount, caps)?.let { children.add(it) }
                     }
                     if (children.isNotEmpty()) {
-                        if (catHeader != null) result.add(PrefNode.Header(catHeader))
+                        if (entry.title != null) result.add(PrefNode.Header(entry.title))
                         result.addAll(children)
-                    } else if (result.size > before) {
-                        // no-op
                     }
-                } else {
-                    mapPreference(context, pref, xmlRes, proxyCount)?.let { result.add(it) }
+                }
+                is RawXmlEntry.Single -> {
+                    mapRawPreference(context, entry.item, xmlRes, proxyCount, caps)?.let { result.add(it) }
                 }
             }
         }
-
-        visitGroup(screen)
         return result
     }
 
@@ -1672,16 +1741,17 @@ class TvSettingsFragment : Fragment() {
         return results
     }
 
-    private fun mapPreference(
+    private fun mapRawPreference(
         context: Context,
-        pref: Preference,
+        raw: RawPrefItem,
         xmlRes: Int,
         proxyCount: Int,
+        caps: DeviceCaps,
     ): PrefNode.Item? {
-        val key = pref.key.orEmpty()
+        val key = raw.key
         if (key in MaterialPreferenceFragment.TV_HIDDEN_KEYS) return null
         if (xmlRes == R.xml.adblock_preferences && key == "video_swap_settings") return null
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !context.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+        if (!caps.hasPip) {
             if (key == C.PLAYER_PICTURE_IN_PICTURE || key == C.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED || key == C.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED) {
                 return null
             }
@@ -1689,14 +1759,11 @@ class TvSettingsFragment : Fragment() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && key == C.PLAYER_ROUNDED_CORNER_PADDING) return null
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P && (key == C.UI_DRAW_BEHIND_CUTOUTS || key == C.PLAYER_AUDIO_COMPRESSOR_BUTTON)) return null
 
-        val arm64 = Build.SUPPORTED_64_BIT_ABIS.firstOrNull() == "arm64-v8a"
-        if (!arm64 && (key == "chat_translate" || key == "downloaded_languages" || key == "chat_translate_target")) {
+        if (!caps.arm64 && (key == "chat_translate" || key == "downloaded_languages" || key == "chat_translate_target")) {
             return null
         }
 
-        val httpEngine = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7
-        val cronet = runCatching { CronetProvider.getAllProviders(context).any { it.isEnabled } }.getOrDefault(false)
-        if (key == C.NETWORK_LIBRARY && !httpEngine && !cronet) return null
+        if (key == C.NETWORK_LIBRARY && !caps.httpEngine && !caps.cronet) return null
 
         val prefs = context.prefs()
         val expOn = prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
@@ -1704,9 +1771,9 @@ class TvSettingsFragment : Fragment() {
         val streamProxyOn = prefs.getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
         val anyProxyOn = !expOn && (customProxyOn || streamProxyOn)
 
-        var enabled = pref.isEnabled
+        var enabled = raw.isEnabled
         var disabledHint: (() -> String)? = null
-        val depKey = pref.dependency
+        val depKey = raw.dependency
         if (!depKey.isNullOrBlank()) {
             enabled = enabled && prefs.getBoolean(depKey, false)
         }
@@ -1728,33 +1795,31 @@ class TvSettingsFragment : Fragment() {
             }
         }
 
-        val iconRes = PLAYER_BUTTON_ICONS[key] ?: TvSettingIcons.iconOf(pref)
-
-        var title = when (key) {
+        val title = when (key) {
             C.PLAYER_ADBLOCK -> context.getString(R.string.tv_adblock_swap_title)
             "about_app" -> "${context.getString(R.string.app_name)} ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
-            else -> pref.title?.toString().orEmpty()
+            else -> raw.title
         }
         if (title.isBlank()) return null
 
-        var summary: String? = pref.summary?.toString()
-        val kind: Kind = when (pref) {
-            is TwoStatePreference -> {
+        var summary: String? = raw.summary
+        val kind: Kind = when (val rk = raw.rawKind) {
+            is RawKind.Toggle -> {
                 val checked = when (key) {
                     C.PLAYER_ADBLOCK -> if (!anyProxyOn) true else prefs.getBoolean(C.PLAYER_ADBLOCK, true)
                     C.TV_EXPERIMENTAL_ADBLOCK -> expOn
                     C.PLAYER_USE_STREAM_PROXY -> !expOn && streamProxyOn
-                    else -> if (key.isNotBlank() && prefs.contains(key)) prefs.getBoolean(key, pref.isChecked) else pref.isChecked
+                    else -> if (key.isNotBlank() && prefs.contains(key)) prefs.getBoolean(key, rk.defaultChecked) else rk.defaultChecked
                 }
                 if (key == C.PLAYER_ADBLOCK) {
                     summary = context.getString(R.string.tv_adblock_summary_1440p)
                 }
                 Kind.Toggle(checked)
             }
-            is ListPreference -> {
-                var entries = pref.entries?.map { it.toString() }.orEmpty()
-                var values = pref.entryValues?.map { it.toString() }.orEmpty()
-                var currentValue = if (key.isNotBlank() && prefs.contains(key)) prefs.getString(key, pref.value) else pref.value
+            is RawKind.Choice -> {
+                var entries = rk.entries
+                var values = rk.entryValues
+                var currentValue = if (key.isNotBlank() && prefs.contains(key)) prefs.getString(key, rk.defaultValue) else rk.defaultValue
 
                 when (key) {
                     C.UI_LANGUAGE -> {
@@ -1808,15 +1873,14 @@ class TvSettingsFragment : Fragment() {
                         }
                     }
                     "chat_translate_target" -> {
-                        val langs = TranslateLanguage.getAllLanguages()
-                        entries = langs.map { Locale.forLanguageTag(it).displayLanguage }
-                        values = langs
+                        entries = caps.translateLanguages.map { it.second }
+                        values = caps.translateLanguages.map { it.first }
                     }
                     C.NETWORK_LIBRARY -> {
-                        if (!cronet) {
+                        if (!caps.cronet) {
                             entries = context.resources.getStringArray(R.array.networkLibraryEntriesNoCronet).toList()
                             values = entries
-                        } else if (!httpEngine) {
+                        } else if (!caps.httpEngine) {
                             entries = context.resources.getStringArray(R.array.networkLibraryEntriesNoHttpEngine).toList()
                             values = entries
                         }
@@ -1833,29 +1897,28 @@ class TvSettingsFragment : Fragment() {
                 val subtitle = if (key == C.TV_STREAM_END_ACTION) context.getString(R.string.tv_stream_end_raid_note) else null
                 Kind.Choice(currentValue, entries, values, colors, subtitle)
             }
-            is MultiSelectListPreference -> {
-                val entries = pref.entries?.map { it.toString() }.orEmpty()
-                val values = pref.entryValues?.map { it.toString() }.orEmpty()
+            is RawKind.MultiChoice -> {
+                val entries = rk.entries
+                val values = rk.entryValues
                 val selected = if (key.isNotBlank() && prefs.contains(key)) {
-                    prefs.getStringSet(key, pref.values).orEmpty()
-                } else pref.values.orEmpty()
+                    prefs.getStringSet(key, rk.defaultValues).orEmpty()
+                } else rk.defaultValues
                 if (summary.isNullOrBlank()) {
                     val labels = values.mapIndexedNotNull { idx, v -> if (v in selected) entries.getOrNull(idx) else null }
                     summary = if (labels.isEmpty()) context.getString(R.string.disabled_setting) else labels.joinToString(", ")
                 }
                 Kind.MultiChoice(selected, entries, values)
             }
-            is SeekBarPreference -> {
-                val cur = if (key.isNotBlank() && prefs.contains(key)) prefs.getInt(key, pref.value) else pref.value
-                val step = pref.seekBarIncrement.takeIf { it > 0 } ?: 1
-                Kind.Slider(cur, pref.min, pref.max, step)
+            is RawKind.Slider -> {
+                val cur = if (key.isNotBlank() && prefs.contains(key)) prefs.getInt(key, rk.defaultValue) else rk.defaultValue
+                Kind.Slider(cur, rk.min, rk.max, rk.step)
             }
-            is EditTextPreference -> {
+            is RawKind.TextInput -> {
                 val tokenMapping = TOKEN_PREF_KEYS[key]
                 val cur = if (tokenMapping != null) {
                     context.tokenPrefs().getString(tokenMapping, "").orEmpty()
                 } else {
-                    prefs.getString(key, pref.text).orEmpty()
+                    prefs.getString(key, rk.defaultText).orEmpty()
                 }
                 when (key) {
                     C.PLAYER_REWIND -> summary = context.getString(R.string.seconds_full, cur.ifBlank { "10" })
@@ -1866,10 +1929,9 @@ class TvSettingsFragment : Fragment() {
                 val numeric = key == C.PLAYER_REWIND || key == C.PLAYER_FORWARD || key == "update_check_frequency"
                 Kind.TextInput(cur, isNumeric = numeric, useTokenPrefs = tokenMapping != null, tokenKey = tokenMapping)
             }
-            else -> {
+            RawKind.Action -> {
                 when (key) {
                     "tv_favorites" -> {
-                        TvFavorites.load(context)
                         val count = TvFavorites.items.value.size
                         summary = if (count == 0) context.getString(R.string.tv_favorites_empty) else context.getString(R.string.tv_favorites_count, count)
                     }
@@ -1892,7 +1954,7 @@ class TvSettingsFragment : Fragment() {
                         ).joinToString(" · ") + "\n" + context.getString(R.string.tv_proxies_1440p)
                     }
                     "about_app" -> summary = TvAbout.CREDIT_TEXT
-                    "about_device" -> summary = TvAbout.deviceSummary()
+                    "about_device" -> summary = caps.deviceSummary
                 }
                 Kind.Action(hasChevron = key in CHEVRON_KEYS)
             }
@@ -1902,7 +1964,7 @@ class TvSettingsFragment : Fragment() {
             key = key,
             title = title,
             summary = summary,
-            iconRes = iconRes,
+            iconRes = raw.iconRes,
             enabled = enabled,
             disabledHint = disabledHint,
             kind = kind,
@@ -2809,5 +2871,177 @@ class TvSettingsFragment : Fragment() {
             "player_viewericon" to R.drawable.baseline_person_black_24,
             "player_pause" to R.drawable.baseline_play_arrow_black_48,
         )
+
+        private val ALL_PREWARM_XMLS = listOf(
+            R.xml.xtratv_preferences,
+            R.xml.tv_settings_player,
+            R.xml.player_preferences,
+            R.xml.playback_preferences,
+            R.xml.buffer_preferences,
+            R.xml.player_button_preferences,
+            R.xml.player_menu_preferences,
+            R.xml.chat_preferences,
+            R.xml.tv_settings_interface,
+            R.xml.ui_preferences,
+            R.xml.tv_settings_ads,
+            R.xml.adblock_preferences,
+            R.xml.download_preferences,
+            R.xml.tv_settings_updates,
+            R.xml.update_preferences,
+            R.xml.tv_settings_advanced,
+            R.xml.api_token_preferences,
+            R.xml.debug_preferences,
+            R.xml.tv_settings_about,
+        )
+
+        private class DeviceCaps(appCtx: Context) {
+            val hasPip: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                appCtx.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+            val arm64: Boolean = Build.SUPPORTED_64_BIT_ABIS.firstOrNull() == "arm64-v8a"
+            val httpEngine: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7
+            val cronet: Boolean = runCatching {
+                CronetProvider.getAllProviders(appCtx).any { it.isEnabled }
+            }.getOrDefault(false)
+            val deviceSummary: String = TvAbout.deviceSummary()
+            val translateLanguages: List<Pair<String, String>> by lazy {
+                TranslateLanguage.getAllLanguages().map { it to Locale.forLanguageTag(it).displayLanguage }
+            }
+        }
+
+        private sealed interface RawKind {
+            data class Toggle(val defaultChecked: Boolean) : RawKind
+            data class Choice(
+                val defaultValue: String?,
+                val entries: List<String>,
+                val entryValues: List<String>,
+            ) : RawKind
+            data class MultiChoice(
+                val defaultValues: Set<String>,
+                val entries: List<String>,
+                val entryValues: List<String>,
+            ) : RawKind
+            data class Slider(val defaultValue: Int, val min: Int, val max: Int, val step: Int) : RawKind
+            data class TextInput(val defaultText: String?) : RawKind
+            data object Action : RawKind
+        }
+
+        private data class RawPrefItem(
+            val key: String,
+            val title: String,
+            val summary: String?,
+            val isEnabled: Boolean,
+            val dependency: String?,
+            val iconRes: Int,
+            val rawKind: RawKind,
+        )
+
+        private sealed interface RawXmlEntry {
+            data class HeaderGroup(val title: String?, val children: List<RawPrefItem>) : RawXmlEntry
+            data class Single(val item: RawPrefItem) : RawXmlEntry
+        }
+
+        @Volatile
+        private var cachedDeviceCaps: DeviceCaps? = null
+        private val parsedXmlCache = ConcurrentHashMap<String, List<RawXmlEntry>>()
+        private val xmlInflateLock = Any()
+        private val prewarmScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        private fun deviceCaps(context: Context): DeviceCaps {
+            cachedDeviceCaps?.let { return it }
+            return synchronized(xmlInflateLock) {
+                cachedDeviceCaps ?: DeviceCaps(context.applicationContext).also { cachedDeviceCaps = it }
+            }
+        }
+
+        private fun parseRawPrefItem(pref: Preference): RawPrefItem {
+            val key = pref.key.orEmpty()
+            val iconRes = PLAYER_BUTTON_ICONS[key] ?: TvSettingIcons.iconOf(pref)
+            val title = pref.title?.toString().orEmpty()
+            val summary = if (pref is EditTextPreference && pref.summaryProvider != null) {
+                null
+            } else {
+                pref.summary?.toString()
+            }
+            val rawKind: RawKind = when (pref) {
+                is TwoStatePreference -> RawKind.Toggle(defaultChecked = pref.isChecked)
+                is ListPreference -> RawKind.Choice(
+                    defaultValue = pref.value,
+                    entries = pref.entries?.map { it.toString() }.orEmpty(),
+                    entryValues = pref.entryValues?.map { it.toString() }.orEmpty(),
+                )
+                is MultiSelectListPreference -> RawKind.MultiChoice(
+                    defaultValues = pref.values?.toSet().orEmpty(),
+                    entries = pref.entries?.map { it.toString() }.orEmpty(),
+                    entryValues = pref.entryValues?.map { it.toString() }.orEmpty(),
+                )
+                is SeekBarPreference -> RawKind.Slider(
+                    defaultValue = pref.value,
+                    min = pref.min,
+                    max = pref.max,
+                    step = pref.seekBarIncrement.takeIf { it > 0 } ?: 1,
+                )
+                is EditTextPreference -> RawKind.TextInput(defaultText = pref.text)
+                else -> RawKind.Action
+            }
+            return RawPrefItem(
+                key = key,
+                title = title,
+                summary = summary,
+                isEnabled = pref.isEnabled,
+                dependency = pref.dependency,
+                iconRes = iconRes,
+                rawKind = rawKind,
+            )
+        }
+
+        @SuppressLint("RestrictedApi")
+        private fun parseXmlEntries(context: Context, xmlRes: Int): List<RawXmlEntry> {
+            val cacheKey = "${context.resources.configuration.locales.toLanguageTags()}:$xmlRes"
+            parsedXmlCache[cacheKey]?.let { return it }
+            return synchronized(xmlInflateLock) {
+                parsedXmlCache[cacheKey]?.let { return@synchronized it }
+                val themedCtx = androidx.appcompat.view.ContextThemeWrapper(context, R.style.DarkTheme)
+                val pm = PreferenceManager(themedCtx).apply {
+                    sharedPreferencesName = "tv_xml_defaults_only"
+                }
+                val screen = pm.inflateFromResource(themedCtx, xmlRes, null)
+                val entries = ArrayList<RawXmlEntry>(screen.preferenceCount)
+                for (i in 0 until screen.preferenceCount) {
+                    val pref = screen.getPreference(i)
+                    if (!pref.isVisible) continue
+                    if (pref is PreferenceCategory) {
+                        val catHeader = pref.title?.toString()?.takeIf { it.isNotBlank() }
+                        val children = ArrayList<RawPrefItem>(pref.preferenceCount)
+                        for (j in 0 until pref.preferenceCount) {
+                            val child = pref.getPreference(j)
+                            if (!child.isVisible) continue
+                            children.add(parseRawPrefItem(child))
+                        }
+                        if (children.isNotEmpty()) {
+                            entries.add(RawXmlEntry.HeaderGroup(catHeader, children))
+                        }
+                    } else {
+                        entries.add(RawXmlEntry.Single(parseRawPrefItem(pref)))
+                    }
+                }
+                parsedXmlCache[cacheKey] = entries
+                entries
+            }
+        }
+
+        fun prewarmAsync(context: Context) {
+            val config = Configuration(context.resources.configuration)
+            val appCtx = context.applicationContext
+            prewarmScope.launch {
+                runCatching {
+                    val localizedCtx = appCtx.createConfigurationContext(config)
+                    deviceCaps(localizedCtx)
+                    ALL_PREWARM_XMLS.forEach { xmlRes ->
+                        runCatching { parseXmlEntries(localizedCtx, xmlRes) }
+                    }
+                }
+            }
+        }
     }
 }

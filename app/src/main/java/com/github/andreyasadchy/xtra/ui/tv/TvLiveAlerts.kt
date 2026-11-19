@@ -282,15 +282,17 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
         } else {
             // several at the same time: one banner for all of them
             title = context.getString(R.string.tv_live_alert_many, firstName, streams.size - 1)
-            subtitle = streams.drop(1).take(4).joinToString(", ") { it.channelName ?: it.channelLogin ?: "" }
+            subtitle = streams.drop(1).take(4).joinToString(", ") { it.channelName ?: it.channelLogin ?: "" }.ifBlank { null }
         }
+        val padV = (12 * density).toInt()
+        val padStart = (12 * density).toInt()
+        val padEnd = (16 * density).toInt()
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val padding = (12 * density).toInt()
-            setPadding(padding, padding, (16 * density).toInt(), padding)
+            setPadding(padStart, padV, padEnd, padV)
             background = GradientDrawable().apply {
-                setColor(Color.argb(235, 24, 24, 28))
+                setColor(Color.argb(238, 24, 24, 28))
                 cornerRadius = 18 * density
                 setStroke((1 * density).toInt(), Color.argb(60, 255, 255, 255))
             }
@@ -298,61 +300,69 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
             isFocusable = false
             isClickable = false
         }
-        val size = (48 * density).toInt()
-        row.addView(ImageView(context).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setOval(0, 0, view.width, view.height)
+
+        val avatarGapEnd = (14 * density).toInt()
+        val avatarBlockWidth: Int
+        if (streams.size == 1) {
+            val size = (48 * density).toInt()
+            avatarBlockWidth = size
+            row.addView(ImageView(context).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setOval(0, 0, view.width, view.height)
+                    }
                 }
+                clipToOutline = true
+                setBackgroundColor(Color.DKGRAY)
+                first.channelImage?.let { load(it) }
+            }, LinearLayout.LayoutParams(size, size).apply { marginEnd = avatarGapEnd })
+        } else {
+            val shownAvatars = streams.take(3)
+            val ringPad = (2 * density).toInt()
+            val outerSize = (42 * density).toInt()
+            val stepPx = (26 * density).toInt()
+            avatarBlockWidth = outerSize + (shownAvatars.size - 1) * stepPx
+            val stack = FrameLayout(context)
+            shownAvatars.forEachIndexed { idx, stream ->
+                val holder = FrameLayout(context).apply {
+                    setPadding(ringPad, ringPad, ringPad, ringPad)
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(Color.rgb(24, 24, 28))
+                    }
+                }
+                val img = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    outlineProvider = object : ViewOutlineProvider() {
+                        override fun getOutline(view: View, outline: Outline) {
+                            outline.setOval(0, 0, view.width, view.height)
+                        }
+                    }
+                    clipToOutline = true
+                    setBackgroundColor(Color.DKGRAY)
+                    stream.channelImage?.let { load(it) }
+                }
+                holder.addView(img, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                stack.addView(holder, FrameLayout.LayoutParams(outerSize, outerSize, Gravity.CENTER_VERTICAL or Gravity.START).apply {
+                    marginStart = idx * stepPx
+                })
             }
-            clipToOutline = true
-            setBackgroundColor(Color.DKGRAY)
-            first.channelImage?.let { load(it) }
-        }, LinearLayout.LayoutParams(size, size).apply { marginEnd = (14 * density).toInt() })
-        val textMax = (context.resources.displayMetrics.widthPixels * 0.38f).toInt()
-        val texts = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        texts.addView(LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(TextView(context).apply {
-                text = context.getString(R.string.tv_live_alert_badge)
-                setTextColor(Color.WHITE)
-                textSize = 11f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                val h = (6 * density).toInt()
-                setPadding(h, (1 * density).toInt(), h, (1 * density).toInt())
-                background = GradientDrawable().apply {
-                    setColor(Color.rgb(235, 4, 0))
-                    cornerRadius = 4 * density
-                }
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = (8 * density).toInt() })
-            addView(TextView(context).apply {
-                text = title
-                setTextColor(Color.WHITE)
-                textSize = 17f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                maxLines = 1
-                maxWidth = textMax
-                ellipsize = TextUtils.TruncateAt.END
-            })
-        })
-        if (subtitle != null) {
-            texts.addView(TextView(context).apply {
-                text = subtitle
-                setTextColor(Color.argb(200, 255, 255, 255))
-                textSize = 14f
-                maxLines = 1
-                maxWidth = textMax
-                ellipsize = TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (2 * density).toInt() })
+            row.addView(stack, LinearLayout.LayoutParams(avatarBlockWidth, outerSize).apply { marginEnd = avatarGapEnd })
         }
-        row.addView(texts, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        row.addView(TextView(context).apply {
-            text = context.getString(R.string.tv_live_alert_action_hint)
+
+        val screenW = context.resources.displayMetrics.widthPixels
+        val overscanH = context.resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+        val maxBannerW = (screenW - overscanH * 2).coerceAtMost((780 * density).toInt())
+        val hintText = context.getString(R.string.tv_live_alert_action_hint)
+        val hintView = TextView(context).apply {
+            text = hintText
             setTextColor(Color.argb(230, 255, 255, 255))
             textSize = 12f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
+            isSingleLine = true
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
             val h = (9 * density).toInt()
             val v = (4 * density).toInt()
             setPadding(h, v, h, v)
@@ -361,8 +371,65 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
                 cornerRadius = 999 * density
                 setStroke((1 * density).toInt(), Color.argb(70, 255, 255, 255))
             }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            marginStart = (14 * density).toInt()
+        }
+        hintView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        val hintGapStart = (14 * density).toInt()
+
+        val badgeView = TextView(context).apply {
+            text = context.getString(R.string.tv_live_alert_badge)
+            setTextColor(Color.WHITE)
+            textSize = 11f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            isSingleLine = true
+            maxLines = 1
+            includeFontPadding = false
+            val h = (6 * density).toInt()
+            val v = (2 * density).toInt()
+            setPadding(h, v, h, v)
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(235, 4, 0))
+                cornerRadius = 4 * density
+            }
+        }
+        badgeView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        val badgeGapEnd = (8 * density).toInt()
+
+        val textMax = (maxBannerW - padStart - padEnd - avatarBlockWidth - avatarGapEnd - hintGapStart - hintView.measuredWidth)
+            .coerceAtLeast((200 * density).toInt())
+        val titleMax = (textMax - badgeView.measuredWidth - badgeGapEnd).coerceAtLeast((140 * density).toInt())
+
+        val texts = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        texts.addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(badgeView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginEnd = badgeGapEnd
+            })
+            addView(TextView(context).apply {
+                text = title
+                setTextColor(Color.WHITE)
+                textSize = 16.5f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                isSingleLine = true
+                maxLines = 1
+                maxWidth = titleMax
+                ellipsize = TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        })
+        if (subtitle != null) {
+            texts.addView(TextView(context).apply {
+                text = subtitle
+                setTextColor(Color.argb(205, 255, 255, 255))
+                textSize = 13.5f
+                isSingleLine = true
+                maxLines = 1
+                maxWidth = textMax
+                ellipsize = TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (2 * density).toInt() })
+        }
+        row.addView(texts, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        row.addView(hintView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = hintGapStart
         })
         return FrameLayout(context).apply {
             isFocusable = false

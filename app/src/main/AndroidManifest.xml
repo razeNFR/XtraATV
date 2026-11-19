@@ -40,7 +40,7 @@
             android:name=".ui.main.MainActivity"
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboard|keyboardHidden|navigation|touchscreen"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -57,7 +57,9 @@
                 <data android:host="twitch.tv" />
             </intent-filter>
         </activity>
-        <activity android:name=".ui.settings.SettingsActivity" />
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|touchscreen" />
         <!-- the downloaded update, opened with the installer of Android when its session does not install (UpdateInstallHelper) -->
         <provider
             android:name="androidx.core.content.FileProvider"

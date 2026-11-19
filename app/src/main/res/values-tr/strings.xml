@@ -1327,4 +1327,15 @@
     <string name="tv_prediction_not_enough_points">Yeterli Kanal Puanı yok</string>
     <string name="tv_prediction_bet_sent">%2$s için %1$s puan yatırıldı!</string>
     <string name="tv_prediction_bet_failed">Bahis yatırılamadı (%1$s)</string>
+    <string name="tv_night_shift_level">Sıcak ışık (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">Düzen: ortada alt alta (sohbetler yanda)</string>
+    <string name="tv_multistream_2_side_by_side">Düzen: yan yana (sohbetler altta)</string>
+    <string name="tv_multistream_swap_side_chats">Sol / sağ sohbetleri değiştir</string>
+    <string name="tv_remote_action_restart_player">Oynatıcıyı yeniden başlat</string>
+    <string name="tv_player_restarted">Oynatıcı yeniden başlatıldı</string>
+    <string name="tv_restart_chat">Sohbeti yeniden başlat</string>
+    <string name="tv_chat_restarted">Sohbet yeniden başlatıldı</string>
+    <string name="tv_follow_rejected_verification">Twitch bu takibi reddetti (bu kanal Twitch\'te doğrulanmış telefon numarası veya e-posta gerektiriyor olabilir)</string>
+    <string name="tv_chat_predictions_30s">Açık (30 sn)</string>
+    <string name="tv_chat_predictions_full">Açık (tüm oylama süresi)</string>
 </resources>

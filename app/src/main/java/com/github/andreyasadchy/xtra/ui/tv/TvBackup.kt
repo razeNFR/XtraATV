@@ -489,6 +489,16 @@ object TvBackup {
                     null
                 )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
             }.getOrNull() ?: FILE_NAME
+            if (!actualName.equals(FILE_NAME, ignoreCase = true)) {
+                val directOverwritten = runCatching {
+                    val pubDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    val directFile = File(pubDir, FILE_NAME)
+                    directFile.writeBytes(bytes)
+                    runCatching { resolver.delete(itemUri, null, null) }
+                    true
+                }.getOrDefault(false)
+                if (directOverwritten) return@runCatching "${Environment.DIRECTORY_DOWNLOADS}/$FILE_NAME"
+            }
             "${Environment.DIRECTORY_DOWNLOADS}/$actualName"
         }.getOrNull()
     }
@@ -532,6 +542,20 @@ object TvBackup {
         return dirs.distinctBy { it.absolutePath }
     }
 
+    private fun purgeSiblingBackups(dir: File, keepFile: File) {
+        runCatching {
+            dir.listFiles()?.forEach { f ->
+                if (f.isFile &&
+                    f.absolutePath != keepFile.absolutePath &&
+                    f.name.startsWith("XtraTV-backup", ignoreCase = true) &&
+                    f.name.endsWith(".zip", ignoreCase = true)
+                ) {
+                    runCatching { f.delete() }
+                }
+            }
+        }
+    }
+
     /** Saves the backup archive to Download/ (surviving app data resets on Android 10+) and shows its path. */
     fun saveToTv(context: Context, scope: CoroutineScope) {
         val appContext = context.applicationContext
@@ -542,7 +566,9 @@ object TvBackup {
                 runCatching {
                     appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { extDir ->
                         extDir.mkdirs()
-                        File(extDir, FILE_NAME).writeBytes(bytes)
+                        val extPrimary = File(extDir, FILE_NAME)
+                        extPrimary.writeBytes(bytes)
+                        purgeSiblingBackups(extDir, extPrimary)
                     }
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -554,6 +580,7 @@ object TvBackup {
                     val wrotePrimary = runCatching {
                         dir.mkdirs()
                         primary.writeBytes(bytes)
+                        purgeSiblingBackups(dir, primary)
                         true
                     }.getOrDefault(false)
                     if (wrotePrimary) return@withContext primary.absolutePath
@@ -563,6 +590,7 @@ object TvBackup {
                     val wroteTimestamped = runCatching {
                         dir.mkdirs()
                         timestamped.writeBytes(bytes)
+                        purgeSiblingBackups(dir, timestamped)
                         true
                     }.getOrDefault(false)
                     if (wroteTimestamped) return@withContext timestamped.absolutePath

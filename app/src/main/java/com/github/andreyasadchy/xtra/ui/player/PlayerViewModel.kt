@@ -654,7 +654,7 @@ class PlayerViewModel(
                                     return@launch
                                 }
                             }
-                        }.errors?.firstOrNull()?.message
+                        }.extractErrorOrRejection()
                         if (!errorMessage.isNullOrBlank()) {
                             follow.value = Pair(true, errorMessage)
                         } else {

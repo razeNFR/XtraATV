@@ -1346,5 +1346,15 @@
     <string name="tv_prediction_not_enough_points">Not enough Channel Points</string>
     <string name="tv_prediction_bet_sent">Wagered %1$s pts on %2$s!</string>
     <string name="tv_prediction_bet_failed">Could not place wager (%1$s)</string>
+    <string name="tv_night_shift_level">Warm light (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">Layout: stacked center (chats on sides)</string>
+    <string name="tv_multistream_2_side_by_side">Layout: side by side (chats below)</string>
+    <string name="tv_multistream_swap_side_chats">Swap left / right chats</string>
+    <string name="tv_remote_action_restart_player">Restart player</string>
+    <string name="tv_player_restarted">Player restarted</string>
+    <string name="tv_restart_chat">Restart chat</string>
+    <string name="tv_chat_restarted">Chat restarted</string>
+    <string name="tv_follow_rejected_verification">Twitch refused this follow (this channel may require a verified phone number or email on Twitch)</string>
+    <string name="tv_chat_predictions_30s">On (30s)</string>
+    <string name="tv_chat_predictions_full">On (full voting)</string>
 </resources>
-

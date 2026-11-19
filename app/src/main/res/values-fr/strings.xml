@@ -1326,4 +1326,15 @@
     <string name="tv_prediction_not_enough_points">Points de chaîne insuffisants</string>
     <string name="tv_prediction_bet_sent">%1$s pts misés sur %2$s !</string>
     <string name="tv_prediction_bet_failed">Impossible de placer la mise (%1$s)</string>
+    <string name="tv_night_shift_level">Filtre lumière chaude (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">Disposition : superposés au centre (chats sur les côtés)</string>
+    <string name="tv_multistream_2_side_by_side">Disposition : côte à côte (chats dessous)</string>
+    <string name="tv_multistream_swap_side_chats">Inverser les chats gauche / droite</string>
+    <string name="tv_remote_action_restart_player">Redémarrer le lecteur</string>
+    <string name="tv_player_restarted">Lecteur redémarré</string>
+    <string name="tv_restart_chat">Redémarrer le chat</string>
+    <string name="tv_chat_restarted">Chat redémarré</string>
+    <string name="tv_follow_rejected_verification">Twitch a refusé cet abonnement (cette chaîne exige probablement un numéro de téléphone ou e-mail vérifié sur Twitch)</string>
+    <string name="tv_chat_predictions_30s">Activé (affichage 30 s)</string>
+    <string name="tv_chat_predictions_full">Activé (affichage total)</string>
 </resources>

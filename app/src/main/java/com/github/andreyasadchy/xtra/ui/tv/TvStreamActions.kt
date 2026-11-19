@@ -93,15 +93,15 @@ object TvStreamActions {
             if (channelId != null && following != null) {
                 entries += Extra(activity.getString(if (following) R.string.unfollow else R.string.follow), if (following) R.drawable.tv_ic_heart else R.drawable.tv_ic_heart_outline) {
                     activity.lifecycleScope.launch {
-                        val done = TvFollow.setFollowing(activity, channelId, stream.channelLogin, stream.channelName, !following)
+                        val err = TvFollow.setFollowingWithMessage(activity, channelId, stream.channelLogin, stream.channelName, !following)
                         Toast.makeText(
                             activity,
                             when {
-                                !done -> activity.getString(R.string.tv_follow_failed)
+                                err != null -> err
                                 following -> activity.getString(R.string.unfollowed, name)
                                 else -> activity.getString(R.string.now_following, name)
                             },
-                            Toast.LENGTH_SHORT
+                            if (err != null) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
                         ).show()
                     }
                 }
@@ -116,33 +116,6 @@ object TvStreamActions {
                     } else {
                         TvFavorites.add(activity, login, stream.channelName)
                         Toast.makeText(activity, activity.getString(R.string.tv_favorite_added, name), Toast.LENGTH_SHORT).show()
-                    }
-                }
-                if (playerFrag != null && login.equals(activity.currentPlayingStream()?.channelLogin, ignoreCase = true)) {
-                    entries += Extra(activity.getString(R.string.tv_create_clip), R.drawable.tv_ic_clip) {
-                        playerFrag.triggerTvCreateClip()
-                    }
-                    entries += Extra(activity.getString(R.string.tv_share_qr), R.drawable.tv_ic_qr) {
-                        playerFrag.showTvShareQr()
-                    }
-                } else {
-                    entries += Extra(activity.getString(R.string.tv_create_clip), R.drawable.tv_ic_clip) {
-                        TvQrShare.createAndShowClipQr(
-                            context = activity,
-                            broadcasterId = stream.channelId,
-                            channelLogin = login,
-                            broadcastId = stream.id,
-                            videoId = null,
-                            offsetSeconds = null,
-                        )
-                    }
-                    entries += Extra(activity.getString(R.string.tv_share_qr), R.drawable.tv_ic_qr) {
-                        TvQrShare.showQrModal(
-                            context = activity,
-                            title = name.ifBlank { login },
-                            subtitle = activity.getString(R.string.tv_share_qr_subtitle),
-                            url = "https://www.twitch.tv/$login",
-                        )
                     }
                 }
             }

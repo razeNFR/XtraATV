@@ -424,7 +424,12 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                                 val following = pair.first
                                 val errorMessage = pair.second
                                 if (!errorMessage.isNullOrBlank()) {
-                                    Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show()
+                                    val msg = if (errorMessage.startsWith(C.FOLLOW_REJECTED_PREFIX)) {
+                                        getString(R.string.tv_follow_rejected_verification)
+                                    } else {
+                                        errorMessage
+                                    }
+                                    Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show()
                                 } else {
                                     if (following) {
                                         Toast.makeText(requireContext(),

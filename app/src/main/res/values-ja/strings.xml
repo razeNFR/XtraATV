@@ -1326,4 +1326,15 @@
     <string name="tv_prediction_not_enough_points">チャンネルポイントが不足しています</string>
     <string name="tv_prediction_bet_sent">%2$s に %1$s pt 賭けました！</string>
     <string name="tv_prediction_bet_failed">予想に賭けられませんでした（%1$s）</string>
+    <string name="tv_night_shift_level">暖色フィルター (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">レイアウト：中央上下配置（左右にチャット）</string>
+    <string name="tv_multistream_2_side_by_side">レイアウト：左右並び（下にチャット）</string>
+    <string name="tv_multistream_swap_side_chats">左右のチャットを入れ替え</string>
+    <string name="tv_remote_action_restart_player">プレーヤーを再起動</string>
+    <string name="tv_player_restarted">プレーヤーを再起動しました</string>
+    <string name="tv_restart_chat">チャットを再起動</string>
+    <string name="tv_chat_restarted">チャットを再起動しました</string>
+    <string name="tv_follow_rejected_verification">Twitchによりフォローが拒否されました（このチャンネルはTwitchで認証済みの電話番号またはメールアドレスが必要な場合があります）</string>
+    <string name="tv_chat_predictions_30s">オン（30秒表示）</string>
+    <string name="tv_chat_predictions_full">オン（投票終了まで表示）</string>
 </resources>

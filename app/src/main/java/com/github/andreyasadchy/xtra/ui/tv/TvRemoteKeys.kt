@@ -73,6 +73,8 @@ object TvRemoteKeys {
     const val ACTION_POINTS = "points_drops"
     const val ACTION_CLIP = "create_clip"
     const val ACTION_SHARE_QR = "share_qr"
+    const val ACTION_RESTART_PLAYER = "restart_player"
+    const val ACTION_RESTART_CHAT = "restart_chat"
 
     val ALL_ACTIONS = listOf(
         ACTION_DEFAULT,
@@ -82,9 +84,11 @@ object TvRemoteKeys {
         ACTION_CYCLE_CHAT_PREV,
         ACTION_TOGGLE_CHAT,
         ACTION_CHAT_PANEL,
+        ACTION_RESTART_CHAT,
         ACTION_STREAM_SWITCHER,
         ACTION_GO_LIVE,
         ACTION_PLAY_PAUSE,
+        ACTION_RESTART_PLAYER,
         ACTION_MUTE,
         ACTION_QUALITY,
         ACTION_STATS,
@@ -170,9 +174,11 @@ object TvRemoteKeys {
         ACTION_CYCLE_CHAT_PREV -> context.getString(R.string.tv_remote_action_cycle_chat_prev)
         ACTION_TOGGLE_CHAT -> context.getString(R.string.tv_remote_action_toggle_chat)
         ACTION_CHAT_PANEL -> context.getString(R.string.tv_remote_action_chat_panel)
+        ACTION_RESTART_CHAT -> context.getString(R.string.tv_restart_chat)
         ACTION_STREAM_SWITCHER -> context.getString(R.string.tv_remote_action_stream_switcher)
         ACTION_GO_LIVE -> context.getString(R.string.tv_go_to_live)
         ACTION_PLAY_PAUSE -> context.getString(R.string.tv_remote_action_play_pause)
+        ACTION_RESTART_PLAYER -> context.getString(R.string.tv_remote_action_restart_player)
         ACTION_MUTE -> context.getString(R.string.tv_remote_action_mute)
         ACTION_QUALITY -> context.getString(R.string.tv_remote_action_quality)
         ACTION_STATS -> context.getString(R.string.tv_remote_action_stats)

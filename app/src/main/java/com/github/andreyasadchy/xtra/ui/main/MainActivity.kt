@@ -166,6 +166,8 @@ class MainActivity : AppCompatActivity() {
             com.github.andreyasadchy.xtra.ui.tv.TvAccent.init(this)
             // favorite channels, read before the followed streams are loaded
             com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
+            // pre-warm the TV settings XML cache in the background so opening Settings is instant
+            com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment.prewarmAsync(this)
             prefs.edit {
                 // on TV leaving the app stops the stream: no picture-in-picture, no background audio (the phone settings are hidden)
                 putBoolean(C.PLAYER_PICTURE_IN_PICTURE, false)
@@ -1741,10 +1743,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Opens the side menu from a Compose screen (left on its first card). */
+    /** Opens the side menu from a Compose screen (left on its first card / category). */
     fun openTvMenu() {
-        tvMenuOpenedByBack = false
-        showTvMenu(true)
+        binding.root.post {
+            tvMenuOpenedByBack = false
+            showTvMenu(true)
+        }
     }
 
     private fun closeTvMenuAndFocusContent() {
@@ -1856,6 +1860,13 @@ class MainActivity : AppCompatActivity() {
         val menu = binding.navBarContainer
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         menu.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        if (tvMenuExtraSelected == null && ::navController.isInitialized) {
+            navController.currentDestination?.id?.let { destId ->
+                if (tvMenuState.items.any { it.id == destId }) {
+                    tvMenuState.selected = destId
+                }
+            }
+        }
         tvMenuState.collapsed = false
         if (!isTvMenuShown) {
             isTvMenuShown = true
@@ -1867,11 +1878,11 @@ class MainActivity : AppCompatActivity() {
         if (focus) {
             val sideMenu = binding.tvSideMenu
             if (sideMenu != null) {
-                if (!tvMenuState.focusSelected()) {
-                    // the entries are not shown yet (the icon rail unfolds): they take the focus once they are
+                tvMenuState.suppressFocusCallback = true
+                if (!sideMenu.hasFocus()) {
                     sideMenu.requestFocus()
-                    tvMenuState.pendingFocus = true
                 }
+                tvMenuState.requestFocusSelected()
             } else {
                 val selected = binding.navBar.findViewById<View>(binding.navBar.selectedItemId)
                 if (selected == null || !selected.requestFocus()) {
@@ -3605,7 +3616,12 @@ class MainActivity : AppCompatActivity() {
                 if (destination.id != R.id.followPagerFragment) {
                     tvMenuExtraSelected = null
                 }
-                binding.root.post { tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId }
+                val destId = destination.id
+                binding.root.post {
+                    tvMenuState.selected = tvMenuExtraSelected
+                        ?: destId.takeIf { id -> tvMenuState.items.any { it.id == id } }
+                        ?: binding.navBar.selectedItemId
+                }
             }
         }
         val tabList = parseNavigationTabList()

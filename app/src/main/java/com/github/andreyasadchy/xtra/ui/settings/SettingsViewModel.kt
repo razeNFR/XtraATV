@@ -414,6 +414,11 @@ class SettingsViewModel(
         bytes: ByteArray,
     ): String? {
         val resolver = applicationContext.contentResolver
+        val base = if ('.' in fileName) fileName.substringBeforeLast('.') else fileName
+        val ext = if ('.' in fileName) ".${fileName.substringAfterLast('.')}" else ""
+        val duplicatePattern = Regex("^${Regex.escape(base)}\\s*\\(\\d+\\)${Regex.escape(ext)}$", RegexOption.IGNORE_CASE)
+        var overwrittenExistingName: String? = null
+
         runCatching {
             val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
                 treeUri,
@@ -431,22 +436,51 @@ class SettingsViewModel(
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
                 val nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val duplicateUris = mutableListOf<Uri>()
+                var primaryEntry: Pair<Uri, String>? = null
                 while (cursor.moveToNext()) {
-                    if (cursor.getString(nameCol) == fileName) {
-                        val existingUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idCol))
-                        val overwritten = runCatching {
-                            resolver.openOutputStream(existingUri, "wt")?.use { out ->
+                    val existingName = cursor.getString(nameCol) ?: continue
+                    val existingUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idCol))
+                    if (existingName.equals(fileName, ignoreCase = true) && primaryEntry == null) {
+                        primaryEntry = existingUri to existingName
+                    } else if (duplicatePattern.matches(existingName)) {
+                        duplicateUris += existingUri
+                    }
+                }
+                duplicateUris.forEach { dupUri ->
+                    runCatching { DocumentsContract.deleteDocument(resolver, dupUri) }
+                }
+                primaryEntry?.let { (existingUri, existingName) ->
+                    val overwritten = runCatching {
+                        resolver.openFileDescriptor(existingUri, "rwt")?.use { pfd ->
+                            java.io.FileOutputStream(pfd.fileDescriptor).use { out ->
+                                out.channel.truncate(0L)
                                 out.write(bytes)
                                 out.flush()
-                            } != null
+                            }
+                            true
+                        } ?: false
+                    }.getOrElse {
+                        runCatching {
+                            resolver.openFileDescriptor(existingUri, "w")?.use { pfd ->
+                                java.io.FileOutputStream(pfd.fileDescriptor).use { out ->
+                                    out.channel.truncate(0L)
+                                    out.write(bytes)
+                                    out.flush()
+                                }
+                                true
+                            } ?: false
                         }.getOrDefault(false)
-                        if (overwritten) return fileName
+                    }
+                    if (overwritten) {
+                        overwrittenExistingName = existingName
+                    } else {
                         runCatching { DocumentsContract.deleteDocument(resolver, existingUri) }
-                        break
                     }
                 }
             }
         }
+        overwrittenExistingName?.let { return it }
         val createdUri = runCatching {
             DocumentsContract.createDocument(resolver, directoryUri, mimeType, fileName)
         }.getOrNull() ?: return null

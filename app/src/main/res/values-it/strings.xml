@@ -1326,4 +1326,15 @@
     <string name="tv_prediction_not_enough_points">Punti canale insufficienti</string>
     <string name="tv_prediction_bet_sent">Puntati %1$s pt su %2$s!</string>
     <string name="tv_prediction_bet_failed">Impossibile piazzare la puntata (%1$s)</string>
+    <string name="tv_night_shift_level">Luce calda (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">Layout: impilati al centro (chat ai lati)</string>
+    <string name="tv_multistream_2_side_by_side">Layout: affiancati (chat in basso)</string>
+    <string name="tv_multistream_swap_side_chats">Scambia chat sinistra / destra</string>
+    <string name="tv_remote_action_restart_player">Riavvia lettore</string>
+    <string name="tv_player_restarted">Lettore riavviato</string>
+    <string name="tv_restart_chat">Riavvia chat</string>
+    <string name="tv_chat_restarted">Chat riavviata</string>
+    <string name="tv_follow_rejected_verification">Twitch ha rifiutato il follow (questo canale potrebbe richiedere un numero di telefono o un\'email verificati su Twitch)</string>
+    <string name="tv_chat_predictions_30s">Attivo (30 s)</string>
+    <string name="tv_chat_predictions_full">Attivo (intera votazione)</string>
 </resources>

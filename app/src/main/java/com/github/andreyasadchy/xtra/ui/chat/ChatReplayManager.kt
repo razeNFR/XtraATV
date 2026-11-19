@@ -6,6 +6,7 @@ import com.github.andreyasadchy.xtra.model.chat.TwitchEmote
 import com.github.andreyasadchy.xtra.model.chat.VideoChatMessage
 import com.github.andreyasadchy.xtra.repository.GraphQLRepository
 import com.github.andreyasadchy.xtra.util.C
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -13,7 +14,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlin.math.max
+import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
@@ -34,11 +35,13 @@ class ChatReplayManager(
     private var cursor: String? = null
     private val list = mutableListOf<VideoChatMessage>()
     private var started = false
+    @Volatile
     private var isLoading = false
     private var useOffsetSeconds = false
     private var loadJob: Job? = null
     private var messageJob: Job? = null
     private var lastCheckedPosition = 0L
+    private var lastReloadPosition = 0L
     private var playbackSpeed: Float? = null
     var isActive = true
 
@@ -47,8 +50,10 @@ class ChatReplayManager(
             started = true
             val currentPosition = getCurrentPosition() ?: 0
             lastCheckedPosition = currentPosition
+            lastReloadPosition = currentPosition
             playbackSpeed = getCurrentSpeed()
             list.clear()
+            cursor = null
             coroutineScope.launch {
                 listener.clearMessages()
             }
@@ -59,10 +64,24 @@ class ChatReplayManager(
     fun stop() {
         loadJob?.cancel()
         messageJob?.cancel()
+        isLoading = false
         isActive = false
     }
 
+    private fun messageOffsetMs(message: VideoChatMessage): Long? {
+        val fromCreated = if (!useOffsetSeconds && createdAt != null && !message.createdAt.isNullOrBlank()) {
+            Instant.parseOrNull(message.createdAt)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 }?.minus(createdAt)
+        } else {
+            null
+        }
+        return fromCreated ?: message.offsetSeconds?.times(1000L)
+    }
+
     private fun load(position: Long? = null) {
+        loadJob?.cancel()
+        if (position != null) {
+            cursor = null
+        }
         isLoading = true
         loadJob = coroutineScope.launch(Dispatchers.IO) {
             try {
@@ -137,6 +156,8 @@ class ChatReplayManager(
                 cursor = if (comments.pageInfo?.hasNextPage != false) comments.edges.lastOrNull()?.cursor?.toString() else null
                 isLoading = false
                 startJob()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 try {
                     val response = if (position != null) {
@@ -209,8 +230,19 @@ class ChatReplayManager(
                     cursor = if (comments.pageInfo?.hasNextPage != false) comments.edges.lastOrNull()?.cursor else null
                     isLoading = false
                     startJob()
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-
+                    isLoading = false
+                    if (this@ChatReplayManager.isActive) {
+                        delay(3000.milliseconds)
+                        if (this@ChatReplayManager.isActive && !isLoading && list.isEmpty()) {
+                            val retryPos = getCurrentPosition()?.let { it + startTime } ?: position
+                            if (retryPos != null || !cursor.isNullOrBlank()) {
+                                load(if (!cursor.isNullOrBlank() && position == null) null else retryPos)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -218,27 +250,32 @@ class ChatReplayManager(
 
     private fun startJob() {
         messageJob = coroutineScope.launch {
-            while (isActive) {
-                val message = list.firstOrNull() ?: break
-                val messageOffset = if (!useOffsetSeconds && createdAt != null && !message.createdAt.isNullOrBlank()) {
-                    Instant.parseOrNull(message.createdAt)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 }?.minus(createdAt)
-                } else {
-                    null
-                } ?: message.offsetSeconds?.times(1000L)
+            while (isActive && this@ChatReplayManager.isActive) {
+                val message = list.firstOrNull()
+                if (message == null) {
+                    if (!cursor.isNullOrBlank() && !isLoading && this@ChatReplayManager.isActive) {
+                        load()
+                    }
+                    break
+                }
+                val messageOffset = messageOffsetMs(message)
                 if (messageOffset != null) {
                     var currentPosition: Long
                     while (
+                        isActive && this@ChatReplayManager.isActive &&
                         (getCurrentPosition() ?: 0).let { position ->
                             lastCheckedPosition = position
                             currentPosition = position + startTime
                             currentPosition < messageOffset
                         }
                     ) {
-                        val timeLeft = (messageOffset - currentPosition).div(playbackSpeed ?: 1f).toLong()
-                        val delay = max(timeLeft, 1) // ExoPlayer getCurrentPosition freezes the app if it's called too rapidly
-                        delay(delay.milliseconds)
+                        val speed = (playbackSpeed ?: 1f).coerceAtLeast(0.1f)
+                        val timeLeft = ((messageOffset - currentPosition) / speed).toLong()
+                        // Cap each wait step to <= 2000ms so pauses, seeks, or speed changes wake up promptly
+                        val stepDelay = timeLeft.coerceIn(50L, 2000L)
+                        delay(stepDelay.milliseconds)
                     }
-                    if (!isActive) {
+                    if (!isActive || !this@ChatReplayManager.isActive) {
                         break
                     }
                     listener.onChatMessage(
@@ -260,7 +297,7 @@ class ChatReplayManager(
                         load()
                     }
                 } else {
-                    if (!isActive) {
+                    if (!isActive || !this@ChatReplayManager.isActive) {
                         break
                     }
                 }
@@ -270,20 +307,31 @@ class ChatReplayManager(
     }
 
     fun updatePosition(position: Long) {
-        if (started && lastCheckedPosition != position) {
-            if (position - lastCheckedPosition !in 0..20000) {
-                loadJob?.cancel()
-                messageJob?.cancel()
-                list.clear()
-                coroutineScope.launch {
-                    listener.clearMessages()
-                }
-                load(position + startTime)
-            } else {
-                messageJob?.cancel()
-                startJob()
-            }
+        if (!started || lastCheckedPosition == position) return
+        val targetOffset = position + startTime
+        val lastBufferedOffset = list.lastOrNull()?.let { messageOffsetMs(it) }
+        val backwardSeek = position < lastCheckedPosition - 2_000L
+        val largeForwardJump = position - lastCheckedPosition > 20_000L
+        val cumulativeSkipPastBuffer = position - lastReloadPosition > 20_000L &&
+            (lastBufferedOffset == null || targetOffset > lastBufferedOffset + 5_000L)
+        val stalledAndMoved = list.isEmpty() && !isLoading && cursor.isNullOrBlank() && abs(position - lastReloadPosition) > 5_000L
+
+        if (backwardSeek || largeForwardJump || cumulativeSkipPastBuffer || stalledAndMoved) {
+            lastReloadPosition = position
             lastCheckedPosition = position
+            loadJob?.cancel()
+            messageJob?.cancel()
+            isLoading = false
+            cursor = null
+            list.clear()
+            coroutineScope.launch {
+                listener.clearMessages()
+            }
+            load(targetOffset)
+        } else {
+            lastCheckedPosition = position
+            messageJob?.cancel()
+            startJob()
         }
     }
 

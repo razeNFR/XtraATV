@@ -1326,4 +1326,15 @@
     <string name="tv_prediction_not_enough_points">忠誠點數不足</string>
     <string name="tv_prediction_bet_sent">已向 %2$s 投入 %1$s 點！</string>
     <string name="tv_prediction_bet_failed">無法送出預測（%1$s）</string>
+    <string name="tv_night_shift_level">暖光護眼 (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">版面配置：置中上下排列（兩側顯示聊天室）</string>
+    <string name="tv_multistream_2_side_by_side">版面配置：左右並排（下方顯示聊天室）</string>
+    <string name="tv_multistream_swap_side_chats">交換左右兩側聊天室</string>
+    <string name="tv_remote_action_restart_player">重新啟動播放器</string>
+    <string name="tv_player_restarted">播放器已重新啟動</string>
+    <string name="tv_restart_chat">重新啟動聊天室</string>
+    <string name="tv_chat_restarted">聊天室已重新啟動</string>
+    <string name="tv_follow_rejected_verification">Twitch 拒絕了此次追隨（此頻道可能需要在 Twitch 上驗證手機號碼或電子郵件）</string>
+    <string name="tv_chat_predictions_30s">開啟（顯示 30 秒）</string>
+    <string name="tv_chat_predictions_full">開啟（投票期間全程顯示）</string>
 </resources>

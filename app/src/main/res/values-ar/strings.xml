@@ -1326,4 +1326,15 @@
     <string name="tv_prediction_not_enough_points">نقاط القناة غير كافية</string>
     <string name="tv_prediction_bet_sent">تم الرهان بـ %1$s نقطة على %2$s!</string>
     <string name="tv_prediction_bet_failed">تعذّر وضع الرهان (%1$s)</string>
+    <string name="tv_night_shift_level">إضاءة دافئة (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">التخطيط: مكدس في المنتصف (الدردشات على الجانبين)</string>
+    <string name="tv_multistream_2_side_by_side">التخطيط: جنباً إلى جنب (الدردشات بالأسفل)</string>
+    <string name="tv_multistream_swap_side_chats">تبديل الدردشة اليمنى واليسرى</string>
+    <string name="tv_remote_action_restart_player">إعادة تشغيل المشغل</string>
+    <string name="tv_player_restarted">تمت إعادة تشغيل المشغل</string>
+    <string name="tv_restart_chat">إعادة تشغيل الدردشة</string>
+    <string name="tv_chat_restarted">تمت إعادة تشغيل الدردشة</string>
+    <string name="tv_follow_rejected_verification">رفضت Twitch هذه المتابعة (قد تتطلب هذه القناة رقم هاتف أو بريداً إلكترونياً موثقاً على Twitch)</string>
+    <string name="tv_chat_predictions_30s">مفعّل (30 ثانية)</string>
+    <string name="tv_chat_predictions_full">مفعّل (طوال فترة التصويت)</string>
 </resources>

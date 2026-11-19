@@ -1327,4 +1327,15 @@
     <string name="tv_prediction_not_enough_points">Poin Saluran tidak cukup</string>
     <string name="tv_prediction_bet_sent">Bertaruh %1$s poin pada %2$s!</string>
     <string name="tv_prediction_bet_failed">Gagal memasang taruhan (%1$s)</string>
+    <string name="tv_night_shift_level">Cahaya hangat (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">Tata letak: bertumpuk di tengah (obrolan di samping)</string>
+    <string name="tv_multistream_2_side_by_side">Tata letak: berdampingan (obrolan di bawah)</string>
+    <string name="tv_multistream_swap_side_chats">Tukar obrolan kiri / kanan</string>
+    <string name="tv_remote_action_restart_player">Muat ulang pemutar</string>
+    <string name="tv_player_restarted">Pemutar dimuat ulang</string>
+    <string name="tv_restart_chat">Muat ulang obrolan</string>
+    <string name="tv_chat_restarted">Obrolan dimuat ulang</string>
+    <string name="tv_follow_rejected_verification">Twitch menolak mengikuti saluran ini (saluran mungkin memerlukan nomor telepon atau email terverifikasi di Twitch)</string>
+    <string name="tv_chat_predictions_30s">Aktif (30 dtk)</string>
+    <string name="tv_chat_predictions_full">Aktif (selama voting)</string>
 </resources>

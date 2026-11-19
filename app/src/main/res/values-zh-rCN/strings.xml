@@ -1326,4 +1326,15 @@
     <string name="tv_prediction_not_enough_points">频道积分不足</string>
     <string name="tv_prediction_bet_sent">已向 %2$s 投注 %1$s 积分！</string>
     <string name="tv_prediction_bet_failed">无法完成投注（%1$s）</string>
+    <string name="tv_night_shift_level">暖光护眼 (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">布局：居中上下排列（两侧显示聊天）</string>
+    <string name="tv_multistream_2_side_by_side">布局：左右并排（下方显示聊天）</string>
+    <string name="tv_multistream_swap_side_chats">交换左右两侧聊天</string>
+    <string name="tv_remote_action_restart_player">重启播放器</string>
+    <string name="tv_player_restarted">播放器已重启</string>
+    <string name="tv_restart_chat">重启聊天</string>
+    <string name="tv_chat_restarted">聊天已重启</string>
+    <string name="tv_follow_rejected_verification">Twitch 拒绝了此次关注（该频道可能需要在 Twitch 上验证手机号或电子邮箱）</string>
+    <string name="tv_chat_predictions_30s">开启（显示 30 秒）</string>
+    <string name="tv_chat_predictions_full">开启（投票期间全程显示）</string>
 </resources>

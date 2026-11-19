@@ -69,6 +69,7 @@ import com.github.andreyasadchy.xtra.model.gql.channel.ChannelClipsResponse
 import com.github.andreyasadchy.xtra.model.gql.channel.ChannelSuggestionsResponse
 import com.github.andreyasadchy.xtra.model.gql.channel.ChannelVideosResponse
 import com.github.andreyasadchy.xtra.model.gql.channel.ChannelViewerListResponse
+import com.github.andreyasadchy.xtra.model.gql.channel.FollowUserResponse
 import com.github.andreyasadchy.xtra.model.gql.chat.BadgesResponse
 import com.github.andreyasadchy.xtra.model.gql.chat.ChannelCheerEmotesResponse
 import com.github.andreyasadchy.xtra.model.gql.chat.ChannelPointContextResponse
@@ -1380,7 +1381,7 @@ class GraphQLRepository(
         json.decodeFromString<FollowedGamesResponse>(sendPersistedQuery(networkLibrary, headers, body))
     }
 
-    suspend fun loadFollowUser(networkLibrary: String?, headers: Map<String, String>, userId: String?, disableNotifications: Boolean): ErrorResponse = withContext(Dispatchers.IO) {
+    suspend fun loadFollowUser(networkLibrary: String?, headers: Map<String, String>, userId: String?, disableNotifications: Boolean): FollowUserResponse = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             putJsonObject("extensions") {
                 putJsonObject("persistedQuery") {
@@ -1396,7 +1397,7 @@ class GraphQLRepository(
                 }
             }
         }.toString()
-        json.decodeFromString<ErrorResponse>(sendPersistedQuery(networkLibrary, headers, body))
+        json.decodeFromString<FollowUserResponse>(sendPersistedQuery(networkLibrary, headers, body))
     }
 
     suspend fun loadUnfollowUser(networkLibrary: String?, headers: Map<String, String>, userId: String?): ErrorResponse = withContext(Dispatchers.IO) {

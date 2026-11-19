@@ -136,17 +136,17 @@ object TvStatsPage {
                         }
                     ) {
                         listOf(R.string.tv_stats_period_7, R.string.tv_stats_period_30, R.string.tv_stats_period_all).forEachIndexed { index, label ->
-                            val chipMod = when (index) {
-                                0 -> if (isEmbeddedPage) {
-                                    Modifier.onPreviewKeyEvent { ev ->
-                                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                                            onOpenSideMenu()
-                                            true
-                                        } else false
-                                    }
-                                } else Modifier
-                                1 -> Modifier.focusRequester(first)
-                                else -> Modifier
+                            var chipMod: Modifier = Modifier
+                            if (index == period) {
+                                chipMod = chipMod.focusRequester(first)
+                            }
+                            if (index == 0 && isEmbeddedPage) {
+                                chipMod = chipMod.onPreviewKeyEvent { ev ->
+                                    if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                                        onOpenSideMenu()
+                                        true
+                                    } else false
+                                }
                             }
                             Chip(context.getString(label), index == period, chipMod) { period = index }
                         }

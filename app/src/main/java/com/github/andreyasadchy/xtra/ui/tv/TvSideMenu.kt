@@ -40,6 +40,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,10 +74,18 @@ class TvMenuState {
     var onFocusItem: (Int) -> Unit = {}
 
     /**
-     * The focus is wanted in the menu while its entries are not there yet (the icon rail is unfolding): they take it
-     * as soon as they are shown. Without it the first "left" opened the menu and a second one was needed to enter it.
+     * The focus is wanted in the menu while its entries are not there yet (the icon rail is unfolding) or while the
+     * AndroidComposeView is acquiring View focus from a Compose page: they take it cleanly on the next frame.
      */
     var pendingFocus by mutableStateOf(false)
+    var focusRequestToken by mutableIntStateOf(0)
+    var suppressFocusCallback = false
+
+    fun requestFocusSelected() {
+        suppressFocusCallback = true
+        pendingFocus = true
+        focusRequestToken++
+    }
 
     /** Moves the focus to the screen being shown, else to the first entry. False when no entry could take it. */
     fun focusSelected(): Boolean {
@@ -107,6 +117,8 @@ class TvMenuState {
 @Composable
 fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     val collapsed = state.collapsed
+    val scrollState = rememberScrollState()
+    val itemBounds = remember { mutableMapOf<Int, Pair<Int, Int>>() }
     // 0: the rail of icons, 1: the menu open
     val open by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (collapsed) 0f else 1f,
@@ -141,16 +153,34 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     // kept as a number went wrong when the menu opened with a stream kept playing: the focus came before the "now
     // playing" card was put in, the number was 2 short and up / down jumped over entries
     var focusedRequester by remember { mutableStateOf<FocusRequester?>(null) }
-    if (state.pendingFocus && !collapsed) {
-        // the entries were just put back (rail unfolded): the focus as soon as one of them can take it
-        androidx.compose.runtime.LaunchedEffect(Unit) {
+    androidx.compose.runtime.LaunchedEffect(state.focusRequestToken, collapsed) {
+        if (!state.pendingFocus || collapsed) return@LaunchedEffect
+        try {
             repeat(20) {
                 androidx.compose.runtime.withFrameNanos { }
-                if (!state.pendingFocus || state.focusSelected()) {
+                if (!state.pendingFocus || collapsed) return@LaunchedEffect
+                val targetId = state.selected
+                itemBounds[targetId]?.let { (topY, h) ->
+                    val viewport = scrollState.viewportSize
+                    if (viewport > 0) {
+                        val bottomY = topY + h + 32
+                        val desired = when {
+                            bottomY > scrollState.value + viewport -> (bottomY - viewport).coerceAtMost(scrollState.maxValue)
+                            topY < scrollState.value -> (topY - 24).coerceAtLeast(0)
+                            else -> scrollState.value
+                        }
+                        if (desired != scrollState.value) {
+                            scrollState.scrollTo(desired)
+                        }
+                    }
+                }
+                if (state.focusSelected() && (state.focusedId == targetId || state.requesters[targetId] == null)) {
                     state.pendingFocus = false
                     return@LaunchedEffect
                 }
             }
+        } finally {
+            state.suppressFocusCallback = false
             state.pendingFocus = false
         }
     }
@@ -221,7 +251,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                         else -> false
                     }
                 }
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = MENU_PADDING, vertical = 24.dp)
         ) {
             items.forEachIndexed { index, item ->
@@ -266,12 +296,18 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 }
                 val requester = state.requesters.getOrPut(item.id) { FocusRequester() }
                 val entryModifier = Modifier
+                    .onGloballyPositioned { coords ->
+                        itemBounds[item.id] = coords.positionInParent().y.toInt() to coords.size.height
+                    }
                     .focusRequester(requester)
                     .onFocusChanged {
                         if (it.isFocused) {
                             focusedRequester = requester
                             state.focusedId = item.id
-                            state.onFocusItem(item.id)
+                            if (!state.suppressFocusCallback || item.id == state.selected) {
+                                state.suppressFocusCallback = false
+                                state.onFocusItem(item.id)
+                            }
                         }
                     }
                 if (item === account) {

@@ -1765,7 +1765,7 @@ class ChatViewModel(
             val showRaids = applicationContext.prefs().getBoolean(C.CHAT_RAIDS_SHOW, true)
             val showPolls = applicationContext.prefs().getBoolean(C.CHAT_POLLS_SHOW, true) || isTvDevice
             val showPredictions = applicationContext.prefs().getBoolean(C.CHAT_PREDICTIONS_SHOW, true) ||
-                applicationContext.prefs().getBoolean(C.TV_CHAT_PREDICTIONS_POPUP, false) || isTvDevice
+                C.getTvPredictionsPopupMode(applicationContext.prefs()) != 0 || isTvDevice
             val primaryGqlToken = gqlHeaders[C.HEADER_TOKEN]?.removePrefix("OAuth ")?.takeIf { it.isNotBlank() }
             val primaryGqlClientId = gqlHeaders[C.HEADER_CLIENT_ID]?.takeIf { it.isNotBlank() }
             val webTokenClean = gqlWebToken?.removePrefix("OAuth ")?.takeIf { it.isNotBlank() }

@@ -1326,4 +1326,15 @@
     <string name="tv_prediction_not_enough_points">Недостаточно баллов канала</string>
     <string name="tv_prediction_bet_sent">Поставлено %1$s баллов на %2$s!</string>
     <string name="tv_prediction_bet_failed">Не удалось сделать ставку (%1$s)</string>
+    <string name="tv_night_shift_level">Тёплый свет (Night Shift)</string>
+    <string name="tv_multistream_2_stacked">Макет: по центру друг над другом (чаты по бокам)</string>
+    <string name="tv_multistream_2_side_by_side">Макет: рядом (чаты внизу)</string>
+    <string name="tv_multistream_swap_side_chats">Поменять левый и правый чаты</string>
+    <string name="tv_remote_action_restart_player">Перезапустить плеер</string>
+    <string name="tv_player_restarted">Плеер перезапущен</string>
+    <string name="tv_restart_chat">Перезапустить чат</string>
+    <string name="tv_chat_restarted">Чат перезапущен</string>
+    <string name="tv_follow_rejected_verification">Twitch отклонил подписку (возможно, для этого канала требуется подтверждённый номер телефона или e-mail на Twitch)</string>
+    <string name="tv_chat_predictions_30s">Вкл. (30 сек.)</string>
+    <string name="tv_chat_predictions_full">Вкл. (всё время голосования)</string>
 </resources>
