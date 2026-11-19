@@ -10,7 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
 /** TV home written with Compose: rows of cards like the YouTube app, the focus is handled by Compose. */
 class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.Previewer {
 
-    private val viewModel: TvHomeViewModel by viewModels { TvHomeViewModelFactory }
+    private val viewModel: TvHomeViewModel by activityViewModels { TvHomeViewModelFactory }
     private val previewLogin = mutableStateOf<String?>(null)
     private val previewPlayer = mutableStateOf<ExoPlayer?>(null)
     private var previewJob: Job? = null
@@ -635,11 +635,16 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     override fun onResume() {
         super.onResume()
         context?.let { syncHomePrefs(it) }
-        viewModel.load()
         loadLocalRows()
+        val hasWarmData = viewModel.followed.value != null || viewModel.popular.value != null || viewModel.games.value != null
+        if (hasWarmData) {
+            view?.postDelayed({ if (isResumed) viewModel.load(force = false, maxAgeMs = 20_000L) }, 160L)
+        } else {
+            viewModel.load(force = false, maxAgeMs = 20_000L)
+        }
     }
 
-    fun refreshIfStale(maxAgeMs: Long = 60_000L) {
+    fun refreshIfStale(maxAgeMs: Long = 20_000L) {
         context?.let { syncHomePrefs(it) }
         viewModel.load(force = false, maxAgeMs = maxAgeMs)
         loadLocalRows()

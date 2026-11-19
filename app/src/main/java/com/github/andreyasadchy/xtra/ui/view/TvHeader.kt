@@ -117,7 +117,18 @@ object TvHeader {
         }
     }
 
-    private class Controller(val firstRequester: FocusRequester, val tabRequester: FocusRequester, val searchRequester: FocusRequester, val view: ComposeView)
+    private class Controller(
+        val firstRequester: FocusRequester,
+        val tabRequester: FocusRequester,
+        val searchRequester: FocusRequester,
+        val view: ComposeView,
+        val update: () -> Unit,
+    )
+
+    fun refresh(root: View) {
+        val header = root.findViewById<ComposeView>(R.id.tvHeaderCompose) ?: return
+        (header.tag as? Controller)?.update?.invoke()
+    }
 
     /** Headers made of a toolbar with tabs, a sort bar, a search bar or a title block are replaced by the TV Compose header. */
     fun install(appBar: AppBarLayout) {
@@ -149,17 +160,17 @@ object TvHeader {
                 Header(snapshot, firstRequester, tabRequester, searchRequester, appBar)
             }
         }
-        view.id = R.id.tvHeaderCompose
-        view.tag = Controller(firstRequester, tabRequester, searchRequester, view)
-        appBar.addView(view, AppBarLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            scrollFlags = 0
-        })
         val update = {
             val next = read(appBar)
             if (!next.same(state.value)) {
                 state.value = next
             }
         }
+        view.id = R.id.tvHeaderCompose
+        view.tag = Controller(firstRequester, tabRequester, searchRequester, view, update)
+        appBar.addView(view, AppBarLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            scrollFlags = 0
+        })
         appBar.viewTreeObserver.addOnGlobalLayoutListener { update() }
         searchView?.findViewById<TextView>(androidx.appcompat.R.id.search_src_text)?.let { input ->
             input.addTextChangedListener(object : android.text.TextWatcher {

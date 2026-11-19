@@ -9,7 +9,7 @@
 - **Predictions (chat hidden) — Full Voting Mode**: upgraded **Predictions (chat hidden)** in the Chat layout panel to a 3-choice selector: *Disabled*, *On (30s)*, and *On (full voting)* — keeping the prediction banner visible while voting is open, hiding it as soon as bets lock, and showing final results for `15s` when resolved.
 - **Restart Player & Restart Chat Shortcuts**: added **Restart player** and **Restart chat** to customizable D-pad and remote key shortcuts, plus a **Restart chat** action in the Live Chat layout panel and VOD/Clip settings menu.
 - **UI & Leanback Polish**:
-  - **Smooth side-rail transitions**: subtle `120 ms` crossfade when switching sections from the TV side rail.
+  - **YouTube TV-style 60fps side-rail navigation**: spring-animated gliding focus indicator pill, proactive smooth D-pad rail scrolling, zero-relayout GPU open/close animation, calibrated hover-settle switching (`Switch categories without pressing OK`), instant warm root-page restoration (`0 ms`), in-place **Following** sub-tab switching, and silent automatic background data refresh (`stale-while-revalidate`).
   - **Dynamic Channel page ambient glow**: opening a streamer's page on TV derives a soft ambient background tint from their channel banner or avatar without flickering when browsing their VODs and clips.
   - **Discreet *Playing* / *PiP* badges on stream cards**: stream thumbnails on TV Home, stream grids, and the Streamer Switcher display a discreet **Playing** or **PiP** (`PiP 1` / `PiP 2`) pill when active.
   - **Direct category long-press menu & cleaner stream card menu**: holding **OK** on a category card now opens its actions panel directly (no intermediate *More actions* popup), and stream card long-press menus no longer clutter browse screens with *Create clip (30s)* or *Open on phone (QR code)* (kept inside the player).
@@ -20,7 +20,7 @@
 - **Channel Follow silently reverting on specific channels**: parsed Twitch's `followUser.error` (`FORBIDDEN` / verification required) response instead of falsely reporting success, immediately rolling back optimistic follow state and displaying a clear explanation toast.
 - **Multi-streamer Live notification banner**: fixed text wrapping/splitting and missing avatars when multiple followed streamers go live simultaneously, displaying up to 3 overlapping circular profile pictures and a crisp single-line `LIVE` badge.
 - **Settings backup file overwrite**: exporting a backup to a folder that already contains `xtra_backup.zip` now overwrites the existing archive in place instead of creating `(01)` / `(1)` duplicates.
-- **Side-rail focus & Settings smoothness**: fixed side-rail focus restoration when pressing Left/Back from **Statistics** or **Settings**, prewarmed XML preference trees in the background for instant **Settings** opening, and eliminated mini-freezes when scrolling the left category list.
+- **Side-rail focus & Settings smoothness**: fixed side-rail focus restoration when pressing Left/Back from **Statistics** or **Settings**, prewarmed XML preference trees in the background for instant **Settings** opening, and eliminated mini-freezes when scrolling the left category list or stepping rapidly through the main TV side rail.
 
 ### Install
 Download `XtraTV-1.4.6-tv.apk` below and install it over the previous version, your settings and account are kept.

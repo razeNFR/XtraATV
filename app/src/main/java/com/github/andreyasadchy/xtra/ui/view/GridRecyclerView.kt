@@ -373,7 +373,7 @@ class GridRecyclerView : RecyclerView {
      * TV: lists of live streams load again when the screen comes back after a while, a streamer that stopped
      * does not stay in the list.
      */
-    fun refreshIfStale(maxAge: Long = 30_000L) {
+    fun refreshIfStale(maxAge: Long = 20_000L) {
         val adapter = adapter
         if (adapter !is StreamsAdapter && adapter !is StreamsCompactAdapter) {
             return

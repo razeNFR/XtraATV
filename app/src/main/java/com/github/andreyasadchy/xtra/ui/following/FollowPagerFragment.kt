@@ -38,6 +38,7 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
     companion object {
         /** TV side menu: tab to show when the screen opens ("0" categories, "2" videos, "3" channels). */
         var requestedTab: String? = null
+        var clearStandalone: Boolean = false
     }
 
     private var _binding: FragmentMediaPagerBinding? = null
@@ -46,6 +47,9 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
 
     /** Keys of the tabs shown ("0" categories, "1" live, "2" videos, "3" channels). */
     private var shownTabs: List<String> = emptyList()
+    private var enabledTabsList: List<String> = emptyList()
+    private var defaultTabKey: String = "1"
+    private var tabMediator: TabLayoutMediator? = null
 
     private var pendingTab = -1
 
@@ -73,6 +77,90 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
             return true
         }
         return false
+    }
+
+    /**
+     * Switches between full Following tabs (`key == null`) and any sub-entry (`"0"`, `"2"`, `"3"`)
+     * directly in place without destroying or recreating [FollowPagerFragment].
+     */
+    fun selectMenuTab(key: String?): Boolean {
+        if (_binding == null || !isAdded) return false
+        val showVideosTab = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank()
+        if (key == null) {
+            if (standaloneTab != null || shownTabs != enabledTabsList) {
+                standaloneTab = null
+                bindTabs(enabledTabsList, defaultTabKey)
+            } else {
+                val defaultIdx = shownTabs.indexOf(defaultTabKey).takeIf { it >= 0 } ?: 0
+                if (binding.viewPager.currentItem != defaultIdx) {
+                    binding.viewPager.setCurrentItem(defaultIdx, false)
+                }
+            }
+        } else {
+            if (key == "2" && !showVideosTab) return false
+            if (key in enabledTabsList) {
+                if (standaloneTab != null || shownTabs != enabledTabsList) {
+                    standaloneTab = null
+                    bindTabs(enabledTabsList, key)
+                } else {
+                    val idx = shownTabs.indexOf(key)
+                    if (idx >= 0 && binding.viewPager.currentItem != idx) {
+                        binding.viewPager.setCurrentItem(idx, false)
+                    }
+                }
+            } else if (standaloneTab != key || shownTabs != listOf(key)) {
+                standaloneTab = key
+                bindTabs(listOf(key), key)
+            }
+        }
+        binding.root.postDelayed({
+            if (_binding != null && isResumed) {
+                (currentFragment as? com.github.andreyasadchy.xtra.ui.common.PagedListFragment)?.refreshIfStale(20_000L)
+            }
+        }, 160L)
+        com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(binding.root)
+        return true
+    }
+
+    private fun bindTabs(tabs: List<String>, targetKey: String?) {
+        val b = _binding ?: return
+        tabMediator?.detach()
+        tabMediator = null
+        shownTabs = tabs
+        if (tabs.size <= 1) {
+            b.tabLayout.visibility = View.GONE
+        } else {
+            b.tabLayout.visibility = View.VISIBLE
+            if (tabs.size >= 5) {
+                b.tabLayout.tabGravity = TabLayout.GRAVITY_CENTER
+                b.tabLayout.tabMode = TabLayout.MODE_SCROLLABLE
+            } else {
+                b.tabLayout.tabGravity = TabLayout.GRAVITY_FILL
+                b.tabLayout.tabMode = TabLayout.MODE_FIXED
+            }
+        }
+        val adapter = FollowPagerAdapter(this@FollowPagerFragment, tabs)
+        b.viewPager.adapter = adapter
+        b.viewPager.offscreenPageLimit = if (requireContext().resources.getBoolean(R.bool.isTv)) {
+            1
+        } else {
+            adapter.itemCount
+        }
+        if (targetKey != null) {
+            val idx = tabs.indexOf(targetKey).takeIf { it >= 0 }
+                ?: tabs.indexOf("1").takeIf { it >= 0 }
+                ?: 0
+            b.viewPager.setCurrentItem(idx, false)
+        }
+        tabMediator = TabLayoutMediator(b.tabLayout, b.viewPager) { tab, position ->
+            tab.text = when (tabs.getOrNull(position)) {
+                "0" -> getString(R.string.games)
+                "1" -> getString(R.string.live)
+                "2" -> getString(R.string.videos)
+                "3" -> getString(R.string.channels)
+                else -> getString(R.string.live)
+            }
+        }.also { it.attach() }
     }
 
     override val currentFragment: Fragment?
@@ -149,6 +237,13 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
                     null
                 }
             }
+            enabledTabsList = enabledTabs
+            defaultTabKey = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
+            val wasClearStandalone = clearStandalone
+            if (clearStandalone) {
+                clearStandalone = false
+                standaloneTab = null
+            }
             // TV: opened from an entry of the side menu (videos, channels, categories of the followed channels); a tab
             // hidden in the settings is shown alone, the settings stay as they are
             // a tab asked from the side menu that is not among the tabs of the screen (Followed channels...) is the
@@ -156,16 +251,6 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
             val requested = (requestedTab?.also { requestedTab = null } ?: standaloneTab)?.takeIf { it != "2" || showVideosTab }
             standaloneTab = requested?.takeIf { it !in enabledTabs }
             val tabs = if (requested != null && requested !in enabledTabs) listOf(requested) else enabledTabs
-            if (tabs.size <= 1) {
-                tabLayout.visibility = View.GONE
-            } else {
-                if (tabs.size >= 5) {
-                    tabLayout.tabGravity = TabLayout.GRAVITY_CENTER
-                    tabLayout.tabMode = TabLayout.MODE_SCROLLABLE
-                }
-            }
-            val adapter = FollowPagerAdapter(this@FollowPagerFragment, tabs)
-            viewPager.adapter = adapter
             viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
                     viewPager.doOnLayout {
@@ -198,33 +283,18 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
                     }
                 }
             })
+            viewPager.reduceDragSensitivity()
+            val targetKey = requested ?: if (firstLaunch || wasClearStandalone) defaultTabKey else null
+            bindTabs(tabs, targetKey)
             if (requested != null) {
-                viewPager.setCurrentItem(tabs.indexOf(requested), false)
-                // the screen may come back with its last tab (the side menu keeps the state of its screens): the tab asked
-                // for is chosen again once that state is put back
                 pendingTab = tabs.indexOf(requested)
                 firstLaunch = false
-            }
-            shownTabs = tabs
-            if (firstLaunch) {
-                val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "1"
-                viewPager.setCurrentItem(
-                    tabs.indexOf(defaultItem).takeIf { it != -1 } ?: tabs.indexOf("1").takeIf { it != -1 } ?: 0,
-                    false
-                )
+            } else if (wasClearStandalone) {
+                pendingTab = tabs.indexOf(defaultTabKey).coerceAtLeast(0)
+                firstLaunch = false
+            } else if (firstLaunch) {
                 firstLaunch = false
             }
-            viewPager.offscreenPageLimit = adapter.itemCount
-            viewPager.reduceDragSensitivity()
-            TabLayoutMediator(tabLayout, viewPager) { tab, position ->
-                tab.text = when (tabs.getOrNull(position)) {
-                    "0" -> getString(R.string.games)
-                    "1" -> getString(R.string.live)
-                    "2" -> getString(R.string.videos)
-                    "3" -> getString(R.string.channels)
-                    else -> getString(R.string.live)
-                }
-            }.attach()
             ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
                 val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
                 toolbar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
@@ -241,6 +311,8 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
     }
 
     override fun onDestroyView() {
+        tabMediator?.detach()
+        tabMediator = null
         super.onDestroyView()
         _binding = null
     }

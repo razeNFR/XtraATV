@@ -137,6 +137,8 @@ class MainActivity : AppCompatActivity() {
         private const val QUEUE_REFRESH_MS = 60_000L
         /** Opening the other streams or switching loads it again when it is older than this. */
         private const val QUEUE_FRESH_MS = 30_000L
+        /** Settle delay before auto-switching sections when stepping through the TV side menu without OK. */
+        private const val TV_MENU_HOVER_SETTLE_MS = 280L
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -337,8 +339,14 @@ class MainActivity : AppCompatActivity() {
                         return
                     }
                     binding.root.post {
-                        // a list of streams shown again after a while: the streamers that stopped go away
-                        f.view?.let { refreshStaleStreamLists(it) }
+                        // a list of streams shown again after a while: the streamers that stopped go away (deferred past the 120ms fade)
+                        f.view?.let { v ->
+                            v.postDelayed({
+                                if (f.isResumed) {
+                                    refreshStaleStreamLists(v, 20_000L)
+                                }
+                            }, 160L)
+                        }
                         if (tvInitialFocusDone && !isTvMenuShown && f.parentFragment is NavHostFragment && !isTvPlayerOverContent()) {
                             restoreTvScreenFocus()
                         }
@@ -1605,7 +1613,7 @@ class MainActivity : AppCompatActivity() {
             tvMenuPendingId = 0
             if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavAccount && id != tvMenuState.selected) {
                 tvMenuPendingId = id
-                binding.root.postDelayed(tvMenuAutoNav, 150L)
+                binding.root.postDelayed(tvMenuAutoNav, TV_MENU_HOVER_SETTLE_MS)
             }
         }
         com.github.andreyasadchy.xtra.ui.view.TvHeader.sectionTitle = {
@@ -1638,6 +1646,7 @@ class MainActivity : AppCompatActivity() {
                     binding.root.removeCallbacks(tvMenuAutoNav)
                     tvMenuPendingId = 0
                     tvMenuAutoNavAt = 0L
+                    tvMenuAutoHovering = false
                     binding.navBar.selectedItemId = id
                     tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
                     if (id != R.id.tvNavAccount) {
@@ -1650,13 +1659,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val tvRootDestinations = setOf(
+        R.id.searchPagerFragment,
+        R.id.tvHomeFragment,
+        R.id.rootGamesFragment,
+        R.id.rootTopFragment,
+        R.id.followPagerFragment,
+        R.id.followMediaFragment,
+        R.id.savedPagerFragment,
+        R.id.savedMediaFragment,
+        R.id.tvStatsFragment,
+        R.id.tvSettingsFragment,
+    )
+
     /** Last key pressed (and when): a move of the focus asked by the user, not by a page that loaded. */
     private var lastTvKeyCode = 0
     private var lastTvKeyAt = 0L
     /** When a page was shown from the side menu without OK. */
     private var tvMenuAutoNavAt = 0L
     private var tvMenuPendingId = 0
-    /** Option of the Xtra TV settings: the entry focused in the side menu shows its page after a short stop on it. */
+    private var tvMenuAutoHovering = false
+    /** Option of the Xtra TV settings: the entry focused in the side menu shows its page after settling on it. */
     private val tvMenuAutoNav = Runnable {
         val id = tvMenuPendingId
         tvMenuPendingId = 0
@@ -1665,46 +1688,68 @@ class MainActivity : AppCompatActivity() {
         }
         tvMenuAutoNavAt = android.os.SystemClock.elapsedRealtime()
         lastContentFocus = null
-        binding.navBar.selectedItemId = id
+        tvMenuAutoHovering = true
+        try {
+            binding.navBar.selectedItemId = id
+        } finally {
+            tvMenuAutoHovering = false
+        }
         tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
     }
 
     /** Entry of the side menu shown as chosen instead of its screen ("Followed videos" rather than "Following"). */
     private var tvMenuExtraSelected: Int? = null
 
-    /** TV side menu: a tab of the followed channels (videos, channels, categories), its screen opened if needed. */
-    private fun openFollowedTab(key: String, entry: Int) {
+    /** TV side menu: a tab of the followed channels (videos, channels, categories), switched in place when already open. */
+    private fun openFollowedTab(key: String, entry: Int, fromAutoHover: Boolean = tvMenuAutoHovering) {
         val loggedInWithCode = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank()
         if (key == "2" && !loggedInWithCode) {
-            // the videos of the followed channels need the login with the code (the token of the app)
-            Toast.makeText(this, R.string.tv_followed_videos_need_code, Toast.LENGTH_LONG).show()
+            if (!fromAutoHover) {
+                // the videos of the followed channels need the login with the code (the token of the app)
+                Toast.makeText(this, R.string.tv_followed_videos_need_code, Toast.LENGTH_LONG).show()
+            }
             return
         }
         tvMenuExtraSelected = entry
         tvMenuState.selected = entry
-        val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.getOrNull(0)
-        if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment && current.showTab(key)) {
+        val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)
+            ?.childFragmentManager?.fragments?.firstOrNull { it.isVisible }
+        if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment && current.selectMenuTab(key)) {
             return
         }
+        com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.clearStandalone = false
         com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.requestedTab = key
-        if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment) {
-            // the tab is hidden on the screen open: the screen again, with that tab
-            navController.navigate(R.id.followPagerFragment)
-        } else {
-            openTvSectionRoot(R.id.followPagerFragment)
-        }
+        openTvSectionRoot(R.id.followPagerFragment)
     }
 
     /**
-     * TV: a section of the side menu opens at its root. The screens opened in another section (a channel, a category)
-     * are not kept behind it: coming back to that section shows the section, not the channel left there.
+     * TV: a section of the side menu opens at its root while keeping root ViewModels & state warm in memory.
+     * Sub-screens opened inside another section (a channel, a category) are popped first so coming back to that
+     * section shows its root, and stale content silently refreshes in the background right after the crossfade.
      */
     private fun openTvSectionRoot(id: Int): Boolean {
         return try {
+            while (navController.currentDestination?.id?.let { it !in tvRootDestinations } == true && navController.popBackStack()) {
+                // pop transient sub-screens (category, channel) before saving root state
+            }
+            if (id == R.id.followPagerFragment && tvMenuExtraSelected == null) {
+                com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.clearStandalone = true
+                com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.requestedTab = null
+                val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)
+                    ?.childFragmentManager?.fragments?.firstOrNull { it.isVisible }
+                if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment && current.selectMenuTab(null)) {
+                    com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.clearStandalone = false
+                    return true
+                }
+            }
+            if (navController.currentDestination?.id == id) {
+                binding.root.postDelayed({ refreshVisibleScreensIfStale(20_000L) }, 160L)
+                return true
+            }
             navController.navigate(id, null, androidx.navigation.navOptions {
                 launchSingleTop = true
-                restoreState = false
-                popUpTo(navController.graph.findStartDestination().id) { saveState = false }
+                restoreState = true
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                 anim {
                     enter = R.anim.tv_section_fade_in
                     exit = R.anim.tv_section_fade_out
@@ -1754,11 +1799,16 @@ class MainActivity : AppCompatActivity() {
     private fun closeTvMenuAndFocusContent() {
         binding.navHostFragment.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         if (tvMenuPendingId != 0) {
+            val pendingId = tvMenuPendingId
+            tvMenuPendingId = 0
             binding.root.removeCallbacks(tvMenuAutoNav)
-            tvMenuAutoNav.run()
             tvMenuAutoNavAt = 0L
+            tvMenuAutoHovering = false
+            lastContentFocus = null
+            binding.navBar.selectedItemId = pendingId
+            tvMenuState.selected = tvMenuExtraSelected ?: binding.navBar.selectedItemId
             hideTvMenu()
-            focusContentAfterMenu(false)
+            focusContentAfterMenu(pendingId == R.id.searchPagerFragment)
             return
         }
         // the home first: giving the focus back to its view would put it on its banner. The card that had the
@@ -1803,10 +1853,10 @@ class MainActivity : AppCompatActivity() {
         focusContentAfterMenu(false)
     }
 
-    private fun refreshStaleStreamLists(view: View) {
+    private fun refreshStaleStreamLists(view: View, maxAgeMs: Long = 20_000L) {
         when (view) {
-            is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> view.refreshIfStale()
-            is ViewGroup -> for (i in 0 until view.childCount) refreshStaleStreamLists(view.getChildAt(i))
+            is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView -> view.refreshIfStale(maxAgeMs)
+            is ViewGroup -> for (i in 0 until view.childCount) refreshStaleStreamLists(view.getChildAt(i), maxAgeMs)
         }
     }
 
@@ -2753,7 +2803,7 @@ class MainActivity : AppCompatActivity() {
     /**
      * Silently refreshes the currently visible browsing screens (TV Home and paged lists) if their data is older than [maxAgeMs].
      */
-    fun refreshVisibleScreensIfStale(maxAgeMs: Long = 60_000L) {
+    fun refreshVisibleScreensIfStale(maxAgeMs: Long = 20_000L) {
         if (isFinishing || isDestroyed || !::binding.isInitialized) return
         fun visit(fragments: List<androidx.fragment.app.Fragment>) {
             for (fragment in fragments) {
@@ -2767,7 +2817,7 @@ class MainActivity : AppCompatActivity() {
         }
         supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.let { visit(it) }
         if (isTv && maxAgeMs <= 60_000L) {
-            refreshStaleStreamLists(binding.navHostFragment)
+            refreshStaleStreamLists(binding.navHostFragment, maxAgeMs)
         }
     }
 
@@ -3712,16 +3762,28 @@ class MainActivity : AppCompatActivity() {
             }
             setOnItemReselectedListener {
                 if (tvMenuExtraSelected != null && it.itemId == R.id.followPagerFragment) {
-                    // back to "Following" from one of its shortcuts: the screen with all its tabs again
+                    // back to "Following" from one of its shortcuts: restore its full tab set in place
                     tvMenuExtraSelected = null
                     tvMenuState.selected = it.itemId
-                    navController.navigate(R.id.followPagerFragment)
+                    com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.clearStandalone = true
+                    com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.requestedTab = null
+                    val current = supportFragmentManager.findFragmentById(R.id.navHostFragment)
+                        ?.childFragmentManager?.fragments?.firstOrNull { f -> f.isVisible }
+                    if (current is com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment && current.selectMenuTab(null)) {
+                        com.github.andreyasadchy.xtra.ui.following.FollowPagerFragment.clearStandalone = false
+                    } else {
+                        openTvSectionRoot(R.id.followPagerFragment)
+                    }
                     return@setOnItemReselectedListener
                 }
                 if (!navController.popBackStack(it.itemId, false)) {
-                    val currentFragment = supportFragmentManager.findFragmentById(R.id.navHostFragment)?.childFragmentManager?.fragments?.getOrNull(0)
+                    val currentFragment = supportFragmentManager.findFragmentById(R.id.navHostFragment)
+                        ?.childFragmentManager?.fragments?.firstOrNull { f -> f.isVisible }
                     if (currentFragment is Scrollable) {
                         currentFragment.scrollToTop()
+                    }
+                    if (isTv) {
+                        refreshVisibleScreensIfStale(5_000L)
                     }
                 }
             }
