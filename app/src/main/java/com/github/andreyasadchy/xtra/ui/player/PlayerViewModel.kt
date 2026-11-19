@@ -91,6 +91,9 @@ class PlayerViewModel(
     }
     val isBookmarked = MutableStateFlow<Boolean?>(null)
     val gamesList = MutableStateFlow<List<Game>?>(null)
+    val mutedSegments = MutableStateFlow<List<Pair<Long, Long>>>(emptyList())
+    private var mutedSegmentsVideoId: String? = null
+    private var mutedSegmentsJob: Job? = null
     private val _isFollowing = MutableStateFlow<Boolean?>(null)
     val isFollowing: StateFlow<Boolean?> = _isFollowing
     private val _accountFollowedAtMs = MutableStateFlow<Long?>(null)
@@ -368,6 +371,29 @@ class PlayerViewModel(
 
                     }
                 }
+            }
+        }
+    }
+
+    fun loadMutedSegments(videoId: String?, networkLibrary: String?, gqlHeaders: Map<String, String>) {
+        if (videoId.isNullOrBlank()) {
+            mutedSegmentsJob?.cancel()
+            mutedSegmentsVideoId = null
+            mutedSegments.value = emptyList()
+            return
+        }
+        if (videoId == mutedSegmentsVideoId && (mutedSegmentsJob?.isActive == true || mutedSegments.value.isNotEmpty())) {
+            return
+        }
+        mutedSegmentsJob?.cancel()
+        if (videoId != mutedSegmentsVideoId) {
+            mutedSegmentsVideoId = videoId
+            mutedSegments.value = emptyList()
+        }
+        mutedSegmentsJob = viewModelScope.launch {
+            val segments = graphQLRepository.loadVideoMutedSegments(networkLibrary, gqlHeaders, videoId)
+            if (mutedSegmentsVideoId == videoId) {
+                mutedSegments.value = segments
             }
         }
     }

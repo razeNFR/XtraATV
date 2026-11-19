@@ -258,7 +258,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
-            <androidx.media3.ui.DefaultTimeBar
+            <com.github.andreyasadchy.xtra.ui.view.XtraTimeBar
                 android:id="@+id/progressBar"
                 android:layout_width="match_parent"
                 android:layout_height="26dp"

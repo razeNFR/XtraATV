@@ -168,6 +168,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
         }
 
+    private var hlsMutedSegments: List<Pair<Long, Long>> = emptyList()
+
+    protected fun updateHlsMutedSegments(segments: List<Pair<Long, Long>>) {
+        hlsMutedSegments = segments
+        val bar = _binding?.playerControls?.progressBar ?: return
+        val effective = when {
+            playbackService?.type != BasePlaybackService.VIDEO -> emptyList()
+            segments.isNotEmpty() -> segments
+            else -> viewModel.mutedSegments.value
+        }
+        bar.setMutedSegments(effective)
+    }
+
     /** A live stream: from the service, or from the screen itself while its service connects (a switch just made it). */
     private fun isStreamScreen(): Boolean {
         return playbackService?.type == BasePlaybackService.STREAM || (playbackService == null && arguments?.getBoolean(KEY_STREAM) == true)
@@ -960,6 +973,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                     BasePlaybackService.VIDEO -> {
                         val videoId = playbackService?.videoId
+                        if (!videoId.isNullOrBlank()) {
+                            viewModel.loadMutedSegments(
+                                videoId,
+                                requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                                TwitchApiHelper.getGQLHeaders(requireContext()),
+                            )
+                        } else {
+                            viewModel.loadMutedSegments(null, null, emptyMap())
+                        }
                         if (!videoId.isNullOrBlank() && (isTv || requireContext().prefs().getBoolean(C.PLAYER_GAMES_BUTTON, true) || requireContext().prefs().getBoolean(C.PLAYER_MENU_GAMES, false))) {
                             viewModel.loadGamesList(
                                 videoId,
@@ -968,6 +990,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                             )
                         }
+                    }
+                    else -> {
+                        viewModel.loadMutedSegments(null, null, emptyMap())
                     }
                 }
             }
@@ -1286,8 +1311,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
                 progressBar.setAdGroupTimesMs(null, null, 0)
+                hlsMutedSegments = emptyList()
+                progressBar.setMutedSegments(emptyList())
                 seekPreview?.setChapters(null)
                 if (playbackService?.type == BasePlaybackService.VIDEO) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.mutedSegments.collectLatest { segments ->
+                                val effective = if (hlsMutedSegments.isNotEmpty()) hlsMutedSegments else segments
+                                progressBar.setMutedSegments(effective)
+                            }
+                        }
+                    }
                     if (isTv && requireContext().prefs().getBoolean(C.TV_BUTTON_STREAM_LIST, true)) {
                         streamList?.visibility = View.VISIBLE
                         streamList?.setOnClickListener {

@@ -1262,6 +1262,51 @@ class GraphQLRepository(
         json.decodeFromString<VideoGamesResponse>(sendPersistedQuery(networkLibrary, headers, body))
     }
 
+    suspend fun loadVideoMutedSegments(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        videoId: String?,
+    ): List<Pair<Long, Long>> = withContext(Dispatchers.IO) {
+        if (videoId.isNullOrBlank()) return@withContext emptyList()
+        runCatching {
+            val body = buildJsonObject {
+                put("query", "query null(\$id: ID!) { video(id: \$id) { muteInfo { mutedSegmentConnection { nodes { offset duration } } } } }")
+                putJsonObject("variables") {
+                    put("id", videoId)
+                }
+            }.toString()
+            val root = json.parseToJsonElement(sendPersistedQuery(networkLibrary, headers, body)) as? JsonObject
+            val dataObj = root?.get("data") as? JsonObject
+            val videoObj = dataObj?.get("video") as? JsonObject
+            val muteInfoObj = videoObj?.get("muteInfo") as? JsonObject
+            val connObj = muteInfoObj?.get("mutedSegmentConnection") as? JsonObject
+            val nodes = connObj?.get("nodes") as? JsonArray ?: return@runCatching emptyList()
+            val rawRanges = ArrayList<Pair<Long, Long>>(nodes.size)
+            for (element in nodes) {
+                val node = element as? JsonObject ?: continue
+                val offsetSec = (node["offset"] as? JsonPrimitive)?.intOrNull ?: continue
+                val durationSec = (node["duration"] as? JsonPrimitive)?.intOrNull ?: continue
+                if (offsetSec >= 0 && durationSec > 0) {
+                    val startMs = offsetSec * 1000L
+                    val endMs = (offsetSec + durationSec) * 1000L
+                    rawRanges.add(startMs to endMs)
+                }
+            }
+            if (rawRanges.isEmpty()) return@runCatching emptyList()
+            rawRanges.sortBy { it.first }
+            val merged = ArrayList<Pair<Long, Long>>(rawRanges.size)
+            for ((startMs, endMs) in rawRanges) {
+                val last = merged.lastOrNull()
+                if (last != null && startMs <= last.second + 1_000L) {
+                    merged[merged.lastIndex] = last.first to maxOf(last.second, endMs)
+                } else {
+                    merged.add(startMs to endMs)
+                }
+            }
+            merged
+        }.getOrDefault(emptyList())
+    }
+
     suspend fun loadChannelViewerList(networkLibrary: String?, headers: Map<String, String>, channelLogin: String?): ChannelViewerListResponse = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             putJsonObject("extensions") {

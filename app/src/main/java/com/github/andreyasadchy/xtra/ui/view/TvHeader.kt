@@ -345,7 +345,8 @@ object TvHeader {
             (0 until tabLayout.tabCount).mapNotNull { index ->
                 tabLayout.getTabAt(index)?.let { tab ->
                     Action("tab$index", tab.text?.toString() ?: "", null, tab.isSelected) {
-                        screenRoot(appBar).findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.viewPager)?.setCurrentItem(index, false)
+                        val pagerIndex = (tab.tag as? Int) ?: index
+                        screenRoot(appBar).findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.viewPager)?.setCurrentItem(pagerIndex, false)
                         tab.select()
                     }
                 }

@@ -1970,11 +1970,14 @@ class MainActivity : AppCompatActivity() {
         if (focus) {
             val sideMenu = binding.tvSideMenu
             if (sideMenu != null) {
-                tvMenuState.suppressFocusCallback = true
+                tvMenuState.requestFocusSelected()
                 if (!sideMenu.hasFocus()) {
                     sideMenu.requestFocus()
                 }
-                tvMenuState.requestFocusSelected()
+                if (tvMenuState.focusSelected() && tvMenuState.focusedId == tvMenuState.selected) {
+                    tvMenuState.pendingFocus = false
+                    tvMenuState.suppressFocusCallback = false
+                }
             } else {
                 val selected = binding.navBar.findViewById<View>(binding.navBar.selectedItemId)
                 if (selected == null || !selected.requestFocus()) {

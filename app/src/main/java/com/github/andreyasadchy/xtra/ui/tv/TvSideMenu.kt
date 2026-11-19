@@ -200,7 +200,12 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     val pillCorner = remember { Animatable(0f) }
     var pillInitialized by remember { mutableStateOf(false) }
 
-    val activePillBounds = if (menuHasFocus && !collapsed && focusedEntryId != 0) entryPillBounds[focusedEntryId] else null
+    val displayFocusId = when {
+        !menuHasFocus || collapsed -> 0
+        state.pendingFocus && state.selected != 0 -> state.selected
+        else -> focusedEntryId
+    }
+    val activePillBounds = if (displayFocusId != 0) entryPillBounds[displayFocusId] else null
     LaunchedEffect(activePillBounds) {
         if (activePillBounds == null) {
             pillInitialized = false
@@ -225,6 +230,10 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         if (!state.pendingFocus || collapsed) return@LaunchedEffect
         try {
             repeat(20) {
+                if (state.focusSelected() && (state.focusedId == state.selected || state.requesters[state.selected] == null)) {
+                    state.pendingFocus = false
+                    return@LaunchedEffect
+                }
                 withFrameNanos { }
                 if (!state.pendingFocus || collapsed) return@LaunchedEffect
                 val targetId = state.selected
@@ -242,10 +251,6 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             scrollState.scrollTo(desired)
                         }
                     }
-                }
-                if (state.focusSelected() && (state.focusedId == targetId || state.requesters[targetId] == null)) {
-                    state.pendingFocus = false
-                    return@LaunchedEffect
                 }
             }
         } finally {
@@ -482,6 +487,9 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                     .focusRequester(requester)
                     .onFocusChanged {
                         if (it.isFocused) {
+                            if (state.pendingFocus && state.selected != 0 && item.id != state.selected) {
+                                return@onFocusChanged
+                            }
                             focusedRequester = requester
                             focusedEntryId = item.id
                             state.focusedId = item.id
@@ -491,10 +499,11 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             }
                         }
                     }
+                val suppressVisualFocus = state.pendingFocus && state.selected != 0 && item.id != state.selected
                 if (isAccount) {
-                    AccountEntry(item, state, openProvider, hasPillBounds, entryModifier) { onClick(item.id) }
+                    AccountEntry(item, state, openProvider, hasPillBounds, suppressVisualFocus, entryModifier) { onClick(item.id) }
                 } else {
-                    MenuEntry(item, item.id == activeId, openProvider, hasPillBounds, entryModifier) { onClick(item.id) }
+                    MenuEntry(item, item.id == activeId, openProvider, hasPillBounds, suppressVisualFocus, entryModifier) { onClick(item.id) }
                 }
             }
         }
@@ -513,11 +522,13 @@ private fun AccountEntry(
     state: TvMenuState,
     openProvider: () -> Float,
     useGlidingPill: Boolean,
+    suppressVisualFocus: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
+    val rawFocused by interaction.collectIsFocusedAsState()
+    val focused = rawFocused && !suppressVisualFocus
     val name = state.accountName
     val image = state.accountImage
     val content = if (focused) TvColors.onFocused else Color.White
@@ -713,11 +724,13 @@ private fun MenuEntry(
     selected: Boolean,
     openProvider: () -> Float,
     useGlidingPill: Boolean,
+    suppressVisualFocus: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
+    val rawFocused by interaction.collectIsFocusedAsState()
+    val focused = rawFocused && !suppressVisualFocus
     val accent = androidx.tv.material3.MaterialTheme.colorScheme.primary
     val selectedPillColor = accent.copy(alpha = 0.22f)
     val content = when {
