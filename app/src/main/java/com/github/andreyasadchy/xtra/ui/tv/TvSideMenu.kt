@@ -319,7 +319,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         userMovedInOpenMenu = false
         try {
             var confirmedFrames = 0
-            repeat(24) {
+            for (attempt in 0 until 24) {
                 withFrameNanos { }
                 if (!state.pendingFocus || collapsed) return@LaunchedEffect
                 val targetId = state.selected.takeIf { id -> id != 0 && items.any { it.id == id } }
