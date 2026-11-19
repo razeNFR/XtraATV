@@ -260,7 +260,7 @@ class ChatReplayManager(
                 }
                 val messageOffset = messageOffsetMs(message)
                 if (messageOffset != null) {
-                    var currentPosition: Long
+                    var currentPosition = 0L
                     while (
                         isActive && this@ChatReplayManager.isActive &&
                         (getCurrentPosition() ?: 0).let { position ->

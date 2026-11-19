@@ -1863,7 +1863,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         requireContext().prefs().edit { putBoolean(C.KEY_CHAT_OPENED, false) }
         if (isTv && isMaximized && C.getTvPredictionsPopupMode(requireContext().prefs()) == 2) {
-            tvActivePrediction.value?.takeIf { it.status == "ACTIVE" }?.let { onTvPredictionUpdated(it) }
+            tvActivePrediction.value?.takeIf { it.status == "ACTIVE" }?.let { onTvPredictionEvent(it) }
         }
     }
 
@@ -3151,7 +3151,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         hideTvPredictionPopup()
                     } else if (!isChatOpen) {
                         if (it == 2) {
-                            tvActivePrediction.value?.takeIf { p -> p.status == "ACTIVE" }?.let { p -> onTvPredictionUpdated(p) }
+                            tvActivePrediction.value?.takeIf { p -> p.status == "ACTIVE" }?.let { p -> onTvPredictionEvent(p) }
                         } else if (it == 1 && tvPredictionView?.isVisible == true && tvPredictionCurrent?.status == "ACTIVE") {
                             showTvPredictionPopup(autoHideMs = 30_000L)
                         }

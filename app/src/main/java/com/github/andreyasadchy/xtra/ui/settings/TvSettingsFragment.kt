@@ -1647,7 +1647,7 @@ class TvSettingsFragment : Fragment() {
             if (canMoveUp) SmallTextChip("↑", onMoveUp)
             if (canMoveDown) SmallTextChip("↓", onMoveDown)
             SmallTextChip("✎", onEdit)
-            if (canDelete) SmallIconPill(R.drawable.tv_ic_close, onDelete)
+            if (canDelete) SmallIconPill(iconRes = R.drawable.tv_ic_close, onClick = onDelete)
         }
     }
 
