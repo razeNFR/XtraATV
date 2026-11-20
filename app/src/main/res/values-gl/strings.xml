@@ -1352,4 +1352,14 @@
     <string name="tv_backup_save_failed">Non se puido gardar o ficheiro de copia de seguranza</string>
     <string name="tv_remote_action_last_stream">Última transmisión vista</string>
     <string name="tv_no_last_stream">Aínda non hai ningunha transmisión anterior</string>
+    <string name="tv_pip_edge_margin">Marxe do bordo</string>
+    <string name="tv_pip_margin_normal">Normal</string>
+    <string name="tv_pip_margin_reduced">Reducida</string>
+    <string name="tv_pip_margin_flush">Pegada</string>
+    <string name="tv_pip_streamer_name">Nome do streamer</string>
+    <string name="tv_pip_label_auto">Automático (co HUD)</string>
+    <string name="tv_pip_label_always">Sempre visible</string>
+    <string name="tv_pip_label_hidden">Oculto</string>
+    <string name="tv_remote_action_live_alert">Abrir alerta de directo</string>
+    <string name="tv_no_live_alert">Sen notificación de directo recente</string>
 </resources>

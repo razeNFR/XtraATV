@@ -146,15 +146,16 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         slot.decoderSteppedDown = false
 
         val frame = slot.view ?: return
+        frame.findViewById<TextView>(R.id.tvPipLabel)?.text = stream.channelName ?: login
         updateVideoSizeCaps()
         applyLayout()
         applySound()
         applyDim()
-        updateBorders()
+        borderStyleApplied = -1
+        wakeChrome()
         TvDim.removeListener(dimListener)
         TvDim.addListener(dimListener)
 
-        frame.findViewById<TextView>(R.id.tvPipLabel)?.text = stream.channelName ?: login
         val texture = frame.findViewById<TextureView>(R.id.tvPipTexture)
         texture?.animate()?.cancel()
         texture?.alpha = 0f
@@ -243,7 +244,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 applyLayout()
                 applySound()
                 applyDim()
-                updateBorders()
+                borderStyleApplied = -1
+                wakeChrome()
                 TvDim.removeListener(dimListener)
                 TvDim.addListener(dimListener)
                 if (!hadVisibleBefore) {
@@ -521,11 +523,23 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         return w to (w * 9 / 16)
     }
 
+    private fun edgeMarginPx(): Int {
+        val density = activity.resources.displayMetrics.density
+        return when (activity.prefs().getString(C.TV_PIP_EDGE_MARGIN, "reduced")) {
+            "normal" -> (26 * density).toInt()
+            "flush" -> 0
+            else -> (14 * density).toInt()
+        }
+    }
+
+    private fun isFlushEdgeMargin(): Boolean =
+        activity.prefs().getString(C.TV_PIP_EDGE_MARGIN, "reduced") == "flush"
+
     /** Corner and size of each open small window, stacking vertically with a clean gap if both share the same corner. */
     fun applyLayout() {
         val density = activity.resources.displayMetrics.density
-        val horizontal = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
-        val vertical = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+        val margin = edgeMarginPx()
+        val cornerRadiusPx = (if (isFlushEdgeMargin()) 6f else 12f) * density
         val gap = (10 * density).toInt()
 
         val slot0Open = slots[0].isVisibleSlot()
@@ -539,6 +553,13 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         slots.forEachIndexed { idx, slot ->
             val frame = slot?.view ?: return@forEachIndexed
             if (!slot.isVisibleSlot()) return@forEachIndexed
+            (frame.foreground as? GradientDrawable)?.cornerRadius = cornerRadiusPx
+            frame.outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(v: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, v.width, v.height, cornerRadiusPx)
+                }
+            }
+            frame.invalidateOutline()
             val corner = if (idx == 1) corner1 else corner0
             val (width, height) = dimensionsForSize(sizeForSlot(idx))
             val vGravity = when (corner) {
@@ -551,8 +572,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 "tc", "c", "bc" -> Gravity.CENTER_HORIZONTAL
                 else -> Gravity.END
             }
-            var topM = vertical
-            var bottomM = vertical
+            var topM = margin
+            var bottomM = margin
             var extraTranslationY = 0f
             if (sameCorner) {
                 when (vGravity) {
@@ -564,7 +585,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 }
             }
             frame.layoutParams = FrameLayout.LayoutParams(width, height, vGravity or hGravity).apply {
-                setMargins(horizontal, topM, horizontal, bottomM)
+                setMargins(margin, topM, margin, bottomM)
             }
             frame.animate().cancel()
             frame.translationY = controlsLift(corner) + extraTranslationY
@@ -572,12 +593,46 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     }
 
     private var controlsShown = false
+    private var chromeAwake = false
+    private var chromeWokeAt = 0L
+    private var borderStyleApplied = -1
+    private var borderAnimator: android.animation.ValueAnimator? = null
+    private val sleepChromeRunnable = Runnable {
+        if (!controlsShown) {
+            chromeAwake = false
+            refreshChrome(animate = true)
+        }
+    }
+
+    fun wakeChrome() {
+        chromeAwake = true
+        chromeWokeAt = SystemClock.elapsedRealtime()
+        container.removeCallbacks(sleepChromeRunnable)
+        if (!controlsShown) {
+            container.postDelayed(sleepChromeRunnable, CHROME_WAKE_MS)
+        }
+        refreshChrome(animate = true)
+    }
 
     fun setControlsShown(shown: Boolean) {
         if (controlsShown == shown) {
             return
         }
         controlsShown = shown
+        if (shown) {
+            container.removeCallbacks(sleepChromeRunnable)
+            chromeAwake = true
+            refreshChrome(animate = true)
+        } else {
+            val remaining = CHROME_WAKE_MS - (SystemClock.elapsedRealtime() - chromeWokeAt)
+            container.removeCallbacks(sleepChromeRunnable)
+            if (remaining > 350L) {
+                container.postDelayed(sleepChromeRunnable, remaining)
+            } else {
+                chromeAwake = false
+                refreshChrome(animate = true)
+            }
+        }
         val density = activity.resources.displayMetrics.density
         val gap = (10 * density).toInt()
         val sameCorner = slots[0].isVisibleSlot() && slots[1].isVisibleSlot() && cornerForSlot(0) == cornerForSlot(1)
@@ -709,19 +764,104 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         }
     }
 
-    private fun updateBorders() {
+    private fun shouldShowStreamerLabel(): Boolean {
+        return when (activity.prefs().getString(C.TV_PIP_LABEL_MODE, "auto")) {
+            "always" -> true
+            "hidden" -> false
+            else -> controlsShown || chromeAwake || selectorActive
+        }
+    }
+
+    fun refreshChrome(animate: Boolean = false) {
+        val showLabel = shouldShowStreamerLabel()
+        slots.forEach { slot ->
+            if (!slot.isVisibleSlot()) return@forEach
+            val label = slot?.view?.findViewById<TextView>(R.id.tvPipLabel) ?: return@forEach
+            label.animate().cancel()
+            if (showLabel) {
+                if (label.visibility != View.VISIBLE) {
+                    label.alpha = if (animate) 0f else 1f
+                    label.visibility = View.VISIBLE
+                }
+                if (animate) {
+                    label.animate().alpha(1f).setDuration(200L).start()
+                } else {
+                    label.alpha = 1f
+                }
+            } else {
+                if (animate && label.visibility == View.VISIBLE && label.alpha > 0f) {
+                    label.animate().alpha(0f).setDuration(240L).withEndAction {
+                        if (!shouldShowStreamerLabel()) {
+                            label.visibility = View.INVISIBLE
+                        }
+                    }.start()
+                } else {
+                    label.alpha = 0f
+                    label.visibility = View.INVISIBLE
+                }
+            }
+        }
+        updateBorders(animate = animate)
+    }
+
+    private fun applyStrokeToNormalBorders(widthPx: Int, alpha: Int) {
+        val color = Color.argb(alpha.coerceIn(0, 255), 255, 255, 255)
+        slots.forEach { slot ->
+            val fg = slot?.view?.foreground as? GradientDrawable ?: return@forEach
+            fg.setStroke(widthPx, color)
+        }
+    }
+
+    private fun updateBorders(animate: Boolean = false) {
         val density = activity.resources.displayMetrics.density
-        slots.forEachIndexed { idx, slot ->
-            val fg = slot?.view?.foreground as? GradientDrawable ?: return@forEachIndexed
-            if (selectorActive && activeCount >= 2) {
+        if (selectorActive && activeCount >= 2) {
+            borderAnimator?.cancel()
+            borderAnimator = null
+            borderStyleApplied = 2
+            slots.forEachIndexed { idx, slot ->
+                val fg = slot?.view?.foreground as? GradientDrawable ?: return@forEachIndexed
                 if (idx == selectedSlot) {
                     fg.setStroke((4.5f * density).toInt(), TvAccent.color)
                 } else {
                     fg.setStroke((2.5f * density).toInt(), 0x77FFFFFF)
                 }
-            } else {
-                fg.setStroke((3 * density).toInt(), Color.WHITE)
             }
+            return
+        }
+        val prominent = controlsShown || chromeAwake
+        val targetStyle = if (prominent) 1 else 0
+        val thickPx = maxOf(2, (3f * density).toInt())
+        val thinPx = maxOf(1, kotlin.math.round(1f * density).toInt())
+        val thickAlpha = 255
+        val thinAlpha = 85
+
+        if (!animate || borderStyleApplied !in 0..1 || borderStyleApplied == targetStyle) {
+            borderAnimator?.cancel()
+            borderAnimator = null
+            borderStyleApplied = targetStyle
+            if (prominent) {
+                applyStrokeToNormalBorders(thickPx, thickAlpha)
+            } else {
+                applyStrokeToNormalBorders(thinPx, thinAlpha)
+            }
+            return
+        }
+
+        borderAnimator?.cancel()
+        val fromW = if (borderStyleApplied == 1) thickPx.toFloat() else thinPx.toFloat()
+        val toW = if (prominent) thickPx.toFloat() else thinPx.toFloat()
+        val fromA = if (borderStyleApplied == 1) thickAlpha.toFloat() else thinAlpha.toFloat()
+        val toA = if (prominent) thickAlpha.toFloat() else thinAlpha.toFloat()
+        borderStyleApplied = targetStyle
+        borderAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 240L
+            addUpdateListener { anim ->
+                val f = anim.animatedValue as Float
+                val w = kotlin.math.round(fromW + (toW - fromW) * f).toInt().coerceAtLeast(1)
+                val a = kotlin.math.round(fromA + (toA - fromA) * f).toInt().coerceIn(0, 255)
+                applyStrokeToNormalBorders(w, a)
+            }
+            start()
         }
     }
 
@@ -731,7 +871,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         selectorCenterDown = false
         backDown = false
         selectedSlot = if (slots[0].isVisibleSlot()) 0 else 1
-        updateBorders()
+        refreshChrome(animate = true)
         showSelectorHint()
         container.removeCallbacks(hideSelectorRunnable)
         container.postDelayed(hideSelectorRunnable, SELECTOR_TIMEOUT_MS)
@@ -744,7 +884,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         container.removeCallbacks(hideSelectorRunnable)
         selectorHintView?.let { container.removeView(it) }
         selectorHintView = null
-        updateBorders()
+        borderStyleApplied = -1
+        refreshChrome(animate = false)
     }
 
     private fun showSelectorHint() {
@@ -804,6 +945,11 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         exitSelectorMode()
 
         if (activeCount == 0) {
+            borderAnimator?.cancel()
+            borderAnimator = null
+            container.removeCallbacks(sleepChromeRunnable)
+            chromeAwake = false
+            borderStyleApplied = -1
             setMainMix(1f)
             if (configuredCount == 0) {
                 TvDim.removeListener(dimListener)
@@ -817,7 +963,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             updateVideoSizeCaps()
             applyLayout()
             applySound()
-            updateBorders()
+            borderStyleApplied = -1
+            refreshChrome(animate = false)
         }
         activity.syncTvPlaybackState()
     }
@@ -834,6 +981,11 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     fun close() {
         val wasOpen = activeCount > 0
         exitSelectorMode()
+        borderAnimator?.cancel()
+        borderAnimator = null
+        container.removeCallbacks(sleepChromeRunnable)
+        chromeAwake = false
+        borderStyleApplied = -1
         TvDim.removeListener(dimListener)
         for (i in 0 until MAX_SLOTS) {
             val slot = slots[i] ?: continue
@@ -994,6 +1146,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     companion object {
         const val MAX_SLOTS = 2
         private const val SELECTOR_TIMEOUT_MS = 5_000L
+        private const val CHROME_WAKE_MS = 4_000L
 
         @Volatile
         var mainMix = 1f

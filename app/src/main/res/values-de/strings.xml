@@ -1352,4 +1352,14 @@
     <string name="tv_backup_save_failed">Backup-Datei konnte nicht gespeichert werden</string>
     <string name="tv_remote_action_last_stream">Zuletzt gesehener Stream</string>
     <string name="tv_no_last_stream">Noch kein vorheriger Stream vorhanden</string>
+    <string name="tv_pip_edge_margin">Randabstand</string>
+    <string name="tv_pip_margin_normal">Normal</string>
+    <string name="tv_pip_margin_reduced">Verringert</string>
+    <string name="tv_pip_margin_flush">Bündig</string>
+    <string name="tv_pip_streamer_name">Streamer-Name</string>
+    <string name="tv_pip_label_auto">Automatisch (mit HUD)</string>
+    <string name="tv_pip_label_always">Immer sichtbar</string>
+    <string name="tv_pip_label_hidden">Ausgeblendet</string>
+    <string name="tv_remote_action_live_alert">Live-Benachrichtigung öffnen</string>
+    <string name="tv_no_live_alert">Keine aktuelle Live-Benachrichtigung</string>
 </resources>

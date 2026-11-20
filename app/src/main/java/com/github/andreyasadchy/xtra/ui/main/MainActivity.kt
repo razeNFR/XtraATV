@@ -1095,13 +1095,18 @@ class MainActivity : AppCompatActivity() {
 
     fun isStreamInTvPip(login: String?): Boolean = isTv && tvPip.containsStream(login)
 
-    /** TV: corner, size and sound of the small window(s) changed in its panel. */
+    /** TV: corner, size, edge margin, label mode and sound of the small window(s) changed in its panel. */
     fun applyTvPipSettings() {
         if (tvPip.activeCount > 0) {
             tvPip.applyLayout()
             tvPip.applySound()
+            tvPip.wakeChrome()
         }
     }
+
+    fun isTvLiveAlertShowing(): Boolean = isTv && tvLiveAlerts.isBannerShowing
+
+    fun openTvLiveAlert(): Boolean = if (isTv) tvLiveAlerts.openCurrentOrRecent() else false
 
     /** The controls of the full screen player are shown or hidden: the small window(s) make room for them. */
     fun onTvControlsVisibility(visible: Boolean) {
@@ -1199,8 +1204,9 @@ class MainActivity : AppCompatActivity() {
         noPlayerCustomDownKey = 0
         noPlayerCustomLongAction = null
         PlayerFragment.markHeldRemoteKey(key)
-        if (act == com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_LAST_STREAM) {
-            switchToLastWatchedStream()
+        when (act) {
+            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_LAST_STREAM -> switchToLastWatchedStream()
+            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_LIVE_ALERT -> openTvLiveAlert()
         }
     }
 
@@ -1211,7 +1217,10 @@ class MainActivity : AppCompatActivity() {
         if (raw == Keys.ACTION_DEFAULT) return null
         val player = (playerFragment as? PlayerFragment)?.takeIf { !it.isRemoving && !it.isDetached }
         if (player == null) {
-            return raw.takeIf { it == Keys.ACTION_LAST_STREAM && hasLastWatchedStream() }
+            return raw.takeIf {
+                (it == Keys.ACTION_LAST_STREAM && hasLastWatchedStream()) ||
+                    (it == Keys.ACTION_LIVE_ALERT && isTvLiveAlertShowing())
+            }
         }
         return if (player.isMaximizedPlayer()) {
             if (!player.canRunHiddenHudRemoteShortcuts()) return null
@@ -1219,7 +1228,8 @@ class MainActivity : AppCompatActivity() {
             effective.takeIf { it != Keys.ACTION_DEFAULT && it != Keys.ACTION_OPEN_MINI_PLAYER }
         } else {
             raw.takeIf {
-                (player.getTvNowPlaying() != null && Keys.isBackgroundCapableAction(it)) ||
+                (it == Keys.ACTION_LIVE_ALERT && isTvLiveAlertShowing()) ||
+                    (it != Keys.ACTION_LIVE_ALERT && player.getTvNowPlaying() != null && Keys.isBackgroundCapableAction(it)) ||
                     (it == Keys.ACTION_LAST_STREAM && hasLastWatchedStream())
             }
         }
@@ -1229,6 +1239,10 @@ class MainActivity : AppCompatActivity() {
         val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
         if (action == Keys.ACTION_LAST_STREAM) {
             switchToLastWatchedStream()
+            return
+        }
+        if (action == Keys.ACTION_LIVE_ALERT) {
+            openTvLiveAlert()
             return
         }
         val player = playerFragment as? PlayerFragment ?: return
@@ -1325,14 +1339,20 @@ class MainActivity : AppCompatActivity() {
     private fun dispatchNoPlayerCustomRemoteKey(event: KeyEvent): Boolean {
         if (!isTv || tvMultiStreamShown || playerFragment != null || hasOpenDialogFragment()) return false
         val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
-        val shortAction = Keys.customShortActionForKey(this, event.keyCode)
-            ?.takeIf { it == Keys.ACTION_LAST_STREAM }
-        val longAction = Keys.customLongActionForKey(this, event.keyCode)
-            ?.takeIf { it == Keys.ACTION_LAST_STREAM }
+        fun isNoPlayerAction(act: String): Boolean =
+            act == Keys.ACTION_LAST_STREAM || act == Keys.ACTION_LIVE_ALERT
+        fun runNoPlayerAction(act: String) {
+            when (act) {
+                Keys.ACTION_LAST_STREAM -> switchToLastWatchedStream()
+                Keys.ACTION_LIVE_ALERT -> openTvLiveAlert()
+            }
+        }
+        val shortAction = Keys.customShortActionForKey(this, event.keyCode)?.takeIf(::isNoPlayerAction)
+        val longAction = Keys.customLongActionForKey(this, event.keyCode)?.takeIf(::isNoPlayerAction)
         if (shortAction == null && longAction == null) return false
         if (longAction == null) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && shortAction != null) {
-                switchToLastWatchedStream()
+                runNoPlayerAction(shortAction)
             }
             return true
         }
@@ -1349,7 +1369,7 @@ class MainActivity : AppCompatActivity() {
                     noPlayerCustomDownKey = 0
                     noPlayerCustomLongAction = null
                     PlayerFragment.markHeldRemoteKey(event.keyCode)
-                    switchToLastWatchedStream()
+                    runNoPlayerAction(longAction)
                 }
             }
             KeyEvent.ACTION_UP -> {
@@ -1359,8 +1379,10 @@ class MainActivity : AppCompatActivity() {
                 noPlayerCustomLongAction = null
                 if (wasDown && !event.isCanceled) {
                     val heldMs = if (event.downTime > 0L) event.eventTime - event.downTime else 0L
-                    if (heldMs >= longPressMs || shortAction != null) {
-                        switchToLastWatchedStream()
+                    if (heldMs >= longPressMs) {
+                        runNoPlayerAction(longAction)
+                    } else if (shortAction != null) {
+                        runNoPlayerAction(shortAction)
                     }
                 }
             }

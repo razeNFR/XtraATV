@@ -1353,4 +1353,14 @@
     <string name="tv_backup_save_failed">Gagal menyimpan file cadangan</string>
     <string name="tv_remote_action_last_stream">Stream terakhir ditonton</string>
     <string name="tv_no_last_stream">Belum ada stream sebelumnya</string>
+    <string name="tv_pip_edge_margin">Margin tepi</string>
+    <string name="tv_pip_margin_normal">Normal</string>
+    <string name="tv_pip_margin_reduced">Diperkecil</string>
+    <string name="tv_pip_margin_flush">Rapat</string>
+    <string name="tv_pip_streamer_name">Nama streamer</string>
+    <string name="tv_pip_label_auto">Otomatis (dengan HUD)</string>
+    <string name="tv_pip_label_always">Selalu terlihat</string>
+    <string name="tv_pip_label_hidden">Disembunyikan</string>
+    <string name="tv_remote_action_live_alert">Buka notifikasi live</string>
+    <string name="tv_no_live_alert">Tidak ada notifikasi live terbaru</string>
 </resources>

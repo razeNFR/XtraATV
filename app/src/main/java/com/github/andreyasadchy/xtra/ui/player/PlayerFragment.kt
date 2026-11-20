@@ -225,12 +225,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** Live broadcast or live-rewind DVR broadcast (where left/right and channel +/- switch streamers). */
     fun isLiveOrDvrScreen(): Boolean = isStreamScreen() || isDvrScreen()
 
-    private fun effectiveDpadAction(action: String, pipOpen: Boolean): String =
-        if (!pipOpen && com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.isPipOnlyAction(action)) {
-            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_DEFAULT
-        } else {
-            action
+    private fun effectiveDpadAction(action: String, pipOpen: Boolean): String {
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        if (!pipOpen && Keys.isPipOnlyAction(action)) {
+            return Keys.ACTION_DEFAULT
         }
+        if (action == Keys.ACTION_LIVE_ALERT && (activity as? MainActivity)?.isTvLiveAlertShowing() != true) {
+            return Keys.ACTION_DEFAULT
+        }
+        return action
+    }
 
     /**
      * TV: returns -1 or +1 when [keyCode] is configured to switch to the previous/next streamer while controls are
@@ -2831,7 +2835,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     val targetLabel = if (isAtExpLiveEdge) getString(R.string.tv_live) else null
                     position.text = targetLabel ?: DateUtils.formatElapsedTime(tvScrubPosition / 1000)
                     val originPos = if (tvScrubOriginPosition >= 0L) tvScrubOriginPosition else tvScrubPosition
-                    (seekPreview ?: createSeekPreview()).show(
+                    (seekPreview ?: createSeekPreview()).apply {
+                        setStartEpochMs(resolveSeekStartEpochMs())
+                    }.show(
                         position = tvScrubPosition,
                         duration = duration,
                         deltaMs = tvScrubPosition - originPos,
@@ -2920,15 +2926,32 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private var tvStatsView: TextView? = null
     private var seekPreview: TvSeekPreview? = null
+    private var tvSeekStartEpochMs: Long? = null
+
+    private fun resolveSeekStartEpochMs(): Long? {
+        tvSeekStartEpochMs?.takeIf { it > 0L }?.let { return it }
+        if (playbackService?.clipId != null || playbackService?.type == BasePlaybackService.OFFLINE_VIDEO) {
+            return null
+        }
+        val raw = playbackService?.createdAt
+            ?: getTvDvrStream()?.createdAt
+            ?: playbackService?.videoCreatedAt
+        return raw?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.takeIf { it > 0L }
+    }
 
     /** Storyboard description of a video: the seekPreviewsURL of the video, else next to its animated preview. */
     private suspend fun getStoryboardUrl(videoId: String, animatedPreviewUrl: String?): String? {
         val seekPreviews = try {
-            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryVideo(
+            val video = (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryVideo(
                 requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                 TwitchApiHelper.getGQLHeaders(requireContext()),
                 videoId
-            ).data?.video?.let { it.seekPreviewsURL ?: it.animatedPreviewURL?.let { preview -> "${preview.substringBeforeLast("/")}/$videoId-info.json" } }
+            ).data?.video
+            video?.createdAt?.toString()?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.takeIf { it > 0L }?.let { startMs ->
+                tvSeekStartEpochMs = startMs
+                seekPreview?.setStartEpochMs(startMs)
+            }
+            video?.let { it.seekPreviewsURL ?: it.animatedPreviewURL?.let { preview -> "${preview.substringBeforeLast("/")}/$videoId-info.json" } }
         } catch (e: Exception) {
             null
         }
@@ -2955,6 +2978,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             binding.playerControls.progressBar,
         ).also {
             it.setChapters(viewModel.gamesList.value)
+            it.setStartEpochMs(resolveSeekStartEpochMs())
             seekPreview = it
         }
     }
@@ -2982,7 +3006,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         // only the VOD of the current broadcast
         if (video?.id == null || view == null || (streamStart != null && videoStart != null && kotlin.math.abs(videoStart - streamStart) > 15 * 60_000L)) {
+            streamStart?.takeIf { it > 0L }?.let {
+                tvSeekStartEpochMs = it
+                seekPreview?.setStartEpochMs(it)
+            }
             return null
+        }
+        (videoStart ?: streamStart)?.takeIf { it > 0L }?.let {
+            tvSeekStartEpochMs = it
+            seekPreview?.setStartEpochMs(it)
         }
         (activity as? MainActivity)?.dvrChatVideoId = video.id
         val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
@@ -3813,6 +3845,36 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         activity.applyTvPipSettings()
                     }
                 }
+                val marginValues = listOf("normal", "reduced", "flush")
+                val marginLabels = listOf(
+                    getString(R.string.tv_pip_margin_normal),
+                    getString(R.string.tv_pip_margin_reduced),
+                    getString(R.string.tv_pip_margin_flush),
+                )
+                val currentMarginIdx = marginValues.indexOf(prefs.getString(C.TV_PIP_EDGE_MARGIN, "reduced")).let { if (it >= 0) it else 1 }
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                    getString(R.string.tv_pip_edge_margin),
+                    marginLabels,
+                    currentMarginIdx,
+                ) {
+                    prefs.edit { putString(C.TV_PIP_EDGE_MARGIN, marginValues[it]) }
+                    activity.applyTvPipSettings()
+                }
+                val labelModeValues = listOf("auto", "always", "hidden")
+                val labelModeLabels = listOf(
+                    getString(R.string.tv_pip_label_auto),
+                    getString(R.string.tv_pip_label_always),
+                    getString(R.string.tv_pip_label_hidden),
+                )
+                val currentLabelModeIdx = labelModeValues.indexOf(prefs.getString(C.TV_PIP_LABEL_MODE, "auto")).let { if (it >= 0) it else 0 }
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                    getString(R.string.tv_pip_streamer_name),
+                    labelModeLabels,
+                    currentLabelModeIdx,
+                ) {
+                    prefs.edit { putString(C.TV_PIP_LABEL_MODE, labelModeValues[it]) }
+                    activity.applyTvPipSettings()
+                }
                 com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_pip_sound), sounds, sound.intValue) {
                     sound.intValue = it
                     prefs.edit { putString(C.TV_PIP_SOUND, soundValues[it]) }
@@ -4329,6 +4391,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             Keys.ACTION_LAST_STREAM -> {
                 (activity as? MainActivity)?.switchToLastWatchedStream() ?: false
             }
+            Keys.ACTION_LIVE_ALERT -> {
+                (activity as? MainActivity)?.openTvLiveAlert() ?: false
+            }
             Keys.ACTION_MUTE -> {
                 togglePlayerMute()
                 true
@@ -4367,6 +4432,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     binding.dragView.requestFocus()
                 }
                 main.switchToLastWatchedStream()
+            }
+            Keys.ACTION_LIVE_ALERT -> {
+                (activity as? MainActivity)?.openTvLiveAlert() ?: return false
             }
             Keys.ACTION_SWITCH_PREV, Keys.ACTION_SWITCH_NEXT -> {
                 val delta = if (action == Keys.ACTION_SWITCH_NEXT) 1 else -1
@@ -4640,7 +4708,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (isMaximized) {
                 act != Keys.ACTION_OPEN_MINI_PLAYER && (pipOpen || !Keys.isPipOnlyAction(act))
             } else {
-                (playbackService != null && Keys.isBackgroundCapableAction(act)) ||
+                act == Keys.ACTION_LIVE_ALERT ||
+                    (playbackService != null && Keys.isBackgroundCapableAction(act)) ||
                     (act == Keys.ACTION_LAST_STREAM && mainAct?.hasLastWatchedStream() == true)
             }
         }
@@ -4648,7 +4717,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (isMaximized) {
                 act != Keys.ACTION_OPEN_MINI_PLAYER && (pipOpen || !Keys.isPipOnlyAction(act))
             } else {
-                (playbackService != null && Keys.isBackgroundCapableAction(act)) ||
+                act == Keys.ACTION_LIVE_ALERT ||
+                    (playbackService != null && Keys.isBackgroundCapableAction(act)) ||
                     (act == Keys.ACTION_LAST_STREAM && mainAct?.hasLastWatchedStream() == true)
             }
         }
@@ -5111,10 +5181,74 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var tvFavoritesObserverJob: Job? = null
     private var tvHeaderLayoutListenerAdded = false
     private val tvHeaderLayoutListener = View.OnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
         if (right - left != oldRight - oldLeft) {
             syncTvHeaderBounds()
+        }
+    }
+
+    private fun updateTvFavoriteChip() {
+        if (!isTv || _binding == null) return
+        val chip = binding.playerControls.tvFavoriteChip ?: return
+        val ctx = context ?: return
+        val curStream = getTvDvrStream() ?: (activity as? MainActivity)?.currentPlayingStream()
+        val login = playbackService?.channelLogin?.takeIf { it.isNotBlank() }
+            ?: curStream?.channelLogin?.takeIf { it.isNotBlank() }
+        val chName = playbackService?.channelName?.takeIf { it.isNotBlank() }
+            ?: curStream?.channelName?.takeIf { it.isNotBlank() }
+        if (!isLiveOrDvrScreen() || login == null) {
+            chip.visibility = View.GONE
+            return
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(ctx)
+        val isFav = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(login)
+        val density = resources.displayMetrics.density
+        chip.visibility = View.VISIBLE
+        (chip.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            val wantMargin = if (binding.playerControls.channel.isVisible) (6f * density).toInt() else 0
+            if (lp.marginStart != wantMargin) {
+                lp.marginStart = wantMargin
+                chip.layoutParams = lp
+            }
+        }
+        chip.setImageResource(if (isFav) R.drawable.tv_ic_star else R.drawable.tv_ic_star_outline)
+        fun applyStarTint(focused: Boolean, fav: Boolean) {
+            val tint = when {
+                focused && fav -> 0xFFB45309.toInt()
+                focused -> 0xFF111014.toInt()
+                fav -> 0xFFFFCA28.toInt()
+                else -> 0xEBFFFFFF.toInt()
+            }
+            chip.setColorFilter(tint)
+        }
+        applyStarTint(chip.hasFocus(), isFav)
+        chip.contentDescription = getString(if (isFav) R.string.tv_favorite_remove else R.string.tv_favorite_add)
+        chip.setOnFocusChangeListener { _, hasFocus ->
+            val nowFav = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(login)
+            applyStarTint(hasFocus, nowFav)
+        }
+        chip.setOnClickListener {
+            val label = chName ?: login
+            val currentlyFav = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(login)
+            if (currentlyFav) {
+                com.github.andreyasadchy.xtra.ui.tv.TvFavorites.remove(ctx, login)
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    ctx,
+                    getString(R.string.tv_favorite_removed, label),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } else {
+                com.github.andreyasadchy.xtra.ui.tv.TvFavorites.add(ctx, login, chName)
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    ctx,
+                    getString(R.string.tv_favorite_added, label),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            showController(force = true)
+            updateTvFavoriteChip()
         }
     }
 
@@ -5131,20 +5265,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val comfortableCap = ((playerW * 0.64f).toInt() - avatarW).coerceAtLeast((180f * density).toInt())
         val maxBlockW = minOf(availableByRight, comfortableCap)
         b.playerControls.title.maxWidth = maxBlockW
+        val favReserved = if (b.playerControls.tvFavoriteChip?.isVisible == true) (34f * density).toInt() else 0
+        val usableRowW = (maxBlockW - favReserved).coerceAtLeast((150f * density).toInt())
         val bothChips = b.playerControls.channel.isVisible && b.playerControls.tvCategoryChip?.isVisible == true
         if (bothChips) {
-            val chipBudget = (maxBlockW - (8f * density).toInt()).coerceAtLeast((160f * density).toInt())
-            val chMax = (chipBudget * 0.50f).toInt().coerceIn((110f * density).toInt(), (280f * density).toInt())
-            val catMax = (chipBudget - chMax - (36f * density).toInt()).coerceIn((90f * density).toInt(), (260f * density).toInt())
+            val chipBudget = (usableRowW - (8f * density).toInt()).coerceAtLeast((150f * density).toInt())
+            val chMax = (chipBudget * 0.50f).toInt().coerceIn((105f * density).toInt(), (280f * density).toInt())
+            val catMax = (chipBudget - chMax - (36f * density).toInt()).coerceIn((85f * density).toInt(), (260f * density).toInt())
             b.playerControls.channel.maxWidth = chMax
             b.playerControls.category.maxWidth = catMax
         } else {
-            b.playerControls.channel.maxWidth = minOf(maxBlockW, (320f * density).toInt())
-            b.playerControls.category.maxWidth = minOf((maxBlockW - (36f * density).toInt()).coerceAtLeast((110f * density).toInt()), (300f * density).toInt())
+            b.playerControls.channel.maxWidth = minOf(usableRowW, (320f * density).toInt())
+            b.playerControls.category.maxWidth = minOf((usableRowW - (36f * density).toInt()).coerceAtLeast((105f * density).toInt()), (300f * density).toInt())
         }
     }
 
-    /** TV: picture of the channel next to its name, box art of the category inside its capsule, and safe width bounds. */
+    /** TV: picture of the channel next to its name, favorite star on live streams, box art of the category inside its capsule, and safe width bounds. */
     private fun updateTvAvatars() {
         if (!isTv || _binding == null) {
             return
@@ -5153,6 +5289,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             tvHeaderLayoutListenerAdded = true
             binding.playerLayout.addOnLayoutChangeListener(tvHeaderLayoutListener)
         }
+        if (tvFavoritesObserverJob?.isActive != true && view != null) {
+            tvFavoritesObserverJob = viewLifecycleOwner.lifecycleScope.launch {
+                com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectLatest {
+                    if (_binding != null) {
+                        updateTvFavoriteChip()
+                    }
+                }
+            }
+        }
+        updateTvFavoriteChip()
         with(binding.playerControls) {
             val context = requireContext()
             val density = resources.displayMetrics.density
@@ -5174,18 +5320,27 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             val showCatChip = category.isVisible && !category.text.isNullOrBlank()
+            val hasBeforeCat = channel.isVisible || tvFavoriteChip?.isVisible == true
             tvCategoryChip?.let { chip ->
                 chip.visibility = if (showCatChip) View.VISIBLE else View.GONE
                 (chip.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
-                    val wantMargin = if (channel.isVisible) (8f * density).toInt() else 0
+                    val wantMargin = if (hasBeforeCat) (6f * density).toInt() else 0
                     if (lp.marginStart != wantMargin) {
                         lp.marginStart = wantMargin
                         chip.layoutParams = lp
                     }
                 }
-                chip.nextFocusLeftId = if (channel.isVisible) R.id.channel else R.id.tvCategoryChip
             }
-            channel.nextFocusRightId = if (showCatChip && tvCategoryChip != null) R.id.tvCategoryChip else R.id.channel
+            val headerChips = listOfNotNull(
+                channel.takeIf { it.isVisible },
+                tvFavoriteChip?.takeIf { it.isVisible },
+                tvCategoryChip?.takeIf { it.isVisible },
+            )
+            headerChips.forEachIndexed { idx, v ->
+                v.nextFocusLeftId = headerChips.getOrElse(idx - 1) { v }.id
+                v.nextFocusRightId = headerChips.getOrElse(idx + 1) { v }.id
+                v.nextFocusUpId = v.id
+            }
             val gameId = playbackService?.gameId
             tvCategoryAvatar?.let { avatar ->
                 if (!gameId.isNullOrBlank() && showCatChip) {
@@ -7504,6 +7659,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvOsdText = null
         chatUnlockTimerJob?.cancel()
         chatUnlockTimerJob = null
+        tvFavoritesObserverJob?.cancel()
+        tvFavoritesObserverJob = null
         isTvChatLocked = null
         chatLockObservedFragment = null
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(tvDimListener)
@@ -7529,6 +7686,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvScrubDuration = 0L
         seekPreview?.release()
         seekPreview = null
+        tvSeekStartEpochMs = null
         tvPredictionView?.removeCallbacks(tvPredictionHideRunnable)
         tvPredictionView = null
         tvStreamEndNextTarget = null

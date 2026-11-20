@@ -49,10 +49,25 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
     private val queue = ArrayDeque<List<Stream>>()
     private var banner: View? = null
     private var currentStreams: List<Stream> = emptyList()
+    private var lastAnnouncedStreams: List<Stream> = emptyList()
+    private var lastAnnouncedAt = 0L
     private var dismissRunnable: Runnable? = null
     private var showing = false
-    private var upDown = false
-    private var upOpened = false
+    private var heldAlertKeyDown = 0
+    private var heldAlertOpened = false
+    private var replayingShortKey = false
+    private val holdHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val holdAlertRunnable = Runnable {
+        val key = heldAlertKeyDown
+        if (!showing || currentStreams.isEmpty() || key == 0 || heldAlertOpened) return@Runnable
+        heldAlertOpened = true
+        heldAlertKeyDown = 0
+        com.github.andreyasadchy.xtra.ui.player.PlayerFragment.markHeldRemoteKey(key)
+        openAlertActions()
+    }
+
+    val isBannerShowing: Boolean
+        get() = showing && currentStreams.isNotEmpty()
 
     fun start() {
         if (job != null) {
@@ -74,14 +89,15 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
         job?.cancel()
         job = null
         queue.clear()
+        holdHandler.removeCallbacks(holdAlertRunnable)
         dismissRunnable?.let { banner?.removeCallbacks(it) }
         dismissRunnable = null
         banner?.let { container.removeView(it) }
         banner = null
         currentStreams = emptyList()
         showing = false
-        upDown = false
-        upOpened = false
+        heldAlertKeyDown = 0
+        heldAlertOpened = false
     }
 
     private suspend fun check() {
@@ -133,8 +149,10 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
         val streams = queue.removeFirstOrNull() ?: return
         showing = true
         currentStreams = streams
-        upDown = false
-        upOpened = false
+        lastAnnouncedStreams = streams
+        lastAnnouncedAt = SystemClock.elapsedRealtime()
+        heldAlertKeyDown = 0
+        heldAlertOpened = false
         val view = createBanner(streams)
         banner = view
         container.addView(view)
@@ -149,13 +167,14 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
 
     private fun dismissCurrent(showNextAfter: Boolean) {
         val view = banner ?: return
+        holdHandler.removeCallbacks(holdAlertRunnable)
         dismissRunnable?.let { view.removeCallbacks(it) }
         dismissRunnable = null
         banner = null
         currentStreams = emptyList()
         showing = false
-        upDown = false
-        upOpened = false
+        heldAlertKeyDown = 0
+        heldAlertOpened = false
         view.animate().cancel()
         view.animate().alpha(0f).translationY(-24 * activity.resources.displayMetrics.density).setDuration(200L).withEndAction {
             container.removeView(view)
@@ -165,56 +184,131 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
         }.start()
     }
 
+    private fun isShortBoundToAlert(keyCode: Int): Boolean {
+        val act = TvRemoteKeys.ACTION_LIVE_ALERT
+        return when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_CENTER -> TvRemoteKeys.centerAction(activity) == act
+            KeyEvent.KEYCODE_DPAD_LEFT -> TvRemoteKeys.leftAction(activity) == act
+            KeyEvent.KEYCODE_DPAD_RIGHT -> TvRemoteKeys.rightAction(activity) == act
+            KeyEvent.KEYCODE_DPAD_UP -> TvRemoteKeys.upAction(activity) == act
+            KeyEvent.KEYCODE_DPAD_DOWN -> TvRemoteKeys.downAction(activity) == act
+            else -> TvRemoteKeys.customShortActionForKey(activity, keyCode) == act
+        }
+    }
+
+    private fun isLongBoundToAlert(keyCode: Int): Boolean {
+        val act = TvRemoteKeys.ACTION_LIVE_ALERT
+        return when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_CENTER -> TvRemoteKeys.centerLongAction(activity) == act
+            KeyEvent.KEYCODE_DPAD_UP -> TvRemoteKeys.upLongAction(activity) == act
+            KeyEvent.KEYCODE_DPAD_DOWN -> TvRemoteKeys.downLongAction(activity) == act
+            KeyEvent.KEYCODE_BACK -> TvRemoteKeys.backLongAction(activity) == act
+            else -> TvRemoteKeys.customLongActionForKey(activity, keyCode) == act
+        }
+    }
+
     /**
      * Handles remote keys while the live alert banner is visible without ever stealing focus:
-     * - Holding D-pad Up opens the live alert actions (tapping D-pad Up replays normally).
-     * - Pressing Menu or Info opens the live alert actions immediately.
+     * - Triggers on whichever D-pad or custom remote key is bound to [TvRemoteKeys.ACTION_LIVE_ALERT]
+     *   (plus unbound Menu / Info keys).
+     * - Short taps on long-bound keys replay transparently so normal navigation/HUD/Back is unaffected.
      */
     fun onKey(event: KeyEvent): Boolean {
-        if (!showing || currentStreams.isEmpty()) {
-            upDown = false
-            upOpened = false
+        if (replayingShortKey) {
             return false
         }
-        if (event.keyCode == KeyEvent.KEYCODE_MENU || event.keyCode == KeyEvent.KEYCODE_INFO) {
+        if (!showing || currentStreams.isEmpty()) {
+            holdHandler.removeCallbacks(holdAlertRunnable)
+            heldAlertKeyDown = 0
+            heldAlertOpened = false
+            return false
+        }
+        val code = event.keyCode
+        val unboundMenuOrInfo = (code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_INFO) &&
+            TvRemoteKeys.customShortActionForKey(activity, code) == null &&
+            TvRemoteKeys.customLongActionForKey(activity, code) == null
+        val shortBound = isShortBoundToAlert(code) || unboundMenuOrInfo
+        val longBound = isLongBoundToAlert(code)
+        if (!shortBound && !longBound) {
+            return false
+        }
+        if (shortBound && !longBound) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 openAlertActions()
             }
             return true
         }
-        if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            when {
-                event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> {
-                    upDown = true
-                    upOpened = false
+        val longPressMs = android.view.ViewConfiguration.getLongPressTimeout().toLong().coerceIn(350L, 550L)
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount == 0) {
+                    heldAlertKeyDown = code
+                    heldAlertOpened = false
+                    holdHandler.removeCallbacks(holdAlertRunnable)
+                    holdHandler.postDelayed(holdAlertRunnable, longPressMs)
                     return true
                 }
-                event.action == KeyEvent.ACTION_DOWN && event.repeatCount >= 1 -> {
-                    if (!upDown) {
-                        // D-pad Up was already held before the banner appeared: let normal scrolling continue
-                        return false
-                    }
-                    if (!upOpened) {
-                        upOpened = true
+                if (heldAlertKeyDown != code) {
+                    // Key was already held before the banner appeared: let normal scrolling continue
+                    return false
+                }
+                if (!heldAlertOpened && (event.repeatCount >= 1 || event.isLongPress)) {
+                    holdHandler.removeCallbacks(holdAlertRunnable)
+                    heldAlertOpened = true
+                    heldAlertKeyDown = 0
+                    com.github.andreyasadchy.xtra.ui.player.PlayerFragment.markHeldRemoteKey(code)
+                    openAlertActions()
+                }
+                return true
+            }
+            KeyEvent.ACTION_UP -> {
+                holdHandler.removeCallbacks(holdAlertRunnable)
+                if (heldAlertKeyDown != code && !heldAlertOpened) {
+                    return false
+                }
+                val wasShort = heldAlertKeyDown == code && !heldAlertOpened
+                heldAlertKeyDown = 0
+                heldAlertOpened = false
+                if (wasShort && !event.isCanceled) {
+                    val heldMs = if (event.downTime > 0L) event.eventTime - event.downTime else 0L
+                    if (heldMs >= longPressMs) {
                         openAlertActions()
+                    } else if (shortBound) {
+                        openAlertActions()
+                    } else {
+                        replayingShortKey = true
+                        try {
+                            activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+                            activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+                        } finally {
+                            replayingShortKey = false
+                        }
                     }
-                    return true
                 }
-                event.action == KeyEvent.ACTION_UP -> {
-                    if (!upDown) {
-                        return false
-                    }
-                    val shortPress = !upOpened
-                    upDown = false
-                    upOpened = false
-                    if (shortPress) {
-                        activity.dispatchPlayerKey(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_UP))
-                        activity.dispatchPlayerKey(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_UP))
-                    }
-                    return true
-                }
+                return true
+            }
+            else -> {
+                holdHandler.removeCallbacks(holdAlertRunnable)
+                heldAlertKeyDown = 0
+                heldAlertOpened = false
+                return true
             }
         }
+    }
+
+    fun openCurrentOrRecent(): Boolean {
+        if (showing && currentStreams.isNotEmpty()) {
+            openAlertActions()
+            return true
+        }
+        val recent = lastAnnouncedStreams.takeIf {
+            it.isNotEmpty() && SystemClock.elapsedRealtime() - lastAnnouncedAt <= 5 * 60_000L
+        }
+        if (recent != null) {
+            showStreamsActionPanel(recent)
+            return true
+        }
+        TvToast.makeText(activity, R.string.tv_no_live_alert, android.widget.Toast.LENGTH_SHORT).show()
         return false
     }
 
@@ -222,6 +316,10 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
         val streams = currentStreams
         if (streams.isEmpty()) return
         dismissCurrent(showNextAfter = false)
+        showStreamsActionPanel(streams)
+    }
+
+    private fun showStreamsActionPanel(streams: List<Stream>) {
         if (streams.size == 1) {
             showActionsForStream(streams.first())
         } else {
@@ -354,26 +452,30 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
         val screenW = context.resources.displayMetrics.widthPixels
         val overscanH = context.resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
         val maxBannerW = (screenW - overscanH * 2).coerceAtMost((780 * density).toInt())
-        val hintText = context.getString(R.string.tv_live_alert_action_hint)
-        val hintView = TextView(context).apply {
-            text = hintText
-            setTextColor(Color.argb(230, 255, 255, 255))
-            textSize = 12f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            isSingleLine = true
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-            val h = (9 * density).toInt()
-            val v = (4 * density).toInt()
-            setPadding(h, v, h, v)
-            background = GradientDrawable().apply {
-                setColor(Color.argb(40, 255, 255, 255))
-                cornerRadius = 999 * density
-                setStroke((1 * density).toInt(), Color.argb(70, 255, 255, 255))
+        val hintText = TvRemoteKeys.liveAlertBannerHint(context)
+        val hintGapStart = (14 * density).toInt()
+        val hintView = hintText?.let { label ->
+            TextView(context).apply {
+                text = label
+                setTextColor(Color.argb(230, 255, 255, 255))
+                textSize = 12f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                isSingleLine = true
+                maxLines = 1
+                maxWidth = (220 * density).toInt()
+                ellipsize = TextUtils.TruncateAt.END
+                val h = (9 * density).toInt()
+                val v = (4 * density).toInt()
+                setPadding(h, v, h, v)
+                background = GradientDrawable().apply {
+                    setColor(Color.argb(40, 255, 255, 255))
+                    cornerRadius = 999 * density
+                    setStroke((1 * density).toInt(), Color.argb(70, 255, 255, 255))
+                }
+                measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
             }
         }
-        hintView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        val hintGapStart = (14 * density).toInt()
+        val hintReserved = if (hintView != null) hintGapStart + hintView.measuredWidth else 0
 
         val badgeView = TextView(context).apply {
             text = context.getString(R.string.tv_live_alert_badge)
@@ -394,7 +496,7 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
         badgeView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
         val badgeGapEnd = (8 * density).toInt()
 
-        val textMax = (maxBannerW - padStart - padEnd - avatarBlockWidth - avatarGapEnd - hintGapStart - hintView.measuredWidth)
+        val textMax = (maxBannerW - padStart - padEnd - avatarBlockWidth - avatarGapEnd - hintReserved)
             .coerceAtLeast((200 * density).toInt())
         val titleMax = (textMax - badgeView.measuredWidth - badgeGapEnd).coerceAtLeast((140 * density).toInt())
 
@@ -428,9 +530,11 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (2 * density).toInt() })
         }
         row.addView(texts, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        row.addView(hintView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            marginStart = hintGapStart
-        })
+        if (hintView != null) {
+            row.addView(hintView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = hintGapStart
+            })
+        }
         return FrameLayout(context).apply {
             isFocusable = false
             isClickable = false

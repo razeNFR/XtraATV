@@ -127,6 +127,9 @@ object C {
     const val TV_PIP_VOL_MAIN = "tv_pip_vol_main"
     const val TV_PIP_VOL_1 = "tv_pip_vol_1"
     const val TV_PIP_VOL_2 = "tv_pip_vol_2"
+    const val TV_PIP_EDGE_MARGIN = "tv_pip_edge_margin"
+    const val TV_PIP_LABEL_MODE = "tv_pip_label_mode"
+    const val TV_LIVE_ALERT_KEY_MIGRATED = "tv_live_alert_key_migrated"
     // multi-stream: the sounds of all the streams at their own volume (else the selected one only), volume of each by login,
     // kept for the next multi-streams only with the box ticked
     const val TV_MULTISTREAM_SOUND_MIX = "tv_multistream_sound_mix"

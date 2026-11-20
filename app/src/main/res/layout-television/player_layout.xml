@@ -120,6 +120,21 @@
                     tools:text="channel"
                     tools:visibility="visible" />
 
+                <ImageView
+                    android:id="@+id/tvFavoriteChip"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/tv_player_header_chip_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:nextFocusUp="@id/tvFavoriteChip"
+                    android:padding="5.5dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/tv_ic_star_outline"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
                 <LinearLayout
                     android:id="@+id/tvCategoryChip"
                     android:layout_width="wrap_content"
