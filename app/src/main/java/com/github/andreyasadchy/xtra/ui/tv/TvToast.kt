@@ -421,6 +421,7 @@ object TvToast {
         R.string.tv_backup_restored,
         R.string.tv_poll_vote_sent,
         R.string.tv_prediction_bet_sent,
+        R.string.tv_free_move_saved,
         R.string.connection_restored -> R.drawable.tv_ic_check
 
         R.string.no_connection,

@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -79,6 +80,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1952,10 +1954,28 @@ private fun FocusCard(
         }
     }
     var longPressed by remember { mutableStateOf(false) }
+    val focusToken = remember { Any() }
+    var cardCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    LaunchedEffect(focused) {
+        if (focused) {
+            cardCoords?.let { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, it) }
+        } else {
+            com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
+        }
+    }
+    DisposableEffect(focusToken) {
+        onDispose { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken) }
+    }
     Column(
         modifier
             .width(animatedWidth)
             .bringIntoViewRequester(bringIntoView)
+            .onGloballyPositioned { coords ->
+                cardCoords = coords
+                if (focused) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                }
+            }
             .onFocusChanged { onFocus(it.isFocused) }
             .onPreviewKeyEvent { event ->
                 // OK held down: actions of the card
@@ -2550,12 +2570,30 @@ private fun StatsCard(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    val focusToken = remember { Any() }
+    var cardCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    LaunchedEffect(focused) {
+        if (focused) {
+            cardCoords?.let { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, it) }
+        } else {
+            com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
+        }
+    }
+    DisposableEffect(focusToken) {
+        onDispose { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken) }
+    }
     Column(Modifier.padding(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp)) {
         RowTitle(stats.title, R.drawable.tv_ic_bar_chart)
         Spacer(Modifier.height(4.dp))
         Column(
             modifier
                 .fillMaxWidth()
+                .onGloballyPositioned { coords ->
+                    cardCoords = coords
+                    if (focused) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                    }
+                }
                 .leftEdge(0, actions.openMenu)
                 .clip(RoundedCornerShape(16.dp))
                 .background(

@@ -1363,4 +1363,14 @@
     <string name="tv_pip_label_hidden">Disembunyikan</string>
     <string name="tv_remote_action_live_alert">Buka notifikasi live</string>
     <string name="tv_no_live_alert">Tidak ada notifikasi live terbaru</string>
+    <string name="tv_free_move_button">Pindah bebas…</string>
+    <string name="tv_position_free">Bebas</string>
+    <string name="tv_free_move_hint">◀ ▲ ▼ ▶ Geser  ·  OK Simpan  ·  Kembali Batal</string>
+    <string name="tv_free_move_saved">Posisi disimpan</string>
+    <string name="tv_pip_opacity">Opasitas</string>
+    <string name="tv_panel_tab_placement">Posisi</string>
+    <string name="tv_panel_tab_appearance">Tampilan</string>
+    <string name="tv_panel_tab_options">Opsi</string>
+    <string name="tv_panel_tab_display">Layar</string>
+    <string name="tv_panel_tab_audio">Audio</string>
 </resources>

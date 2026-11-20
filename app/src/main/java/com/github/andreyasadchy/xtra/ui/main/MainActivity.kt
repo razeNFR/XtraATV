@@ -1124,6 +1124,20 @@ class MainActivity : AppCompatActivity() {
         tvPip.swapStreams(slotIndex)
     }
 
+    fun startTvPipFreeMove(slotIndex: Int) {
+        if (isTv) {
+            tvPip.startFreeMove(slotIndex)
+        }
+    }
+
+    fun isTvSideMenuOpen(): Boolean = isTv && isTvMenuShown
+
+    fun isMinimizedGhostScreen(): Boolean {
+        if (!isTv || !::navController.isInitialized) return false
+        val destId = navController.currentDestination?.id
+        return destId == R.id.tvSettingsFragment || destId == R.id.tvStatsFragment
+    }
+
     /** The volume of the full screen stream follows the sound chosen for the small window(s). */
     fun refreshPlayerVolume() {
         (playerFragment as? PlayerFragment)?.refreshVolume()
@@ -1416,7 +1430,10 @@ class MainActivity : AppCompatActivity() {
         if (isTv && !dispatchingPlayerKey && tvLiveAlerts.onKey(event)) {
             return true
         }
-        if (isTv && !dispatchingPlayerKey && tvPip.isSelectorOpen() && tvPip.onKey(event)) {
+        if (isTv && !dispatchingPlayerKey && (tvPip.isSelectorOpen() || tvPip.isFreeMoving()) && tvPip.onKey(event)) {
+            return true
+        }
+        if (isTv && !dispatchingPlayerKey && (playerFragment as? PlayerFragment)?.onTvChatFreeMoveKey(event) == true) {
             return true
         }
         if (isTv && !dispatchingPlayerKey && dispatchTvBackLongKey(event)) {
@@ -1514,7 +1531,12 @@ class MainActivity : AppCompatActivity() {
         if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             val focus = currentFocus
             if (focus != null && focus.isInside(binding.navBarContainer)) {
-                closeTvMenuAndFocusContent()
+                if (event.repeatCount == 0 && isTvMenuShown && tvMenuState.isNowPlayingOpenFocused && tvMenuState.focusNowPlayingClose()) {
+                    return true
+                }
+                if (event.repeatCount == 0) {
+                    closeTvMenuAndFocusContent()
+                }
                 return true
             }
         }
@@ -2262,6 +2284,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck()
     }
 
     private fun hideTvMenu() {
@@ -2293,6 +2316,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }.start()
         }
+        (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck()
     }
 
     private fun isBrowsingRoot(): Boolean {
@@ -4159,6 +4183,7 @@ class MainActivity : AppCompatActivity() {
                     (playerFragment as? PlayerFragment)?.refreshTvMinimizedBorderColor()
                 }
                 updateTvMenuBackCallback()
+                (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck()
                 if (destination.id in tvRootDestinations && destination.id != R.id.followPagerFragment) {
                     tvMenuExtraSelected = null
                 }
@@ -4172,6 +4197,7 @@ class MainActivity : AppCompatActivity() {
                             ?: binding.navBar.selectedItemId
                     }
                     currentVisibleNavFragment()?.view?.let { com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(it) }
+                    (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck()
                 }
             }
         }

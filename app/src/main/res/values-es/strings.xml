@@ -1367,4 +1367,14 @@
     <string name="tv_pip_label_hidden">Oculto</string>
     <string name="tv_remote_action_live_alert">Abrir alerta de directo</string>
     <string name="tv_no_live_alert">Sin notificación de directo reciente</string>
+    <string name="tv_free_move_button">Movimiento libre…</string>
+    <string name="tv_position_free">Libre</string>
+    <string name="tv_free_move_hint">◀ ▲ ▼ ▶ Mover  ·  OK Guardar  ·  Atrás Cancelar</string>
+    <string name="tv_free_move_saved">Posición guardada</string>
+    <string name="tv_pip_opacity">Opacidad</string>
+    <string name="tv_panel_tab_placement">Ubicación</string>
+    <string name="tv_panel_tab_appearance">Apariencia</string>
+    <string name="tv_panel_tab_options">Opciones</string>
+    <string name="tv_panel_tab_display">Pantalla</string>
+    <string name="tv_panel_tab_audio">Audio</string>
 </resources>

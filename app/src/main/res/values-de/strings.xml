@@ -1362,4 +1362,14 @@
     <string name="tv_pip_label_hidden">Ausgeblendet</string>
     <string name="tv_remote_action_live_alert">Live-Benachrichtigung öffnen</string>
     <string name="tv_no_live_alert">Keine aktuelle Live-Benachrichtigung</string>
+    <string name="tv_free_move_button">Frei verschieben…</string>
+    <string name="tv_position_free">Frei</string>
+    <string name="tv_free_move_hint">◀ ▲ ▼ ▶ Bewegen  ·  OK Speichern  ·  Zurück Abbrechen</string>
+    <string name="tv_free_move_saved">Position gespeichert</string>
+    <string name="tv_pip_opacity">Deckkraft</string>
+    <string name="tv_panel_tab_placement">Position</string>
+    <string name="tv_panel_tab_appearance">Darstellung</string>
+    <string name="tv_panel_tab_options">Optionen</string>
+    <string name="tv_panel_tab_display">Anzeige</string>
+    <string name="tv_panel_tab_audio">Audio</string>
 </resources>

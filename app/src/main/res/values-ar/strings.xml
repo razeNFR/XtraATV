@@ -1362,4 +1362,14 @@
     <string name="tv_pip_label_hidden">مخفي</string>
     <string name="tv_remote_action_live_alert">فتح إشعار البث المباشر</string>
     <string name="tv_no_live_alert">لا يوجد إشعار بث مباشر حديث</string>
+    <string name="tv_free_move_button">تحريك حر…</string>
+    <string name="tv_position_free">حر</string>
+    <string name="tv_free_move_hint">◀ ▲ ▼ ▶ تحريك  ·  OK حفظ  ·  رجوع إلغاء</string>
+    <string name="tv_free_move_saved">تم حفظ الموضع</string>
+    <string name="tv_pip_opacity">الشفافية</string>
+    <string name="tv_panel_tab_placement">الموضع</string>
+    <string name="tv_panel_tab_appearance">المظهر</string>
+    <string name="tv_panel_tab_options">الخيارات</string>
+    <string name="tv_panel_tab_display">العرض</string>
+    <string name="tv_panel_tab_audio">الصوت</string>
 </resources>
