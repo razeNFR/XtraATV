@@ -3216,6 +3216,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 alignEnd = left && mode.intValue != 2,
             ) {
                 val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                val update: (String, Int) -> Unit = { key, value ->
+                    prefs.edit { putInt(key, value) }
+                    if (_binding != null) {
+                        applyTvChatLayout()
+                    }
+                }
                 val updatePosition: (Int) -> Unit = { newPos ->
                     position.intValue = newPos
                     saveTvChatPosForMode(prefs, mode.intValue, newPos)
