@@ -302,7 +302,7 @@ class ExoPlayerFragment : PlayerFragment() {
 
             override fun toast(resId: Int, duration: Int) {
                 if (view != null) {
-                    Toast.makeText(requireContext(), resId, duration).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), resId, duration).show()
                     if (resId == R.string.stream_ended) {
                         onTvStreamEnded()
                     }
@@ -311,7 +311,7 @@ class ExoPlayerFragment : PlayerFragment() {
 
             override fun toast(text: CharSequence, duration: Int) {
                 if (view != null) {
-                    Toast.makeText(requireContext(), text, duration).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), text, duration).show()
                 }
             }
 

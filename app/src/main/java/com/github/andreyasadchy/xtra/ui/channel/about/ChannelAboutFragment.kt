@@ -202,7 +202,7 @@ class ChannelAboutFragment : BaseNetworkFragment(), IntegrityDialog.Listener {
                                                             }
                                                             startActivity(intent)
                                                         } catch (e: ActivityNotFoundException) {
-                                                            Toast.makeText(requireContext(), R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                                                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                                         }
                                                     }
                                                 }, 0, string.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)

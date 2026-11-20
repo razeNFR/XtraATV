@@ -1282,7 +1282,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                             updateTvLiveTimeline()
                                         }
                                         if (!resumeLive) {
-                                            Toast.makeText(requireContext(), R.string.video_not_found, Toast.LENGTH_SHORT).show()
+                                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.video_not_found, Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                     viewModel.unlistedVideoQualities.value = null
@@ -1530,12 +1530,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         if (!errorMessage.isNullOrBlank()) {
                                             val rejected = errorMessage.startsWith(C.FOLLOW_REJECTED_PREFIX)
                                             val msg = if (rejected) getString(R.string.tv_follow_rejected_verification) else errorMessage
-                                            Toast.makeText(requireContext(), msg, if (rejected) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+                                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), msg, if (rejected) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
                                         } else {
                                             if (following) {
-                                                Toast.makeText(requireContext(), getString(R.string.now_following, displayName), Toast.LENGTH_SHORT).show()
+                                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), getString(R.string.now_following, displayName), Toast.LENGTH_SHORT).show()
                                             } else {
-                                                Toast.makeText(requireContext(), getString(R.string.unfollowed, displayName), Toast.LENGTH_SHORT).show()
+                                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), getString(R.string.unfollowed, displayName), Toast.LENGTH_SHORT).show()
                                             }
                                         }
                                         viewModel.follow.value = null
@@ -2768,7 +2768,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             createdAt = playbackService?.createdAt,
             viewerCount = playbackService?.viewerCount,
         )
-        Toast.makeText(requireContext(), R.string.tv_looking_for_vod, Toast.LENGTH_SHORT).show()
+        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_looking_for_vod, Toast.LENGTH_SHORT).show()
         findUnlistedVideo()
     }
 
@@ -3355,7 +3355,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 ) {
                     if (isExperimentalVodActive()) {
                         delayMode.intValue = 1
-                        Toast.makeText(requireContext(), R.string.tv_adblock_exp_chat_auto_locked, Toast.LENGTH_SHORT).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_adblock_exp_chat_auto_locked, Toast.LENGTH_SHORT).show()
                     } else {
                         delayMode.intValue = it
                         prefs.edit { putString(C.CHAT_DELAY_MODE, it.toString()) }
@@ -4065,9 +4065,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             setTextColor(Color.WHITE)
             textSize = 14.5f
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-            maxLines = 1
+            maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
-            maxWidth = (640f * density).toInt()
+            maxWidth = (680f * density).toInt()
         }
         val container = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -4090,6 +4090,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL,
         ).apply {
             bottomMargin = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+            marginStart = (32f * density).toInt()
+            marginEnd = (32f * density).toInt()
         }
         b.playerLayout.addView(container, lp)
         tvOsdContainer = container
@@ -4138,10 +4140,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             .start()
     }
 
-    fun showTvPlayerOsd(message: String, iconRes: Int? = null) {
+    fun showTvPlayerOsd(message: String, iconRes: Int? = null, durationMs: Long = 1850L) {
         val ctx = context ?: return
-        if (!isTv || !isMaximized || _binding == null) {
+        if (!isTv) {
             Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!isMaximized || _binding == null) {
+            val dur = if (durationMs > 2400L) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.show(ctx, message, dur, iconRes)
             return
         }
         val osd = ensureTvOsdView() ?: return
@@ -4187,7 +4194,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 .withEndAction(null)
                 .start()
         }
-        osd.postDelayed(tvOsdHideRunnable, 1800L)
+        osd.postDelayed(tvOsdHideRunnable, durationMs)
     }
 
     private fun tvChatModeLabel(mode: Int): String = when (mode) {
@@ -4880,7 +4887,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     showController(force = true)
                     val lock = computeTvChatLockState()
                     if (lock != null) {
-                        Toast.makeText(requireContext(), lock.message, Toast.LENGTH_SHORT).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), lock.message, Toast.LENGTH_SHORT).show()
                     } else {
                         showChatComposer()
                     }
@@ -7299,7 +7306,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     fun onSleepTimerChanged(durationMs: Long, hours: Int, minutes: Int, lockScreen: Boolean) {
         if (durationMs > 0L) {
-            Toast.makeText(
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                 requireContext(),
                 when {
                     hours == 0 -> getString(
@@ -7319,7 +7326,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 Toast.LENGTH_LONG
             ).show()
         } else if (((activity as? MainActivity)?.getSleepTimerTimeLeft() ?: 0) > 0L) {
-            Toast.makeText(requireContext(), R.string.timer_canceled, Toast.LENGTH_LONG).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.timer_canceled, Toast.LENGTH_LONG).show()
         }
         if (lockScreen != requireContext().prefs().getBoolean(C.SLEEP_TIMER_LOCK, false)) {
             requireContext().prefs().edit { putBoolean(C.SLEEP_TIMER_LOCK, lockScreen) }

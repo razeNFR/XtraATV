@@ -60,7 +60,7 @@ object TvMultiStreamPicker {
                 val deleteActions = groups.map { group ->
                     com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(group.label, R.drawable.tv_ic_delete) {
                         com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(activity, group.id)
-                        Toast.makeText(activity, R.string.tv_multistream_group_removed, Toast.LENGTH_SHORT).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_multistream_group_removed, Toast.LENGTH_SHORT).show()
                     }
                 }
                 com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(
@@ -130,7 +130,7 @@ object TvMultiStreamPicker {
                     .distinctBy { it.channelLogin }
             }
             if (candidates.isEmpty()) {
-                Toast.makeText(activity, R.string.tv_multistream_none, Toast.LENGTH_SHORT).show()
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_multistream_none, Toast.LENGTH_SHORT).show()
                 return@launch
             }
             TvStreamSwitcher.show(

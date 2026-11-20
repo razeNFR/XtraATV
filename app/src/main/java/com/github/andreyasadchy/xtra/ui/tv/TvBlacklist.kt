@@ -436,7 +436,7 @@ object TvBlacklist {
         val voiceInput = rememberVoiceInput(voiceState) { spoken ->
             val added = addKeyword(context, spoken)
             if (added > 0) {
-                Toast.makeText(context, context.getString(R.string.tv_blacklist_keyword_added, spoken.trim()), Toast.LENGTH_SHORT).show()
+                TvToast.makeText(context, context.getString(R.string.tv_blacklist_keyword_added, spoken.trim()), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -577,7 +577,7 @@ object TvBlacklist {
                                 FocusRow(
                                     onClick = {
                                         unblockChannel(context, ch.id, ch.login)
-                                        Toast.makeText(
+                                        TvToast.makeText(
                                             context,
                                             context.getString(R.string.tv_blacklist_channel_unhidden, ch.displayLabel),
                                             Toast.LENGTH_SHORT,
@@ -663,7 +663,7 @@ object TvBlacklist {
                                 FocusRow(
                                     onClick = {
                                         unblockCategory(context, cat.id, cat.slug, cat.name)
-                                        Toast.makeText(
+                                        TvToast.makeText(
                                             context,
                                             context.getString(R.string.tv_blacklist_category_unhidden, cat.displayLabel),
                                             Toast.LENGTH_SHORT,
@@ -734,7 +734,7 @@ object TvBlacklist {
                             val added = addKeyword(context, trimmed)
                             keywordDraft = ""
                             if (added > 0) {
-                                Toast.makeText(
+                                TvToast.makeText(
                                     context,
                                     context.getString(R.string.tv_blacklist_keyword_added, trimmed.removePrefix("#").trim()),
                                     Toast.LENGTH_SHORT,
@@ -779,7 +779,7 @@ object TvBlacklist {
                                 FocusRow(
                                     onClick = {
                                         removeKeyword(context, kw)
-                                        Toast.makeText(
+                                        TvToast.makeText(
                                             context,
                                             context.getString(R.string.tv_blacklist_keyword_removed, kw),
                                             Toast.LENGTH_SHORT,

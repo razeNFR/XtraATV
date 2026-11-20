@@ -646,7 +646,7 @@ object TvSwitcherRows {
                                         next.add(insertAt, Entry(catId, true))
                                     }
                                     save(context, next)
-                                    Toast.makeText(
+                                    TvToast.makeText(
                                         context,
                                         context.getString(R.string.tv_home_category_pinned, game.name ?: ""),
                                         Toast.LENGTH_SHORT,

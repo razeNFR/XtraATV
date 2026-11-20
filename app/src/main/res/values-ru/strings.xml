@@ -1345,4 +1345,9 @@
     <string name="tv_remote_action_stop_stream">Остановить трансляцию</string>
     <string name="tv_osd_chat_shown">Чат показан</string>
     <string name="tv_osd_chat_hidden">Чат скрыт</string>
+    <string name="tv_backup_perm_title">Требуется доступ к файлам</string>
+    <string name="tv_backup_perm_summary">Чтобы перезаписать или прочитать XtraTV-backup.zip в папке Загрузки, разрешите доступ к файлам на следующем экране.</string>
+    <string name="tv_backup_perm_grant">Разрешить доступ к файлам</string>
+    <string name="tv_backup_perm_continue_anyway">Продолжить без разрешения</string>
+    <string name="tv_backup_save_failed">Не удалось сохранить файл резервной копии</string>
 </resources>

@@ -393,7 +393,7 @@ object TvAccounts {
                                 val switched = switchToAccount(activity, target.key)
                                 dismiss()
                                 if (switched != null) {
-                                    Toast.makeText(
+                                    TvToast.makeText(
                                         activity,
                                         activity.getString(R.string.tv_accounts_switched_to, switched.username),
                                         Toast.LENGTH_SHORT,
@@ -433,7 +433,7 @@ object TvAccounts {
                             accounts = listAccounts(activity)
                             optionsTarget = null
                             if (removed != null) {
-                                Toast.makeText(
+                                TvToast.makeText(
                                     activity,
                                     activity.getString(R.string.tv_accounts_removed, removed.username),
                                     Toast.LENGTH_SHORT,
@@ -493,7 +493,7 @@ object TvAccounts {
                                 val switched = switchToAccount(activity, acc.key)
                                 dismiss()
                                 if (switched != null) {
-                                    Toast.makeText(
+                                    TvToast.makeText(
                                         activity,
                                         activity.getString(R.string.tv_accounts_switched_to, switched.username),
                                         Toast.LENGTH_SHORT,
@@ -572,7 +572,7 @@ object TvAccounts {
                         if (!guestActive) {
                             switchToGuest(activity)
                             dismiss()
-                            Toast.makeText(activity, R.string.tv_accounts_switched_guest, Toast.LENGTH_SHORT).show()
+                            TvToast.makeText(activity, R.string.tv_accounts_switched_guest, Toast.LENGTH_SHORT).show()
                             activity.onTvAccountSwitched()
                         } else {
                             dismiss()

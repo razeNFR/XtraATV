@@ -302,16 +302,16 @@ object TvPollsPredictionsPanel {
                                 onClick = {
                                     if (busy) return@PollChoiceRow
                                     if (!isLoggedIn || userId == null) {
-                                        Toast.makeText(context, R.string.tv_polls_login_hint, Toast.LENGTH_SHORT).show()
+                                        TvToast.makeText(context, R.string.tv_polls_login_hint, Toast.LENGTH_SHORT).show()
                                         return@PollChoiceRow
                                     }
                                     if (!clickable) {
-                                        Toast.makeText(context, R.string.tv_poll_already_voted, Toast.LENGTH_SHORT).show()
+                                        TvToast.makeText(context, R.string.tv_poll_already_voted, Toast.LENGTH_SHORT).show()
                                         return@PollChoiceRow
                                     }
                                     val extraCost = if (myChoiceId != null && canExtraVote) currentPoll.pointsPerVote else null
                                     if (extraCost != null && (balance ?: 0) < extraCost) {
-                                        Toast.makeText(context, R.string.tv_prediction_not_enough_points, Toast.LENGTH_SHORT).show()
+                                        TvToast.makeText(context, R.string.tv_prediction_not_enough_points, Toast.LENGTH_SHORT).show()
                                         return@PollChoiceRow
                                     }
                                     val cId = choice.id ?: return@PollChoiceRow
@@ -353,9 +353,9 @@ object TvPollsPredictionsPanel {
                                                     pointsPerVote = currentPoll.pointsPerVote,
                                                 )
                                             )
-                                            Toast.makeText(context, R.string.tv_poll_vote_sent, Toast.LENGTH_SHORT).show()
+                                            TvToast.makeText(context, R.string.tv_poll_vote_sent, Toast.LENGTH_SHORT).show()
                                         } else {
-                                            Toast.makeText(
+                                            TvToast.makeText(
                                                 context,
                                                 context.getString(R.string.tv_poll_vote_failed, res.errorCode ?: "ERROR"),
                                                 Toast.LENGTH_SHORT,
@@ -474,24 +474,24 @@ object TvPollsPredictionsPanel {
                                 onClick = {
                                     if (busy) return@PredictionOutcomeRow
                                     if (!isLoggedIn) {
-                                        Toast.makeText(context, R.string.tv_polls_login_hint, Toast.LENGTH_SHORT).show()
+                                        TvToast.makeText(context, R.string.tv_polls_login_hint, Toast.LENGTH_SHORT).show()
                                         return@PredictionOutcomeRow
                                     }
                                     if (isLocked) {
-                                        Toast.makeText(context, R.string.prediction_locked, Toast.LENGTH_SHORT).show()
+                                        TvToast.makeText(context, R.string.prediction_locked, Toast.LENGTH_SHORT).show()
                                         return@PredictionOutcomeRow
                                     }
                                     if (lockedToOtherOutcome) {
-                                        Toast.makeText(context, R.string.tv_prediction_other_outcome_locked, Toast.LENGTH_SHORT).show()
+                                        TvToast.makeText(context, R.string.tv_prediction_other_outcome_locked, Toast.LENGTH_SHORT).show()
                                         return@PredictionOutcomeRow
                                     }
                                     val betAmount = computeBetAmount()
                                     if (betAmount < 10) {
-                                        Toast.makeText(context, R.string.tv_prediction_min_points, Toast.LENGTH_SHORT).show()
+                                        TvToast.makeText(context, R.string.tv_prediction_min_points, Toast.LENGTH_SHORT).show()
                                         return@PredictionOutcomeRow
                                     }
                                     if (balance != null && betAmount > balance!!) {
-                                        Toast.makeText(context, R.string.tv_prediction_not_enough_points, Toast.LENGTH_SHORT).show()
+                                        TvToast.makeText(context, R.string.tv_prediction_not_enough_points, Toast.LENGTH_SHORT).show()
                                         return@PredictionOutcomeRow
                                     }
                                     val oId = outcome.id ?: return@PredictionOutcomeRow
@@ -535,13 +535,13 @@ object TvPollsPredictionsPanel {
                                                     winningOutcomeId = currentPred.winningOutcomeId,
                                                 )
                                             )
-                                            Toast.makeText(
+                                            TvToast.makeText(
                                                 context,
                                                 context.getString(R.string.tv_prediction_bet_sent, nf.format(betAmount), outcome.title.orEmpty()),
                                                 Toast.LENGTH_SHORT,
                                             ).show()
                                         } else {
-                                            Toast.makeText(
+                                            TvToast.makeText(
                                                 context,
                                                 context.getString(R.string.tv_prediction_bet_failed, res.errorCode ?: "ERROR"),
                                                 Toast.LENGTH_SHORT,

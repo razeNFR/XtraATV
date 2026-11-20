@@ -94,7 +94,7 @@ object TvStreamActions {
                 entries += Extra(activity.getString(if (following) R.string.unfollow else R.string.follow), if (following) R.drawable.tv_ic_heart else R.drawable.tv_ic_heart_outline) {
                     activity.lifecycleScope.launch {
                         val err = TvFollow.setFollowingWithMessage(activity, channelId, stream.channelLogin, stream.channelName, !following)
-                        Toast.makeText(
+                        TvToast.makeText(
                             activity,
                             when {
                                 err != null -> err
@@ -112,10 +112,10 @@ object TvStreamActions {
                 entries += Extra(activity.getString(if (favorite) R.string.tv_favorite_remove else R.string.tv_favorite_add), R.drawable.tv_ic_star) {
                     if (favorite) {
                         TvFavorites.remove(activity, login)
-                        Toast.makeText(activity, activity.getString(R.string.tv_favorite_removed, name), Toast.LENGTH_SHORT).show()
+                        TvToast.makeText(activity, activity.getString(R.string.tv_favorite_removed, name), Toast.LENGTH_SHORT).show()
                     } else {
                         TvFavorites.add(activity, login, stream.channelName)
-                        Toast.makeText(activity, activity.getString(R.string.tv_favorite_added, name), Toast.LENGTH_SHORT).show()
+                        TvToast.makeText(activity, activity.getString(R.string.tv_favorite_added, name), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -131,10 +131,10 @@ object TvStreamActions {
                     val label = name.ifBlank { stream.channelLogin.orEmpty() }
                     if (chBlocked) {
                         TvBlacklist.unblockChannel(activity, stream.channelId, stream.channelLogin)
-                        Toast.makeText(activity, activity.getString(R.string.tv_blacklist_channel_unhidden, label), Toast.LENGTH_SHORT).show()
+                        TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_channel_unhidden, label), Toast.LENGTH_SHORT).show()
                     } else {
                         TvBlacklist.blockChannel(activity, stream.channelId, stream.channelLogin, stream.channelName, stream.channelImageURL)
-                        Toast.makeText(activity, activity.getString(R.string.tv_blacklist_channel_hidden, label), Toast.LENGTH_SHORT).show()
+                        TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_channel_hidden, label), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -150,10 +150,10 @@ object TvStreamActions {
                 ) {
                     if (catBlocked) {
                         TvBlacklist.unblockCategory(activity, stream.gameId, stream.gameSlug, gName)
-                        Toast.makeText(activity, activity.getString(R.string.tv_blacklist_category_unhidden, gName), Toast.LENGTH_SHORT).show()
+                        TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_category_unhidden, gName), Toast.LENGTH_SHORT).show()
                     } else {
                         TvBlacklist.blockCategory(activity, stream.gameId, stream.gameSlug, gName)
-                        Toast.makeText(activity, activity.getString(R.string.tv_blacklist_category_hidden, gName), Toast.LENGTH_SHORT).show()
+                        TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_category_hidden, gName), Toast.LENGTH_SHORT).show()
                     }
                 }
             }

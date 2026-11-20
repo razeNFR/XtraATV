@@ -384,12 +384,12 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                             val enabled = pair.first
                             val errorMessage = pair.second
                             if (!errorMessage.isNullOrBlank()) {
-                                Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show()
+                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show()
                             } else {
                                 if (enabled) {
-                                    Toast.makeText(requireContext(), R.string.enabled_notifications, Toast.LENGTH_SHORT).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.enabled_notifications, Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(requireContext(), R.string.disabled_notifications, Toast.LENGTH_SHORT).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.disabled_notifications, Toast.LENGTH_SHORT).show()
                                 }
                             }
                             viewModel.notifications.value = null
@@ -429,10 +429,10 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                                     } else {
                                         errorMessage
                                     }
-                                    Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show()
                                 } else {
                                     if (following) {
-                                        Toast.makeText(requireContext(),
+                                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(),
                                             getString(
                                                 R.string.now_following,
                                                 if (args.channelLogin != null && !args.channelLogin.equals(args.channelName, true)) {
@@ -448,7 +448,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
-                                        Toast.makeText(requireContext(),
+                                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(),
                                             getString(
                                                 R.string.unfollowed,
                                                 if (args.channelLogin != null && !args.channelLogin.equals(args.channelName, true)) {

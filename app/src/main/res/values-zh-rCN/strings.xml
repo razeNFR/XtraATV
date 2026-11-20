@@ -1345,4 +1345,9 @@
     <string name="tv_remote_action_stop_stream">停止直播</string>
     <string name="tv_osd_chat_shown">已显示聊天</string>
     <string name="tv_osd_chat_hidden">已隐藏聊天</string>
+    <string name="tv_backup_perm_title">需要文件访问权限</string>
+    <string name="tv_backup_perm_summary">要在下载目录中覆盖或读取 XtraTV-backup.zip，请在下一屏幕允许文件访问。</string>
+    <string name="tv_backup_perm_grant">允许文件访问</string>
+    <string name="tv_backup_perm_continue_anyway">不授权继续</string>
+    <string name="tv_backup_save_failed">无法保存备份文件</string>
 </resources>

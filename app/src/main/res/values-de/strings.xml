@@ -1345,4 +1345,9 @@
     <string name="tv_remote_action_stop_stream">Stream beenden</string>
     <string name="tv_osd_chat_shown">Chat eingeblendet</string>
     <string name="tv_osd_chat_hidden">Chat ausgeblendet</string>
+    <string name="tv_backup_perm_title">Dateizugriff erforderlich</string>
+    <string name="tv_backup_perm_summary">Um XtraTV-backup.zip unter Downloads zu überschreiben oder zu lesen, erlauben Sie auf dem nächsten Bildschirm den Dateizugriff.</string>
+    <string name="tv_backup_perm_grant">Dateizugriff erlauben</string>
+    <string name="tv_backup_perm_continue_anyway">Ohne Berechtigung fortfahren</string>
+    <string name="tv_backup_save_failed">Backup-Datei konnte nicht gespeichert werden</string>
 </resources>

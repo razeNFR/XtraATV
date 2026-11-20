@@ -185,7 +185,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.Listener {
             if (result.resultCode == Activity.RESULT_OK) {
                 result.data?.data?.let {
                     when {
-                        it.authority?.startsWith("com.android.providers") == true -> Toast.makeText(requireActivity(), R.string.invalid_directory, Toast.LENGTH_LONG).show()
+                        it.authority?.startsWith("com.android.providers") == true -> com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireActivity(), R.string.invalid_directory, Toast.LENGTH_LONG).show()
                         else -> {
                             requireContext().contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                             sharedPath = it.toString()
@@ -253,7 +253,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.Listener {
                     repeatOnLifecycle(Lifecycle.State.STARTED) {
                         viewModel.dismiss.collectLatest {
                             if (it) {
-                                Toast.makeText(requireActivity(), R.string.video_subscribers_only, Toast.LENGTH_LONG).show()
+                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireActivity(), R.string.video_subscribers_only, Toast.LENGTH_LONG).show()
                                 dismiss()
                             }
                         }

@@ -455,7 +455,7 @@ class MainActivity : AppCompatActivity() {
                     && networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             if (!isNetworkAvailable) {
                 initialized = true
-                Toast.makeText(this, R.string.no_connection, Toast.LENGTH_SHORT).show()
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.no_connection, Toast.LENGTH_SHORT).show()
             }
         }
         lifecycleScope.launch {
@@ -470,7 +470,7 @@ class MainActivity : AppCompatActivity() {
                         if (viewModel.isNetworkAvailable.value != isNetworkAvailable) {
                             viewModel.isNetworkAvailable.value = isNetworkAvailable
                             if (initialized) {
-                                Toast.makeText(this@MainActivity, if (isNetworkAvailable) R.string.connection_restored else R.string.no_connection, Toast.LENGTH_SHORT).show()
+                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@MainActivity, if (isNetworkAvailable) R.string.connection_restored else R.string.no_connection, Toast.LENGTH_SHORT).show()
                             } else {
                                 initialized = true
                             }
@@ -594,7 +594,7 @@ class MainActivity : AppCompatActivity() {
                                         putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
                                     }
                                 } catch (e: ActivityNotFoundException) {
-                                    Toast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                 }
                             } else {
                                 // the settings "Install unknown apps" at most once an hour, then the ways of installing (never a loop)
@@ -958,6 +958,11 @@ class MainActivity : AppCompatActivity() {
         UpdateInstallHelper.onActivityResult(this, requestCode, resultCode)
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        com.github.andreyasadchy.xtra.ui.tv.TvBackup.onRequestPermissionsResult(this, requestCode)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (BuildConfig.DEBUG && intent.hasExtra("tv_test")) {
@@ -1119,7 +1124,7 @@ class MainActivity : AppCompatActivity() {
     /** OK held on a stream of the row of the other streams: it plays in a small window (up to 2). */
     fun openTvPip(stream: Stream, targetSlot: Int? = null) {
         if (stream.channelLogin.equals(currentStreamLogin, ignoreCase = true) || tvPip.containsStream(stream.channelLogin)) {
-            android.widget.Toast.makeText(this, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
         val first = tvPip.activeCount == 0
@@ -1731,7 +1736,7 @@ class MainActivity : AppCompatActivity() {
             exitTvApp()
         } else {
             lastExitBackAt = now
-            Toast.makeText(this, R.string.tv_press_back_again_to_exit, Toast.LENGTH_SHORT).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.tv_press_back_again_to_exit, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1946,7 +1951,7 @@ class MainActivity : AppCompatActivity() {
         if (key == "2" && !loggedInWithCode) {
             if (!fromAutoHover) {
                 // the videos of the followed channels need the login with the code (the token of the app)
-                Toast.makeText(this, R.string.tv_followed_videos_need_code, Toast.LENGTH_LONG).show()
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.tv_followed_videos_need_code, Toast.LENGTH_LONG).show()
             }
             return
         }
@@ -2700,7 +2705,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     else -> {
                         if (!msg.isNullOrBlank()) {
-                            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, msg, Toast.LENGTH_LONG).show()
                         }
                         showInstallBlockedDialog(fallbackUrl, retry)
                     }
@@ -3024,6 +3029,7 @@ class MainActivity : AppCompatActivity() {
 
     /** A multi-stream is shown (set before its screen is made, so that the focus waits for it). */
     private var tvMultiStreamShown = false
+    fun isTvMultiStreamOpen() = tvMultiStreamShown
 
     /** The screen of a multi-stream went away, however it was closed (a stream opened over it, back...). */
     fun onMultiStreamDestroyed() {

@@ -87,7 +87,7 @@ object TvProxyPanel {
         onClosed: (List<CustomProxy>?) -> Unit,
     ) {
         if (manage != null && TvExperimentalAdblock.isExperimentalEnabled(context)) {
-            android.widget.Toast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_SHORT).show()
+            TvToast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
         TvExperimentalAdblock.normalizePrefs(context)
@@ -119,7 +119,7 @@ object TvProxyPanel {
                             } else {
                                 R.string.tv_adblock_swap_locked_hint
                             }
-                            android.widget.Toast.makeText(context, hintRes, android.widget.Toast.LENGTH_SHORT).show()
+                            TvToast.makeText(context, hintRes, android.widget.Toast.LENGTH_SHORT).show()
                         } else {
                             swapAdblock = !swapAdblock
                             context.prefs().edit {

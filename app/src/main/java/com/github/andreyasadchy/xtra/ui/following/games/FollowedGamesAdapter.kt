@@ -99,7 +99,7 @@ class FollowedGamesAdapter(
                                             if (pinned) R.drawable.tv_ic_delete else R.drawable.tv_ic_pin,
                                         ) {
                                             val nowPinned = com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.togglePinCategory(context, item)
-                                            android.widget.Toast.makeText(
+                                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                                                 context,
                                                 context.getString(
                                                     if (nowPinned) R.string.tv_home_category_pinned else R.string.tv_home_category_unpinned,
@@ -123,14 +123,14 @@ class FollowedGamesAdapter(
                                         ) {
                                             if (catBlocked) {
                                                 com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.unblockCategory(context, item.id, item.slug, item.name)
-                                                android.widget.Toast.makeText(
+                                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                                                     context,
                                                     context.getString(R.string.tv_blacklist_category_unhidden, catLabel),
                                                     android.widget.Toast.LENGTH_SHORT,
                                                 ).show()
                                             } else {
                                                 com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.blockCategory(context, item.id, item.slug, item.name, item.boxArtURL)
-                                                android.widget.Toast.makeText(
+                                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                                                     context,
                                                     context.getString(R.string.tv_blacklist_category_hidden, catLabel),
                                                     android.widget.Toast.LENGTH_SHORT,

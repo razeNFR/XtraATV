@@ -814,7 +814,7 @@ object TvHomeRows {
                                         next.add(insertAt, Entry(catId, true))
                                     }
                                     save(context, next)
-                                    Toast.makeText(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                                         context,
                                         context.getString(R.string.tv_home_category_pinned, game.name ?: ""),
                                         Toast.LENGTH_SHORT,

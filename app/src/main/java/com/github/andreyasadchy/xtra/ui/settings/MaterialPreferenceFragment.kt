@@ -196,7 +196,7 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
                 val hint = preference?.key?.let { disabledHints[it]?.invoke() }
                     ?: preference?.dependency?.let { findPreference<Preference>(it)?.title?.toString() }?.let { getString(com.github.andreyasadchy.xtra.R.string.setting_disabled_dependency, it) }
                     ?: getString(com.github.andreyasadchy.xtra.R.string.setting_disabled_generic)
-                android.widget.Toast.makeText(requireContext(), hint, android.widget.Toast.LENGTH_LONG).show()
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), hint, android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

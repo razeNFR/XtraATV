@@ -209,12 +209,12 @@ class GamePagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
                                 val following = pair.first
                                 val errorMessage = pair.second
                                 if (!errorMessage.isNullOrBlank()) {
-                                    Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show()
                                 } else {
                                     if (following) {
-                                        Toast.makeText(requireContext(), getString(R.string.now_following, args.gameName), Toast.LENGTH_SHORT).show()
+                                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), getString(R.string.now_following, args.gameName), Toast.LENGTH_SHORT).show()
                                     } else {
-                                        Toast.makeText(requireContext(), getString(R.string.unfollowed, args.gameName), Toast.LENGTH_SHORT).show()
+                                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), getString(R.string.unfollowed, args.gameName), Toast.LENGTH_SHORT).show()
                                     }
                                 }
                                 viewModel.follow.value = null

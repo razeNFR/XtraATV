@@ -398,7 +398,7 @@ class TvSettingsFragment : Fragment() {
                                         putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
                                     }
                                 } catch (_: ActivityNotFoundException) {
-                                    Toast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
                                 }
                             } else {
                                 UpdateInstallHelper.startUpdate(requireActivity(), url) { u -> startUpdateDownload(u) }
@@ -406,7 +406,7 @@ class TvSettingsFragment : Fragment() {
                         }
                         TvUpdateDialog.show(requireActivity(), settingsViewModel.updateVersion, settingsViewModel.updateNotes, startUpdate) {}
                     } else {
-                        Toast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -1116,7 +1116,7 @@ class TvSettingsFragment : Fragment() {
                 .clickable(interactionSource = interaction, indication = null) {
                     if (!item.enabled) {
                         item.disabledHint?.invoke()?.let { msg ->
-                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, msg, Toast.LENGTH_LONG).show()
                         }
                         return@clickable
                     }
@@ -2123,7 +2123,7 @@ class TvSettingsFragment : Fragment() {
                 when (key) {
                     C.TV_EXPERIMENTAL_ADBLOCK -> {
                         if (next && TvExperimentalAdblock.isAnyProxyEnabled(context)) {
-                            Toast.makeText(context, R.string.tv_adblock_exp_disabled_by_proxy, Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_adblock_exp_disabled_by_proxy, Toast.LENGTH_LONG).show()
                             return
                         }
                         context.prefs().edit { putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, next) }
@@ -2131,7 +2131,7 @@ class TvSettingsFragment : Fragment() {
                     }
                     C.PLAYER_USE_STREAM_PROXY -> {
                         if (next && context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
-                            Toast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
                             return
                         }
                         context.prefs().edit { putBoolean(C.PLAYER_USE_STREAM_PROXY, next) }
@@ -2144,7 +2144,7 @@ class TvSettingsFragment : Fragment() {
                             } else {
                                 R.string.tv_adblock_swap_locked_hint
                             }
-                            Toast.makeText(context, hintRes, Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, hintRes, Toast.LENGTH_LONG).show()
                             return
                         }
                         context.prefs().edit { putBoolean(C.PLAYER_ADBLOCK, next) }
@@ -2297,7 +2297,7 @@ class TvSettingsFragment : Fragment() {
             }
             "stream_proxy_settings" -> {
                 if (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
-                    Toast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
                     return
                 }
                 streamProxyViewModel.getProxies()
@@ -2308,7 +2308,7 @@ class TvSettingsFragment : Fragment() {
             }
             "custom_proxy_settings" -> {
                 if (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
-                    Toast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
                     return
                 }
                 val activity = requireActivity()
@@ -2348,7 +2348,7 @@ class TvSettingsFragment : Fragment() {
                 TvFavorites.load(context)
                 val favorites = TvFavorites.items.value
                 if (favorites.isEmpty()) {
-                    Toast.makeText(context, R.string.tv_favorites_how, Toast.LENGTH_LONG).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_favorites_how, Toast.LENGTH_LONG).show()
                 } else {
                     val items = favorites.map {
                         SettingsDragListItem(key = it.login, text = it.name ?: it.login, default = false, enabled = true)
@@ -2499,7 +2499,7 @@ class TvSettingsFragment : Fragment() {
             }
             "import_app_downloads" -> {
                 settingsViewModel.importDownloads()
-                Toast.makeText(context, android.R.string.ok, Toast.LENGTH_SHORT).show()
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, android.R.string.ok, Toast.LENGTH_SHORT).show()
             }
             "admin_settings" -> {
                 runCatching {
@@ -2541,7 +2541,7 @@ class TvSettingsFragment : Fragment() {
                                         putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                                     })
                                 } catch (_: ActivityNotFoundException) {
-                                    Toast.makeText(context, R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
                                 }
                             }
                         },

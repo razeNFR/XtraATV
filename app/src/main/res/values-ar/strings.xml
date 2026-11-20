@@ -1345,4 +1345,9 @@
     <string name="tv_remote_action_stop_stream">إيقاف البث</string>
     <string name="tv_osd_chat_shown">تم إظهار الدردشة</string>
     <string name="tv_osd_chat_hidden">تم إخفاء الدردشة</string>
+    <string name="tv_backup_perm_title">مطلوب إذن الوصول إلى الملفات</string>
+    <string name="tv_backup_perm_summary">لاستبدال أو قراءة ملف XtraTV-backup.zip في التنزيلات، اسمح بالوصول إلى الملفات في الشاشة التالية.</string>
+    <string name="tv_backup_perm_grant">السماح بالوصول إلى الملفات</string>
+    <string name="tv_backup_perm_continue_anyway">المتابعة بدون إذن</string>
+    <string name="tv_backup_save_failed">تعذّر حفظ ملف النسخ الاحتياطي</string>
 </resources>

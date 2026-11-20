@@ -157,7 +157,7 @@ object TvRewardsPanel {
                                 runCatching {
                                     repo.loadClaimPoints(networkLibrary, headers, resolvedChannelId, claimId)
                                 }
-                                Toast.makeText(
+                                TvToast.makeText(
                                     context,
                                     context.getString(R.string.tv_points_bonus_claimed),
                                     Toast.LENGTH_SHORT,
@@ -198,7 +198,7 @@ object TvRewardsPanel {
                                     if (busy) return@FocusRow
                                     if (!canRedeem) {
                                         statusNote?.let {
-                                            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                                            TvToast.makeText(context, it, Toast.LENGTH_SHORT).show()
                                         }
                                         return@FocusRow
                                     }
@@ -228,7 +228,7 @@ object TvRewardsPanel {
                                                             prompt = reward.prompt,
                                                             textInput = trimmed,
                                                         )
-                                                        Toast.makeText(
+                                                        TvToast.makeText(
                                                             context,
                                                             if (res.success) {
                                                                 context.getString(R.string.tv_points_redeemed_ok, reward.title)
@@ -269,7 +269,7 @@ object TvRewardsPanel {
                                                             prompt = reward.prompt,
                                                             textInput = null,
                                                         )
-                                                        Toast.makeText(
+                                                        TvToast.makeText(
                                                             context,
                                                             if (res.success) {
                                                                 context.getString(R.string.tv_points_redeemed_ok, reward.title)
@@ -396,7 +396,7 @@ object TvRewardsPanel {
                                 res == GraphQLRepository.DropClaimResult.ALREADY_CLAIMED
                             ) {
                                 claimedKeys = claimedKeys + setOf(drop.dropId, instanceId)
-                                Toast.makeText(
+                                TvToast.makeText(
                                     context,
                                     context.getString(R.string.tv_points_redeemed_ok, drop.dropName),
                                     Toast.LENGTH_SHORT,

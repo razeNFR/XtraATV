@@ -1346,4 +1346,9 @@
     <string name="tv_remote_action_stop_stream">Hentikan siaran</string>
     <string name="tv_osd_chat_shown">Obrolan ditampilkan</string>
     <string name="tv_osd_chat_hidden">Obrolan disembunyikan</string>
+    <string name="tv_backup_perm_title">Izin akses file diperlukan</string>
+    <string name="tv_backup_perm_summary">Untuk menimpa atau membaca XtraTV-backup.zip di Unduhan, izinkan akses file di layar berikutnya.</string>
+    <string name="tv_backup_perm_grant">Izinkan akses file</string>
+    <string name="tv_backup_perm_continue_anyway">Lanjutkan tanpa izin</string>
+    <string name="tv_backup_save_failed">Gagal menyimpan file cadangan</string>
 </resources>

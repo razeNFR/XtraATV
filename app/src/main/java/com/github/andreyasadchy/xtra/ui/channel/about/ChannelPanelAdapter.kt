@@ -83,7 +83,7 @@ class ChannelPanelAdapter(
                                     }
                                     context.startActivity(intent)
                                 } catch (e: ActivityNotFoundException) {
-                                    Toast.makeText(context, R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                 }
                             }
                         }

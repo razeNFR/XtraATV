@@ -264,7 +264,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     if (wait > 0L) kotlinx.coroutines.delay(wait)
                     homeRefreshing.value = false
                     homeSweep.intValue++
-                    context?.let { android.widget.Toast.makeText(it, R.string.tv_refreshed, android.widget.Toast.LENGTH_SHORT).show() }
+                    context?.let { com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(it, R.string.tv_refreshed, android.widget.Toast.LENGTH_SHORT).show() }
                 } else {
                     homeRefreshing.value = false
                 }
@@ -529,7 +529,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                         if (pinned) R.drawable.tv_ic_delete else R.drawable.tv_ic_pin,
                     ) {
                         val nowPinned = TvHomeRows.togglePinCategory(activity, game)
-                        android.widget.Toast.makeText(
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                             activity,
                             getString(
                                 if (nowPinned) R.string.tv_home_category_pinned else R.string.tv_home_category_unpinned,
@@ -550,10 +550,10 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     ) {
                         if (catBlocked) {
                             com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.unblockCategory(activity, game.id, game.slug, game.name)
-                            android.widget.Toast.makeText(activity, getString(R.string.tv_blacklist_category_unhidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, getString(R.string.tv_blacklist_category_unhidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
                         } else {
                             com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.blockCategory(activity, game.id, game.slug, game.name, game.boxArtURL)
-                            android.widget.Toast.makeText(activity, getString(R.string.tv_blacklist_category_hidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, getString(R.string.tv_blacklist_category_hidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }
                 )
@@ -701,7 +701,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     R.drawable.tv_ic_delete,
                 ) {
                     com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(activity, item.group.id)
-                    android.widget.Toast.makeText(activity, R.string.tv_multistream_group_removed, android.widget.Toast.LENGTH_SHORT).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_multistream_group_removed, android.widget.Toast.LENGTH_SHORT).show()
                 }
             )
             item.group.streams.forEach { member ->
