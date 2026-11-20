@@ -1175,20 +1175,67 @@ class MainActivity : AppCompatActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    private var tvBackLongDownSeen = false
+    private var tvBackLongPending = false
+    private var tvBackLongPendingAction: String? = null
+    private var noPlayerCustomDownKey = 0
+    private var noPlayerCustomLongAction: String? = null
+    private val tvBackLongHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    private val tvBackLongTimeoutRunnable = Runnable {
+        if (!tvBackLongPending || isFinishing || isDestroyed) return@Runnable
+        val act = tvBackLongPendingAction ?: resolveApplicableTvBackLongAction()
+        tvBackLongPending = false
+        tvBackLongPendingAction = null
+        if (act != null) {
+            PlayerFragment.markHeldRemoteKey(KeyEvent.KEYCODE_BACK)
+            triggerTvBackLongAction(act)
+        }
+    }
+
+    private val noPlayerCustomLongRunnable = Runnable {
+        val key = noPlayerCustomDownKey
+        val act = noPlayerCustomLongAction
+        if (key == 0 || act == null || isFinishing || isDestroyed) return@Runnable
+        noPlayerCustomDownKey = 0
+        noPlayerCustomLongAction = null
+        PlayerFragment.markHeldRemoteKey(key)
+        if (act == com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_LAST_STREAM) {
+            switchToLastWatchedStream()
+        }
+    }
 
     private fun resolveApplicableTvBackLongAction(): String? {
         if (!isTv || tvMultiStreamShown || hasOpenDialogFragment()) return null
         val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
         val raw = Keys.backLongAction(this)
         if (raw == Keys.ACTION_DEFAULT) return null
-        val player = (playerFragment as? PlayerFragment)?.takeIf { !it.isRemoving && !it.isDetached } ?: return null
+        val player = (playerFragment as? PlayerFragment)?.takeIf { !it.isRemoving && !it.isDetached }
+        if (player == null) {
+            return raw.takeIf { it == Keys.ACTION_LAST_STREAM && hasLastWatchedStream() }
+        }
         return if (player.isMaximizedPlayer()) {
             if (!player.canRunHiddenHudRemoteShortcuts()) return null
             val effective = player.effectiveRemoteAction(raw)
             effective.takeIf { it != Keys.ACTION_DEFAULT && it != Keys.ACTION_OPEN_MINI_PLAYER }
         } else {
-            raw.takeIf { player.getTvNowPlaying() != null && Keys.isBackgroundCapableAction(it) }
+            raw.takeIf {
+                (player.getTvNowPlaying() != null && Keys.isBackgroundCapableAction(it)) ||
+                    (it == Keys.ACTION_LAST_STREAM && hasLastWatchedStream())
+            }
+        }
+    }
+
+    private fun triggerTvBackLongAction(action: String) {
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        if (action == Keys.ACTION_LAST_STREAM) {
+            switchToLastWatchedStream()
+            return
+        }
+        val player = playerFragment as? PlayerFragment ?: return
+        if (player.isMaximizedPlayer()) {
+            player.executeTvRemoteAction(action)
+        } else {
+            player.executeTvBackgroundRemoteAction(action)
         }
     }
 
@@ -1229,37 +1276,98 @@ class MainActivity : AppCompatActivity() {
         if (event.keyCode != KeyEvent.KEYCODE_BACK) {
             return false
         }
-        val action = resolveApplicableTvBackLongAction()
+        val action = tvBackLongPendingAction ?: resolveApplicableTvBackLongAction()
         if (action == null) {
-            tvBackLongDownSeen = false
+            tvBackLongHandler.removeCallbacks(tvBackLongTimeoutRunnable)
+            tvBackLongPending = false
+            tvBackLongPendingAction = null
             return false
         }
+        val longPressMs = android.view.ViewConfiguration.getLongPressTimeout().toLong().coerceIn(350L, 550L)
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (event.repeatCount == 0) {
-                    tvBackLongDownSeen = true
-                } else if (tvBackLongDownSeen && (event.repeatCount >= 1 || event.isLongPress)) {
-                    tvBackLongDownSeen = false
+                    tvBackLongPending = true
+                    tvBackLongPendingAction = action
+                    tvBackLongHandler.removeCallbacks(tvBackLongTimeoutRunnable)
+                    tvBackLongHandler.postDelayed(tvBackLongTimeoutRunnable, longPressMs)
+                } else if (tvBackLongPending && (event.repeatCount >= 1 || event.isLongPress)) {
+                    tvBackLongHandler.removeCallbacks(tvBackLongTimeoutRunnable)
+                    tvBackLongPending = false
+                    tvBackLongPendingAction = null
                     PlayerFragment.markHeldRemoteKey(KeyEvent.KEYCODE_BACK)
-                    val player = playerFragment as? PlayerFragment
-                    if (player != null) {
-                        if (player.isMaximizedPlayer()) {
-                            player.executeTvRemoteAction(action)
-                        } else {
-                            player.executeTvBackgroundRemoteAction(action)
-                        }
-                    }
+                    triggerTvBackLongAction(action)
                 }
             }
             KeyEvent.ACTION_UP -> {
-                val wasShort = tvBackLongDownSeen
-                tvBackLongDownSeen = false
-                if (wasShort && !event.isCanceled) {
-                    performShortTvBack()
+                tvBackLongHandler.removeCallbacks(tvBackLongTimeoutRunnable)
+                val wasPending = tvBackLongPending
+                tvBackLongPending = false
+                tvBackLongPendingAction = null
+                if (wasPending && !event.isCanceled) {
+                    val heldMs = if (event.downTime > 0L) event.eventTime - event.downTime else 0L
+                    if (heldMs >= longPressMs) {
+                        triggerTvBackLongAction(action)
+                    } else {
+                        performShortTvBack()
+                    }
                 }
             }
             else -> {
-                tvBackLongDownSeen = false
+                tvBackLongHandler.removeCallbacks(tvBackLongTimeoutRunnable)
+                tvBackLongPending = false
+                tvBackLongPendingAction = null
+            }
+        }
+        return true
+    }
+
+    private fun dispatchNoPlayerCustomRemoteKey(event: KeyEvent): Boolean {
+        if (!isTv || tvMultiStreamShown || playerFragment != null || hasOpenDialogFragment()) return false
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        val shortAction = Keys.customShortActionForKey(this, event.keyCode)
+            ?.takeIf { it == Keys.ACTION_LAST_STREAM }
+        val longAction = Keys.customLongActionForKey(this, event.keyCode)
+            ?.takeIf { it == Keys.ACTION_LAST_STREAM }
+        if (shortAction == null && longAction == null) return false
+        if (longAction == null) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && shortAction != null) {
+                switchToLastWatchedStream()
+            }
+            return true
+        }
+        val longPressMs = android.view.ViewConfiguration.getLongPressTimeout().toLong().coerceIn(350L, 550L)
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount == 0) {
+                    noPlayerCustomDownKey = event.keyCode
+                    noPlayerCustomLongAction = longAction
+                    tvBackLongHandler.removeCallbacks(noPlayerCustomLongRunnable)
+                    tvBackLongHandler.postDelayed(noPlayerCustomLongRunnable, longPressMs)
+                } else if (noPlayerCustomDownKey == event.keyCode && (event.repeatCount >= 1 || event.isLongPress)) {
+                    tvBackLongHandler.removeCallbacks(noPlayerCustomLongRunnable)
+                    noPlayerCustomDownKey = 0
+                    noPlayerCustomLongAction = null
+                    PlayerFragment.markHeldRemoteKey(event.keyCode)
+                    switchToLastWatchedStream()
+                }
+            }
+            KeyEvent.ACTION_UP -> {
+                tvBackLongHandler.removeCallbacks(noPlayerCustomLongRunnable)
+                val wasDown = noPlayerCustomDownKey == event.keyCode
+                noPlayerCustomDownKey = 0
+                noPlayerCustomLongAction = null
+                if (wasDown && !event.isCanceled) {
+                    val heldMs = if (event.downTime > 0L) event.eventTime - event.downTime else 0L
+                    if (heldMs >= longPressMs || shortAction != null) {
+                        switchToLastWatchedStream()
+                    }
+                }
+            }
+            else -> {
+                tvBackLongHandler.removeCallbacks(noPlayerCustomLongRunnable)
+                noPlayerCustomDownKey = 0
+                noPlayerCustomLongAction = null
             }
         }
         return true
@@ -1412,6 +1520,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
         if (isTv && !tvMultiStreamShown && (playerFragment as? PlayerFragment)?.dispatchCustomRemoteKey(event) == true) {
+            return true
+        }
+        if (isTv && !tvMultiStreamShown && dispatchNoPlayerCustomRemoteKey(event)) {
             return true
         }
         if (isTv && !tvMultiStreamShown &&
@@ -3135,6 +3246,91 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var previousWatchedStream: Stream? = null
+
+    fun hasLastWatchedStream(): Boolean {
+        val prev = previousWatchedStream ?: return false
+        val prevLogin = prev.channelLogin?.takeIf { it.isNotBlank() } ?: return false
+        val curLogin = currentStreamLogin?.takeIf { playerFragment != null }
+        return !prevLogin.equals(curLogin, ignoreCase = true)
+    }
+
+    fun switchToLastWatchedStream(): Boolean {
+        val target = previousWatchedStream
+        val targetLogin = target?.channelLogin?.takeIf { it.isNotBlank() }
+        val curLogin = currentStreamLogin?.takeIf { playerFragment != null }
+        if (target == null || targetLogin == null || targetLogin.equals(curLogin, ignoreCase = true)) {
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.tv_no_last_stream, android.widget.Toast.LENGTH_SHORT).show()
+            return false
+        }
+        val label = target.channelName?.takeIf { it.isNotBlank() } ?: targetLogin
+        startStream(target, peekHud = true)
+        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, label, android.widget.Toast.LENGTH_SHORT, R.drawable.tv_ic_swap).show()
+        return true
+    }
+
+    private fun openSearchTabWithQuery(query: String?) {
+        if (tvMultiStreamShown) {
+            closeMultiStream()
+        }
+        if ((playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true) {
+            leavePlayerForBrowsing()
+        }
+        if (!query.isNullOrBlank()) {
+            com.github.andreyasadchy.xtra.ui.search.SearchPagerFragment.pendingExternalQuery = query
+        }
+        if (isTv) {
+            openTvSection(R.id.searchPagerFragment)
+            binding.root.post {
+                (currentVisibleNavFragment() as? com.github.andreyasadchy.xtra.ui.search.SearchPagerFragment)?.consumePendingExternalQuery()
+            }
+        } else {
+            runCatching { navController.navigate(R.id.searchPagerFragment) }
+        }
+    }
+
+    private fun openExternalSearch(query: String?, autoPlayLiveMatch: Boolean) {
+        if (autoPlayLiveMatch && !query.isNullOrBlank()) {
+            val clean = query.trim()
+            val norm = clean.lowercase().replace(" ", "")
+            lifecycleScope.launch {
+                val matched = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching {
+                        val app = application as XtraApp
+                        val ds = com.github.andreyasadchy.xtra.repository.datasource.SearchStreamsDataSource(
+                            query = clean,
+                            gqlHeaders = TwitchApiHelper.getGQLHeaders(this@MainActivity),
+                            graphQLRepository = app.xtraModule.graphQLRepository,
+                            helixHeaders = TwitchApiHelper.getHelixHeaders(this@MainActivity),
+                            helixRepository = app.xtraModule.helixRepository,
+                            enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false),
+                            networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                        )
+                        val res = ds.load(androidx.paging.PagingSource.LoadParams.Refresh(null, 8, false))
+                        val list = (res as? androidx.paging.PagingSource.LoadResult.Page)?.data.orEmpty()
+                        list.firstOrNull { s ->
+                            s.channelLogin?.lowercase() == norm ||
+                                s.channelName?.lowercase()?.replace(" ", "") == norm
+                        } ?: list.firstOrNull { s ->
+                            s.channelLogin?.lowercase()?.startsWith(norm) == true ||
+                                s.channelName?.lowercase()?.replace(" ", "")?.startsWith(norm) == true
+                        }
+                    }.getOrNull()
+                }
+                if (matched != null && !matched.channelLogin.isNullOrBlank()) {
+                    if (tvMultiStreamShown) {
+                        closeMultiStream()
+                    }
+                    startStream(matched, peekHud = true)
+                } else {
+                    openSearchTabWithQuery(clean)
+                }
+            }
+            return
+        }
+        openSearchTabWithQuery(query)
+    }
+
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null, peekHud: Boolean = false) {
         currentClipId = null
         // TV: the info of the stream for a moment each time a stream starts (from the home, a list, a switch...)
@@ -3165,6 +3361,13 @@ class MainActivity : AppCompatActivity() {
         }
         if (isTv) {
             tvPip.syncWithMainStream(stream.channelLogin)
+        }
+        val outgoing = currentPlayingStream() ?: currentStream
+        if (outgoing != null &&
+            !outgoing.channelLogin.isNullOrBlank() &&
+            !outgoing.channelLogin.equals(stream.channelLogin, ignoreCase = true)
+        ) {
+            previousWatchedStream = outgoing
         }
         currentStream = stream
         currentStreamLogin = stream.channelLogin
@@ -3734,6 +3937,10 @@ class MainActivity : AppCompatActivity() {
     fun closePlayer(focusHome: Boolean = true) {
         binding.root.removeCallbacks(keepFocusInPlayerAction)
         currentClipId = null
+        val closingStream = currentPlayingStream() ?: currentStream
+        if (closingStream != null && !closingStream.channelLogin.isNullOrBlank()) {
+            previousWatchedStream = closingStream
+        }
         currentStream = null
         currentStreamLogin = null
         neighborJob?.cancel()

@@ -1350,4 +1350,6 @@
     <string name="tv_backup_perm_grant">允许文件访问</string>
     <string name="tv_backup_perm_continue_anyway">不授权继续</string>
     <string name="tv_backup_save_failed">无法保存备份文件</string>
+    <string name="tv_remote_action_last_stream">上次观看的直播</string>
+    <string name="tv_no_last_stream">暂无上一个观看的直播</string>
 </resources>
