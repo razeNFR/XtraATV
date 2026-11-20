@@ -1337,4 +1337,12 @@
     <string name="tv_follow_rejected_verification">Twitch 拒绝了此次关注（该频道可能需要在 Twitch 上验证手机号或电子邮箱）</string>
     <string name="tv_chat_predictions_30s">开启（显示 30 秒）</string>
     <string name="tv_chat_predictions_full">开启（投票期间全程显示）</string>
+    <string name="tv_dpad_back_long">返回（长按）</string>
+    <string name="tv_remote_action_none">无（已禁用）</string>
+    <string name="tv_remote_action_open_mini">打开迷你播放器</string>
+    <string name="tv_remote_action_open_mini_default">打开迷你播放器（默认）</string>
+    <string name="tv_remote_action_cycle_chat_mode">切换聊天显示模式</string>
+    <string name="tv_remote_action_stop_stream">停止直播</string>
+    <string name="tv_osd_chat_shown">已显示聊天</string>
+    <string name="tv_osd_chat_hidden">已隐藏聊天</string>
 </resources>

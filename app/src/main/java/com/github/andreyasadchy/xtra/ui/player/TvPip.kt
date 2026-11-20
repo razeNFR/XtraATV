@@ -856,6 +856,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
     private var backDown = false
 
+    fun isSelectorOpen(): Boolean = isShown && selectorActive && activeCount >= 2
+
     fun onKey(event: KeyEvent): Boolean {
         if (!isShown) {
             backDown = false

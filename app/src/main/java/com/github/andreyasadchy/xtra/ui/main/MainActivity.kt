@@ -309,6 +309,7 @@ class MainActivity : AppCompatActivity() {
                 } else if (newFocus.isInside(binding.navHostFragment)) {
                     hideTvMenu()
                 }
+                scheduleTvMiniPlayerDodgeCheck(followScrollMs = 260L)
             }
         }
         if (isTv) {
@@ -1166,6 +1167,156 @@ class MainActivity : AppCompatActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
+    private var tvBackLongDownSeen = false
+    private val tvDodgeTempRect = android.graphics.Rect()
+    private var tvDodgeFollowUntilElapsed = 0L
+    private val tvDodgeCheckRunnable = object : Runnable {
+        override fun run() {
+            if (isFinishing || isDestroyed || !::binding.isInitialized) return
+            val player = playerFragment as? PlayerFragment
+            if (player == null || !player.isTvMiniPlayerVisible()) {
+                tvDodgeFollowUntilElapsed = 0L
+                return
+            }
+            player.updateTvMinimizedDodge(resolveCurrentFocusedRect(tvDodgeTempRect))
+            if (android.os.SystemClock.elapsedRealtime() < tvDodgeFollowUntilElapsed) {
+                binding.root.postDelayed(this, 85L)
+            }
+        }
+    }
+
+    fun scheduleTvMiniPlayerDodgeCheck(followScrollMs: Long = 0L) {
+        if (!isTv || isFinishing || isDestroyed || !::binding.isInitialized) return
+        val player = playerFragment as? PlayerFragment
+        if (player == null || !player.isTvMiniPlayerVisible()) return
+        if (followScrollMs > 0L) {
+            val until = android.os.SystemClock.elapsedRealtime() + followScrollMs
+            if (until > tvDodgeFollowUntilElapsed) {
+                tvDodgeFollowUntilElapsed = until
+            }
+        }
+        binding.root.removeCallbacks(tvDodgeCheckRunnable)
+        binding.root.postDelayed(tvDodgeCheckRunnable, 40L)
+    }
+
+    fun resolveCurrentFocusedRect(outRect: android.graphics.Rect = android.graphics.Rect()): android.graphics.Rect? {
+        if (!::binding.isInitialized) return null
+        val root = binding.root
+        if (root.width <= 0 || root.height <= 0) return null
+        val focused = root.findFocus() ?: return null
+        if (!focused.isShown || focused.width <= 0 || focused.height <= 0 || focused.isInside(binding.playerContainer)) {
+            return null
+        }
+        val local = android.graphics.Rect()
+        focused.getFocusedRect(local)
+        if (local.isEmpty) return null
+        val loc = IntArray(2)
+        val rootLoc = IntArray(2)
+        focused.getLocationInWindow(loc)
+        root.getLocationInWindow(rootLoc)
+        outRect.set(
+            local.left + loc[0] - rootLoc[0],
+            local.top + loc[1] - rootLoc[1],
+            local.right + loc[0] - rootLoc[0],
+            local.bottom + loc[1] - rootLoc[1],
+        )
+        if (outRect.width() >= root.width * 0.92f && outRect.height() >= root.height * 0.82f) {
+            return null
+        }
+        if (!outRect.intersect(0, 0, root.width, root.height)) {
+            return null
+        }
+        return outRect
+    }
+
+    private fun resolveApplicableTvBackLongAction(): String? {
+        if (!isTv || tvMultiStreamShown || hasOpenDialogFragment()) return null
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        val raw = Keys.backLongAction(this)
+        if (raw == Keys.ACTION_DEFAULT) return null
+        val player = (playerFragment as? PlayerFragment)?.takeIf { !it.isRemoving && !it.isDetached } ?: return null
+        return if (player.isMaximizedPlayer()) {
+            if (!player.canRunHiddenHudRemoteShortcuts()) return null
+            val effective = player.effectiveRemoteAction(raw)
+            effective.takeIf { it != Keys.ACTION_DEFAULT && it != Keys.ACTION_OPEN_MINI_PLAYER }
+        } else {
+            raw.takeIf { player.getTvNowPlaying() != null && Keys.isBackgroundCapableAction(it) }
+        }
+    }
+
+    private fun performShortTvBack() {
+        val player = playerFragment as? PlayerFragment
+        if (isTvPipOpen() && isPlayerFocusedWithoutControls()) {
+            closeLatestTvPip()
+            return
+        }
+        if (isTvMenuShown && !tvMenuOpenedByBack &&
+            prefs.getBoolean(C.TV_BACK_CLOSES_MENU, true) && !tvMultiStreamShown &&
+            player?.isMaximizedPlayer() != true
+        ) {
+            closeTvMenuAndFocusContent()
+            return
+        }
+        if (!isTvMenuShown && isBrowsingRoot() && !tvGridBackCallback.isEnabled) {
+            val settingsFrag = if (::navController.isInitialized && navController.currentDestination?.id == R.id.tvSettingsFragment) {
+                currentTvSettings()
+            } else null
+            if (settingsFrag != null && settingsFrag.canHandleTvBackPress()) {
+                settingsFrag.handleTvBackPress()
+                return
+            }
+            val onHome = ::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment
+            if (onHome && prefs.getBoolean(C.TV_CONFIRM_EXIT, true)) {
+                confirmOrExitTvApp()
+            } else {
+                tvMenuOpenedByBack = true
+                showTvMenu(true)
+            }
+            return
+        }
+        onBackPressedDispatcher.onBackPressed()
+    }
+
+    private fun dispatchTvBackLongKey(event: KeyEvent): Boolean {
+        if (event.keyCode != KeyEvent.KEYCODE_BACK) {
+            return false
+        }
+        val action = resolveApplicableTvBackLongAction()
+        if (action == null) {
+            tvBackLongDownSeen = false
+            return false
+        }
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount == 0) {
+                    tvBackLongDownSeen = true
+                } else if (tvBackLongDownSeen && (event.repeatCount >= 1 || event.isLongPress)) {
+                    tvBackLongDownSeen = false
+                    PlayerFragment.markHeldRemoteKey(KeyEvent.KEYCODE_BACK)
+                    val player = playerFragment as? PlayerFragment
+                    if (player != null) {
+                        if (player.isMaximizedPlayer()) {
+                            player.executeTvRemoteAction(action)
+                        } else {
+                            player.executeTvBackgroundRemoteAction(action)
+                        }
+                    }
+                }
+            }
+            KeyEvent.ACTION_UP -> {
+                val wasShort = tvBackLongDownSeen
+                tvBackLongDownSeen = false
+                if (wasShort && !event.isCanceled) {
+                    performShortTvBack()
+                }
+            }
+            else -> {
+                tvBackLongDownSeen = false
+            }
+        }
+        return true
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             lastTvKeyCode = event.keyCode
@@ -1173,6 +1324,13 @@ class MainActivity : AppCompatActivity() {
             lastUserInteractionAt = lastTvKeyAt
             if (event.keyCode != KeyEvent.KEYCODE_BACK) {
                 lastExitBackAt = 0L
+            }
+            if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                    event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                    event.keyCode == KeyEvent.KEYCODE_PAGE_UP || event.keyCode == KeyEvent.KEYCODE_PAGE_DOWN ||
+                    event.keyCode == KeyEvent.KEYCODE_BACK)
+            ) {
+                scheduleTvMiniPlayerDodgeCheck(followScrollMs = 340L)
             }
         }
         if (isTv && PlayerFragment.consumeHeldRemoteKeyTail(event)) {
@@ -1185,6 +1343,12 @@ class MainActivity : AppCompatActivity() {
             return true
         }
         if (isTv && !dispatchingPlayerKey && tvLiveAlerts.onKey(event)) {
+            return true
+        }
+        if (isTv && !dispatchingPlayerKey && tvPip.isSelectorOpen() && tvPip.onKey(event)) {
+            return true
+        }
+        if (isTv && !dispatchingPlayerKey && dispatchTvBackLongKey(event)) {
             return true
         }
         if (isTv && !dispatchingPlayerKey && tvPip.onKey(event)) {
@@ -3468,7 +3632,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun stopTvPlayback() {
+    fun reopenTvMiniPlayer() {
+        val player = (playerFragment as? PlayerFragment)?.takeIf { !it.isRemoving && !it.isDetached } ?: return
+        if (player.isMaximizedPlayer()) return
+        hideTvMenu()
+        player.maximize()
+    }
+
+    fun stopTvPlayback() {
         (playerFragment as? PlayerFragment)?.let {
             it.close()
             closePlayer()

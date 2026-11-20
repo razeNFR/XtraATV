@@ -37,6 +37,7 @@ import android.view.ViewPropertyAnimator
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -1606,13 +1607,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 fragment.onChatShown()
             }
         }
-        Toast.makeText(ctx, R.string.tv_chat_restarted, Toast.LENGTH_SHORT).show()
+        showTvPlayerOsd(getString(R.string.tv_chat_restarted), R.drawable.tv_ic_refresh)
     }
 
     fun restartTvPlayer() {
-        val ctx = context ?: return
+        if (context == null) return
         restartPlayer()
-        Toast.makeText(ctx, R.string.tv_player_restarted, Toast.LENGTH_SHORT).show()
+        showTvPlayerOsd(getString(R.string.tv_player_restarted), R.drawable.tv_ic_refresh)
     }
 
     private fun initLayout() {
@@ -3023,13 +3024,45 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private fun tvChatModePosKey(mode: Int): String = when (mode) {
+        1 -> C.TV_CHAT_POS_SIDE
+        2 -> C.TV_CHAT_POS_BAND
+        else -> C.TV_CHAT_POS_OVERLAY
+    }
+
+    private fun getTvChatPosForMode(prefs: android.content.SharedPreferences, mode: Int): Int = when (mode) {
+        1 -> if (prefs.contains(C.TV_CHAT_POS_SIDE)) {
+            prefs.getInt(C.TV_CHAT_POS_SIDE, 0)
+        } else {
+            val raw = prefs.getInt(C.TV_CHAT_POSITION, 0)
+            if (raw == 2 || raw == 3 || raw == 5) 2 else 0
+        }
+        2 -> if (prefs.contains(C.TV_CHAT_POS_BAND)) {
+            prefs.getInt(C.TV_CHAT_POS_BAND, 0)
+        } else {
+            0
+        }
+        else -> if (prefs.contains(C.TV_CHAT_POS_OVERLAY)) {
+            prefs.getInt(C.TV_CHAT_POS_OVERLAY, 0).coerceIn(0, 7)
+        } else {
+            prefs.getInt(C.TV_CHAT_POSITION, 0).coerceIn(0, 7)
+        }
+    }
+
+    private fun saveTvChatPosForMode(prefs: android.content.SharedPreferences, mode: Int, pos: Int) {
+        prefs.edit {
+            putInt(tvChatModePosKey(mode), pos)
+            putInt(C.TV_CHAT_POSITION, pos)
+        }
+    }
+
     /** TV chat overlay: size, corner and transparency from the chat layout panel, flush with the screen edges by default. */
     private fun applyTvChatLayout() {
         with(binding) {
             val prefs = requireContext().prefs()
             val metrics = resources.displayMetrics
-            val position = prefs.getInt(C.TV_CHAT_POSITION, 0)
             val mode = prefs.getInt(C.TV_CHAT_MODE, 0)
+            val position = getTvChatPosForMode(prefs, mode)
             val margin = if (mode == 0) (prefs.getInt(C.TV_CHAT_MARGIN, 0) * metrics.density).toInt() else 0
             val screenWidth = root.width.takeIf { it > 0 } ?: metrics.widthPixels
             val screenHeight = root.height.takeIf { it > 0 } ?: metrics.heightPixels
@@ -3127,15 +3160,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_rounded)
             chatLayout.background?.mutate()?.alpha = (prefs.getInt(C.TV_CHAT_OPACITY, 55) * 255 / 100).coerceIn(0, 255)
             chatLayout.clipToOutline = margin != 0
+            syncTvOsdLift(animate = false)
         }
     }
 
     /** The chat goes up over the controls only when it is at the bottom of the screen. */
     private fun getTvChatLift(): Float {
-        val position = requireContext().prefs().getInt(C.TV_CHAT_POSITION, 0)
-        val mode = requireContext().prefs().getInt(C.TV_CHAT_MODE, 0)
+        val prefs = requireContext().prefs()
+        val mode = prefs.getInt(C.TV_CHAT_MODE, 0)
+        val position = getTvChatPosForMode(prefs, mode)
         // the band at the bottom over the stream: it goes up over the controls while they are shown
-        if (mode == 2 && requireContext().prefs().getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) {
+        if (mode == 2 && prefs.getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) {
             val top = position == 1 || position == 3 || position == 6
             return if (top) 0f else -resources.getDimension(R.dimen.tv_chat_lift)
         }
@@ -3171,8 +3206,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             getString(R.string.tv_chat_mode_below),
         )
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(context) { dismiss ->
-            val position = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_POSITION, 0)) }
-            val mode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_MODE, 0)) }
+            val initialMode = prefs.getInt(C.TV_CHAT_MODE, 0)
+            val mode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(initialMode) }
+            val position = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(getTvChatPosForMode(prefs, initialMode)) }
             val left = position.intValue == 2 || position.intValue == 3 || position.intValue == 5
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_chat_layout),
@@ -3180,35 +3216,44 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 alignEnd = left && mode.intValue != 2,
             ) {
                 val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
-                val update: (String, Int) -> Unit = { key, value ->
-                    prefs.edit { putInt(key, value) }
+                val updatePosition: (Int) -> Unit = { newPos ->
+                    position.intValue = newPos
+                    saveTvChatPosForMode(prefs, mode.intValue, newPos)
                     if (_binding != null) {
                         applyTvChatLayout()
                     }
                 }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_mode), modes, mode.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) {
-                    mode.intValue = it
-                    update(C.TV_CHAT_MODE, it)
+                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_mode), modes, mode.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) { newMode ->
+                    if (!prefs.contains(tvChatModePosKey(mode.intValue))) {
+                        saveTvChatPosForMode(prefs, mode.intValue, position.intValue)
+                    }
+                    mode.intValue = newMode
+                    val nextPos = getTvChatPosForMode(prefs, newMode)
+                    position.intValue = nextPos
+                    prefs.edit {
+                        putInt(C.TV_CHAT_MODE, newMode)
+                        putInt(C.TV_CHAT_POSITION, nextPos)
+                    }
+                    if (_binding != null) {
+                        applyTvChatLayout()
+                    }
                 }
                 androidx.compose.runtime.key(mode.intValue) {
                     when (mode.intValue) {
                         1 -> {
                             com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), sides, if (left) 1 else 0) {
-                                position.intValue = if (it == 1) 2 else 0
-                                update(C.TV_CHAT_POSITION, position.intValue)
+                                updatePosition(if (it == 1) 2 else 0)
                             }
                         }
                         2 -> {
                             val top = position.intValue == 1 || position.intValue == 3 || position.intValue == 6
                             com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), bands, if (top) 1 else 0) {
-                                position.intValue = if (it == 1) 1 else 0
-                                update(C.TV_CHAT_POSITION, position.intValue)
+                                updatePosition(if (it == 1) 1 else 0)
                             }
                         }
                         else -> {
                             com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), corners, position.intValue.coerceIn(0, corners.lastIndex)) {
-                                position.intValue = it
-                                update(C.TV_CHAT_POSITION, it)
+                                updatePosition(it)
                             }
                         }
                     }
@@ -3409,6 +3454,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_reset)) {
                     prefs.edit {
                         remove(C.TV_CHAT_POSITION)
+                        remove(C.TV_CHAT_POS_OVERLAY)
+                        remove(C.TV_CHAT_POS_SIDE)
+                        remove(C.TV_CHAT_POS_BAND)
                         remove(C.TV_CHAT_WIDTH)
                         remove(C.TV_CHAT_HEIGHT)
                         remove(C.TV_CHAT_MARGIN)
@@ -3929,6 +3977,261 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         )
     }
 
+    private val tvFastOutSlowIn = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+    private var tvOsdContainer: LinearLayout? = null
+    private var tvOsdIcon: ImageView? = null
+    private var tvOsdText: TextView? = null
+    private val tvOsdHideRunnable = Runnable { hideTvPlayerOsd(animate = true) }
+
+    private fun computeTvOsdTargetTranslationY(hudLiftOverride: Boolean? = null): Float {
+        val b = _binding ?: return 0f
+        val density = resources.displayMetrics.density
+        val overscanBottom = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical).toFloat()
+        val hudVisible = b.playerControls.root.isVisible && !controllerHiding
+        val fullHudActive = hudLiftOverride ?: (hudVisible && !hudPeek)
+        var shift = when {
+            fullHudActive -> {
+                val bottomHudView = b.playerControls.streamInfoLayout?.parent as? View
+                val hudBlockH = bottomHudView?.height?.takeIf { it > 0 }?.toFloat() ?: (116f * density)
+                hudBlockH + 14f * density
+            }
+            hudVisible && hudPeek -> 38f * density
+            else -> 0f
+        }
+        val prefs = context?.prefs()
+        if (prefs != null && isChatOpen && prefs.getInt(C.TV_CHAT_MODE, 0) == 2 && prefs.getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) {
+            val pos = getTvChatPosForMode(prefs, 2)
+            val top = pos == 1 || pos == 3 || pos == 6
+            if (!top) {
+                val bandH = b.chatLayout.height.takeIf { it > 0 }?.toFloat() ?: 0f
+                if (bandH > 0f) {
+                    val chatLift = if (fullHudActive) resources.getDimension(R.dimen.tv_chat_lift) else 0f
+                    val needed = (bandH + chatLift - overscanBottom + 12f * density).coerceAtLeast(0f)
+                    if (needed > shift) {
+                        shift = needed
+                    }
+                }
+            }
+        }
+        return -shift
+    }
+
+    private fun ensureTvOsdView(): LinearLayout? {
+        val b = _binding ?: return null
+        val ctx = context ?: return null
+        val density = resources.displayMetrics.density
+        val existing = tvOsdContainer
+        val borderColor = if (com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null) {
+            androidx.core.graphics.ColorUtils.setAlphaComponent(com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark, 0x59)
+        } else {
+            0x38FFFFFF
+        }
+        val iconTint = if (com.github.andreyasadchy.xtra.ui.tv.TvAccent.current != null) {
+            com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
+        } else {
+            Color.WHITE
+        }
+        if (existing != null && existing.parent === b.playerLayout) {
+            (existing.background as? android.graphics.drawable.GradientDrawable)?.setStroke(
+                (1f * density).toInt().coerceAtLeast(1),
+                borderColor,
+            )
+            tvOsdIcon?.imageTintList = android.content.res.ColorStateList.valueOf(iconTint)
+            return existing
+        }
+        existing?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        val bg = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+            cornerRadius = 999f * density
+            setColor(0xEB18181B.toInt())
+            setStroke((1f * density).toInt().coerceAtLeast(1), borderColor)
+        }
+        val iconView = ImageView(ctx).apply {
+            val size = (18f * density).toInt()
+            layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                marginEnd = (8f * density).toInt()
+            }
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            imageTintList = android.content.res.ColorStateList.valueOf(iconTint)
+            visibility = View.GONE
+        }
+        val textView = TextView(ctx).apply {
+            setTextColor(Color.WHITE)
+            textSize = 14.5f
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            maxWidth = (640f * density).toInt()
+        }
+        val container = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = bg
+            isFocusable = false
+            isClickable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            elevation = 14f * density
+            val padH = (18f * density).toInt()
+            val padV = (10f * density).toInt()
+            setPadding(padH, padV, padH, padV)
+            visibility = View.GONE
+            addView(iconView)
+            addView(textView)
+        }
+        val lp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL,
+        ).apply {
+            bottomMargin = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+        }
+        b.playerLayout.addView(container, lp)
+        tvOsdContainer = container
+        tvOsdIcon = iconView
+        tvOsdText = textView
+        return container
+    }
+
+    private fun syncTvOsdLift(animate: Boolean, hudLiftOverride: Boolean? = null) {
+        val osd = tvOsdContainer ?: return
+        if (!osd.isVisible || _binding == null) return
+        val targetTy = computeTvOsdTargetTranslationY(hudLiftOverride)
+        if (animate) {
+            osd.animate()
+                .translationY(targetTy)
+                .setDuration(200L)
+                .setInterpolator(tvFastOutSlowIn)
+                .withEndAction(null)
+                .start()
+        } else {
+            osd.animate().cancel()
+            osd.translationY = targetTy
+        }
+    }
+
+    private fun hideTvPlayerOsd(animate: Boolean = false) {
+        val osd = tvOsdContainer ?: return
+        osd.removeCallbacks(tvOsdHideRunnable)
+        osd.animate().cancel()
+        if (!animate || !osd.isVisible) {
+            osd.visibility = View.GONE
+            osd.alpha = 0f
+            return
+        }
+        osd.animate()
+            .alpha(0f)
+            .scaleX(0.97f)
+            .scaleY(0.97f)
+            .setDuration(160L)
+            .setInterpolator(tvFastOutSlowIn)
+            .withEndAction {
+                if (tvOsdContainer === osd) {
+                    osd.visibility = View.GONE
+                }
+            }
+            .start()
+    }
+
+    fun showTvPlayerOsd(message: String, iconRes: Int? = null) {
+        val ctx = context ?: return
+        if (!isTv || !isMaximized || _binding == null) {
+            Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val osd = ensureTvOsdView() ?: return
+        val density = resources.displayMetrics.density
+        tvOsdIcon?.let { icon ->
+            if (iconRes != null) {
+                icon.setImageResource(iconRes)
+                icon.visibility = View.VISIBLE
+            } else {
+                icon.visibility = View.GONE
+            }
+        }
+        tvOsdText?.text = message
+        osd.removeCallbacks(tvOsdHideRunnable)
+        val targetTy = computeTvOsdTargetTranslationY()
+        if (!osd.isVisible) {
+            osd.animate().cancel()
+            osd.visibility = View.VISIBLE
+            osd.alpha = 0f
+            osd.scaleX = 0.96f
+            osd.scaleY = 0.96f
+            osd.translationY = targetTy + 10f * density
+            osd.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .translationY(targetTy)
+                .setDuration(170L)
+                .setInterpolator(tvFastOutSlowIn)
+                .withEndAction(null)
+                .start()
+        } else {
+            osd.animate().cancel()
+            osd.alpha = 1f
+            osd.scaleX = 0.98f
+            osd.scaleY = 0.98f
+            osd.animate()
+                .scaleX(1f)
+                .scaleY(1f)
+                .translationY(targetTy)
+                .setDuration(130L)
+                .setInterpolator(tvFastOutSlowIn)
+                .withEndAction(null)
+                .start()
+        }
+        osd.postDelayed(tvOsdHideRunnable, 1800L)
+    }
+
+    private fun tvChatModeLabel(mode: Int): String = when (mode) {
+        1 -> getString(R.string.tv_chat_mode_side)
+        2 -> getString(R.string.tv_chat_mode_below)
+        else -> getString(R.string.tv_chat_mode_overlay)
+    }
+
+    private fun tvChatPositionLabel(mode: Int, pos: Int): String = when (mode) {
+        1 -> if (pos == 2 || pos == 3 || pos == 5) getString(R.string.tv_chat_left) else getString(R.string.tv_chat_right)
+        2 -> if (pos == 1 || pos == 3 || pos == 6) getString(R.string.tv_chat_above) else getString(R.string.tv_chat_under)
+        else -> when (pos) {
+            1 -> getString(R.string.tv_chat_top_right)
+            2 -> getString(R.string.tv_chat_bottom_left)
+            3 -> getString(R.string.tv_chat_top_left)
+            4 -> getString(R.string.tv_chat_middle_right)
+            5 -> getString(R.string.tv_chat_middle_left)
+            6 -> getString(R.string.tv_chat_middle_top)
+            7 -> getString(R.string.tv_chat_middle_bottom)
+            else -> getString(R.string.tv_chat_bottom_right)
+        }
+    }
+
+    private fun cycleTvChatMode() {
+        val ctx = context ?: return
+        val prefs = ctx.prefs()
+        if (prefs.getBoolean(C.CHAT_DISABLE, false) || playbackService?.type == BasePlaybackService.OFFLINE_VIDEO) {
+            return
+        }
+        val curMode = prefs.getInt(C.TV_CHAT_MODE, 0).coerceIn(0, 2)
+        if (!isChatOpen) {
+            showChat()
+            showTvPlayerOsd("${getString(R.string.tv_chat_mode)} : ${tvChatModeLabel(curMode)}", R.drawable.tv_ic_chat_layout)
+            return
+        }
+        if (!prefs.contains(tvChatModePosKey(curMode))) {
+            saveTvChatPosForMode(prefs, curMode, getTvChatPosForMode(prefs, curMode))
+        }
+        val nextMode = (curMode + 1) % 3
+        val nextPos = getTvChatPosForMode(prefs, nextMode)
+        prefs.edit {
+            putInt(C.TV_CHAT_MODE, nextMode)
+            putInt(C.TV_CHAT_POSITION, nextPos)
+        }
+        if (_binding != null) {
+            applyTvChatLayout()
+        }
+        showTvPlayerOsd("${getString(R.string.tv_chat_mode)} : ${tvChatModeLabel(nextMode)}", R.drawable.tv_ic_chat_layout)
+    }
+
     private fun cycleTvChatPosition(delta: Int) {
         val ctx = context ?: return
         val prefs = ctx.prefs()
@@ -3937,10 +4240,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         if (!isChatOpen) {
             showChat()
+            showTvPlayerOsd(getString(R.string.tv_osd_chat_shown), R.drawable.tv_ic_chat)
             return
         }
         val mode = prefs.getInt(C.TV_CHAT_MODE, 0)
-        val pos = prefs.getInt(C.TV_CHAT_POSITION, 0)
+        val pos = getTvChatPosForMode(prefs, mode)
         val next = when (mode) {
             1 -> if (pos == 2 || pos == 3 || pos == 5) 0 else 2
             2 -> if (pos == 1 || pos == 3 || pos == 6) 0 else 1
@@ -3951,13 +4255,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (idx >= 0) ring[(idx + delta + ring.size) % ring.size] else 0
             }
         }
-        prefs.edit { putInt(C.TV_CHAT_POSITION, next) }
+        saveTvChatPosForMode(prefs, mode, next)
         if (_binding != null) {
             applyTvChatLayout()
         }
+        showTvPlayerOsd("${getString(R.string.tv_chat_position)} : ${tvChatPositionLabel(mode, next)}", R.drawable.tv_ic_chat_layout)
     }
 
-    private fun togglePlayerMute() {
+    fun togglePlayerMute() {
         val ctx = context ?: return
         val prefs = ctx.prefs()
         val current = ((getCurrentVolume() ?: 1f) * 100).toInt()
@@ -3965,12 +4270,54 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             unmutedVolume = current
             prefs.edit { putInt(C.PLAYER_VOLUME, 0) }
             changeVolume(0f)
-            Toast.makeText(ctx, R.string.tv_muted, Toast.LENGTH_SHORT).show()
+            showTvPlayerOsd(getString(R.string.tv_muted), R.drawable.tv_ic_volume)
         } else {
             val restored = unmutedVolume.takeIf { it > 0 } ?: 100
             prefs.edit { putInt(C.PLAYER_VOLUME, restored) }
             changeVolume(restored / 100f)
-            Toast.makeText(ctx, getString(R.string.tv_unmuted, restored), Toast.LENGTH_SHORT).show()
+            showTvPlayerOsd(getString(R.string.tv_unmuted, restored), R.drawable.tv_ic_volume)
+        }
+    }
+
+    fun canRunHiddenHudRemoteShortcuts(): Boolean {
+        if (!isTv || !isMaximized || isRemoving || _binding == null || !useController) {
+            return false
+        }
+        if (binding.chatLayout.hasFocus() || tvStreamEndNextTarget != null || tvScrubPosition >= 0L) {
+            return false
+        }
+        return !binding.playerControls.root.isVisible || hudPeek
+    }
+
+    fun effectiveRemoteAction(action: String): String =
+        effectiveDpadAction(action, (activity as? MainActivity)?.isTvPipOpen() == true)
+
+    fun executeTvBackgroundRemoteAction(action: String): Boolean {
+        if (!isTv || isMaximized || isRemoving || playbackService == null) {
+            return false
+        }
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        return when (action) {
+            Keys.ACTION_OPEN_MINI_PLAYER -> {
+                (activity as? MainActivity)?.reopenTvMiniPlayer()
+                true
+            }
+            Keys.ACTION_STOP_STREAM -> {
+                (activity as? MainActivity)?.stopTvPlayback() ?: run {
+                    close()
+                    (activity as? MainActivity)?.closePlayer()
+                }
+                true
+            }
+            Keys.ACTION_MUTE -> {
+                togglePlayerMute()
+                true
+            }
+            Keys.ACTION_PLAY_PAUSE -> {
+                playPause()
+                true
+            }
+            else -> false
         }
     }
 
@@ -3981,6 +4328,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             hideController()
         }
         when (action) {
+            Keys.ACTION_OPEN_MINI_PLAYER -> {
+                if (!isMaximized) {
+                    (activity as? MainActivity)?.reopenTvMiniPlayer()
+                } else {
+                    return false
+                }
+            }
+            Keys.ACTION_STOP_STREAM -> {
+                (activity as? MainActivity)?.stopTvPlayback() ?: run {
+                    close()
+                    (activity as? MainActivity)?.closePlayer()
+                }
+            }
             Keys.ACTION_SWITCH_PREV, Keys.ACTION_SWITCH_NEXT -> {
                 val delta = if (action == Keys.ACTION_SWITCH_NEXT) 1 else -1
                 val main = activity as? MainActivity
@@ -3993,11 +4353,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     openHudFromDpad()
                 }
             }
+            Keys.ACTION_CYCLE_CHAT_MODE -> cycleTvChatMode()
             Keys.ACTION_CYCLE_CHAT_NEXT -> cycleTvChatPosition(1)
             Keys.ACTION_CYCLE_CHAT_PREV -> cycleTvChatPosition(-1)
             Keys.ACTION_TOGGLE_CHAT -> {
                 if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
-                    if (isChatOpen) hideChat() else showChat()
+                    if (isChatOpen) {
+                        hideChat()
+                        showTvPlayerOsd(getString(R.string.tv_osd_chat_hidden), R.drawable.tv_ic_chat)
+                    } else {
+                        showChat()
+                        showTvPlayerOsd(getString(R.string.tv_osd_chat_shown), R.drawable.tv_ic_chat)
+                    }
                 }
             }
             Keys.ACTION_CHAT_PANEL -> {
@@ -4213,25 +4580,47 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var customKeyDownSeen = 0
 
     fun dispatchCustomRemoteKey(event: KeyEvent): Boolean {
-        if (!isTv || !isMaximized || _binding == null || binding.chatLayout.hasFocus()) {
+        if (!isTv || isRemoving || _binding == null) {
             return false
         }
-        val ctx = requireContext()
+        val ctx = context ?: return false
         val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
-        val pipOpen = (activity as? MainActivity)?.isTvPipOpen() == true
+        if (isMaximized && binding.chatLayout.hasFocus()) {
+            return false
+        }
+        val pipOpen = isMaximized && (activity as? MainActivity)?.isTvPipOpen() == true
         val rawShort = Keys.customShortActionForKey(ctx, event.keyCode)
         val rawLong = Keys.customLongActionForKey(ctx, event.keyCode)
         if (rawShort == null && rawLong == null) {
             return false
         }
-        val shortAction = rawShort?.takeUnless { !pipOpen && Keys.isPipOnlyAction(it) }
-        val longAction = rawLong?.takeUnless { !pipOpen && Keys.isPipOnlyAction(it) }
+        val shortAction = rawShort?.takeIf { act ->
+            if (isMaximized) {
+                act != Keys.ACTION_OPEN_MINI_PLAYER && (pipOpen || !Keys.isPipOnlyAction(act))
+            } else {
+                playbackService != null && Keys.isBackgroundCapableAction(act)
+            }
+        }
+        val longAction = rawLong?.takeIf { act ->
+            if (isMaximized) {
+                act != Keys.ACTION_OPEN_MINI_PLAYER && (pipOpen || !Keys.isPipOnlyAction(act))
+            } else {
+                playbackService != null && Keys.isBackgroundCapableAction(act)
+            }
+        }
         if (shortAction == null && longAction == null) {
             return false
         }
+        fun runAction(act: String) {
+            if (isMaximized) {
+                executeTvRemoteAction(act)
+            } else {
+                executeTvBackgroundRemoteAction(act)
+            }
+        }
         if (longAction == null) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && shortAction != null) {
-                executeTvRemoteAction(shortAction)
+                runAction(shortAction)
             }
             return true
         }
@@ -4242,14 +4631,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 } else if (customKeyDownSeen == event.keyCode && heldLongKeyCode != event.keyCode && (event.repeatCount >= 1 || event.isLongPress)) {
                     heldLongKeyCode = event.keyCode
                     customKeyDownSeen = 0
-                    executeTvRemoteAction(longAction)
+                    runAction(longAction)
                 }
             }
             KeyEvent.ACTION_UP -> {
                 val wasDownSeen = customKeyDownSeen == event.keyCode
                 customKeyDownSeen = 0
                 if (wasDownSeen && heldLongKeyCode != event.keyCode && !event.isCanceled && shortAction != null) {
-                    executeTvRemoteAction(shortAction)
+                    runAction(shortAction)
                 }
                 if (heldLongKeyCode == event.keyCode) {
                     heldLongKeyCode = 0
@@ -4282,6 +4671,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         with(binding) {
             if (chatLayout.isVisible) {
                 chatLayout.animate().translationY(if (lift) getTvChatLift() else 0f).setDuration(200L).start()
+            }
+            syncTvOsdLift(animate = true, hudLiftOverride = lift)
+            if (lift && (playerControls.streamInfoLayout?.parent as? View)?.height == 0) {
+                playerControls.root.post {
+                    if (_binding != null && playerControls.root.isVisible && !controllerHiding && !hudPeek) {
+                        syncTvOsdLift(animate = true, hudLiftOverride = true)
+                    }
+                }
             }
             if (visible) {
                 syncPlayPauseButtonVisibility()
@@ -6471,6 +6868,92 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private var tvAudioOnly = false
+    private var tvMinimizedDodgedTop = false
+    private var tvMinimizedDodgeAnimator: android.animation.ObjectAnimator? = null
+
+    fun isTvMiniPlayerVisible(): Boolean =
+        isTv && !isMaximized && !tvAudioOnly && !isRemoving && _binding != null && binding.slidingLayout.isVisible
+
+    private fun cancelTvMinimizedDodgeAnimator() {
+        tvMinimizedDodgeAnimator?.cancel()
+        tvMinimizedDodgeAnimator = null
+    }
+
+    private fun computeTvMinimizedTargetTy(dodgedTop: Boolean): Float {
+        val b = _binding ?: return 0f
+        val (_, minimizedScaleY) = getScaleValues()
+        val h = b.slidingLayout.height
+        val scaledYDiff = (h * (1f - minimizedScaleY)) / 2f
+        val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
+        val newY = if (dodgedTop) {
+            val overscanTop = resources.getDimension(R.dimen.tv_overscan_vertical)
+            maxOf(tvMargin, overscanTop)
+        } else {
+            h - (h * minimizedScaleY) - tvMargin
+        }
+        return -scaledYDiff + newY
+    }
+
+    private fun shouldDodgeTvMiniPlayer(focusedRectInRoot: android.graphics.Rect?, currentlyDodged: Boolean): Boolean {
+        val b = _binding ?: return false
+        val rect = focusedRectInRoot ?: return currentlyDodged
+        if (rect.isEmpty) return currentlyDodged
+        val w = b.slidingLayout.width
+        val h = b.slidingLayout.height
+        if (w <= 0 || h <= 0) return false
+        val (scaleX, scaleY) = getScaleValues()
+        val miniW = (w * scaleX).toInt()
+        val miniH = (h * scaleY).toInt()
+        val density = resources.displayMetrics.density
+        val margin = (18f * density).toInt()
+        val topMargin = maxOf(margin, resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical))
+        val miniLeft = w - miniW - margin
+        val miniRight = w - margin
+        val bottomTop = h - miniH - margin
+        val bottomBottom = h - margin
+        val pad = ((if (currentlyDodged) 34f else 14f) * density).toInt()
+        val checkLeft = miniLeft - pad
+        val checkRight = miniRight + pad
+        val checkTop = bottomTop - pad
+        val checkBottom = bottomBottom + pad
+        if (!android.graphics.Rect.intersects(rect, android.graphics.Rect(checkLeft, checkTop, checkRight, checkBottom))) {
+            return false
+        }
+        // Only dodge to top-right when moving up actually reduces overlap with the focused element
+        val bottomOverlapW = (minOf(rect.right, checkRight) - maxOf(rect.left, checkLeft)).coerceAtLeast(0)
+        val bottomOverlapH = (minOf(rect.bottom, checkBottom) - maxOf(rect.top, checkTop)).coerceAtLeast(0)
+        val bottomArea = bottomOverlapW.toLong() * bottomOverlapH.toLong()
+        val topLeft = miniLeft - pad
+        val topRight = miniRight + pad
+        val topTop = topMargin - pad
+        val topBottom = topMargin + miniH + pad
+        val topOverlapW = (minOf(rect.right, topRight) - maxOf(rect.left, topLeft)).coerceAtLeast(0)
+        val topOverlapH = (minOf(rect.bottom, topBottom) - maxOf(rect.top, topTop)).coerceAtLeast(0)
+        val topArea = topOverlapW.toLong() * topOverlapH.toLong()
+        return topArea < bottomArea
+    }
+
+    fun updateTvMinimizedDodge(focusedRectInRoot: android.graphics.Rect?) {
+        if (!isTvMiniPlayerVisible()) return
+        val b = binding
+        if (b.slidingLayout.width <= 0 || b.slidingLayout.height <= 0) return
+        val wantDodged = shouldDodgeTvMiniPlayer(focusedRectInRoot, tvMinimizedDodgedTop)
+        if (wantDodged == tvMinimizedDodgedTop) return
+        tvMinimizedDodgedTop = wantDodged
+        if (isAnimating) return
+        cancelTvMinimizedDodgeAnimator()
+        val targetTy = computeTvMinimizedTargetTy(wantDodged)
+        tvMinimizedDodgeAnimator = android.animation.ObjectAnimator.ofFloat(
+            b.slidingLayout,
+            View.TRANSLATION_Y,
+            b.slidingLayout.translationY,
+            targetTy,
+        ).apply {
+            duration = 240L
+            interpolator = tvFastOutSlowIn
+            start()
+        }
+    }
 
     /**
      * TV: leaving the app (Home, or Back on the first screen) keeps the sound of the mini player and of the sound only
@@ -6490,6 +6973,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** TV audio only: the mini player is hidden and the picture is not decoded, the sound goes on. */
     private fun setTvAudioOnly(enabled: Boolean) {
         tvAudioOnly = enabled
+        if (enabled) {
+            cancelTvMinimizedDodgeAnimator()
+            tvMinimizedDodgedTop = false
+        }
         _binding?.slidingLayout?.visibility = if (enabled) View.INVISIBLE else View.VISIBLE
         setVideoHidden(enabled)
         (activity as? MainActivity)?.updateTvNowPlaying()
@@ -6527,6 +7014,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun minimize() {
         with(binding) {
             isMaximized = false
+            cancelTvMinimizedDodgeAnimator()
+            hideTvPlayerOsd(animate = false)
             if (isTv) {
                 restoreTvOledProtection()
                 cancelTvStreamEndCountdown()
@@ -6561,9 +7050,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (isTv) {
                     val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
                     val newX = slidingLayout.width - (slidingLayout.width * minimizedScaleX) - tvMargin
-                    val newY = slidingLayout.height - (slidingLayout.height * minimizedScaleY) - tvMargin
                     targetTx = -scaledXDiff + newX
-                    targetTy = -scaledYDiff + newY
+                    val initialFocusRect = (activity as? MainActivity)?.resolveCurrentFocusedRect()
+                    tvMinimizedDodgedTop = if (!tvAudioOnly) shouldDodgeTvMiniPlayer(initialFocusRect, false) else false
+                    targetTy = computeTvMinimizedTargetTy(tvMinimizedDodgedTop)
                 } else {
                     val windowInsets = ViewCompat.getRootWindowInsets(requireView())
                     val insets = windowInsets?.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
@@ -6598,6 +7088,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 isAnimating = false
                                 setListener(null)
                                 activePointerId = -1
+                                if (isTvMiniPlayerVisible()) {
+                                    (activity as? MainActivity)?.scheduleTvMiniPlayerDodgeCheck()
+                                }
                             }
                         }
                     )
@@ -6627,6 +7120,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun maximize() {
         with(binding) {
             isMaximized = true
+            cancelTvMinimizedDodgeAnimator()
+            tvMinimizedDodgedTop = false
             if (isTv) {
                 applyTvMinimizedFrame(false)
                 dragView.isFocusable = true
@@ -7005,6 +7500,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvMinimizedBorderAnimator?.cancel()
         tvMinimizedBorderAnimator = null
         tvMinimizedBorderDrawable = null
+        cancelTvMinimizedDodgeAnimator()
+        tvMinimizedDodgedTop = false
+        tvOsdContainer?.removeCallbacks(tvOsdHideRunnable)
+        tvOsdContainer?.animate()?.cancel()
+        tvOsdContainer = null
+        tvOsdIcon = null
+        tvOsdText = null
         chatUnlockTimerJob?.cancel()
         chatUnlockTimerJob = null
         isTvChatLocked = null
@@ -7114,6 +7616,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private var lastControlLabel: String? = null
 
         private var heldLongKeyCode = 0
+
+        fun markHeldRemoteKey(keyCode: Int) {
+            heldLongKeyCode = keyCode
+        }
 
         /** Swallows trailing auto-repeat DOWN events and final UP event of a remote long-press across fragment switches. */
         fun consumeHeldRemoteKeyTail(event: KeyEvent): Boolean {
