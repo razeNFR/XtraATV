@@ -120,7 +120,7 @@ object TvQrShare {
         val gqlToken = TwitchApiHelper.getGQLHeaders(context, true)[C.HEADER_TOKEN]
         val helixToken = TwitchApiHelper.getHelixHeaders(context)[C.HEADER_TOKEN]
         if (gqlToken.isNullOrBlank() && helixToken.isNullOrBlank()) {
-            Toast.makeText(context, R.string.tv_clip_login_required, Toast.LENGTH_SHORT).show()
+            TvToast.makeText(context, R.string.tv_clip_login_required, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -142,7 +142,7 @@ object TvQrShare {
                 }
                 val bid = resolvedBroadcasterId?.takeIf { it.isNotBlank() }
                 if (bid == null) {
-                    Toast.makeText(
+                    TvToast.makeText(
                         context,
                         context.getString(R.string.tv_clip_failed, "BROADCASTER_NOT_FOUND"),
                         Toast.LENGTH_LONG,
@@ -163,7 +163,7 @@ object TvQrShare {
                 if (finalUrl != null) {
                     clipUrl = finalUrl
                 } else {
-                    Toast.makeText(
+                    TvToast.makeText(
                         context,
                         context.getString(R.string.tv_clip_failed, result.error ?: "ERROR"),
                         Toast.LENGTH_LONG,

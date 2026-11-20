@@ -181,7 +181,7 @@ class MultiStreamFragment : Fragment() {
                 return@launch
             }
             if (!originLive) {
-                android.widget.Toast.makeText(activity, getString(R.string.tv_multistream_origin_offline, origin.channelName ?: origin.channelLogin), android.widget.Toast.LENGTH_SHORT).show()
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, getString(R.string.tv_multistream_origin_offline, origin.channelName ?: origin.channelLogin), android.widget.Toast.LENGTH_SHORT).show()
             }
             activity.closeMultiStream()
             // the next choices if this one ends at once
@@ -574,7 +574,7 @@ class MultiStreamFragment : Fragment() {
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - tile.lastDecoderStepDownAt > 12_000L) {
             tile.lastDecoderStepDownAt = now
-            android.widget.Toast.makeText(
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                 ctx,
                 getString(R.string.tv_multistream_decoder_stepdown, tile.stream.channelName ?: login),
                 android.widget.Toast.LENGTH_SHORT,
@@ -847,10 +847,10 @@ class MultiStreamFragment : Fragment() {
                 ) {
                     if (saved) {
                         com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(requireContext(), groupId)
-                        android.widget.Toast.makeText(requireContext(), R.string.tv_multistream_group_removed, android.widget.Toast.LENGTH_SHORT).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_multistream_group_removed, android.widget.Toast.LENGTH_SHORT).show()
                     } else {
                         com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.save(requireContext(), currentStreams)
-                        android.widget.Toast.makeText(requireContext(), R.string.tv_multistream_group_saved, android.widget.Toast.LENGTH_SHORT).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_multistream_group_saved, android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -1089,7 +1089,7 @@ class MultiStreamFragment : Fragment() {
         val ctx = context ?: return
         val immediateLock = computeTileChatLockMessage(tile)
         if (immediateLock != null) {
-            android.widget.Toast.makeText(ctx, immediateLock, android.widget.Toast.LENGTH_SHORT).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(ctx, immediateLock, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
         val login = tile.stream.channelLogin ?: return
@@ -1106,7 +1106,7 @@ class MultiStreamFragment : Fragment() {
                 if (view == null || !isAdded || tile !in tiles) return@launch
                 val lockAfterCheck = computeTileChatLockMessage(tile)
                 if (lockAfterCheck != null) {
-                    android.widget.Toast.makeText(requireContext(), lockAfterCheck, android.widget.Toast.LENGTH_SHORT).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), lockAfterCheck, android.widget.Toast.LENGTH_SHORT).show()
                 } else {
                     showTileChatComposerDialog(tile)
                 }
@@ -1358,7 +1358,7 @@ class MultiStreamFragment : Fragment() {
                     }
                 } else null
                 if (!toastMsg.isNullOrBlank()) {
-                    android.widget.Toast.makeText(appCtx, toastMsg, android.widget.Toast.LENGTH_LONG).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(appCtx, toastMsg, android.widget.Toast.LENGTH_LONG).show()
                 }
             } catch (_: Exception) {
             }
@@ -1998,7 +1998,7 @@ class MultiStreamFragment : Fragment() {
             if (view == null || tile !in tiles || tile.stream.channelLogin != login || tile.player.isPlaying) {
                 return@launch
             }
-            android.widget.Toast.makeText(requireContext(), getString(R.string.tv_multistream_stream_ended, tile.stream.channelName ?: login), android.widget.Toast.LENGTH_LONG).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), getString(R.string.tv_multistream_stream_ended, tile.stream.channelName ?: login), android.widget.Toast.LENGTH_LONG).show()
             if (tiles.size > 2) {
                 removeTile(tile)
             } else {
@@ -2197,7 +2197,7 @@ class MultiStreamFragment : Fragment() {
                         tile.player.repeatMode = Player.REPEAT_MODE_OFF
                         tile.player.prepare()
                         tile.player.playWhenReady = true
-                        android.widget.Toast.makeText(ctx, R.string.tv_adblock_exp_switched, android.widget.Toast.LENGTH_SHORT).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(ctx, R.string.tv_adblock_exp_switched, android.widget.Toast.LENGTH_SHORT).show()
                     }
                     return@launch
                 }

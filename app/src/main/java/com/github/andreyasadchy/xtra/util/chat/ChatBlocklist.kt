@@ -605,7 +605,7 @@ object ChatBlocklist {
                                 blockedBadge = context.getString(R.string.chat_blocked_badge),
                             ) {
                                 val nowHighlighted = toggleHighlight(context, user.login, user.name)
-                                Toast.makeText(
+                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                                     context,
                                     context.getString(
                                         if (nowHighlighted) R.string.chat_user_highlighted else R.string.chat_user_unhighlighted,
@@ -631,7 +631,7 @@ object ChatBlocklist {
                                 blockedBadge = context.getString(R.string.chat_blocked_badge),
                             ) {
                                 val nowBlocked = toggle(context, user.login, user.name)
-                                Toast.makeText(
+                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                                     context,
                                     context.getString(
                                         if (nowBlocked) R.string.chat_user_blocked else R.string.chat_user_unblocked,
@@ -688,7 +688,7 @@ object ChatBlocklist {
             when (which) {
                 0 -> {
                     val nowHighlighted = toggleHighlight(context, user.login, user.name)
-                    Toast.makeText(
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                         context,
                         context.getString(
                             if (nowHighlighted) R.string.chat_user_highlighted else R.string.chat_user_unhighlighted,
@@ -699,7 +699,7 @@ object ChatBlocklist {
                 }
                 1 -> {
                     val nowBlocked = toggle(context, user.login, user.name)
-                    Toast.makeText(
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                         context,
                         context.getString(
                             if (nowBlocked) R.string.chat_user_blocked else R.string.chat_user_unblocked,
@@ -786,7 +786,7 @@ object ChatBlocklist {
                                 ) {
                                     val nowHighlighted = toggleHighlight(context, user.login, user.name)
                                     onChanged()
-                                    Toast.makeText(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                                         context,
                                         context.getString(
                                             if (nowHighlighted) R.string.chat_user_highlighted else R.string.chat_user_unhighlighted,
@@ -825,7 +825,7 @@ object ChatBlocklist {
                 val target = users.getOrNull(which) ?: return@setItems
                 unhighlight(context, target.login)
                 onChanged()
-                Toast.makeText(
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                     context,
                     context.getString(R.string.chat_user_unhighlighted, target.displayLabel),
                     Toast.LENGTH_SHORT,
@@ -855,7 +855,7 @@ object ChatBlocklist {
                 if (added.isNotEmpty()) {
                     onChanged()
                     val label = added.joinToString(", ") { it.displayLabel }
-                    Toast.makeText(
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                         context,
                         context.getString(R.string.chat_user_highlighted, label),
                         Toast.LENGTH_SHORT,
@@ -876,7 +876,7 @@ object ChatBlocklist {
                 val added = highlightMany(context, raw)
                 if (added.isNotEmpty()) {
                     val label = added.joinToString(", ") { it.displayLabel }
-                    Toast.makeText(
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                         context,
                         context.getString(R.string.chat_user_highlighted, label),
                         Toast.LENGTH_SHORT,
@@ -962,7 +962,7 @@ object ChatBlocklist {
                                 ) {
                                     val nowBlocked = toggle(context, user.login, user.name)
                                     onChanged()
-                                    Toast.makeText(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                                         context,
                                         context.getString(
                                             if (nowBlocked) R.string.chat_user_blocked else R.string.chat_user_unblocked,
@@ -1001,7 +1001,7 @@ object ChatBlocklist {
                 val target = users.getOrNull(which) ?: return@setItems
                 unblock(context, target.login)
                 onChanged()
-                Toast.makeText(
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                     context,
                     context.getString(R.string.chat_user_unblocked, target.displayLabel),
                     Toast.LENGTH_SHORT,
@@ -1031,7 +1031,7 @@ object ChatBlocklist {
                 if (added.isNotEmpty()) {
                     onChanged()
                     val label = added.joinToString(", ") { it.displayLabel }
-                    Toast.makeText(
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                         context,
                         context.getString(R.string.chat_user_blocked, label),
                         Toast.LENGTH_SHORT,
@@ -1052,7 +1052,7 @@ object ChatBlocklist {
                 val added = blockMany(context, raw)
                 if (added.isNotEmpty()) {
                     val label = added.joinToString(", ") { it.displayLabel }
-                    Toast.makeText(
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                         context,
                         context.getString(R.string.chat_user_blocked, label),
                         Toast.LENGTH_SHORT,

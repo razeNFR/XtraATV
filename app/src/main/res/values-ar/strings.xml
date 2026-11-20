@@ -1337,4 +1337,17 @@
     <string name="tv_follow_rejected_verification">رفضت Twitch هذه المتابعة (قد تتطلب هذه القناة رقم هاتف أو بريداً إلكترونياً موثقاً على Twitch)</string>
     <string name="tv_chat_predictions_30s">مفعّل (30 ثانية)</string>
     <string name="tv_chat_predictions_full">مفعّل (طوال فترة التصويت)</string>
+    <string name="tv_dpad_back_long">رجوع (ضغطة مطولة)</string>
+    <string name="tv_remote_action_none">بدون (معطّل)</string>
+    <string name="tv_remote_action_open_mini">فتح المشغل المصغر</string>
+    <string name="tv_remote_action_open_mini_default">فتح المشغل المصغر (افتراضي)</string>
+    <string name="tv_remote_action_cycle_chat_mode">تغيير وضع عرض الدردشة</string>
+    <string name="tv_remote_action_stop_stream">إيقاف البث</string>
+    <string name="tv_osd_chat_shown">تم إظهار الدردشة</string>
+    <string name="tv_osd_chat_hidden">تم إخفاء الدردشة</string>
+    <string name="tv_backup_perm_title">مطلوب إذن الوصول إلى الملفات</string>
+    <string name="tv_backup_perm_summary">لاستبدال أو قراءة ملف XtraTV-backup.zip في التنزيلات، اسمح بالوصول إلى الملفات في الشاشة التالية.</string>
+    <string name="tv_backup_perm_grant">السماح بالوصول إلى الملفات</string>
+    <string name="tv_backup_perm_continue_anyway">المتابعة بدون إذن</string>
+    <string name="tv_backup_save_failed">تعذّر حفظ ملف النسخ الاحتياطي</string>
 </resources>

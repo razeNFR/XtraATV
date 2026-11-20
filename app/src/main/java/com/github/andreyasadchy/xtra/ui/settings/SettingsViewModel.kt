@@ -548,7 +548,7 @@ class SettingsViewModel(
 
             if (savedName != null) {
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                         applicationContext,
                         applicationContext.getString(com.github.andreyasadchy.xtra.R.string.tv_backup_saved, savedName),
                         android.widget.Toast.LENGTH_LONG
@@ -632,7 +632,7 @@ class SettingsViewModel(
             )
             if (!restored) {
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                         applicationContext,
                         com.github.andreyasadchy.xtra.R.string.tv_backup_not_found,
                         android.widget.Toast.LENGTH_LONG

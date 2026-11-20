@@ -1337,4 +1337,17 @@
     <string name="tv_follow_rejected_verification">Twitch ha rifiutato il follow (questo canale potrebbe richiedere un numero di telefono o un\'email verificati su Twitch)</string>
     <string name="tv_chat_predictions_30s">Attivo (30 s)</string>
     <string name="tv_chat_predictions_full">Attivo (intera votazione)</string>
+    <string name="tv_dpad_back_long">Indietro (pressione prolungata)</string>
+    <string name="tv_remote_action_none">Nessuna (disattivato)</string>
+    <string name="tv_remote_action_open_mini">Apri il mini lettore</string>
+    <string name="tv_remote_action_open_mini_default">Apri il mini lettore (predefinito)</string>
+    <string name="tv_remote_action_cycle_chat_mode">Cambia modalità di visualizzazione chat</string>
+    <string name="tv_remote_action_stop_stream">Ferma lo stream</string>
+    <string name="tv_osd_chat_shown">Chat mostrata</string>
+    <string name="tv_osd_chat_hidden">Chat nascosta</string>
+    <string name="tv_backup_perm_title">Accesso ai file richiesto</string>
+    <string name="tv_backup_perm_summary">Per sovrascrivere o leggere XtraTV-backup.zip in Download, consenti l\'accesso ai file nella schermata successiva.</string>
+    <string name="tv_backup_perm_grant">Consenti accesso ai file</string>
+    <string name="tv_backup_perm_continue_anyway">Continua senza autorizzazione</string>
+    <string name="tv_backup_save_failed">Impossibile salvare il file di backup</string>
 </resources>

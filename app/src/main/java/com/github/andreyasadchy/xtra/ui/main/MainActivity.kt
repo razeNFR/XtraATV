@@ -266,6 +266,10 @@ class MainActivity : AppCompatActivity() {
         applyTheme()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        if (isTv) {
+            binding.playerContainer.isFocusable = false
+            binding.playerContainer.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        }
         binding.root.viewTreeObserver.addOnGlobalFocusChangeListener listener@{ oldFocus, newFocus ->
             // the page shown from the side menu without OK takes the focus by itself (its list loaded): the focus stays in
             // the menu, only right (or OK) goes into the page
@@ -454,7 +458,7 @@ class MainActivity : AppCompatActivity() {
                     && networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             if (!isNetworkAvailable) {
                 initialized = true
-                Toast.makeText(this, R.string.no_connection, Toast.LENGTH_SHORT).show()
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.no_connection, Toast.LENGTH_SHORT).show()
             }
         }
         lifecycleScope.launch {
@@ -469,7 +473,7 @@ class MainActivity : AppCompatActivity() {
                         if (viewModel.isNetworkAvailable.value != isNetworkAvailable) {
                             viewModel.isNetworkAvailable.value = isNetworkAvailable
                             if (initialized) {
-                                Toast.makeText(this@MainActivity, if (isNetworkAvailable) R.string.connection_restored else R.string.no_connection, Toast.LENGTH_SHORT).show()
+                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@MainActivity, if (isNetworkAvailable) R.string.connection_restored else R.string.no_connection, Toast.LENGTH_SHORT).show()
                             } else {
                                 initialized = true
                             }
@@ -593,7 +597,7 @@ class MainActivity : AppCompatActivity() {
                                         putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
                                     }
                                 } catch (e: ActivityNotFoundException) {
-                                    Toast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@MainActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                 }
                             } else {
                                 // the settings "Install unknown apps" at most once an hour, then the ways of installing (never a loop)
@@ -957,6 +961,11 @@ class MainActivity : AppCompatActivity() {
         UpdateInstallHelper.onActivityResult(this, requestCode, resultCode)
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        com.github.andreyasadchy.xtra.ui.tv.TvBackup.onRequestPermissionsResult(this, requestCode)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (BuildConfig.DEBUG && intent.hasExtra("tv_test")) {
@@ -1118,7 +1127,7 @@ class MainActivity : AppCompatActivity() {
     /** OK held on a stream of the row of the other streams: it plays in a small window (up to 2). */
     fun openTvPip(stream: Stream, targetSlot: Int? = null) {
         if (stream.channelLogin.equals(currentStreamLogin, ignoreCase = true) || tvPip.containsStream(stream.channelLogin)) {
-            android.widget.Toast.makeText(this, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
         val first = tvPip.activeCount == 0
@@ -1166,6 +1175,96 @@ class MainActivity : AppCompatActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
+    private var tvBackLongDownSeen = false
+
+    private fun resolveApplicableTvBackLongAction(): String? {
+        if (!isTv || tvMultiStreamShown || hasOpenDialogFragment()) return null
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        val raw = Keys.backLongAction(this)
+        if (raw == Keys.ACTION_DEFAULT) return null
+        val player = (playerFragment as? PlayerFragment)?.takeIf { !it.isRemoving && !it.isDetached } ?: return null
+        return if (player.isMaximizedPlayer()) {
+            if (!player.canRunHiddenHudRemoteShortcuts()) return null
+            val effective = player.effectiveRemoteAction(raw)
+            effective.takeIf { it != Keys.ACTION_DEFAULT && it != Keys.ACTION_OPEN_MINI_PLAYER }
+        } else {
+            raw.takeIf { player.getTvNowPlaying() != null && Keys.isBackgroundCapableAction(it) }
+        }
+    }
+
+    private fun performShortTvBack() {
+        val player = playerFragment as? PlayerFragment
+        if (isTvPipOpen() && isPlayerFocusedWithoutControls()) {
+            closeLatestTvPip()
+            return
+        }
+        if (isTvMenuShown && !tvMenuOpenedByBack &&
+            prefs.getBoolean(C.TV_BACK_CLOSES_MENU, true) && !tvMultiStreamShown &&
+            player?.isMaximizedPlayer() != true
+        ) {
+            closeTvMenuAndFocusContent()
+            return
+        }
+        if (!isTvMenuShown && isBrowsingRoot() && !tvGridBackCallback.isEnabled) {
+            val settingsFrag = if (::navController.isInitialized && navController.currentDestination?.id == R.id.tvSettingsFragment) {
+                currentTvSettings()
+            } else null
+            if (settingsFrag != null && settingsFrag.canHandleTvBackPress()) {
+                settingsFrag.handleTvBackPress()
+                return
+            }
+            val onHome = ::navController.isInitialized && navController.currentDestination?.id == R.id.tvHomeFragment
+            if (onHome && prefs.getBoolean(C.TV_CONFIRM_EXIT, true)) {
+                confirmOrExitTvApp()
+            } else {
+                tvMenuOpenedByBack = true
+                showTvMenu(true)
+            }
+            return
+        }
+        onBackPressedDispatcher.onBackPressed()
+    }
+
+    private fun dispatchTvBackLongKey(event: KeyEvent): Boolean {
+        if (event.keyCode != KeyEvent.KEYCODE_BACK) {
+            return false
+        }
+        val action = resolveApplicableTvBackLongAction()
+        if (action == null) {
+            tvBackLongDownSeen = false
+            return false
+        }
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount == 0) {
+                    tvBackLongDownSeen = true
+                } else if (tvBackLongDownSeen && (event.repeatCount >= 1 || event.isLongPress)) {
+                    tvBackLongDownSeen = false
+                    PlayerFragment.markHeldRemoteKey(KeyEvent.KEYCODE_BACK)
+                    val player = playerFragment as? PlayerFragment
+                    if (player != null) {
+                        if (player.isMaximizedPlayer()) {
+                            player.executeTvRemoteAction(action)
+                        } else {
+                            player.executeTvBackgroundRemoteAction(action)
+                        }
+                    }
+                }
+            }
+            KeyEvent.ACTION_UP -> {
+                val wasShort = tvBackLongDownSeen
+                tvBackLongDownSeen = false
+                if (wasShort && !event.isCanceled) {
+                    performShortTvBack()
+                }
+            }
+            else -> {
+                tvBackLongDownSeen = false
+            }
+        }
+        return true
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             lastTvKeyCode = event.keyCode
@@ -1185,6 +1284,12 @@ class MainActivity : AppCompatActivity() {
             return true
         }
         if (isTv && !dispatchingPlayerKey && tvLiveAlerts.onKey(event)) {
+            return true
+        }
+        if (isTv && !dispatchingPlayerKey && tvPip.isSelectorOpen() && tvPip.onKey(event)) {
+            return true
+        }
+        if (isTv && !dispatchingPlayerKey && dispatchTvBackLongKey(event)) {
             return true
         }
         if (isTv && !dispatchingPlayerKey && tvPip.onKey(event)) {
@@ -1567,7 +1672,7 @@ class MainActivity : AppCompatActivity() {
             exitTvApp()
         } else {
             lastExitBackAt = now
-            Toast.makeText(this, R.string.tv_press_back_again_to_exit, Toast.LENGTH_SHORT).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.tv_press_back_again_to_exit, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1782,7 +1887,7 @@ class MainActivity : AppCompatActivity() {
         if (key == "2" && !loggedInWithCode) {
             if (!fromAutoHover) {
                 // the videos of the followed channels need the login with the code (the token of the app)
-                Toast.makeText(this, R.string.tv_followed_videos_need_code, Toast.LENGTH_LONG).show()
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.tv_followed_videos_need_code, Toast.LENGTH_LONG).show()
             }
             return
         }
@@ -2536,7 +2641,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     else -> {
                         if (!msg.isNullOrBlank()) {
-                            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, msg, Toast.LENGTH_LONG).show()
                         }
                         showInstallBlockedDialog(fallbackUrl, retry)
                     }
@@ -2860,6 +2965,7 @@ class MainActivity : AppCompatActivity() {
 
     /** A multi-stream is shown (set before its screen is made, so that the focus waits for it). */
     private var tvMultiStreamShown = false
+    fun isTvMultiStreamOpen() = tvMultiStreamShown
 
     /** The screen of a multi-stream went away, however it was closed (a stream opened over it, back...). */
     fun onMultiStreamDestroyed() {
@@ -3365,6 +3471,10 @@ class MainActivity : AppCompatActivity() {
             return
         }
         if (focusable) {
+            if (isTv) {
+                binding.playerContainer.isFocusable = false
+                binding.playerContainer.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            }
             if (binding.navHostFragment.descendantFocusability != ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
                 return
             }
@@ -3381,6 +3491,11 @@ class MainActivity : AppCompatActivity() {
             lastFocusGrid = null
             currentTvHome()?.let { home ->
                 home.focusLastCard()
+                return
+            }
+            currentTvSettings()?.let { settings ->
+                settings.requestContentFocus()
+                settings.view?.requestFocus()
                 return
             }
             if (lastFocus != null && lastFocus.isAttachedToWindow && lastFocus.isShown && lastFocus.requestFocus()) {
@@ -3408,6 +3523,10 @@ class MainActivity : AppCompatActivity() {
                 ensureFocus(force = true)
             }
         } else {
+            if (isTv) {
+                binding.playerContainer.isFocusable = true
+                binding.playerContainer.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            }
             if (binding.navHostFragment.descendantFocusability == ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
                 return
             }
@@ -3468,7 +3587,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun stopTvPlayback() {
+    fun reopenTvMiniPlayer() {
+        val player = (playerFragment as? PlayerFragment)?.takeIf { !it.isRemoving && !it.isDetached } ?: return
+        if (player.isMaximizedPlayer()) return
+        hideTvMenu()
+        player.maximize()
+    }
+
+    fun stopTvPlayback() {
         (playerFragment as? PlayerFragment)?.let {
             it.close()
             closePlayer()

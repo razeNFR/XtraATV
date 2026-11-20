@@ -260,6 +260,11 @@ class SettingsActivity : AppCompatActivity() {
         UpdateInstallHelper.onActivityResult(this, requestCode, resultCode)
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        com.github.andreyasadchy.xtra.ui.tv.TvBackup.onRequestPermissionsResult(this, requestCode)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState?.getBoolean(KEY_CHANGED) == true) {
@@ -824,7 +829,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             findPreference<Preference>("custom_proxy_settings")?.setOnPreferenceClickListener {
                 if (TvUi.isTv(requireContext()) && requireContext().prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
-                    android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_LONG).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_LONG).show()
                     return@setOnPreferenceClickListener true
                 }
                 val openScreen = {
@@ -861,7 +866,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             findPreference<Preference>("stream_proxy_settings")?.setOnPreferenceClickListener {
                 if (TvUi.isTv(requireContext()) && requireContext().prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
-                    android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_LONG).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_LONG).show()
                     return@setOnPreferenceClickListener true
                 }
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
@@ -877,7 +882,7 @@ class SettingsActivity : AppCompatActivity() {
                 findPreference<SwitchPreferenceCompat>(C.TV_EXPERIMENTAL_ADBLOCK)?.setOnPreferenceChangeListener { _, newValue ->
                     val enabled = newValue as Boolean
                     if (enabled && com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isAnyProxyEnabled(requireContext())) {
-                        android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_disabled_by_proxy, android.widget.Toast.LENGTH_LONG).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_adblock_exp_disabled_by_proxy, android.widget.Toast.LENGTH_LONG).show()
                         return@setOnPreferenceChangeListener false
                     }
                     requireContext().prefs().edit().putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, enabled).apply()
@@ -888,7 +893,7 @@ class SettingsActivity : AppCompatActivity() {
                 findPreference<SwitchPreferenceCompat>(C.PLAYER_USE_STREAM_PROXY)?.setOnPreferenceChangeListener { _, newValue ->
                     val enabled = newValue as Boolean
                     if (enabled && requireContext().prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
-                        android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_LONG).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_LONG).show()
                         return@setOnPreferenceChangeListener false
                     }
                     requireContext().prefs().edit().putBoolean(C.PLAYER_USE_STREAM_PROXY, enabled).apply()
@@ -903,7 +908,7 @@ class SettingsActivity : AppCompatActivity() {
                         } else {
                             R.string.tv_adblock_swap_locked_hint
                         }
-                        android.widget.Toast.makeText(requireContext(), hintRes, android.widget.Toast.LENGTH_LONG).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), hintRes, android.widget.Toast.LENGTH_LONG).show()
                         return@setOnPreferenceChangeListener false
                     }
                     requireContext().prefs().edit().putBoolean(C.PLAYER_ADBLOCK, enabled).apply()
@@ -997,7 +1002,7 @@ class SettingsActivity : AppCompatActivity() {
                                             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                                         })
                                     } catch (e: ActivityNotFoundException) {
-                                        Toast.makeText(requireContext(), R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
+                                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
                                     }
                                 }
                             },
@@ -1015,7 +1020,7 @@ class SettingsActivity : AppCompatActivity() {
                         })
                     } catch (e: ActivityNotFoundException) {
                         com.github.andreyasadchy.xtra.ui.tv.TvBackup.restoreFromTv(requireContext(), lifecycleScope) {
-                            Toast.makeText(requireContext(), R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -1097,7 +1102,7 @@ class SettingsActivity : AppCompatActivity() {
                                             putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis())
                                         }
                                     } catch (e: ActivityNotFoundException) {
-                                        Toast.makeText(requireContext(), R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                     }
                                 } else {
                                     // the settings "Install unknown apps" at most once an hour, then the ways of installing (never a loop)
@@ -1116,7 +1121,7 @@ class SettingsActivity : AppCompatActivity() {
                                     .show()
                             }
                         } else {
-                            Toast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -2108,7 +2113,7 @@ class SettingsActivity : AppCompatActivity() {
                 preference.setOnPreferenceClickListener {
                     val favorites = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.value
                     if (favorites.isEmpty()) {
-                        android.widget.Toast.makeText(context, R.string.tv_favorites_how, android.widget.Toast.LENGTH_LONG).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_favorites_how, android.widget.Toast.LENGTH_LONG).show()
                     } else {
                         val items = favorites.map { SettingsDragListItem(key = it.login, text = it.name ?: it.login, default = false, enabled = true) }.toMutableList()
                         (requireActivity() as? SettingsActivity)?.showDragListDialog(items, "", preference.title, showDefault = false) { list ->
@@ -2357,7 +2362,7 @@ class SettingsActivity : AppCompatActivity() {
                             } else {
                                 R.string.tv_adblock_swap_locked_hint
                             }
-                            android.widget.Toast.makeText(requireContext(), hintRes, android.widget.Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), hintRes, android.widget.Toast.LENGTH_LONG).show()
                             return@setOnPreferenceChangeListener false
                         }
                         requireContext().prefs().edit().putBoolean(C.PLAYER_ADBLOCK, enabled).apply()
@@ -2368,7 +2373,7 @@ class SettingsActivity : AppCompatActivity() {
                 findPreference<SwitchPreferenceCompat>(C.TV_EXPERIMENTAL_ADBLOCK)?.setOnPreferenceChangeListener { _, newValue ->
                     val enabled = newValue as Boolean
                     if (enabled && com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isAnyProxyEnabled(requireContext())) {
-                        android.widget.Toast.makeText(requireContext(), R.string.tv_adblock_exp_disabled_by_proxy, android.widget.Toast.LENGTH_LONG).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_adblock_exp_disabled_by_proxy, android.widget.Toast.LENGTH_LONG).show()
                         return@setOnPreferenceChangeListener false
                     }
                     requireContext().prefs().edit().putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, enabled).apply()

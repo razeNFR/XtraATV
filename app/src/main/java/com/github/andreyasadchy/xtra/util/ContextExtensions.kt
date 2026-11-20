@@ -337,7 +337,7 @@ fun Activity.showInstallBlockedDialog(downloadUrl: String?, onRetry: (() -> Unit
             startActivity(intent)
             tokenPrefs().edit().putLong(C.UPDATE_LAST_CHECKED, System.currentTimeMillis()).apply()
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(this, R.string.no_browser_found, Toast.LENGTH_LONG).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.no_browser_found, Toast.LENGTH_LONG).show()
         }
     }
     val builder = getAlertDialogBuilder()

@@ -1337,4 +1337,17 @@
     <string name="tv_follow_rejected_verification">Twitchによりフォローが拒否されました（このチャンネルはTwitchで認証済みの電話番号またはメールアドレスが必要な場合があります）</string>
     <string name="tv_chat_predictions_30s">オン（30秒表示）</string>
     <string name="tv_chat_predictions_full">オン（投票終了まで表示）</string>
+    <string name="tv_dpad_back_long">戻る（長押し）</string>
+    <string name="tv_remote_action_none">なし（無効）</string>
+    <string name="tv_remote_action_open_mini">ミニプレーヤーを開く</string>
+    <string name="tv_remote_action_open_mini_default">ミニプレーヤーを開く（デフォルト）</string>
+    <string name="tv_remote_action_cycle_chat_mode">チャットの表示モードを切り替え</string>
+    <string name="tv_remote_action_stop_stream">配信を停止</string>
+    <string name="tv_osd_chat_shown">チャットを表示</string>
+    <string name="tv_osd_chat_hidden">チャットを非表示</string>
+    <string name="tv_backup_perm_title">ファイルへのアクセス権が必要です</string>
+    <string name="tv_backup_perm_summary">ダウンロード内の XtraTV-backup.zip を上書きまたは読み取るには、次の画面でファイルへのアクセスを許可してください。</string>
+    <string name="tv_backup_perm_grant">ファイルへのアクセスを許可</string>
+    <string name="tv_backup_perm_continue_anyway">権限なしで続行</string>
+    <string name="tv_backup_save_failed">バックアップファイルを保存できませんでした</string>
 </resources>

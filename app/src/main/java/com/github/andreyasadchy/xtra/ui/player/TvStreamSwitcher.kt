@@ -367,7 +367,7 @@ object TvStreamSwitcher {
                         return@Adapter
                     }
                     checked.size >= selection.max -> {
-                        android.widget.Toast.makeText(activity, activity.getString(R.string.tv_multistream_max, selection.max), android.widget.Toast.LENGTH_SHORT).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, activity.getString(R.string.tv_multistream_max, selection.max), android.widget.Toast.LENGTH_SHORT).show()
                         return@Adapter
                     }
                     else -> checked.add(login)
@@ -394,7 +394,7 @@ object TvStreamSwitcher {
                     (stream.channelLogin.equals(currentChannelLogin, ignoreCase = true) || activity.isStreamInTvPip(stream.channelLogin))
                 ) {
                     // the stream watched is already on the screen: no small window of it
-                    android.widget.Toast.makeText(activity, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
                 } else {
                     dialog.dismiss()
                     onPip(stream)
@@ -444,7 +444,7 @@ object TvStreamSwitcher {
         validate?.setOnClickListener {
             val logins = checked ?: return@setOnClickListener
             if (logins.size < minChecked) {
-                android.widget.Toast.makeText(activity, activity.getString(R.string.tv_multistream_min, minChecked), android.widget.Toast.LENGTH_SHORT).show()
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, activity.getString(R.string.tv_multistream_min, minChecked), android.widget.Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             dialog.dismiss()
@@ -488,7 +488,7 @@ object TvStreamSwitcher {
                         return@launch
                     }
                     if (list.isNullOrEmpty()) {
-                        android.widget.Toast.makeText(activity, if (list == null) R.string.tv_switch_error else R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, if (list == null) R.string.tv_switch_error else R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
                     } else {
                         showTab(searchTabIndex, list)
                         recyclerView.post { recyclerView.layoutManager?.findViewByPosition(0)?.requestFocus() }
@@ -534,7 +534,7 @@ object TvStreamSwitcher {
                         return@launch
                     }
                     if (list.isNullOrEmpty()) {
-                        android.widget.Toast.makeText(activity, if (list == null) R.string.tv_switch_error else R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
+                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, if (list == null) R.string.tv_switch_error else R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
                     } else {
                         showTab(index, list)
                         // the list is there: the focus goes to its first stream

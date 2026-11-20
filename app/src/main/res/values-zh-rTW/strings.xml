@@ -1337,4 +1337,17 @@
     <string name="tv_follow_rejected_verification">Twitch 拒絕了此次追隨（此頻道可能需要在 Twitch 上驗證手機號碼或電子郵件）</string>
     <string name="tv_chat_predictions_30s">開啟（顯示 30 秒）</string>
     <string name="tv_chat_predictions_full">開啟（投票期間全程顯示）</string>
+    <string name="tv_dpad_back_long">返回（長按）</string>
+    <string name="tv_remote_action_none">無（已停用）</string>
+    <string name="tv_remote_action_open_mini">開啟迷你播放器</string>
+    <string name="tv_remote_action_open_mini_default">開啟迷你播放器（預設）</string>
+    <string name="tv_remote_action_cycle_chat_mode">切換聊天室顯示模式</string>
+    <string name="tv_remote_action_stop_stream">停止直播</string>
+    <string name="tv_osd_chat_shown">已顯示聊天室</string>
+    <string name="tv_osd_chat_hidden">已隱藏聊天室</string>
+    <string name="tv_backup_perm_title">需要檔案存取權限</string>
+    <string name="tv_backup_perm_summary">若要在下載資料夾中覆寫或讀取 XtraTV-backup.zip，請在下一個畫面允許檔案存取。</string>
+    <string name="tv_backup_perm_grant">允許檔案存取</string>
+    <string name="tv_backup_perm_continue_anyway">不授權繼續</string>
+    <string name="tv_backup_save_failed">無法儲存備份檔案</string>
 </resources>

@@ -525,14 +525,14 @@ class LoginActivity : AppCompatActivity() {
                         logoutAll(networkLibrary)
                     }
                     tvChanged = true
-                    Toast.makeText(this, R.string.tv_login_logged_out, Toast.LENGTH_SHORT).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.tv_login_logged_out, Toast.LENGTH_SHORT).show()
                     tvStatus.value = currentTvStatus()
                 },
                 onDone = { finishTv() },
                 onGuest = {
                     com.github.andreyasadchy.xtra.ui.tv.TvAccounts.switchToGuest(this)
                     tvChanged = true
-                    Toast.makeText(this, R.string.tv_accounts_switched_guest, Toast.LENGTH_SHORT).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this, R.string.tv_accounts_switched_guest, Toast.LENGTH_SHORT).show()
                     finishTv()
                 },
             )
@@ -706,14 +706,14 @@ class LoginActivity : AppCompatActivity() {
                                                 }
                                                 .show()
                                         } else {
-                                            Toast.makeText(this@LoginActivity, R.string.invalid_url, Toast.LENGTH_SHORT).show()
+                                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@LoginActivity, R.string.invalid_url, Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 } else {
-                                    Toast.makeText(this@LoginActivity, R.string.invalid_url, Toast.LENGTH_SHORT).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@LoginActivity, R.string.invalid_url, Toast.LENGTH_SHORT).show()
                                 }
                             } else {
-                                Toast.makeText(this@LoginActivity, R.string.invalid_url, Toast.LENGTH_SHORT).show()
+                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@LoginActivity, R.string.invalid_url, Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
@@ -725,7 +725,7 @@ class LoginActivity : AppCompatActivity() {
                             startActivity(intent)
                             webView.reload()
                         } catch (e: ActivityNotFoundException) {
-                            Toast.makeText(this@LoginActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@LoginActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                         }
                     }
                     .setNegativeButton(android.R.string.cancel, null)
@@ -905,7 +905,7 @@ class LoginActivity : AppCompatActivity() {
                     startActivity(intent)
                     webView.reload()
                 } catch (e: ActivityNotFoundException) {
-                    Toast.makeText(this@LoginActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@LoginActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                 }
             }
             next.visibility = View.VISIBLE
@@ -928,7 +928,7 @@ class LoginActivity : AppCompatActivity() {
                                     if (!helixToken.isNullOrBlank()) {
                                         done()
                                     } else if (isTv) {
-                                        Toast.makeText(this@LoginActivity, R.string.connection_error, Toast.LENGTH_LONG).show()
+                                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@LoginActivity, R.string.connection_error, Toast.LENGTH_LONG).show()
                                         showTvScreen()
                                     } else {
                                         deviceCode = null
@@ -945,7 +945,7 @@ class LoginActivity : AppCompatActivity() {
                                 }
                             } else if (manual) {
                                 response.message?.let {
-                                    Toast.makeText(this@LoginActivity, it, Toast.LENGTH_SHORT).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@LoginActivity, it, Toast.LENGTH_SHORT).show()
                                 }
                             }
                         } catch (e: Exception) {
@@ -1005,7 +1005,7 @@ class LoginActivity : AppCompatActivity() {
 
     private fun error() {
         with(binding) {
-            Toast.makeText(this@LoginActivity, R.string.connection_error, Toast.LENGTH_LONG).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(this@LoginActivity, R.string.connection_error, Toast.LENGTH_LONG).show()
             CookieManager.getInstance().removeAllCookies(null)
             helixToken = null
             gqlClientId = null
@@ -1101,7 +1101,7 @@ class LoginActivity : AppCompatActivity() {
             }
             com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
             tvChanged = true
-            Toast.makeText(
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
                 this,
                 if (otherAccount) R.string.tv_login_other_account else if (code) R.string.tv_login_code_ok else R.string.tv_login_page_ok,
                 Toast.LENGTH_LONG

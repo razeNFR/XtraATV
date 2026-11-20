@@ -74,6 +74,16 @@ object TvDialogs {
             // its repeats and its release are dropped until OK is pressed again
             private var dropHeldSelect = true
 
+            override fun onStart() {
+                super.onStart()
+                TvToast.onDialogShown(this)
+            }
+
+            override fun onStop() {
+                TvToast.onDialogDismissed(this)
+                super.onStop()
+            }
+
             override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
                 val isSelect = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
                         event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER

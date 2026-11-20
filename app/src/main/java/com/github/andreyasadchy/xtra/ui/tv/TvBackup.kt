@@ -1,15 +1,25 @@
 package com.github.andreyasadchy.xtra.ui.tv
 
+import android.Manifest
+import android.app.Activity
+import android.content.ComponentName
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.media.MediaScannerConnection
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.provider.MediaStore
+import android.provider.Settings
 import android.util.Xml
 import android.widget.Toast
 import androidx.annotation.RequiresApi
@@ -35,16 +45,21 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.tv.material3.Text
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import com.github.andreyasadchy.xtra.ui.player.ExoPlayerService
+import com.github.andreyasadchy.xtra.ui.player.MediaPlayerService
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -57,6 +72,7 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -65,17 +81,183 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 
 /**
  * TV & mobile helper: backup and restore of settings, TV favorites/stats, and Room database (never Twitch account tokens),
- * either to Download/ on the device (via MediaStore on Android 10+ and filesystem fallback) or over Wi-Fi via QR code.
+ * either to Download/ on the device (with cross-Android permission check & atomic in-place overwrite) or over Wi-Fi via QR code.
  */
 object TvBackup {
 
     const val FILE_NAME = "XtraTV-backup.zip"
+    const val REQ_STORAGE_PERMISSION = 4901
     private const val PREFS_ENTRY = "preferences.xml"
     private const val TV_FAVORITES_ENTRY = "tv_favorites.xml"
     private const val TV_STATS_ENTRY = "tv_stats.xml"
     private const val TV_BLACKLIST_ENTRY = "tv_blacklist.xml"
     private const val DB_ENTRY = "database"
+    private const val PENDING_TIMEOUT_MS = 5 * 60_000L
     private val SQLITE_MAGIC = "SQLite format 3".toByteArray(Charsets.US_ASCII)
+
+    private val backupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val operationBusy = AtomicBoolean(false)
+
+    private class PendingFileAction(
+        val createdAtElapsed: Long,
+        val onGranted: () -> Unit,
+        val onFallback: () -> Unit,
+    )
+
+    private var pendingFileAction: PendingFileAction? = null
+
+    private data class ParsedBackup(
+        val mainPrefsXml: ByteArray?,
+        val tvFavoritesXml: ByteArray?,
+        val tvStatsXml: ByteArray?,
+        val tvBlacklistXml: ByteArray?,
+        val dbBytes: ByteArray?,
+    )
+
+    /** True when the app has full read/write/overwrite access to shared `Download/` across Android 7..14+. */
+    fun hasFullFileAccess(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    /** Automatically resumes any pending backup/restore as soon as the user returns from Android Settings having granted access. */
+    fun onActivityResumed(activity: Activity) {
+        val pending = pendingFileAction ?: return
+        if (SystemClock.elapsedRealtime() - pending.createdAtElapsed > PENDING_TIMEOUT_MS) {
+            pendingFileAction = null
+            return
+        }
+        if (hasFullFileAccess(activity)) {
+            pendingFileAction = null
+            mainHandler.postDelayed({ pending.onGranted() }, 140L)
+        }
+    }
+
+    /** Handles Android 7..10 runtime storage permission dialog result. */
+    fun onRequestPermissionsResult(activity: Activity, requestCode: Int) {
+        if (requestCode != REQ_STORAGE_PERMISSION) return
+        val pending = pendingFileAction ?: return
+        if (hasFullFileAccess(activity)) {
+            pendingFileAction = null
+            pending.onGranted()
+        } else if (!activity.isFinishing && !activity.isDestroyed) {
+            showFilePermissionPanel(activity, pending.onGranted, pending.onFallback)
+        }
+    }
+
+    private fun openAllFilesPermissionSettings(activity: Activity): Boolean {
+        val pkgUri = Uri.fromParts("package", activity.packageName, null)
+        val candidates = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                add(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, pkgUri))
+                add(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            }
+            add(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkgUri))
+            add(Intent(Settings.ACTION_SETTINGS))
+        }
+        for (intent in candidates) {
+            val launched = runCatching {
+                activity.startActivity(intent)
+                true
+            }.getOrDefault(false)
+            if (launched) return true
+        }
+        return false
+    }
+
+    private fun showFilePermissionPanel(
+        activity: Activity,
+        onGranted: () -> Unit,
+        onFallback: () -> Unit,
+    ) {
+        TvDialogs.show(activity) { dismiss ->
+            val primaryFocus = remember { FocusRequester() }
+            SidePanel(
+                title = activity.getString(R.string.tv_backup_perm_title),
+                width = 480.dp,
+            ) {
+                Text(
+                    activity.getString(R.string.tv_backup_perm_summary),
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                    color = TvColors.secondaryText,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+                Spacer(Modifier.height(18.dp))
+                ButtonRow(
+                    label = activity.getString(R.string.tv_backup_perm_grant),
+                    modifier = Modifier.focusRequester(primaryFocus),
+                ) {
+                    dismiss()
+                    pendingFileAction = PendingFileAction(
+                        createdAtElapsed = SystemClock.elapsedRealtime(),
+                        onGranted = onGranted,
+                        onFallback = onFallback,
+                    )
+                    if (!openAllFilesPermissionSettings(activity)) {
+                        pendingFileAction = null
+                        onFallback()
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                ButtonRow(
+                    label = activity.getString(R.string.tv_backup_perm_continue_anyway),
+                ) {
+                    dismiss()
+                    pendingFileAction = null
+                    onFallback()
+                }
+                LaunchedEffect(Unit) {
+                    runCatching { primaryFocus.requestFocus() }
+                }
+            }
+        }
+    }
+
+    private fun ensureFileAccessOrPrompt(
+        context: Context,
+        onGranted: () -> Unit,
+        onFallback: () -> Unit,
+    ) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { ensureFileAccessOrPrompt(context, onGranted, onFallback) }
+            return
+        }
+        if (hasFullFileAccess(context)) {
+            onGranted()
+            return
+        }
+        val activity = TvToast.currentActivity(context)
+        if (activity == null) {
+            onFallback()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            showFilePermissionPanel(activity, onGranted, onFallback)
+        } else {
+            pendingFileAction = PendingFileAction(
+                createdAtElapsed = SystemClock.elapsedRealtime(),
+                onGranted = onGranted,
+                onFallback = onFallback,
+            )
+            val requested = runCatching {
+                ActivityCompat.requestPermissions(
+                    activity,
+                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE),
+                    REQ_STORAGE_PERMISSION,
+                )
+                true
+            }.getOrDefault(false)
+            if (!requested) {
+                showFilePermissionPanel(activity, onGranted, onFallback)
+            }
+        }
+    }
 
     fun isValidSqliteBytes(bytes: ByteArray): Boolean =
         bytes.size >= 16 && SQLITE_MAGIC.indices.all { bytes[it] == SQLITE_MAGIC[it] }
@@ -264,6 +446,48 @@ object TvBackup {
         return dbFile
     }
 
+    /** Writes [bytes] to a sibling `.tmp` file with fsync, then atomically replaces [targetFile] in place. */
+    private fun atomicOverwriteFile(targetFile: File, bytes: ByteArray): Boolean {
+        if (bytes.isEmpty()) return false
+        val parent = targetFile.parentFile ?: return false
+        runCatching { parent.mkdirs() }
+        val tmpFile = File(parent, "${targetFile.name}.tmp")
+        val wroteTmp = runCatching {
+            FileOutputStream(tmpFile, false).use { out ->
+                out.write(bytes)
+                out.flush()
+                runCatching { out.fd.sync() }
+            }
+            tmpFile.exists() && tmpFile.length() == bytes.size.toLong()
+        }.getOrDefault(false)
+
+        if (wroteTmp) {
+            val renamedDirect = runCatching { tmpFile.renameTo(targetFile) }.getOrDefault(false)
+            if (renamedDirect && targetFile.exists() && targetFile.length() == bytes.size.toLong()) {
+                return true
+            }
+            val deletedAndRenamed = runCatching {
+                if (targetFile.exists()) targetFile.delete()
+                tmpFile.renameTo(targetFile)
+            }.getOrDefault(false)
+            if (deletedAndRenamed && targetFile.exists() && targetFile.length() == bytes.size.toLong()) {
+                return true
+            }
+        }
+
+        // Fallback on filesystems where rename over an existing file is unsupported: direct overwrite + fsync
+        val directOk = runCatching {
+            FileOutputStream(targetFile, false).use { out ->
+                out.write(bytes)
+                out.flush()
+                runCatching { out.fd.sync() }
+            }
+            targetFile.exists() && targetFile.length() == bytes.size.toLong()
+        }.getOrDefault(false)
+        runCatching { if (tmpFile.exists()) tmpFile.delete() }
+        return directOk
+    }
+
     /** Builds the backup archive in memory (settings XML, TV favorites/stats XML, and Room database — never Twitch tokens). */
     fun buildBackupZip(context: Context): ByteArray {
         val appContext = context.applicationContext
@@ -275,9 +499,13 @@ object TvBackup {
             }
         }
         val mainPrefsBytes = exportDefaultPrefsXml(appContext)
-        val tvFavPrefs = appContext.getSharedPreferences("tv_favorites", Context.MODE_PRIVATE)
-        val tvStatsPrefs = appContext.getSharedPreferences("tv_stats", Context.MODE_PRIVATE)
-        val tvBlacklistPrefs = appContext.getSharedPreferences(TvBlacklist.FILE, Context.MODE_PRIVATE)
+        val suffix = runCatching { TvAccounts.storageSuffix(appContext) }.getOrDefault("")
+        val tvFavPrefs = appContext.getSharedPreferences("tv_favorites$suffix", Context.MODE_PRIVATE)
+            .takeIf { it.all.isNotEmpty() } ?: appContext.getSharedPreferences("tv_favorites", Context.MODE_PRIVATE)
+        val tvStatsPrefs = appContext.getSharedPreferences("tv_stats$suffix", Context.MODE_PRIVATE)
+            .takeIf { it.all.isNotEmpty() } ?: appContext.getSharedPreferences("tv_stats", Context.MODE_PRIVATE)
+        val tvBlacklistPrefs = appContext.getSharedPreferences(TvBlacklist.FILE + suffix, Context.MODE_PRIVATE)
+            .takeIf { it.all.isNotEmpty() } ?: appContext.getSharedPreferences(TvBlacklist.FILE, Context.MODE_PRIVATE)
 
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
@@ -309,9 +537,56 @@ object TvBackup {
         return out.toByteArray()
     }
 
+    /** Strictly parses and validates a backup ZIP archive in memory before any state is modified (all-or-nothing). */
+    private fun parseAndValidateZip(bytes: ByteArray): ParsedBackup? {
+        if (bytes.size < 4 || bytes[0] != 'P'.code.toByte() || bytes[1] != 'K'.code.toByte()) {
+            return null
+        }
+        return try {
+            var mainPrefsXml: ByteArray? = null
+            var tvFavoritesXml: ByteArray? = null
+            var tvStatsXml: ByteArray? = null
+            var tvBlacklistXml: ByteArray? = null
+            var dbBytes: ByteArray? = null
+            var sawAnyEntry = false
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    sawAnyEntry = true
+                    if (!entry.isDirectory) {
+                        val name = entry.name.substringAfterLast('/')
+                        val content = zip.readBytes()
+                        when {
+                            name == TV_FAVORITES_ENTRY -> tvFavoritesXml = content
+                            name == TV_STATS_ENTRY -> tvStatsXml = content
+                            name == TV_BLACKLIST_ENTRY -> tvBlacklistXml = content
+                            name == "prefs2.xml" -> Unit
+                            name == PREFS_ENTRY || name.endsWith("_preferences.xml") -> mainPrefsXml = content
+                            name == DB_ENTRY -> dbBytes = content
+                        }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+            if (!sawAnyEntry) return null
+            if (mainPrefsXml != null && parseSharedPrefsXml(mainPrefsXml) == null) return null
+            if (tvFavoritesXml != null && parseSharedPrefsXml(tvFavoritesXml) == null) return null
+            if (tvStatsXml != null && parseSharedPrefsXml(tvStatsXml) == null) return null
+            if (tvBlacklistXml != null && parseSharedPrefsXml(tvBlacklistXml) == null) return null
+            if (dbBytes != null && !isValidSqliteBytes(dbBytes)) return null
+            if (mainPrefsXml == null && tvFavoritesXml == null && tvStatsXml == null && tvBlacklistXml == null && dbBytes == null) {
+                return null
+            }
+            ParsedBackup(mainPrefsXml, tvFavoritesXml, tvStatsXml, tvBlacklistXml, dbBytes)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /**
      * Applies parsed backup components synchronously to in-memory + disk SharedPreferences and Room database,
-     * shows confirmation Toast, updates app locale if needed, and performs a clean cold process restart.
+     * stops active playback services cleanly, shows OSD confirmation, updates app locale if needed, and performs a clean cold restart.
      */
     fun applyRestoredParts(
         context: Context,
@@ -323,61 +598,76 @@ object TvBackup {
         onPostPrefsCommit: ((Map<String, Any>) -> Unit)? = null,
     ): Boolean {
         val appContext = context.applicationContext
+        val validatedMain = mainPrefsXml?.takeIf { isSharedPrefsXmlBytes(it) && parseSharedPrefsXml(it) != null }
+        val validatedFav = tvFavoritesXml?.takeIf { isSharedPrefsXmlBytes(it) && parseSharedPrefsXml(it) != null }
+        val validatedStats = tvStatsXml?.takeIf { isSharedPrefsXmlBytes(it) && parseSharedPrefsXml(it) != null }
+        val validatedBl = tvBlacklistXml?.takeIf { isSharedPrefsXmlBytes(it) && parseSharedPrefsXml(it) != null }
+        val validatedDb = dbBytes?.takeIf { isValidSqliteBytes(it) }
+        if (validatedMain == null && validatedFav == null && validatedStats == null && validatedBl == null && validatedDb == null) {
+            return false
+        }
+
+        // Stop playback services before touching Room or restarting process so SQLite is never written concurrently
+        runCatching { appContext.stopService(Intent(appContext, ExoPlayerService::class.java)) }
+        runCatching { appContext.stopService(Intent(appContext, MediaPlayerService::class.java)) }
+
         var restoredAny = false
         var restoredLanguage: String? = null
+        val suffix = runCatching { TvAccounts.storageSuffix(appContext) }.getOrDefault("")
 
-        if (mainPrefsXml != null && isSharedPrefsXmlBytes(mainPrefsXml)) {
-            val parsed = commitSharedPrefsXml(appContext.prefs(), mainPrefsXml)
+        if (validatedMain != null) {
+            val parsed = commitSharedPrefsXml(appContext.prefs(), validatedMain)
             if (parsed != null) {
                 restoredAny = true
                 restoredLanguage = parsed[C.UI_LANGUAGE] as? String
                 runCatching { onPostPrefsCommit?.invoke(parsed) }
             }
         }
-        if (tvFavoritesXml != null && isSharedPrefsXmlBytes(tvFavoritesXml)) {
-            val favPrefs = appContext.getSharedPreferences("tv_favorites", Context.MODE_PRIVATE)
-            if (commitSharedPrefsXml(favPrefs, tvFavoritesXml) != null) {
+        if (validatedFav != null) {
+            val favPrefs = appContext.getSharedPreferences("tv_favorites$suffix", Context.MODE_PRIVATE)
+            if (commitSharedPrefsXml(favPrefs, validatedFav) != null) {
+                if (suffix.isNotEmpty()) {
+                    commitSharedPrefsXml(appContext.getSharedPreferences("tv_favorites", Context.MODE_PRIVATE), validatedFav)
+                }
                 runCatching { TvFavorites.reload(appContext) }
                 restoredAny = true
             }
         }
-        if (tvStatsXml != null && isSharedPrefsXmlBytes(tvStatsXml)) {
-            val statsPrefs = appContext.getSharedPreferences("tv_stats", Context.MODE_PRIVATE)
-            if (commitSharedPrefsXml(statsPrefs, tvStatsXml) != null) {
+        if (validatedStats != null) {
+            val statsPrefs = appContext.getSharedPreferences("tv_stats$suffix", Context.MODE_PRIVATE)
+            if (commitSharedPrefsXml(statsPrefs, validatedStats) != null) {
+                if (suffix.isNotEmpty()) {
+                    commitSharedPrefsXml(appContext.getSharedPreferences("tv_stats", Context.MODE_PRIVATE), validatedStats)
+                }
                 restoredAny = true
             }
         }
-        if (tvBlacklistXml != null && isSharedPrefsXmlBytes(tvBlacklistXml)) {
-            val blPrefs = appContext.getSharedPreferences(TvBlacklist.FILE, Context.MODE_PRIVATE)
-            if (commitSharedPrefsXml(blPrefs, tvBlacklistXml) != null) {
+        if (validatedBl != null) {
+            val blPrefs = appContext.getSharedPreferences(TvBlacklist.FILE + suffix, Context.MODE_PRIVATE)
+            if (commitSharedPrefsXml(blPrefs, validatedBl) != null) {
+                if (suffix.isNotEmpty()) {
+                    commitSharedPrefsXml(appContext.getSharedPreferences(TvBlacklist.FILE, Context.MODE_PRIVATE), validatedBl)
+                }
                 runCatching { TvBlacklist.reload(appContext) }
                 restoredAny = true
             }
         }
-        if (dbBytes != null && isValidSqliteBytes(dbBytes)) {
+        if (validatedDb != null) {
             (appContext as? XtraApp)?.xtraModule?.closeDatabaseIfOpen()
             val dbTarget = appContext.getDatabasePath(DB_ENTRY)
             dbTarget.parentFile?.mkdirs()
-            File(dbTarget.parentFile, "database-shm").delete()
-            File(dbTarget.parentFile, "database-wal").delete()
-            File(dbTarget.parentFile, "database-journal").delete()
-            val wroteDb = runCatching {
-                FileOutputStream(dbTarget).use { out ->
-                    out.write(dbBytes)
-                    out.flush()
-                    runCatching { out.fd.sync() }
-                }
-                true
-            }.getOrDefault(false)
-            if (wroteDb) {
+            runCatching { File(dbTarget.parentFile, "database-shm").delete() }
+            runCatching { File(dbTarget.parentFile, "database-wal").delete() }
+            runCatching { File(dbTarget.parentFile, "database-journal").delete() }
+            if (atomicOverwriteFile(dbTarget, validatedDb)) {
                 restoredAny = true
             }
         }
 
         if (!restoredAny) return false
 
-        CoroutineScope(Dispatchers.Main).launch {
-            Toast.makeText(appContext, R.string.tv_backup_restored, Toast.LENGTH_SHORT).show()
+        backupScope.launch {
+            TvToast.show(appContext, R.string.tv_backup_restored, Toast.LENGTH_SHORT, R.drawable.tv_ic_check)
             if (restoredLanguage != null) {
                 val desired = LocaleListCompat.forLanguageTags(
                     restoredLanguage.takeIf { it.isNotBlank() && it != "auto" }
@@ -386,12 +676,15 @@ object TvBackup {
                     runCatching { AppCompatDelegate.setApplicationLocales(desired) }
                 }
             }
-            delay(300)
-            appContext.startActivity(
+            delay(650)
+            val restartIntent = runCatching {
+                Intent.makeRestartActivityTask(ComponentName(appContext, MainActivity::class.java))
+            }.getOrElse {
                 Intent(appContext, MainActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 }
-            )
+            }
+            appContext.startActivity(restartIntent)
             exitProcess(0)
         }
         return true
@@ -405,32 +698,16 @@ object TvBackup {
     ): Boolean {
         if (bytes.isEmpty()) return false
         if (bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()) {
-            var mainPrefsXml: ByteArray? = null
-            var tvFavoritesXml: ByteArray? = null
-            var tvStatsXml: ByteArray? = null
-            var tvBlacklistXml: ByteArray? = null
-            var dbBytes: ByteArray? = null
-            runCatching {
-                ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
-                    var entry = zip.nextEntry
-                    while (entry != null) {
-                        if (!entry.isDirectory) {
-                            val name = entry.name.substringAfterLast('/')
-                            when {
-                                name == TV_FAVORITES_ENTRY -> tvFavoritesXml = zip.readBytes()
-                                name == TV_STATS_ENTRY -> tvStatsXml = zip.readBytes()
-                                name == TV_BLACKLIST_ENTRY -> tvBlacklistXml = zip.readBytes()
-                                name == "prefs2.xml" -> Unit
-                                name == PREFS_ENTRY || name.endsWith("_preferences.xml") -> mainPrefsXml = zip.readBytes()
-                                name == DB_ENTRY -> dbBytes = zip.readBytes()
-                            }
-                        }
-                        zip.closeEntry()
-                        entry = zip.nextEntry
-                    }
-                }
-            }
-            return applyRestoredParts(context, mainPrefsXml, tvFavoritesXml, tvStatsXml, tvBlacklistXml, dbBytes, onPostPrefsCommit)
+            val parsed = parseAndValidateZip(bytes) ?: return false
+            return applyRestoredParts(
+                context = context,
+                mainPrefsXml = parsed.mainPrefsXml,
+                tvFavoritesXml = parsed.tvFavoritesXml,
+                tvStatsXml = parsed.tvStatsXml,
+                tvBlacklistXml = parsed.tvBlacklistXml,
+                dbBytes = parsed.dbBytes,
+                onPostPrefsCommit = onPostPrefsCommit,
+            )
         }
         if (isValidSqliteBytes(bytes)) {
             return applyRestoredParts(context, dbBytes = bytes, onPostPrefsCommit = onPostPrefsCommit)
@@ -442,24 +719,63 @@ object TvBackup {
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    private fun saveToMediaStoreDownloads(context: Context, bytes: ByteArray): String? {
-        val resolver = context.contentResolver
-        // Remove previous backup archives owned by this app so we keep Download/ tidy
+    private fun cleanupDuplicateMediaStoreRows(context: Context, keepExactFileName: Boolean) {
         runCatching {
+            val resolver = context.contentResolver
             resolver.query(
                 MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                arrayOf(MediaStore.MediaColumns._ID),
+                arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
                 "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
                 arrayOf("XtraTV-backup%"),
-                null
+                null,
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
                 while (cursor.moveToNext()) {
+                    val name = cursor.getString(nameCol).orEmpty()
+                    if (keepExactFileName && name.equals(FILE_NAME, ignoreCase = true)) {
+                        continue
+                    }
                     val existingUri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cursor.getLong(idCol))
                     runCatching { resolver.delete(existingUri, null, null) }
                 }
             }
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun saveToMediaStoreDownloads(context: Context, bytes: ByteArray): String? {
+        val resolver = context.contentResolver
+        // First try overwriting an existing MediaStore row named XtraTV-backup.zip owned by this app
+        val overwrittenExisting = runCatching {
+            resolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
+                "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                arrayOf(FILE_NAME),
+                "${MediaStore.MediaColumns._ID} DESC",
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                while (cursor.moveToNext()) {
+                    val existingUri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cursor.getLong(idCol))
+                    val wrote = runCatching {
+                        resolver.openOutputStream(existingUri, "wt")?.use { out ->
+                            out.write(bytes)
+                            out.flush()
+                        } != null
+                    }.getOrDefault(false)
+                    if (wrote) return@runCatching true
+                }
+                false
+            } ?: false
+        }.getOrDefault(false)
+
+        if (overwrittenExisting) {
+            cleanupDuplicateMediaStoreRows(context, keepExactFileName = true)
+            return "${Environment.DIRECTORY_DOWNLOADS}/$FILE_NAME"
+        }
+
+        cleanupDuplicateMediaStoreRows(context, keepExactFileName = false)
         return runCatching {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME)
@@ -486,47 +802,50 @@ object TvBackup {
                     arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
                     null,
                     null,
-                    null
+                    null,
                 )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
             }.getOrNull() ?: FILE_NAME
             if (!actualName.equals(FILE_NAME, ignoreCase = true)) {
-                val directOverwritten = runCatching {
-                    val pubDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                    val directFile = File(pubDir, FILE_NAME)
-                    directFile.writeBytes(bytes)
+                val pubDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val directFile = File(pubDir, FILE_NAME)
+                if (atomicOverwriteFile(directFile, bytes)) {
                     runCatching { resolver.delete(itemUri, null, null) }
-                    true
-                }.getOrDefault(false)
-                if (directOverwritten) return@runCatching "${Environment.DIRECTORY_DOWNLOADS}/$FILE_NAME"
+                    purgeSiblingBackups(pubDir, directFile)
+                    runCatching {
+                        MediaScannerConnection.scanFile(context, arrayOf(directFile.absolutePath), arrayOf("application/zip"), null)
+                    }
+                    return@runCatching "${Environment.DIRECTORY_DOWNLOADS}/$FILE_NAME"
+                }
             }
             "${Environment.DIRECTORY_DOWNLOADS}/$actualName"
         }.getOrNull()
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    private fun readLatestFromMediaStoreDownloads(context: Context): Pair<Long, ByteArray>? {
+    private fun readAllFromMediaStoreDownloads(context: Context): List<Pair<Long, ByteArray>> {
         return runCatching {
             val resolver = context.contentResolver
-            resolver.query(
-                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DATE_MODIFIED),
-                "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
-                arrayOf("XtraTV-backup%"),
-                "${MediaStore.MediaColumns.DATE_MODIFIED} DESC, ${MediaStore.MediaColumns._ID} DESC"
-            )?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
-                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED)
-                while (cursor.moveToNext()) {
-                    val uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cursor.getLong(idCol))
-                    val modifiedMs = cursor.getLong(dateCol) * 1000L
-                    val data = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
-                    if (data != null && data.size >= 4 && data[0] == 'P'.code.toByte() && data[1] == 'K'.code.toByte()) {
-                        return@runCatching modifiedMs to data
+            buildList {
+                resolver.query(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DATE_MODIFIED),
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                    arrayOf("XtraTV-backup%"),
+                    "${MediaStore.MediaColumns.DATE_MODIFIED} DESC, ${MediaStore.MediaColumns._ID} DESC",
+                )?.use { cursor ->
+                    val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                    val dateCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED)
+                    while (cursor.moveToNext()) {
+                        val uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cursor.getLong(idCol))
+                        val modifiedMs = cursor.getLong(dateCol) * 1000L
+                        val data = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+                        if (data != null && parseAndValidateZip(data) != null) {
+                            add(modifiedMs to data)
+                        }
                     }
                 }
-                null
             }
-        }.getOrNull()
+        }.getOrDefault(emptyList())
     }
 
     /** Candidate directories on the TV where backup files can be stored or discovered without a system file picker. */
@@ -548,7 +867,7 @@ object TvBackup {
                 if (f.isFile &&
                     f.absolutePath != keepFile.absolutePath &&
                     f.name.startsWith("XtraTV-backup", ignoreCase = true) &&
-                    f.name.endsWith(".zip", ignoreCase = true)
+                    (f.name.endsWith(".zip", ignoreCase = true) || f.name.endsWith(".tmp", ignoreCase = true))
                 ) {
                     runCatching { f.delete() }
                 }
@@ -556,113 +875,202 @@ object TvBackup {
         }
     }
 
-    /** Saves the backup archive to Download/ (surviving app data resets on Android 10+) and shows its path. */
-    fun saveToTv(context: Context, scope: CoroutineScope) {
+    /** Saves the backup archive to Download/XtraTV-backup.zip (checking/requesting file access first so existing files are overwritten). */
+    fun saveToTv(context: Context, @Suppress("UNUSED_PARAMETER") scope: CoroutineScope, skipPermissionPrompt: Boolean = false) {
         val appContext = context.applicationContext
-        scope.launch {
-            val savedPath = withContext(Dispatchers.IO) {
-                val bytes = runCatching { buildBackupZip(appContext) }.getOrNull() ?: return@withContext null
-                // Always keep a fast local mirror inside app-specific external files if available
-                runCatching {
-                    appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { extDir ->
-                        extDir.mkdirs()
-                        val extPrimary = File(extDir, FILE_NAME)
-                        extPrimary.writeBytes(bytes)
-                        purgeSiblingBackups(extDir, extPrimary)
-                    }
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val mediaStorePath = saveToMediaStoreDownloads(appContext, bytes)
-                    if (mediaStorePath != null) return@withContext mediaStorePath
-                }
-                for (dir in candidateDirs(appContext)) {
-                    val primary = File(dir, FILE_NAME)
-                    val wrotePrimary = runCatching {
-                        dir.mkdirs()
-                        primary.writeBytes(bytes)
-                        purgeSiblingBackups(dir, primary)
-                        true
-                    }.getOrDefault(false)
-                    if (wrotePrimary) return@withContext primary.absolutePath
+        if (!skipPermissionPrompt && !hasFullFileAccess(appContext)) {
+            ensureFileAccessOrPrompt(
+                context = context,
+                onGranted = { performSaveToTv(appContext) },
+                onFallback = { performSaveToTv(appContext) },
+            )
+            return
+        }
+        performSaveToTv(appContext)
+    }
 
-                    // If an unowned file from a previous install blocks overwriting XtraTV-backup.zip in Download/
-                    val timestamped = File(dir, "XtraTV-backup-${System.currentTimeMillis()}.zip")
-                    val wroteTimestamped = runCatching {
-                        dir.mkdirs()
-                        timestamped.writeBytes(bytes)
-                        purgeSiblingBackups(dir, timestamped)
-                        true
-                    }.getOrDefault(false)
-                    if (wroteTimestamped) return@withContext timestamped.absolutePath
+    private fun performSaveToTv(appContext: Context) {
+        if (!operationBusy.compareAndSet(false, true)) return
+        backupScope.launch {
+            try {
+                val savedPath = withContext(Dispatchers.IO) {
+                    val bytes = runCatching { buildBackupZip(appContext) }.getOrNull()
+                        ?.takeIf { parseAndValidateZip(it) != null }
+                        ?: return@withContext null
+
+                    // Keep a fast local mirror inside app-specific external files as safety net
+                    runCatching {
+                        appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { extDir ->
+                            val extPrimary = File(extDir, FILE_NAME)
+                            if (atomicOverwriteFile(extPrimary, bytes)) {
+                                purgeSiblingBackups(extDir, extPrimary)
+                            }
+                        }
+                    }
+
+                    // 1. Direct atomic in-place overwrite of Download/XtraTV-backup.zip (works across Android 7..14+ when permission is granted)
+                    val pubDownloadDir = runCatching {
+                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    }.getOrNull()
+                    if (pubDownloadDir != null) {
+                        val directTarget = File(pubDownloadDir, FILE_NAME)
+                        if (atomicOverwriteFile(directTarget, bytes)) {
+                            purgeSiblingBackups(pubDownloadDir, directTarget)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                cleanupDuplicateMediaStoreRows(appContext, keepExactFileName = true)
+                            }
+                            runCatching {
+                                MediaScannerConnection.scanFile(
+                                    appContext,
+                                    arrayOf(directTarget.absolutePath),
+                                    arrayOf("application/zip"),
+                                    null,
+                                )
+                            }
+                            return@withContext "${Environment.DIRECTORY_DOWNLOADS}/$FILE_NAME"
+                        }
+                    }
+
+                    // 2. Fallback when user chose "Continue without permission" on restricted firmware
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val mediaStorePath = saveToMediaStoreDownloads(appContext, bytes)
+                        if (mediaStorePath != null) return@withContext mediaStorePath
+                    }
+                    for (dir in candidateDirs(appContext)) {
+                        val primary = File(dir, FILE_NAME)
+                        if (atomicOverwriteFile(primary, bytes)) {
+                            purgeSiblingBackups(dir, primary)
+                            return@withContext primary.absolutePath
+                        }
+                    }
+                    null
                 }
-                null
-            }
-            if (savedPath != null) {
-                Toast.makeText(appContext, appContext.getString(R.string.tv_backup_saved, savedPath), Toast.LENGTH_LONG).show()
+                if (savedPath != null) {
+                    TvToast.show(
+                        appContext,
+                        appContext.getString(R.string.tv_backup_saved, savedPath),
+                        Toast.LENGTH_LONG,
+                        R.drawable.tv_ic_check,
+                    )
+                } else {
+                    TvToast.show(
+                        appContext,
+                        R.string.tv_backup_save_failed,
+                        Toast.LENGTH_LONG,
+                        R.drawable.tv_ic_info,
+                    )
+                }
+            } finally {
+                operationBusy.set(false)
             }
         }
     }
 
-    /** Restores from the newest valid backup file found on the TV, or invokes [onNotFound] if none is directly readable. */
-    fun restoreFromTv(context: Context, scope: CoroutineScope, onNotFound: () -> Unit) {
+    /** Restores from the newest valid backup file found on the TV (requesting file access first if needed), or invokes [onNotFound]. */
+    fun restoreFromTv(
+        context: Context,
+        @Suppress("UNUSED_PARAMETER") scope: CoroutineScope,
+        skipPermissionPrompt: Boolean = false,
+        onNotFound: () -> Unit,
+    ) {
         val appContext = context.applicationContext
-        scope.launch {
-            val restored = withContext(Dispatchers.IO) {
-                val candidates = mutableListOf<Pair<Long, ByteArray>>()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    readLatestFromMediaStoreDownloads(appContext)?.let { candidates += it }
-                }
-                for (dir in candidateDirs(appContext)) {
-                    // Check any XtraTV-backup*.zip files in the folder (sorted newest first) plus direct FILE_NAME
-                    val zipFiles = buildList {
-                        add(File(dir, FILE_NAME))
-                        runCatching {
-                            dir.listFiles()?.filter {
-                                it.isFile && it.name.startsWith("XtraTV-backup", ignoreCase = true) && it.name.endsWith(".zip", ignoreCase = true)
-                            }?.let { addAll(it) }
-                        }
-                    }.distinctBy { it.absolutePath }
-                    for (zf in zipFiles) {
-                        val data = runCatching {
-                            if (zf.exists() && zf.length() > 4L) zf.readBytes() else null
-                        }.getOrNull()
-                        if (data != null && data.size >= 4 && data[0] == 'P'.code.toByte() && data[1] == 'K'.code.toByte()) {
-                            candidates += zf.lastModified() to data
-                        }
-                    }
-                }
-                val bestZip = candidates.maxByOrNull { it.first }?.second
-                if (bestZip != null && applyBackupBytes(appContext, bestZip)) {
-                    return@withContext true
-                }
+        if (!skipPermissionPrompt && !hasFullFileAccess(appContext)) {
+            ensureFileAccessOrPrompt(
+                context = context,
+                onGranted = { performRestoreFromTv(appContext, onNotFound) },
+                onFallback = { performRestoreFromTv(appContext, onNotFound) },
+            )
+            return
+        }
+        performRestoreFromTv(appContext, onNotFound)
+    }
 
-                // Fallback: raw preferences XML and/or SQLite database placed next to each other in a candidate folder
-                for (dir in candidateDirs(appContext)) {
-                    val prefsCandidates = buildList {
-                        add(File(dir, "${appContext.packageName}_preferences.xml"))
-                        add(File(dir, PREFS_ENTRY))
-                        runCatching {
-                            dir.listFiles()?.filter { it.isFile && it.name.endsWith("_preferences.xml") && it.name != "prefs2.xml" }?.let { addAll(it) }
-                        }
-                    }.distinctBy { it.absolutePath }
-                    val prefsBytes = prefsCandidates.firstNotNullOfOrNull { f ->
-                        runCatching { if (f.exists() && f.length() > 0L) f.readBytes() else null }.getOrNull()
-                            ?.takeIf { isSharedPrefsXmlBytes(it) }
-                    }
-                    val dbFile = File(dir, DB_ENTRY)
-                    val dbBytes = runCatching {
-                        if (isValidSqliteFile(dbFile)) dbFile.readBytes() else null
+    private fun performRestoreFromTv(appContext: Context, onNotFound: () -> Unit) {
+        if (!operationBusy.compareAndSet(false, true)) return
+        backupScope.launch {
+            var releasingLock = true
+            try {
+                val restored = withContext(Dispatchers.IO) {
+                    val candidates = mutableListOf<Pair<Long, ByteArray>>()
+                    val pubDownloadDir = runCatching {
+                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                     }.getOrNull()
-                    if (prefsBytes != null || dbBytes != null) {
-                        if (applyRestoredParts(appContext, mainPrefsXml = prefsBytes, dbBytes = dbBytes)) {
+
+                    // Prioritize public Download/XtraTV-backup.zip when accessible
+                    if (pubDownloadDir != null) {
+                        val exact = File(pubDownloadDir, FILE_NAME)
+                        val exactBytes = runCatching {
+                            if (exact.exists() && exact.length() > 4L) exact.readBytes() else null
+                        }.getOrNull()
+                        if (exactBytes != null && parseAndValidateZip(exactBytes) != null) {
+                            candidates += exact.lastModified() to exactBytes
+                        }
+                    }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        candidates += readAllFromMediaStoreDownloads(appContext)
+                    }
+
+                    for (dir in candidateDirs(appContext)) {
+                        val zipFiles = buildList {
+                            add(File(dir, FILE_NAME))
+                            runCatching {
+                                dir.listFiles()?.filter {
+                                    it.isFile && it.name.startsWith("XtraTV-backup", ignoreCase = true) && it.name.endsWith(".zip", ignoreCase = true)
+                                }?.let { addAll(it) }
+                            }
+                        }.distinctBy { it.absolutePath }
+                        for (zf in zipFiles) {
+                            val data = runCatching {
+                                if (zf.exists() && zf.length() > 4L) zf.readBytes() else null
+                            }.getOrNull()
+                            if (data != null && parseAndValidateZip(data) != null) {
+                                candidates += zf.lastModified() to data
+                            }
+                        }
+                    }
+
+                    for ((_, zipData) in candidates.sortedByDescending { it.first }) {
+                        if (applyBackupBytes(appContext, zipData)) {
                             return@withContext true
                         }
                     }
+
+                    // Fallback: raw preferences XML and/or SQLite database placed next to each other in a candidate folder
+                    for (dir in candidateDirs(appContext)) {
+                        val prefsCandidates = buildList {
+                            add(File(dir, "${appContext.packageName}_preferences.xml"))
+                            add(File(dir, PREFS_ENTRY))
+                            runCatching {
+                                dir.listFiles()?.filter { it.isFile && it.name.endsWith("_preferences.xml") && it.name != "prefs2.xml" }?.let { addAll(it) }
+                            }
+                        }.distinctBy { it.absolutePath }
+                        val prefsBytes = prefsCandidates.firstNotNullOfOrNull { f ->
+                            runCatching { if (f.exists() && f.length() > 0L) f.readBytes() else null }.getOrNull()
+                                ?.takeIf { isSharedPrefsXmlBytes(it) && parseSharedPrefsXml(it) != null }
+                        }
+                        val dbFile = File(dir, DB_ENTRY)
+                        val dbBytes = runCatching {
+                            if (isValidSqliteFile(dbFile)) dbFile.readBytes() else null
+                        }.getOrNull()
+                        if (prefsBytes != null || dbBytes != null) {
+                            if (applyRestoredParts(appContext, mainPrefsXml = prefsBytes, dbBytes = dbBytes)) {
+                                return@withContext true
+                            }
+                        }
+                    }
+                    false
                 }
-                false
-            }
-            if (!restored) {
-                onNotFound()
+                if (restored) {
+                    // Keep lock held until cold restart exits the process
+                    releasingLock = false
+                } else {
+                    onNotFound()
+                }
+            } finally {
+                if (releasingLock) {
+                    operationBusy.set(false)
+                }
             }
         }
     }
@@ -673,7 +1081,7 @@ object TvBackup {
         scope.launch {
             val ip = withContext(Dispatchers.IO) { findLocalIpAddress() }
             if (ip == null) {
-                Toast.makeText(appContext, R.string.tv_backup_no_network, Toast.LENGTH_LONG).show()
+                TvToast.makeText(appContext, R.string.tv_backup_no_network, Toast.LENGTH_LONG).show()
                 return@launch
             }
             val zipBytes = withContext(Dispatchers.IO) { runCatching { buildBackupZip(appContext) }.getOrNull() } ?: return@launch
@@ -737,7 +1145,7 @@ object TvBackup {
         scope.launch {
             val ip = withContext(Dispatchers.IO) { findLocalIpAddress() }
             if (ip == null) {
-                Toast.makeText(appContext, R.string.tv_backup_no_network, Toast.LENGTH_LONG).show()
+                TvToast.makeText(appContext, R.string.tv_backup_no_network, Toast.LENGTH_LONG).show()
                 return@launch
             }
             val server = withContext(Dispatchers.IO) { runCatching { ServerSocket(0) }.getOrNull() } ?: return@launch
@@ -794,7 +1202,7 @@ object TvBackup {
                             }
                             if (!applyBackupBytes(appContext, uploaded)) {
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(appContext, R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
+                                    TvToast.makeText(appContext, R.string.tv_backup_not_found, Toast.LENGTH_LONG).show()
                                 }
                             }
                         }

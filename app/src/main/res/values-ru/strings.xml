@@ -1337,4 +1337,17 @@
     <string name="tv_follow_rejected_verification">Twitch отклонил подписку (возможно, для этого канала требуется подтверждённый номер телефона или e-mail на Twitch)</string>
     <string name="tv_chat_predictions_30s">Вкл. (30 сек.)</string>
     <string name="tv_chat_predictions_full">Вкл. (всё время голосования)</string>
+    <string name="tv_dpad_back_long">Назад (долгое нажатие)</string>
+    <string name="tv_remote_action_none">Нет (отключено)</string>
+    <string name="tv_remote_action_open_mini">Открыть мини-плеер</string>
+    <string name="tv_remote_action_open_mini_default">Открыть мини-плеер (по умолчанию)</string>
+    <string name="tv_remote_action_cycle_chat_mode">Переключить режим отображения чата</string>
+    <string name="tv_remote_action_stop_stream">Остановить трансляцию</string>
+    <string name="tv_osd_chat_shown">Чат показан</string>
+    <string name="tv_osd_chat_hidden">Чат скрыт</string>
+    <string name="tv_backup_perm_title">Требуется доступ к файлам</string>
+    <string name="tv_backup_perm_summary">Чтобы перезаписать или прочитать XtraTV-backup.zip в папке Загрузки, разрешите доступ к файлам на следующем экране.</string>
+    <string name="tv_backup_perm_grant">Разрешить доступ к файлам</string>
+    <string name="tv_backup_perm_continue_anyway">Продолжить без разрешения</string>
+    <string name="tv_backup_save_failed">Не удалось сохранить файл резервной копии</string>
 </resources>

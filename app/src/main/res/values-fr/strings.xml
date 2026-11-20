@@ -1337,4 +1337,17 @@
     <string name="tv_follow_rejected_verification">Twitch a refusé cet abonnement (cette chaîne exige probablement un numéro de téléphone ou e-mail vérifié sur Twitch)</string>
     <string name="tv_chat_predictions_30s">Activé (affichage 30 s)</string>
     <string name="tv_chat_predictions_full">Activé (affichage total)</string>
+    <string name="tv_dpad_back_long">Retour (appui long)</string>
+    <string name="tv_remote_action_none">Aucune (désactivé)</string>
+    <string name="tv_remote_action_open_mini">Ouvrir le lecteur réduit</string>
+    <string name="tv_remote_action_open_mini_default">Ouvrir le lecteur réduit (par défaut)</string>
+    <string name="tv_remote_action_cycle_chat_mode">Changer l\'affichage du chat</string>
+    <string name="tv_remote_action_stop_stream">Arrêter le stream</string>
+    <string name="tv_osd_chat_shown">Chat affiché</string>
+    <string name="tv_osd_chat_hidden">Chat masqué</string>
+    <string name="tv_backup_perm_title">Autorisation des fichiers requise</string>
+    <string name="tv_backup_perm_summary">Pour écraser ou relire le fichier XtraTV-backup.zip dans Téléchargements, autorisez l\'accès aux fichiers sur l\'écran suivant.</string>
+    <string name="tv_backup_perm_grant">Autoriser l\'accès aux fichiers</string>
+    <string name="tv_backup_perm_continue_anyway">Continuer sans autorisation</string>
+    <string name="tv_backup_save_failed">Échec de l\'enregistrement de la sauvegarde</string>
 </resources>

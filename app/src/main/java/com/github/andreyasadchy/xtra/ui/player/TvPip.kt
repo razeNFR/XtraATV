@@ -128,7 +128,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     fun open(stream: Stream, targetSlot: Int? = null) {
         val login = stream.channelLogin ?: return
         if (containsStream(login)) {
-            Toast.makeText(activity, R.string.tv_pip_already_shown, Toast.LENGTH_SHORT).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_pip_already_shown, Toast.LENGTH_SHORT).show()
             return
         }
         val chosenIndex = when {
@@ -856,6 +856,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
     private var backDown = false
 
+    fun isSelectorOpen(): Boolean = isShown && selectorActive && activeCount >= 2
+
     fun onKey(event: KeyEvent): Boolean {
         if (!isShown) {
             backDown = false
@@ -1011,7 +1013,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             } else {
                 activity.getString(R.string.tv_pip_hint_no_key)
             }
-            Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, text, Toast.LENGTH_LONG).show()
         }
     }
 }

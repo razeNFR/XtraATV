@@ -448,7 +448,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         viewLifecycleOwner.lifecycleScope.launch {
                             repeatOnLifecycle(Lifecycle.State.STARTED) {
                                 viewModel.chatRestrictionToast.collect { reason ->
-                                    android.widget.Toast.makeText(requireContext(), reason, android.widget.Toast.LENGTH_LONG).show()
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), reason, android.widget.Toast.LENGTH_LONG).show()
                                 }
                             }
                         }

@@ -176,7 +176,7 @@ object TvMultiStreamGroups {
                     activity.closeMultiStream()
                     activity.startStream(live.first())
                 }
-                else -> Toast.makeText(activity, R.string.tv_multistream_group_offline, Toast.LENGTH_SHORT).show()
+                else -> TvToast.makeText(activity, R.string.tv_multistream_group_offline, Toast.LENGTH_SHORT).show()
             }
         }
     }

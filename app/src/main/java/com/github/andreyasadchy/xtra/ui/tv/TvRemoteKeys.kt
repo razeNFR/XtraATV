@@ -55,8 +55,11 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 object TvRemoteKeys {
 
     const val ACTION_DEFAULT = "default"
+    const val ACTION_OPEN_MINI_PLAYER = "open_mini_player"
+    const val ACTION_STOP_STREAM = "stop_stream"
     const val ACTION_SWITCH_PREV = "switch_prev"
     const val ACTION_SWITCH_NEXT = "switch_next"
+    const val ACTION_CYCLE_CHAT_MODE = "cycle_chat_mode"
     const val ACTION_CYCLE_CHAT_NEXT = "cycle_chat_next"
     const val ACTION_CYCLE_CHAT_PREV = "cycle_chat_prev"
     const val ACTION_TOGGLE_CHAT = "toggle_chat"
@@ -78,8 +81,11 @@ object TvRemoteKeys {
 
     val ALL_ACTIONS = listOf(
         ACTION_DEFAULT,
+        ACTION_OPEN_MINI_PLAYER,
+        ACTION_STOP_STREAM,
         ACTION_SWITCH_PREV,
         ACTION_SWITCH_NEXT,
+        ACTION_CYCLE_CHAT_MODE,
         ACTION_CYCLE_CHAT_NEXT,
         ACTION_CYCLE_CHAT_PREV,
         ACTION_TOGGLE_CHAT,
@@ -105,11 +111,21 @@ object TvRemoteKeys {
     fun isPipOnlyAction(action: String): Boolean =
         action == ACTION_PIP_SWAP || action == ACTION_PIP_SETTINGS || action == ACTION_PIP_CLOSE
 
+    /** Actions that can operate on a stream/VOD playing in the mini-player or audio-only while browsing outside the player. */
+    fun isBackgroundCapableAction(action: String): Boolean =
+        action == ACTION_OPEN_MINI_PLAYER ||
+            action == ACTION_STOP_STREAM ||
+            action == ACTION_MUTE ||
+            action == ACTION_PLAY_PAUSE
+
     data class CustomKeyBinding(val keyCode: Int, val action: String, val longPress: Boolean = false)
 
     fun ensureMigrated(context: Context) {
         val prefs = context.prefs()
         if (prefs.getBoolean(C.TV_DEFAULTS_REMOTE_MIGRATED, false)) {
+            if (!prefs.contains(C.TV_DPAD_BACK_LONG_ACTION)) {
+                prefs.edit { putString(C.TV_DPAD_BACK_LONG_ACTION, ACTION_OPEN_MINI_PLAYER) }
+            }
             return
         }
         val legacySwitch = prefs.getBoolean(C.TV_DPAD_SWITCH_STREAM, false)
@@ -139,6 +155,9 @@ object TvRemoteKeys {
             if (!prefs.contains(C.TV_DPAD_DOWN_LONG_ACTION)) {
                 putString(C.TV_DPAD_DOWN_LONG_ACTION, ACTION_DEFAULT)
             }
+            if (!prefs.contains(C.TV_DPAD_BACK_LONG_ACTION)) {
+                putString(C.TV_DPAD_BACK_LONG_ACTION, ACTION_OPEN_MINI_PLAYER)
+            }
             putBoolean(C.TV_DEFAULTS_REMOTE_MIGRATED, true)
         }
     }
@@ -157,6 +176,7 @@ object TvRemoteKeys {
     fun upLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_UP_LONG_ACTION)
     fun downAction(context: Context): String = dpadAction(context, C.TV_DPAD_DOWN_ACTION)
     fun downLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_DOWN_LONG_ACTION)
+    fun backLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_BACK_LONG_ACTION, ACTION_OPEN_MINI_PLAYER)
 
     fun dpadForKeyCode(context: Context, keyCode: Int): String = when (keyCode) {
         KeyEvent.KEYCODE_DPAD_LEFT -> leftAction(context)
@@ -168,8 +188,11 @@ object TvRemoteKeys {
     }
 
     fun actionLabel(context: Context, action: String): String = when (action) {
+        ACTION_OPEN_MINI_PLAYER -> context.getString(R.string.tv_remote_action_open_mini)
+        ACTION_STOP_STREAM -> context.getString(R.string.tv_remote_action_stop_stream)
         ACTION_SWITCH_PREV -> context.getString(R.string.tv_remote_action_switch_prev)
         ACTION_SWITCH_NEXT -> context.getString(R.string.tv_remote_action_switch_next)
+        ACTION_CYCLE_CHAT_MODE -> context.getString(R.string.tv_remote_action_cycle_chat_mode)
         ACTION_CYCLE_CHAT_NEXT -> context.getString(R.string.tv_remote_action_cycle_chat_next)
         ACTION_CYCLE_CHAT_PREV -> context.getString(R.string.tv_remote_action_cycle_chat_prev)
         ACTION_TOGGLE_CHAT -> context.getString(R.string.tv_remote_action_toggle_chat)
@@ -276,6 +299,7 @@ object TvRemoteKeys {
             if (upLongAction(context) == action) add(context.getString(R.string.tv_dpad_up_long))
             if (downAction(context) == action) add(context.getString(R.string.tv_dpad_down))
             if (downLongAction(context) == action) add(context.getString(R.string.tv_dpad_down_long))
+            if (backLongAction(context) == action) add(context.getString(R.string.tv_dpad_back_long))
             loadCustomKeys(context).forEach { binding ->
                 if (binding.action == action) {
                     add(bindingKeyLabel(context, binding))
@@ -297,6 +321,9 @@ object TvRemoteKeys {
             if (upLongAction(context) != ACTION_DEFAULT) add("↑⏳ ${actionLabel(context, upLongAction(context))}")
             if (downAction(context) != ACTION_DEFAULT) add("↓ ${actionLabel(context, downAction(context))}")
             if (downLongAction(context) != ACTION_DEFAULT) add("↓⏳ ${actionLabel(context, downLongAction(context))}")
+            if (backLongAction(context) != ACTION_DEFAULT && backLongAction(context) != ACTION_OPEN_MINI_PLAYER) {
+                add("↩⏳ ${actionLabel(context, backLongAction(context))}")
+            }
         }
         return if (active.isEmpty()) {
             context.getString(R.string.tv_dpad_shortcuts_summary)
@@ -338,15 +365,30 @@ object TvRemoteKeys {
                 else -> actionLabel(context, it)
             }
         }
-        val slots = listOf(
+        val backLongActions = listOf(ACTION_OPEN_MINI_PLAYER) + ALL_ACTIONS.filter { it != ACTION_OPEN_MINI_PLAYER }
+        val backLongLabels = backLongActions.map {
+            when (it) {
+                ACTION_OPEN_MINI_PLAYER -> context.getString(R.string.tv_remote_action_open_mini_default)
+                ACTION_DEFAULT -> context.getString(R.string.tv_remote_action_none)
+                else -> actionLabel(context, it)
+            }
+        }
+        val shortSlots = listOf(
             DpadSlot(context.getString(R.string.tv_dpad_center), C.TV_DPAD_CENTER_ACTION, standardActions, standardLabels) { centerAction(context) },
-            DpadSlot(context.getString(R.string.tv_dpad_center_long), C.TV_DPAD_CENTER_LONG_ACTION, centerLongActions, centerLongLabels) { centerLongAction(context) },
             DpadSlot(context.getString(R.string.tv_dpad_left), C.TV_DPAD_LEFT_ACTION, standardActions, standardLabels) { leftAction(context) },
             DpadSlot(context.getString(R.string.tv_dpad_right), C.TV_DPAD_RIGHT_ACTION, standardActions, standardLabels) { rightAction(context) },
             DpadSlot(context.getString(R.string.tv_dpad_up), C.TV_DPAD_UP_ACTION, standardActions, standardLabels) { upAction(context) },
-            DpadSlot(context.getString(R.string.tv_dpad_up_long), C.TV_DPAD_UP_LONG_ACTION, standardActions, upLongLabels) { upLongAction(context) },
             DpadSlot(context.getString(R.string.tv_dpad_down), C.TV_DPAD_DOWN_ACTION, standardActions, standardLabels) { downAction(context) },
+        )
+        val longSlots = listOf(
+            DpadSlot(context.getString(R.string.tv_dpad_center_long), C.TV_DPAD_CENTER_LONG_ACTION, centerLongActions, centerLongLabels) { centerLongAction(context) },
+            DpadSlot(context.getString(R.string.tv_dpad_up_long), C.TV_DPAD_UP_LONG_ACTION, standardActions, upLongLabels) { upLongAction(context) },
             DpadSlot(context.getString(R.string.tv_dpad_down_long), C.TV_DPAD_DOWN_LONG_ACTION, standardActions, standardLabels) { downLongAction(context) },
+            DpadSlot(context.getString(R.string.tv_dpad_back_long), C.TV_DPAD_BACK_LONG_ACTION, backLongActions, backLongLabels) { backLongAction(context) },
+        )
+        val groups = listOf(
+            context.getString(R.string.tv_custom_key_short_press) to shortSlots,
+            context.getString(R.string.tv_custom_key_long_press) to longSlots,
         )
         TvDialogs.show(context) {
             val firstFocus = remember { FocusRequester() }
@@ -360,54 +402,80 @@ object TvRemoteKeys {
             ) {
                 @Suppress("UNUSED_VARIABLE")
                 val observedUpdate = updateTick
-                slots.forEachIndexed { index, slot ->
-                    val currentAction = slot.readCurrent()
-                    val selectedIdx = slot.actions.indexOf(currentAction).coerceAtLeast(0)
-                    FocusRow(
-                        modifier = if (index == 0) Modifier.focusRequester(firstFocus) else Modifier,
-                        onClick = {
-                            val latestIdx = slot.actions.indexOf(slot.readCurrent()).coerceAtLeast(0)
-                            TvDialogs.showChoices(
-                                context = context,
-                                title = slot.title,
-                                options = slot.labels,
-                                selected = latestIdx,
-                            ) { chosenIdx ->
-                                prefs.edit { putString(slot.prefKey, slot.actions[chosenIdx]) }
-                                updateTick++
-                                onChanged()
+                groups.forEachIndexed { groupIdx, (groupTitle, groupSlots) ->
+                    if (groupIdx > 0) {
+                        Spacer(Modifier.height(14.dp))
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier
+                                .width(3.dp)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(TvColors.accent)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            groupTitle,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TvColors.accent,
+                        )
+                    }
+                    groupSlots.forEachIndexed { slotIdx, slot ->
+                        val currentAction = slot.readCurrent()
+                        val selectedIdx = slot.actions.indexOf(currentAction).coerceAtLeast(0)
+                        FocusRow(
+                            modifier = if (groupIdx == 0 && slotIdx == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                            onClick = {
+                                val latestIdx = slot.actions.indexOf(slot.readCurrent()).coerceAtLeast(0)
+                                TvDialogs.showChoices(
+                                    context = context,
+                                    title = slot.title,
+                                    options = slot.labels,
+                                    selected = latestIdx,
+                                ) { chosenIdx ->
+                                    prefs.edit { putString(slot.prefKey, slot.actions[chosenIdx]) }
+                                    updateTick++
+                                    onChanged()
+                                }
                             }
-                        }
-                    ) { focused ->
-                        val textColor = if (focused) TvColors.onFocused else ComposeColor.White
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Box(
-                                Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(if (focused) ComposeColor(0x22000000) else ComposeColor(0x26FFFFFF))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) { focused ->
+                            val textColor = if (focused) TvColors.onFocused else ComposeColor.White
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
+                                Box(
+                                    Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (focused) ComposeColor(0x22000000) else ComposeColor(0x26FFFFFF))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        slot.title,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textColor,
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
                                 Text(
-                                    slot.title,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    slot.labels[selectedIdx],
+                                    fontSize = 16.sp,
                                     color = textColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.End,
+                                    modifier = Modifier.weight(1f, fill = false),
                                 )
                             }
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                slot.labels[selectedIdx],
-                                fontSize = 16.sp,
-                                color = textColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.End,
-                                modifier = Modifier.weight(1f, fill = false),
-                            )
                         }
                     }
                 }
@@ -422,6 +490,7 @@ object TvRemoteKeys {
                         putString(C.TV_DPAD_DOWN_LONG_ACTION, ACTION_DEFAULT)
                         putString(C.TV_DPAD_CENTER_ACTION, ACTION_DEFAULT)
                         putString(C.TV_DPAD_CENTER_LONG_ACTION, ACTION_PIP_SWAP)
+                        putString(C.TV_DPAD_BACK_LONG_ACTION, ACTION_OPEN_MINI_PLAYER)
                     }
                     updateTick++
                     resetTick++

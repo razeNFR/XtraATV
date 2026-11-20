@@ -1337,4 +1337,17 @@
     <string name="tv_follow_rejected_verification">Twitch hat das Folgen abgelehnt (dieser Kanal erfordert möglicherweise eine bestätigte Telefonnummer oder E-Mail-Adresse auf Twitch)</string>
     <string name="tv_chat_predictions_30s">Ein (30 Sek.)</string>
     <string name="tv_chat_predictions_full">Ein (gesamte Abstimmung)</string>
+    <string name="tv_dpad_back_long">Zurück (lange drücken)</string>
+    <string name="tv_remote_action_none">Keine (deaktiviert)</string>
+    <string name="tv_remote_action_open_mini">Mini-Player öffnen</string>
+    <string name="tv_remote_action_open_mini_default">Mini-Player öffnen (Standard)</string>
+    <string name="tv_remote_action_cycle_chat_mode">Chat-Anzeigemodus wechseln</string>
+    <string name="tv_remote_action_stop_stream">Stream beenden</string>
+    <string name="tv_osd_chat_shown">Chat eingeblendet</string>
+    <string name="tv_osd_chat_hidden">Chat ausgeblendet</string>
+    <string name="tv_backup_perm_title">Dateizugriff erforderlich</string>
+    <string name="tv_backup_perm_summary">Um XtraTV-backup.zip unter Downloads zu überschreiben oder zu lesen, erlauben Sie auf dem nächsten Bildschirm den Dateizugriff.</string>
+    <string name="tv_backup_perm_grant">Dateizugriff erlauben</string>
+    <string name="tv_backup_perm_continue_anyway">Ohne Berechtigung fortfahren</string>
+    <string name="tv_backup_save_failed">Backup-Datei konnte nicht gespeichert werden</string>
 </resources>

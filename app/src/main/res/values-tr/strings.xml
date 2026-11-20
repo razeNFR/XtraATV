@@ -1338,4 +1338,17 @@
     <string name="tv_follow_rejected_verification">Twitch bu takibi reddetti (bu kanal Twitch\'te doğrulanmış telefon numarası veya e-posta gerektiriyor olabilir)</string>
     <string name="tv_chat_predictions_30s">Açık (30 sn)</string>
     <string name="tv_chat_predictions_full">Açık (tüm oylama süresi)</string>
+    <string name="tv_dpad_back_long">Geri (uzun basma)</string>
+    <string name="tv_remote_action_none">Yok (devre dışı)</string>
+    <string name="tv_remote_action_open_mini">Mini oynatıcıyı aç</string>
+    <string name="tv_remote_action_open_mini_default">Mini oynatıcıyı aç (varsayılan)</string>
+    <string name="tv_remote_action_cycle_chat_mode">Sohbet görünüm modunu değiştir</string>
+    <string name="tv_remote_action_stop_stream">Yayını durdur</string>
+    <string name="tv_osd_chat_shown">Sohbet gösterildi</string>
+    <string name="tv_osd_chat_hidden">Sohbet gizlendi</string>
+    <string name="tv_backup_perm_title">Dosya erişimi gerekli</string>
+    <string name="tv_backup_perm_summary">İndirilenler klasöründeki XtraTV-backup.zip dosyasının üzerine yazmak veya okumak için sonraki ekranda dosya erişimine izin verin.</string>
+    <string name="tv_backup_perm_grant">Dosya erişimine izin ver</string>
+    <string name="tv_backup_perm_continue_anyway">İzin olmadan devam et</string>
+    <string name="tv_backup_save_failed">Yedekleme dosyası kaydedilemedi</string>
 </resources>

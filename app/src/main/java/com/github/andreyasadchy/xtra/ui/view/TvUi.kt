@@ -348,7 +348,7 @@ object TvUi {
                 refreshing.value = false
                 if (grid.isAttachedToWindow) {
                     grid.sweep()
-                    android.widget.Toast.makeText(grid.context, R.string.tv_refreshed, android.widget.Toast.LENGTH_SHORT).show()
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(grid.context, R.string.tv_refreshed, android.widget.Toast.LENGTH_SHORT).show()
                 }
             }, wait)
         }

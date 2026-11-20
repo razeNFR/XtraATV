@@ -58,6 +58,6 @@
         android:layout_height="match_parent"
         android:clipChildren="false"
         android:elevation="16dp"
-        android:focusable="true" />
+        android:focusable="false" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
