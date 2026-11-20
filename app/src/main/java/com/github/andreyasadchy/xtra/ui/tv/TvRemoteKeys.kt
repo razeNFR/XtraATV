@@ -59,6 +59,7 @@ object TvRemoteKeys {
     const val ACTION_STOP_STREAM = "stop_stream"
     const val ACTION_SWITCH_PREV = "switch_prev"
     const val ACTION_SWITCH_NEXT = "switch_next"
+    const val ACTION_LAST_STREAM = "last_watched_stream"
     const val ACTION_CYCLE_CHAT_MODE = "cycle_chat_mode"
     const val ACTION_CYCLE_CHAT_NEXT = "cycle_chat_next"
     const val ACTION_CYCLE_CHAT_PREV = "cycle_chat_prev"
@@ -85,6 +86,7 @@ object TvRemoteKeys {
         ACTION_STOP_STREAM,
         ACTION_SWITCH_PREV,
         ACTION_SWITCH_NEXT,
+        ACTION_LAST_STREAM,
         ACTION_CYCLE_CHAT_MODE,
         ACTION_CYCLE_CHAT_NEXT,
         ACTION_CYCLE_CHAT_PREV,
@@ -115,6 +117,7 @@ object TvRemoteKeys {
     fun isBackgroundCapableAction(action: String): Boolean =
         action == ACTION_OPEN_MINI_PLAYER ||
             action == ACTION_STOP_STREAM ||
+            action == ACTION_LAST_STREAM ||
             action == ACTION_MUTE ||
             action == ACTION_PLAY_PAUSE
 
@@ -192,6 +195,7 @@ object TvRemoteKeys {
         ACTION_STOP_STREAM -> context.getString(R.string.tv_remote_action_stop_stream)
         ACTION_SWITCH_PREV -> context.getString(R.string.tv_remote_action_switch_prev)
         ACTION_SWITCH_NEXT -> context.getString(R.string.tv_remote_action_switch_next)
+        ACTION_LAST_STREAM -> context.getString(R.string.tv_remote_action_last_stream)
         ACTION_CYCLE_CHAT_MODE -> context.getString(R.string.tv_remote_action_cycle_chat_mode)
         ACTION_CYCLE_CHAT_NEXT -> context.getString(R.string.tv_remote_action_cycle_chat_next)
         ACTION_CYCLE_CHAT_PREV -> context.getString(R.string.tv_remote_action_cycle_chat_prev)

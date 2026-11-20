@@ -428,6 +428,7 @@ object TvToast {
 
         R.string.tv_looking_for_vod -> R.drawable.tv_ic_video_library
         R.string.tv_refreshed -> R.drawable.tv_ic_refresh
+        R.string.tv_no_last_stream -> R.drawable.tv_ic_swap
 
         R.string.tv_pip_already_shown,
         R.string.tv_multistream_group_saved,

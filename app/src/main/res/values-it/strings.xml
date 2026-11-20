@@ -1350,4 +1350,6 @@
     <string name="tv_backup_perm_grant">Consenti accesso ai file</string>
     <string name="tv_backup_perm_continue_anyway">Continua senza autorizzazione</string>
     <string name="tv_backup_save_failed">Impossibile salvare il file di backup</string>
+    <string name="tv_remote_action_last_stream">Ultimo stream guardato</string>
+    <string name="tv_no_last_stream">Nessuno stream precedente memorizzato</string>
 </resources>

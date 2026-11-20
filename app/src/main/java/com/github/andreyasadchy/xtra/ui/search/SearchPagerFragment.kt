@@ -265,6 +265,20 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                 return false
             }
         })
+        consumePendingExternalQuery()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (_binding != null) {
+            consumePendingExternalQuery()
+        }
+    }
+
+    fun consumePendingExternalQuery() {
+        val q = pendingExternalQuery?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        pendingExternalQuery = null
+        setQuery(q)
     }
 
     private val voiceSearchLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
@@ -301,5 +315,9 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    companion object {
+        var pendingExternalQuery: String? = null
     }
 }

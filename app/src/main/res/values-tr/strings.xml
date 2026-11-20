@@ -1351,4 +1351,6 @@
     <string name="tv_backup_perm_grant">Dosya erişimine izin ver</string>
     <string name="tv_backup_perm_continue_anyway">İzin olmadan devam et</string>
     <string name="tv_backup_save_failed">Yedekleme dosyası kaydedilemedi</string>
+    <string name="tv_remote_action_last_stream">Son izlenen yayın</string>
+    <string name="tv_no_last_stream">Henüz önceki bir yayın yok</string>
 </resources>

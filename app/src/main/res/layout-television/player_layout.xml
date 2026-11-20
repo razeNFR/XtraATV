@@ -25,16 +25,66 @@
         android:layout_alignParentBottom="true"
         android:background="@drawable/tv_player_scrim_bottom" />
 
+    <FrameLayout
+        android:id="@+id/tvTopRightAnchor"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="@dimen/tv_overscan_vertical"
+        android:layout_marginEnd="@dimen/tv_overscan_horizontal"
+        android:minWidth="156dp">
+
+        <TextClock
+            android:id="@+id/tvClock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:shadowColor="#E6000000"
+            android:shadowDy="2"
+            android:shadowRadius="8"
+            android:textColor="@android:color/white"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+    </FrameLayout>
+
     <LinearLayout
         android:id="@+id/topLeftLayout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentStart="true"
         android:layout_alignParentTop="true"
-        android:layout_toStartOf="@+id/tvClock"
         android:layout_marginStart="@dimen/tv_overscan_horizontal"
         android:layout_marginTop="@dimen/tv_overscan_vertical"
-        android:layout_marginEnd="24dp">
+        android:layout_marginEnd="24dp"
+        android:layout_toStartOf="@id/tvTopRightAnchor"
+        android:gravity="top"
+        android:orientation="horizontal">
+
+        <FrameLayout
+            android:id="@+id/tvChannelAvatarFrame"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginTop="1dp"
+            android:layout_marginEnd="11dp"
+            android:background="@drawable/tv_player_avatar_ring"
+            android:padding="1.5dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <ImageView
+                android:id="@+id/tvChannelAvatar"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:scaleType="centerCrop"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+        </FrameLayout>
 
         <LinearLayout
             android:id="@+id/infoLayout"
@@ -42,117 +92,104 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/title"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:shadowColor="#CC000000"
-                android:shadowDy="2"
-                android:shadowRadius="6"
-                android:textColor="@android:color/white"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:visibility="gone"
-                tools:text="Stream title"
-                tools:visibility="visible" />
-
             <LinearLayout
+                android:id="@+id/tvHeaderChipsRow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <ImageView
-                    android:id="@+id/tvChannelAvatar"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_marginEnd="4dp"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
-
                 <TextView
                     android:id="@+id/channel"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/tv_player_link_background"
+                    android:layout_height="28dp"
+                    android:background="@drawable/tv_player_header_chip_background"
                     android:ellipsize="end"
                     android:focusable="true"
+                    android:gravity="center_vertical"
                     android:maxLines="1"
-                    android:paddingStart="10dp"
-                    android:paddingTop="4dp"
-                    android:paddingEnd="10dp"
-                    android:paddingBottom="4dp"
+                    android:maxWidth="280dp"
+                    android:nextFocusLeft="@id/channel"
+                    android:nextFocusUp="@id/channel"
+                    android:paddingStart="11dp"
+                    android:paddingEnd="11dp"
                     android:textColor="@color/tv_player_link_text"
-                    android:textSize="20sp"
+                    android:textSize="15.5sp"
                     android:textStyle="bold"
                     android:visibility="gone"
                     tools:text="channel"
                     tools:visibility="visible" />
 
-                <TextView
-                    android:id="@+id/tvCategorySeparator"
+                <LinearLayout
+                    android:id="@+id/tvCategoryChip"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="6dp"
-                    android:text="¦"
-                    android:textColor="#B3FFFFFF"
-                    android:textSize="20sp"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
-
-                <ImageView
-                    android:id="@+id/tvCategoryAvatar"
-                    android:layout_width="22dp"
-                    android:layout_height="30dp"
-                    android:layout_marginEnd="2dp"
-                    android:scaleType="centerCrop"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
-
-                <TextView
-                    android:id="@+id/category"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/tv_player_link_background"
-                    android:ellipsize="end"
+                    android:layout_height="28dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/tv_player_header_chip_background"
+                    android:clickable="true"
                     android:focusable="true"
-                    android:maxLines="1"
+                    android:gravity="center_vertical"
+                    android:nextFocusRight="@id/tvCategoryChip"
+                    android:nextFocusUp="@id/tvCategoryChip"
+                    android:orientation="horizontal"
                     android:paddingStart="8dp"
-                    android:paddingTop="3dp"
-                    android:paddingEnd="8dp"
-                    android:paddingBottom="3dp"
-                    android:textColor="@color/tv_player_link_text"
-                    android:textSize="16sp"
+                    android:paddingEnd="11dp"
                     android:visibility="gone"
-                    tools:text="Just Chatting"
-                    tools:visibility="visible" />
+                    tools:visibility="visible">
+
+                    <ImageView
+                        android:id="@+id/tvCategoryAvatar"
+                        android:layout_width="15dp"
+                        android:layout_height="20dp"
+                        android:layout_marginEnd="6dp"
+                        android:importantForAccessibility="no"
+                        android:scaleType="centerCrop"
+                        android:visibility="gone"
+                        tools:visibility="visible" />
+
+                    <TextView
+                        android:id="@+id/category"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        android:duplicateParentState="true"
+                        android:ellipsize="end"
+                        android:focusable="false"
+                        android:maxLines="1"
+                        android:maxWidth="260dp"
+                        android:textColor="@color/tv_player_link_text"
+                        android:textSize="13.5sp"
+                        android:textStyle="bold"
+                        android:visibility="gone"
+                        tools:text="Just Chatting"
+                        tools:visibility="visible" />
+
+                </LinearLayout>
 
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="2dp"
+                android:layout_marginTop="5dp"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:lineSpacingExtra="1dp"
+                android:maxLines="2"
+                android:shadowColor="#D9000000"
+                android:shadowDy="1.5"
+                android:shadowRadius="5"
+                android:textColor="#F0FFFFFF"
+                android:textSize="14.5sp"
+                android:visibility="gone"
+                tools:text="Stream title"
+                tools:visibility="visible" />
 
         </LinearLayout>
 
     </LinearLayout>
-
-    <TextClock
-        android:id="@+id/tvClock"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:layout_alignParentTop="true"
-        android:layout_marginTop="@dimen/tv_overscan_vertical"
-        android:layout_marginEnd="@dimen/tv_overscan_horizontal"
-        android:shadowColor="#E6000000"
-        android:shadowDy="2"
-        android:shadowRadius="8"
-        android:textColor="@android:color/white"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:visibility="gone"
-        tools:visibility="visible" />
 
     <LinearLayout
         android:layout_width="match_parent"
