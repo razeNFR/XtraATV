@@ -13,7 +13,7 @@ import com.github.andreyasadchy.xtra.ui.view.TvUi
 import java.util.concurrent.TimeUnit
 
 /**
- * Periodic WorkManager job (every 45 min when network is connected) that keeps the Android TV / Google TV
+ * Periodic WorkManager job (every 15 min when network is connected) that keeps the Android TV / Google TV
  * "Followed Live" launcher channel and "Watch Next" row up-to-date even while Xtra TV is closed.
  */
 class TvLauncherSyncWorker(
@@ -34,7 +34,7 @@ class TvLauncherSyncWorker(
         fun schedule(context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !TvUi.isTv(context)) return
             val appContext = context.applicationContext
-            val request = PeriodicWorkRequestBuilder<TvLauncherSyncWorker>(45, TimeUnit.MINUTES)
+            val request = PeriodicWorkRequestBuilder<TvLauncherSyncWorker>(15, TimeUnit.MINUTES)
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -43,7 +43,7 @@ class TvLauncherSyncWorker(
                 .build()
             WorkManager.getInstance(appContext).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 request,
             )
         }

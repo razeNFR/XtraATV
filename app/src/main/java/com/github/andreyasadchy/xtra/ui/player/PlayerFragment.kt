@@ -6881,92 +6881,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private var tvAudioOnly = false
-    private var tvMinimizedDodgedTop = false
-    private var tvMinimizedDodgeAnimator: android.animation.ObjectAnimator? = null
-
-    fun isTvMiniPlayerVisible(): Boolean =
-        isTv && !isMaximized && !tvAudioOnly && !isRemoving && _binding != null && binding.slidingLayout.isVisible
-
-    private fun cancelTvMinimizedDodgeAnimator() {
-        tvMinimizedDodgeAnimator?.cancel()
-        tvMinimizedDodgeAnimator = null
-    }
-
-    private fun computeTvMinimizedTargetTy(dodgedTop: Boolean): Float {
-        val b = _binding ?: return 0f
-        val (_, minimizedScaleY) = getScaleValues()
-        val h = b.slidingLayout.height
-        val scaledYDiff = (h * (1f - minimizedScaleY)) / 2f
-        val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
-        val newY = if (dodgedTop) {
-            val overscanTop = resources.getDimension(R.dimen.tv_overscan_vertical)
-            maxOf(tvMargin, overscanTop)
-        } else {
-            h - (h * minimizedScaleY) - tvMargin
-        }
-        return -scaledYDiff + newY
-    }
-
-    private fun shouldDodgeTvMiniPlayer(focusedRectInRoot: android.graphics.Rect?, currentlyDodged: Boolean): Boolean {
-        val b = _binding ?: return false
-        val rect = focusedRectInRoot ?: return currentlyDodged
-        if (rect.isEmpty) return currentlyDodged
-        val w = b.slidingLayout.width
-        val h = b.slidingLayout.height
-        if (w <= 0 || h <= 0) return false
-        val (scaleX, scaleY) = getScaleValues()
-        val miniW = (w * scaleX).toInt()
-        val miniH = (h * scaleY).toInt()
-        val density = resources.displayMetrics.density
-        val margin = (18f * density).toInt()
-        val topMargin = maxOf(margin, resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical))
-        val miniLeft = w - miniW - margin
-        val miniRight = w - margin
-        val bottomTop = h - miniH - margin
-        val bottomBottom = h - margin
-        val pad = ((if (currentlyDodged) 34f else 14f) * density).toInt()
-        val checkLeft = miniLeft - pad
-        val checkRight = miniRight + pad
-        val checkTop = bottomTop - pad
-        val checkBottom = bottomBottom + pad
-        if (!android.graphics.Rect.intersects(rect, android.graphics.Rect(checkLeft, checkTop, checkRight, checkBottom))) {
-            return false
-        }
-        // Only dodge to top-right when moving up actually reduces overlap with the focused element
-        val bottomOverlapW = (minOf(rect.right, checkRight) - maxOf(rect.left, checkLeft)).coerceAtLeast(0)
-        val bottomOverlapH = (minOf(rect.bottom, checkBottom) - maxOf(rect.top, checkTop)).coerceAtLeast(0)
-        val bottomArea = bottomOverlapW.toLong() * bottomOverlapH.toLong()
-        val topLeft = miniLeft - pad
-        val topRight = miniRight + pad
-        val topTop = topMargin - pad
-        val topBottom = topMargin + miniH + pad
-        val topOverlapW = (minOf(rect.right, topRight) - maxOf(rect.left, topLeft)).coerceAtLeast(0)
-        val topOverlapH = (minOf(rect.bottom, topBottom) - maxOf(rect.top, topTop)).coerceAtLeast(0)
-        val topArea = topOverlapW.toLong() * topOverlapH.toLong()
-        return topArea < bottomArea
-    }
-
-    fun updateTvMinimizedDodge(focusedRectInRoot: android.graphics.Rect?) {
-        if (!isTvMiniPlayerVisible()) return
-        val b = binding
-        if (b.slidingLayout.width <= 0 || b.slidingLayout.height <= 0) return
-        val wantDodged = shouldDodgeTvMiniPlayer(focusedRectInRoot, tvMinimizedDodgedTop)
-        if (wantDodged == tvMinimizedDodgedTop) return
-        tvMinimizedDodgedTop = wantDodged
-        if (isAnimating) return
-        cancelTvMinimizedDodgeAnimator()
-        val targetTy = computeTvMinimizedTargetTy(wantDodged)
-        tvMinimizedDodgeAnimator = android.animation.ObjectAnimator.ofFloat(
-            b.slidingLayout,
-            View.TRANSLATION_Y,
-            b.slidingLayout.translationY,
-            targetTy,
-        ).apply {
-            duration = 240L
-            interpolator = tvFastOutSlowIn
-            start()
-        }
-    }
 
     /**
      * TV: leaving the app (Home, or Back on the first screen) keeps the sound of the mini player and of the sound only
@@ -6986,10 +6900,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** TV audio only: the mini player is hidden and the picture is not decoded, the sound goes on. */
     private fun setTvAudioOnly(enabled: Boolean) {
         tvAudioOnly = enabled
-        if (enabled) {
-            cancelTvMinimizedDodgeAnimator()
-            tvMinimizedDodgedTop = false
-        }
         _binding?.slidingLayout?.visibility = if (enabled) View.INVISIBLE else View.VISIBLE
         setVideoHidden(enabled)
         (activity as? MainActivity)?.updateTvNowPlaying()
@@ -7027,7 +6937,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun minimize() {
         with(binding) {
             isMaximized = false
-            cancelTvMinimizedDodgeAnimator()
             hideTvPlayerOsd(animate = false)
             if (isTv) {
                 restoreTvOledProtection()
@@ -7063,10 +6972,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (isTv) {
                     val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
                     val newX = slidingLayout.width - (slidingLayout.width * minimizedScaleX) - tvMargin
+                    val newY = slidingLayout.height - (slidingLayout.height * minimizedScaleY) - tvMargin
                     targetTx = -scaledXDiff + newX
-                    val initialFocusRect = (activity as? MainActivity)?.resolveCurrentFocusedRect()
-                    tvMinimizedDodgedTop = if (!tvAudioOnly) shouldDodgeTvMiniPlayer(initialFocusRect, false) else false
-                    targetTy = computeTvMinimizedTargetTy(tvMinimizedDodgedTop)
+                    targetTy = -scaledYDiff + newY
                 } else {
                     val windowInsets = ViewCompat.getRootWindowInsets(requireView())
                     val insets = windowInsets?.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
@@ -7101,9 +7009,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 isAnimating = false
                                 setListener(null)
                                 activePointerId = -1
-                                if (isTvMiniPlayerVisible()) {
-                                    (activity as? MainActivity)?.scheduleTvMiniPlayerDodgeCheck()
-                                }
                             }
                         }
                     )
@@ -7133,8 +7038,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun maximize() {
         with(binding) {
             isMaximized = true
-            cancelTvMinimizedDodgeAnimator()
-            tvMinimizedDodgedTop = false
             if (isTv) {
                 applyTvMinimizedFrame(false)
                 dragView.isFocusable = true
@@ -7513,8 +7416,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvMinimizedBorderAnimator?.cancel()
         tvMinimizedBorderAnimator = null
         tvMinimizedBorderDrawable = null
-        cancelTvMinimizedDodgeAnimator()
-        tvMinimizedDodgedTop = false
         tvOsdContainer?.removeCallbacks(tvOsdHideRunnable)
         tvOsdContainer?.animate()?.cancel()
         tvOsdContainer = null

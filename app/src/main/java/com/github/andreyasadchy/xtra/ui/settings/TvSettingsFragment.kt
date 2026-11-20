@@ -65,7 +65,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -77,6 +79,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.ComposeView
@@ -188,6 +191,7 @@ class TvSettingsFragment : Fragment() {
 
     private val focusLeftTrigger = mutableIntStateOf(0)
     private val focusRightTrigger = mutableIntStateOf(0)
+    private var handledFocusRightTrigger = 0
     private val refreshStamp = mutableIntStateOf(0)
     private val customProxyCountState = mutableIntStateOf(0)
 
@@ -310,7 +314,7 @@ class TvSettingsFragment : Fragment() {
     }
 
     fun requestContentFocus() {
-        if (subScreenStack.isNotEmpty()) {
+        if (subScreenStack.isNotEmpty() || rightColumnFocusedState.value) {
             focusRightTrigger.intValue++
         } else {
             focusLeftTrigger.intValue++
@@ -542,16 +546,6 @@ class TvSettingsFragment : Fragment() {
                 runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
             }
         }
-        LaunchedEffect(focusRightTrigger.intValue) {
-            if (focusRightTrigger.intValue > 0) {
-                delay(35)
-                val focusedOk = runCatching { rightFirstRequester.requestFocus() }.getOrDefault(false)
-                if (!focusedOk) {
-                    delay(60)
-                    runCatching { rightFirstRequester.requestFocus() }
-                }
-            }
-        }
 
         val returnToLeftColumn: () -> Unit = {
             rightColumnFocusedState.value = false
@@ -562,6 +556,14 @@ class TvSettingsFragment : Fragment() {
         Row(
             modifier = Modifier
                 .fillMaxSize()
+                .onKeyEvent { ev ->
+                    ev.type == KeyEventType.KeyDown && (
+                        ev.key == Key.DirectionUp ||
+                            ev.key == Key.DirectionDown ||
+                            ev.key == Key.DirectionLeft ||
+                            ev.key == Key.DirectionRight
+                        )
+                }
                 .padding(start = 12.dp, end = 12.dp, top = 22.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
         ) {
@@ -992,78 +994,187 @@ class TvSettingsFragment : Fragment() {
         firstRequester: FocusRequester,
         onNavigateLeft: () -> Unit,
     ) {
-        val listState = rememberLazyListState()
-        val firstInteractiveIndex = remember(nodes, highlightKey) {
-            val highlighted = highlightKey?.let { hk ->
-                nodes.indexOfFirst { it is PrefNode.Item && it.key == hk }.takeIf { it >= 0 }
-            }
-            highlighted ?: nodes.indexOfFirst { it is PrefNode.Item }
-        }
+        androidx.compose.runtime.key(listKey) {
+            val listState = rememberLazyListState()
+            val scope = rememberCoroutineScope()
+            val itemRequesters = remember { HashMap<String, FocusRequester>() }
+            val emptyBoxRequester = remember { firstRequester }
+            var lastFocusedId by remember { mutableStateOf<String?>(null) }
 
-        LaunchedEffect(listKey, highlightKey) {
-            if (highlightKey != null && firstInteractiveIndex > 0) {
-                runCatching { listState.scrollToItem((firstInteractiveIndex - 1).coerceAtLeast(0)) }
-            } else {
-                runCatching { listState.scrollToItem(0) }
-            }
-        }
-
-        Column(Modifier.fillMaxSize()) {
-            SubScreenHeaderTitle(headerTitle = headerTitle, parentBreadcrumb = parentBreadcrumb)
-            Spacer(Modifier.height(10.dp))
-            if (nodes.none { it is PrefNode.Item }) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .focusRequester(firstRequester)
-                        .onPreviewKeyEvent { ev ->
-                            if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                                onNavigateLeft()
-                                true
-                            } else false
+            val nodeIds = remember(nodes) {
+                val counts = HashMap<String, Int>()
+                nodes.map { node ->
+                    when (node) {
+                        is PrefNode.Header -> {
+                            val base = "hdr_${node.title}"
+                            val n = (counts[base] ?: 0) + 1
+                            counts[base] = n
+                            if (n == 1) base else "${base}_$n"
                         }
-                        .focusable(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("—", fontSize = 15.sp, color = TvColors.secondaryText)
+                        is PrefNode.Item -> {
+                            val base = "itm_${node.key.ifBlank { node.title }}_${node.locationBreadcrumb.orEmpty()}"
+                            val n = (counts[base] ?: 0) + 1
+                            counts[base] = n
+                            if (n == 1) base else "${base}_$n"
+                        }
+                    }
                 }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                ) {
-                    itemsIndexed(
-                        items = nodes,
-                        key = { idx, node ->
-                            when (node) {
-                                is PrefNode.Header -> "h_${idx}_${node.title}"
-                                is PrefNode.Item -> "i_${idx}_${node.key}_${node.locationBreadcrumb.orEmpty()}"
-                            }
+            }
+
+            fun requesterFor(id: String): FocusRequester = itemRequesters.getOrPut(id) { FocusRequester() }
+
+            val firstInteractiveIndex = remember(nodes, highlightKey) {
+                val highlighted = highlightKey?.let { hk ->
+                    nodes.indexOfFirst { it is PrefNode.Item && it.key == hk }.takeIf { it >= 0 }
+                }
+                highlighted ?: nodes.indexOfFirst { it is PrefNode.Item }
+            }
+
+            suspend fun focusNodeAtIndex(targetIdx: Int) {
+                if (targetIdx !in nodes.indices || nodes[targetIdx] !is PrefNode.Item) return
+                val targetId = nodeIds[targetIdx]
+                val req = requesterFor(targetId)
+                if (listState.layoutInfo.visibleItemsInfo.any { it.index == targetIdx }) {
+                    if (runCatching { req.requestFocus() }.getOrDefault(false)) return
+                }
+                runCatching { listState.scrollToItem((targetIdx - 1).coerceAtLeast(0)) }
+                withFrameNanos { }
+                if (!runCatching { req.requestFocus() }.getOrDefault(false)) {
+                    delay(35)
+                    runCatching { req.requestFocus() }
+                }
+            }
+
+            LaunchedEffect(highlightKey) {
+                if (highlightKey != null && firstInteractiveIndex > 0) {
+                    runCatching { listState.scrollToItem((firstInteractiveIndex - 1).coerceAtLeast(0)) }
+                }
+            }
+
+            LaunchedEffect(focusRightTrigger.intValue, nodes.size) {
+                val trigger = focusRightTrigger.intValue
+                if (trigger > handledFocusRightTrigger) {
+                    if (nodes.none { it is PrefNode.Item }) {
+                        handledFocusRightTrigger = trigger
+                        delay(20)
+                        runCatching { emptyBoxRequester.requestFocus() }
+                    } else {
+                        handledFocusRightTrigger = trigger
+                        val targetIdx = when {
+                            highlightKey != null -> nodes.indexOfFirst { it is PrefNode.Item && it.key == highlightKey }
+                                .takeIf { it >= 0 }
+                            lastFocusedId != null -> nodeIds.indexOf(lastFocusedId).takeIf { it >= 0 && nodes[it] is PrefNode.Item }
+                            else -> null
+                        } ?: listState.layoutInfo.visibleItemsInfo
+                            .map { it.index }
+                            .firstOrNull { it in nodes.indices && nodes[it] is PrefNode.Item }
+                            ?: firstInteractiveIndex
+                        if (returnFocusKeyState.value != null && highlightKey == returnFocusKeyState.value) {
+                            returnFocusKeyState.value = null
                         }
-                    ) { index, node ->
-                        when (node) {
-                            is PrefNode.Header -> {
-                                Text(
-                                    text = node.title.uppercase(),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.8.sp,
-                                    color = TvColors.accent,
-                                    modifier = Modifier.padding(
-                                        start = 6.dp,
-                                        top = if (index == 0) 2.dp else 12.dp,
-                                        bottom = 2.dp,
-                                    ),
-                                )
+                        focusNodeAtIndex(targetIdx)
+                    }
+                }
+            }
+
+            Column(Modifier.fillMaxSize()) {
+                SubScreenHeaderTitle(headerTitle = headerTitle, parentBreadcrumb = parentBreadcrumb)
+                Spacer(Modifier.height(10.dp))
+                if (nodes.none { it is PrefNode.Item }) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .focusRequester(emptyBoxRequester)
+                            .onPreviewKeyEvent { ev ->
+                                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                                    onNavigateLeft()
+                                    true
+                                } else false
                             }
-                            is PrefNode.Item -> {
-                                PreferenceItemCard(
-                                    item = node,
-                                    modifier = if (index == firstInteractiveIndex) Modifier.focusRequester(firstRequester) else Modifier,
-                                    onNavigateLeft = onNavigateLeft,
-                                )
+                            .focusable(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("—", fontSize = 15.sp, color = TvColors.secondaryText)
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                    ) {
+                        itemsIndexed(
+                            items = nodes,
+                            key = { idx, _ -> nodeIds[idx] },
+                        ) { index, node ->
+                            when (node) {
+                                is PrefNode.Header -> {
+                                    Text(
+                                        text = node.title.uppercase(),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.8.sp,
+                                        color = TvColors.accent,
+                                        modifier = Modifier.padding(
+                                            start = 6.dp,
+                                            top = if (index == 0) 2.dp else 12.dp,
+                                            bottom = 2.dp,
+                                        ),
+                                    )
+                                }
+                                is PrefNode.Item -> {
+                                    val itemId = nodeIds[index]
+                                    val req = requesterFor(itemId)
+                                    PreferenceItemCard(
+                                        item = node,
+                                        modifier = Modifier
+                                            .focusRequester(req)
+                                            .onFocusChanged { fs ->
+                                                if (fs.isFocused) {
+                                                    lastFocusedId = itemId
+                                                }
+                                            },
+                                        onNavigateLeft = onNavigateLeft,
+                                        onNavigateUp = {
+                                            val prevIdx = (index - 1 downTo 0).firstOrNull { nodes[it] is PrefNode.Item }
+                                            if (prevIdx == null) {
+                                                if (index > 0) {
+                                                    scope.launch { runCatching { listState.animateScrollToItem(0) } }
+                                                }
+                                            } else {
+                                                val prevReq = requesterFor(nodeIds[prevIdx])
+                                                val focusedImmediate = listState.layoutInfo.visibleItemsInfo.any { it.index == prevIdx } &&
+                                                    runCatching { prevReq.requestFocus() }.getOrDefault(false)
+                                                if (focusedImmediate) {
+                                                    if (prevIdx <= 1 && prevIdx > 0) {
+                                                        scope.launch { runCatching { listState.animateScrollToItem(0) } }
+                                                    }
+                                                } else {
+                                                    scope.launch { focusNodeAtIndex(prevIdx) }
+                                                }
+                                            }
+                                        },
+                                        onNavigateDown = {
+                                            val nextIdx = (index + 1..nodes.lastIndex).firstOrNull { nodes[it] is PrefNode.Item }
+                                            if (nextIdx != null) {
+                                                val nextReq = requesterFor(nodeIds[nextIdx])
+                                                val focusedImmediate = listState.layoutInfo.visibleItemsInfo.any { it.index == nextIdx } &&
+                                                    runCatching { nextReq.requestFocus() }.getOrDefault(false)
+                                                if (!focusedImmediate) {
+                                                    scope.launch {
+                                                        runCatching {
+                                                            listState.scrollToItem((listState.firstVisibleItemIndex + 1).coerceAtMost(nextIdx))
+                                                        }
+                                                        withFrameNanos { }
+                                                        if (!runCatching { nextReq.requestFocus() }.getOrDefault(false)) {
+                                                            focusNodeAtIndex(nextIdx)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -1077,6 +1188,8 @@ class TvSettingsFragment : Fragment() {
         item: PrefNode.Item,
         modifier: Modifier,
         onNavigateLeft: () -> Unit,
+        onNavigateUp: () -> Unit,
+        onNavigateDown: () -> Unit,
     ) {
         val context = LocalContext.current
         val interaction = remember { MutableInteractionSource() }
@@ -1096,19 +1209,26 @@ class TvSettingsFragment : Fragment() {
                             if (item.enabled && slider != null && slider.value > slider.min) {
                                 val next = (slider.value - slider.step).coerceAtLeast(slider.min)
                                 applySliderValue(context, item.key, next)
-                                true
                             } else {
                                 onNavigateLeft()
-                                true
                             }
+                            true
                         }
                         Key.DirectionRight -> {
                             val slider = item.kind as? Kind.Slider
                             if (item.enabled && slider != null && slider.value < slider.max) {
                                 val next = (slider.value + slider.step).coerceAtMost(slider.max)
                                 applySliderValue(context, item.key, next)
-                                true
-                            } else false
+                            }
+                            true
+                        }
+                        Key.DirectionUp -> {
+                            onNavigateUp()
+                            true
+                        }
+                        Key.DirectionDown -> {
+                            onNavigateDown()
+                            true
                         }
                         else -> false
                     }
@@ -1350,6 +1470,18 @@ class TvSettingsFragment : Fragment() {
         val list by customProxyViewModel.list.collectAsState()
         val stamp = refreshStamp.intValue
 
+        LaunchedEffect(focusRightTrigger.intValue) {
+            val trigger = focusRightTrigger.intValue
+            if (trigger > handledFocusRightTrigger) {
+                handledFocusRightTrigger = trigger
+                delay(25)
+                if (!runCatching { firstRequester.requestFocus() }.getOrDefault(false)) {
+                    delay(50)
+                    runCatching { firstRequester.requestFocus() }
+                }
+            }
+        }
+
         LaunchedEffect(Unit) {
             customProxyViewModel.statusChanged.collect {
                 refreshStamp.intValue++
@@ -1388,7 +1520,9 @@ class TvSettingsFragment : Fragment() {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
-                itemsIndexed(list.toList(), key = { idx, p -> "cp_${p.id}_${idx}_$stamp" }) { index, proxy ->
+                itemsIndexed(list.toList(), key = { idx, p -> if (p.id != 0) "cp_${p.id}" else "cp_new_$idx" }) { index, proxy ->
+                    @Suppress("UNUSED_EXPRESSION")
+                    stamp
                     val online = proxy.url?.let { customProxyViewModel.statusMap[it] }
                     val statusText = when (online) {
                         true -> "Online"
@@ -1470,6 +1604,18 @@ class TvSettingsFragment : Fragment() {
         val list by streamProxyViewModel.list.collectAsState()
         val stamp = refreshStamp.intValue
 
+        LaunchedEffect(focusRightTrigger.intValue) {
+            val trigger = focusRightTrigger.intValue
+            if (trigger > handledFocusRightTrigger) {
+                handledFocusRightTrigger = trigger
+                delay(25)
+                if (!runCatching { firstRequester.requestFocus() }.getOrDefault(false)) {
+                    delay(50)
+                    runCatching { firstRequester.requestFocus() }
+                }
+            }
+        }
+
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
@@ -1505,7 +1651,9 @@ class TvSettingsFragment : Fragment() {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
-                itemsIndexed(list.toList(), key = { idx, p -> "sp_${p.id}_${idx}_$stamp" }) { index, proxy ->
+                itemsIndexed(list.toList(), key = { idx, p -> if (p.id != 0) "sp_${p.id}" else "sp_new_$idx" }) { index, proxy ->
+                    @Suppress("UNUSED_EXPRESSION")
+                    stamp
                     val label = buildString {
                         append(proxy.host.orEmpty().ifBlank { "—" })
                         proxy.port?.let { append(":$it") }
@@ -1584,6 +1732,18 @@ class TvSettingsFragment : Fragment() {
         val list by videoSwapViewModel.list.collectAsState()
         val stamp = refreshStamp.intValue
 
+        LaunchedEffect(focusRightTrigger.intValue) {
+            val trigger = focusRightTrigger.intValue
+            if (trigger > handledFocusRightTrigger) {
+                handledFocusRightTrigger = trigger
+                delay(25)
+                if (!runCatching { firstRequester.requestFocus() }.getOrDefault(false)) {
+                    delay(50)
+                    runCatching { firstRequester.requestFocus() }
+                }
+            }
+        }
+
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
@@ -1611,7 +1771,18 @@ class TvSettingsFragment : Fragment() {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
-                itemsIndexed(list.toList(), key = { idx, v -> "vs_${v.id}_${idx}_$stamp" }) { index, swap ->
+                itemsIndexed(
+                    list.toList(),
+                    key = { idx, v ->
+                        when {
+                            v.position == -1 -> "vs_primary"
+                            v.id != 0 -> "vs_${v.id}"
+                            else -> "vs_new_$idx"
+                        }
+                    },
+                ) { index, swap ->
+                    @Suppress("UNUSED_EXPRESSION")
+                    stamp
                     val isPrimary = swap.position == -1 || index == 0
                     ManagedEntityRow(
                         title = "${swap.platform.orEmpty()} / ${swap.playerType.orEmpty()}",

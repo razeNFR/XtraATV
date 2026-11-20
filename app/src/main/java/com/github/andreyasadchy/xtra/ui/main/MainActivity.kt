@@ -266,6 +266,10 @@ class MainActivity : AppCompatActivity() {
         applyTheme()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        if (isTv) {
+            binding.playerContainer.isFocusable = false
+            binding.playerContainer.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        }
         binding.root.viewTreeObserver.addOnGlobalFocusChangeListener listener@{ oldFocus, newFocus ->
             // the page shown from the side menu without OK takes the focus by itself (its list loaded): the focus stays in
             // the menu, only right (or OK) goes into the page
@@ -309,7 +313,6 @@ class MainActivity : AppCompatActivity() {
                 } else if (newFocus.isInside(binding.navHostFragment)) {
                     hideTvMenu()
                 }
-                scheduleTvMiniPlayerDodgeCheck(followScrollMs = 260L)
             }
         }
         if (isTv) {
@@ -1173,66 +1176,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var tvBackLongDownSeen = false
-    private val tvDodgeTempRect = android.graphics.Rect()
-    private var tvDodgeFollowUntilElapsed = 0L
-    private val tvDodgeCheckRunnable = object : Runnable {
-        override fun run() {
-            if (isFinishing || isDestroyed || !::binding.isInitialized) return
-            val player = playerFragment as? PlayerFragment
-            if (player == null || !player.isTvMiniPlayerVisible()) {
-                tvDodgeFollowUntilElapsed = 0L
-                return
-            }
-            player.updateTvMinimizedDodge(resolveCurrentFocusedRect(tvDodgeTempRect))
-            if (android.os.SystemClock.elapsedRealtime() < tvDodgeFollowUntilElapsed) {
-                binding.root.postDelayed(this, 85L)
-            }
-        }
-    }
-
-    fun scheduleTvMiniPlayerDodgeCheck(followScrollMs: Long = 0L) {
-        if (!isTv || isFinishing || isDestroyed || !::binding.isInitialized) return
-        val player = playerFragment as? PlayerFragment
-        if (player == null || !player.isTvMiniPlayerVisible()) return
-        if (followScrollMs > 0L) {
-            val until = android.os.SystemClock.elapsedRealtime() + followScrollMs
-            if (until > tvDodgeFollowUntilElapsed) {
-                tvDodgeFollowUntilElapsed = until
-            }
-        }
-        binding.root.removeCallbacks(tvDodgeCheckRunnable)
-        binding.root.postDelayed(tvDodgeCheckRunnable, 40L)
-    }
-
-    fun resolveCurrentFocusedRect(outRect: android.graphics.Rect = android.graphics.Rect()): android.graphics.Rect? {
-        if (!::binding.isInitialized) return null
-        val root = binding.root
-        if (root.width <= 0 || root.height <= 0) return null
-        val focused = root.findFocus() ?: return null
-        if (!focused.isShown || focused.width <= 0 || focused.height <= 0 || focused.isInside(binding.playerContainer)) {
-            return null
-        }
-        val local = android.graphics.Rect()
-        focused.getFocusedRect(local)
-        if (local.isEmpty) return null
-        val loc = IntArray(2)
-        val rootLoc = IntArray(2)
-        focused.getLocationInWindow(loc)
-        root.getLocationInWindow(rootLoc)
-        outRect.set(
-            local.left + loc[0] - rootLoc[0],
-            local.top + loc[1] - rootLoc[1],
-            local.right + loc[0] - rootLoc[0],
-            local.bottom + loc[1] - rootLoc[1],
-        )
-        if (outRect.width() >= root.width * 0.92f && outRect.height() >= root.height * 0.82f) {
-            return null
-        }
-        if (!outRect.intersect(0, 0, root.width, root.height)) {
-            return null
-        }
-        return outRect
-    }
 
     private fun resolveApplicableTvBackLongAction(): String? {
         if (!isTv || tvMultiStreamShown || hasOpenDialogFragment()) return null
@@ -1329,13 +1272,6 @@ class MainActivity : AppCompatActivity() {
             lastUserInteractionAt = lastTvKeyAt
             if (event.keyCode != KeyEvent.KEYCODE_BACK) {
                 lastExitBackAt = 0L
-            }
-            if (isTv && (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
-                    event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
-                    event.keyCode == KeyEvent.KEYCODE_PAGE_UP || event.keyCode == KeyEvent.KEYCODE_PAGE_DOWN ||
-                    event.keyCode == KeyEvent.KEYCODE_BACK)
-            ) {
-                scheduleTvMiniPlayerDodgeCheck(followScrollMs = 340L)
             }
         }
         if (isTv && PlayerFragment.consumeHeldRemoteKeyTail(event)) {
@@ -3535,6 +3471,10 @@ class MainActivity : AppCompatActivity() {
             return
         }
         if (focusable) {
+            if (isTv) {
+                binding.playerContainer.isFocusable = false
+                binding.playerContainer.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            }
             if (binding.navHostFragment.descendantFocusability != ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
                 return
             }
@@ -3551,6 +3491,11 @@ class MainActivity : AppCompatActivity() {
             lastFocusGrid = null
             currentTvHome()?.let { home ->
                 home.focusLastCard()
+                return
+            }
+            currentTvSettings()?.let { settings ->
+                settings.requestContentFocus()
+                settings.view?.requestFocus()
                 return
             }
             if (lastFocus != null && lastFocus.isAttachedToWindow && lastFocus.isShown && lastFocus.requestFocus()) {
@@ -3578,6 +3523,10 @@ class MainActivity : AppCompatActivity() {
                 ensureFocus(force = true)
             }
         } else {
+            if (isTv) {
+                binding.playerContainer.isFocusable = true
+                binding.playerContainer.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            }
             if (binding.navHostFragment.descendantFocusability == ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
                 return
             }

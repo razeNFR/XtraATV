@@ -107,13 +107,25 @@ object TvLauncherChannels {
         }
 
         val total = streams.size
+        val stampBucket = System.currentTimeMillis() / (5 * 60_000L)
         streams.forEachIndexed { index, stream ->
             val login = stream.channelLogin ?: return@forEachIndexed
             val name = stream.channelName?.takeIf { it.isNotBlank() } ?: login
             val game = stream.gameName?.takeIf { it.isNotBlank() }
             val cardTitle = if (game != null) "$name · $game" else name
-            val poster = stream.thumbnail?.takeUnless { stream.thumbnailURL.isNullOrBlank() }
-                ?: stream.channelImage
+            val rawThumb = stream.thumbnail?.takeUnless { stream.thumbnailURL.isNullOrBlank() }
+            val poster = if (rawThumb != null) {
+                val stamped = TvThumbnails.withStamp(rawThumb, stampBucket)
+                val sid = stream.id?.takeIf { it.isNotBlank() }
+                if (stamped != null && sid != null && !stamped.contains("404_preview")) {
+                    "$stamped&s=$sid"
+                } else {
+                    stamped
+                }
+            } else {
+                stream.channelImage
+            }
+            val providerId = stream.id?.takeIf { it.isNotBlank() }?.let { "live_${login}_$it" } ?: "live_$login"
             val deepLink = Uri.parse("https://www.twitch.tv/$login").buildUpon()
                 .appendQueryParameter("xtratv_play", "1")
                 .apply {
@@ -142,7 +154,7 @@ object TvLauncherChannels {
                     TvContract.PreviewPrograms.ASPECT_RATIO_16_9,
                 )
                 put(TvContract.PreviewPrograms.COLUMN_INTENT_URI, intentUri)
-                put(TvContract.PreviewPrograms.COLUMN_INTERNAL_PROVIDER_ID, "live_$login")
+                put(TvContract.PreviewPrograms.COLUMN_INTERNAL_PROVIDER_ID, providerId)
                 put(TvContract.PreviewPrograms.COLUMN_WEIGHT, (total - index) * 10)
             }
             resolver.insert(TvContract.PreviewPrograms.CONTENT_URI, values)
