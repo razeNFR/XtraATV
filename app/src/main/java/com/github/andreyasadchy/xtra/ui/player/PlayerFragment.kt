@@ -90,6 +90,7 @@ import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.player.PlayerViewModel.Companion.PlayerViewModelFactory
+import com.github.andreyasadchy.xtra.ui.tv.FooterActionChip
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
@@ -3572,7 +3573,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
                         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                     ) {
-                        com.github.andreyasadchy.xtra.ui.tv.FooterActionChip(
+                        FooterActionChip(
                             label = getString(R.string.tv_chat_manage_users),
                             icon = R.drawable.tv_ic_person,
                             requester = footerUsersReq,
@@ -3585,7 +3586,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 recentChatters = chatFragment?.getRecentChatters().orEmpty(),
                             )
                         }
-                        com.github.andreyasadchy.xtra.ui.tv.FooterActionChip(
+                        FooterActionChip(
                             label = getString(R.string.tv_restart_chat),
                             icon = R.drawable.tv_ic_refresh,
                             requester = footerRestartReq,
@@ -3596,7 +3597,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             restartTvChat()
                             dismiss()
                         }
-                        com.github.andreyasadchy.xtra.ui.tv.FooterActionChip(
+                        FooterActionChip(
                             label = getString(R.string.tv_reset),
                             icon = R.drawable.tv_ic_replay,
                             requester = footerResetReq,
@@ -4351,7 +4352,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                     ) {
                         if (!twoOpen) {
-                            com.github.andreyasadchy.xtra.ui.tv.FooterActionChip(
+                            FooterActionChip(
                                 label = getString(R.string.tv_pip_add_second),
                                 icon = R.drawable.tv_ic_add,
                                 requester = footer0Req,
@@ -4373,7 +4374,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                     activity.openTvPip(picked)
                                 }
                             }
-                            com.github.andreyasadchy.xtra.ui.tv.FooterActionChip(
+                            FooterActionChip(
                                 label = getString(R.string.tv_pip_swap),
                                 icon = R.drawable.tv_ic_swap,
                                 requester = footer1Req,
@@ -4384,7 +4385,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 dismiss()
                                 activity.swapTvPip(currentSlot)
                             }
-                            com.github.andreyasadchy.xtra.ui.tv.FooterActionChip(
+                            FooterActionChip(
                                 label = getString(R.string.tv_pip_close),
                                 icon = R.drawable.tv_ic_close,
                                 requester = footer2Req,
@@ -4396,7 +4397,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             }
                         } else {
                             val slotTitle = getString(if (currentSlot == 1) R.string.tv_pip_window_2 else R.string.tv_pip_window_1)
-                            com.github.andreyasadchy.xtra.ui.tv.FooterActionChip(
+                            FooterActionChip(
                                 label = getString(R.string.tv_pip_swap),
                                 icon = R.drawable.tv_ic_swap,
                                 requester = footer0Req,
@@ -4406,7 +4407,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 dismiss()
                                 activity.swapTvPip(currentSlot)
                             }
-                            com.github.andreyasadchy.xtra.ui.tv.FooterActionChip(
+                            FooterActionChip(
                                 label = slotTitle,
                                 icon = R.drawable.tv_ic_close,
                                 requester = footer1Req,
@@ -4417,7 +4418,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 dismiss()
                                 activity.closeTvPipSlot(currentSlot)
                             }
-                            com.github.andreyasadchy.xtra.ui.tv.FooterActionChip(
+                            FooterActionChip(
                                 label = getString(R.string.tv_pip_close_all),
                                 icon = R.drawable.tv_ic_delete,
                                 requester = footer2Req,

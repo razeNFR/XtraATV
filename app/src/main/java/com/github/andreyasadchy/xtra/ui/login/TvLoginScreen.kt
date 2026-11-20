@@ -84,13 +84,13 @@ fun TvLoginScreen(
                 }
                 Spacer(Modifier.width(24.dp))
                 if (status.code || status.page) {
-                    ButtonRow(stringResource(R.string.log_out), Modifier.width(200.dp), onLogout)
+                    ButtonRow(stringResource(R.string.log_out), Modifier.width(200.dp), onClick = onLogout)
                     Spacer(Modifier.width(12.dp))
                 } else if (onGuest != null) {
-                    ButtonRow(stringResource(R.string.tv_accounts_guest_short), Modifier.width(180.dp), onGuest)
+                    ButtonRow(stringResource(R.string.tv_accounts_guest_short), Modifier.width(180.dp), onClick = onGuest)
                     Spacer(Modifier.width(12.dp))
                 }
-                ButtonRow(stringResource(R.string.tv_login_done_button), Modifier.width(200.dp).focusRequester(doneRequester), onDone)
+                ButtonRow(stringResource(R.string.tv_login_done_button), Modifier.width(200.dp).focusRequester(doneRequester), onClick = onDone)
             }
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -161,7 +161,7 @@ private fun MethodCard(
         ButtonRow(
             stringResource(if (connected) R.string.tv_login_redo else R.string.tv_login_connect),
             Modifier.focusRequester(requester).align(Alignment.CenterHorizontally),
-            onClick
+            onClick = onClick,
         )
     }
 }
