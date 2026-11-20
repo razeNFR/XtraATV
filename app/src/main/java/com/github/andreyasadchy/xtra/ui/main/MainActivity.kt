@@ -1932,7 +1932,8 @@ class MainActivity : AppCompatActivity() {
         tvMenuState.onFocusItem = { id ->
             binding.root.removeCallbacks(tvMenuAutoNav)
             tvMenuPendingId = 0
-            if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavAccount && id != tvMenuState.selected) {
+            val onSubScreen = ::navController.isInitialized && navController.previousBackStackEntry != null
+            if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavAccount && (id != tvMenuState.selected || onSubScreen)) {
                 tvMenuPendingId = id
                 binding.root.postDelayed(tvMenuAutoNav, TV_MENU_HOVER_SETTLE_MS)
             }
@@ -1993,14 +1994,19 @@ class MainActivity : AppCompatActivity() {
     private val tvMenuAutoNav = Runnable {
         val id = tvMenuPendingId
         tvMenuPendingId = 0
-        if (id == 0 || !isTvMenuShown || (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null)) {
+        val onSubScreen = ::navController.isInitialized && navController.previousBackStackEntry != null
+        if (id == 0 || !isTvMenuShown || (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null && !onSubScreen)) {
             return@Runnable
         }
         tvMenuAutoNavAt = android.os.SystemClock.elapsedRealtime()
         lastContentFocus = null
         tvMenuAutoHovering = true
         try {
-            binding.navBar.selectedItemId = id
+            if (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null && onSubScreen && id in tvRootDestinations) {
+                openTvSectionRoot(id)
+            } else {
+                binding.navBar.selectedItemId = id
+            }
         } finally {
             tvMenuAutoHovering = false
         }
@@ -3900,9 +3906,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun currentVisibleNavFragment(): Fragment? {
-        return supportFragmentManager.findFragmentById(R.id.navHostFragment)
-            ?.childFragmentManager?.fragments
-            ?.firstOrNull { it !is androidx.fragment.app.DialogFragment && it.isVisible }
+        val host = supportFragmentManager.findFragmentById(R.id.navHostFragment) ?: return null
+        host.childFragmentManager.primaryNavigationFragment
+            ?.takeIf { it !is androidx.fragment.app.DialogFragment && it.isVisible && !it.isRemoving }
+            ?.let { return it }
+        return host.childFragmentManager.fragments
+            .lastOrNull { it !is androidx.fragment.app.DialogFragment && it.isVisible && !it.isRemoving }
     }
 
     /** The home, when it is the screen shown. */
@@ -4300,6 +4309,10 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         openTvSectionRoot(R.id.followPagerFragment)
                     }
+                    return@setOnItemReselectedListener
+                }
+                if (isTv && navController.previousBackStackEntry != null && it.itemId in tvRootDestinations) {
+                    openTvSectionRoot(it.itemId)
                     return@setOnItemReselectedListener
                 }
                 if (!navController.popBackStack(it.itemId, false)) {

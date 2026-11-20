@@ -82,65 +82,11 @@ class FollowedGamesAdapter(
                     val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
                     if (isTv) {
                         root.setOnLongClickListener {
-                            val pinned = com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.isCategoryPinned(context, item.id)
-                            val actions = buildList {
-                                add(
-                                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
-                                        context.getString(R.string.tv_open_this_category),
-                                        R.drawable.tv_ic_gamepad,
-                                    ) {
-                                        openCategory()
-                                    }
-                                )
-                                if (!item.id.isNullOrBlank()) {
-                                    add(
-                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
-                                            context.getString(if (pinned) R.string.tv_home_unpin_category else R.string.tv_home_pin_category),
-                                            if (pinned) R.drawable.tv_ic_delete else R.drawable.tv_ic_pin,
-                                        ) {
-                                            val nowPinned = com.github.andreyasadchy.xtra.ui.tv.home.TvHomeRows.togglePinCategory(context, item)
-                                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
-                                                context,
-                                                context.getString(
-                                                    if (nowPinned) R.string.tv_home_category_pinned else R.string.tv_home_category_unpinned,
-                                                    item.name ?: "",
-                                                ),
-                                                android.widget.Toast.LENGTH_SHORT,
-                                            ).show()
-                                        }
-                                    )
-                                }
-                                if (!item.id.isNullOrBlank() || !item.slug.isNullOrBlank() || !item.name.isNullOrBlank()) {
-                                    val catBlocked = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(item.id, item.slug, item.name)
-                                    val catLabel = item.name ?: item.slug ?: ""
-                                    add(
-                                        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
-                                            context.getString(
-                                                if (catBlocked) R.string.tv_blacklist_unhide_category else R.string.tv_blacklist_hide_category,
-                                                catLabel,
-                                            ),
-                                            R.drawable.tv_ic_block,
-                                        ) {
-                                            if (catBlocked) {
-                                                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.unblockCategory(context, item.id, item.slug, item.name)
-                                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
-                                                    context,
-                                                    context.getString(R.string.tv_blacklist_category_unhidden, catLabel),
-                                                    android.widget.Toast.LENGTH_SHORT,
-                                                ).show()
-                                            } else {
-                                                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.blockCategory(context, item.id, item.slug, item.name, item.boxArtURL)
-                                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
-                                                    context,
-                                                    context.getString(R.string.tv_blacklist_category_hidden, catLabel),
-                                                    android.widget.Toast.LENGTH_SHORT,
-                                                ).show()
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                            com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(context, item.name ?: "", actions)
+                            com.github.andreyasadchy.xtra.ui.tv.TvGameActions.show(
+                                context = context,
+                                game = item,
+                                onOpenCategory = openCategory,
+                            )
                             true
                         }
                     } else {

@@ -3385,16 +3385,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     val leftPx = kotlin.math.round(prefs.getFloat(C.TV_CHAT_FREE_X, 0.7f).coerceIn(0f, 1f) * maxLeft).toInt().coerceIn(0, maxLeft)
                     val topPx = kotlin.math.round(prefs.getFloat(C.TV_CHAT_FREE_Y, 0.5f).coerceIn(0f, 1f) * maxTop).toInt().coerceIn(0, maxTop)
                     freeRounded = leftPx > 0 && leftPx < maxLeft && topPx > 0 && topPx < maxTop
-                    chatLayout.updateLayoutParams<FrameLayout.LayoutParams> {
-                        width = chatWidth
-                        height = chatHeight
-                        gravity = Gravity.TOP or Gravity.START
-                        marginStart = 0
-                        marginEnd = 0
-                        leftMargin = leftPx
-                        topMargin = topPx
-                        rightMargin = 0
-                        bottomMargin = 0
+                    chatLayout.layoutParams = FrameLayout.LayoutParams(chatWidth, chatHeight, Gravity.TOP or Gravity.LEFT).apply {
+                        setMargins(leftPx, topPx, 0, 0)
                     }
                 }
                 else -> {
@@ -3417,10 +3409,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             7 -> Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
                             else -> Gravity.END or Gravity.BOTTOM
                         }
+                        setMargins(margin, margin, margin, margin)
                         marginStart = margin
                         marginEnd = margin
-                        topMargin = margin
-                        bottomMargin = margin
                     }
                 }
             }
@@ -3555,7 +3546,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_chat_layout),
-                width = 480.dp,
+                width = 392.dp,
                 compactHeader = true,
                 scrollable = true,
                 alignEnd = alignEnd,
@@ -3680,7 +3671,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 applyTvChatLayout()
                             }
                         }
-                        androidx.compose.runtime.key(mode.intValue, freePosState.value) {
+                        androidx.compose.runtime.key(mode.intValue) {
                             when (mode.intValue) {
                                 1 -> {
                                     val sideLeft = position.intValue == 2 || position.intValue == 3 || position.intValue == 5
@@ -4306,7 +4297,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_pip_settings),
-                width = 480.dp,
+                width = 392.dp,
                 compactHeader = true,
                 alignEnd = pipOnLeft,
                 scrollable = true,
@@ -4434,7 +4425,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             ) {
                 when (selectedTab.intValue) {
                     0 -> {
-                        androidx.compose.runtime.key(currentSlot, slotCornerPos == "free") {
+                        androidx.compose.runtime.key(currentSlot) {
                             val isFree = slotCornerPos == "free"
                             val posOptions = if (isFree) corners + getString(R.string.tv_position_free) else corners
                             val posSelected = if (isFree) {

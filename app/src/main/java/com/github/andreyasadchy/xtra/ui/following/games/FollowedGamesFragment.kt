@@ -65,6 +65,17 @@ class FollowedGamesFragment : PagedListFragment(), Scrollable {
                 }
             }
         }
+        viewLifecycleOwner.lifecycleScope.launch {
+            var seenGen = com.github.andreyasadchy.xtra.ui.tv.TvFollow.gameChanges.value
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                com.github.andreyasadchy.xtra.ui.tv.TvFollow.gameChanges.collectLatest { gen ->
+                    if (gen != seenGen) {
+                        seenGen = gen
+                        pagingAdapter.refresh()
+                    }
+                }
+            }
+        }
         initializeAdapter(binding, pagingAdapter, enableScrollTopButton = false)
     }
 

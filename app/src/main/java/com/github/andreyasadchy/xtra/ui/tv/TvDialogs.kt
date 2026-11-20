@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -223,11 +224,11 @@ fun SidePanel(
                         if (alignEnd) listOf(ComposeColor(0xE6141318), TvColors.panel) else listOf(TvColors.panel, ComposeColor(0xE6141318))
                     )
                 )
-                .padding(horizontal = if (compactHeader) 26.dp else 32.dp, vertical = if (compactHeader) 24.dp else 36.dp)
+                .padding(horizontal = if (compactHeader) 18.dp else 32.dp, vertical = if (compactHeader) 22.dp else 36.dp)
         ) {
             Text(
                 title,
-                fontSize = if (compactHeader) 23.sp else 26.sp,
+                fontSize = if (compactHeader) 21.sp else 26.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = ComposeColor.White,
                 maxLines = 2,
@@ -238,11 +239,11 @@ fun SidePanel(
                 Text(subtitle, fontSize = 14.sp, color = TvColors.secondaryText)
             }
             if (headerExtra != null) {
-                Spacer(Modifier.height(12.dp))
-                headerExtra()
                 Spacer(Modifier.height(10.dp))
+                headerExtra()
+                Spacer(Modifier.height(8.dp))
             } else {
-                Spacer(Modifier.height(if (compactHeader) 14.dp else 24.dp))
+                Spacer(Modifier.height(if (compactHeader) 12.dp else 24.dp))
             }
             if (scrollable) {
                 val effectiveScroll = scrollState ?: androidx.compose.foundation.rememberScrollState()
@@ -262,7 +263,7 @@ fun SidePanel(
                 content()
             }
             if (footer != null) {
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 footer()
             }
         }
@@ -287,7 +288,7 @@ fun PanelTabs(
     val latestOnSelect by androidx.compose.runtime.rememberUpdatedState(onSelect)
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         tabs.forEachIndexed { index, (icon, label) ->
             val interaction = remember { MutableInteractionSource() }
@@ -316,7 +317,7 @@ fun PanelTabs(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(38.dp)
+                    .height(36.dp)
                     .focusRequester(tabRequesters[index])
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -355,7 +356,7 @@ fun PanelTabs(
                         latestOnSelect(index)
                         runCatching { latestDown.requestFocus() }
                     }
-                    .padding(horizontal = 10.dp),
+                    .padding(horizontal = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
@@ -369,13 +370,13 @@ fun PanelTabs(
                         androidx.compose.ui.res.painterResource(icon),
                         contentDescription = null,
                         tint = iconCol,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(15.dp),
                     )
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(5.dp))
                 }
                 Text(
                     label,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = if (active || focused) FontWeight.SemiBold else FontWeight.Medium,
                     color = textCol,
                     maxLines = 1,
@@ -407,7 +408,7 @@ fun androidx.compose.foundation.layout.RowScope.FooterActionChip(
     Row(
         modifier = Modifier
             .weight(1f)
-            .height(42.dp)
+            .height(40.dp)
             .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -437,7 +438,7 @@ fun androidx.compose.foundation.layout.RowScope.FooterActionChip(
             .clip(RoundedCornerShape(10.dp))
             .background(if (focused) TvColors.focused else TvColors.item)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -446,13 +447,13 @@ fun androidx.compose.foundation.layout.RowScope.FooterActionChip(
                 androidx.compose.ui.res.painterResource(icon),
                 contentDescription = null,
                 tint = if (focused) TvColors.onFocused else ComposeColor(0xDCFFFFFF),
-                modifier = Modifier.size(17.dp),
+                modifier = Modifier.size(15.dp),
             )
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
         }
         Text(
             label,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = textColor,
             maxLines = 1,
@@ -483,7 +484,7 @@ fun FocusRow(
                 if (onClick != null) Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)
                 else Modifier.focusable(interactionSource = interaction)
             )
-            .padding(horizontal = if (compact) 15.dp else 18.dp, vertical = if (compact) 10.dp else 14.dp)
+            .padding(horizontal = if (compact) 13.dp else 18.dp, vertical = if (compact) 9.dp else 14.dp)
     ) {
         content(focused)
     }
@@ -525,7 +526,7 @@ fun ChoiceList(options: List<String>, selected: Int, icons: List<Int?>? = null, 
     }
     LaunchedEffect(Unit) {
         if (options.isNotEmpty()) {
-            requester.requestFocus()
+            runCatching { requester.requestFocus() }
         }
     }
 }
@@ -589,7 +590,7 @@ fun SliderRow(
         }
     ) { focused ->
         val textColor = if (focused) TvColors.onFocused else ComposeColor.White
-        val fontSize = if (compact) 15.5.sp else 17.sp
+        val fontSize = if (compact) 15.sp else 17.sp
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
@@ -597,9 +598,9 @@ fun SliderRow(
                         androidx.compose.ui.res.painterResource(icon),
                         contentDescription = null,
                         tint = if (focused) TvColors.onFocused else ComposeColor(0xD8FFFFFF),
-                        modifier = Modifier.size(if (compact) 19.dp else 20.dp),
+                        modifier = Modifier.size(if (compact) 18.dp else 20.dp),
                     )
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(9.dp))
                 }
                 Text(label, fontSize = fontSize, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (focused) {
@@ -610,7 +611,7 @@ fun SliderRow(
                     Text("  ›", fontSize = fontSize, color = textColor)
                 }
             }
-            Spacer(Modifier.height(if (compact) 7.dp else 10.dp))
+            Spacer(Modifier.height(if (compact) 6.dp else 10.dp))
             val fraction = if (range.last > range.first) (current - range.first).toFloat() / (range.last - range.first) else 0f
             Box(
                 Modifier
@@ -662,20 +663,28 @@ fun SelectorRow(
         }
     ) { focused ->
         val textColor = if (focused) TvColors.onFocused else ComposeColor.White
-        val fontSize = if (compact) 15.5.sp else 17.sp
+        val fontSize = if (compact) 15.sp else 17.sp
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             if (icon != null) {
                 androidx.tv.material3.Icon(
                     androidx.compose.ui.res.painterResource(icon),
                     contentDescription = null,
                     tint = if (focused) TvColors.onFocused else ComposeColor(0xD8FFFFFF),
-                    modifier = Modifier.size(if (compact) 19.dp else 20.dp),
+                    modifier = Modifier.size(if (compact) 18.dp else 20.dp),
                 )
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(9.dp))
             }
             Text(label, fontSize = fontSize, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            Text((if (focused) "‹  " else "") + options[current] + (if (focused) "  ›" else ""), fontSize = fontSize, fontWeight = FontWeight.SemiBold, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                (if (focused) "‹ " else "") + options[current] + (if (focused) " ›" else ""),
+                fontSize = fontSize,
+                fontWeight = FontWeight.SemiBold,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = if (compact) 185.dp else 235.dp),
+            )
         }
     }
 }
@@ -691,7 +700,7 @@ fun ButtonRow(
 ) {
     FocusRow(modifier = modifier, compact = compact, onClick = onClick) { focused ->
         val textColor = if (focused) TvColors.onFocused else ComposeColor.White
-        val fontSize = if (compact) 15.5.sp else 17.sp
+        val fontSize = if (compact) 15.sp else 17.sp
         if (alignStart) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
@@ -699,9 +708,9 @@ fun ButtonRow(
                         androidx.compose.ui.res.painterResource(icon),
                         contentDescription = null,
                         tint = if (focused) TvColors.onFocused else ComposeColor(0xD8FFFFFF),
-                        modifier = Modifier.size(if (compact) 19.dp else 20.dp),
+                        modifier = Modifier.size(if (compact) 18.dp else 20.dp),
                     )
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(9.dp))
                 }
                 Text(label, fontSize = fontSize, fontWeight = FontWeight.Medium, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -712,7 +721,7 @@ fun ButtonRow(
                         androidx.compose.ui.res.painterResource(icon),
                         contentDescription = null,
                         tint = if (focused) TvColors.onFocused else ComposeColor(0xD8FFFFFF),
-                        modifier = Modifier.size(if (compact) 19.dp else 20.dp),
+                        modifier = Modifier.size(if (compact) 18.dp else 20.dp),
                     )
                     Spacer(Modifier.width(8.dp))
                 }

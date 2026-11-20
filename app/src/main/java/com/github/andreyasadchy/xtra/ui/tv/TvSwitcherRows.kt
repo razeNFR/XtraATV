@@ -721,7 +721,7 @@ object TvSwitcherRows {
             }
 
             LaunchedEffect(Unit) {
-                searchFocus.requestFocus()
+                runCatching { searchFocus.requestFocus() }
             }
         }
     }

@@ -515,7 +515,7 @@ fun TvHomeScreen(
                             )
                         }
                     }
-                    .focusRestorer(if (firstIsGhost) ghostCard else firstCard)
+                    .focusRestorer()
                     .onPreviewKeyEvent { event ->
                         if (event.type == KeyEventType.KeyDown) {
                             userMoved = true

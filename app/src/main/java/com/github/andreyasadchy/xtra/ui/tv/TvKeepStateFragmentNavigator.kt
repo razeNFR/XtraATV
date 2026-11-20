@@ -32,6 +32,8 @@ class TvKeepStateFragmentNavigator(
     private val rootDestinationIds: Set<Int>,
 ) : Navigator<FragmentNavigator.Destination>() {
 
+    private val pendingRemoved = HashSet<androidx.fragment.app.Fragment>()
+
     override fun createDestination(): FragmentNavigator.Destination =
         FragmentNavigator.Destination(this)
 
@@ -73,14 +75,14 @@ class TvKeepStateFragmentNavigator(
             )
         }
 
-        var targetFrag = fragmentManager.findFragmentByTag(tag)
+        var targetFrag = fragmentManager.findFragmentByTag(tag)?.takeUnless { it in pendingRemoved }
         for (existing in fragmentManager.fragments) {
             if (existing !== targetFrag &&
                 existing.id == containerId &&
                 existing !is DialogFragment &&
                 !existing.isRemoving &&
                 !existing.isDetached &&
-                !existing.isHidden
+                existing !in pendingRemoved
             ) {
                 ft.hide(existing)
                 ft.setMaxLifecycle(existing, Lifecycle.State.STARTED)
@@ -98,9 +100,7 @@ class TvKeepStateFragmentNavigator(
             if (!isRoot && isSingleTop) {
                 targetFrag.arguments = entry.arguments ?: Bundle()
             }
-            if (targetFrag.isHidden) {
-                ft.show(targetFrag)
-            }
+            ft.show(targetFrag)
         }
         ft.setMaxLifecycle(targetFrag, Lifecycle.State.RESUMED)
         ft.setPrimaryNavigationFragment(targetFrag)
@@ -119,27 +119,18 @@ class TvKeepStateFragmentNavigator(
         val popIndex = stack.indexOf(popUpTo)
         if (popIndex < 0) return
 
-        val popped = stack.subList(popIndex, stack.size)
+        val popped = stack.subList(popIndex, stack.size).toList()
         val nextTop = stack.getOrNull(popIndex - 1)
         val ft = fragmentManager.beginTransaction().setReorderingAllowed(true)
+        val removedNow = ArrayList<androidx.fragment.app.Fragment>()
         var hasOps = false
 
         for (entry in popped) {
             val destId = entry.destination.id
-            if (destId in rootDestinationIds) {
-                // Keep root fragments warm in FragmentManager; when nextTop == null, a root switch
-                // navigate() immediately follows and cross-fades the outgoing root in a single transaction.
-                if (nextTop != null && nextTop.destination.id != destId) {
-                    fragmentManager.findFragmentByTag(rootTag(destId))
-                        ?.takeIf { !it.isHidden }
-                        ?.let { frag ->
-                            ft.hide(frag)
-                            ft.setMaxLifecycle(frag, Lifecycle.State.STARTED)
-                            hasOps = true
-                        }
-                }
-            } else {
+            if (destId !in rootDestinationIds) {
                 fragmentManager.findFragmentByTag(entry.id)?.let { frag ->
+                    pendingRemoved += frag
+                    removedNow += frag
                     ft.remove(frag)
                     hasOps = true
                 }
@@ -150,7 +141,7 @@ class TvKeepStateFragmentNavigator(
             val nextDest = nextTop.destination as FragmentNavigator.Destination
             val nextIsRoot = nextDest.id in rootDestinationIds
             val nextTag = if (nextIsRoot) rootTag(nextDest.id) else nextTop.id
-            var topFrag = fragmentManager.findFragmentByTag(nextTag)
+            var topFrag = fragmentManager.findFragmentByTag(nextTag)?.takeUnless { it in pendingRemoved }
             if (topFrag == null) {
                 topFrag = fragmentManager.fragmentFactory
                     .instantiate(context.classLoader, nextDest.className)
@@ -158,14 +149,31 @@ class TvKeepStateFragmentNavigator(
                         arguments = nextTop.arguments ?: Bundle()
                     }
                 ft.add(containerId, topFrag, nextTag)
-            } else if (topFrag.isHidden) {
+            } else {
                 ft.show(topFrag)
+            }
+            for (existing in fragmentManager.fragments) {
+                if (existing !== topFrag &&
+                    existing.id == containerId &&
+                    existing !is DialogFragment &&
+                    !existing.isRemoving &&
+                    !existing.isDetached &&
+                    existing !in pendingRemoved
+                ) {
+                    ft.hide(existing)
+                    ft.setMaxLifecycle(existing, Lifecycle.State.STARTED)
+                }
             }
             ft.setMaxLifecycle(topFrag, Lifecycle.State.RESUMED)
             ft.setPrimaryNavigationFragment(topFrag)
             hasOps = true
         }
 
+        if (removedNow.isNotEmpty()) {
+            ft.runOnCommit {
+                pendingRemoved.removeAll(removedNow.toSet())
+            }
+        }
         if (hasOps) {
             ft.commit()
         }

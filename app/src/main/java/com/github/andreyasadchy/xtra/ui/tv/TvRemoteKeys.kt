@@ -534,7 +534,7 @@ object TvRemoteKeys {
                 }
             }
             LaunchedEffect(resetTick) {
-                firstFocus.requestFocus()
+                runCatching { firstFocus.requestFocus() }
             }
         }
     }
@@ -661,7 +661,7 @@ object TvRemoteKeys {
                 }
             }
             LaunchedEffect(Unit) {
-                addFocus.requestFocus()
+                runCatching { addFocus.requestFocus() }
             }
         }
     }
