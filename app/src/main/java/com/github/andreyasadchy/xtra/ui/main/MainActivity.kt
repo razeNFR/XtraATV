@@ -1779,17 +1779,17 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    /** Coming back to a screen: focus the card that had the focus there (the views were recreated). */
+    /** Coming back to a screen: focus the card that had the focus there (the views were recreated or unhidden). */
     private fun restoreTvScreenFocus(tries: Int = 0) {
         if (!::navController.isInitialized || isTvMenuShown) {
             return
         }
-        val position = tvFocusKey()?.let { tvFocusMemory[it] } ?: return
+        val activeRoot = currentVisibleNavFragment()?.view ?: binding.navHostFragment
         val focus = currentFocus
-        if (focus != null && focus.isShown && focus.parent is RecyclerView) {
+        if (focus != null && focus.isShown && focus.isInside(activeRoot) && focus.parent is RecyclerView) {
             return
         }
-        val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+        val grid = TvUi.findVisibleGrid(activeRoot)
         val count = grid?.adapter?.itemCount ?: 0
         if (grid == null || count == 0) {
             if (tries < 15) {
@@ -1797,11 +1797,16 @@ class MainActivity : AppCompatActivity() {
             }
             return
         }
-        val target = position.coerceAtMost(count - 1)
+        val position = tvFocusKey()?.let { tvFocusMemory[it] } ?: 0
+        val target = position.coerceIn(0, count - 1)
         val holder = grid.findViewHolderForAdapterPosition(target)
         if (holder == null || !holder.itemView.requestFocus()) {
             grid.scrollToPosition(target)
-            grid.post { grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() }
+            grid.post {
+                if (grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() != true) {
+                    TvUi.focusFirstItem(grid)
+                }
+            }
         }
     }
 
@@ -1846,7 +1851,7 @@ class MainActivity : AppCompatActivity() {
                 // anything else: the back of before
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
-                isEnabled = true
+                updateTvMenuBackCallback()
             }
         }
     }
@@ -1864,7 +1869,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTvMenuBackCallback() {
-        tvMenuBackCallback.isEnabled = isTv && !isTvMenuShown && ::navController.isInitialized && navController.previousBackStackEntry == null
+        val atRoot = isTv && ::navController.isInitialized && navController.previousBackStackEntry == null
+        tvLeaveBackCallback.isEnabled = atRoot && isTvMenuShown
+        tvMenuBackCallback.isEnabled = atRoot && !isTvMenuShown
     }
 
     private val tvMenuState = com.github.andreyasadchy.xtra.ui.tv.TvMenuState()
@@ -2312,15 +2319,21 @@ class MainActivity : AppCompatActivity() {
             menu.translationX = 0f
             menu.alpha = 1f
             menu.visibility = View.VISIBLE
-        } else if (isTvMenuShown && menu.width > 0) {
+        } else if (isTvMenuShown) {
             isTvMenuShown = false
             updateTvMenuBackCallback()
             menu.animate().cancel()
-            menu.animate().translationX(-menu.width.toFloat()).alpha(0f).setDuration(180L).withEndAction {
-                if (!isTvMenuShown) {
-                    menu.visibility = View.INVISIBLE
-                }
-            }.start()
+            if (menu.width > 0) {
+                menu.animate().translationX(-menu.width.toFloat()).alpha(0f).setDuration(180L).withEndAction {
+                    if (!isTvMenuShown) {
+                        menu.visibility = View.INVISIBLE
+                    }
+                }.start()
+            } else {
+                menu.alpha = 0f
+                menu.visibility = View.INVISIBLE
+                menu.doOnLayout { if (!isTvMenuShown) it.translationX = -it.width.toFloat() }
+            }
         }
         (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck()
     }
@@ -4259,6 +4272,7 @@ class MainActivity : AppCompatActivity() {
                 if (prefs.getBoolean(C.TV_HIDE_MENU_ON_LAUNCH, false)) {
                     val sideMenu = binding.navBarContainer
                     isTvMenuShown = false
+                    updateTvMenuBackCallback()
                     if (isCompactRailEnabled()) {
                         tvMenuState.collapsed = true
                         sideMenu.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS

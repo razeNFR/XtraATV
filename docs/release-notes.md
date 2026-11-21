@@ -13,7 +13,7 @@
 - **Follow / Unfollow categories from long-press (logged in & logged out)**: added **Follow / Unfollow** directly in the long-press action menu of every category card (*Home*, *Categories*, *Search*, and *Followed categories*), using your Twitch account when signed in or local category follows when signed out.
 - **Stream switcher & Multi-stream picker refinements**: highlighted the *Hold OK for PiP* hint with an accented pill badge, refined stream card sizing in the *Other stream* banner, and routed D-pad Up in the Multi-stream picker directly to **Validate** as soon as at least one streamer is selected.
 - **Cleaner VOD card long-press menu**: removed *Open on phone (QR)* and *Create clip (30s)* from VOD card long-press menus (*Continue watching*, *Latest videos from followed channels*, and video grids), keeping those actions strictly inside the active player.
-- **Navigation & focus fixes**: fixed a crash when pressing Back from a game category opened from a scrolled Home screen, fixed overlapping root screens when leaving a category via the side menu, and refined focus retention across Chat and PiP panels.
+- **Navigation & focus fixes**: fixed pressing Back inside a game category or channel closing the app instead of returning to the previous screen, fixed overlapping root screens when leaving a category via the side menu, and refined focus retention across Chat and PiP panels.
 
 ### Install
 Download `XtraTV-1.4.6.4-tv.apk` below and install it over the previous version, your settings and account are kept.

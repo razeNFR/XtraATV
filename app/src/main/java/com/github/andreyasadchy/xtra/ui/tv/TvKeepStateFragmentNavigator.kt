@@ -220,6 +220,7 @@ class TvNavHostFragment : NavHostFragment() {
 
     override fun onCreateNavHostController(navHostController: NavHostController) {
         super.onCreateNavHostController(navHostController)
+        navHostController.setOnBackPressedDispatcher(requireActivity().onBackPressedDispatcher)
         val containerId = if (id != 0 && id != View.NO_ID) id else R.id.navHostFragment
         val navigator = TvKeepStateFragmentNavigator(
             context = requireContext(),
