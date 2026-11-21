@@ -1352,4 +1352,24 @@
     <string name="tv_backup_save_failed">无法保存备份文件</string>
     <string name="tv_remote_action_last_stream">上次观看的直播</string>
     <string name="tv_no_last_stream">暂无上一个观看的直播</string>
+    <string name="tv_pip_edge_margin">边缘间距</string>
+    <string name="tv_pip_margin_normal">标准</string>
+    <string name="tv_pip_margin_reduced">紧凑</string>
+    <string name="tv_pip_margin_flush">贴边</string>
+    <string name="tv_pip_streamer_name">主播名称</string>
+    <string name="tv_pip_label_auto">自动（随控制栏显示）</string>
+    <string name="tv_pip_label_always">始终显示</string>
+    <string name="tv_pip_label_hidden">隐藏</string>
+    <string name="tv_remote_action_live_alert">打开开播通知</string>
+    <string name="tv_no_live_alert">暂无最近的开播通知</string>
+    <string name="tv_free_move_button">自由移动…</string>
+    <string name="tv_position_free">自由位置</string>
+    <string name="tv_free_move_hint">◀ ▲ ▼ ▶ 移动  ·  OK 保存  ·  返回 取消</string>
+    <string name="tv_free_move_saved">位置已保存</string>
+    <string name="tv_pip_opacity">不透明度</string>
+    <string name="tv_panel_tab_placement">位置</string>
+    <string name="tv_panel_tab_appearance">外观</string>
+    <string name="tv_panel_tab_options">选项</string>
+    <string name="tv_panel_tab_display">显示</string>
+    <string name="tv_panel_tab_audio">音频</string>
 </resources>

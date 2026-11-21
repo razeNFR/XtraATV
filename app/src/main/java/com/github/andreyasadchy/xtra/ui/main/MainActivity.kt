@@ -1095,13 +1095,18 @@ class MainActivity : AppCompatActivity() {
 
     fun isStreamInTvPip(login: String?): Boolean = isTv && tvPip.containsStream(login)
 
-    /** TV: corner, size and sound of the small window(s) changed in its panel. */
+    /** TV: corner, size, edge margin, label mode and sound of the small window(s) changed in its panel. */
     fun applyTvPipSettings() {
         if (tvPip.activeCount > 0) {
             tvPip.applyLayout()
             tvPip.applySound()
+            tvPip.wakeChrome()
         }
     }
+
+    fun isTvLiveAlertShowing(): Boolean = isTv && tvLiveAlerts.isBannerShowing
+
+    fun openTvLiveAlert(): Boolean = if (isTv) tvLiveAlerts.openCurrentOrRecent() else false
 
     /** The controls of the full screen player are shown or hidden: the small window(s) make room for them. */
     fun onTvControlsVisibility(visible: Boolean) {
@@ -1117,6 +1122,20 @@ class MainActivity : AppCompatActivity() {
 
     fun swapTvPip(slotIndex: Int? = null) {
         tvPip.swapStreams(slotIndex)
+    }
+
+    fun startTvPipFreeMove(slotIndex: Int) {
+        if (isTv) {
+            tvPip.startFreeMove(slotIndex)
+        }
+    }
+
+    fun isTvSideMenuOpen(): Boolean = isTv && isTvMenuShown
+
+    fun isMinimizedGhostScreen(): Boolean {
+        if (!isTv || !::navController.isInitialized) return false
+        val destId = navController.currentDestination?.id
+        return destId == R.id.tvSettingsFragment || destId == R.id.tvStatsFragment
     }
 
     /** The volume of the full screen stream follows the sound chosen for the small window(s). */
@@ -1199,8 +1218,9 @@ class MainActivity : AppCompatActivity() {
         noPlayerCustomDownKey = 0
         noPlayerCustomLongAction = null
         PlayerFragment.markHeldRemoteKey(key)
-        if (act == com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_LAST_STREAM) {
-            switchToLastWatchedStream()
+        when (act) {
+            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_LAST_STREAM -> switchToLastWatchedStream()
+            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_LIVE_ALERT -> openTvLiveAlert()
         }
     }
 
@@ -1211,7 +1231,10 @@ class MainActivity : AppCompatActivity() {
         if (raw == Keys.ACTION_DEFAULT) return null
         val player = (playerFragment as? PlayerFragment)?.takeIf { !it.isRemoving && !it.isDetached }
         if (player == null) {
-            return raw.takeIf { it == Keys.ACTION_LAST_STREAM && hasLastWatchedStream() }
+            return raw.takeIf {
+                (it == Keys.ACTION_LAST_STREAM && hasLastWatchedStream()) ||
+                    (it == Keys.ACTION_LIVE_ALERT && isTvLiveAlertShowing())
+            }
         }
         return if (player.isMaximizedPlayer()) {
             if (!player.canRunHiddenHudRemoteShortcuts()) return null
@@ -1219,7 +1242,8 @@ class MainActivity : AppCompatActivity() {
             effective.takeIf { it != Keys.ACTION_DEFAULT && it != Keys.ACTION_OPEN_MINI_PLAYER }
         } else {
             raw.takeIf {
-                (player.getTvNowPlaying() != null && Keys.isBackgroundCapableAction(it)) ||
+                (it == Keys.ACTION_LIVE_ALERT && isTvLiveAlertShowing()) ||
+                    (it != Keys.ACTION_LIVE_ALERT && player.getTvNowPlaying() != null && Keys.isBackgroundCapableAction(it)) ||
                     (it == Keys.ACTION_LAST_STREAM && hasLastWatchedStream())
             }
         }
@@ -1229,6 +1253,10 @@ class MainActivity : AppCompatActivity() {
         val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
         if (action == Keys.ACTION_LAST_STREAM) {
             switchToLastWatchedStream()
+            return
+        }
+        if (action == Keys.ACTION_LIVE_ALERT) {
+            openTvLiveAlert()
             return
         }
         val player = playerFragment as? PlayerFragment ?: return
@@ -1325,14 +1353,20 @@ class MainActivity : AppCompatActivity() {
     private fun dispatchNoPlayerCustomRemoteKey(event: KeyEvent): Boolean {
         if (!isTv || tvMultiStreamShown || playerFragment != null || hasOpenDialogFragment()) return false
         val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
-        val shortAction = Keys.customShortActionForKey(this, event.keyCode)
-            ?.takeIf { it == Keys.ACTION_LAST_STREAM }
-        val longAction = Keys.customLongActionForKey(this, event.keyCode)
-            ?.takeIf { it == Keys.ACTION_LAST_STREAM }
+        fun isNoPlayerAction(act: String): Boolean =
+            act == Keys.ACTION_LAST_STREAM || act == Keys.ACTION_LIVE_ALERT
+        fun runNoPlayerAction(act: String) {
+            when (act) {
+                Keys.ACTION_LAST_STREAM -> switchToLastWatchedStream()
+                Keys.ACTION_LIVE_ALERT -> openTvLiveAlert()
+            }
+        }
+        val shortAction = Keys.customShortActionForKey(this, event.keyCode)?.takeIf(::isNoPlayerAction)
+        val longAction = Keys.customLongActionForKey(this, event.keyCode)?.takeIf(::isNoPlayerAction)
         if (shortAction == null && longAction == null) return false
         if (longAction == null) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && shortAction != null) {
-                switchToLastWatchedStream()
+                runNoPlayerAction(shortAction)
             }
             return true
         }
@@ -1349,7 +1383,7 @@ class MainActivity : AppCompatActivity() {
                     noPlayerCustomDownKey = 0
                     noPlayerCustomLongAction = null
                     PlayerFragment.markHeldRemoteKey(event.keyCode)
-                    switchToLastWatchedStream()
+                    runNoPlayerAction(longAction)
                 }
             }
             KeyEvent.ACTION_UP -> {
@@ -1359,8 +1393,10 @@ class MainActivity : AppCompatActivity() {
                 noPlayerCustomLongAction = null
                 if (wasDown && !event.isCanceled) {
                     val heldMs = if (event.downTime > 0L) event.eventTime - event.downTime else 0L
-                    if (heldMs >= longPressMs || shortAction != null) {
-                        switchToLastWatchedStream()
+                    if (heldMs >= longPressMs) {
+                        runNoPlayerAction(longAction)
+                    } else if (shortAction != null) {
+                        runNoPlayerAction(shortAction)
                     }
                 }
             }
@@ -1394,7 +1430,10 @@ class MainActivity : AppCompatActivity() {
         if (isTv && !dispatchingPlayerKey && tvLiveAlerts.onKey(event)) {
             return true
         }
-        if (isTv && !dispatchingPlayerKey && tvPip.isSelectorOpen() && tvPip.onKey(event)) {
+        if (isTv && !dispatchingPlayerKey && (tvPip.isSelectorOpen() || tvPip.isFreeMoving()) && tvPip.onKey(event)) {
+            return true
+        }
+        if (isTv && !dispatchingPlayerKey && (playerFragment as? PlayerFragment)?.onTvChatFreeMoveKey(event) == true) {
             return true
         }
         if (isTv && !dispatchingPlayerKey && dispatchTvBackLongKey(event)) {
@@ -1492,7 +1531,12 @@ class MainActivity : AppCompatActivity() {
         if (isTv && event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             val focus = currentFocus
             if (focus != null && focus.isInside(binding.navBarContainer)) {
-                closeTvMenuAndFocusContent()
+                if (event.repeatCount == 0 && isTvMenuShown && tvMenuState.isNowPlayingOpenFocused && tvMenuState.focusNowPlayingClose()) {
+                    return true
+                }
+                if (event.repeatCount == 0) {
+                    closeTvMenuAndFocusContent()
+                }
                 return true
             }
         }
@@ -1735,17 +1779,17 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    /** Coming back to a screen: focus the card that had the focus there (the views were recreated). */
+    /** Coming back to a screen: focus the card that had the focus there (the views were recreated or unhidden). */
     private fun restoreTvScreenFocus(tries: Int = 0) {
         if (!::navController.isInitialized || isTvMenuShown) {
             return
         }
-        val position = tvFocusKey()?.let { tvFocusMemory[it] } ?: return
+        val activeRoot = currentVisibleNavFragment()?.view ?: binding.navHostFragment
         val focus = currentFocus
-        if (focus != null && focus.isShown && focus.parent is RecyclerView) {
+        if (focus != null && focus.isShown && focus.isInside(activeRoot) && focus.parent is RecyclerView) {
             return
         }
-        val grid = TvUi.findVisibleGrid(binding.navHostFragment)
+        val grid = TvUi.findVisibleGrid(activeRoot)
         val count = grid?.adapter?.itemCount ?: 0
         if (grid == null || count == 0) {
             if (tries < 15) {
@@ -1753,11 +1797,16 @@ class MainActivity : AppCompatActivity() {
             }
             return
         }
-        val target = position.coerceAtMost(count - 1)
+        val position = tvFocusKey()?.let { tvFocusMemory[it] } ?: 0
+        val target = position.coerceIn(0, count - 1)
         val holder = grid.findViewHolderForAdapterPosition(target)
         if (holder == null || !holder.itemView.requestFocus()) {
             grid.scrollToPosition(target)
-            grid.post { grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() }
+            grid.post {
+                if (grid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() != true) {
+                    TvUi.focusFirstItem(grid)
+                }
+            }
         }
     }
 
@@ -1802,7 +1851,7 @@ class MainActivity : AppCompatActivity() {
                 // anything else: the back of before
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
-                isEnabled = true
+                updateTvMenuBackCallback()
             }
         }
     }
@@ -1820,7 +1869,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTvMenuBackCallback() {
-        tvMenuBackCallback.isEnabled = isTv && !isTvMenuShown && ::navController.isInitialized && navController.previousBackStackEntry == null
+        val atRoot = isTv && ::navController.isInitialized && navController.previousBackStackEntry == null
+        tvLeaveBackCallback.isEnabled = atRoot && isTvMenuShown
+        tvMenuBackCallback.isEnabled = atRoot && !isTvMenuShown
     }
 
     private val tvMenuState = com.github.andreyasadchy.xtra.ui.tv.TvMenuState()
@@ -1888,7 +1939,8 @@ class MainActivity : AppCompatActivity() {
         tvMenuState.onFocusItem = { id ->
             binding.root.removeCallbacks(tvMenuAutoNav)
             tvMenuPendingId = 0
-            if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavAccount && id != tvMenuState.selected) {
+            val onSubScreen = ::navController.isInitialized && navController.previousBackStackEntry != null
+            if (prefs.getBoolean(C.TV_FOCUS_SWITCH, false) && id != R.id.tvNavAccount && (id != tvMenuState.selected || onSubScreen)) {
                 tvMenuPendingId = id
                 binding.root.postDelayed(tvMenuAutoNav, TV_MENU_HOVER_SETTLE_MS)
             }
@@ -1949,14 +2001,19 @@ class MainActivity : AppCompatActivity() {
     private val tvMenuAutoNav = Runnable {
         val id = tvMenuPendingId
         tvMenuPendingId = 0
-        if (id == 0 || !isTvMenuShown || (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null)) {
+        val onSubScreen = ::navController.isInitialized && navController.previousBackStackEntry != null
+        if (id == 0 || !isTvMenuShown || (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null && !onSubScreen)) {
             return@Runnable
         }
         tvMenuAutoNavAt = android.os.SystemClock.elapsedRealtime()
         lastContentFocus = null
         tvMenuAutoHovering = true
         try {
-            binding.navBar.selectedItemId = id
+            if (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null && onSubScreen && id in tvRootDestinations) {
+                openTvSectionRoot(id)
+            } else {
+                binding.navBar.selectedItemId = id
+            }
         } finally {
             tvMenuAutoHovering = false
         }
@@ -2240,6 +2297,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck()
     }
 
     private fun hideTvMenu() {
@@ -2261,16 +2319,23 @@ class MainActivity : AppCompatActivity() {
             menu.translationX = 0f
             menu.alpha = 1f
             menu.visibility = View.VISIBLE
-        } else if (isTvMenuShown && menu.width > 0) {
+        } else if (isTvMenuShown) {
             isTvMenuShown = false
             updateTvMenuBackCallback()
             menu.animate().cancel()
-            menu.animate().translationX(-menu.width.toFloat()).alpha(0f).setDuration(180L).withEndAction {
-                if (!isTvMenuShown) {
-                    menu.visibility = View.INVISIBLE
-                }
-            }.start()
+            if (menu.width > 0) {
+                menu.animate().translationX(-menu.width.toFloat()).alpha(0f).setDuration(180L).withEndAction {
+                    if (!isTvMenuShown) {
+                        menu.visibility = View.INVISIBLE
+                    }
+                }.start()
+            } else {
+                menu.alpha = 0f
+                menu.visibility = View.INVISIBLE
+                menu.doOnLayout { if (!isTvMenuShown) it.translationX = -it.width.toFloat() }
+            }
         }
+        (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck()
     }
 
     private fun isBrowsingRoot(): Boolean {
@@ -3854,9 +3919,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun currentVisibleNavFragment(): Fragment? {
-        return supportFragmentManager.findFragmentById(R.id.navHostFragment)
-            ?.childFragmentManager?.fragments
-            ?.firstOrNull { it !is androidx.fragment.app.DialogFragment && it.isVisible }
+        val host = supportFragmentManager.findFragmentById(R.id.navHostFragment) ?: return null
+        host.childFragmentManager.primaryNavigationFragment
+            ?.takeIf { it !is androidx.fragment.app.DialogFragment && it.isVisible && !it.isRemoving }
+            ?.let { return it }
+        return host.childFragmentManager.fragments
+            .lastOrNull { it !is androidx.fragment.app.DialogFragment && it.isVisible && !it.isRemoving }
     }
 
     /** The home, when it is the screen shown. */
@@ -4137,6 +4205,7 @@ class MainActivity : AppCompatActivity() {
                     (playerFragment as? PlayerFragment)?.refreshTvMinimizedBorderColor()
                 }
                 updateTvMenuBackCallback()
+                (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck()
                 if (destination.id in tvRootDestinations && destination.id != R.id.followPagerFragment) {
                     tvMenuExtraSelected = null
                 }
@@ -4150,6 +4219,7 @@ class MainActivity : AppCompatActivity() {
                             ?: binding.navBar.selectedItemId
                     }
                     currentVisibleNavFragment()?.view?.let { com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(it) }
+                    (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck()
                 }
             }
         }
@@ -4202,6 +4272,7 @@ class MainActivity : AppCompatActivity() {
                 if (prefs.getBoolean(C.TV_HIDE_MENU_ON_LAUNCH, false)) {
                     val sideMenu = binding.navBarContainer
                     isTvMenuShown = false
+                    updateTvMenuBackCallback()
                     if (isCompactRailEnabled()) {
                         tvMenuState.collapsed = true
                         sideMenu.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
@@ -4252,6 +4323,10 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         openTvSectionRoot(R.id.followPagerFragment)
                     }
+                    return@setOnItemReselectedListener
+                }
+                if (isTv && navController.previousBackStackEntry != null && it.itemId in tvRootDestinations) {
+                    openTvSectionRoot(it.itemId)
                     return@setOnItemReselectedListener
                 }
                 if (!navController.popBackStack(it.itemId, false)) {

@@ -421,6 +421,7 @@ object TvToast {
         R.string.tv_backup_restored,
         R.string.tv_poll_vote_sent,
         R.string.tv_prediction_bet_sent,
+        R.string.tv_free_move_saved,
         R.string.connection_restored -> R.drawable.tv_ic_check
 
         R.string.no_connection,
@@ -436,7 +437,8 @@ object TvToast {
         R.string.tv_multistream_group_offline,
         R.string.tv_multistream_none -> R.drawable.tv_ic_multistream
 
-        R.string.enabled_notifications -> R.drawable.tv_ic_bell
+        R.string.enabled_notifications,
+        R.string.tv_no_live_alert -> R.drawable.tv_ic_bell
         R.string.disabled_notifications -> R.drawable.tv_ic_bell_outline
 
         R.string.tv_accounts_switched_guest,

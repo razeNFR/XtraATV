@@ -1352,4 +1352,24 @@
     <string name="tv_backup_save_failed">Échec de l\'enregistrement de la sauvegarde</string>
     <string name="tv_remote_action_last_stream">Dernier stream regardé</string>
     <string name="tv_no_last_stream">Aucun dernier stream mémorisé</string>
+    <string name="tv_pip_edge_margin">Marge des bords</string>
+    <string name="tv_pip_margin_normal">Normale</string>
+    <string name="tv_pip_margin_reduced">Réduite</string>
+    <string name="tv_pip_margin_flush">Collée</string>
+    <string name="tv_pip_streamer_name">Nom du streamer</string>
+    <string name="tv_pip_label_auto">Automatique (avec le HUD)</string>
+    <string name="tv_pip_label_always">Toujours visible</string>
+    <string name="tv_pip_label_hidden">Masqué</string>
+    <string name="tv_remote_action_live_alert">Ouvrir l\'alerte de live</string>
+    <string name="tv_no_live_alert">Aucune notification de live récente</string>
+    <string name="tv_free_move_button">Déplacement libre…</string>
+    <string name="tv_position_free">Libre</string>
+    <string name="tv_free_move_hint">◀ ▲ ▼ ▶ Déplacer  ·  OK Valider  ·  Retour Annuler</string>
+    <string name="tv_free_move_saved">Position enregistrée</string>
+    <string name="tv_pip_opacity">Opacité</string>
+    <string name="tv_panel_tab_placement">Placement</string>
+    <string name="tv_panel_tab_appearance">Apparence</string>
+    <string name="tv_panel_tab_options">Options</string>
+    <string name="tv_panel_tab_display">Affichage</string>
+    <string name="tv_panel_tab_audio">Audio</string>
 </resources>

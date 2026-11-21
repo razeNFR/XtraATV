@@ -219,16 +219,44 @@ object TvStreamSwitcher {
         }
         // what OK held does, over the row (not when picking the streams of a multi-stream)
         if (selection == null && onPip != null) {
-            root.addView(TextView(activity).apply {
+            val hintRow = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(horizontalPadding + (8 * density).toInt(), (4 * density).toInt(), horizontalPadding, (4 * density).toInt())
+            }
+            val accentColor = com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
+            val hintBadge = TextView(activity).apply {
                 text = activity.getString(R.string.tv_switch_pip_hint)
-                setTextColor(0xCCFFFFFF.toInt())
-                textSize = 14f
-                setShadowLayer(6 * density, 0f, 1 * density, 0xE6000000.toInt())
-                setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (2 * density).toInt())
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                setTextColor(0xFFFFFFFF.toInt())
+                textSize = 14.5f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = 999f * density
+                    setColor(0xE016151E.toInt())
+                    setStroke(
+                        maxOf(1, kotlin.math.round(1.5f * density).toInt()),
+                        (accentColor and 0x00FFFFFF) or 0xCC000000.toInt(),
+                    )
+                }
+                val icon = activity.getDrawable(R.drawable.tv_ic_pip)?.mutate()?.apply {
+                    setTint(accentColor)
+                    val iconPx = (18 * density).toInt()
+                    setBounds(0, 0, iconPx, iconPx)
+                }
+                setCompoundDrawablesRelative(icon, null, null, null)
+                compoundDrawablePadding = (8 * density).toInt()
+                setPadding((14 * density).toInt(), (6 * density).toInt(), (16 * density).toInt(), (6 * density).toInt())
+                elevation = 4 * density
+            }
+            hintRow.addView(hintBadge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            root.addView(hintRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
+        // a multi-stream needs 2 streams at least
+        val minChecked = if ((selection?.max ?: 0) > 1) 2 else 1
         // tabs of the lists: Stream Together first when active, the list of the stream, the other rows, and Search at the end
         val tabViews = mutableListOf<TextView>()
+        var tabsScrollView: android.widget.HorizontalScrollView? = null
         if (tabEntries.size > 1) {
             val tabsLayout = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -263,23 +291,32 @@ object TvStreamSwitcher {
             if (!omitEmptyCurrentTab || initialStreams.isNotEmpty()) {
                 tabViews.getOrNull(initialTab)?.isSelected = true
             }
-            root.addView(android.widget.HorizontalScrollView(activity).apply {
+            tabsScrollView = android.widget.HorizontalScrollView(activity).apply {
                 isHorizontalScrollBarEnabled = false
                 isFocusable = false
                 addView(tabsLayout)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            root.addView(tabsScrollView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         val recyclerView = RecyclerView(activity).apply {
             clipToPadding = false
             clipChildren = false
             setPadding(horizontalPadding, (8 * density).toInt(), horizontalPadding, (8 * density).toInt())
         }
+        var lastFocusedCardPos = RecyclerView.NO_POSITION
         // card the focus goes to once it is shown (left / right pressed faster than the row scrolls)
         var pendingTarget = RecyclerView.NO_POSITION
         recyclerView.layoutManager = object : LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false) {
             // left / right stay in the row: the next card not shown yet, the row scrolls smoothly to it and the focus
             // follows when it is there (no jump, the tabs above are never reached); at the end the last card keeps it
             override fun onInterceptFocusSearch(focused: View, direction: Int): View? {
+                if (direction == View.FOCUS_UP && selection != null && validate != null && validate.isShown &&
+                    (checked?.size ?: 0) >= minChecked
+                ) {
+                    findContainingItemView(focused)?.let { lastFocusedCardPos = getPosition(it) }
+                    tabsScrollView?.scrollTo(0, 0)
+                    return validate
+                }
                 if (direction != View.FOCUS_RIGHT && direction != View.FOCUS_LEFT) {
                     return null
                 }
@@ -334,8 +371,6 @@ object TvStreamSwitcher {
             }
         } else null
         lateinit var adapter: Adapter
-        // a multi-stream needs 2 streams at least
-        val minChecked = if ((selection?.max ?: 0) > 1) 2 else 1
         val updateValidate = {
             validate?.text = activity.getString(R.string.tv_multistream_validate, checked?.size ?: 0)
             // not enough streams checked: the button is dimmed and does nothing
@@ -349,13 +384,17 @@ object TvStreamSwitcher {
         // down from "Validate": the cards
         validate?.setOnKeyListener { _, keyCode, event ->
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN) {
-                (recyclerView.layoutManager?.findViewByPosition((recyclerView.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition())
+                val remembered = lastFocusedCardPos.takeIf { it != RecyclerView.NO_POSITION }
+                    ?.let { recyclerView.layoutManager?.findViewByPosition(it) }
+                    ?.takeIf { it.isShown }
+                (remembered
+                    ?: recyclerView.layoutManager?.findViewByPosition((recyclerView.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition())
                     ?: recyclerView.getChildAt(0))?.requestFocus()
                 true
             } else false
         }
-        // multi-stream: smaller cards, more streams in sight
-        adapter = Adapter(initialStreams, ((if (selection != null) 175 else 250) * density).toInt(), preview, checked) { stream ->
+        // multi-stream: smaller cards, more streams in sight; stream switcher slightly more compact than before while staying larger than multi-stream
+        adapter = Adapter(initialStreams, ((if (selection != null) 175 else 216) * density).toInt(), preview, checked) { stream ->
             if (selection != null && checked != null) {
                 val login = stream.channelLogin ?: return@Adapter
                 when {

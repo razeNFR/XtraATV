@@ -147,6 +147,29 @@ class TvSeekPreview(
         includeFontPadding = false
         maxLines = 1
     }
+    private val clockSeparatorTextView = TextView(container.context).apply {
+        text = "  ·  "
+        setTextColor(0x80FFFFFF.toInt())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        includeFontPadding = false
+        maxLines = 1
+        visibility = View.GONE
+    }
+    private val clockIconView = ImageView(container.context).apply {
+        setImageResource(com.github.andreyasadchy.xtra.R.drawable.tv_ic_schedule)
+        setColorFilter(0xC8FFFFFF.toInt())
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        visibility = View.GONE
+    }
+    private val localClockTextView = TextView(container.context).apply {
+        setTextColor(0xEBFFFFFF.toInt())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+        typeface = Typeface.DEFAULT_BOLD
+        includeFontPadding = false
+        maxLines = 1
+        visibility = View.GONE
+    }
     private val seekInfoBox = LinearLayout(container.context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -163,6 +186,15 @@ class TvSeekPreview(
         addView(deltaTextView)
         addView(separatorTextView)
         addView(targetTimeTextView)
+        addView(clockSeparatorTextView)
+        val iconSize = (13.5f * density).toInt()
+        addView(
+            clockIconView,
+            LinearLayout.LayoutParams(iconSize, iconSize).apply {
+                marginEnd = (4.5f * density).toInt()
+            }
+        )
+        addView(localClockTextView)
     }
     private val previewWidth = (240 * density).toInt()
     private val previewHeight = (135 * density).toInt()
@@ -170,6 +202,8 @@ class TvSeekPreview(
 
     // the hidden player takes a video decoder: it is let go when the timeline is not used anymore
     private val releaseAction = Runnable { releaseVideo() }
+
+    private var startEpochMs: Long? = null
 
     init {
         frame.addView(imageView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -179,6 +213,15 @@ class TvSeekPreview(
         )
         container.addView(frame, ViewGroup.LayoutParams(previewWidth, previewHeight))
         container.addView(seekInfoBox, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+
+    fun setStartEpochMs(epochMs: Long?) {
+        val normalized = epochMs?.takeIf { it > 0L }
+        if (startEpochMs == normalized) return
+        startEpochMs = normalized
+        if (seekInfoBox.isShown && lastPosition >= 0L && lastDuration > 0L) {
+            show(lastPosition, lastDuration, lastDeltaMs, lastTargetLabel)
+        }
     }
 
     fun setChapters(list: List<Game>?) {
@@ -345,6 +388,18 @@ class TvSeekPreview(
             }
             deltaTextView.setTextColor(ColorUtils.blendARGB(baseAccent, Color.WHITE, 0.42f))
             targetTimeTextView.text = targetLabel ?: DateUtils.formatElapsedTime((position / 1000L).coerceAtLeast(0L))
+            val baseEpoch = startEpochMs
+            if (baseEpoch != null && baseEpoch > 0L) {
+                localClockTextView.text = android.text.format.DateFormat.getTimeFormat(container.context)
+                    .format(java.util.Date(baseEpoch + position.coerceAtLeast(0L)))
+                clockSeparatorTextView.visibility = View.VISIBLE
+                clockIconView.visibility = View.VISIBLE
+                localClockTextView.visibility = View.VISIBLE
+            } else {
+                clockSeparatorTextView.visibility = View.GONE
+                clockIconView.visibility = View.GONE
+                localClockTextView.visibility = View.GONE
+            }
             seekInfoBox.visibility = View.VISIBLE
         } else {
             seekInfoBox.visibility = View.GONE

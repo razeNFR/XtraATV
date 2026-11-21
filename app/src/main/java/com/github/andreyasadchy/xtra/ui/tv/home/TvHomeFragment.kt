@@ -512,54 +512,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private fun showGameActions(game: com.github.andreyasadchy.xtra.model.ui.Game) {
         stopPreview()
         val activity = activity as? MainActivity ?: return
-        val pinned = TvHomeRows.isCategoryPinned(activity, game.id)
-        val actions = buildList {
-            add(
-                com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
-                    getString(R.string.tv_open_this_category),
-                    R.drawable.tv_ic_gamepad,
-                ) {
-                    navigateToGame(game)
-                }
-            )
-            if (!game.id.isNullOrBlank()) {
-                add(
-                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
-                        getString(if (pinned) R.string.tv_home_unpin_category else R.string.tv_home_pin_category),
-                        if (pinned) R.drawable.tv_ic_delete else R.drawable.tv_ic_pin,
-                    ) {
-                        val nowPinned = TvHomeRows.togglePinCategory(activity, game)
-                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
-                            activity,
-                            getString(
-                                if (nowPinned) R.string.tv_home_category_pinned else R.string.tv_home_category_unpinned,
-                                game.name ?: "",
-                            ),
-                            android.widget.Toast.LENGTH_SHORT,
-                        ).show()
-                    }
-                )
-            }
-            if (!game.id.isNullOrBlank() || !game.slug.isNullOrBlank() || !game.name.isNullOrBlank()) {
-                val catBlocked = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(game.id, game.slug, game.name)
-                val catLabel = game.name ?: game.slug ?: ""
-                add(
-                    com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.Action(
-                        getString(if (catBlocked) R.string.tv_blacklist_unhide_category else R.string.tv_blacklist_hide_category, catLabel),
-                        R.drawable.tv_ic_block,
-                    ) {
-                        if (catBlocked) {
-                            com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.unblockCategory(activity, game.id, game.slug, game.name)
-                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, getString(R.string.tv_blacklist_category_unhidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
-                        } else {
-                            com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.blockCategory(activity, game.id, game.slug, game.name, game.boxArtURL)
-                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, getString(R.string.tv_blacklist_category_hidden, catLabel), android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-            }
-        }
-        com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(activity, game.name ?: "", actions)
+        com.github.andreyasadchy.xtra.ui.tv.TvGameActions.show(
+            context = activity,
+            game = game,
+            onOpenCategory = { navigateToGame(game) },
+        )
     }
 
     private fun showClipActions(clip: com.github.andreyasadchy.xtra.model.ui.Clip, queue: List<com.github.andreyasadchy.xtra.model.ui.Clip>) {

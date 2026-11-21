@@ -284,21 +284,24 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
             }
             childFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
+                    val b = _binding ?: return
                     if (f is Sortable) {
-                        f.setupSortBar(sortBar)
-                        sortBar.root.doOnLayout {
-                            toolbarContainer.layoutParams = (toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = toolbarContainer2.height }
-                            val toolbarHeight = toolbarContainer.marginTop + toolbarContainer.marginBottom
-                            toolbar.layoutParams = toolbar.layoutParams.apply { height = toolbarHeight }
-                            collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
+                        f.setupSortBar(b.sortBar)
+                        b.sortBar.root.doOnLayout {
+                            val b2 = _binding ?: return@doOnLayout
+                            b2.toolbarContainer.layoutParams = (b2.toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = b2.toolbarContainer2.height }
+                            val toolbarHeight = b2.toolbarContainer.marginTop + b2.toolbarContainer.marginBottom
+                            b2.toolbar.layoutParams = b2.toolbar.layoutParams.apply { height = toolbarHeight }
+                            b2.collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
                         }
                     } else {
-                        sortBar.root.visibility = View.GONE
-                        toolbarContainer2.doOnLayout {
-                            toolbarContainer.layoutParams = (toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = toolbarContainer2.height }
-                            val toolbarHeight = toolbarContainer.marginTop + toolbarContainer.marginBottom
-                            toolbar.layoutParams = toolbar.layoutParams.apply { height = toolbarHeight }
-                            collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
+                        b.sortBar.root.visibility = View.GONE
+                        b.toolbarContainer2.doOnLayout {
+                            val b2 = _binding ?: return@doOnLayout
+                            b2.toolbarContainer.layoutParams = (b2.toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = b2.toolbarContainer2.height }
+                            val toolbarHeight = b2.toolbarContainer.marginTop + b2.toolbarContainer.marginBottom
+                            b2.toolbar.layoutParams = b2.toolbar.layoutParams.apply { height = toolbarHeight }
+                            b2.collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
                         }
                     }
                 }

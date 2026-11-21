@@ -1352,4 +1352,24 @@
     <string name="tv_backup_save_failed">Не удалось сохранить файл резервной копии</string>
     <string name="tv_remote_action_last_stream">Последний просмотренный стрим</string>
     <string name="tv_no_last_stream">Предыдущий стрим ещё не сохранён</string>
+    <string name="tv_pip_edge_margin">Отступ от края</string>
+    <string name="tv_pip_margin_normal">Обычный</string>
+    <string name="tv_pip_margin_reduced">Уменьшенный</string>
+    <string name="tv_pip_margin_flush">Вплотную</string>
+    <string name="tv_pip_streamer_name">Имя стримера</string>
+    <string name="tv_pip_label_auto">Авто (с панелью)</string>
+    <string name="tv_pip_label_always">Всегда видно</string>
+    <string name="tv_pip_label_hidden">Скрыто</string>
+    <string name="tv_remote_action_live_alert">Открыть уведомление об эфире</string>
+    <string name="tv_no_live_alert">Нет недавних уведомлений об эфире</string>
+    <string name="tv_free_move_button">Свободное перемещение…</string>
+    <string name="tv_position_free">Свободно</string>
+    <string name="tv_free_move_hint">◀ ▲ ▼ ▶ Двигать  ·  OK Сохранить  ·  Назад Отмена</string>
+    <string name="tv_free_move_saved">Позиция сохранена</string>
+    <string name="tv_pip_opacity">Прозрачность</string>
+    <string name="tv_panel_tab_placement">Размещение</string>
+    <string name="tv_panel_tab_appearance">Вид</string>
+    <string name="tv_panel_tab_options">Опции</string>
+    <string name="tv_panel_tab_display">Экран</string>
+    <string name="tv_panel_tab_audio">Звук</string>
 </resources>

@@ -106,9 +106,17 @@ class TvMenuState {
     var pendingFocus by mutableStateOf(false)
     var focusRequestToken by mutableIntStateOf(0)
     var suppressFocusCallback = false
+    var isNowPlayingOpenFocused by mutableStateOf(false)
+    internal var nowPlayingCloseFocusRequester: FocusRequester? = null
+
+    fun focusNowPlayingClose(): Boolean {
+        val req = nowPlayingCloseFocusRequester ?: return false
+        return runCatching { req.requestFocus() }.getOrDefault(false)
+    }
 
     fun requestFocusSelected() {
         focusedId = 0
+        isNowPlayingOpenFocused = false
         suppressFocusCallback = true
         pendingFocus = true
         focusRequestToken++
@@ -197,8 +205,9 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         }
         (widest + MENU_PADDING * 2).coerceIn(212.dp, 320.dp)
     }
-    val verticalPadPx = with(density) { 24.dp.roundToPx() }
-    val scrollMarginPx = with(density) { 56.dp.roundToPx() }
+    val verticalPadDp = 16.dp
+    val verticalPadPx = with(density) { verticalPadDp.roundToPx() }
+    val scrollMarginPx = with(density) { 48.dp.roundToPx() }
     val subIndentPx = with(density) { 30.dp.toPx() }
     val accountCornerPx = with(density) { 16.dp.toPx() }
     val itemCornerPx = with(density) { 14.dp.toPx() }
@@ -220,6 +229,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
 
     LaunchedEffect(collapsed) {
         if (collapsed) {
+            state.isNowPlayingOpenFocused = false
             userMovedInOpenMenu = false
             pillAnimating = false
             lastPillItemId = 0
@@ -279,11 +289,22 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
     val nowPlayingAt = items.indexOfFirst { it !== account && it.group != TvMenuState.GROUP_TOP }.coerceAtLeast(0)
     val nowPlayingOpenRequester = remember { FocusRequester() }
     val nowPlayingCloseRequester = remember { FocusRequester() }
+    androidx.compose.runtime.SideEffect {
+        state.nowPlayingCloseFocusRequester = if (playing != null && !collapsed) nowPlayingCloseRequester else null
+        if (playing == null || collapsed || !menuHasFocus) {
+            state.isNowPlayingOpenFocused = false
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            state.nowPlayingCloseFocusRequester = null
+            state.isNowPlayingOpenFocused = false
+        }
+    }
     val slots = buildList {
         items.forEachIndexed { index, item ->
             if (index == nowPlayingAt && playing != null && !collapsed) {
                 add(nowPlayingOpenRequester)
-                add(nowPlayingCloseRequester)
             }
             if (!collapsed || !item.sub) {
                 add(state.requesters.getOrPut(item.id) { FocusRequester() })
@@ -300,7 +321,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
         val topInScroll = bounds.topY + verticalPadPx
         val bottomInScroll = topInScroll + bounds.heightPx
         val desired = when {
-            slotIdx == 0 -> 0
+            slotIdx <= 0 -> 0
             slotIdx == slots.lastIndex && scrollState.maxValue > 0 -> scrollState.maxValue
             bottomInScroll + scrollMarginPx > scrollState.value + viewport ->
                 (bottomInScroll + scrollMarginPx - viewport).coerceAtMost(scrollState.maxValue)
@@ -344,7 +365,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
             state.suppressFocusCallback = false
             state.pendingFocus = false
         }
-        // Keep the focused entry smoothly anchored in view while NowPlayingCard & sub-items finish unfolding (0..200ms)
+        // Keep the focused entry smoothly anchored in view while sub-items finish unfolding (0..200ms)
         while (!collapsed && !userMovedInOpenMenu && openState.value < 0.999f) {
             withFrameNanos { }
             if (collapsed || userMovedInOpenMenu) return@LaunchedEffect
@@ -413,6 +434,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                     focusedRequester = null
                     focusedEntryId = 0
                     state.focusedId = 0
+                    state.isNowPlayingOpenFocused = false
                     pillAnimating = false
                     lastPillItemId = 0
                     lastDrawnPillBounds.value = null
@@ -463,10 +485,11 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 .fillMaxHeight()
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    val effectiveRequester = if (focusedRequester === nowPlayingCloseRequester) nowPlayingOpenRequester else focusedRequester
                     when (event.key) {
                         Key.DirectionUp -> {
                             userMovedInOpenMenu = true
-                            val slot = slots.indexOf(focusedRequester)
+                            val slot = slots.indexOf(effectiveRequester)
                             if (slot > 0) {
                                 val nextIndex = slot - 1
                                 val nextRequester = slots[nextIndex]
@@ -477,7 +500,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                         }
                         Key.DirectionDown -> {
                             userMovedInOpenMenu = true
-                            val slot = slots.indexOf(focusedRequester)
+                            val slot = slots.indexOf(effectiveRequester)
                             if (slot in 0 until slots.lastIndex) {
                                 val nextIndex = slot + 1
                                 val nextRequester = slots[nextIndex]
@@ -486,12 +509,18 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             }
                             true
                         }
-                        Key.DirectionLeft -> true
+                        Key.DirectionLeft -> {
+                            if (focusedRequester === nowPlayingCloseRequester) {
+                                userMovedInOpenMenu = true
+                                runCatching { nowPlayingOpenRequester.requestFocus() }
+                            }
+                            true
+                        }
                         else -> false
                     }
                 }
                 .verticalScroll(scrollState)
-                .padding(horizontal = MENU_PADDING, vertical = 24.dp)
+                .padding(horizontal = MENU_PADDING, vertical = verticalPadDp)
                 .drawBehind {
                     val targetId = when {
                         !menuHasFocus || collapsed -> 0
@@ -519,48 +548,35 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 }
         ) {
             items.forEachIndexed { index, item ->
-                if (index == nowPlayingAt && playing != null) {
-                    Spacer(Modifier.height(10.dp))
-                    var slotTopY by remember { mutableIntStateOf(0) }
-                    var rawOpenBounds by remember { mutableStateOf(0 to 0) }
-                    var rawCloseBounds by remember { mutableStateOf(0 to 0) }
+                val hasNowPlayingHere = index == nowPlayingAt && playing != null
+                if (hasNowPlayingHere) {
+                    Spacer(Modifier.height(8.dp))
                     Box(
                         Modifier
                             .fillMaxWidth()
+                            .height(ENTRY_HEIGHT)
                             .onGloballyPositioned { coords ->
-                                slotTopY = coords.positionInParent().y.toInt()
-                                slotBounds[nowPlayingOpenRequester] = (slotTopY + rawOpenBounds.first) to rawOpenBounds.second
-                                slotBounds[nowPlayingCloseRequester] = (slotTopY + rawCloseBounds.first) to rawCloseBounds.second
-                            }
-                            .clip(RoundedCornerShape(12.dp))
-                            .layout { measurable, constraints ->
-                                val placeable = measurable.measure(constraints)
-                                val p = openProvider().coerceIn(0f, 1f)
-                                val minH = ENTRY_HEIGHT.roundToPx().coerceAtMost(placeable.height)
-                                val currentH = minH + ((placeable.height - minH) * p).roundToInt()
-                                layout(placeable.width, currentH) {
-                                    placeable.placeRelative(0, 0)
-                                }
+                                val y = coords.positionInParent().y.toInt()
+                                val h = coords.size.height
+                                slotBounds[nowPlayingOpenRequester] = y to h
+                                slotBounds[nowPlayingCloseRequester] = y to h
                             }
                     ) {
-                        NowPlayingCard(
+                        NowPlayingBar(
                             playing = playing,
                             state = state,
                             openRequester = nowPlayingOpenRequester,
                             closeRequester = nowPlayingCloseRequester,
                             suppressVisualFocus = collapsed || (state.pendingFocus && state.selected != 0),
                             openProvider = openProvider,
-                            onBoundsChanged = { openBounds, closeBounds ->
-                                rawOpenBounds = openBounds
-                                rawCloseBounds = closeBounds
-                                slotBounds[nowPlayingOpenRequester] = (slotTopY + openBounds.first) to openBounds.second
-                                slotBounds[nowPlayingCloseRequester] = (slotTopY + closeBounds.first) to closeBounds.second
-                            },
-                            onOpenFocused = {
-                                if (!collapsed && (!state.pendingFocus || state.selected == 0)) {
+                            onOpenFocusChanged = { isFocused ->
+                                if (isFocused && !collapsed && (!state.pendingFocus || state.selected == 0)) {
                                     focusedRequester = nowPlayingOpenRequester
                                     focusedEntryId = 0
                                     state.focusedId = 0
+                                    state.isNowPlayingOpenFocused = true
+                                } else if (!isFocused) {
+                                    state.isNowPlayingOpenFocused = false
                                 }
                             },
                             onCloseFocused = {
@@ -568,10 +584,11 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                                     focusedRequester = nowPlayingCloseRequester
                                     focusedEntryId = 0
                                     state.focusedId = 0
+                                    state.isNowPlayingOpenFocused = false
                                 }
                             },
                         )
-                        // the stream kept playing, as a red dot of the rail (smoothly crossfaded with NowPlayingCard)
+                        // the stream kept playing, as a red dot of the rail (smoothly crossfaded with NowPlayingBar)
                         Box(
                             Modifier
                                 .size(ENTRY_HEIGHT)
@@ -593,13 +610,13 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             )
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
                 }
                 // air between the groups (account, search, sections, settings), no line
-                if (index > 0 && !item.sub) {
+                if (index > 0 && !item.sub && !hasNowPlayingHere) {
                     val previous = items[index - 1]
                     val newGroup = previous === account || previous.group != item.group
-                    Spacer(Modifier.height(if (newGroup) 18.dp else 4.dp))
+                    Spacer(Modifier.height(if (newGroup) 12.dp else 4.dp))
                 }
                 val requester = state.requesters.getOrPut(item.id) { FocusRequester() }
                 val isAccount = item === account
@@ -649,6 +666,7 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                             focusedRequester = requester
                             focusedEntryId = item.id
                             state.focusedId = item.id
+                            state.isNowPlayingOpenFocused = false
                             if (!state.suppressFocusCallback || item.id == state.selected) {
                                 state.suppressFocusCallback = false
                                 state.onFocusItem(item.id)
@@ -747,145 +765,129 @@ private fun AccountEntry(
     }
 }
 
-/** "Now playing": OK goes back to the stream, the button under it stops it. */
+/** Compact single-line "Now playing" bar: OK on the left pill reopens the stream, Right focuses the inline ✕ button. */
 @Composable
-private fun NowPlayingCard(
+private fun NowPlayingBar(
     playing: TvNowPlaying,
     state: TvMenuState,
     openRequester: FocusRequester,
     closeRequester: FocusRequester,
     suppressVisualFocus: Boolean,
     openProvider: () -> Float,
-    onBoundsChanged: (openBounds: Pair<Int, Int>, closeBounds: Pair<Int, Int>) -> Unit,
-    onOpenFocused: () -> Unit,
+    onOpenFocusChanged: (Boolean) -> Unit,
     onCloseFocused: () -> Unit,
 ) {
-    var cardTopY by remember { mutableIntStateOf(0) }
-    var openLocalBounds by remember { mutableStateOf(0 to 0) }
-    var closeLocalBounds by remember { mutableStateOf(0 to 0) }
-    Column(
+    val openInteraction = remember { MutableInteractionSource() }
+    val rawOpenFocused by openInteraction.collectIsFocusedAsState()
+    val openFocused = rawOpenFocused && !suppressVisualFocus
+    val closeInteraction = remember { MutableInteractionSource() }
+    val rawCloseFocused by closeInteraction.collectIsFocusedAsState()
+    val closeFocused = rawCloseFocused && !suppressVisualFocus
+    val fallbackLabel = androidx.compose.ui.platform.LocalContext.current.getString(com.github.andreyasadchy.xtra.R.string.tv_now_playing)
+    Row(
         Modifier
-            .fillMaxWidth()
-            .onGloballyPositioned { coords ->
-                cardTopY = coords.positionInParent().y.toInt()
-                onBoundsChanged(
-                    (cardTopY + openLocalBounds.first) to openLocalBounds.second,
-                    (cardTopY + closeLocalBounds.first) to closeLocalBounds.second,
-                )
-            }
+            .fillMaxSize()
             .graphicsLayer {
                 val p = openProvider().coerceIn(0f, 1f)
                 alpha = ((p - 0.14f) / 0.86f).coerceIn(0f, 1f)
-                val s = 0.97f + 0.03f * p
-                scaleX = s
-                scaleY = s
-                transformOrigin = TransformOrigin(0f, 0f)
-            }
-    ) {
-        NowPlayingContent(
-            playing = playing,
-            state = state,
-            requester = openRequester,
-            suppressVisualFocus = suppressVisualFocus,
-            onLocalBounds = { bounds ->
-                openLocalBounds = bounds
-                onBoundsChanged(
-                    (cardTopY + openLocalBounds.first) to openLocalBounds.second,
-                    (cardTopY + closeLocalBounds.first) to closeLocalBounds.second,
-                )
             },
-            onFocused = onOpenFocused,
-        )
-        val interaction = remember { MutableInteractionSource() }
-        val rawFocused by interaction.collectIsFocusedAsState()
-        val focused = rawFocused && !suppressVisualFocus
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val contentColor = if (openFocused) TvColors.onFocused else Color.White
         Row(
             Modifier
-                .padding(top = 6.dp)
-                .fillMaxWidth()
-                .onGloballyPositioned { coords ->
-                    closeLocalBounds = coords.positionInParent().y.toInt() to coords.size.height
-                    onBoundsChanged(
-                        (cardTopY + openLocalBounds.first) to openLocalBounds.second,
-                        (cardTopY + closeLocalBounds.first) to closeLocalBounds.second,
+                .weight(1f)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (openFocused) TvColors.focused else Color(0x22E91916))
+                .then(
+                    if (openFocused) Modifier
+                    else Modifier.drawBehind {
+                        drawRoundRect(
+                            color = Color(0x52E91916),
+                            cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx()),
+                            style = Stroke(width = 1.dp.toPx()),
+                        )
+                    }
+                )
+                .focusRequester(openRequester)
+                .onFocusChanged { onOpenFocusChanged(it.isFocused) }
+                .clickable(interactionSource = openInteraction, indication = null) { state.onNowPlayingClick() }
+                .padding(end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(ENTRY_HEIGHT), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(30.dp)) {
+                    if (!playing.image.isNullOrBlank() && !playing.audioOnly) {
+                        coil3.compose.AsyncImage(
+                            model = playing.image,
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(Color(0xFF26252C)),
+                        )
+                    } else {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(if (openFocused) Color(0x1F000000) else Color(0x33E91916)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painterResource(
+                                    if (playing.audioOnly) com.github.andreyasadchy.xtra.R.drawable.baseline_audiotrack_black_24
+                                    else com.github.andreyasadchy.xtra.R.drawable.tv_ic_live
+                                ),
+                                contentDescription = null,
+                                tint = if (openFocused) TvColors.onFocused else Color(0xFFE91916),
+                                modifier = Modifier.size(17.dp),
+                            )
+                        }
+                    }
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(9.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(if (openFocused) TvColors.focused else Color(0xFF15141B))
+                            .padding(1.5.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(Color(0xFFE91916))
                     )
                 }
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
-                .focusRequester(closeRequester)
-                .onFocusChanged { if (it.isFocused) onCloseFocused() }
-                .clickable(interactionSource = interaction, indication = null) { state.onNowPlayingClose() }
-                .padding(vertical = 8.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            }
             Text(
-                androidx.compose.ui.platform.LocalContext.current.getString(com.github.andreyasadchy.xtra.R.string.tv_close_playback),
-                fontSize = 14.sp,
+                playing.channelName?.takeIf { it.isNotBlank() } ?: fallbackLabel,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (focused) TvColors.onFocused else Color.White,
+                color = contentColor,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
         }
-    }
-}
-
-@Composable
-private fun NowPlayingContent(
-    playing: TvNowPlaying,
-    state: TvMenuState,
-    requester: FocusRequester,
-    suppressVisualFocus: Boolean,
-    onLocalBounds: (Pair<Int, Int>) -> Unit,
-    onFocused: () -> Unit,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val rawFocused by interaction.collectIsFocusedAsState()
-    val focused = rawFocused && !suppressVisualFocus
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .onGloballyPositioned { coords ->
-                onLocalBounds(coords.positionInParent().y.toInt() to coords.size.height)
-            }
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
-            .focusRequester(requester)
-            .onFocusChanged { if (it.isFocused) onFocused() }
-            .clickable(interactionSource = interaction, indication = null) { state.onNowPlayingClick() }
-            .padding(10.dp)
-    ) {
-        val content = if (focused) TvColors.onFocused else Color.White
-        Text(
-            androidx.compose.ui.platform.LocalContext.current.getString(com.github.andreyasadchy.xtra.R.string.tv_now_playing),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (focused) TvColors.onFocused else Color(0xFFE91916),
-        )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.width(6.dp))
         Box(
             Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF26252C)),
-            contentAlignment = Alignment.Center
+                .width(40.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (closeFocused) TvColors.focused else Color(0x1AFFFFFF))
+                .focusRequester(closeRequester)
+                .onFocusChanged { if (it.isFocused) onCloseFocused() }
+                .clickable(interactionSource = closeInteraction, indication = null) { state.onNowPlayingClose() },
+            contentAlignment = Alignment.Center,
         ) {
-            coil3.compose.AsyncImage(
-                model = playing.image,
-                contentDescription = null,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+            Icon(
+                painterResource(com.github.andreyasadchy.xtra.R.drawable.tv_ic_close),
+                contentDescription = androidx.compose.ui.platform.LocalContext.current.getString(com.github.andreyasadchy.xtra.R.string.tv_close_playback),
+                tint = if (closeFocused) TvColors.onFocused else Color(0xD9FFFFFF),
+                modifier = Modifier.size(18.dp),
             )
-            if (playing.audioOnly) {
-                Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) {
-                    Icon(painterResource(com.github.andreyasadchy.xtra.R.drawable.baseline_audiotrack_black_24), contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
-                }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(playing.channelName ?: "", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = content, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (!playing.title.isNullOrBlank()) {
-            Text(playing.title, fontSize = 12.sp, color = if (focused) TvColors.onFocused else TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

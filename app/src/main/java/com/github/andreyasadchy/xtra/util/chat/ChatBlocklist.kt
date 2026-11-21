@@ -509,7 +509,7 @@ object ChatBlocklist {
                                 context.getString(R.string.tv_proxies_on),
                             ),
                             selected = if (hideBots) 1 else 0,
-                            modifier = if (!hasAnyUsers) Modifier.focusRequester(topFocus) else Modifier,
+                            modifier = Modifier.focusRequester(topFocus),
                         ) { idx ->
                             val enabled = idx == 1
                             hideBots = enabled
@@ -657,11 +657,7 @@ object ChatBlocklist {
             }
             LaunchedEffect(Unit) {
                 runCatching {
-                    if (hasAnyUsers) {
-                        firstRecentFocus.requestFocus()
-                    } else {
-                        topFocus.requestFocus()
-                    }
+                    topFocus.requestFocus()
                 }
             }
         }

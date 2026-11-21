@@ -57,6 +57,94 @@ class ExoPlayerFragment : PlayerFragment() {
     /** TV: the settings or the login were opened over the app, the stream went on and the service stayed bound. */
     private var keptAcrossStop = false
 
+    /** TV minimized player: renders into a TextureView while minimized so View alpha (20% ghost mode) applies cleanly. */
+    private var tvMiniTextureView: android.view.TextureView? = null
+
+    private fun ensureTvMiniTextureView(): android.view.TextureView {
+        tvMiniTextureView?.let { return it }
+        val tex = android.view.TextureView(requireContext())
+        val idx = binding.aspectRatioFrameLayout.indexOfChild(binding.adHideOverlay).takeIf { it >= 0 }
+            ?: binding.aspectRatioFrameLayout.childCount
+        binding.aspectRatioFrameLayout.addView(
+            tex,
+            idx,
+            android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+        )
+        tvMiniTextureView = tex
+        return tex
+    }
+
+    private fun applyCurrentVideoOutput(secondaryOverride: Boolean? = null) {
+        if (view == null || !isAdded) return
+        val service = playbackService
+        val secondaryPlayer = secondaryOverride ?: (service?.isSwapping == true)
+        val hideMain = service?.shouldHidePlayerSurface() == true
+        val useMiniTexture = isTv && !isMaximized
+
+        if (useMiniTexture) {
+            service?.player?.clearVideoSurfaceView(binding.playerSurface)
+            service?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
+            binding.playerSurface.visibility = View.GONE
+            binding.secondaryPlayerSurface.visibility = View.GONE
+            val tex = ensureTvMiniTextureView()
+            if (hideMain) {
+                service?.player?.clearVideoTextureView(tex)
+                service?.secondaryPlayer?.clearVideoTextureView(tex)
+                tex.visibility = View.GONE
+                binding.adHideOverlay.isVisible = service?.isHidingAds == true
+            } else if (secondaryPlayer) {
+                binding.adHideOverlay.visibility = View.GONE
+                service?.player?.clearVideoTextureView(tex)
+                tex.visibility = View.VISIBLE
+                service?.secondaryPlayer?.setVideoTextureView(tex)
+            } else {
+                service?.secondaryPlayer?.clearVideoTextureView(tex)
+                tex.visibility = View.VISIBLE
+                service?.player?.setVideoTextureView(tex)
+                binding.adHideOverlay.isVisible = service?.isHidingAds == true
+            }
+        } else {
+            tvMiniTextureView?.let { tex ->
+                service?.player?.clearVideoTextureView(tex)
+                service?.secondaryPlayer?.clearVideoTextureView(tex)
+                tex.visibility = View.GONE
+            }
+            binding.playerSurface.visibility = if (hideMain) View.GONE else View.VISIBLE
+            if (!hideMain) {
+                service?.player?.setVideoSurfaceView(binding.playerSurface)
+            }
+            if (secondaryPlayer && !hideMain) {
+                binding.adHideOverlay.visibility = View.GONE
+                binding.secondaryPlayerSurface.visibility = View.VISIBLE
+                service?.secondaryPlayer?.setVideoSurfaceView(binding.secondaryPlayerSurface)
+            } else {
+                service?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
+                binding.secondaryPlayerSurface.visibility = View.GONE
+                binding.adHideOverlay.isVisible = service?.isHidingAds == true
+            }
+        }
+
+        playerListener?.let { listener ->
+            if (secondaryPlayer && !hideMain) {
+                service?.player?.removeListener(listener)
+                service?.secondaryPlayer?.addListener(listener)
+            } else {
+                service?.secondaryPlayer?.removeListener(listener)
+                service?.player?.addListener(listener)
+            }
+        }
+        if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
+            requireView().keepScreenOn = service?.visiblePlayer?.isPlaying == true
+        }
+    }
+
+    override fun onTvMinimizedChanged(minimized: Boolean) {
+        applyCurrentVideoOutput()
+    }
+
     private fun syncVodMutedSegmentsFromManifest() {
         val service = playbackService
         if (service?.type != BasePlaybackService.VIDEO) {
@@ -120,17 +208,7 @@ class ExoPlayerFragment : PlayerFragment() {
         super.onStart()
         if (keptAcrossStop && playbackService != null && serviceConnection != null) {
             keptAcrossStop = false
-            playbackService?.let { service ->
-                val hideMain = service.shouldHidePlayerSurface()
-                binding.playerSurface.visibility = if (hideMain) View.GONE else View.VISIBLE
-                if (!hideMain) {
-                    service.player?.setVideoSurfaceView(binding.playerSurface)
-                }
-                if (service.isSwapping && !hideMain) {
-                    binding.secondaryPlayerSurface.visibility = View.VISIBLE
-                    service.secondaryPlayer?.setVideoSurfaceView(binding.secondaryPlayerSurface)
-                }
-            }
+            applyCurrentVideoOutput()
             syncPlayPauseButtonVisibility()
             updateProgress()
             return
@@ -257,7 +335,12 @@ class ExoPlayerFragment : PlayerFragment() {
                 } else {
                     parameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_VIDEO)
                 }
-                binding.playerSurface.visibility = if (hideMainSurface) View.GONE else View.VISIBLE
+                if (isTv && !isMaximized) {
+                    binding.playerSurface.visibility = View.GONE
+                    tvMiniTextureView?.visibility = if (hideMainSurface) View.GONE else View.VISIBLE
+                } else {
+                    binding.playerSurface.visibility = if (hideMainSurface) View.GONE else View.VISIBLE
+                }
                 binding.adHideOverlay.isVisible = service?.isHidingAds == true
             }
         }
@@ -373,32 +456,7 @@ class ExoPlayerFragment : PlayerFragment() {
                 if (view == null || !isAdded) {
                     return
                 }
-                val service = playbackService
-                val hideMain = service?.shouldHidePlayerSurface() == true
-                binding.playerSurface.visibility = if (hideMain) View.GONE else View.VISIBLE
-                if (!hideMain) {
-                    service?.player?.setVideoSurfaceView(binding.playerSurface)
-                }
-                if (secondaryPlayer && !hideMain) {
-                    binding.adHideOverlay.visibility = View.GONE
-                    binding.secondaryPlayerSurface.visibility = View.VISIBLE
-                    service?.secondaryPlayer?.setVideoSurfaceView(binding.secondaryPlayerSurface)
-                    playerListener?.let {
-                        service?.player?.removeListener(it)
-                        service?.secondaryPlayer?.addListener(it)
-                    }
-                } else {
-                    service?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
-                    binding.secondaryPlayerSurface.visibility = View.GONE
-                    binding.adHideOverlay.isVisible = service?.isHidingAds == true
-                    playerListener?.let {
-                        service?.secondaryPlayer?.removeListener(it)
-                        service?.player?.addListener(it)
-                    }
-                }
-                if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
-                    requireView().keepScreenOn = service?.visiblePlayer?.isPlaying == true
-                }
+                applyCurrentVideoOutput(secondaryOverride = secondaryPlayer)
             }
         }
         val connection = object : ServiceConnection {
@@ -819,6 +877,11 @@ class ExoPlayerFragment : PlayerFragment() {
         service.serviceListener = null
         service.player?.clearVideoSurfaceView(binding.playerSurface)
         service.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
+        tvMiniTextureView?.let { tex ->
+            service.player?.clearVideoTextureView(tex)
+            service.secondaryPlayer?.clearVideoTextureView(tex)
+            tex.visibility = View.GONE
+        }
         binding.secondaryPlayerSurface.visibility = View.GONE
         binding.adHideOverlay.visibility = View.GONE
         service.prepareStreamSwitch()
@@ -840,6 +903,11 @@ class ExoPlayerFragment : PlayerFragment() {
         if (view != null) {
             playbackService?.player?.clearVideoSurfaceView(binding.playerSurface)
             playbackService?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
+            tvMiniTextureView?.let { tex ->
+                playbackService?.player?.clearVideoTextureView(tex)
+                playbackService?.secondaryPlayer?.clearVideoTextureView(tex)
+                tex.visibility = View.GONE
+            }
             binding.secondaryPlayerSurface.visibility = View.GONE
             binding.adHideOverlay.visibility = View.GONE
         }
@@ -857,6 +925,11 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun onDestroyView() {
         lastMutedScanPlaylist = null
         binding.playerControls.root.removeCallbacks(updateProgressAction)
+        tvMiniTextureView?.let { tex ->
+            playbackService?.player?.clearVideoTextureView(tex)
+            playbackService?.secondaryPlayer?.clearVideoTextureView(tex)
+        }
+        tvMiniTextureView = null
         if (keptAcrossStop) {
             // the screen is made again (a setting changed): the service is let go here, the new player binds it again
             keptAcrossStop = false

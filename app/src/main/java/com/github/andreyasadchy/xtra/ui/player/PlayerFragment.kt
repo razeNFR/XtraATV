@@ -45,10 +45,14 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.trackPipAnimationHintView
 import androidx.annotation.OptIn
 import androidx.core.content.edit
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
@@ -86,6 +90,7 @@ import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.player.PlayerViewModel.Companion.PlayerViewModelFactory
+import com.github.andreyasadchy.xtra.ui.tv.FooterActionChip
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
@@ -225,12 +230,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** Live broadcast or live-rewind DVR broadcast (where left/right and channel +/- switch streamers). */
     fun isLiveOrDvrScreen(): Boolean = isStreamScreen() || isDvrScreen()
 
-    private fun effectiveDpadAction(action: String, pipOpen: Boolean): String =
-        if (!pipOpen && com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.isPipOnlyAction(action)) {
-            com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_DEFAULT
-        } else {
-            action
+    private fun effectiveDpadAction(action: String, pipOpen: Boolean): String {
+        val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
+        if (!pipOpen && Keys.isPipOnlyAction(action)) {
+            return Keys.ACTION_DEFAULT
         }
+        if (action == Keys.ACTION_LIVE_ALERT && (activity as? MainActivity)?.isTvLiveAlertShowing() != true) {
+            return Keys.ACTION_DEFAULT
+        }
+        return action
+    }
 
     /**
      * TV: returns -1 or +1 when [keyCode] is configured to switch to the previous/next streamer while controls are
@@ -2831,7 +2840,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     val targetLabel = if (isAtExpLiveEdge) getString(R.string.tv_live) else null
                     position.text = targetLabel ?: DateUtils.formatElapsedTime(tvScrubPosition / 1000)
                     val originPos = if (tvScrubOriginPosition >= 0L) tvScrubOriginPosition else tvScrubPosition
-                    (seekPreview ?: createSeekPreview()).show(
+                    (seekPreview ?: createSeekPreview()).apply {
+                        setStartEpochMs(resolveSeekStartEpochMs())
+                    }.show(
                         position = tvScrubPosition,
                         duration = duration,
                         deltaMs = tvScrubPosition - originPos,
@@ -2920,15 +2931,32 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private var tvStatsView: TextView? = null
     private var seekPreview: TvSeekPreview? = null
+    private var tvSeekStartEpochMs: Long? = null
+
+    private fun resolveSeekStartEpochMs(): Long? {
+        tvSeekStartEpochMs?.takeIf { it > 0L }?.let { return it }
+        if (playbackService?.clipId != null || playbackService?.type == BasePlaybackService.OFFLINE_VIDEO) {
+            return null
+        }
+        val raw = playbackService?.createdAt
+            ?: getTvDvrStream()?.createdAt
+            ?: playbackService?.videoCreatedAt
+        return raw?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.takeIf { it > 0L }
+    }
 
     /** Storyboard description of a video: the seekPreviewsURL of the video, else next to its animated preview. */
     private suspend fun getStoryboardUrl(videoId: String, animatedPreviewUrl: String?): String? {
         val seekPreviews = try {
-            (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryVideo(
+            val video = (requireContext().applicationContext as com.github.andreyasadchy.xtra.XtraApp).xtraModule.graphQLRepository.loadQueryVideo(
                 requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                 TwitchApiHelper.getGQLHeaders(requireContext()),
                 videoId
-            ).data?.video?.let { it.seekPreviewsURL ?: it.animatedPreviewURL?.let { preview -> "${preview.substringBeforeLast("/")}/$videoId-info.json" } }
+            ).data?.video
+            video?.createdAt?.toString()?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }?.takeIf { it > 0L }?.let { startMs ->
+                tvSeekStartEpochMs = startMs
+                seekPreview?.setStartEpochMs(startMs)
+            }
+            video?.let { it.seekPreviewsURL ?: it.animatedPreviewURL?.let { preview -> "${preview.substringBeforeLast("/")}/$videoId-info.json" } }
         } catch (e: Exception) {
             null
         }
@@ -2955,6 +2983,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             binding.playerControls.progressBar,
         ).also {
             it.setChapters(viewModel.gamesList.value)
+            it.setStartEpochMs(resolveSeekStartEpochMs())
             seekPreview = it
         }
     }
@@ -2982,7 +3011,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         // only the VOD of the current broadcast
         if (video?.id == null || view == null || (streamStart != null && videoStart != null && kotlin.math.abs(videoStart - streamStart) > 15 * 60_000L)) {
+            streamStart?.takeIf { it > 0L }?.let {
+                tvSeekStartEpochMs = it
+                seekPreview?.setStartEpochMs(it)
+            }
             return null
+        }
+        (videoStart ?: streamStart)?.takeIf { it > 0L }?.let {
+            tvSeekStartEpochMs = it
+            seekPreview?.setStartEpochMs(it)
         }
         (activity as? MainActivity)?.dvrChatVideoId = video.id
         val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
@@ -3060,14 +3097,220 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var tvChatFreeMoving = false
+    private var tvChatFreePrevMode = 0
+    private var tvChatFreePrevPos = 0
+    private var tvChatFreePrevActive = false
+    private var tvChatFreePrevX = 0.7f
+    private var tvChatFreePrevY = 0.5f
+    private var tvChatFreeCenterDown = false
+    private var tvChatFreeBackDown = false
+    private var tvChatFreeHintView: TextView? = null
+
+    fun isTvChatFreeMoving(): Boolean = isTv && isMaximized && tvChatFreeMoving
+
+    fun hideControlsForFreeMove() {
+        if (_binding != null) {
+            hideController(force = true)
+        }
+    }
+
+    fun startTvChatFreeMove() {
+        val b = _binding ?: return
+        if (!isTv || !isMaximized) return
+        val prefs = requireContext().prefs()
+        if (!isChatOpen) {
+            showChat()
+        }
+        tvChatFreePrevMode = prefs.getInt(C.TV_CHAT_MODE, 0)
+        tvChatFreePrevPos = getTvChatPosForMode(prefs, tvChatFreePrevMode)
+        tvChatFreePrevActive = prefs.getBoolean(C.TV_CHAT_FREE_ACTIVE, false)
+        tvChatFreePrevX = prefs.getFloat(C.TV_CHAT_FREE_X, 0.7f)
+        tvChatFreePrevY = prefs.getFloat(C.TV_CHAT_FREE_Y, 0.5f)
+
+        val metrics = resources.displayMetrics
+        val screenW = b.root.width.takeIf { it > 0 } ?: metrics.widthPixels
+        val screenH = b.root.height.takeIf { it > 0 } ?: metrics.heightPixels
+        val chatW = (screenW * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
+        val chatH = (screenH * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
+        val maxLeft = (screenW - chatW).coerceAtLeast(1)
+        val maxTop = (screenH - chatH).coerceAtLeast(1)
+
+        val (initX, initY) = if (tvChatFreePrevMode == 0 && b.chatLayout.width > 0 && b.root.width > 0) {
+            (b.chatLayout.left.coerceIn(0, maxLeft).toFloat() / maxLeft.toFloat()) to
+                (b.chatLayout.top.coerceIn(0, maxTop).toFloat() / maxTop.toFloat())
+        } else if (tvChatFreePrevActive) {
+            tvChatFreePrevX.coerceIn(0f, 1f) to tvChatFreePrevY.coerceIn(0f, 1f)
+        } else {
+            val left = tvChatFreePrevPos == 2 || tvChatFreePrevPos == 3 || tvChatFreePrevPos == 5
+            val top = tvChatFreePrevPos == 1 || tvChatFreePrevPos == 3 || tvChatFreePrevPos == 6
+            val hCenter = tvChatFreePrevPos == 6 || tvChatFreePrevPos == 7
+            val vCenter = tvChatFreePrevPos == 4 || tvChatFreePrevPos == 5
+            val rx = when {
+                hCenter -> 0.5f
+                left -> 0.02f
+                else -> 0.98f
+            }
+            val ry = when {
+                vCenter -> 0.5f
+                top -> 0.02f
+                else -> 0.98f
+            }
+            rx to ry
+        }
+
+        prefs.edit {
+            putInt(C.TV_CHAT_MODE, 0)
+            putBoolean(C.TV_CHAT_FREE_ACTIVE, true)
+            putFloat(C.TV_CHAT_FREE_X, initX.coerceIn(0f, 1f))
+            putFloat(C.TV_CHAT_FREE_Y, initY.coerceIn(0f, 1f))
+        }
+        hideControlsForFreeMove()
+        tvChatFreeMoving = true
+        tvChatFreeCenterDown = false
+        tvChatFreeBackDown = false
+        applyTvChatLayout()
+        showTvChatFreeMoveHint()
+    }
+
+    private fun showTvChatFreeMoveHint() {
+        val b = _binding ?: return
+        val density = resources.displayMetrics.density
+        val vertical = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+        val pill = tvChatFreeHintView ?: TextView(requireContext()).apply {
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xE6141318.toInt())
+                cornerRadius = 999 * density
+                setStroke((2 * density).toInt(), com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
+            }
+            val padH = (16 * density).toInt()
+            val padV = (8 * density).toInt()
+            setPadding(padH, padV, padH, padV)
+            elevation = 28 * density
+            isFocusable = false
+            b.slidingLayout.addView(
+                this,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.TOP or Gravity.CENTER_HORIZONTAL,
+                ).apply {
+                    topMargin = vertical
+                }
+            )
+            tvChatFreeHintView = this
+        }
+        pill.text = getString(R.string.tv_free_move_hint)
+        pill.visibility = View.VISIBLE
+    }
+
+    private fun exitTvChatFreeMove(restorePrevious: Boolean) {
+        if (!tvChatFreeMoving && tvChatFreeHintView == null) return
+        if (restorePrevious && context != null) {
+            requireContext().prefs().edit {
+                putInt(C.TV_CHAT_MODE, tvChatFreePrevMode)
+                putInt(C.TV_CHAT_POSITION, tvChatFreePrevPos)
+                putBoolean(C.TV_CHAT_FREE_ACTIVE, tvChatFreePrevActive)
+                putFloat(C.TV_CHAT_FREE_X, tvChatFreePrevX)
+                putFloat(C.TV_CHAT_FREE_Y, tvChatFreePrevY)
+            }
+        }
+        tvChatFreeMoving = false
+        tvChatFreeCenterDown = false
+        tvChatFreeBackDown = false
+        tvChatFreeHintView?.let { _binding?.slidingLayout?.removeView(it) }
+        tvChatFreeHintView = null
+        if (_binding != null) {
+            binding.chatLayout.foreground = null
+            applyTvChatLayout()
+        }
+    }
+
+    fun onTvChatFreeMoveKey(event: KeyEvent): Boolean {
+        if (!isTvChatFreeMoving()) return false
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    nudgeTvChatFreeMove(event.keyCode, event.repeatCount)
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    tvChatFreeCenterDown = true
+                } else if (event.action == KeyEvent.ACTION_UP && tvChatFreeCenterDown) {
+                    exitTvChatFreeMove(restorePrevious = false)
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_free_move_saved, Toast.LENGTH_SHORT).show()
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_BACK -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    tvChatFreeBackDown = true
+                } else if (event.action == KeyEvent.ACTION_UP && tvChatFreeBackDown) {
+                    exitTvChatFreeMove(restorePrevious = true)
+                }
+                return true
+            }
+            else -> return true
+        }
+    }
+
+    private fun nudgeTvChatFreeMove(keyCode: Int, repeatCount: Int) {
+        val b = _binding ?: return
+        val prefs = requireContext().prefs()
+        val metrics = resources.displayMetrics
+        val density = metrics.density
+        val stepDp = when {
+            repeatCount <= 0 -> 4f
+            repeatCount <= 4 -> 10f
+            repeatCount <= 12 -> 20f
+            else -> 32f
+        }
+        val stepPx = maxOf(1, kotlin.math.round(stepDp * density).toInt())
+        val screenW = b.root.width.takeIf { it > 0 } ?: metrics.widthPixels
+        val screenH = b.root.height.takeIf { it > 0 } ?: metrics.heightPixels
+        val chatW = (screenW * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
+        val chatH = (screenH * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
+        val maxLeft = (screenW - chatW).coerceAtLeast(1)
+        val maxTop = (screenH - chatH).coerceAtLeast(1)
+
+        val curLeft = kotlin.math.round(prefs.getFloat(C.TV_CHAT_FREE_X, 0.7f).coerceIn(0f, 1f) * maxLeft).toInt().coerceIn(0, maxLeft)
+        val curTop = kotlin.math.round(prefs.getFloat(C.TV_CHAT_FREE_Y, 0.5f).coerceIn(0f, 1f) * maxTop).toInt().coerceIn(0, maxTop)
+        val newLeft = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> (curLeft - stepPx).coerceAtLeast(0)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> (curLeft + stepPx).coerceAtMost(maxLeft)
+            else -> curLeft
+        }
+        val newTop = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> (curTop - stepPx).coerceAtLeast(0)
+            KeyEvent.KEYCODE_DPAD_DOWN -> (curTop + stepPx).coerceAtMost(maxTop)
+            else -> curTop
+        }
+        prefs.edit {
+            putFloat(C.TV_CHAT_FREE_X, (newLeft.toFloat() / maxLeft.toFloat()).coerceIn(0f, 1f))
+            putFloat(C.TV_CHAT_FREE_Y, (newTop.toFloat() / maxTop.toFloat()).coerceIn(0f, 1f))
+        }
+        applyTvChatLayout()
+    }
+
     /** TV chat overlay: size, corner and transparency from the chat layout panel, flush with the screen edges by default. */
     private fun applyTvChatLayout() {
         with(binding) {
             val prefs = requireContext().prefs()
             val metrics = resources.displayMetrics
             val mode = prefs.getInt(C.TV_CHAT_MODE, 0)
+            val freeActive = mode == 0 && prefs.getBoolean(C.TV_CHAT_FREE_ACTIVE, false)
             val position = getTvChatPosForMode(prefs, mode)
-            val margin = if (mode == 0) (prefs.getInt(C.TV_CHAT_MARGIN, 0) * metrics.density).toInt() else 0
+            val margin = if (mode == 0 && !freeActive) (prefs.getInt(C.TV_CHAT_MARGIN, 0) * metrics.density).toInt() else 0
             val screenWidth = root.width.takeIf { it > 0 } ?: metrics.widthPixels
             val screenHeight = root.height.takeIf { it > 0 } ?: metrics.heightPixels
             val chatWidth = (screenWidth * prefs.getInt(C.TV_CHAT_WIDTH, 30) / 100f).toInt()
@@ -3075,6 +3318,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             // corners 0..3, middle of a side 4..7 (right, left, top, bottom)
             val left = position == 2 || position == 3 || position == 5
             val top = position == 1 || position == 3 || position == 6
+            var freeRounded = false
             when {
                 !isChatOpen -> {
                     playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
@@ -3129,6 +3373,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         marginEnd = 0
                     }
                 }
+                freeActive -> {
+                    playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
+                        width = ViewGroup.LayoutParams.MATCH_PARENT
+                        height = ViewGroup.LayoutParams.MATCH_PARENT
+                        gravity = Gravity.NO_GRAVITY
+                        marginEnd = 0
+                    }
+                    val maxLeft = (screenWidth - chatWidth).coerceAtLeast(0)
+                    val maxTop = (screenHeight - chatHeight).coerceAtLeast(0)
+                    val leftPx = kotlin.math.round(prefs.getFloat(C.TV_CHAT_FREE_X, 0.7f).coerceIn(0f, 1f) * maxLeft).toInt().coerceIn(0, maxLeft)
+                    val topPx = kotlin.math.round(prefs.getFloat(C.TV_CHAT_FREE_Y, 0.5f).coerceIn(0f, 1f) * maxTop).toInt().coerceIn(0, maxTop)
+                    freeRounded = leftPx > 0 && leftPx < maxLeft && topPx > 0 && topPx < maxTop
+                    chatLayout.layoutParams = FrameLayout.LayoutParams(chatWidth, chatHeight, Gravity.TOP or Gravity.LEFT).apply {
+                        setMargins(leftPx, topPx, 0, 0)
+                    }
+                }
                 else -> {
                     playerLayout.updateLayoutParams<FrameLayout.LayoutParams> {
                         width = ViewGroup.LayoutParams.MATCH_PARENT
@@ -3149,27 +3409,37 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             7 -> Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
                             else -> Gravity.END or Gravity.BOTTOM
                         }
+                        setMargins(margin, margin, margin, margin)
                         marginStart = margin
                         marginEnd = margin
-                        topMargin = margin
-                        bottomMargin = margin
                     }
                 }
             }
             chatFragment?.setSingleLine(mode == 2 && prefs.getInt(C.TV_CHAT_LINES, 3) == 1)
             chatLayout.animate().cancel()
-            chatLayout.translationY = if (playerControls.root.isVisible && !controllerHiding && !hudPeek) getTvChatLift() else 0f
+            chatLayout.translationY = if (playerControls.root.isVisible && !controllerHiding && !hudPeek && !tvChatFreeMoving) getTvChatLift() else 0f
             // both backgrounds are opaque: the opacity chosen is the only one applied (the rounded one was already see-through,
             // 100 % gave 55 % as soon as the chat left the edges)
-            chatLayout.setBackgroundResource(if (margin == 0) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_rounded)
-            chatLayout.background?.mutate()?.alpha = (prefs.getInt(C.TV_CHAT_OPACITY, 55) * 255 / 100).coerceIn(0, 255)
-            chatLayout.clipToOutline = margin != 0
+            val rounded = margin != 0 || freeRounded
+            chatLayout.setBackgroundResource(if (!rounded) R.drawable.tv_chat_overlay_flush else R.drawable.tv_chat_overlay_rounded)
+            val savedAlpha = (prefs.getInt(C.TV_CHAT_OPACITY, 55) * 255 / 100).coerceIn(0, 255)
+            chatLayout.background?.mutate()?.alpha = if (tvChatFreeMoving) maxOf(savedAlpha, 90) else savedAlpha
+            chatLayout.clipToOutline = rounded
+            if (tvChatFreeMoving) {
+                chatLayout.foreground = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = if (rounded) 12f * metrics.density else 0f
+                    setStroke((3f * metrics.density).toInt().coerceAtLeast(2), com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
+                }
+            } else if (chatLayout.foreground != null) {
+                chatLayout.foreground = null
+            }
             syncTvOsdLift(animate = false)
         }
     }
 
     /** The chat goes up over the controls only when it is at the bottom of the screen. */
     private fun getTvChatLift(): Float {
+        if (tvChatFreeMoving) return 0f
         val prefs = requireContext().prefs()
         val mode = prefs.getInt(C.TV_CHAT_MODE, 0)
         val position = getTvChatPosForMode(prefs, mode)
@@ -3182,12 +3452,50 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (mode != 0) {
             return 0f
         }
+        if (prefs.getBoolean(C.TV_CHAT_FREE_ACTIVE, false)) {
+            val metrics = resources.displayMetrics
+            val screenH = _binding?.root?.height?.takeIf { it > 0 } ?: metrics.heightPixels
+            val chatH = (screenH * prefs.getInt(C.TV_CHAT_HEIGHT, 50) / 100f).toInt()
+            val maxTop = (screenH - chatH).coerceAtLeast(0)
+            val topPx = kotlin.math.round(prefs.getFloat(C.TV_CHAT_FREE_Y, 0.5f).coerceIn(0f, 1f) * maxTop).toInt().coerceIn(0, maxTop)
+            val liftPx = resources.getDimension(R.dimen.tv_chat_lift)
+            val overlap = (topPx + chatH) - (screenH - liftPx.toInt())
+            return if (overlap > 0) -overlap.toFloat().coerceAtMost(liftPx) else 0f
+        }
         return if (position == 0 || position == 2 || position == 7) -resources.getDimension(R.dimen.tv_chat_lift) else 0f
     }
 
+    private fun androidx.compose.ui.Modifier.panelFirstRow(
+        requester: androidx.compose.ui.focus.FocusRequester,
+        upTarget: () -> androidx.compose.ui.focus.FocusRequester,
+    ): androidx.compose.ui.Modifier = this
+        .focusRequester(requester)
+        .onPreviewKeyEvent { ev ->
+            if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && ev.key == androidx.compose.ui.input.key.Key.DirectionUp) {
+                runCatching { upTarget().requestFocus() }
+                true
+            } else {
+                false
+            }
+        }
+
+    private fun androidx.compose.ui.Modifier.panelLastRow(
+        requester: androidx.compose.ui.focus.FocusRequester?,
+        downTarget: androidx.compose.ui.focus.FocusRequester,
+    ): androidx.compose.ui.Modifier = this
+        .then(if (requester != null) androidx.compose.ui.Modifier.focusRequester(requester) else androidx.compose.ui.Modifier)
+        .onPreviewKeyEvent { ev ->
+            if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && ev.key == androidx.compose.ui.input.key.Key.DirectionDown) {
+                runCatching { downTarget.requestFocus() }
+                true
+            } else {
+                false
+            }
+        }
+
     /**
-     * Panel with sliders to place the chat, on the opposite side so the chat can be seen while it changes.
-     * Its rows follow the display: corners over the stream, sides next to it, above or under it.
+     * Tabbed Chat panel on the opposite side of the chat so changes are visible live without vertical scroll:
+     * Placement · Appearance · Options + pinned horizontal action footer.
      */
     private fun showChatLayoutPanel() {
         val context = requireContext()
@@ -3209,17 +3517,119 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             getString(R.string.tv_chat_mode_side),
             getString(R.string.tv_chat_mode_below),
         )
+        val tabs = listOf(
+            R.drawable.tv_ic_chat_layout to getString(R.string.tv_panel_tab_placement),
+            R.drawable.tv_ic_palette to getString(R.string.tv_panel_tab_appearance),
+            R.drawable.tv_ic_tune to getString(R.string.tv_panel_tab_options),
+        )
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(context) { dismiss ->
             val initialMode = prefs.getInt(C.TV_CHAT_MODE, 0)
             val mode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(initialMode) }
             val position = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(getTvChatPosForMode(prefs, initialMode)) }
-            val left = position.intValue == 2 || position.intValue == 3 || position.intValue == 5
+            val freePosState = androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableStateOf(initialMode == 0 && prefs.getBoolean(C.TV_CHAT_FREE_ACTIVE, false))
+            }
+            val selectedTab = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+            val tabRequesters = androidx.compose.runtime.remember { List(3) { androidx.compose.ui.focus.FocusRequester() } }
+            val firstRowReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val lastRowReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val footerUsersReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val footerRestartReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val footerResetReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+
+            val chatOnLeft = if (mode.intValue == 0 && freePosState.value) {
+                prefs.getFloat(C.TV_CHAT_FREE_X, 0.7f) < 0.5f
+            } else {
+                position.intValue == 2 || position.intValue == 3 || position.intValue == 5
+            }
+            val alignEnd = chatOnLeft && mode.intValue != 2
+
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_chat_layout),
+                width = 392.dp,
+                compactHeader = true,
                 scrollable = true,
-                alignEnd = left && mode.intValue != 2,
+                alignEnd = alignEnd,
+                headerExtra = {
+                    com.github.andreyasadchy.xtra.ui.tv.PanelTabs(
+                        tabs = tabs,
+                        selectedTab = selectedTab.intValue,
+                        tabRequesters = tabRequesters,
+                        downTarget = firstRowReq,
+                        onSelect = { selectedTab.intValue = it },
+                    )
+                },
+                footer = {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                    ) {
+                        FooterActionChip(
+                            label = getString(R.string.tv_chat_manage_users),
+                            icon = R.drawable.tv_ic_person,
+                            requester = footerUsersReq,
+                            rightTarget = footerRestartReq,
+                            upTarget = lastRowReq,
+                        ) {
+                            com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.showPlayerBlockPanel(
+                                context = context,
+                                alignEnd = alignEnd,
+                                recentChatters = chatFragment?.getRecentChatters().orEmpty(),
+                            )
+                        }
+                        FooterActionChip(
+                            label = getString(R.string.tv_restart_chat),
+                            icon = R.drawable.tv_ic_refresh,
+                            requester = footerRestartReq,
+                            leftTarget = footerUsersReq,
+                            rightTarget = footerResetReq,
+                            upTarget = lastRowReq,
+                        ) {
+                            restartTvChat()
+                            dismiss()
+                        }
+                        FooterActionChip(
+                            label = getString(R.string.tv_reset),
+                            icon = R.drawable.tv_ic_replay,
+                            requester = footerResetReq,
+                            leftTarget = footerRestartReq,
+                            upTarget = lastRowReq,
+                        ) {
+                            prefs.edit {
+                                remove(C.TV_CHAT_POSITION)
+                                remove(C.TV_CHAT_POS_OVERLAY)
+                                remove(C.TV_CHAT_POS_SIDE)
+                                remove(C.TV_CHAT_POS_BAND)
+                                remove(C.TV_CHAT_FREE_ACTIVE)
+                                remove(C.TV_CHAT_FREE_X)
+                                remove(C.TV_CHAT_FREE_Y)
+                                remove(C.TV_CHAT_WIDTH)
+                                remove(C.TV_CHAT_HEIGHT)
+                                remove(C.TV_CHAT_MARGIN)
+                                remove(C.TV_CHAT_OPACITY)
+                                remove(C.TV_CHAT_MODE)
+                                remove(C.TV_CHAT_LINES)
+                                remove(C.CHAT_SIZE_MODIFIER)
+                                remove(C.CHAT_SLOW_RATE)
+                                remove(C.CHAT_DELAY_MODE)
+                                remove(C.TV_CHAT_BAND_OVERLAY)
+                                remove(C.CHAT_DELAY_SECONDS)
+                                remove(C.TV_CHAT_PREDICTIONS_POPUP)
+                                remove(C.TV_CHAT_PREDICTIONS_MODE)
+                                remove(C.TV_CHAT_PINNED_MODE)
+                                remove(C.CHAT_SHARED_BADGES)
+                            }
+                            hideTvPredictionPopup()
+                            chatFragment?.refreshPinnedBanner()
+                            chatFragment?.applySizeModifier()
+                            if (_binding != null) {
+                                applyTvChatLayout()
+                            }
+                            dismiss()
+                        }
+                    }
+                },
             ) {
-                val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
                 val update: (String, Int) -> Unit = { key, value ->
                     prefs.edit { putInt(key, value) }
                     if (_binding != null) {
@@ -3228,270 +3638,352 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
                 val updatePosition: (Int) -> Unit = { newPos ->
                     position.intValue = newPos
+                    freePosState.value = false
+                    prefs.edit { putBoolean(C.TV_CHAT_FREE_ACTIVE, false) }
                     saveTvChatPosForMode(prefs, mode.intValue, newPos)
                     if (_binding != null) {
                         applyTvChatLayout()
                     }
                 }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_mode), modes, mode.intValue, androidx.compose.ui.Modifier.focusRequester(requester)) { newMode ->
-                    if (!prefs.contains(tvChatModePosKey(mode.intValue))) {
-                        saveTvChatPosForMode(prefs, mode.intValue, position.intValue)
-                    }
-                    mode.intValue = newMode
-                    val nextPos = getTvChatPosForMode(prefs, newMode)
-                    position.intValue = nextPos
-                    prefs.edit {
-                        putInt(C.TV_CHAT_MODE, newMode)
-                        putInt(C.TV_CHAT_POSITION, nextPos)
-                    }
-                    if (_binding != null) {
-                        applyTvChatLayout()
-                    }
-                }
-                androidx.compose.runtime.key(mode.intValue) {
-                    when (mode.intValue) {
-                        1 -> {
-                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), sides, if (left) 1 else 0) {
-                                updatePosition(if (it == 1) 2 else 0)
+
+                when (selectedTab.intValue) {
+                    0 -> {
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_chat_mode),
+                            options = modes,
+                            selected = mode.intValue,
+                            icon = R.drawable.tv_ic_view_quilt,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] },
+                        ) { newMode ->
+                            if (!prefs.contains(tvChatModePosKey(mode.intValue))) {
+                                saveTvChatPosForMode(prefs, mode.intValue, position.intValue)
+                            }
+                            mode.intValue = newMode
+                            freePosState.value = newMode == 0 && prefs.getBoolean(C.TV_CHAT_FREE_ACTIVE, false)
+                            val nextPos = getTvChatPosForMode(prefs, newMode)
+                            position.intValue = nextPos
+                            prefs.edit {
+                                putInt(C.TV_CHAT_MODE, newMode)
+                                putInt(C.TV_CHAT_POSITION, nextPos)
+                            }
+                            if (_binding != null) {
+                                applyTvChatLayout()
                             }
                         }
-                        2 -> {
-                            val top = position.intValue == 1 || position.intValue == 3 || position.intValue == 6
-                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), bands, if (top) 1 else 0) {
-                                updatePosition(if (it == 1) 1 else 0)
-                            }
-                        }
-                        else -> {
-                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_chat_position), corners, position.intValue.coerceIn(0, corners.lastIndex)) {
-                                updatePosition(it)
-                            }
-                        }
-                    }
-                }
-                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_chat_manage_users)) {
-                    com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.showPlayerBlockPanel(
-                        context = context,
-                        alignEnd = left && mode.intValue != 2,
-                        recentChatters = chatFragment?.getRecentChatters().orEmpty(),
-                    )
-                }
-                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_restart_chat)) {
-                    restartTvChat()
-                    dismiss()
-                }
-                // slow chat: off or max normal messages per second (1, 2, 4, 6), priority messages stay shown
-                val slowRateValues = listOf("0", "1", "2", "4", "6")
-                val slowRateLabels = listOf(
-                    getString(R.string.tv_chat_delay_off),
-                    getString(R.string.tv_chat_slow_rate, 1),
-                    getString(R.string.tv_chat_slow_rate, 2),
-                    getString(R.string.tv_chat_slow_rate, 4),
-                    getString(R.string.tv_chat_slow_rate, 6),
-                )
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                    getString(R.string.tv_chat_slow),
-                    slowRateLabels,
-                    slowRateValues.indexOf(prefs.getString(C.CHAT_SLOW_RATE, "0")).coerceAtLeast(0),
-                ) {
-                    prefs.edit { putString(C.CHAT_SLOW_RATE, slowRateValues[it]) }
-                }
-                val activePin = chatFragment?.getPinnedMessage()
-                if (activePin != null) {
-                    val pinSender = activePin.senderName ?: activePin.senderLogin
-                    val pinPreview = if (!pinSender.isNullOrBlank()) "$pinSender: ${activePin.messageText}" else activePin.messageText
-                    com.github.andreyasadchy.xtra.ui.tv.ButtonRow("📌 ${getString(R.string.tv_chat_pinned_active)} — ${pinPreview.take(36)}") {
-                        showPinnedMessageDetailPanel(activePin, alignEnd = left && mode.intValue != 2)
-                    }
-                }
-                val pinnedMode = androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_PINNED_MODE, 1).coerceIn(0, 2))
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                    getString(R.string.tv_chat_pinned),
-                    listOf(
-                        getString(R.string.tv_chat_pinned_hidden),
-                        getString(R.string.tv_chat_pinned_temp),
-                        getString(R.string.tv_chat_pinned_always),
-                    ),
-                    pinnedMode.intValue,
-                ) {
-                    pinnedMode.intValue = it
-                    prefs.edit { putInt(C.TV_CHAT_PINNED_MODE, it) }
-                    chatFragment?.refreshPinnedBanner()
-                }
-                val predPopup = androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableIntStateOf(C.getTvPredictionsPopupMode(prefs))
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                    getString(R.string.tv_chat_predictions_popup),
-                    listOf(
-                        getString(R.string.tv_chat_delay_off),
-                        getString(R.string.tv_chat_predictions_30s),
-                        getString(R.string.tv_chat_predictions_full),
-                    ),
-                    predPopup.intValue,
-                ) {
-                    predPopup.intValue = it
-                    prefs.edit {
-                        putInt(C.TV_CHAT_PREDICTIONS_MODE, it)
-                        putBoolean(C.TV_CHAT_PREDICTIONS_POPUP, it != 0)
-                    }
-                    if (it == 0) {
-                        hideTvPredictionPopup()
-                    } else if (!isChatOpen) {
-                        if (it == 2) {
-                            tvActivePrediction.value?.takeIf { p -> p.status == "ACTIVE" }?.let { p -> onTvPredictionEvent(p) }
-                        } else if (it == 1 && tvPredictionView?.isVisible == true && tvPredictionCurrent?.status == "ACTIVE") {
-                            showTvPredictionPopup(autoHideMs = 30_000L)
-                        }
-                    }
-                }
-                // delay of the live chat: off, auto (the latency of the stream) or 1 to 60 s
-                val expVodChat = isExperimentalVodActive()
-                val savedDelayMode = prefs.getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull()?.coerceIn(0, 2) ?: 1
-                val delayMode = androidx.compose.runtime.remember(expVodChat) {
-                    androidx.compose.runtime.mutableIntStateOf(if (expVodChat) 1 else savedDelayMode)
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                    getString(R.string.tv_chat_delay),
-                    listOf(getString(R.string.tv_chat_delay_off), getString(R.string.tv_chat_delay_auto), getString(R.string.tv_chat_delay_manual)),
-                    delayMode.intValue,
-                ) {
-                    if (isExperimentalVodActive()) {
-                        delayMode.intValue = 1
-                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_adblock_exp_chat_auto_locked, Toast.LENGTH_SHORT).show()
-                    } else {
-                        delayMode.intValue = it
-                        prefs.edit { putString(C.CHAT_DELAY_MODE, it.toString()) }
-                    }
-                }
-                androidx.compose.runtime.key(delayMode.intValue, expVodChat) {
-                    when (delayMode.intValue) {
-                        1 -> {
-                            val measuredState by androidx.compose.runtime.produceState(
-                                (chatFragment?.getAutoDelayMs() ?: 0L) to (chatFragment?.isAutoDelayMeasured() == true)
-                            ) {
-                                while (true) {
-                                    value = (chatFragment?.getAutoDelayMs() ?: 0L) to (chatFragment?.isAutoDelayMeasured() == true)
-                                    kotlinx.coroutines.delay(1000)
+                        androidx.compose.runtime.key(mode.intValue) {
+                            when (mode.intValue) {
+                                1 -> {
+                                    val sideLeft = position.intValue == 2 || position.intValue == 3 || position.intValue == 5
+                                    com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                                        label = getString(R.string.tv_chat_position),
+                                        options = sides,
+                                        selected = if (sideLeft) 1 else 0,
+                                        icon = R.drawable.tv_ic_open_full,
+                                        compact = true,
+                                    ) {
+                                        updatePosition(if (it == 1) 2 else 0)
+                                    }
+                                }
+                                2 -> {
+                                    val top = position.intValue == 1 || position.intValue == 3 || position.intValue == 6
+                                    com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                                        label = getString(R.string.tv_chat_position),
+                                        options = bands,
+                                        selected = if (top) 1 else 0,
+                                        icon = R.drawable.tv_ic_open_full,
+                                        compact = true,
+                                    ) {
+                                        updatePosition(if (it == 1) 1 else 0)
+                                    }
+                                }
+                                else -> {
+                                    val posOptions = if (freePosState.value) corners + getString(R.string.tv_position_free) else corners
+                                    val posSelected = if (freePosState.value) corners.size else position.intValue.coerceIn(0, corners.lastIndex)
+                                    com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                                        label = getString(R.string.tv_chat_position),
+                                        options = posOptions,
+                                        selected = posSelected,
+                                        icon = R.drawable.tv_ic_open_full,
+                                        compact = true,
+                                    ) { chosen ->
+                                        if (chosen in corners.indices) {
+                                            updatePosition(chosen)
+                                        }
+                                    }
                                 }
                             }
-                            val (measured, isMeasured) = measuredState
-                            val now = if (measured > 0L || isMeasured) {
-                                getString(R.string.tv_chat_delay_auto_now, "%.1f".format(measured / 1000f))
-                            } else {
-                                getString(R.string.tv_chat_delay_auto_measuring)
-                            }
-                            val infoText = if (expVodChat) {
-                                getString(R.string.tv_adblock_exp_chat_auto_info, now)
-                            } else {
-                                getString(R.string.tv_chat_delay_auto_info, now)
-                            }
-                            androidx.tv.material3.Text(
-                                infoText,
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp,
-                                color = com.github.andreyasadchy.xtra.ui.tv.TvColors.secondaryText,
-                                modifier = androidx.compose.ui.Modifier.padding(start = 18.dp, end = 18.dp, top = 2.dp, bottom = 6.dp),
-                            )
                         }
-                        2 -> {
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_delay_seconds), prefs.getInt(C.CHAT_DELAY_SECONDS, 5).coerceIn(1, 60), 1..60, valueText = { "$it s" }) {
-                                prefs.edit { putInt(C.CHAT_DELAY_SECONDS, it) }
-                            }
+                        val hasFourthPlacementRow = (mode.intValue == 0 && !freePosState.value) || mode.intValue == 2
+                        com.github.andreyasadchy.xtra.ui.tv.ButtonRow(
+                            label = getString(R.string.tv_free_move_button),
+                            icon = R.drawable.tv_ic_move,
+                            compact = true,
+                            modifier = if (!hasFourthPlacementRow) androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq) else androidx.compose.ui.Modifier,
+                        ) {
+                            dismiss()
+                            startTvChatFreeMove()
                         }
-                    }
-                }
-                androidx.compose.runtime.key("size_${mode.intValue}") {
-                    when (mode.intValue) {
-                        1 -> {
-                            textSizeRow(prefs)
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 5..60, valueText = { "$it %" }) {
-                                update(C.TV_CHAT_WIDTH, it)
+                        if (mode.intValue == 0 && !freePosState.value) {
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                label = getString(R.string.tv_chat_margin),
+                                value = prefs.getInt(C.TV_CHAT_MARGIN, 0),
+                                range = 0..64,
+                                step = 4,
+                                valueText = { "$it dp" },
+                                icon = R.drawable.tv_ic_fullscreen,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq),
+                            ) {
+                                update(C.TV_CHAT_MARGIN, it)
                             }
-                        }
-                        2 -> {
-                            // the band apart (the picture a bit smaller) or over the stream (the picture full screen)
+                        } else if (mode.intValue == 2) {
                             com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                                getString(R.string.tv_chat_band),
-                                listOf(getString(R.string.tv_chat_band_separate), getString(R.string.tv_chat_band_overlay)),
-                                if (prefs.getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) 1 else 0,
+                                label = getString(R.string.tv_chat_band),
+                                options = listOf(getString(R.string.tv_chat_band_separate), getString(R.string.tv_chat_band_overlay)),
+                                selected = if (prefs.getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) 1 else 0,
+                                icon = R.drawable.tv_ic_chat_layout,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq),
                             ) {
                                 prefs.edit { putBoolean(C.TV_CHAT_BAND_OVERLAY, it == 1) }
                                 if (_binding != null) {
                                     applyTvChatLayout()
                                 }
                             }
-                            textSizeRow(prefs)
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
-                                getString(R.string.tv_chat_height),
-                                prefs.getInt(C.TV_CHAT_LINES, 3),
-                                1..12,
-                                valueText = { if (it == 1) getString(R.string.tv_chat_one_line) else getString(R.string.tv_chat_lines, it) }
+                        }
+                    }
+
+                    1 -> {
+                        textSizeRow(
+                            prefs = prefs,
+                            modifier = androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] },
+                        )
+                        when (mode.intValue) {
+                            1 -> {
+                                com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                    label = getString(R.string.tv_chat_width),
+                                    value = prefs.getInt(C.TV_CHAT_WIDTH, 30),
+                                    range = 5..60,
+                                    valueText = { "$it %" },
+                                    icon = R.drawable.tv_ic_open_full,
+                                    compact = true,
+                                ) {
+                                    update(C.TV_CHAT_WIDTH, it)
+                                }
+                            }
+                            2 -> {
+                                com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                    label = getString(R.string.tv_chat_height),
+                                    value = prefs.getInt(C.TV_CHAT_LINES, 3),
+                                    range = 1..12,
+                                    valueText = { if (it == 1) getString(R.string.tv_chat_one_line) else getString(R.string.tv_chat_lines, it) },
+                                    icon = R.drawable.tv_ic_list,
+                                    compact = true,
+                                ) {
+                                    update(C.TV_CHAT_LINES, it)
+                                }
+                            }
+                            else -> {
+                                com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                    label = getString(R.string.tv_chat_width),
+                                    value = prefs.getInt(C.TV_CHAT_WIDTH, 30),
+                                    range = 5..60,
+                                    valueText = { "$it %" },
+                                    icon = R.drawable.tv_ic_open_full,
+                                    compact = true,
+                                ) {
+                                    update(C.TV_CHAT_WIDTH, it)
+                                }
+                                com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                    label = getString(R.string.tv_chat_height),
+                                    value = prefs.getInt(C.TV_CHAT_HEIGHT, 50),
+                                    range = 20..100,
+                                    step = 5,
+                                    valueText = { "$it %" },
+                                    icon = R.drawable.tv_ic_fullscreen,
+                                    compact = true,
+                                ) {
+                                    update(C.TV_CHAT_HEIGHT, it)
+                                }
+                            }
+                        }
+                        com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                            label = getString(R.string.tv_chat_opacity),
+                            value = prefs.getInt(C.TV_CHAT_OPACITY, 55),
+                            range = 0..100,
+                            step = 5,
+                            valueText = { "$it %" },
+                            icon = R.drawable.tv_ic_opacity,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq),
+                        ) {
+                            update(C.TV_CHAT_OPACITY, it)
+                        }
+                    }
+
+                    else -> {
+                        val activePin = chatFragment?.getPinnedMessage()
+                        if (activePin != null) {
+                            val pinSender = activePin.senderName ?: activePin.senderLogin
+                            val pinPreview = if (!pinSender.isNullOrBlank()) "$pinSender: ${activePin.messageText}" else activePin.messageText
+                            com.github.andreyasadchy.xtra.ui.tv.ButtonRow(
+                                label = "${getString(R.string.tv_chat_pinned_active)} — ${pinPreview.take(32)}",
+                                icon = R.drawable.tv_ic_pin,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] },
                             ) {
-                                update(C.TV_CHAT_LINES, it)
+                                showPinnedMessageDetailPanel(activePin, alignEnd = alignEnd)
                             }
                         }
-                        else -> {
-                            textSizeRow(prefs)
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_width), prefs.getInt(C.TV_CHAT_WIDTH, 30), 5..60, valueText = { "$it %" }) {
-                                update(C.TV_CHAT_WIDTH, it)
+                        val expVodChat = isExperimentalVodActive()
+                        val savedDelayMode = prefs.getString(C.CHAT_DELAY_MODE, "1")?.toIntOrNull()?.coerceIn(0, 2) ?: 1
+                        val delayMode = androidx.compose.runtime.remember(expVodChat) {
+                            androidx.compose.runtime.mutableIntStateOf(if (expVodChat) 1 else savedDelayMode)
+                        }
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_chat_delay),
+                            options = listOf(getString(R.string.tv_chat_delay_off), getString(R.string.tv_chat_delay_auto), getString(R.string.tv_chat_delay_manual)),
+                            selected = delayMode.intValue,
+                            icon = R.drawable.tv_ic_timer,
+                            compact = true,
+                            modifier = if (activePin == null) androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] } else androidx.compose.ui.Modifier,
+                        ) {
+                            if (isExperimentalVodActive()) {
+                                delayMode.intValue = 1
+                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_adblock_exp_chat_auto_locked, Toast.LENGTH_SHORT).show()
+                            } else {
+                                delayMode.intValue = it
+                                prefs.edit { putString(C.CHAT_DELAY_MODE, it.toString()) }
                             }
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_height), prefs.getInt(C.TV_CHAT_HEIGHT, 50), 20..100, step = 5, valueText = { "$it %" }) {
-                                update(C.TV_CHAT_HEIGHT, it)
+                        }
+                        androidx.compose.runtime.key(delayMode.intValue, expVodChat) {
+                            when (delayMode.intValue) {
+                                1 -> {
+                                    val measuredState by androidx.compose.runtime.produceState(
+                                        (chatFragment?.getAutoDelayMs() ?: 0L) to (chatFragment?.isAutoDelayMeasured() == true)
+                                    ) {
+                                        while (true) {
+                                            value = (chatFragment?.getAutoDelayMs() ?: 0L) to (chatFragment?.isAutoDelayMeasured() == true)
+                                            kotlinx.coroutines.delay(1000)
+                                        }
+                                    }
+                                    val (measured, isMeasured) = measuredState
+                                    val now = if (measured > 0L || isMeasured) {
+                                        getString(R.string.tv_chat_delay_auto_now, "%.1f".format(measured / 1000f))
+                                    } else {
+                                        getString(R.string.tv_chat_delay_auto_measuring)
+                                    }
+                                    val infoText = if (expVodChat) {
+                                        getString(R.string.tv_adblock_exp_chat_auto_info, now)
+                                    } else {
+                                        getString(R.string.tv_chat_delay_auto_info, now)
+                                    }
+                                    androidx.tv.material3.Text(
+                                        infoText,
+                                        fontSize = 12.sp,
+                                        lineHeight = 16.sp,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        color = com.github.andreyasadchy.xtra.ui.tv.TvColors.secondaryText,
+                                        modifier = androidx.compose.ui.Modifier.padding(start = 15.dp, end = 15.dp, top = 1.dp, bottom = 3.dp),
+                                    )
+                                }
+                                2 -> {
+                                    com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                        label = getString(R.string.tv_chat_delay_seconds),
+                                        value = prefs.getInt(C.CHAT_DELAY_SECONDS, 5).coerceIn(1, 60),
+                                        range = 1..60,
+                                        valueText = { "$it s" },
+                                        icon = R.drawable.tv_ic_schedule,
+                                        compact = true,
+                                    ) {
+                                        prefs.edit { putInt(C.CHAT_DELAY_SECONDS, it) }
+                                    }
+                                }
                             }
-                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_margin), prefs.getInt(C.TV_CHAT_MARGIN, 0), 0..64, step = 4, valueText = { "$it dp" }) {
-                                update(C.TV_CHAT_MARGIN, it)
+                        }
+                        val slowRateValues = listOf("0", "1", "2", "4", "6")
+                        val slowRateLabels = listOf(
+                            getString(R.string.tv_chat_delay_off),
+                            getString(R.string.tv_chat_slow_rate, 1),
+                            getString(R.string.tv_chat_slow_rate, 2),
+                            getString(R.string.tv_chat_slow_rate, 4),
+                            getString(R.string.tv_chat_slow_rate, 6),
+                        )
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_chat_slow),
+                            options = slowRateLabels,
+                            selected = slowRateValues.indexOf(prefs.getString(C.CHAT_SLOW_RATE, "0")).coerceAtLeast(0),
+                            icon = R.drawable.tv_ic_speed,
+                            compact = true,
+                        ) {
+                            prefs.edit { putString(C.CHAT_SLOW_RATE, slowRateValues[it]) }
+                        }
+                        val pinnedMode = androidx.compose.runtime.remember {
+                            androidx.compose.runtime.mutableIntStateOf(prefs.getInt(C.TV_CHAT_PINNED_MODE, 1).coerceIn(0, 2))
+                        }
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_chat_pinned),
+                            options = listOf(
+                                getString(R.string.tv_chat_pinned_hidden),
+                                getString(R.string.tv_chat_pinned_temp),
+                                getString(R.string.tv_chat_pinned_always),
+                            ),
+                            selected = pinnedMode.intValue,
+                            icon = R.drawable.tv_ic_pin,
+                            compact = true,
+                        ) {
+                            pinnedMode.intValue = it
+                            prefs.edit { putInt(C.TV_CHAT_PINNED_MODE, it) }
+                            chatFragment?.refreshPinnedBanner()
+                        }
+                        val predPopup = androidx.compose.runtime.remember {
+                            androidx.compose.runtime.mutableIntStateOf(C.getTvPredictionsPopupMode(prefs))
+                        }
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_chat_predictions_popup),
+                            options = listOf(
+                                getString(R.string.tv_chat_delay_off),
+                                getString(R.string.tv_chat_predictions_30s),
+                                getString(R.string.tv_chat_predictions_full),
+                            ),
+                            selected = predPopup.intValue,
+                            icon = R.drawable.tv_ic_trending,
+                            compact = true,
+                        ) {
+                            predPopup.intValue = it
+                            prefs.edit {
+                                putInt(C.TV_CHAT_PREDICTIONS_MODE, it)
+                                putBoolean(C.TV_CHAT_PREDICTIONS_POPUP, it != 0)
                             }
+                            if (it == 0) {
+                                hideTvPredictionPopup()
+                            } else if (!isChatOpen) {
+                                if (it == 2) {
+                                    tvActivePrediction.value?.takeIf { p -> p.status == "ACTIVE" }?.let { p -> onTvPredictionEvent(p) }
+                                } else if (it == 1 && tvPredictionView?.isVisible == true && tvPredictionCurrent?.status == "ACTIVE") {
+                                    showTvPredictionPopup(autoHideMs = 30_000L)
+                                }
+                            }
+                        }
+                        val sharedBadges = androidx.compose.runtime.remember {
+                            androidx.compose.runtime.mutableIntStateOf(if (prefs.getBoolean(C.CHAT_SHARED_BADGES, true)) 1 else 0)
+                        }
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_chat_shared_badges),
+                            options = listOf(getString(R.string.tv_chat_delay_off), getString(R.string.tv_option_on)),
+                            selected = sharedBadges.intValue,
+                            icon = R.drawable.tv_ic_shield,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq),
+                        ) {
+                            sharedBadges.intValue = it
+                            prefs.edit { putBoolean(C.CHAT_SHARED_BADGES, it == 1) }
                         }
                     }
                 }
-                com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_opacity), prefs.getInt(C.TV_CHAT_OPACITY, 55), 0..100, step = 5, valueText = { "$it %" }) {
-                    update(C.TV_CHAT_OPACITY, it)
-                }
-                val sharedBadges = androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableIntStateOf(if (prefs.getBoolean(C.CHAT_SHARED_BADGES, true)) 1 else 0)
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                    getString(R.string.tv_chat_shared_badges),
-                    listOf(getString(R.string.tv_chat_delay_off), getString(R.string.tv_option_on)),
-                    sharedBadges.intValue,
-                ) {
-                    sharedBadges.intValue = it
-                    prefs.edit { putBoolean(C.CHAT_SHARED_BADGES, it == 1) }
-                }
-                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
-                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_reset)) {
-                    prefs.edit {
-                        remove(C.TV_CHAT_POSITION)
-                        remove(C.TV_CHAT_POS_OVERLAY)
-                        remove(C.TV_CHAT_POS_SIDE)
-                        remove(C.TV_CHAT_POS_BAND)
-                        remove(C.TV_CHAT_WIDTH)
-                        remove(C.TV_CHAT_HEIGHT)
-                        remove(C.TV_CHAT_MARGIN)
-                        remove(C.TV_CHAT_OPACITY)
-                        remove(C.TV_CHAT_MODE)
-                        remove(C.TV_CHAT_LINES)
-                        remove(C.CHAT_SIZE_MODIFIER)
-                        remove(C.CHAT_SLOW_RATE)
-                        remove(C.CHAT_DELAY_MODE)
-                        remove(C.TV_CHAT_BAND_OVERLAY)
-                        remove(C.CHAT_DELAY_SECONDS)
-                        remove(C.TV_CHAT_PREDICTIONS_POPUP)
-                        remove(C.TV_CHAT_PREDICTIONS_MODE)
-                        remove(C.TV_CHAT_PINNED_MODE)
-                        remove(C.CHAT_SHARED_BADGES)
-                    }
-                    hideTvPredictionPopup()
-                    chatFragment?.refreshPinnedBanner()
-                    chatFragment?.applySizeModifier()
-                    if (_binding != null) {
-                        applyTvChatLayout()
-                    }
-                    dismiss()
-                }
-                androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
+                androidx.compose.runtime.LaunchedEffect(Unit) { firstRowReq.requestFocus() }
             }
         }
     }
@@ -3703,8 +4195,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     /**
-     * TV: panel of the small window(s): manages Window 1 & Window 2 position, size, sound modes, adding a 2nd window,
-     * swapping, and closing.
+     * TV: tabbed panel of the small window(s): Display (Position, Free move, Size, Edge margin, Opacity, Streamer name)
+     * and Audio (Sound, Balance / Mix) + pinned horizontal action footer, with zero vertical scroll.
      */
     private fun showTvPipPanel() {
         val activity = activity as? MainActivity ?: return
@@ -3733,6 +4225,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (name0.isNotBlank()) "${getString(R.string.tv_pip_window_1)} ($name0)" else getString(R.string.tv_pip_window_1),
             if (name1.isNotBlank()) "${getString(R.string.tv_pip_window_2)} ($name1)" else getString(R.string.tv_pip_window_2),
         )
+        val tabs = listOf(
+            R.drawable.tv_ic_pip to getString(R.string.tv_panel_tab_display),
+            R.drawable.tv_ic_volume to getString(R.string.tv_panel_tab_audio),
+        )
 
         com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(activity) { dismiss ->
             val selectedSlotState = androidx.compose.runtime.remember {
@@ -3742,9 +4238,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val cornerKey = if (currentSlot == 1) C.TV_PIP2_CORNER else C.TV_PIP_CORNER
             val cornerDefault = if (currentSlot == 1) "tl" else "tr"
             val sizeKey = if (currentSlot == 1) C.TV_PIP2_SIZE else C.TV_PIP_SIZE
+            val opacityKey = if (currentSlot == 1) C.TV_PIP2_OPACITY else C.TV_PIP_OPACITY
+            val freeXKey = if (currentSlot == 1) C.TV_PIP2_FREE_X else C.TV_PIP_FREE_X
 
-            val slotCornerPos = prefs.getString(cornerKey, cornerDefault) ?: cornerDefault
-            val pipOnLeft = slotCornerPos == "tl" || slotCornerPos == "ml" || slotCornerPos == "bl"
+            val slotCornerState = androidx.compose.runtime.remember(currentSlot) {
+                androidx.compose.runtime.mutableStateOf(prefs.getString(cornerKey, cornerDefault) ?: cornerDefault)
+            }
+            val slotCornerPos = slotCornerState.value
+            val pipOnLeft = if (slotCornerPos == "free") {
+                prefs.getFloat(freeXKey, if (currentSlot == 1) 0.03f else 0.97f) < 0.5f
+            } else {
+                slotCornerPos == "tl" || slotCornerPos == "ml" || slotCornerPos == "bl"
+            }
 
             val soundValues = if (twoOpen) {
                 listOf("main", "pip1", "pip2", "mix")
@@ -3777,141 +4282,339 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 androidx.compose.runtime.mutableIntStateOf(soundValues.indexOf(normalizedSound).coerceAtLeast(0))
             }
 
+            val selectedTab = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+            val windowSelectorReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val tabRequesters = androidx.compose.runtime.remember { List(2) { androidx.compose.ui.focus.FocusRequester() } }
+            val firstRowReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val lastRowReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val footer0Req = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val footer1Req = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val footer2Req = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+
+            val hasExtraAudioRows = (!twoOpen && soundValues.getOrNull(sound.intValue) == "both") ||
+                (twoOpen && soundValues.getOrNull(sound.intValue) == "mix")
+            val footerUpTarget = if (selectedTab.intValue == 1 && !hasExtraAudioRows) firstRowReq else lastRowReq
+
             com.github.andreyasadchy.xtra.ui.tv.SidePanel(
                 title = getString(R.string.tv_pip_settings),
+                width = 392.dp,
+                compactHeader = true,
                 alignEnd = pipOnLeft,
                 scrollable = true,
+                headerExtra = {
+                    if (twoOpen) {
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_pip_settings),
+                            options = windowOptions,
+                            selected = currentSlot.coerceIn(0, 1),
+                            icon = R.drawable.tv_ic_multistream,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier
+                                .focusRequester(windowSelectorReq)
+                                .onPreviewKeyEvent { ev ->
+                                    if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                        when (ev.key) {
+                                            androidx.compose.ui.input.key.Key.DirectionDown -> {
+                                                runCatching { tabRequesters[selectedTab.intValue].requestFocus() }
+                                                true
+                                            }
+                                            androidx.compose.ui.input.key.Key.DirectionUp -> true
+                                            else -> false
+                                        }
+                                    } else false
+                                },
+                        ) {
+                            selectedSlotState.intValue = it
+                        }
+                        androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(6.dp))
+                    }
+                    com.github.andreyasadchy.xtra.ui.tv.PanelTabs(
+                        tabs = tabs,
+                        selectedTab = selectedTab.intValue,
+                        tabRequesters = tabRequesters,
+                        downTarget = firstRowReq,
+                        upTarget = if (twoOpen) windowSelectorReq else null,
+                        onSelect = { selectedTab.intValue = it },
+                    )
+                },
+                footer = {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (!twoOpen) {
+                            FooterActionChip(
+                                label = getString(R.string.tv_pip_add_second),
+                                icon = R.drawable.tv_ic_add,
+                                requester = footer0Req,
+                                rightTarget = footer1Req,
+                                upTarget = footerUpTarget,
+                            ) {
+                                dismiss()
+                                val mainStream = activity.dvrStream ?: activity.currentPlayingStream()
+                                val excluded = buildSet {
+                                    mainStream?.channelLogin?.let { add(it) }
+                                    activity.tvPipActiveStreams().forEach { s -> s.channelLogin?.let { add(it) } }
+                                }
+                                TvMultiStreamPicker.pickOne(
+                                    activity,
+                                    excluded,
+                                    getString(R.string.tv_pip_add_second),
+                                    mainStream,
+                                ) { picked ->
+                                    activity.openTvPip(picked)
+                                }
+                            }
+                            FooterActionChip(
+                                label = getString(R.string.tv_pip_swap),
+                                icon = R.drawable.tv_ic_swap,
+                                requester = footer1Req,
+                                leftTarget = footer0Req,
+                                rightTarget = footer2Req,
+                                upTarget = footerUpTarget,
+                            ) {
+                                dismiss()
+                                activity.swapTvPip(currentSlot)
+                            }
+                            FooterActionChip(
+                                label = getString(R.string.tv_pip_close),
+                                icon = R.drawable.tv_ic_close,
+                                requester = footer2Req,
+                                leftTarget = footer1Req,
+                                upTarget = footerUpTarget,
+                            ) {
+                                dismiss()
+                                activity.closeTvPipSlot(currentSlot)
+                            }
+                        } else {
+                            val slotTitle = getString(if (currentSlot == 1) R.string.tv_pip_window_2 else R.string.tv_pip_window_1)
+                            FooterActionChip(
+                                label = getString(R.string.tv_pip_swap),
+                                icon = R.drawable.tv_ic_swap,
+                                requester = footer0Req,
+                                rightTarget = footer1Req,
+                                upTarget = footerUpTarget,
+                            ) {
+                                dismiss()
+                                activity.swapTvPip(currentSlot)
+                            }
+                            FooterActionChip(
+                                label = slotTitle,
+                                icon = R.drawable.tv_ic_close,
+                                requester = footer1Req,
+                                leftTarget = footer0Req,
+                                rightTarget = footer2Req,
+                                upTarget = footerUpTarget,
+                            ) {
+                                dismiss()
+                                activity.closeTvPipSlot(currentSlot)
+                            }
+                            FooterActionChip(
+                                label = getString(R.string.tv_pip_close_all),
+                                icon = R.drawable.tv_ic_delete,
+                                requester = footer2Req,
+                                leftTarget = footer1Req,
+                                upTarget = footerUpTarget,
+                            ) {
+                                dismiss()
+                                activity.closeTvPip()
+                            }
+                        }
+                    }
+                },
             ) {
-                val requester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
-                if (twoOpen) {
-                    com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                        getString(R.string.tv_pip_settings),
-                        windowOptions,
-                        currentSlot.coerceIn(0, 1),
-                        androidx.compose.ui.Modifier.focusRequester(requester),
-                    ) {
-                        selectedSlotState.intValue = it
-                    }
-                }
-                androidx.compose.runtime.key(currentSlot) {
-                    val cIdx = cornerValues.indexOf(prefs.getString(cornerKey, cornerDefault)).let { if (it >= 0) it else if (currentSlot == 1) 0 else 2 }
-                    com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                        getString(R.string.tv_pip_position),
-                        corners,
-                        cIdx,
-                        if (!twoOpen) androidx.compose.ui.Modifier.focusRequester(requester) else androidx.compose.ui.Modifier,
-                    ) {
-                        prefs.edit { putString(cornerKey, cornerValues[it]) }
-                        activity.applyTvPipSettings()
-                    }
-                    com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
-                        getString(R.string.tv_pip_size),
-                        sizes,
-                        prefs.getInt(sizeKey, 1).coerceIn(0, 2),
-                    ) {
-                        prefs.edit { putInt(sizeKey, it) }
-                        activity.applyTvPipSettings()
-                    }
-                }
-                com.github.andreyasadchy.xtra.ui.tv.SelectorRow(getString(R.string.tv_pip_sound), sounds, sound.intValue) {
-                    sound.intValue = it
-                    prefs.edit { putString(C.TV_PIP_SOUND, soundValues[it]) }
-                    activity.applyTvPipSettings()
-                }
-                if (!twoOpen && soundValues.getOrNull(sound.intValue) == "both") {
-                    com.github.andreyasadchy.xtra.ui.tv.SliderRow(
-                        getString(R.string.tv_pip_balance),
-                        prefs.getInt(C.TV_PIP_BALANCE, 0).coerceIn(-100, 100),
-                        -100..100,
-                        step = 10,
-                        valueText = { value ->
-                            val main = if (value > 0) 100 - value else 100
-                            val small = if (value < 0) 100 + value else 100
-                            getString(R.string.tv_pip_balance_value, main, small)
+                when (selectedTab.intValue) {
+                    0 -> {
+                        androidx.compose.runtime.key(currentSlot) {
+                            val isFree = slotCornerPos == "free"
+                            val posOptions = if (isFree) corners + getString(R.string.tv_position_free) else corners
+                            val posSelected = if (isFree) {
+                                corners.size
+                            } else {
+                                cornerValues.indexOf(slotCornerPos).let { if (it >= 0) it else if (currentSlot == 1) 0 else 2 }
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                                label = getString(R.string.tv_pip_position),
+                                options = posOptions,
+                                selected = posSelected,
+                                icon = R.drawable.tv_ic_open_full,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] },
+                            ) { chosen ->
+                                if (chosen in cornerValues.indices) {
+                                    val nextCorner = cornerValues[chosen]
+                                    slotCornerState.value = nextCorner
+                                    prefs.edit { putString(cornerKey, nextCorner) }
+                                    activity.applyTvPipSettings()
+                                }
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.ButtonRow(
+                                label = getString(R.string.tv_free_move_button),
+                                icon = R.drawable.tv_ic_move,
+                                compact = true,
+                            ) {
+                                dismiss()
+                                activity.startTvPipFreeMove(currentSlot)
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                                label = getString(R.string.tv_pip_size),
+                                options = sizes,
+                                selected = prefs.getInt(sizeKey, 1).coerceIn(0, 2),
+                                icon = R.drawable.tv_ic_fullscreen,
+                                compact = true,
+                            ) {
+                                prefs.edit { putInt(sizeKey, it) }
+                                activity.applyTvPipSettings()
+                            }
                         }
-                    ) {
-                        prefs.edit { putInt(C.TV_PIP_BALANCE, it) }
-                        activity.applyTvPipSettings()
-                    }
-                } else if (twoOpen && soundValues.getOrNull(sound.intValue) == "mix") {
-                    com.github.andreyasadchy.xtra.ui.tv.SliderRow(
-                        getString(R.string.tv_pip_vol_main),
-                        prefs.getInt(C.TV_PIP_VOL_MAIN, 100).coerceIn(0, 100),
-                        0..100,
-                        step = 10,
-                        valueText = { "$it %" },
-                    ) {
-                        prefs.edit { putInt(C.TV_PIP_VOL_MAIN, it) }
-                        activity.applyTvPipSettings()
-                    }
-                    com.github.andreyasadchy.xtra.ui.tv.SliderRow(
-                        getString(R.string.tv_pip_vol_1),
-                        prefs.getInt(C.TV_PIP_VOL_1, 80).coerceIn(0, 100),
-                        0..100,
-                        step = 10,
-                        valueText = { "$it %" },
-                    ) {
-                        prefs.edit { putInt(C.TV_PIP_VOL_1, it) }
-                        activity.applyTvPipSettings()
-                    }
-                    com.github.andreyasadchy.xtra.ui.tv.SliderRow(
-                        getString(R.string.tv_pip_vol_2),
-                        prefs.getInt(C.TV_PIP_VOL_2, 80).coerceIn(0, 100),
-                        0..100,
-                        step = 10,
-                        valueText = { "$it %" },
-                    ) {
-                        prefs.edit { putInt(C.TV_PIP_VOL_2, it) }
-                        activity.applyTvPipSettings()
-                    }
-                }
-                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
-                if (!twoOpen) {
-                    com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_pip_add_second)) {
-                        dismiss()
-                        val mainStream = activity.dvrStream ?: activity.currentPlayingStream()
-                        val excluded = buildSet {
-                            mainStream?.channelLogin?.let { add(it) }
-                            activity.tvPipActiveStreams().forEach { s -> s.channelLogin?.let { add(it) } }
+                        val marginValues = listOf("normal", "reduced", "flush")
+                        val marginLabels = listOf(
+                            getString(R.string.tv_pip_margin_normal),
+                            getString(R.string.tv_pip_margin_reduced),
+                            getString(R.string.tv_pip_margin_flush),
+                        )
+                        val currentMarginIdx = marginValues.indexOf(prefs.getString(C.TV_PIP_EDGE_MARGIN, "reduced")).let { if (it >= 0) it else 1 }
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_pip_edge_margin),
+                            options = marginLabels,
+                            selected = currentMarginIdx,
+                            icon = R.drawable.tv_ic_view_quilt,
+                            compact = true,
+                        ) {
+                            prefs.edit { putString(C.TV_PIP_EDGE_MARGIN, marginValues[it]) }
+                            activity.applyTvPipSettings()
                         }
-                        TvMultiStreamPicker.pickOne(
-                            activity,
-                            excluded,
-                            getString(R.string.tv_pip_add_second),
-                            mainStream,
-                        ) { picked ->
-                            activity.openTvPip(picked)
+                        androidx.compose.runtime.key("op_$currentSlot") {
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                label = getString(R.string.tv_pip_opacity),
+                                value = prefs.getInt(opacityKey, 100).coerceIn(5, 100),
+                                range = 5..100,
+                                step = 5,
+                                valueText = { "$it %" },
+                                icon = R.drawable.tv_ic_opacity,
+                                compact = true,
+                            ) {
+                                prefs.edit { putInt(opacityKey, it) }
+                                activity.applyTvPipSettings()
+                            }
+                        }
+                        val labelModeValues = listOf("auto", "always", "hidden")
+                        val labelModeLabels = listOf(
+                            getString(R.string.tv_pip_label_auto),
+                            getString(R.string.tv_pip_label_always),
+                            getString(R.string.tv_pip_label_hidden),
+                        )
+                        val currentLabelModeIdx = labelModeValues.indexOf(prefs.getString(C.TV_PIP_LABEL_MODE, "auto")).let { if (it >= 0) it else 0 }
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_pip_streamer_name),
+                            options = labelModeLabels,
+                            selected = currentLabelModeIdx,
+                            icon = R.drawable.tv_ic_person,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footer0Req),
+                        ) {
+                            prefs.edit { putString(C.TV_PIP_LABEL_MODE, labelModeValues[it]) }
+                            activity.applyTvPipSettings()
                         }
                     }
-                }
-                com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_pip_swap)) {
-                    dismiss()
-                    activity.swapTvPip(currentSlot)
-                }
-                if (twoOpen) {
-                    val slotTitle = getString(if (currentSlot == 1) R.string.tv_pip_window_2 else R.string.tv_pip_window_1)
-                    com.github.andreyasadchy.xtra.ui.tv.ButtonRow("${getString(R.string.tv_pip_close)} ($slotTitle)") {
-                        dismiss()
-                        activity.closeTvPipSlot(currentSlot)
+
+                    else -> {
+                        val soundMod = androidx.compose.ui.Modifier
+                            .panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] }
+                            .let { if (!hasExtraAudioRows) it.panelLastRow(null, footer0Req) else it }
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_pip_sound),
+                            options = sounds,
+                            selected = sound.intValue,
+                            icon = R.drawable.tv_ic_volume,
+                            compact = true,
+                            modifier = soundMod,
+                        ) {
+                            sound.intValue = it
+                            prefs.edit { putString(C.TV_PIP_SOUND, soundValues[it]) }
+                            activity.applyTvPipSettings()
+                        }
+                        if (!twoOpen && soundValues.getOrNull(sound.intValue) == "both") {
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                label = getString(R.string.tv_pip_balance),
+                                value = prefs.getInt(C.TV_PIP_BALANCE, 0).coerceIn(-100, 100),
+                                range = -100..100,
+                                step = 10,
+                                valueText = { value ->
+                                    val main = if (value > 0) 100 - value else 100
+                                    val small = if (value < 0) 100 + value else 100
+                                    getString(R.string.tv_pip_balance_value, main, small)
+                                },
+                                icon = R.drawable.tv_ic_tune,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footer0Req),
+                            ) {
+                                prefs.edit { putInt(C.TV_PIP_BALANCE, it) }
+                                activity.applyTvPipSettings()
+                            }
+                        } else if (twoOpen && soundValues.getOrNull(sound.intValue) == "mix") {
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                label = getString(R.string.tv_pip_vol_main),
+                                value = prefs.getInt(C.TV_PIP_VOL_MAIN, 100).coerceIn(0, 100),
+                                range = 0..100,
+                                step = 10,
+                                valueText = { "$it %" },
+                                icon = R.drawable.tv_ic_volume,
+                                compact = true,
+                            ) {
+                                prefs.edit { putInt(C.TV_PIP_VOL_MAIN, it) }
+                                activity.applyTvPipSettings()
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                label = getString(R.string.tv_pip_vol_1),
+                                value = prefs.getInt(C.TV_PIP_VOL_1, 80).coerceIn(0, 100),
+                                range = 0..100,
+                                step = 10,
+                                valueText = { "$it %" },
+                                icon = R.drawable.tv_ic_volume,
+                                compact = true,
+                            ) {
+                                prefs.edit { putInt(C.TV_PIP_VOL_1, it) }
+                                activity.applyTvPipSettings()
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+                                label = getString(R.string.tv_pip_vol_2),
+                                value = prefs.getInt(C.TV_PIP_VOL_2, 80).coerceIn(0, 100),
+                                range = 0..100,
+                                step = 10,
+                                valueText = { "$it %" },
+                                icon = R.drawable.tv_ic_volume,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footer0Req),
+                            ) {
+                                prefs.edit { putInt(C.TV_PIP_VOL_2, it) }
+                                activity.applyTvPipSettings()
+                            }
+                        }
                     }
-                    com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_pip_close_all)) {
-                        dismiss()
-                        activity.closeTvPip()
-                    }
-                } else {
-                    com.github.andreyasadchy.xtra.ui.tv.ButtonRow(getString(R.string.tv_pip_close)) {
-                        dismiss()
-                        activity.closeTvPipSlot(currentSlot)
-                    }
                 }
-                androidx.compose.runtime.LaunchedEffect(Unit) { requester.requestFocus() }
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    if (twoOpen) windowSelectorReq.requestFocus() else firstRowReq.requestFocus()
+                }
             }
         }
     }
 
     @androidx.compose.runtime.Composable
-    private fun textSizeRow(prefs: android.content.SharedPreferences) {
-        com.github.andreyasadchy.xtra.ui.tv.SliderRow(getString(R.string.tv_chat_text_size), prefs.getInt(C.CHAT_SIZE_MODIFIER, 100), 60..200, step = 10, valueText = { "$it %" }) {
+    private fun textSizeRow(
+        prefs: android.content.SharedPreferences,
+        modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
+    ) {
+        com.github.andreyasadchy.xtra.ui.tv.SliderRow(
+            label = getString(R.string.tv_chat_text_size),
+            value = prefs.getInt(C.CHAT_SIZE_MODIFIER, 100),
+            range = 60..200,
+            step = 10,
+            valueText = { "$it %" },
+            icon = R.drawable.tv_ic_text_size,
+            compact = true,
+            modifier = modifier,
+        ) {
             prefs.edit { putInt(C.CHAT_SIZE_MODIFIER, it) }
             chatFragment?.applySizeModifier()
             // the band under the stream is as high as its lines
@@ -4329,6 +5032,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             Keys.ACTION_LAST_STREAM -> {
                 (activity as? MainActivity)?.switchToLastWatchedStream() ?: false
             }
+            Keys.ACTION_LIVE_ALERT -> {
+                (activity as? MainActivity)?.openTvLiveAlert() ?: false
+            }
             Keys.ACTION_MUTE -> {
                 togglePlayerMute()
                 true
@@ -4367,6 +5073,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     binding.dragView.requestFocus()
                 }
                 main.switchToLastWatchedStream()
+            }
+            Keys.ACTION_LIVE_ALERT -> {
+                (activity as? MainActivity)?.openTvLiveAlert() ?: return false
             }
             Keys.ACTION_SWITCH_PREV, Keys.ACTION_SWITCH_NEXT -> {
                 val delta = if (action == Keys.ACTION_SWITCH_NEXT) 1 else -1
@@ -4640,7 +5349,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (isMaximized) {
                 act != Keys.ACTION_OPEN_MINI_PLAYER && (pipOpen || !Keys.isPipOnlyAction(act))
             } else {
-                (playbackService != null && Keys.isBackgroundCapableAction(act)) ||
+                act == Keys.ACTION_LIVE_ALERT ||
+                    (playbackService != null && Keys.isBackgroundCapableAction(act)) ||
                     (act == Keys.ACTION_LAST_STREAM && mainAct?.hasLastWatchedStream() == true)
             }
         }
@@ -4648,7 +5358,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (isMaximized) {
                 act != Keys.ACTION_OPEN_MINI_PLAYER && (pipOpen || !Keys.isPipOnlyAction(act))
             } else {
-                (playbackService != null && Keys.isBackgroundCapableAction(act)) ||
+                act == Keys.ACTION_LIVE_ALERT ||
+                    (playbackService != null && Keys.isBackgroundCapableAction(act)) ||
                     (act == Keys.ACTION_LAST_STREAM && mainAct?.hasLastWatchedStream() == true)
             }
         }
@@ -5111,10 +5822,74 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var tvFavoritesObserverJob: Job? = null
     private var tvHeaderLayoutListenerAdded = false
     private val tvHeaderLayoutListener = View.OnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
         if (right - left != oldRight - oldLeft) {
             syncTvHeaderBounds()
+        }
+    }
+
+    private fun updateTvFavoriteChip() {
+        if (!isTv || _binding == null) return
+        val chip = binding.playerControls.tvFavoriteChip ?: return
+        val ctx = context ?: return
+        val curStream = getTvDvrStream() ?: (activity as? MainActivity)?.currentPlayingStream()
+        val login = playbackService?.channelLogin?.takeIf { it.isNotBlank() }
+            ?: curStream?.channelLogin?.takeIf { it.isNotBlank() }
+        val chName = playbackService?.channelName?.takeIf { it.isNotBlank() }
+            ?: curStream?.channelName?.takeIf { it.isNotBlank() }
+        if (!isLiveOrDvrScreen() || login == null) {
+            chip.visibility = View.GONE
+            return
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(ctx)
+        val isFav = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(login)
+        val density = resources.displayMetrics.density
+        chip.visibility = View.VISIBLE
+        (chip.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            val wantMargin = if (binding.playerControls.channel.isVisible) (6f * density).toInt() else 0
+            if (lp.marginStart != wantMargin) {
+                lp.marginStart = wantMargin
+                chip.layoutParams = lp
+            }
+        }
+        chip.setImageResource(if (isFav) R.drawable.tv_ic_star else R.drawable.tv_ic_star_outline)
+        fun applyStarTint(focused: Boolean, fav: Boolean) {
+            val tint = when {
+                focused && fav -> 0xFFB45309.toInt()
+                focused -> 0xFF111014.toInt()
+                fav -> 0xFFFFCA28.toInt()
+                else -> 0xEBFFFFFF.toInt()
+            }
+            chip.setColorFilter(tint)
+        }
+        applyStarTint(chip.hasFocus(), isFav)
+        chip.contentDescription = getString(if (isFav) R.string.tv_favorite_remove else R.string.tv_favorite_add)
+        chip.setOnFocusChangeListener { _, hasFocus ->
+            val nowFav = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(login)
+            applyStarTint(hasFocus, nowFav)
+        }
+        chip.setOnClickListener {
+            val label = chName ?: login
+            val currentlyFav = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(login)
+            if (currentlyFav) {
+                com.github.andreyasadchy.xtra.ui.tv.TvFavorites.remove(ctx, login)
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    ctx,
+                    getString(R.string.tv_favorite_removed, label),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } else {
+                com.github.andreyasadchy.xtra.ui.tv.TvFavorites.add(ctx, login, chName)
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    ctx,
+                    getString(R.string.tv_favorite_added, label),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            showController(force = true)
+            updateTvFavoriteChip()
         }
     }
 
@@ -5131,20 +5906,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val comfortableCap = ((playerW * 0.64f).toInt() - avatarW).coerceAtLeast((180f * density).toInt())
         val maxBlockW = minOf(availableByRight, comfortableCap)
         b.playerControls.title.maxWidth = maxBlockW
+        val favReserved = if (b.playerControls.tvFavoriteChip?.isVisible == true) (34f * density).toInt() else 0
+        val usableRowW = (maxBlockW - favReserved).coerceAtLeast((150f * density).toInt())
         val bothChips = b.playerControls.channel.isVisible && b.playerControls.tvCategoryChip?.isVisible == true
         if (bothChips) {
-            val chipBudget = (maxBlockW - (8f * density).toInt()).coerceAtLeast((160f * density).toInt())
-            val chMax = (chipBudget * 0.50f).toInt().coerceIn((110f * density).toInt(), (280f * density).toInt())
-            val catMax = (chipBudget - chMax - (36f * density).toInt()).coerceIn((90f * density).toInt(), (260f * density).toInt())
+            val chipBudget = (usableRowW - (8f * density).toInt()).coerceAtLeast((150f * density).toInt())
+            val chMax = (chipBudget * 0.50f).toInt().coerceIn((105f * density).toInt(), (280f * density).toInt())
+            val catMax = (chipBudget - chMax - (36f * density).toInt()).coerceIn((85f * density).toInt(), (260f * density).toInt())
             b.playerControls.channel.maxWidth = chMax
             b.playerControls.category.maxWidth = catMax
         } else {
-            b.playerControls.channel.maxWidth = minOf(maxBlockW, (320f * density).toInt())
-            b.playerControls.category.maxWidth = minOf((maxBlockW - (36f * density).toInt()).coerceAtLeast((110f * density).toInt()), (300f * density).toInt())
+            b.playerControls.channel.maxWidth = minOf(usableRowW, (320f * density).toInt())
+            b.playerControls.category.maxWidth = minOf((usableRowW - (36f * density).toInt()).coerceAtLeast((105f * density).toInt()), (300f * density).toInt())
         }
     }
 
-    /** TV: picture of the channel next to its name, box art of the category inside its capsule, and safe width bounds. */
+    /** TV: picture of the channel next to its name, favorite star on live streams, box art of the category inside its capsule, and safe width bounds. */
     private fun updateTvAvatars() {
         if (!isTv || _binding == null) {
             return
@@ -5153,6 +5930,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             tvHeaderLayoutListenerAdded = true
             binding.playerLayout.addOnLayoutChangeListener(tvHeaderLayoutListener)
         }
+        if (tvFavoritesObserverJob?.isActive != true && view != null) {
+            tvFavoritesObserverJob = viewLifecycleOwner.lifecycleScope.launch {
+                com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectLatest {
+                    if (_binding != null) {
+                        updateTvFavoriteChip()
+                    }
+                }
+            }
+        }
+        updateTvFavoriteChip()
         with(binding.playerControls) {
             val context = requireContext()
             val density = resources.displayMetrics.density
@@ -5174,18 +5961,27 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             val showCatChip = category.isVisible && !category.text.isNullOrBlank()
+            val hasBeforeCat = channel.isVisible || tvFavoriteChip?.isVisible == true
             tvCategoryChip?.let { chip ->
                 chip.visibility = if (showCatChip) View.VISIBLE else View.GONE
                 (chip.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
-                    val wantMargin = if (channel.isVisible) (8f * density).toInt() else 0
+                    val wantMargin = if (hasBeforeCat) (6f * density).toInt() else 0
                     if (lp.marginStart != wantMargin) {
                         lp.marginStart = wantMargin
                         chip.layoutParams = lp
                     }
                 }
-                chip.nextFocusLeftId = if (channel.isVisible) R.id.channel else R.id.tvCategoryChip
             }
-            channel.nextFocusRightId = if (showCatChip && tvCategoryChip != null) R.id.tvCategoryChip else R.id.channel
+            val headerChips = listOfNotNull(
+                channel.takeIf { it.isVisible },
+                tvFavoriteChip?.takeIf { it.isVisible },
+                tvCategoryChip?.takeIf { it.isVisible },
+            )
+            headerChips.forEachIndexed { idx, v ->
+                v.nextFocusLeftId = headerChips.getOrElse(idx - 1) { v }.id
+                v.nextFocusRightId = headerChips.getOrElse(idx + 1) { v }.id
+                v.nextFocusUpId = v.id
+            }
             val gameId = playbackService?.gameId
             tvCategoryAvatar?.let { avatar ->
                 if (!gameId.isNullOrBlank() && showCatChip) {
@@ -6536,11 +7332,140 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    protected open fun onTvMinimizedChanged(minimized: Boolean) {}
+
+    private var tvMiniGhostListenersAttached = false
+    private var tvMiniGhostTargetAlpha = 1f
+    private var tvMiniGhostAlphaAnimator: android.animation.ObjectAnimator? = null
+    private val tvMiniGhostCheckRunnable = Runnable { refreshTvMinimizedGhostOpacity(immediate = false) }
+    private val tvMiniGhostFocusListener = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, _ ->
+        scheduleTvMinimizedGhostCheck()
+    }
+    private val tvMiniGhostScrollListener = android.view.ViewTreeObserver.OnScrollChangedListener {
+        scheduleTvMinimizedGhostCheck()
+    }
+    private val tvMiniGhostComposeCallback: () -> Unit = {
+        scheduleTvMinimizedGhostCheck()
+    }
+
+    private fun attachTvMinimizedGhostListeners() {
+        if (tvMiniGhostListenersAttached) return
+        val vto = activity?.window?.decorView?.viewTreeObserver?.takeIf { it.isAlive } ?: return
+        vto.addOnGlobalFocusChangeListener(tvMiniGhostFocusListener)
+        vto.addOnScrollChangedListener(tvMiniGhostScrollListener)
+        com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.onChanged = tvMiniGhostComposeCallback
+        tvMiniGhostListenersAttached = true
+    }
+
+    private fun detachTvMinimizedGhostListeners() {
+        _binding?.root?.removeCallbacks(tvMiniGhostCheckRunnable)
+        if (tvMiniGhostListenersAttached) {
+            activity?.window?.decorView?.viewTreeObserver?.takeIf { it.isAlive }?.let { vto ->
+                vto.removeOnGlobalFocusChangeListener(tvMiniGhostFocusListener)
+                vto.removeOnScrollChangedListener(tvMiniGhostScrollListener)
+            }
+            tvMiniGhostListenersAttached = false
+        }
+        if (com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.onChanged === tvMiniGhostComposeCallback) {
+            com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.onChanged = null
+        }
+    }
+
+    fun scheduleTvMinimizedGhostCheck() {
+        val b = _binding ?: return
+        if (!isTv || isMaximized) return
+        b.root.removeCallbacks(tvMiniGhostCheckRunnable)
+        if ((activity as? MainActivity)?.isMinimizedGhostScreen() == true) {
+            refreshTvMinimizedGhostOpacity(immediate = false)
+        } else {
+            b.root.postDelayed(tvMiniGhostCheckRunnable, 140L)
+        }
+    }
+
+    private fun isComposeBackedView(view: View): Boolean {
+        var cur: android.view.ViewParent? = if (view is android.view.ViewGroup) view else view.parent
+        while (cur != null) {
+            if (cur is androidx.compose.ui.platform.ComposeView || cur.javaClass.name.contains("AndroidComposeView")) {
+                return true
+            }
+            cur = cur.parent
+        }
+        return view.javaClass.name.contains("AndroidComposeView")
+    }
+
+    private fun shouldGhostTvMinimizedPlayer(): Boolean {
+        val act = activity as? MainActivity ?: return false
+        val b = _binding ?: return false
+        if (!isTv || isMaximized || tvAudioOnly) return false
+        if (act.isMinimizedGhostScreen()) return true
+        if (act.isTvSideMenuOpen()) return false
+
+        val (scaleX, scaleY) = getScaleValues()
+        val fullW = b.slidingLayout.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val fullH = b.slidingLayout.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+        val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics).toInt()
+        val miniW = (fullW * scaleX).toInt()
+        val miniH = (fullH * scaleY).toInt()
+        val rootLoc = IntArray(2)
+        b.root.getLocationInWindow(rootLoc)
+        val miniRight = rootLoc[0] + fullW - tvMargin
+        val miniBottom = rootLoc[1] + fullH - tvMargin
+        val miniRect = android.graphics.Rect(miniRight - miniW, miniBottom - miniH, miniRight, miniBottom)
+
+        val focus = act.currentFocus ?: return false
+        if (isComposeBackedView(focus)) {
+            if (!com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.hasFocusedCard) return false
+            return android.graphics.Rect.intersects(com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.focusedCardRect, miniRect)
+        }
+        if (focus.width <= 0 || focus.height <= 0 ||
+            focus.width > (fullW * 0.85f).toInt() || focus.height > (fullH * 0.75f).toInt()
+        ) {
+            return false
+        }
+        val fLoc = IntArray(2)
+        focus.getLocationInWindow(fLoc)
+        val fRect = android.graphics.Rect(fLoc[0], fLoc[1], fLoc[0] + focus.width, fLoc[1] + focus.height)
+        return android.graphics.Rect.intersects(fRect, miniRect)
+    }
+
+    fun refreshTvMinimizedGhostOpacity(immediate: Boolean = false) {
+        val b = _binding ?: return
+        if (!isTv) return
+        if (isMaximized) {
+            tvMiniGhostAlphaAnimator?.cancel()
+            tvMiniGhostAlphaAnimator = null
+            tvMiniGhostTargetAlpha = 1f
+            b.slidingLayout.alpha = 1f
+            return
+        }
+        val target = if (shouldGhostTvMinimizedPlayer()) 0.20f else 1.0f
+        if (!immediate && kotlin.math.abs(tvMiniGhostTargetAlpha - target) < 0.001f) {
+            return
+        }
+        tvMiniGhostTargetAlpha = target
+        tvMiniGhostAlphaAnimator?.cancel()
+        tvMiniGhostAlphaAnimator = null
+        if (immediate || kotlin.math.abs(b.slidingLayout.alpha - target) < 0.01f) {
+            b.slidingLayout.alpha = target
+        } else {
+            tvMiniGhostAlphaAnimator = android.animation.ObjectAnimator.ofFloat(
+                b.slidingLayout,
+                View.ALPHA,
+                b.slidingLayout.alpha,
+                target,
+            ).apply {
+                duration = 200L
+                start()
+            }
+        }
+    }
+
     private fun applyTvMinimizedFrame(minimized: Boolean) {
         val b = _binding ?: return
         if (!isTv) return
         tvMinimizedBorderAnimator?.cancel()
         tvMinimizedBorderAnimator = null
+        onTvMinimizedChanged(minimized)
         if (minimized) {
             val density = resources.displayMetrics.density
             val (scaleX, _) = getScaleValues()
@@ -6566,7 +7491,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             tvMinimizedBorderDrawable = border
             b.dragView.background = border
+            attachTvMinimizedGhostListeners()
+            refreshTvMinimizedGhostOpacity(immediate = false)
         } else {
+            detachTvMinimizedGhostListeners()
+            tvMiniGhostAlphaAnimator?.cancel()
+            tvMiniGhostAlphaAnimator = null
+            tvMiniGhostTargetAlpha = 1f
+            b.slidingLayout.alpha = 1f
             tvMinimizedBorderDrawable = null
             b.slidingLayout.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
             b.slidingLayout.elevation = 0f
@@ -7020,6 +7952,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             isMaximized = false
             hideTvPlayerOsd(animate = false)
             if (isTv) {
+                exitTvChatFreeMove(restorePrevious = false)
                 restoreTvOledProtection()
                 cancelTvStreamEndCountdown()
                 // the mini player is not reached with the D-pad, "Now playing" in the side menu brings it back
@@ -7494,6 +8427,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         playerCoStreamers = emptyList()
         tvMultiStreamBadge?.let { d -> _binding?.playerControls?.multiStream?.overlay?.remove(d) }
         tvMultiStreamBadge = null
+        detachTvMinimizedGhostListeners()
+        tvMiniGhostAlphaAnimator?.cancel()
+        tvMiniGhostAlphaAnimator = null
+        tvChatFreeMoving = false
+        tvChatFreeHintView = null
         tvMinimizedBorderAnimator?.cancel()
         tvMinimizedBorderAnimator = null
         tvMinimizedBorderDrawable = null
@@ -7504,6 +8442,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvOsdText = null
         chatUnlockTimerJob?.cancel()
         chatUnlockTimerJob = null
+        tvFavoritesObserverJob?.cancel()
+        tvFavoritesObserverJob = null
         isTvChatLocked = null
         chatLockObservedFragment = null
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(tvDimListener)
@@ -7529,6 +8469,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvScrubDuration = 0L
         seekPreview?.release()
         seekPreview = null
+        tvSeekStartEpochMs = null
         tvPredictionView?.removeCallbacks(tvPredictionHideRunnable)
         tvPredictionView = null
         tvStreamEndNextTarget = null

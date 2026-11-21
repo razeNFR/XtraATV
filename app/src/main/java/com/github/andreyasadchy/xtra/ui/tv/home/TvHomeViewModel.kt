@@ -231,6 +231,29 @@ class TvHomeViewModel(
                 }
             }
         }
+        viewModelScope.launch {
+            var seenGen = com.github.andreyasadchy.xtra.ui.tv.TvFollow.gameChanges.value
+            com.github.andreyasadchy.xtra.ui.tv.TvFollow.gameChanges.collect { gen ->
+                if (gen != seenGen) {
+                    seenGen = gen
+                    val activeEntries = TvHomeRows.load(applicationContext).filter { it.enabled }
+                    if (activeEntries.any { it.id == TvHomeRows.ROW_FOLLOWED_GAMES }) {
+                        val prefs = applicationContext.prefs()
+                        followedGames.value = com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterGames(
+                            loadPage(
+                                FollowedGamesDataSource(
+                                    localGameFollowsRepository = localGameFollowsRepository,
+                                    gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true),
+                                    graphQLRepository = graphQLRepository,
+                                    enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false),
+                                    networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+        }
     }
 
     /** Loads the rows, again when they are older than [maxAgeMs]. */

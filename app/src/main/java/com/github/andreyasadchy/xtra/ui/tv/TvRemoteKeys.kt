@@ -60,6 +60,7 @@ object TvRemoteKeys {
     const val ACTION_SWITCH_PREV = "switch_prev"
     const val ACTION_SWITCH_NEXT = "switch_next"
     const val ACTION_LAST_STREAM = "last_watched_stream"
+    const val ACTION_LIVE_ALERT = "open_live_alert"
     const val ACTION_CYCLE_CHAT_MODE = "cycle_chat_mode"
     const val ACTION_CYCLE_CHAT_NEXT = "cycle_chat_next"
     const val ACTION_CYCLE_CHAT_PREV = "cycle_chat_prev"
@@ -87,6 +88,7 @@ object TvRemoteKeys {
         ACTION_SWITCH_PREV,
         ACTION_SWITCH_NEXT,
         ACTION_LAST_STREAM,
+        ACTION_LIVE_ALERT,
         ACTION_CYCLE_CHAT_MODE,
         ACTION_CYCLE_CHAT_NEXT,
         ACTION_CYCLE_CHAT_PREV,
@@ -118,6 +120,7 @@ object TvRemoteKeys {
         action == ACTION_OPEN_MINI_PLAYER ||
             action == ACTION_STOP_STREAM ||
             action == ACTION_LAST_STREAM ||
+            action == ACTION_LIVE_ALERT ||
             action == ACTION_MUTE ||
             action == ACTION_PLAY_PAUSE
 
@@ -128,6 +131,15 @@ object TvRemoteKeys {
         if (prefs.getBoolean(C.TV_DEFAULTS_REMOTE_MIGRATED, false)) {
             if (!prefs.contains(C.TV_DPAD_BACK_LONG_ACTION)) {
                 prefs.edit { putString(C.TV_DPAD_BACK_LONG_ACTION, ACTION_OPEN_MINI_PLAYER) }
+            }
+            if (!prefs.getBoolean(C.TV_LIVE_ALERT_KEY_MIGRATED, false)) {
+                val curUpLong = prefs.getString(C.TV_DPAD_UP_LONG_ACTION, ACTION_DEFAULT) ?: ACTION_DEFAULT
+                prefs.edit {
+                    if (curUpLong == ACTION_DEFAULT) {
+                        putString(C.TV_DPAD_UP_LONG_ACTION, ACTION_LIVE_ALERT)
+                    }
+                    putBoolean(C.TV_LIVE_ALERT_KEY_MIGRATED, true)
+                }
             }
             return
         }
@@ -150,7 +162,7 @@ object TvRemoteKeys {
                 putString(C.TV_DPAD_CENTER_LONG_ACTION, ACTION_PIP_SWAP)
             }
             if (!prefs.contains(C.TV_DPAD_UP_LONG_ACTION)) {
-                putString(C.TV_DPAD_UP_LONG_ACTION, ACTION_DEFAULT)
+                putString(C.TV_DPAD_UP_LONG_ACTION, ACTION_LIVE_ALERT)
             }
             if (!prefs.contains(C.TV_DPAD_DOWN_ACTION)) {
                 putString(C.TV_DPAD_DOWN_ACTION, if (legacyUpDown) ACTION_TOGGLE_CHAT else ACTION_DEFAULT)
@@ -162,6 +174,7 @@ object TvRemoteKeys {
                 putString(C.TV_DPAD_BACK_LONG_ACTION, ACTION_OPEN_MINI_PLAYER)
             }
             putBoolean(C.TV_DEFAULTS_REMOTE_MIGRATED, true)
+            putBoolean(C.TV_LIVE_ALERT_KEY_MIGRATED, true)
         }
     }
 
@@ -176,7 +189,7 @@ object TvRemoteKeys {
     fun centerAction(context: Context): String = dpadAction(context, C.TV_DPAD_CENTER_ACTION)
     fun centerLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_CENTER_LONG_ACTION, ACTION_PIP_SWAP)
     fun upAction(context: Context): String = dpadAction(context, C.TV_DPAD_UP_ACTION)
-    fun upLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_UP_LONG_ACTION)
+    fun upLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_UP_LONG_ACTION, ACTION_LIVE_ALERT)
     fun downAction(context: Context): String = dpadAction(context, C.TV_DPAD_DOWN_ACTION)
     fun downLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_DOWN_LONG_ACTION)
     fun backLongAction(context: Context): String = dpadAction(context, C.TV_DPAD_BACK_LONG_ACTION, ACTION_OPEN_MINI_PLAYER)
@@ -196,6 +209,7 @@ object TvRemoteKeys {
         ACTION_SWITCH_PREV -> context.getString(R.string.tv_remote_action_switch_prev)
         ACTION_SWITCH_NEXT -> context.getString(R.string.tv_remote_action_switch_next)
         ACTION_LAST_STREAM -> context.getString(R.string.tv_remote_action_last_stream)
+        ACTION_LIVE_ALERT -> context.getString(R.string.tv_remote_action_live_alert)
         ACTION_CYCLE_CHAT_MODE -> context.getString(R.string.tv_remote_action_cycle_chat_mode)
         ACTION_CYCLE_CHAT_NEXT -> context.getString(R.string.tv_remote_action_cycle_chat_next)
         ACTION_CYCLE_CHAT_PREV -> context.getString(R.string.tv_remote_action_cycle_chat_prev)
@@ -312,6 +326,18 @@ object TvRemoteKeys {
         }.distinct()
     }
 
+    fun liveAlertBannerHint(context: Context): String? {
+        ensureMigrated(context)
+        if (upLongAction(context) == ACTION_LIVE_ALERT) {
+            return context.getString(R.string.tv_live_alert_action_hint)
+        }
+        if (downLongAction(context) == ACTION_LIVE_ALERT) {
+            val base = context.getString(R.string.tv_live_alert_action_hint)
+            return if (base.contains('▲')) base.replace('▲', '▼') else context.getString(R.string.tv_dpad_down_long)
+        }
+        return bindingsForAction(context, ACTION_LIVE_ALERT).firstOrNull()
+    }
+
     fun dpadSummary(context: Context): String {
         ensureMigrated(context)
         val active = buildList {
@@ -322,7 +348,9 @@ object TvRemoteKeys {
             if (leftAction(context) != ACTION_DEFAULT) add("← ${actionLabel(context, leftAction(context))}")
             if (rightAction(context) != ACTION_DEFAULT) add("→ ${actionLabel(context, rightAction(context))}")
             if (upAction(context) != ACTION_DEFAULT) add("↑ ${actionLabel(context, upAction(context))}")
-            if (upLongAction(context) != ACTION_DEFAULT) add("↑⏳ ${actionLabel(context, upLongAction(context))}")
+            if (upLongAction(context) != ACTION_DEFAULT && upLongAction(context) != ACTION_LIVE_ALERT) {
+                add("↑⏳ ${actionLabel(context, upLongAction(context))}")
+            }
             if (downAction(context) != ACTION_DEFAULT) add("↓ ${actionLabel(context, downAction(context))}")
             if (downLongAction(context) != ACTION_DEFAULT) add("↓⏳ ${actionLabel(context, downLongAction(context))}")
             if (backLongAction(context) != ACTION_DEFAULT && backLongAction(context) != ACTION_OPEN_MINI_PLAYER) {
@@ -357,9 +385,13 @@ object TvRemoteKeys {
         val prefs = context.prefs()
         val standardActions = ALL_ACTIONS
         val standardLabels = standardActions.map { actionLabel(context, it) }
-        val upLongLabels = standardActions.map {
-            if (it == ACTION_DEFAULT) context.getString(R.string.tv_remote_action_live_alert_default)
-            else actionLabel(context, it)
+        val upLongActions = listOf(ACTION_LIVE_ALERT) + ALL_ACTIONS.filter { it != ACTION_LIVE_ALERT }
+        val upLongLabels = upLongActions.map {
+            when (it) {
+                ACTION_LIVE_ALERT -> context.getString(R.string.tv_remote_action_live_alert_default)
+                ACTION_DEFAULT -> context.getString(R.string.tv_remote_action_none)
+                else -> actionLabel(context, it)
+            }
         }
         val centerLongActions = listOf(ACTION_PIP_SWAP) + ALL_ACTIONS.filter { it != ACTION_PIP_SWAP }
         val centerLongLabels = centerLongActions.map {
@@ -386,7 +418,7 @@ object TvRemoteKeys {
         )
         val longSlots = listOf(
             DpadSlot(context.getString(R.string.tv_dpad_center_long), C.TV_DPAD_CENTER_LONG_ACTION, centerLongActions, centerLongLabels) { centerLongAction(context) },
-            DpadSlot(context.getString(R.string.tv_dpad_up_long), C.TV_DPAD_UP_LONG_ACTION, standardActions, upLongLabels) { upLongAction(context) },
+            DpadSlot(context.getString(R.string.tv_dpad_up_long), C.TV_DPAD_UP_LONG_ACTION, upLongActions, upLongLabels) { upLongAction(context) },
             DpadSlot(context.getString(R.string.tv_dpad_down_long), C.TV_DPAD_DOWN_LONG_ACTION, standardActions, standardLabels) { downLongAction(context) },
             DpadSlot(context.getString(R.string.tv_dpad_back_long), C.TV_DPAD_BACK_LONG_ACTION, backLongActions, backLongLabels) { backLongAction(context) },
         )
@@ -489,7 +521,7 @@ object TvRemoteKeys {
                         putString(C.TV_DPAD_LEFT_ACTION, ACTION_DEFAULT)
                         putString(C.TV_DPAD_RIGHT_ACTION, ACTION_DEFAULT)
                         putString(C.TV_DPAD_UP_ACTION, ACTION_DEFAULT)
-                        putString(C.TV_DPAD_UP_LONG_ACTION, ACTION_DEFAULT)
+                        putString(C.TV_DPAD_UP_LONG_ACTION, ACTION_LIVE_ALERT)
                         putString(C.TV_DPAD_DOWN_ACTION, ACTION_DEFAULT)
                         putString(C.TV_DPAD_DOWN_LONG_ACTION, ACTION_DEFAULT)
                         putString(C.TV_DPAD_CENTER_ACTION, ACTION_DEFAULT)
@@ -502,7 +534,7 @@ object TvRemoteKeys {
                 }
             }
             LaunchedEffect(resetTick) {
-                firstFocus.requestFocus()
+                runCatching { firstFocus.requestFocus() }
             }
         }
     }
@@ -629,7 +661,7 @@ object TvRemoteKeys {
                 }
             }
             LaunchedEffect(Unit) {
-                addFocus.requestFocus()
+                runCatching { addFocus.requestFocus() }
             }
         }
     }
