@@ -415,6 +415,10 @@ object TvStreamSwitcher {
                 adapter.notifyItemRangeChanged(0, adapter.itemCount)
                 updateValidate()
             } else {
+                if (!stream.channelLogin.isNullOrBlank() && stream.channelLogin.equals(currentChannelLogin, ignoreCase = true)) {
+                    dialog.dismiss()
+                    return@Adapter
+                }
                 dialog.dismiss()
                 // the info of the stream reached for a moment, like left / right
                 PlayerFragment.peekHudOnStart = true

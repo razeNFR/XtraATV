@@ -15,4 +15,20 @@
 
     <Preference android:key="ui_settings" android:title="@string/tv_settings_display" android:summary="@string/tv_settings_display_summary" app:iconSpaceReserved="false" app:singleLineTitle="false" />
 
+    <Preference
+        android:key="tv_xtratv_sub_home"
+        android:persistent="false"
+        android:summary="@string/tv_xtratv_sub_home_summary"
+        android:title="@string/tv_xtratv_sub_home_title"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_xtratv_sub_previews"
+        android:persistent="false"
+        android:summary="@string/tv_xtratv_sub_previews_summary"
+        android:title="@string/tv_xtratv_sub_previews_title"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
 </androidx.preference.PreferenceScreen>

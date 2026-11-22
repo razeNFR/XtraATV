@@ -1385,6 +1385,12 @@ class SettingsActivity : AppCompatActivity() {
                 // TV: the shortcuts of the side menu to the tabs of the followed channels, checked under "Following"
                 val isTv = requireContext().resources.getBoolean(R.bool.isTv)
                 val extras = requireContext().prefs().getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
+                val extrasOrder = C.parseTvMenuExtrasOrder(requireContext().prefs())
+                val extraLabels = mapOf(
+                    "videos" to R.string.tv_menu_followed_videos,
+                    "channels" to R.string.tv_menu_followed_channels,
+                    "games" to R.string.tv_menu_followed_games,
+                )
                 // TV: the home on top (it can't be moved nor hidden), the house says the page the app opens on
                 val startPage = requireContext().prefs().getString(C.TV_START_PAGE, "home")
                 if (isTv) {
@@ -1394,11 +1400,11 @@ class SettingsActivity : AppCompatActivity() {
                 val rows = if (isTv) {
                     (listOf(home) + tabs.flatMap { tab ->
                         if (tab.key == "2") {
-                            listOf(tab) + listOf(
-                                "videos" to R.string.tv_menu_followed_videos,
-                                "channels" to R.string.tv_menu_followed_channels,
-                                "games" to R.string.tv_menu_followed_games,
-                            ).map { (key, text) -> SettingsDragListItem(key = key, text = getString(text), default = false, enabled = key in extras, parent = "2") }
+                            listOf(tab) + extrasOrder.mapNotNull { key ->
+                                extraLabels[key]?.let { text ->
+                                    SettingsDragListItem(key = key, text = getString(text), default = false, enabled = key in extras, parent = "2")
+                                }
+                            }
                         } else listOf(tab)
                     }).toMutableList()
                 } else tabs
@@ -1410,6 +1416,7 @@ class SettingsActivity : AppCompatActivity() {
                         if (isTv) {
                             // the page the app opens on: the row with the house (a checked one), else the home
                             putString(C.TV_START_PAGE, saved.firstOrNull { it.default && it.enabled && it.parent == null }?.key ?: "home")
+                            putString(C.TV_MENU_EXTRAS_ORDER, saved.filter { it.parent != null }.joinToString(",") { it.key })
                             putStringSet(C.TV_MENU_EXTRAS, saved.filter { it.parent != null && it.enabled }.map { it.key }.toSet())
                         }
                     }

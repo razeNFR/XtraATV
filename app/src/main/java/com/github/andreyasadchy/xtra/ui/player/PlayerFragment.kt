@@ -299,14 +299,26 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    private fun peekHud() {
+    private fun peekHud(immediate: Boolean = false) {
         if (binding.playerControls.root.hasFocus()) {
             return
         }
         hudPeek = true
         // only the info of the stream (title, channel, category, viewers, quality...), no buttons nor timeline
         setHudInfoOnly(true)
-        showController()
+        if (immediate) {
+            restoreTvOledProtection()
+            controllerAnimation?.cancel()
+            controllerIsAnimating = false
+            controllerHiding = false
+            binding.playerControls.root.removeCallbacks(controllerHideAction)
+            onTvControllerVisibility(true)
+            binding.playerControls.root.alpha = 1f
+            binding.playerControls.root.visibility = View.VISIBLE
+            updateProgress()
+        } else {
+            showController()
+        }
         binding.root.removeCallbacks(hudPeekHideAction)
         binding.root.postDelayed(hudPeekHideAction, 2500L)
     }
@@ -961,6 +973,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 subtitleView.setUserDefaultStyle()
                 subtitleView.setUserDefaultTextSize()
             }
+            if (isTv) {
+                prefillTvStreamUiBeforeService()
+                if (peekHudOnStart) {
+                    peekHudOnStart = false
+                    val immediate = peekHudImmediateSwitch
+                    peekHudImmediateSwitch = false
+                    if (isMaximized) {
+                        peekHud(immediate = immediate)
+                    }
+                }
+            }
         }
     }
 
@@ -970,7 +993,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         // a switch of stream (left / right): the HUD of the stream reached for a moment, without the focus
         if (isTv && peekHudOnStart) {
             peekHudOnStart = false
-            binding.root.postDelayed({ if (view != null && isMaximized) peekHud() }, 300L)
+            val immediate = peekHudImmediateSwitch
+            peekHudImmediateSwitch = false
+            if (isMaximized) {
+                peekHud(immediate = immediate)
+            }
+        } else if (isTv && hudPeek) {
+            setHudInfoOnly(true)
         }
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
@@ -5454,6 +5483,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             if (visible) {
+                applyTvHudHeaderSize()
+                updateTvFavoriteChip()
+                syncTvHeaderBounds()
                 syncPlayPauseButtonVisibility()
                 // the button of the small window, only while it is open
                 playerControls.tvPipSettings?.visibility = if ((activity as? MainActivity)?.isTvPipOpen() == true) View.VISIBLE else View.GONE
@@ -5686,10 +5718,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             // "position / duration": the slash only when both are shown
             tvTimeSeparator?.let { separator ->
                 val updateSeparator = {
-                    separator.visibility = if (position.isVisible && duration.isVisible) View.VISIBLE else View.GONE
+                    if (_binding != null) {
+                        separator.visibility = if (position.isVisible && duration.isVisible) View.VISIBLE else View.GONE
+                    }
                 }
                 updateSeparator()
-                duration.viewTreeObserver.addOnGlobalLayoutListener { updateSeparator() }
+                if (!tvTimeSeparatorListenerAdded) {
+                    tvTimeSeparatorListenerAdded = true
+                    duration.viewTreeObserver.addOnGlobalLayoutListener { updateSeparator() }
+                }
             }
             // Nuvio style: the focused button is a white disc, its icon takes the color of accent (ambiance color)
             val focusedIcon = com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight
@@ -5715,6 +5752,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
             }
+            applyTvHudHeaderSize()
             updateTvAvatars()
             updateTvChatLockUi()
         }
@@ -5824,10 +5862,195 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private var tvFavoritesObserverJob: Job? = null
     private var tvHeaderLayoutListenerAdded = false
+    private var tvTimeSeparatorListenerAdded = false
+    private var appliedTvHudHeaderScale = 0f
+    private var lastLoadedChannelAvatarUrl: String? = null
+    private var lastLoadedCategoryGameId: String? = null
     private val tvHeaderLayoutListener = View.OnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
         if (right - left != oldRight - oldLeft) {
             syncTvHeaderBounds()
         }
+    }
+
+    private fun tvHudHeaderScale(): Float {
+        val ctx = context ?: return 1f
+        return when (ctx.prefs().getString(C.TV_HUD_HEADER_SIZE, "normal")) {
+            "medium" -> 1.15f
+            "large" -> 1.30f
+            "xlarge" -> 1.45f
+            else -> 1f
+        }
+    }
+
+    private fun applyTvHudHeaderSize() {
+        if (!isTv || _binding == null) return
+        val scale = tvHudHeaderScale()
+        if (scale == appliedTvHudHeaderScale) return
+        appliedTvHudHeaderScale = scale
+        val density = resources.displayMetrics.density
+        val chipH = (28f * scale * density + 0.5f).toInt()
+        val avatarSize = (42f * scale * density + 0.5f).toInt()
+        val avatarMarginEnd = (11f * scale.coerceAtMost(1.25f) * density + 0.5f).toInt()
+        val channelPadH = (11f * scale * density + 0.5f).toInt()
+        val favPad = (5.5f * scale * density + 0.5f).toInt()
+        val catPadStart = (8f * scale * density + 0.5f).toInt()
+        val catPadEnd = (11f * scale * density + 0.5f).toInt()
+        val catAvatarW = (15f * scale * density + 0.5f).toInt()
+        val catAvatarH = (20f * scale * density + 0.5f).toInt()
+        val catAvatarEnd = (6f * scale.coerceAtMost(1.25f) * density + 0.5f).toInt()
+        val titleTopMargin = (5f * scale.coerceAtMost(1.25f) * density + 0.5f).toInt()
+        with(binding.playerControls) {
+            tvChannelAvatarFrame?.let { frame ->
+                (frame.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                    if (lp.width != avatarSize || lp.height != avatarSize || lp.marginEnd != avatarMarginEnd) {
+                        lp.width = avatarSize
+                        lp.height = avatarSize
+                        lp.marginEnd = avatarMarginEnd
+                        frame.layoutParams = lp
+                    }
+                }
+            }
+            channel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15.5f * scale)
+            channel.setPaddingRelative(channelPadH, 0, channelPadH, 0)
+            channel.layoutParams?.let { lp ->
+                if (lp.height != chipH) {
+                    lp.height = chipH
+                    channel.layoutParams = lp
+                }
+            }
+            tvFavoriteChip?.let { chip ->
+                chip.setPadding(favPad, favPad, favPad, favPad)
+                chip.layoutParams?.let { lp ->
+                    if (lp.width != chipH || lp.height != chipH) {
+                        lp.width = chipH
+                        lp.height = chipH
+                        chip.layoutParams = lp
+                    }
+                }
+            }
+            tvCategoryChip?.let { chip ->
+                chip.setPaddingRelative(catPadStart, 0, catPadEnd, 0)
+                chip.layoutParams?.let { lp ->
+                    if (lp.height != chipH) {
+                        lp.height = chipH
+                        chip.layoutParams = lp
+                    }
+                }
+            }
+            tvCategoryAvatar?.let { avatar ->
+                (avatar.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                    if (lp.width != catAvatarW || lp.height != catAvatarH || lp.marginEnd != catAvatarEnd) {
+                        lp.width = catAvatarW
+                        lp.height = catAvatarH
+                        lp.marginEnd = catAvatarEnd
+                        avatar.layoutParams = lp
+                    }
+                }
+            }
+            category.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f * scale)
+            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f * scale)
+            (title.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                if (lp.topMargin != titleTopMargin) {
+                    lp.topMargin = titleTopMargin
+                    title.layoutParams = lp
+                }
+            }
+        }
+    }
+
+    private fun prefillTvStreamUiBeforeService() {
+        if (!isTv || _binding == null) return
+        applyTvHudHeaderSize()
+        if (!isStreamScreen()) return
+        val ctx = context ?: return
+        val prefs = ctx.prefs()
+        val stream = (activity as? MainActivity)?.currentPlayingStream() ?: return
+        with(binding.playerControls) {
+            val channelLogin = stream.channelLogin
+            val channelName = stream.channelName
+            val displayName = if (channelLogin != null && !channelLogin.equals(channelName, true)) {
+                when (prefs.getString(C.UI_NAME_DISPLAY, "0")) {
+                    "0" -> "$channelName ($channelLogin)"
+                    "1" -> channelName
+                    else -> channelLogin
+                }
+            } else {
+                channelName ?: channelLogin
+            }
+            if (prefs.getBoolean(C.PLAYER_CHANNEL, true) && !displayName.isNullOrBlank()) {
+                channel.visibility = View.VISIBLE
+                channel.text = displayName
+                channel.setOnClickListener {
+                    findNavController().navigate(
+                        ChannelPagerFragmentDirections.actionGlobalChannelPagerFragment(
+                            channelId = playbackService?.channelId ?: stream.channelId,
+                            channelLogin = playbackService?.channelLogin ?: stream.channelLogin,
+                            channelName = playbackService?.channelName ?: stream.channelName,
+                        )
+                    )
+                    leaveForBrowsing()
+                }
+            } else {
+                channel.visibility = View.GONE
+            }
+            val titleText = stream.title
+            if (!titleText.isNullOrBlank() && prefs.getBoolean(C.PLAYER_TITLE, true)) {
+                title.visibility = View.VISIBLE
+                title.text = titleText.trim()
+            } else {
+                title.visibility = View.GONE
+            }
+            val gameName = stream.gameName
+            if (!gameName.isNullOrBlank() && prefs.getBoolean(C.PLAYER_CATEGORY, true)) {
+                val openCategory = View.OnClickListener {
+                    findNavController().navigate(
+                        if (prefs.getBoolean(C.UI_GAME_PAGER, true)) {
+                            GamePagerFragmentDirections.actionGlobalGamePagerFragment(
+                                gameId = playbackService?.gameId ?: stream.gameId,
+                                gameSlug = playbackService?.gameSlug ?: stream.gameSlug,
+                                gameName = gameName,
+                            )
+                        } else {
+                            GameMediaFragmentDirections.actionGlobalGameMediaFragment(
+                                gameId = playbackService?.gameId ?: stream.gameId,
+                                gameSlug = playbackService?.gameSlug ?: stream.gameSlug,
+                                gameName = gameName,
+                            )
+                        }
+                    )
+                    leaveForBrowsing()
+                }
+                category.visibility = View.VISIBLE
+                category.text = gameName
+                category.setOnClickListener(openCategory)
+                tvCategoryChip?.setOnClickListener(openCategory)
+            } else {
+                category.visibility = View.GONE
+            }
+            if (prefs.getBoolean(C.TV_BUTTON_STREAM_LIST, true)) {
+                streamList?.visibility = View.VISIBLE
+                streamList?.setOnClickListener {
+                    hideController()
+                    (activity as? MainActivity)?.showStreamSwitcher()
+                }
+            }
+            if (prefs.getBoolean(C.PLAYER_RESTART, true)) {
+                restart.visibility = View.VISIBLE
+                restart.setOnClickListener {
+                    showController(force = true)
+                    restartPlayer()
+                }
+            }
+        }
+        updateViewerCount(stream.viewerCount)
+        if (prefs.getBoolean(C.PLAYER_SHOW_UPTIME, true)) {
+            stream.createdAt?.let { created ->
+                Instant.parseOrNull(created)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 }?.let { createdMs ->
+                    updateUptime(createdMs)
+                }
+            }
+        }
+        setupTvHud()
     }
 
     private fun updateTvFavoriteChip() {
@@ -5839,7 +6062,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             ?: curStream?.channelLogin?.takeIf { it.isNotBlank() }
         val chName = playbackService?.channelName?.takeIf { it.isNotBlank() }
             ?: curStream?.channelName?.takeIf { it.isNotBlank() }
-        if (!isLiveOrDvrScreen() || login == null) {
+        if (!isLiveOrDvrScreen() || login == null || !ctx.prefs().getBoolean(C.TV_PLAYER_FAVORITE_STAR, true)) {
             chip.visibility = View.GONE
             return
         }
@@ -5899,25 +6122,32 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val playerW = b.playerLayout.width
         if (playerW <= 0) return
         val density = resources.displayMetrics.density
+        val scale = tvHudHeaderScale()
         val overscanH = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
         val rightReserved = overscanH + (188f * density).toInt()
-        val avatarW = if (b.playerControls.tvChannelAvatarFrame?.isVisible == true) (53f * density).toInt() else 0
+        val avatarW = if (b.playerControls.tvChannelAvatarFrame?.isVisible == true) {
+            ((42f * scale + 11f * scale.coerceAtMost(1.25f)) * density).toInt()
+        } else {
+            0
+        }
         val availableByRight = (playerW - overscanH - rightReserved - avatarW).coerceAtLeast((180f * density).toInt())
-        val comfortableCap = ((playerW * 0.64f).toInt() - avatarW).coerceAtLeast((180f * density).toInt())
+        val widthRatio = (0.64f + (scale - 1f) * 0.22f).coerceAtMost(0.74f)
+        val comfortableCap = ((playerW * widthRatio).toInt() - avatarW).coerceAtLeast((180f * density).toInt())
         val maxBlockW = minOf(availableByRight, comfortableCap)
         b.playerControls.title.maxWidth = maxBlockW
-        val favReserved = if (b.playerControls.tvFavoriteChip?.isVisible == true) (34f * density).toInt() else 0
+        val favReserved = if (b.playerControls.tvFavoriteChip?.isVisible == true) ((28f * scale + 6f) * density).toInt() else 0
         val usableRowW = (maxBlockW - favReserved).coerceAtLeast((150f * density).toInt())
+        val catIconAllowance = ((36f * scale) * density).toInt()
         val bothChips = b.playerControls.channel.isVisible && b.playerControls.tvCategoryChip?.isVisible == true
         if (bothChips) {
             val chipBudget = (usableRowW - (8f * density).toInt()).coerceAtLeast((150f * density).toInt())
-            val chMax = (chipBudget * 0.50f).toInt().coerceIn((105f * density).toInt(), (280f * density).toInt())
-            val catMax = (chipBudget - chMax - (36f * density).toInt()).coerceIn((85f * density).toInt(), (260f * density).toInt())
+            val chMax = (chipBudget * 0.50f).toInt().coerceIn((105f * density).toInt(), ((280f * scale) * density).toInt())
+            val catMax = (chipBudget - chMax - catIconAllowance).coerceIn((85f * density).toInt(), ((260f * scale) * density).toInt())
             b.playerControls.channel.maxWidth = chMax
             b.playerControls.category.maxWidth = catMax
         } else {
-            b.playerControls.channel.maxWidth = minOf(usableRowW, (320f * density).toInt())
-            b.playerControls.category.maxWidth = minOf((usableRowW - (36f * density).toInt()).coerceAtLeast((105f * density).toInt()), (300f * density).toInt())
+            b.playerControls.channel.maxWidth = minOf(usableRowW, ((320f * scale) * density).toInt())
+            b.playerControls.category.maxWidth = minOf((usableRowW - catIconAllowance).coerceAtLeast((105f * density).toInt()), ((300f * scale) * density).toInt())
         }
     }
 
@@ -5926,6 +6156,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (!isTv || _binding == null) {
             return
         }
+        applyTvHudHeaderSize()
         if (!tvHeaderLayoutListenerAdded) {
             tvHeaderLayoutListenerAdded = true
             binding.playerLayout.addOnLayoutChangeListener(tvHeaderLayoutListener)
@@ -5935,27 +6166,34 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectLatest {
                     if (_binding != null) {
                         updateTvFavoriteChip()
+                        syncTvHeaderBounds()
                     }
                 }
             }
         }
         updateTvFavoriteChip()
+        val curStream = getTvDvrStream() ?: (activity as? MainActivity)?.currentPlayingStream()
         with(binding.playerControls) {
             val context = requireContext()
             val density = resources.displayMetrics.density
             tvChannelAvatar?.let { avatar ->
-                val image = playbackService?.channelImage
+                val image = playbackService?.channelImage?.takeIf { it.isNotBlank() }
+                    ?: curStream?.channelImage?.takeIf { it.isNotBlank() }
                 if (!image.isNullOrBlank() && channel.isVisible) {
                     avatar.visibility = View.VISIBLE
                     tvChannelAvatarFrame?.visibility = View.VISIBLE
-                    context.imageLoader.enqueue(
-                        coil3.request.ImageRequest.Builder(context).apply {
-                            data(image)
-                            transformations(coil3.transform.CircleCropTransformation())
-                            target(avatar)
-                        }.build()
-                    )
+                    if (image != lastLoadedChannelAvatarUrl || avatar.drawable == null) {
+                        lastLoadedChannelAvatarUrl = image
+                        context.imageLoader.enqueue(
+                            coil3.request.ImageRequest.Builder(context).apply {
+                                data(image)
+                                transformations(coil3.transform.CircleCropTransformation())
+                                target(avatar)
+                            }.build()
+                        )
+                    }
                 } else {
+                    lastLoadedChannelAvatarUrl = null
                     avatar.visibility = View.GONE
                     tvChannelAvatarFrame?.visibility = View.GONE
                 }
@@ -5982,18 +6220,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 v.nextFocusRightId = headerChips.getOrElse(idx + 1) { v }.id
                 v.nextFocusUpId = v.id
             }
-            val gameId = playbackService?.gameId
+            val gameId = playbackService?.gameId?.takeIf { it.isNotBlank() }
+                ?: curStream?.gameId?.takeIf { it.isNotBlank() }
             tvCategoryAvatar?.let { avatar ->
                 if (!gameId.isNullOrBlank() && showCatChip) {
                     avatar.visibility = View.VISIBLE
-                    context.imageLoader.enqueue(
-                        coil3.request.ImageRequest.Builder(context).apply {
-                            data("https://static-cdn.jtvnw.net/ttv-boxart/$gameId-52x72.jpg")
-                            transformations(coil3.transform.RoundedCornersTransformation(4f * density))
-                            target(avatar)
-                        }.build()
-                    )
+                    if (gameId != lastLoadedCategoryGameId || avatar.drawable == null) {
+                        lastLoadedCategoryGameId = gameId
+                        context.imageLoader.enqueue(
+                            coil3.request.ImageRequest.Builder(context).apply {
+                                data("https://static-cdn.jtvnw.net/ttv-boxart/$gameId-52x72.jpg")
+                                transformations(coil3.transform.RoundedCornersTransformation(4f * density))
+                                target(avatar)
+                            }.build()
+                        )
+                    }
                 } else {
+                    lastLoadedCategoryGameId = null
                     avatar.visibility = View.GONE
                 }
             }
@@ -7903,7 +8146,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (!isTv || _binding == null || playbackService == null) {
             return false
         }
-        return when (requireContext().prefs().getString(C.TV_KEEP_SOUND_ON_LEAVE, "always")) {
+        return when (requireContext().prefs().getString(C.TV_KEEP_SOUND_ON_LEAVE, "never")) {
             "never" -> false
             "minimized" -> !isMaximized
             else -> true
@@ -8449,6 +8692,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(tvDimListener)
         _binding?.playerLayout?.removeOnLayoutChangeListener(tvHeaderLayoutListener)
         tvHeaderLayoutListenerAdded = false
+        tvTimeSeparatorListenerAdded = false
+        appliedTvHudHeaderScale = 0f
+        lastLoadedChannelAvatarUrl = null
+        lastLoadedCategoryGameId = null
         _binding?.root?.removeCallbacks(tvHudTicker)
         _binding?.root?.removeCallbacks(customKeyLongRunnable)
         customKeyDownSeen = 0
@@ -8529,6 +8776,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
         /** TV: the next player screen comes from a switch of stream, it shows its HUD for a moment (without the focus). */
         var peekHudOnStart = false
+        /** TV: the switch came from an already full-screen player, so the HUD info appears immediately at full opacity without fading from zero. */
+        var peekHudImmediateSwitch = false
 
         /** TV: last picture of the stream left by a switch of stream (left / right...), for a second or two. */
         private var switchFrame: android.graphics.Bitmap? = null

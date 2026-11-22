@@ -98,6 +98,20 @@ object C {
     const val TV_FULLSCREEN_KEEP_ON_HOME = "tv_fullscreen_keep_on_home"
     const val TV_HOME_LANGUAGE_ROWS = "tv_home_language_rows"
     const val TV_MENU_EXTRAS = "tv_menu_extras"
+    const val TV_MENU_EXTRAS_ORDER = "tv_menu_extras_order"
+    const val TV_DEFAULTS_SOUND_LEAVE_NEVER = "tv_defaults_sound_leave_never"
+    const val TV_HUD_HEADER_SIZE = "tv_hud_header_size"
+    const val TV_PLAYER_FAVORITE_STAR = "tv_player_favorite_star"
+
+    fun parseTvMenuExtrasOrder(prefs: android.content.SharedPreferences): List<String> {
+        val defaultOrder = listOf("videos", "channels", "games")
+        val raw = prefs.getString(TV_MENU_EXTRAS_ORDER, null) ?: return defaultOrder
+        val parsed = raw.split(',').map { it.trim() }.filter { it in defaultOrder }.distinct().toMutableList()
+        for (item in defaultOrder) {
+            if (item !in parsed) parsed.add(item)
+        }
+        return parsed
+    }
     /** Buttons of the channel page hidden in the settings ("download", "share", "notifications"). */
     const val UI_CHANNEL_HIDDEN_BUTTONS = "ui_channel_hidden_buttons"
     /** Until they are chosen in the settings, the 3 buttons of the channel page are hidden (of little use on a TV). */

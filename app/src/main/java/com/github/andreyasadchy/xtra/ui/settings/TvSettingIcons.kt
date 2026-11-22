@@ -48,6 +48,13 @@ object TvSettingIcons {
         "about_discord" to R.drawable.tv_ic_discord,
         "about_device" to R.drawable.tv_ic_tv_small,
         // Xtra TV
+        "tv_xtratv_sub_home" to R.drawable.tv_ic_home,
+        "tv_xtratv_sub_remote" to R.drawable.tv_ic_gamepad,
+        "tv_xtratv_sub_player" to R.drawable.tv_ic_play,
+        "tv_xtratv_sub_previews" to R.drawable.tv_ic_bell,
+        "tv_xtratv_sub_languages" to R.drawable.tv_ic_globe,
+        "tv_hud_header_size" to R.drawable.tv_ic_text_size,
+        "tv_player_favorite_star" to R.drawable.tv_ic_star,
         "player_frame_rate_matching" to R.drawable.tv_ic_hd,
         "tv_player_clock" to R.drawable.tv_ic_schedule,
         "tv_back_action" to R.drawable.tv_ic_replay,

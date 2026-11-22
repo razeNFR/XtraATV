@@ -51,24 +51,31 @@ object TvListPanel {
         var default by mutableStateOf(source.default)
     }
 
-    /** A row and the rows under it, moved together. */
-    private class Block(val item: Item, val children: List<Item>)
+    /** A row and the rows under it, moved together (while children can also be reordered among themselves). */
+    private class Block(
+        val item: Item,
+        val children: androidx.compose.runtime.snapshots.SnapshotStateList<Item>,
+    )
 
     fun show(context: Context, title: CharSequence?, list: List<SettingsDragListItem>, showDefault: Boolean, onSave: (List<SettingsDragListItem>) -> Unit) {
         val blocks = mutableStateListOf<Block>()
-        var current: Block? = null
+        var current: Item? = null
         val pendingChildren = mutableListOf<Item>()
         list.forEach { source ->
             val item = Item(source)
             if (source.parent == null) {
-                current?.let { blocks.add(Block(it.item, pendingChildren.toList())) }
+                current?.let { parentItem ->
+                    blocks.add(Block(parentItem, mutableStateListOf<Item>().also { it.addAll(pendingChildren) }))
+                }
                 pendingChildren.clear()
-                current = Block(item, emptyList())
+                current = item
             } else {
                 pendingChildren.add(item)
             }
         }
-        current?.let { blocks.add(Block(it.item, pendingChildren.toList())) }
+        current?.let { parentItem ->
+            blocks.add(Block(parentItem, mutableStateListOf<Item>().also { it.addAll(pendingChildren) }))
+        }
         val top = { blocks.map { it.item } }
         // the house on a checked row: if it was on an unchecked one (or nowhere), it goes to the first checked one
         if (showDefault && top().none { it.default && it.enabled }) {
@@ -120,21 +127,30 @@ object TvListPanel {
                                 }
                             },
                         )
-                        block.children.forEach { child ->
-                            PanelRow(
-                                label = child.source.text,
-                                enabled = child.enabled,
-                                showSwitch = true,
-                                house = null,
-                                canUp = false,
-                                canDown = false,
-                                showArrows = false,
-                                indent = true,
-                                modifier = Modifier,
-                                onToggle = { child.enabled = !child.enabled },
-                                onHouse = {},
-                                onMove = {},
-                            )
+                        val showChildArrows = block.children.size > 1
+                        block.children.forEachIndexed { childIndex, child ->
+                            androidx.compose.runtime.key(child.source.key) {
+                                PanelRow(
+                                    label = child.source.text,
+                                    enabled = child.enabled,
+                                    showSwitch = true,
+                                    house = null,
+                                    canUp = childIndex > 0,
+                                    canDown = childIndex < block.children.lastIndex,
+                                    showArrows = showChildArrows,
+                                    indent = true,
+                                    modifier = Modifier,
+                                    onToggle = { child.enabled = !child.enabled },
+                                    onHouse = {},
+                                    onMove = { step ->
+                                        val target = childIndex + step
+                                        if (target in 0..block.children.lastIndex) {
+                                            val moved = block.children.removeAt(childIndex)
+                                            block.children.add(target, moved)
+                                        }
+                                    },
+                                )
+                            }
                         }
                     }
                 }

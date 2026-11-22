@@ -1373,4 +1373,20 @@
     <string name="tv_panel_tab_options">Opsi</string>
     <string name="tv_panel_tab_display">Layar</string>
     <string name="tv_panel_tab_audio">Audio</string>
+    <string name="tv_xtratv_sub_home_title">Beranda &amp; Menu samping</string>
+    <string name="tv_xtratv_sub_home_summary">Banner, bilah ringkas, baris Beranda, favorit, konten disembunyikan, warna suasana dan ukuran kartu</string>
+    <string name="tv_xtratv_sub_remote_title">Remote &amp; Navigasi</string>
+    <string name="tv_xtratv_sub_remote_summary">Pintasan tombol arah, tombol khusus, tombol Kembali, pindah otomatis saat fokus, konfirmasi keluar dan papan ketik</string>
+    <string name="tv_xtratv_sub_player_title">Pemutar TV &amp; Multi-stream</string>
+    <string name="tv_xtratv_sub_player_summary">Suara saat keluar aplikasi, tombol Kembali, ukuran info atas, jam, laju bingkai, OLED, klip dan multi-stream</string>
+    <string name="tv_xtratv_sub_previews_title">Pratinjau &amp; Peringatan live</string>
+    <string name="tv_xtratv_sub_previews_summary">Pratinjau video langsung pada kartu, suara pratinjau, perbesaran kartu dan banner notifikasi live</string>
+    <string name="tv_xtratv_sub_languages_title">Bahasa &amp; Konten</string>
+    <string name="tv_xtratv_sub_languages_summary">Baris populer menurut bahasa, bahasa Beranda dan bahasa penjelajahan bawaan</string>
+    <string name="tv_hud_header_size">Ukuran info stream di bagian atas</string>
+    <string name="tv_hud_header_size_normal">Normal (bawaan)</string>
+    <string name="tv_hud_header_size_medium">Sedang</string>
+    <string name="tv_hud_header_size_large">Besar</string>
+    <string name="tv_hud_header_size_xlarge">Sangat besar</string>
+    <string name="tv_player_favorite_star">Bintang streamer favorit</string>
 </resources>

@@ -1372,4 +1372,20 @@
     <string name="tv_panel_tab_options">設定</string>
     <string name="tv_panel_tab_display">表示</string>
     <string name="tv_panel_tab_audio">音声</string>
+    <string name="tv_xtratv_sub_home_title">ホームとサイドメニュー</string>
+    <string name="tv_xtratv_sub_home_summary">バナー、コンパクトレール、ホームの行、お気に入り、非表示コンテンツ、アンビエント色、カードサイズ</string>
+    <string name="tv_xtratv_sub_remote_title">リモコンとナビゲーション</string>
+    <string name="tv_xtratv_sub_remote_summary">十字キーのショートカット、カスタムキー、戻る動作、フォーカス自動切替、終了確認、キーボード</string>
+    <string name="tv_xtratv_sub_player_title">TVプレーヤーとマルチストリーム</string>
+    <string name="tv_xtratv_sub_player_summary">アプリ終了時の音声、戻る動作、上部情報サイズ、時計、フレームレート、OLED保護、クリップ、マルチストリーム</string>
+    <string name="tv_xtratv_sub_previews_title">プレビューとライブ通知</string>
+    <string name="tv_xtratv_sub_previews_summary">カードのライブ動画プレビュー、プレビュー音声、カード拡大、ライブ通知バナー</string>
+    <string name="tv_xtratv_sub_languages_title">言語とコンテンツ</string>
+    <string name="tv_xtratv_sub_languages_summary">言語別の人気行、ホームの言語、デフォルトの表示言語</string>
+    <string name="tv_hud_header_size">上部ストリーム情報のサイズ</string>
+    <string name="tv_hud_header_size_normal">標準（デフォルト）</string>
+    <string name="tv_hud_header_size_medium">中</string>
+    <string name="tv_hud_header_size_large">大</string>
+    <string name="tv_hud_header_size_xlarge">特大</string>
+    <string name="tv_player_favorite_star">お気に入り配信者の星アイコン</string>
 </resources>

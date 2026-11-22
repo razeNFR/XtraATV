@@ -1392,4 +1392,20 @@
     <string name="tv_panel_tab_options">Options</string>
     <string name="tv_panel_tab_display">Display</string>
     <string name="tv_panel_tab_audio">Audio</string>
+    <string name="tv_xtratv_sub_home_title">Home &amp; Side menu</string>
+    <string name="tv_xtratv_sub_home_summary">Banner, compact rail, Home rows, favorites, hidden content, ambient color and card size</string>
+    <string name="tv_xtratv_sub_remote_title">Remote &amp; Navigation</string>
+    <string name="tv_xtratv_sub_remote_summary">D-pad shortcuts, custom keys, Back behavior, hover auto-switch, exit confirmation and keyboard</string>
+    <string name="tv_xtratv_sub_player_title">TV Player &amp; Multi-stream</string>
+    <string name="tv_xtratv_sub_player_summary">Sound when leaving app, Back action, stream header size, clock, frame rate, OLED, clips and multi-stream</string>
+    <string name="tv_xtratv_sub_previews_title">Previews &amp; Live alerts</string>
+    <string name="tv_xtratv_sub_previews_summary">Live card video previews, preview sound, card zoom and live notification banner</string>
+    <string name="tv_xtratv_sub_languages_title">Languages &amp; Content</string>
+    <string name="tv_xtratv_sub_languages_summary">Popular rows by language, Home languages and default browsing languages</string>
+    <string name="tv_hud_header_size">Stream info header size</string>
+    <string name="tv_hud_header_size_normal">Normal (default)</string>
+    <string name="tv_hud_header_size_medium">Medium</string>
+    <string name="tv_hud_header_size_large">Large</string>
+    <string name="tv_hud_header_size_xlarge">Extra large</string>
+    <string name="tv_player_favorite_star">Favorite streamer star</string>
 </resources>

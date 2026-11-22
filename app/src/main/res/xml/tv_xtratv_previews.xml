@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        android:title="@string/tv_settings_previews"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="ui_tv_preview"
+            android:title="@string/tv_stream_preview"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:dependency="ui_tv_preview"
+            android:key="ui_tv_preview_sound"
+            android:title="@string/tv_preview_sound"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_card_zoom"
+            android:summary="@string/tv_card_zoom_summary"
+            android:title="@string/tv_card_zoom"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/tv_live_alerts_category"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="tv_live_alerts"
+            android:summary="@string/tv_live_alerts_summary"
+            android:title="@string/tv_live_alerts"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <ListPreference
+            android:defaultValue="5"
+            android:dependency="tv_live_alerts"
+            android:entries="@array/tvLiveAlertsDurationEntries"
+            android:entryValues="@array/tvLiveAlertsDurationValues"
+            android:key="tv_live_alerts_duration"
+            android:summary="%s"
+            android:title="@string/tv_live_alerts_duration"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
+
+</androidx.preference.PreferenceScreen>

@@ -488,4 +488,16 @@
         <item>next</item>
         <item>stay</item>
     </string-array>
+    <string-array name="tvHudHeaderSizeEntries">
+        <item>@string/tv_hud_header_size_normal</item>
+        <item>@string/tv_hud_header_size_medium</item>
+        <item>@string/tv_hud_header_size_large</item>
+        <item>@string/tv_hud_header_size_xlarge</item>
+    </string-array>
+    <string-array name="tvHudHeaderSizeValues" translatable="false">
+        <item>normal</item>
+        <item>medium</item>
+        <item>large</item>
+        <item>xlarge</item>
+    </string-array>
 </resources>

@@ -273,6 +273,14 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:key="tv_player_favorite_star"
+        android:title="@string/tv_player_favorite_star"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
         android:key="player_title"
         android:title="@string/show_title"
         app:iconSpaceReserved="false"

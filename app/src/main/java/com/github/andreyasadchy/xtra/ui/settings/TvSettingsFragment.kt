@@ -2000,8 +2000,14 @@ class TvSettingsFragment : Fragment() {
         val seenKeys = HashSet<String>()
         val results = mutableListOf<PrefNode>()
 
+        val xtraTitle = context.getString(R.string.xtratv_settings)
         val sources: List<Triple<Int, String, SubScreen?>> = listOf(
-            Triple(R.xml.xtratv_preferences, context.getString(R.string.xtratv_settings), null),
+            Triple(R.xml.tv_settings_xtratv, xtraTitle, null),
+            Triple(R.xml.tv_xtratv_home, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_home_title)}", SubScreen.Xml(R.xml.tv_xtratv_home, context.getString(R.string.tv_xtratv_sub_home_title))),
+            Triple(R.xml.tv_xtratv_remote, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_remote_title)}", SubScreen.Xml(R.xml.tv_xtratv_remote, context.getString(R.string.tv_xtratv_sub_remote_title))),
+            Triple(R.xml.tv_xtratv_player, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_player_title)}", SubScreen.Xml(R.xml.tv_xtratv_player, context.getString(R.string.tv_xtratv_sub_player_title))),
+            Triple(R.xml.tv_xtratv_previews, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_previews_title)}", SubScreen.Xml(R.xml.tv_xtratv_previews, context.getString(R.string.tv_xtratv_sub_previews_title))),
+            Triple(R.xml.tv_xtratv_languages, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_languages_title)}", SubScreen.Xml(R.xml.tv_xtratv_languages, context.getString(R.string.tv_xtratv_sub_languages_title))),
             Triple(R.xml.tv_settings_player, context.getString(R.string.player_settings), null),
             Triple(R.xml.player_preferences, context.getString(R.string.player_settings), SubScreen.Xml(R.xml.player_preferences, context.getString(R.string.player_settings))),
             Triple(R.xml.playback_preferences, context.getString(R.string.playback_settings), SubScreen.Xml(R.xml.playback_preferences, context.getString(R.string.playback_settings))),
@@ -2442,6 +2448,11 @@ class TvSettingsFragment : Fragment() {
     private fun handleActionClick(context: Context, item: PrefNode.Item) {
         when (item.key) {
             // Sub-screens
+            "tv_xtratv_sub_home" -> pushXmlSubScreen(R.xml.tv_xtratv_home, context.getString(R.string.tv_xtratv_sub_home_title), item.key)
+            "tv_xtratv_sub_remote" -> pushXmlSubScreen(R.xml.tv_xtratv_remote, context.getString(R.string.tv_xtratv_sub_remote_title), item.key)
+            "tv_xtratv_sub_player" -> pushXmlSubScreen(R.xml.tv_xtratv_player, context.getString(R.string.tv_xtratv_sub_player_title), item.key)
+            "tv_xtratv_sub_previews" -> pushXmlSubScreen(R.xml.tv_xtratv_previews, context.getString(R.string.tv_xtratv_sub_previews_title), item.key)
+            "tv_xtratv_sub_languages" -> pushXmlSubScreen(R.xml.tv_xtratv_languages, context.getString(R.string.tv_xtratv_sub_languages_title), item.key)
             "player_settings" -> pushXmlSubScreen(R.xml.player_preferences, context.getString(R.string.player_settings), item.key)
             "playback_settings" -> pushXmlSubScreen(R.xml.playback_preferences, context.getString(R.string.playback_settings), item.key)
             "buffer_settings" -> pushXmlSubScreen(R.xml.buffer_preferences, context.getString(R.string.buffer_settings), item.key)
@@ -2759,6 +2770,12 @@ class TvSettingsFragment : Fragment() {
         val tabList = parseTabSpecList(context.prefs().getString(C.UI_NAVIGATION_TAB_LIST, null), C.DEFAULT_NAVIGATION_TAB_LIST)
         val startPage = context.prefs().getString(C.TV_START_PAGE, "home")
         val extras = context.prefs().getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
+        val extrasOrder = C.parseTvMenuExtrasOrder(context.prefs())
+        val extraLabels = mapOf(
+            "videos" to R.string.tv_menu_followed_videos,
+            "channels" to R.string.tv_menu_followed_channels,
+            "games" to R.string.tv_menu_followed_games,
+        )
         val tabs = tabList.map {
             val split = it.split(':')
             SettingsDragListItem(
@@ -2783,12 +2800,10 @@ class TvSettingsFragment : Fragment() {
         )
         val rows = listOf(home) + tabs.flatMap { tab ->
             if (tab.key == "2") {
-                listOf(tab) + listOf(
-                    "videos" to R.string.tv_menu_followed_videos,
-                    "channels" to R.string.tv_menu_followed_channels,
-                    "games" to R.string.tv_menu_followed_games,
-                ).map { (k, labelRes) ->
-                    SettingsDragListItem(key = k, text = getString(labelRes), default = false, enabled = k in extras, parent = "2")
+                listOf(tab) + extrasOrder.mapNotNull { k ->
+                    extraLabels[k]?.let { labelRes ->
+                        SettingsDragListItem(key = k, text = getString(labelRes), default = false, enabled = k in extras, parent = "2")
+                    }
                 }
             } else listOf(tab)
         }
@@ -2798,6 +2813,7 @@ class TvSettingsFragment : Fragment() {
                     "${it.key}:${if (it.default) "1" else "0"}:${if (it.enabled) "1" else "0"}"
                 })
                 putString(C.TV_START_PAGE, saved.firstOrNull { it.default && it.enabled && it.parent == null }?.key ?: "home")
+                putString(C.TV_MENU_EXTRAS_ORDER, saved.filter { it.parent != null }.joinToString(",") { it.key })
                 putStringSet(C.TV_MENU_EXTRAS, saved.filter { it.parent != null && it.enabled }.map { it.key }.toSet())
             }
             (activity as? MainActivity)?.refreshTvNavigationUi()
@@ -3120,7 +3136,7 @@ class TvSettingsFragment : Fragment() {
         var pendingOpenSubScreen: String? = null
 
         private val CATEGORIES = listOf(
-            CategorySpec(R.xml.xtratv_preferences, R.string.app_name, R.drawable.tv_ic_tv_small),
+            CategorySpec(R.xml.tv_settings_xtratv, R.string.app_name, R.drawable.tv_ic_tv_small),
             CategorySpec(R.xml.tv_settings_player, R.string.player_settings, R.drawable.tv_ic_play),
             CategorySpec(R.xml.chat_preferences, R.string.chat_settings, R.drawable.tv_ic_chat),
             CategorySpec(R.xml.tv_settings_interface, R.string.ui_settings, R.drawable.tv_ic_view_quilt),
@@ -3141,8 +3157,9 @@ class TvSettingsFragment : Fragment() {
         )
 
         private val CHEVRON_KEYS = setOf(
-            "player_settings", "playback_settings", "buffer_settings", "player_button_settings",
-            "player_menu_settings", "ui_settings", "adblock_settings", "update_settings",
+            "tv_xtratv_sub_home", "tv_xtratv_sub_remote", "tv_xtratv_sub_player", "tv_xtratv_sub_previews",
+            "tv_xtratv_sub_languages", "player_settings", "playback_settings", "buffer_settings",
+            "player_button_settings", "player_menu_settings", "ui_settings", "adblock_settings", "update_settings",
             "api_token_settings", "debug_settings", "video_swap_settings", "stream_proxy_settings",
             "custom_proxy_settings", "tv_favorites", "tv_blacklist", C.TV_HOME_ROWS, C.TV_PLAYER_CLOCK,
             C.TV_MULTISTREAM_QUALITY, C.TV_SWITCHER_ROWS, "tv_dpad_shortcuts", C.TV_CUSTOM_KEYS,
@@ -3162,6 +3179,7 @@ class TvSettingsFragment : Fragment() {
             C.TV_BUTTON_STATS to R.drawable.tv_ic_stats,
             C.TV_BUTTON_DIM to R.drawable.tv_ic_dim,
             C.TV_BUTTON_PROXY to R.drawable.tv_ic_proxy,
+            C.TV_PLAYER_FAVORITE_STAR to R.drawable.tv_ic_star,
             "player_download" to R.drawable.ic_file_download_black_24dp,
             "player_follow" to R.drawable.baseline_favorite_border_black_24,
             "player_sleep" to R.drawable.baseline_alarm_black_24,
@@ -3181,7 +3199,12 @@ class TvSettingsFragment : Fragment() {
         )
 
         private val ALL_PREWARM_XMLS = listOf(
-            R.xml.xtratv_preferences,
+            R.xml.tv_settings_xtratv,
+            R.xml.tv_xtratv_home,
+            R.xml.tv_xtratv_remote,
+            R.xml.tv_xtratv_player,
+            R.xml.tv_xtratv_previews,
+            R.xml.tv_xtratv_languages,
             R.xml.tv_settings_player,
             R.xml.player_preferences,
             R.xml.playback_preferences,
