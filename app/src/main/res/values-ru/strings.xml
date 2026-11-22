@@ -1372,4 +1372,20 @@
     <string name="tv_panel_tab_options">Опции</string>
     <string name="tv_panel_tab_display">Экран</string>
     <string name="tv_panel_tab_audio">Звук</string>
+    <string name="tv_xtratv_sub_home_title">Главная и боковое меню</string>
+    <string name="tv_xtratv_sub_home_summary">Баннер, компактная панель, ряды главной, избранное, скрытый контент, фоновая подсветка и размер карточек</string>
+    <string name="tv_xtratv_sub_remote_title">Пульт и навигация</string>
+    <string name="tv_xtratv_sub_remote_summary">Действия крестовины, свои кнопки, кнопка «Назад», автопереключение при наведении, выход и клавиатура</string>
+    <string name="tv_xtratv_sub_player_title">ТВ-плеер и мультистрим</string>
+    <string name="tv_xtratv_sub_player_summary">Звук при выходе, кнопка «Назад», размер шапки стрима, часы, частота кадров, защита OLED, клипы и мультистрим</string>
+    <string name="tv_xtratv_sub_previews_title">Превью и уведомления о стримах</string>
+    <string name="tv_xtratv_sub_previews_summary">Видеопревью на карточках, звук превью, увеличение карточек и баннер начала эфира</string>
+    <string name="tv_xtratv_sub_languages_title">Языки и контент</string>
+    <string name="tv_xtratv_sub_languages_summary">Популярные ряды по языкам, языки главной и языки по умолчанию</string>
+    <string name="tv_hud_header_size">Размер информации сверху в плеере</string>
+    <string name="tv_hud_header_size_normal">Обычный (по умолчанию)</string>
+    <string name="tv_hud_header_size_medium">Средний</string>
+    <string name="tv_hud_header_size_large">Крупный</string>
+    <string name="tv_hud_header_size_xlarge">Очень крупный</string>
+    <string name="tv_player_favorite_star">Звезда избранного стримера</string>
 </resources>

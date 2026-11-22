@@ -1372,4 +1372,20 @@
     <string name="tv_panel_tab_options">選項</string>
     <string name="tv_panel_tab_display">顯示</string>
     <string name="tv_panel_tab_audio">音訊</string>
+    <string name="tv_xtratv_sub_home_title">首頁與側邊選單</string>
+    <string name="tv_xtratv_sub_home_summary">橫幅、精簡側欄、首頁列、最愛、隱藏內容、氛圍色彩與卡片大小</string>
+    <string name="tv_xtratv_sub_remote_title">遙控器與導覽</string>
+    <string name="tv_xtratv_sub_remote_summary">方向鍵快捷操作、自訂按鍵、返回鍵行為、聚焦自動切換、離開確認與鍵盤</string>
+    <string name="tv_xtratv_sub_player_title">電視播放器與多重視窗</string>
+    <string name="tv_xtratv_sub_player_summary">離開應用程式時的聲音、返回動作、頂部資訊大小、時鐘、影格率、OLED 保護、剪輯與多重視窗</string>
+    <string name="tv_xtratv_sub_previews_title">預覽與開台通知</string>
+    <string name="tv_xtratv_sub_previews_summary">卡片即時影片預覽、預覽聲音、卡片放大與開台通知橫幅</string>
+    <string name="tv_xtratv_sub_languages_title">語言與內容</string>
+    <string name="tv_xtratv_sub_languages_summary">依語言顯示熱門列、首頁語言與預設瀏覽語言</string>
+    <string name="tv_hud_header_size">頂部實況資訊大小</string>
+    <string name="tv_hud_header_size_normal">標準（預設）</string>
+    <string name="tv_hud_header_size_medium">中等</string>
+    <string name="tv_hud_header_size_large">偏大</string>
+    <string name="tv_hud_header_size_xlarge">特大</string>
+    <string name="tv_player_favorite_star">最愛實況主星號按鈕</string>
 </resources>

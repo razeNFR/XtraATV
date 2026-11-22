@@ -1372,4 +1372,20 @@
     <string name="tv_panel_tab_options">Opções</string>
     <string name="tv_panel_tab_display">Exibição</string>
     <string name="tv_panel_tab_audio">Áudio</string>
+    <string name="tv_xtratv_sub_home_title">Início e menu lateral</string>
+    <string name="tv_xtratv_sub_home_summary">Banner, barra compacta, linhas do Início, favoritos, conteúdo oculto, cor ambiente e tamanho dos cartões</string>
+    <string name="tv_xtratv_sub_remote_title">Controle remoto e navegação</string>
+    <string name="tv_xtratv_sub_remote_summary">Atalhos direcionais, teclas personalizadas, botão Voltar, troca automática ao focar, confirmação de saída e teclado</string>
+    <string name="tv_xtratv_sub_player_title">Player da TV e multi-stream</string>
+    <string name="tv_xtratv_sub_player_summary">Som ao sair do app, botão Voltar, tamanho do cabeçalho, relógio, taxa de quadros, OLED, clipes e multi-stream</string>
+    <string name="tv_xtratv_sub_previews_title">Prévias e alertas de live</string>
+    <string name="tv_xtratv_sub_previews_summary">Prévia de vídeo nos cartões, som da prévia, zoom dos cartões e faixa de notificação ao vivo</string>
+    <string name="tv_xtratv_sub_languages_title">Idiomas e conteúdo</string>
+    <string name="tv_xtratv_sub_languages_summary">Linhas populares por idioma, idiomas do Início e idiomas padrão</string>
+    <string name="tv_hud_header_size">Tamanho das informações no topo</string>
+    <string name="tv_hud_header_size_normal">Normal (padrão)</string>
+    <string name="tv_hud_header_size_medium">Médio</string>
+    <string name="tv_hud_header_size_large">Grande</string>
+    <string name="tv_hud_header_size_xlarge">Muito grande</string>
+    <string name="tv_player_favorite_star">Estrela de streamer favorito</string>
 </resources>

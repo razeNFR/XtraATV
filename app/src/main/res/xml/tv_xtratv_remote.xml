@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_confirm_exit"
+        android:summary="@string/tv_confirm_exit_summary"
+        android:title="@string/tv_confirm_exit"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_dpad_shortcuts"
+        android:persistent="false"
+        android:summary="@string/tv_dpad_shortcuts_summary"
+        android:title="@string/tv_dpad_shortcuts"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_custom_keys"
+        android:persistent="false"
+        android:summary="@string/tv_custom_keys_summary"
+        android:title="@string/tv_custom_keys"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_back_closes_menu"
+        android:summary="@string/tv_back_closes_menu_summary"
+        android:title="@string/tv_back_closes_menu"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_focus_switch"
+        android:summary="@string/tv_focus_switch_summary"
+        android:title="@string/tv_focus_switch"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_disable_soft_keyboard"
+        android:summary="@string/tv_disable_soft_keyboard_summary"
+        android:title="@string/tv_disable_soft_keyboard"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>

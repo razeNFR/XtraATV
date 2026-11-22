@@ -1373,4 +1373,20 @@
     <string name="tv_panel_tab_options">Seçenekler</string>
     <string name="tv_panel_tab_display">Görünüm</string>
     <string name="tv_panel_tab_audio">Ses</string>
+    <string name="tv_xtratv_sub_home_title">Ana ekran ve yan menü</string>
+    <string name="tv_xtratv_sub_home_summary">Afiş, dar yan çubuk, Ana ekran satırları, favoriler, gizlenen içerik, ambiyans rengi ve kart boyutu</string>
+    <string name="tv_xtratv_sub_remote_title">Kumanda ve gezinme</string>
+    <string name="tv_xtratv_sub_remote_summary">Yön tuşu kısayolları, özel tuşlar, Geri tuşu, odaklanınca otomatik geçiş, çıkış onayı ve klavye</string>
+    <string name="tv_xtratv_sub_player_title">TV oynatıcı ve çoklu yayın</string>
+    <string name="tv_xtratv_sub_player_summary">Uygulamadan çıkınca ses, Geri tuşu, üst bilgi boyutu, saat, kare hızı, OLED koruması, klipler ve çoklu yayın</string>
+    <string name="tv_xtratv_sub_previews_title">Önizlemeler ve canlı uyarılar</string>
+    <string name="tv_xtratv_sub_previews_summary">Kartlarda canlı video önizlemesi, önizleme sesi, kart büyütme ve canlı yayın bildirim çubuğu</string>
+    <string name="tv_xtratv_sub_languages_title">Diller ve içerik</string>
+    <string name="tv_xtratv_sub_languages_summary">Dile göre popüler satırlar, Ana ekran dilleri ve varsayılan diller</string>
+    <string name="tv_hud_header_size">Üst yayın bilgisi boyutu</string>
+    <string name="tv_hud_header_size_normal">Normal (varsayılan)</string>
+    <string name="tv_hud_header_size_medium">Orta</string>
+    <string name="tv_hud_header_size_large">Büyük</string>
+    <string name="tv_hud_header_size_xlarge">Çok büyük</string>
+    <string name="tv_player_favorite_star">Favori yayıncı yıldızı</string>
 </resources>

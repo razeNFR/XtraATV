@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_hide_menu_on_launch"
+        android:summary="@string/tv_hide_menu_on_launch_summary"
+        android:title="@string/tv_hide_menu_on_launch"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_compact_rail"
+        android:summary="@string/tv_compact_rail_summary"
+        android:title="@string/tv_compact_rail"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_hide_menu_stats"
+        android:summary="@string/tv_hide_menu_stats_summary"
+        android:title="@string/tv_hide_menu_stats"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_home_hero"
+        android:summary="@string/tv_home_hero_summary"
+        android:title="@string/tv_home_hero"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_home_greeting"
+        android:summary="@string/tv_home_greeting_summary"
+        android:title="@string/tv_home_greeting"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_home_stats_badge"
+        android:summary="@string/tv_home_stats_badge_summary"
+        android:title="@string/tv_home_stats_badge"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_home_followed_show_all"
+        android:summary="@string/tv_home_followed_show_all_summary"
+        android:title="@string/tv_home_followed_show_all"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_home_rows"
+        android:persistent="false"
+        android:summary="@string/tv_home_rows_summary"
+        android:title="@string/tv_home_rows"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_favorites"
+        android:title="@string/tv_favorites"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_blacklist"
+        android:persistent="false"
+        android:summary="@string/tv_blacklist_summary_empty"
+        android:title="@string/tv_blacklist_title"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="violet"
+        android:entries="@array/tvAmbientColorEntries"
+        android:entryValues="@array/tvAmbientColorValues"
+        android:key="tv_ambient_color"
+        android:summary="%s"
+        android:title="@string/tv_ambient_color"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="3"
+        android:entries="@array/tvCardSizeEntries"
+        android:entryValues="@array/tvHomeCards"
+        android:key="tv_home_cards"
+        android:summary="%s"
+        android:title="@string/tv_home_cards"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="4"
+        android:entries="@array/tvCardSizeEntries"
+        android:entryValues="@array/tvStreamColumns"
+        android:key="tv_stream_columns"
+        android:summary="%s"
+        android:title="@string/tv_stream_columns"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>

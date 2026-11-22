@@ -5,6 +5,14 @@
 
     <PreferenceCategory android:title="@string/tv_settings_cat_playback" app:iconSpaceReserved="false">
 
+        <Preference
+            android:key="tv_xtratv_sub_player"
+            android:persistent="false"
+            android:summary="@string/tv_xtratv_sub_player_summary"
+            android:title="@string/tv_xtratv_sub_player_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
         <Preference android:key="player_settings" android:title="@string/player_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />
 
         <Preference android:key="playback_settings" android:title="@string/playback_settings" app:iconSpaceReserved="false" app:singleLineTitle="false" />

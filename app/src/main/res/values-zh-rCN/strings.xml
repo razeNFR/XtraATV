@@ -1372,4 +1372,20 @@
     <string name="tv_panel_tab_options">选项</string>
     <string name="tv_panel_tab_display">显示</string>
     <string name="tv_panel_tab_audio">音频</string>
+    <string name="tv_xtratv_sub_home_title">主页与侧边菜单</string>
+    <string name="tv_xtratv_sub_home_summary">横幅、紧凑侧栏、主页行、收藏、隐藏内容、氛围颜色与卡片大小</string>
+    <string name="tv_xtratv_sub_remote_title">遥控器与导航</string>
+    <string name="tv_xtratv_sub_remote_summary">方向键快捷操作、自定义按键、返回键行为、悬停自动切换、退出确认与键盘</string>
+    <string name="tv_xtratv_sub_player_title">电视播放器与多路直播</string>
+    <string name="tv_xtratv_sub_player_summary">离开应用时的声音、返回操作、顶部信息大小、时钟、帧率匹配、OLED 保护、切片与多路直播</string>
+    <string name="tv_xtratv_sub_previews_title">预览与开播提醒</string>
+    <string name="tv_xtratv_sub_previews_summary">卡片实时视频预览、预览声音、卡片放大与开播通知横幅</string>
+    <string name="tv_xtratv_sub_languages_title">语言与内容</string>
+    <string name="tv_xtratv_sub_languages_summary">按语言显示热门行、主页语言与默认浏览语言</string>
+    <string name="tv_hud_header_size">顶部直播信息大小</string>
+    <string name="tv_hud_header_size_normal">标准（默认）</string>
+    <string name="tv_hud_header_size_medium">中等</string>
+    <string name="tv_hud_header_size_large">偏大</string>
+    <string name="tv_hud_header_size_xlarge">特大</string>
+    <string name="tv_player_favorite_star">收藏主播星标按钮</string>
 </resources>

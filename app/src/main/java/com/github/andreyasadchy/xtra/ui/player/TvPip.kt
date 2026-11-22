@@ -112,7 +112,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
     private val followPlayer = object : Runnable {
         override fun run() {
             val anyConfigured = configuredCount > 0
-            val maximized = activity.isPlayerMaximized()
+            val maximized = activity.isPlayerMaximizedScreen()
             slots.forEach { slot ->
                 val shown = slot.isVisibleSlot() && maximized
                 slot?.view?.visibility = if (shown) View.VISIBLE else View.GONE
@@ -181,7 +181,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 activity.lifecycleScope,
             ) { slot.stream?.channelLogin == login && !slot.suspendedByMain && (texture?.alpha ?: 1f) < 1f }
         }
-        frame.visibility = if (activity.isPlayerMaximized()) View.VISIBLE else View.GONE
+        frame.visibility = if (activity.isPlayerMaximizedScreen()) View.VISIBLE else View.GONE
         noPlayerChecks = 0
         load(slot, login)
         container.removeCallbacks(followPlayer)
@@ -243,7 +243,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                             activity.lifecycleScope,
                         ) { ensured.stream?.channelLogin == login && !ensured.suspendedByMain && (texture?.alpha ?: 1f) < 1f }
                     }
-                    frame.visibility = if (activity.isPlayerMaximized()) View.VISIBLE else View.GONE
+                    frame.visibility = if (activity.isPlayerMaximizedScreen()) View.VISIBLE else View.GONE
                 }
                 load(ensured, login)
             }

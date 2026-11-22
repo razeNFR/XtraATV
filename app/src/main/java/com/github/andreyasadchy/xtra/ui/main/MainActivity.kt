@@ -179,16 +179,23 @@ class MainActivity : AppCompatActivity() {
                 if (!prefs.contains(C.TV_BACK_ACTION)) {
                     putString(C.TV_BACK_ACTION, if (prefs.getBoolean(C.TV_BACK_MINIMIZES_PLAYER, false)) "mini" else "stop")
                 }
-                // sound when the app is left: the 3 old switches (mini player, sound only, full screen) become one choice
+                // sound when the app is left: defaults to "never" unless legacy switches were explicitly configured
                 if (!prefs.contains(C.TV_KEEP_SOUND_ON_LEAVE)) {
-                    val mini = prefs.getBoolean(C.TV_MINI_PLAYER_KEEP_ON_HOME, true)
-                    val audio = prefs.getBoolean(C.TV_AUDIO_ONLY_KEEP_ON_HOME, true)
-                    val fullscreen = prefs.getBoolean(C.TV_FULLSCREEN_KEEP_ON_HOME, true)
-                    putString(C.TV_KEEP_SOUND_ON_LEAVE, when {
-                        !mini && !audio -> "never"
-                        fullscreen -> "always"
-                        else -> "minimized"
-                    })
+                    val hasLegacy = prefs.contains(C.TV_MINI_PLAYER_KEEP_ON_HOME) ||
+                        prefs.contains(C.TV_AUDIO_ONLY_KEEP_ON_HOME) ||
+                        prefs.contains(C.TV_FULLSCREEN_KEEP_ON_HOME)
+                    if (hasLegacy) {
+                        val mini = prefs.getBoolean(C.TV_MINI_PLAYER_KEEP_ON_HOME, false)
+                        val audio = prefs.getBoolean(C.TV_AUDIO_ONLY_KEEP_ON_HOME, false)
+                        val fullscreen = prefs.getBoolean(C.TV_FULLSCREEN_KEEP_ON_HOME, false)
+                        putString(C.TV_KEEP_SOUND_ON_LEAVE, when {
+                            !mini && !audio && !fullscreen -> "never"
+                            fullscreen -> "always"
+                            else -> "minimized"
+                        })
+                    } else {
+                        putString(C.TV_KEEP_SOUND_ON_LEAVE, "never")
+                    }
                 }
                 // no clock face for the sleep timer on TV (made for a touch screen)
                 putBoolean(C.SLEEP_TIMER_USE_TIME_PICKER, false)
@@ -235,6 +242,13 @@ class MainActivity : AppCompatActivity() {
             prefs.edit {
                 putBoolean(C.TV_DEFAULTS_LIVE_PAUSE, true)
                 putBoolean(C.PLAYER_PAUSE, true)
+            }
+        }
+        if (resources.getBoolean(R.bool.isTv) && !prefs.getBoolean(C.TV_DEFAULTS_SOUND_LEAVE_NEVER, false)) {
+            // Background audio when leaving the app is turned off once on update to 1.4.6.5 (can be re-enabled anytime in Settings)
+            prefs.edit {
+                putBoolean(C.TV_DEFAULTS_SOUND_LEAVE_NEVER, true)
+                putString(C.TV_KEEP_SOUND_ON_LEAVE, "never")
             }
         }
         if (tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0) <= 0L) {
@@ -1037,6 +1051,8 @@ class MainActivity : AppCompatActivity() {
     private var dispatchingPlayerKey = false
 
     fun isPlayerMaximized() = (playerFragment as? PlayerFragment)?.isMaximizedPlayer() == true
+
+    fun isPlayerMaximizedScreen() = (playerFragment as? PlayerFragment)?.isMaximizedScreen() == true
 
     fun hasPlayer() = playerFragment != null
 
@@ -2002,14 +2018,16 @@ class MainActivity : AppCompatActivity() {
         val id = tvMenuPendingId
         tvMenuPendingId = 0
         val onSubScreen = ::navController.isInitialized && navController.previousBackStackEntry != null
-        if (id == 0 || !isTvMenuShown || (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null && !onSubScreen)) {
+        val wrongRoot = ::navController.isInitialized && id in tvRootDestinations && navController.currentDestination?.id != id
+        if (id == 0 || !isTvMenuShown || (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null && !onSubScreen && !wrongRoot)) {
             return@Runnable
         }
         tvMenuAutoNavAt = android.os.SystemClock.elapsedRealtime()
         lastContentFocus = null
         tvMenuAutoHovering = true
         try {
-            if (id == binding.navBar.selectedItemId && tvMenuExtraSelected == null && onSubScreen && id in tvRootDestinations) {
+            if (id == binding.navBar.selectedItemId && id in tvRootDestinations && (tvMenuExtraSelected != null || onSubScreen || wrongRoot)) {
+                tvMenuExtraSelected = null
                 openTvSectionRoot(id)
             } else {
                 binding.navBar.selectedItemId = id
@@ -2610,6 +2628,11 @@ class MainActivity : AppCompatActivity() {
         super.onWindowFocusChanged(hasFocus)
         // TV: a panel opened from the HUD of the player closed, the HUD comes back
         (playerFragment as? PlayerFragment)?.onTvWindowFocusChanged(hasFocus)
+        if (hasFocus && isTv && !tvMultiStreamShown) {
+            binding.root.removeCallbacks(keepFocusInPlayerAction)
+            binding.root.post(keepFocusInPlayerAction)
+            binding.root.postDelayed(keepFocusInPlayerAction, 80L)
+        }
     }
 
     override fun onUserLeaveHint() {
@@ -3399,6 +3422,8 @@ class MainActivity : AppCompatActivity() {
     fun startStream(stream: Stream, queue: List<Stream>? = null, queueSource: (() -> androidx.paging.PagingSource<Int, Stream>)? = null, peekHud: Boolean = false) {
         currentClipId = null
         // TV: the info of the stream for a moment each time a stream starts (from the home, a list, a switch...)
+        com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudImmediateSwitch =
+            isTv && (playerFragment as? PlayerFragment)?.isMaximizedScreen() == true
         com.github.andreyasadchy.xtra.ui.player.PlayerFragment.peekHudOnStart = isTv
         // the time of the start of the stream counts from here (debug builds), and its access of Twitch is asked
         // at once, while the player opens
@@ -3792,7 +3817,7 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             if (isTv) {
-                binding.playerContainer.isFocusable = true
+                binding.playerContainer.isFocusable = false
                 binding.playerContainer.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             }
             if (binding.navHostFragment.descendantFocusability == ViewGroup.FOCUS_BLOCK_DESCENDANTS) {
@@ -4169,9 +4194,14 @@ class MainActivity : AppCompatActivity() {
             }
             if (isTv && prefs.getBoolean(C.UI_FOLLOW_PAGER, true)) {
                 val extras = prefs.getStringSet(C.TV_MENU_EXTRAS, null).orEmpty()
-                if ("videos" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedVideos, Menu.NONE, R.string.tv_menu_followed_videos).setIcon(R.drawable.tv_ic_video_library)
-                if ("channels" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedChannels, Menu.NONE, R.string.tv_menu_followed_channels).setIcon(R.drawable.tv_ic_person)
-                if ("games" in extras) menu.add(Menu.NONE, R.id.tvNavFollowedGames, Menu.NONE, R.string.tv_menu_followed_games).setIcon(R.drawable.tv_ic_gamepad)
+                for (extraKey in C.parseTvMenuExtrasOrder(prefs)) {
+                    if (extraKey !in extras) continue
+                    when (extraKey) {
+                        "videos" -> menu.add(Menu.NONE, R.id.tvNavFollowedVideos, Menu.NONE, R.string.tv_menu_followed_videos).setIcon(R.drawable.tv_ic_video_library)
+                        "channels" -> menu.add(Menu.NONE, R.id.tvNavFollowedChannels, Menu.NONE, R.string.tv_menu_followed_channels).setIcon(R.drawable.tv_ic_person)
+                        "games" -> menu.add(Menu.NONE, R.id.tvNavFollowedGames, Menu.NONE, R.string.tv_menu_followed_games).setIcon(R.drawable.tv_ic_gamepad)
+                    }
+                }
             }
             if (isTv) {
                 if (!prefs.getBoolean(C.TV_HIDE_MENU_STATS, false)) {
@@ -4325,7 +4355,10 @@ class MainActivity : AppCompatActivity() {
                     }
                     return@setOnItemReselectedListener
                 }
-                if (isTv && navController.previousBackStackEntry != null && it.itemId in tvRootDestinations) {
+                if (isTv && it.itemId in tvRootDestinations &&
+                    (tvMenuExtraSelected != null || navController.currentDestination?.id != it.itemId || navController.previousBackStackEntry != null)
+                ) {
+                    tvMenuExtraSelected = null
                     openTvSectionRoot(it.itemId)
                     return@setOnItemReselectedListener
                 }

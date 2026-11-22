@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_frame_rate_matching"
+        android:summary="@string/frame_rate_matching_summary"
+        android:title="@string/frame_rate_matching"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="normal"
+        android:entries="@array/tvHudHeaderSizeEntries"
+        android:entryValues="@array/tvHudHeaderSizeValues"
+        android:key="tv_hud_header_size"
+        android:summary="%s"
+        android:title="@string/tv_hud_header_size"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_player_clock"
+        android:persistent="false"
+        android:summary="@string/tv_player_clock_summary"
+        android:title="@string/tv_player_clock"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="stop"
+        android:entries="@array/tvBackActionEntries"
+        android:entryValues="@array/tvBackActionValues"
+        android:key="tv_back_action"
+        android:summary="%s"
+        android:title="@string/tv_back_action"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="never"
+        android:entries="@array/tvKeepSoundEntries"
+        android:entryValues="@array/tvKeepSoundValues"
+        android:key="tv_keep_sound_on_leave"
+        android:title="@string/tv_keep_sound_on_leave"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="home"
+        android:entries="@array/tvStreamEndActionEntries"
+        android:entryValues="@array/tvStreamEndActionValues"
+        android:key="tv_stream_end_action"
+        android:summary="%s"
+        android:title="@string/tv_stream_end_action"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_oled_protection"
+        android:summary="@string/tv_oled_protection_summary"
+        android:title="@string/tv_oled_protection"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_clips_autoplay"
+        android:summary="@string/tv_clips_autoplay_summary"
+        android:title="@string/tv_clips_autoplay"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_multistream_quality"
+        android:persistent="false"
+        android:summary="@string/tv_multistream_quality_summary"
+        android:title="@string/tv_multistream_quality"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_switcher_rows"
+        android:persistent="false"
+        android:summary="@string/tv_switcher_rows_summary"
+        android:title="@string/tv_switcher_rows"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>

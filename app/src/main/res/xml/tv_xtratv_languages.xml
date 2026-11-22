@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <MultiSelectListPreference
+        android:entries="@array/gqlUserLanguageEntries"
+        android:entryValues="@array/gqlUserLanguageValues"
+        android:key="tv_home_language_rows"
+        android:summary="@string/tv_home_language_rows_summary"
+        android:title="@string/tv_home_language_rows"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <MultiSelectListPreference
+        android:entries="@array/gqlUserLanguageEntries"
+        android:entryValues="@array/gqlUserLanguageValues"
+        android:key="tv_home_languages"
+        android:summary="@string/tv_home_languages_summary"
+        android:title="@string/tv_home_languages"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <MultiSelectListPreference
+        android:entries="@array/gqlUserLanguageEntries"
+        android:entryValues="@array/gqlUserLanguageValues"
+        android:key="tv_default_languages"
+        android:summary="@string/tv_default_languages_summary"
+        android:title="@string/tv_default_languages"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>
