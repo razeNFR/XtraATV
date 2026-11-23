@@ -1388,4 +1388,7 @@
     <string name="tv_hud_header_size_large">Groß</string>
     <string name="tv_hud_header_size_xlarge">Sehr groß</string>
     <string name="tv_player_favorite_star">Stern für Lieblings-Streamer</string>
+    <string name="tv_chat_polls_popup">Umfragen (Chat ausgeblendet)</string>
+    <string name="tv_poll_started">Umfrage gestartet</string>
+    <string name="tv_poll_ended">Umfrage beendet</string>
 </resources>

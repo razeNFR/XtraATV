@@ -1955,11 +1955,8 @@ private fun FocusCard(
     }
     var longPressed by remember { mutableStateOf(false) }
     val focusToken = remember { Any() }
-    var cardCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     LaunchedEffect(focused) {
-        if (focused) {
-            cardCoords?.let { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, it) }
-        } else {
+        if (!focused) {
             com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
         }
     }
@@ -1970,12 +1967,15 @@ private fun FocusCard(
         modifier
             .width(animatedWidth)
             .bringIntoViewRequester(bringIntoView)
-            .onGloballyPositioned { coords ->
-                cardCoords = coords
+            .then(
                 if (focused) {
-                    com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                    Modifier.onGloballyPositioned { coords ->
+                        com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                    }
+                } else {
+                    Modifier
                 }
-            }
+            )
             .onFocusChanged { onFocus(it.isFocused) }
             .onPreviewKeyEvent { event ->
                 // OK held down: actions of the card
@@ -2571,11 +2571,8 @@ private fun StatsCard(
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val focusToken = remember { Any() }
-    var cardCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     LaunchedEffect(focused) {
-        if (focused) {
-            cardCoords?.let { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, it) }
-        } else {
+        if (!focused) {
             com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
         }
     }
@@ -2588,12 +2585,15 @@ private fun StatsCard(
         Column(
             modifier
                 .fillMaxWidth()
-                .onGloballyPositioned { coords ->
-                    cardCoords = coords
+                .then(
                     if (focused) {
-                        com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                        Modifier.onGloballyPositioned { coords ->
+                            com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                        }
+                    } else {
+                        Modifier
                     }
-                }
+                )
                 .leftEdge(0, actions.openMenu)
                 .clip(RoundedCornerShape(16.dp))
                 .background(

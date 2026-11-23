@@ -372,6 +372,8 @@ object C {
     const val TV_CHAT_PREDICTIONS_POPUP = "tv_chat_predictions_popup"
     /** TV: hidden-chat predictions popup mode: 0 = off, 1 = 30 s display, 2 = full open-voting duration. */
     const val TV_CHAT_PREDICTIONS_MODE = "tv_chat_predictions_mode"
+    /** TV: hidden-chat polls popup mode: 0 = off, 1 = 30 s display, 2 = full open-voting duration. */
+    const val TV_CHAT_POLLS_MODE = "tv_chat_polls_mode"
     const val TV_DIM_WARM_LEVEL = "tv_dim_warm_level"
     const val TV_MULTISTREAM_2_STACKED = "tv_multistream_2_stacked"
     const val TV_MULTISTREAM_2_SWAP_CHATS = "tv_multistream_2_swap_chats"
@@ -384,6 +386,10 @@ object C {
             return prefs.getInt(TV_CHAT_PREDICTIONS_MODE, 0).coerceIn(0, 2)
         }
         return if (prefs.getBoolean(TV_CHAT_PREDICTIONS_POPUP, false)) 1 else 0
+    }
+
+    fun getTvPollsPopupMode(prefs: android.content.SharedPreferences): Int {
+        return prefs.getInt(TV_CHAT_POLLS_MODE, 0).coerceIn(0, 2)
     }
     /** Show source-channel avatar badge on Shared Chat (Stream Together) messages. */
     const val CHAT_SHARED_BADGES = "chat_shared_badges"

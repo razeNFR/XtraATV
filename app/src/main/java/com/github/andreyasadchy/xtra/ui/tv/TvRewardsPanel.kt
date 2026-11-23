@@ -27,6 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,6 +99,17 @@ object TvRewardsPanel {
                 loading = false
             }
 
+            val hasInteractiveItem = remember(store, drops, claimedKeys) {
+                val hasBonus = !store?.availableClaimId.isNullOrBlank()
+                val hasRewards = !store?.rewards.isNullOrEmpty()
+                val hasClaimableDrop = drops.any { d ->
+                    !d.isClaimed && d.dropId !in claimedKeys &&
+                        !d.dropInstanceId.isNullOrBlank() && d.dropInstanceId !in claimedKeys &&
+                        d.currentMinutes >= d.requiredMinutes.coerceAtLeast(1)
+                }
+                hasBonus || hasRewards || hasClaimableDrop
+            }
+
             SidePanel(
                 title = context.getString(R.string.tv_points_and_drops),
                 width = 480.dp,
@@ -102,7 +118,27 @@ object TvRewardsPanel {
                 footer = {
                     ButtonRow(
                         label = context.getString(R.string.close_player),
-                        modifier = Modifier.focusRequester(closeRequester),
+                        modifier = Modifier
+                            .focusRequester(closeRequester)
+                            .onPreviewKeyEvent { ev ->
+                                if (!hasInteractiveItem && ev.type == KeyEventType.KeyDown && scrollState.maxValue > 0) {
+                                    when (ev.key) {
+                                        Key.DirectionUp -> {
+                                            scope.launch {
+                                                scrollState.animateScrollTo((scrollState.value - 220).coerceAtLeast(0))
+                                            }
+                                            true
+                                        }
+                                        Key.DirectionDown -> {
+                                            scope.launch {
+                                                scrollState.animateScrollTo((scrollState.value + 220).coerceAtMost(scrollState.maxValue))
+                                            }
+                                            true
+                                        }
+                                        else -> false
+                                    }
+                                } else false
+                            },
                         onClick = dismiss,
                     )
                 },
@@ -422,7 +458,7 @@ object TvRewardsPanel {
                         DropItemRow(
                             context = context,
                             drop = drop,
-                            modifier = firstFocusModifier(),
+                            modifier = Modifier,
                             onClaim = { claimDrop(drop) },
                         )
                     }
@@ -454,7 +490,7 @@ object TvRewardsPanel {
                         DropItemRow(
                             context = context,
                             drop = drop,
-                            modifier = firstFocusModifier(),
+                            modifier = Modifier,
                             onClaim = { claimDrop(drop) },
                         )
                     }
@@ -469,12 +505,13 @@ object TvRewardsPanel {
                     } else if (!loading && !initialFocusDone) {
                         initialFocusDone = true
                         androidx.compose.runtime.withFrameNanos { }
+                        scrollState.scrollTo(0)
                         if (hasTopFocusable) {
                             runCatching { firstRequester.requestFocus() }
+                            scrollState.scrollTo(0)
                         } else {
                             runCatching { closeRequester.requestFocus() }
                         }
-                        scrollState.scrollTo(0)
                     }
                 }
             }
@@ -500,12 +537,8 @@ object TvRewardsPanel {
             context.getString(R.string.tv_drops_remaining, pct, remaining)
         }
 
-        FocusRow(
-            modifier = modifier,
-            onClick = {
-                if (claimable) onClaim()
-            },
-        ) { focused ->
+        @Composable
+        fun DropContent(focused: Boolean) {
             val fg = if (focused) TvColors.onFocused else ComposeColor.White
             val sub = if (focused) TvColors.onFocused.copy(alpha = 0.8f) else TvColors.secondaryText
             Column(Modifier.fillMaxWidth()) {
@@ -546,6 +579,26 @@ object TvRewardsPanel {
                     fontWeight = if (claimable) FontWeight.Bold else FontWeight.Normal,
                     color = if (claimable && !focused) TvColors.accent else sub,
                 )
+            }
+        }
+
+        if (claimable) {
+            FocusRow(
+                modifier = modifier,
+                onClick = onClaim,
+            ) { focused ->
+                DropContent(focused = focused)
+            }
+        } else {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 3.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(ComposeColor(0x14FFFFFF))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                DropContent(focused = false)
             }
         }
     }

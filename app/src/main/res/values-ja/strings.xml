@@ -1388,4 +1388,7 @@
     <string name="tv_hud_header_size_large">大</string>
     <string name="tv_hud_header_size_xlarge">特大</string>
     <string name="tv_player_favorite_star">お気に入り配信者の星アイコン</string>
+    <string name="tv_chat_polls_popup">アンケート（チャット非表示時）</string>
+    <string name="tv_poll_started">アンケートが開始されました</string>
+    <string name="tv_poll_ended">アンケートが終了しました</string>
 </resources>

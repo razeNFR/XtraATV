@@ -324,11 +324,27 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <Preference
+        android:key="tv_chat_polls_popup"
+        android:persistent="false"
+        android:title="@string/tv_chat_polls_popup"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
     <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="chat_predictions_show"
         android:title="@string/show_predictions"
         app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="tv_chat_predictions_popup"
+        android:persistent="false"
+        android:title="@string/tv_chat_predictions_popup"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat

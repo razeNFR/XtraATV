@@ -1388,4 +1388,7 @@
     <string name="tv_hud_header_size_large">偏大</string>
     <string name="tv_hud_header_size_xlarge">特大</string>
     <string name="tv_player_favorite_star">收藏主播星标按钮</string>
+    <string name="tv_chat_polls_popup">投票弹窗（隐藏聊天时）</string>
+    <string name="tv_poll_started">投票已开始</string>
+    <string name="tv_poll_ended">投票已结束</string>
 </resources>
