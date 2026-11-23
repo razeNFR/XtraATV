@@ -1393,4 +1393,5 @@
     <string name="tv_poll_ended">Umfrage beendet</string>
     <string name="tv_mini_player_auto_slide">Mini-Player automatisch verschieben</string>
     <string name="tv_mini_player_auto_slide_summary">Schiebt den Mini-Player auf die andere Seite, wenn das ausgewählte Element darunter liegt</string>
+    <string name="tv_section_hidden_toast">„%1$s“ ist im Seitenmenü ausgeblendet (in den Einstellungen wieder aktivieren)</string>
 </resources>

@@ -323,7 +323,7 @@ class TvHomeViewModel(
 
         if (showHero || TvHomeRows.ROW_POPULAR in activeSet) {
             jobs += viewModelScope.launch {
-                popular.value = loadPage(createPopularSource())
+                popular.value = loadStreamPages(createPopularSource())
             }
         } else {
             popular.value = emptyList()
@@ -442,7 +442,7 @@ class TvHomeViewModel(
         if (languages.isNotEmpty()) {
             jobs += viewModelScope.launch {
                 languageRows.value = languages.map { language ->
-                    async { language to loadPage(createLanguageSource(language)) }
+                    async { language to loadStreamPages(createLanguageSource(language)) }
                 }.map { it.await() }.filter { it.second.isNotEmpty() }.toMap()
             }
         } else {
@@ -453,7 +453,7 @@ class TvHomeViewModel(
         if (categories.isNotEmpty()) {
             jobs += viewModelScope.launch {
                 categoryRows.value = categories.map { spec ->
-                    async { spec.id to loadPage(createCategorySource(spec)) }
+                    async { spec.id to loadStreamPages(createCategorySource(spec)) }
                 }.map { it.await() }.filter { it.second.isNotEmpty() }.toMap()
             }
         } else {
@@ -851,6 +851,40 @@ class TvHomeViewModel(
         } catch (_: Exception) {
             emptyList()
         }
+    }
+
+    private suspend fun loadStreamPages(source: PagingSource<Int, Stream>, targetCount: Int = 30): List<Stream> {
+        val collected = ArrayList<Stream>(targetCount)
+        val seen = HashSet<String>()
+        var nextKey: Int? = null
+        var first = true
+        var pages = 0
+        while (collected.size < targetCount && pages < 4) {
+            pages++
+            val params: PagingSource.LoadParams<Int> = if (first) {
+                first = false
+                PagingSource.LoadParams.Refresh(null, targetCount, false)
+            } else {
+                val key = nextKey ?: break
+                PagingSource.LoadParams.Append(key, targetCount, false)
+            }
+            val page = try {
+                source.load(params) as? PagingSource.LoadResult.Page
+            } catch (_: Exception) {
+                null
+            } ?: break
+            if (page.data.isEmpty()) break
+            for (stream in page.data) {
+                val idKey = (stream.channelId ?: stream.channelLogin)?.lowercase() ?: continue
+                if (seen.add(idKey)) {
+                    collected.add(stream)
+                    if (collected.size >= targetCount) break
+                }
+            }
+            nextKey = page.nextKey
+            if (nextKey == null) break
+        }
+        return collected
     }
 
     companion object {

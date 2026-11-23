@@ -1413,4 +1413,5 @@
     <string name="tv_poll_ended">Poll ended</string>
     <string name="tv_mini_player_auto_slide">Auto-move mini player</string>
     <string name="tv_mini_player_auto_slide_summary">Slide the mini player to the opposite side when the focused item moves underneath it</string>
+    <string name="tv_section_hidden_toast">%1$s is hidden in the side menu (re-enable it in settings)</string>
 </resources>

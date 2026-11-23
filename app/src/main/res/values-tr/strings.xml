@@ -1394,4 +1394,5 @@
     <string name="tv_poll_ended">Anket sona erdi</string>
     <string name="tv_mini_player_auto_slide">Mini oynatıcıyı otomatik kaydır</string>
     <string name="tv_mini_player_auto_slide_summary">Seçili öğe altına geldiğinde mini oynatıcıyı diğer tarafa kaydırır</string>
+    <string name="tv_section_hidden_toast">“%1$s” yan menüde gizli (ayarlardan yeniden etkinleştirin)</string>
 </resources>

@@ -62,6 +62,10 @@ class VideosSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSe
     private lateinit var listener: OnFilter
 
     private var selectedLanguages: Array<String> = emptyArray()
+    private var appliedPeriodId: Int = R.id.week
+    private var appliedSortId: Int = R.id.time
+    private var appliedTypeId: Int = R.id.typeAll
+    private var appliedLanguages: Array<String> = emptyArray()
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
@@ -73,11 +77,22 @@ class VideosSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSe
         return binding.root
     }
 
+    private fun updateLanguagesButtonLabel() {
+        val b = _binding ?: return
+        if (!resources.getBoolean(R.bool.isTv)) return
+        b.selectLanguages.text = if (selectedLanguages.isNotEmpty()) {
+            "${getString(R.string.languages)} · ${selectedLanguages.joinToString { it.uppercase() }}"
+        } else {
+            getString(R.string.languages)
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val behavior = BottomSheetBehavior.from(view.parent as View)
         behavior.skipCollapsed = true
         behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        val isTv = resources.getBoolean(R.bool.isTv)
         with(binding) {
             val args = requireArguments()
             when (parentFragment) {
@@ -86,19 +101,19 @@ class VideosSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSe
                     sortType.visibility = View.GONE
                     selectLanguages.visibility = View.GONE
                     saveSort.text = getString(R.string.save_sort_channel)
-                    saveSortLayout.isVisible = parentFragment?.arguments?.getString(C.CHANNEL_ID).isNullOrBlank() == false
+                    saveSortLayout.isVisible = !isTv && parentFragment?.arguments?.getString(C.CHANNEL_ID).isNullOrBlank() == false
                 }
                 is GameClipsFragment -> {
                     sort.visibility = View.GONE
                     sortType.visibility = View.GONE
                     saveSort.text = getString(R.string.save_sort_game)
-                    saveSortLayout.isVisible = parentFragment?.arguments?.getString(C.GAME_ID).isNullOrBlank() == false
+                    saveSortLayout.isVisible = !isTv && parentFragment?.arguments?.getString(C.GAME_ID).isNullOrBlank() == false
                 }
                 is ChannelVideosFragment -> {
                     period.visibility = View.GONE
                     selectLanguages.visibility = View.GONE
                     saveSort.text = getString(R.string.save_sort_channel)
-                    saveSortLayout.isVisible = parentFragment?.arguments?.getString(C.CHANNEL_ID).isNullOrBlank() == false
+                    saveSortLayout.isVisible = !isTv && parentFragment?.arguments?.getString(C.CHANNEL_ID).isNullOrBlank() == false
                 }
                 is FollowedVideosFragment -> {
                     period.visibility = View.GONE
@@ -110,7 +125,7 @@ class VideosSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSe
                         period.visibility = View.GONE
                     }
                     saveSort.text = getString(R.string.save_sort_game)
-                    saveSortLayout.isVisible = parentFragment?.arguments?.getString(C.GAME_ID).isNullOrBlank() == false
+                    saveSortLayout.isVisible = !isTv && parentFragment?.arguments?.getString(C.GAME_ID).isNullOrBlank() == false
                 }
             }
             val originalSortId = when (args.getString(SORT)) {
@@ -133,13 +148,45 @@ class VideosSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSe
                 else -> R.id.typeAll
             }
             val originalLanguages = args.getStringArray(LANGUAGES) ?: emptyArray()
-            if (!args.getBoolean(SAVED)) {
+            appliedPeriodId = originalPeriodId
+            appliedSortId = originalSortId
+            appliedTypeId = originalTypeId
+            appliedLanguages = originalLanguages.sortedArray()
+            if (!args.getBoolean(SAVED) || isTv) {
                 deleteSavedSort.visibility = View.GONE
             }
             sort.check(originalSortId)
             period.check(originalPeriodId)
             sortType.check(originalTypeId)
             selectedLanguages = originalLanguages
+            if (isTv) {
+                updateLanguagesButtonLabel()
+                saveSortLayout.visibility = View.GONE
+                saveDefault.visibility = View.GONE
+                apply.visibility = View.GONE
+                val singleSectionOnly = listOf(sort.isVisible, period.isVisible, sortType.isVisible, selectLanguages.isVisible).count { it } <= 1
+                listOf(time, views).forEach { radio ->
+                    radio.setOnClickListener {
+                        sort.check(radio.id)
+                        applyFilters(appliedPeriodId, appliedSortId, appliedTypeId, appliedLanguages, saveSort = false, saveDefault = true)
+                        if (singleSectionOnly) dismiss()
+                    }
+                }
+                listOf(today, week, month, all).forEach { radio ->
+                    radio.setOnClickListener {
+                        period.check(radio.id)
+                        applyFilters(appliedPeriodId, appliedSortId, appliedTypeId, appliedLanguages, saveSort = false, saveDefault = true)
+                        if (singleSectionOnly) dismiss()
+                    }
+                }
+                listOf(typeAll, typeArchive, typeHighlight, typeUpload).forEach { radio ->
+                    radio.setOnClickListener {
+                        sortType.check(radio.id)
+                        applyFilters(appliedPeriodId, appliedSortId, appliedTypeId, appliedLanguages, saveSort = false, saveDefault = true)
+                        if (singleSectionOnly) dismiss()
+                    }
+                }
+            }
             saveSort.setOnClickListener {
                 applyFilters(originalPeriodId, originalSortId, originalTypeId, originalLanguages, saveSort = true, saveDefault = false)
                 dismiss()
@@ -167,9 +214,18 @@ class VideosSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSe
             val checkedPeriodId = period.checkedRadioButtonId
             val checkedSortId = sort.checkedRadioButtonId
             val checkedTypeId = sortType.checkedRadioButtonId
+            val langs = selectedLanguages.sortedArray()
             val sortBtn = requireView().findViewById<RadioButton>(checkedSortId)
             val periodBtn = requireView().findViewById<RadioButton>(checkedPeriodId)
             val typeBtn = requireView().findViewById<RadioButton>(checkedTypeId)
+            val hasChanged = checkedPeriodId != originalPeriodId ||
+                checkedSortId != originalSortId ||
+                checkedTypeId != originalTypeId ||
+                !langs.contentEquals(originalLanguages.sortedArray())
+            appliedPeriodId = checkedPeriodId
+            appliedSortId = checkedSortId
+            appliedTypeId = checkedTypeId
+            appliedLanguages = langs
             listener.onChange(
                 when (checkedSortId) {
                     R.id.time -> SORT_TIME
@@ -193,11 +249,8 @@ class VideosSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSe
                     else -> VIDEO_TYPE_ALL
                 },
                 typeBtn.text,
-                selectedLanguages,
-                checkedPeriodId != originalPeriodId ||
-                        checkedSortId != originalSortId ||
-                        checkedTypeId != originalTypeId ||
-                        !selectedLanguages.contentEquals(originalLanguages),
+                langs,
+                hasChanged,
                 saveSort,
                 saveDefault
             )
@@ -206,6 +259,10 @@ class VideosSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSe
 
     override fun onChange(languages: Array<String>) {
         selectedLanguages = languages
+        if (resources.getBoolean(R.bool.isTv) && _binding != null) {
+            updateLanguagesButtonLabel()
+            applyFilters(appliedPeriodId, appliedSortId, appliedTypeId, appliedLanguages, saveSort = false, saveDefault = true)
+        }
     }
 
     override fun onDestroyView() {

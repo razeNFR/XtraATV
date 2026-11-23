@@ -1393,4 +1393,5 @@
     <string name="tv_poll_ended">انتهى الاستطلاع</string>
     <string name="tv_mini_player_auto_slide">تحريك المشغل المصغر تلقائياً</string>
     <string name="tv_mini_player_auto_slide_summary">يحرك المشغل المصغر إلى الجانب المقابل عندما يمر العنصر المحدد تحته</string>
+    <string name="tv_section_hidden_toast">تم إخفاء «%1$s» من القائمة الجانبية (أعد تفعيله من الإعدادات)</string>
 </resources>

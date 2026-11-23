@@ -77,12 +77,17 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
     override fun initialize() {
         viewLifecycleOwner.lifecycleScope.launch {
             if (viewModel.filter.value == null) {
-                val sortValues = args.gameId?.let { viewModel.getGameSort(it) } ?: viewModel.getGameSort("default")
+                val isTv = resources.getBoolean(R.bool.isTv)
+                val sortValues = if (isTv) {
+                    viewModel.getGameSort("default") ?: viewModel.getGameSort("top_streams") ?: args.gameId?.let { viewModel.getGameSort(it) }
+                } else {
+                    args.gameId?.let { viewModel.getGameSort(it) } ?: viewModel.getGameSort("default")
+                }
                 viewModel.setFilter(
                     sort = sortValues?.streamSort,
-                    tags = args.tags ?: sortValues?.streamTags?.split(',')?.toTypedArray(),
+                    tags = args.tags ?: if (isTv) null else sortValues?.streamTags?.split(',')?.toTypedArray(),
                     // TV: the default language of the Xtra TV settings when the category has none of its own
-                    languages = args.languages ?: sortValues?.streamLanguages?.split(',')?.toTypedArray() ?: defaultLanguages(),
+                    languages = args.languages ?: if (isTv) (defaultLanguages() ?: sortValues?.streamLanguages?.split(',')?.toTypedArray()) else sortValues?.streamLanguages?.split(',')?.toTypedArray(),
                 )
                 viewModel.sortText.value = getString(
                     R.string.sort_by,
@@ -217,8 +222,12 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
 
     override fun onChange(sort: String, sortText: CharSequence, tags: Array<String>, languages: Array<String>, changed: Boolean, saveFilters: Boolean, saveSort: Boolean, saveDefault: Boolean) {
         if ((parentFragment as? FragmentHost)?.currentFragment == this) {
+            val isTv = resources.getBoolean(R.bool.isTv)
             viewLifecycleOwner.lifecycleScope.launch {
                 if (changed) {
+                    if (isTv && args.languages == null) {
+                        requireContext().prefs().edit().putStringSet(C.TV_DEFAULT_LANGUAGES, languages.toSet()).apply()
+                    }
                     pagingAdapter.submitData(PagingData.empty())
                     viewModel.setFilter(sort, tags, languages)
                     viewModel.sortText.value = getString(R.string.sort_by, sortText)
@@ -275,17 +284,32 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
                     }
                 }
                 if (saveDefault) {
+                    val savedTags = if (isTv) null else tags.takeIf { it.isNotEmpty() }?.joinToString(",")
+                    val savedLangs = if (isTv && args.languages != null) {
+                        viewModel.getGameSort("default")?.streamLanguages
+                    } else {
+                        languages.takeIf { it.isNotEmpty() }?.joinToString(",")
+                    }
                     val item = viewModel.getGameSort("default")?.apply {
                         streamSort = sort
-                        streamTags = tags.takeIf { it.isNotEmpty() }?.joinToString(",")
-                        streamLanguages = languages.takeIf { it.isNotEmpty() }?.joinToString(",")
+                        if (!isTv) streamTags = savedTags
+                        streamLanguages = savedLangs
                     } ?: GameSort(
                         id = "default",
                         streamSort = sort,
-                        streamTags = tags.takeIf { it.isNotEmpty() }?.joinToString(","),
-                        streamLanguages = languages.takeIf { it.isNotEmpty() }?.joinToString(",")
+                        streamTags = savedTags,
+                        streamLanguages = savedLangs,
                     )
                     viewModel.saveGameSort(item)
+                    if (isTv) {
+                        val topItem = viewModel.getGameSort("top_streams")?.apply {
+                            streamSort = sort
+                        } ?: GameSort(
+                            id = "top_streams",
+                            streamSort = sort,
+                        )
+                        viewModel.saveGameSort(topItem)
+                    }
                 }
             }
         }

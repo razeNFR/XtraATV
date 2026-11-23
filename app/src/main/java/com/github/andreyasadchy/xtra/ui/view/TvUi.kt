@@ -199,19 +199,38 @@ object TvUi {
                     params.gravity = android.view.Gravity.END or android.view.Gravity.TOP
                     sheet.layoutParams = params
                 }
-                sheet.background = android.graphics.drawable.ColorDrawable(0xF2141318.toInt())
-                sheet.setPadding((12 * density).toInt(), (24 * density).toInt(), (12 * density).toInt(), (24 * density).toInt())
+                val r = 20f * density
+                sheet.background = android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+                    intArrayOf(0xE6161520.toInt(), 0xEE12111A.toInt()),
+                ).apply {
+                    cornerRadii = floatArrayOf(r, r, 0f, 0f, 0f, 0f, r, r)
+                    setStroke(maxOf(1, density.toInt()), 0x26FFFFFF)
+                }
+                sheet.clipToOutline = true
+                sheet.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+                dialog.window?.setDimAmount(0.16f)
+                sheet.setPadding((14 * density).toInt(), (24 * density).toInt(), (14 * density).toInt(), (24 * density).toInt())
                 sheet.translationX = 460 * density
                 sheet.animate().translationX(0f).setDuration(180L).start()
                 styleSheetViews(sheet)
                 // sort, filters and choices: drawn with Compose
                 val content = fragment.view
-                val isChoiceSheet = fragment.javaClass.simpleName.endsWith("SortDialog") || fragment is com.github.andreyasadchy.xtra.ui.common.RadioButtonDialogFragment
+                val isChoiceSheet = fragment.javaClass.simpleName.endsWith("SortDialog") ||
+                    fragment is com.github.andreyasadchy.xtra.ui.common.RadioButtonDialogFragment ||
+                    fragment is com.github.andreyasadchy.xtra.ui.common.SelectLanguagesDialog
                 if (isChoiceSheet && content != null && sheet is ViewGroup && com.github.andreyasadchy.xtra.ui.tv.TvSheetCompose.canConvert(content)) {
+                    val sheetTitle = when {
+                        fragment is com.github.andreyasadchy.xtra.ui.common.SelectLanguagesDialog -> context.getString(R.string.languages)
+                        fragment is com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog ||
+                            fragment is com.github.andreyasadchy.xtra.ui.games.GamesSortDialog -> context.getString(R.string.sort_and_filter)
+                        fragment.javaClass.simpleName.endsWith("SortDialog") -> context.getString(R.string.sort)
+                        else -> null
+                    }
                     com.github.andreyasadchy.xtra.ui.tv.TvSheetCompose.install(
                         sheet,
                         content,
-                        if (fragment.javaClass.simpleName.endsWith("SortDialog")) context.getString(R.string.sort) else null
+                        sheetTitle,
                     )
                     return
                 }

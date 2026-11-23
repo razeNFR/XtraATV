@@ -2239,6 +2239,23 @@ class MainActivity : AppCompatActivity() {
 
     /** Goes to a section of the side menu ("see all" of the TV home). */
     fun openTvSection(id: Int) {
+        if (binding.navBar.menu.findItem(id) == null) {
+            val sectionName = when (id) {
+                R.id.rootTopFragment -> getString(R.string.popular)
+                R.id.rootGamesFragment -> getString(R.string.games)
+                R.id.followPagerFragment, R.id.followMediaFragment -> getString(R.string.following)
+                R.id.savedPagerFragment, R.id.savedMediaFragment -> getString(R.string.saved)
+                R.id.tvStatsFragment -> getString(R.string.tv_nav_stats)
+                R.id.searchPagerFragment -> getString(R.string.search)
+                else -> getString(R.string.popular)
+            }
+            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                this,
+                getString(R.string.tv_section_hidden_toast, sectionName),
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
         hideTvMenu()
         binding.navBar.selectedItemId = id
         tvMenuState.selected = binding.navBar.selectedItemId

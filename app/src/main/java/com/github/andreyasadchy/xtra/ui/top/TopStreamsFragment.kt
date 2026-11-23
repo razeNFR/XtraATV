@@ -58,6 +58,8 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
     private val viewModel: TopStreamsViewModel by viewModels { TopStreamsViewModelFactory }
     private lateinit var pagingAdapter: PagingDataAdapter<Stream, out RecyclerView.ViewHolder>
 
+    private var initialFocusDone = false
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentGamesBinding.inflate(inflater, container, false)
         return binding.root
@@ -72,6 +74,16 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
             val navController = findNavController()
             val appBarConfiguration = AppBarConfiguration(setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment))
             toolbar.setupWithNavController(navController, appBarConfiguration)
+            if (requireContext().resources.getBoolean(R.bool.isTv) && args.languages?.size == 1) {
+                val code = args.languages?.firstOrNull()
+                if (!code.isNullOrBlank()) {
+                    val values = resources.getStringArray(R.array.gqlUserLanguageValues)
+                    val entries = resources.getStringArray(R.array.gqlUserLanguageEntries)
+                    val idx = values.indexOfFirst { it.equals(code, ignoreCase = true) }
+                    val label = entries.getOrNull(idx) ?: code.uppercase()
+                    toolbar.title = getString(R.string.tv_popular_in, label)
+                }
+            }
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
@@ -138,28 +150,54 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
         setAdapter(binding.recyclerViewLayout.recyclerView, pagingAdapter)
     }
 
+    private fun sortLabelFor(sort: String): String {
+        return getString(
+            when (sort) {
+                SORT_RELEVANCE -> if (TwitchApiHelper.isLoggedIn(requireContext())) R.string.tv_sort_recommended else R.string.viewers_high
+                SORT_VIEWERS -> R.string.viewers_high
+                SORT_VIEWERS_ASC -> R.string.viewers_low
+                RECENT -> R.string.recent
+                else -> R.string.viewers_high
+            }
+        )
+    }
+
+    private fun syncSavedSortOnTv() {
+        if (!isAdded || _binding == null || !resources.getBoolean(R.bool.isTv) || viewModel.filter.value == null) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val savedSort = (viewModel.getGameSort("top_streams") ?: viewModel.getGameSort("default"))?.streamSort ?: return@launch
+            if (savedSort != viewModel.sort) {
+                pagingAdapter.submitData(PagingData.empty())
+                viewModel.setFilter(savedSort, viewModel.tags, viewModel.languages)
+                viewModel.sortText.value = getString(R.string.sort_by, sortLabelFor(viewModel.sort))
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        syncSavedSortOnTv()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (!hidden) {
+            syncSavedSortOnTv()
+        }
+    }
+
     override fun initialize() {
+        val isTv = resources.getBoolean(R.bool.isTv)
         viewLifecycleOwner.lifecycleScope.launch {
             if (viewModel.filter.value == null) {
-                val sortValues = viewModel.getGameSort("top_streams")
+                val sortValues = viewModel.getGameSort("top_streams") ?: viewModel.getGameSort("default")
                 viewModel.setFilter(
                     sort = sortValues?.streamSort,
-                    tags = args.tags ?: sortValues?.streamTags?.split(',')?.toTypedArray(),
+                    tags = args.tags ?: if (isTv) null else sortValues?.streamTags?.split(',')?.toTypedArray(),
                     // the language of "Popular" chosen in the Xtra TV settings, the same as the row of the home
                     languages = args.languages ?: popularLanguages() ?: sortValues?.streamLanguages?.split(',')?.toTypedArray(),
                 )
-                viewModel.sortText.value = getString(
-                    R.string.sort_by,
-                    getString(
-                        when (viewModel.sort) {
-                            SORT_RELEVANCE -> if (TwitchApiHelper.isLoggedIn(requireContext())) R.string.tv_sort_recommended else R.string.viewers_high
-                            SORT_VIEWERS -> R.string.viewers_high
-                            SORT_VIEWERS_ASC -> R.string.viewers_low
-                            RECENT -> R.string.recent
-                            else -> R.string.viewers_high
-                        }
-                    )
-                )
+                viewModel.sortText.value = getString(R.string.sort_by, sortLabelFor(viewModel.sort))
                 viewModel.filtersText.value = if (viewModel.tags.isNotEmpty() || viewModel.languages.isNotEmpty()) {
                     buildString {
                         if (viewModel.tags.isNotEmpty()) {
@@ -194,6 +232,21 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
         }
         val enableScrollTopButton = !args.tags.isNullOrEmpty() || !args.languages.isNullOrEmpty()
         initializeAdapter(binding.recyclerViewLayout, pagingAdapter, enableScrollTopButton = enableScrollTopButton)
+        if (isTv && !args.languages.isNullOrEmpty() && !initialFocusDone) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                pagingAdapter.loadStateFlow.collectLatest { state ->
+                    if (!initialFocusDone && state.refresh is androidx.paging.LoadState.NotLoading && pagingAdapter.itemCount > 0) {
+                        initialFocusDone = true
+                        binding.recyclerViewLayout.recyclerView.postDelayed({
+                            val grid = _binding?.recyclerViewLayout?.recyclerView ?: return@postDelayed
+                            if (grid.isShown && grid.focusedChild == null) {
+                                com.github.andreyasadchy.xtra.ui.view.TvUi.focusFirstItem(grid)
+                            }
+                        }, 150L)
+                    }
+                }
+            }
+        }
         if (enableScrollTopButton && requireContext().prefs().getBoolean(C.UI_SCROLL_TOP, true)) {
             binding.recyclerViewLayout.scrollTop.setOnClickListener {
                 scrollToTop()
@@ -271,9 +324,10 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
     }
 
     override fun onChange(sort: String, sortText: CharSequence, tags: Array<String>, languages: Array<String>, changed: Boolean, saveFilters: Boolean, saveSort: Boolean, saveDefault: Boolean) {
+        val isTv = resources.getBoolean(R.bool.isTv)
         viewLifecycleOwner.lifecycleScope.launch {
             if (changed) {
-                if (resources.getBoolean(R.bool.isTv) && args.languages == null) {
+                if (isTv && args.languages == null) {
                     // the languages chosen here are the ones of "Popular" everywhere, the row of the home too
                     requireContext().prefs().edit().putStringSet(C.TV_HOME_LANGUAGES, languages.toSet()).apply()
                 }
@@ -315,17 +369,32 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                 )
             }
             if (saveDefault) {
+                val savedTags = if (isTv) null else tags.takeIf { it.isNotEmpty() }?.joinToString(",")
+                val savedLangs = if (isTv && args.languages != null) {
+                    viewModel.getGameSort("top_streams")?.streamLanguages
+                } else {
+                    languages.takeIf { it.isNotEmpty() }?.joinToString(",")
+                }
                 val item = viewModel.getGameSort("top_streams")?.apply {
                     streamSort = sort
-                    streamTags = tags.takeIf { it.isNotEmpty() }?.joinToString(",")
-                    streamLanguages = languages.takeIf { it.isNotEmpty() }?.joinToString(",")
+                    if (!isTv) streamTags = savedTags
+                    streamLanguages = savedLangs
                 } ?: GameSort(
                     id = "top_streams",
                     streamSort = sort,
-                    streamTags = tags.takeIf { it.isNotEmpty() }?.joinToString(","),
-                    streamLanguages = languages.takeIf { it.isNotEmpty() }?.joinToString(",")
+                    streamTags = savedTags,
+                    streamLanguages = savedLangs,
                 )
                 viewModel.saveGameSort(item)
+                if (isTv) {
+                    val defaultItem = viewModel.getGameSort("default")?.apply {
+                        streamSort = sort
+                    } ?: GameSort(
+                        id = "default",
+                        streamSort = sort,
+                    )
+                    viewModel.saveGameSort(defaultItem)
+                }
             }
         }
     }

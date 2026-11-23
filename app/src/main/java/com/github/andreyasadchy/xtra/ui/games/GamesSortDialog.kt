@@ -53,6 +53,7 @@ class GamesSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSelec
         val behavior = BottomSheetBehavior.from(view.parent as View)
         behavior.skipCollapsed = true
         behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        val isTv = resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)
         with(binding) {
             val args = requireArguments()
             val originalTagIds = args.getStringArray(TAG_IDS) ?: emptyArray()
@@ -66,16 +67,11 @@ class GamesSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSelec
             } ?: emptyList()
             selectedTags = originalTags.toMutableList()
             originalTags.forEach { tag ->
-                tagGroup.addView(
-                    Chip(requireContext()).apply {
-                        text = tag.name
-                        isCloseIconVisible = true
-                        setOnCloseIconClickListener {
-                            selectedTags.find { it.id == tag.id }?.let { selectedTags.remove(it) }
-                            tagGroup.removeView(this)
-                        }
-                    }
-                )
+                addTagChip(tag, isTv)
+            }
+            if (isTv) {
+                selectTags.text = getString(com.github.andreyasadchy.xtra.R.string.tags_filter)
+                apply.visibility = View.GONE
             }
             selectTags.setOnClickListener {
                 SearchTagsDialog.Companion.newInstance(true).show(childFragmentManager, null)
@@ -92,19 +88,31 @@ class GamesSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSelec
         }
     }
 
-    override fun onTagSelected(tag: Tag) {
-        if (tag.id != null && selectedTags.find { it.id == tag.id } == null) {
-            selectedTags.add(tag)
-            binding.tagGroup.addView(
-                Chip(requireContext()).apply {
-                    text = tag.name
-                    isCloseIconVisible = true
-                    setOnCloseIconClickListener {
-                        selectedTags.find { it.id == tag.id }?.let { selectedTags.remove(it) }
-                        binding.tagGroup.removeView(this)
+    private fun addTagChip(tag: Tag, isTv: Boolean) {
+        val b = _binding ?: return
+        b.tagGroup.addView(
+            Chip(requireContext()).apply {
+                text = tag.name
+                isCloseIconVisible = true
+                setOnCloseIconClickListener {
+                    selectedTags.find { it.id == tag.id }?.let { selectedTags.remove(it) }
+                    b.tagGroup.removeView(this)
+                    if (isTv) {
+                        listener.onChange(selectedTags.sortedBy { it.id }.toTypedArray())
                     }
                 }
-            )
+            }
+        )
+    }
+
+    override fun onTagSelected(tag: Tag) {
+        val isTv = resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)
+        if (tag.id != null && selectedTags.find { it.id == tag.id } == null) {
+            selectedTags.add(tag)
+            addTagChip(tag, isTv)
+            if (isTv) {
+                listener.onChange(selectedTags.sortedBy { it.id }.toTypedArray())
+            }
         }
     }
 

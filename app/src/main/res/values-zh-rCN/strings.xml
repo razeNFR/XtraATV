@@ -1393,4 +1393,5 @@
     <string name="tv_poll_ended">投票已结束</string>
     <string name="tv_mini_player_auto_slide">自动避让迷你播放器</string>
     <string name="tv_mini_player_auto_slide_summary">当选中项移到迷你播放器下方时将其平滑移至另一侧</string>
+    <string name="tv_section_hidden_toast">“%1$s”已在侧边菜单中隐藏（可在设置中重新启用）</string>
 </resources>

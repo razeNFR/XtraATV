@@ -7,6 +7,16 @@
   - Added **Auto-move mini player** (**On** by default) in **Settings > Player > Xtra TV Player Settings** so horizontal auto-sliding can be toggled at any time.
 - **Refined "Edge Dock" Left / Right Streamer Switch Overlay**:
   - Redesigned `TvSwitchOverlay` into symmetrical **`200 × 62 dp`** smoked-glass **Edge Dock** tabs flush (`0 dp`) against the left and right edges of the screen with an ambiance-accented `4 dp` outer stripe, `42 dp` ringed avatar, larger TV-legible typography, and smooth slide-in/out animations without overlapping live chat messages.
+- **Instant Tab Navigation & Active-Tab Focus Memory in Stream Switcher & Multi-Stream Picker**:
+  - Category tabs (*Suggestions*, *Followed*, *Recommended for you*, *Popular*, custom categories & languages) now switch automatically on focus without pressing OK (while **Validate** in Multi-Stream and opening the **Search** keyboard stay click-only).
+  - Pressing **Up** from any streamer card now reliably returns focus to the currently active tab instead of jumping to whichever tab happens to sit above the card.
+- **Simplified 1-Click Sort & Filter Menus on TV**:
+  - Selecting a sort option now applies immediately and saves it as your default across screens (*Popular*, *Categories*, *Videos/Clips*, *Followed Channels*, *Bookmarks*) without requiring **Apply** or **Save as default**.
+  - Removed redundant mobile buttons (*Apply*, *Save as default*, *Save sort for this game*, *Save filters*), renamed tag filtering clearly to **Filter by tags…**, and applied tag/language changes automatically.
+- **TV Home Language Rows, Redesigned "See All" Card & Disabled-Section Feedback**:
+  - Multi-page initial fetch (up to 30 streams) on pinned language rows (e.g. *Popular · French*) and category rows, plus wired **See all** on language rows to open the full language-filtered stream grid.
+  - Redesigned the end-of-row **See all** tile into a compact smoked-glass accent card with a circular arrow badge.
+  - Added a clear `TvToast` message when clicking **See all** for a section that was hidden from the left navigation menu in settings.
 - **Live Rewind (DVR) & Timeline Seek Preview Improvements**:
   - **Experimental Adblock timeline thumbnails**: wired Experimental Adblock's ongoing CDN VOD (`160p30/index-dvr.m3u8` / fallback variants) into `TvSeekPreview`, bringing live timeline thumbnails even on channels with unlisted/private VODs.
   - **Seamless DVR timeline focus & anti-accidental streamer switch**: entering live-rewind DVR (`KEY_DVR`) in Swap Adblock or Proxy mode now opens the HUD focused directly on the timeline (`progressBar`), and pressing **Left / Right** while rewound (across Swap Adblock, Proxy, and Experimental Adblock) reopens the timeline instead of accidentally switching to the previous/next streamer.

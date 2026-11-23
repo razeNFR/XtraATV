@@ -1393,4 +1393,5 @@
     <string name="tv_poll_ended">アンケートが終了しました</string>
     <string name="tv_mini_player_auto_slide">ミニプレーヤーを自動移動</string>
     <string name="tv_mini_player_auto_slide_summary">選択中の項目が下に来たとき、ミニプレーヤーを反対側へスライドします</string>
+    <string name="tv_section_hidden_toast">「%1$s」はサイドメニューで非表示になっています（設定から再有効化できます）</string>
 </resources>

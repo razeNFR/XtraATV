@@ -51,11 +51,15 @@ class BookmarksSortDialog: BottomSheetDialogFragment() {
         return binding.root
     }
 
+    private var appliedSortId: Int = R.id.saved_date
+    private var appliedOrderId: Int = R.id.newest_first
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val behavior = BottomSheetBehavior.from(view.parent as View)
         behavior.skipCollapsed = true
         behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        val isTv = resources.getBoolean(R.bool.isTv)
         with(binding) {
             val args = requireArguments()
             val originalSortId = when (args.getString(SORT)) {
@@ -69,8 +73,26 @@ class BookmarksSortDialog: BottomSheetDialogFragment() {
                 ORDER_ASC -> R.id.oldest_first
                 else -> R.id.newest_first
             }
+            appliedSortId = originalSortId
+            appliedOrderId = originalOrderId
             sort.check(originalSortId)
             order.check(originalOrderId)
+            if (isTv) {
+                saveDefault.visibility = View.GONE
+                apply.visibility = View.GONE
+                listOf(deletionDate, creationDate, savedDate).forEach { radio ->
+                    radio.setOnClickListener {
+                        sort.check(radio.id)
+                        applyFilters(appliedSortId, appliedOrderId, true)
+                    }
+                }
+                listOf(newestFirst, oldestFirst).forEach { radio ->
+                    radio.setOnClickListener {
+                        order.check(radio.id)
+                        applyFilters(appliedSortId, appliedOrderId, true)
+                    }
+                }
+            }
             saveDefault.setOnClickListener {
                 applyFilters(originalSortId, originalOrderId, true)
                 dismiss()
@@ -88,6 +110,9 @@ class BookmarksSortDialog: BottomSheetDialogFragment() {
             val checkedOrderId = order.checkedRadioButtonId
             val sortBtn = requireView().findViewById<RadioButton>(checkedSortId)
             val orderBtn = requireView().findViewById<RadioButton>(checkedOrderId)
+            val hasChanged = checkedSortId != originalSortId || checkedOrderId != originalOrderId
+            appliedSortId = checkedSortId
+            appliedOrderId = checkedOrderId
             listener.onChange(
                 when (checkedSortId) {
                     R.id.deletion_date -> SORT_EXPIRES_AT
@@ -102,7 +127,7 @@ class BookmarksSortDialog: BottomSheetDialogFragment() {
                     else -> ORDER_DESC
                 },
                 orderBtn.text,
-                checkedSortId != originalSortId || checkedOrderId != originalOrderId,
+                hasChanged,
                 saveDefault
             )
         }
