@@ -64,7 +64,7 @@ object TvSwitchOverlay {
 
     private fun animateOutAndRemove(root: FrameLayout) {
         val density = root.resources.displayMetrics.density
-        val slidePx = 14f * density
+        val slidePx = 22f * density
         @Suppress("UNCHECKED_CAST")
         val pair = root.getTag(R.id.tvSwitchOverlay) as? Pair<PillRefs, PillRefs>
         pair?.first?.root?.animate()?.cancel()
@@ -89,7 +89,9 @@ object TvSwitchOverlay {
             return
         }
         val density = activity.resources.displayMetrics.density
-        val slidePx = 16f * density
+        val slidePx = 22f * density
+        val tabWidth = (200f * density).toInt()
+        val tabHeight = (62f * density).toInt()
 
         val root: FrameLayout
         val isReuse = existing != null && existing.parent === decor
@@ -97,9 +99,7 @@ object TvSwitchOverlay {
             root = existing
             pendingHide?.let { root.removeCallbacks(it) }
             root.animate().cancel()
-            if (root.alpha < 1f) {
-                root.animate().alpha(1f).setDuration(150L).start()
-            }
+            root.animate().withEndAction(null).alpha(1f).setDuration(150L).start()
         } else {
             existing?.let { decor.removeView(it) }
             root = FrameLayout(activity).apply {
@@ -116,16 +116,16 @@ object TvSwitchOverlay {
             root.addView(
                 leftRefs.root,
                 FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    tabWidth,
+                    tabHeight,
                     Gravity.START or Gravity.CENTER_VERTICAL,
                 )
             )
             root.addView(
                 rightRefs.root,
                 FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    tabWidth,
+                    tabHeight,
                     Gravity.END or Gravity.CENTER_VERTICAL,
                 )
             )
@@ -185,21 +185,21 @@ object TvSwitchOverlay {
     }
 
     private fun createEdgeDockTab(activity: Activity, density: Float, left: Boolean): PillRefs {
-        val radius = 16f * density
+        val radius = 18f * density
         val strokePx = maxOf(1, (1f * density).toInt())
-        val avatarSize = (32f * density).toInt()
-        val stripeWidth = maxOf(2, (3f * density).toInt())
+        val avatarSize = (42f * density).toInt()
+        val stripeWidth = maxOf(3, (4f * density).toInt())
 
         val outerBg = GradientDrawable(
             if (left) GradientDrawable.Orientation.LEFT_RIGHT else GradientDrawable.Orientation.RIGHT_LEFT,
-            intArrayOf(0xD812111A.toInt(), 0xBA181622.toInt()),
+            intArrayOf(0xEC12111A.toInt(), 0xDC181624.toInt()),
         ).apply {
             cornerRadii = if (left) {
                 floatArrayOf(0f, 0f, radius, radius, radius, radius, 0f, 0f)
             } else {
                 floatArrayOf(radius, radius, 0f, 0f, 0f, 0f, radius, radius)
             }
-            setStroke(strokePx, 0x26FFFFFF)
+            setStroke(strokePx, 0x2EFFFFFF)
         }
 
         val container = LinearLayout(activity).apply {
@@ -217,35 +217,35 @@ object TvSwitchOverlay {
         }
 
         val contentRow = LinearLayout(activity).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val vPad = (7f * density).toInt()
             val edgePad = (6f * density).toInt()
-            val innerPad = (12f * density).toInt()
+            val innerPad = (14f * density).toInt()
             if (left) {
-                setPadding(edgePad, vPad, innerPad, vPad)
+                setPadding(edgePad, 0, innerPad, 0)
             } else {
-                setPadding(innerPad, vPad, edgePad, vPad)
+                setPadding(innerPad, 0, edgePad, 0)
             }
         }
 
         val chevron = TextView(activity).apply {
             text = if (left) "‹" else "›"
-            textSize = 18f
+            textSize = 22f
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
             setTextColor(Color.WHITE)
-            val hPad = (4f * density).toInt()
-            setPadding(hPad, 0, hPad, (1.5f * density).toInt())
+            val hPad = (5f * density).toInt()
+            setPadding(hPad, 0, hPad, (2f * density).toInt())
         }
 
         val avatarFrame = FrameLayout(activity).apply {
-            val ringPad = maxOf(1, (1f * density).toInt())
+            val ringPad = maxOf(1, (1.5f * density + 0.5f).toInt())
             layoutParams = LinearLayout.LayoutParams(avatarSize + ringPad * 2, avatarSize + ringPad * 2)
             setPadding(ringPad, ringPad, ringPad, ringPad)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setStroke(ringPad, 0x38FFFFFF)
+                setStroke(ringPad, 0x3DFFFFFF)
             }
         }
         val image = ImageView(activity).apply {
@@ -253,31 +253,33 @@ object TvSwitchOverlay {
         }
         avatarFrame.addView(image)
 
-        val maxTextWidth = (116f * density).toInt()
         val nameView = TextView(activity).apply {
-            textSize = 13.5f
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            textSize = 15.5f
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             includeFontPadding = false
             setTextColor(Color.WHITE)
             maxLines = 1
-            maxWidth = maxTextWidth
             ellipsize = TextUtils.TruncateAt.END
             gravity = if (left) Gravity.START else Gravity.END
         }
         val gameView = TextView(activity).apply {
-            textSize = 10.5f
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = maxOf(1, (1.5f * density).toInt())
+            }
+            textSize = 12.5f
             includeFontPadding = false
-            setTextColor(0xB3FFFFFF.toInt())
+            setTextColor(0xC4FFFFFF.toInt())
             maxLines = 1
-            maxWidth = maxTextWidth
             ellipsize = TextUtils.TruncateAt.END
             gravity = if (left) Gravity.START else Gravity.END
             visibility = View.GONE
         }
         val texts = LinearLayout(activity).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             orientation = LinearLayout.VERTICAL
             gravity = if (left) Gravity.START else Gravity.END
-            val textGap = (8f * density).toInt()
+            val textGap = (9f * density).toInt()
             if (left) {
                 setPadding(textGap, 0, (2f * density).toInt(), 0)
             } else {

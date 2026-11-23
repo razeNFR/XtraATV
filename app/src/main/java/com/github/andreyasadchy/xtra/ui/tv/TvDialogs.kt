@@ -103,7 +103,7 @@ object TvDialogs {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setDimAmount(0.08f)
+            setDimAmount(0.16f)
         }
         dialog.setContentView(ComposeView(context).apply {
             setContent {
@@ -222,15 +222,15 @@ fun TvTheme(accent: Int, content: @Composable () -> Unit) {
 }
 
 object TvColors {
-    val panel = ComposeColor(0xBE12111A)
-    val panelInner = ComposeColor(0xA6161520)
-    val item = ComposeColor(0x1CFFFFFF)
+    val panel = ComposeColor(0xEE12111A)
+    val panelInner = ComposeColor(0xE6161520)
+    val item = ComposeColor(0xD9272633)
     val focused = ComposeColor(0xFFF2F2F7)
     /** Text and icons of a focused (white) item: the ambiance color, dark enough to read. */
     val onFocused get() = ComposeColor(TvAccent.onLight)
     /** The ambiance color (violet of Twitch without one). */
     val accent get() = ComposeColor(TvAccent.onDark)
-    val secondaryText = ComposeColor(0xB8FFFFFF)
+    val secondaryText = ComposeColor(0xC8FFFFFF)
 }
 
 fun Modifier.tvPanelFirstRow(
@@ -261,7 +261,7 @@ fun Modifier.tvPanelLastRow(
         }
     }
 
-/** Panel on one side of the screen, full height, with smoked-glass translucency and Android 12+ hardware blur. */
+/** Panel on one side of the screen, full height, with subtle smoked-glass translucency and Android 12+ hardware blur. */
 @Composable
 fun SidePanel(
     title: String,
@@ -280,7 +280,7 @@ fun SidePanel(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val widthPx = with(density) { width.roundToPx() }
     val cornerPx = with(density) { 20.dp.toPx() }
-    val blurRadiusPx = with(density) { 28.dp.roundToPx() }
+    val blurRadiusPx = with(density) { 34.dp.roundToPx() }
 
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && dialogWindow != null) {
         androidx.compose.runtime.DisposableEffect(dialogWindow, widthPx, alignEnd, cornerPx) {
@@ -396,23 +396,23 @@ fun PanelTabs(
             val active = index == selectedTab
             val bg = when {
                 focused -> TvColors.focused
-                active -> MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                else -> ComposeColor(0x14FFFFFF)
+                active -> androidx.compose.ui.graphics.lerp(ComposeColor(0xF01A1924), MaterialTheme.colorScheme.primary, 0.34f)
+                else -> ComposeColor(0xDC262532)
             }
             val borderCol = when {
                 focused -> ComposeColor.Transparent
-                active -> MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
-                else -> ComposeColor(0x1FFFFFFF)
+                active -> MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
+                else -> ComposeColor(0x26FFFFFF)
             }
             val textCol = when {
                 focused -> TvColors.onFocused
                 active -> ComposeColor.White
-                else -> ComposeColor(0xB8FFFFFF)
+                else -> ComposeColor(0xD2FFFFFF)
             }
             val iconCol = when {
                 focused -> TvColors.onFocused
                 active -> MaterialTheme.colorScheme.primary
-                else -> ComposeColor(0xB8FFFFFF)
+                else -> ComposeColor(0xD2FFFFFF)
             }
             Row(
                 modifier = Modifier
