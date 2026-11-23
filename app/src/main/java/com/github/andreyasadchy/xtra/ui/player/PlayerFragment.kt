@@ -8922,8 +8922,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvMultiStreamBadge?.let { d -> _binding?.playerControls?.multiStream?.overlay?.remove(d) }
         tvMultiStreamBadge = null
         detachTvMinimizedGhostListeners()
-        tvMiniGhostAlphaAnimator?.cancel()
-        tvMiniGhostAlphaAnimator = null
+        tvMiniDodgeAnimator?.cancel()
+        tvMiniDodgeAnimator = null
+        tvMiniPlayerOnLeft = false
         tvChatFreeMoving = false
         tvChatFreeHintView = null
         tvMinimizedBorderAnimator?.cancel()
