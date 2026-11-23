@@ -2390,32 +2390,6 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
-    private var tvMinimizedCap1080 = false
-
-    fun setTvMinimizedVideoCap(minimized: Boolean) {
-        if (tvMinimizedCap1080 == minimized) return
-        tvMinimizedCap1080 = minimized
-        secondaryPlayer?.let { sp ->
-            sp.trackSelectionParameters = sp.trackSelectionParameters.buildUpon().apply {
-                if (minimized) {
-                    setMaxVideoSize(1920, 1080)
-                } else {
-                    clearVideoSizeConstraints()
-                }
-            }.build()
-        }
-        val curQuality = quality
-        if (curQuality != null &&
-            curQuality.name != VideoQuality.AUDIO_ONLY_QUALITY &&
-            curQuality.name != VideoQuality.CHAT_ONLY_QUALITY &&
-            !playingAds && !isSwapping && !hidden
-        ) {
-            val savedPrev = previousQuality
-            changeQuality(curQuality)
-            previousQuality = savedPrev
-        }
-    }
-
     fun changeQuality(selectedQuality: VideoQuality?) {
         val wasChatOnly = quality?.name == VideoQuality.CHAT_ONLY_QUALITY
         previousQuality = quality
@@ -2446,11 +2420,7 @@ class ExoPlayerService : BasePlaybackService() {
                             }
                             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                                 setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
-                                if (tvMinimizedCap1080) {
-                                    setMaxVideoSize(1920, 1080)
-                                } else {
-                                    clearVideoSizeConstraints()
-                                }
+                                clearVideoSizeConstraints()
                                 clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_VIDEO)
                             }.build()
                         }
@@ -2497,15 +2467,10 @@ class ExoPlayerService : BasePlaybackService() {
                                                 for (i in 0 until trackGroup.mediaTrackGroup.length) {
                                                     formats.add(i to trackGroup.mediaTrackGroup.getFormat(i))
                                                 }
-                                                val sorted = formats
+                                                val list = formats
                                                     .sortedByDescending { it.second.bitrate }
                                                     .sortedByDescending { it.second.frameRate }
                                                     .sortedByDescending { it.second.height }
-                                                val list = if (tvMinimizedCap1080) {
-                                                    sorted.filter { it.second.height in 1..1080 }.ifEmpty { sorted }
-                                                } else {
-                                                    sorted
-                                                }
                                                 val chosen = if (quality.name == VideoQuality.SOURCE_QUALITY) {
                                                     list.firstOrNull()
                                                 } else if (quality.resolution != null) {

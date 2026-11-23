@@ -7935,6 +7935,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             isTvMinimizedGhosted = false
             b.slidingLayout.alpha = 1f
             b.dragView.alpha = 1f
+            b.playerLayout.setBackgroundColor(Color.BLACK)
             tvMinimizedBorderDrawable = null
             b.slidingLayout.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
             b.slidingLayout.elevation = 0f
