@@ -817,7 +817,13 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             val player = previewPlayer.value ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.createPlayer(context).also {
                 previewPlayer.value = it
             }
-            player.volume = if (!muted && com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.hasSound(context)) 1f else 0f
+            val wantSound = !muted && com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.hasSound(context)
+            player.volume = if (wantSound) 1f else 0f
+            if (player.trackSelectionParameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_AUDIO) == wantSound) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, !wantSound)
+                    .build()
+            }
             player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
             player.prepare()
             player.playWhenReady = true

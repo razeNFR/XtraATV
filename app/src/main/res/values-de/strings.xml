@@ -1391,4 +1391,6 @@
     <string name="tv_chat_polls_popup">Umfragen (Chat ausgeblendet)</string>
     <string name="tv_poll_started">Umfrage gestartet</string>
     <string name="tv_poll_ended">Umfrage beendet</string>
+    <string name="tv_mini_player_auto_slide">Mini-Player automatisch verschieben</string>
+    <string name="tv_mini_player_auto_slide_summary">Schiebt den Mini-Player auf die andere Seite, wenn das ausgewählte Element darunter liegt</string>
 </resources>

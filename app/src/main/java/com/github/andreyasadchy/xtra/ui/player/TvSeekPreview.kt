@@ -463,7 +463,9 @@ class TvSeekPreview(
 
     private fun showVideo(position: Long) {
         val url = videoBase ?: return
-        val player = videoPlayer ?: ExoPlayer.Builder(container.context).build().also { player ->
+        val player = videoPlayer ?: ExoPlayer.Builder(container.context)
+            .setVideoChangeFrameRateStrategy(androidx.media3.common.C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
+            .build().also { player ->
             val texture = TextureView(container.context)
             frame.addView(texture, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             textureView = texture
@@ -471,6 +473,9 @@ class TvSeekPreview(
             player.volume = 0f
             player.playWhenReady = false
             player.repeatMode = Player.REPEAT_MODE_OFF
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, true)
+                .build()
             // the key frames of the segments: the frame comes fast, a few seconds from the chosen position at most
             player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
             player.setVideoTextureView(texture)

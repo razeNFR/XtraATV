@@ -1391,4 +1391,6 @@
     <string name="tv_chat_polls_popup">Sondages (chat masqué)</string>
     <string name="tv_poll_started">Sondage lancé</string>
     <string name="tv_poll_ended">Sondage terminé</string>
+    <string name="tv_mini_player_auto_slide">Décaler automatiquement le mini-lecteur</string>
+    <string name="tv_mini_player_auto_slide_summary">Glisse le mini-lecteur de l\'autre côté en bas lorsque l\'élément sélectionné passe dessous</string>
 </resources>

@@ -141,7 +141,7 @@ class ChatAdapter(
                 ChatAdapterUtils.addTranslation(chatMessage, builder, builder.length, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, true)
             }
             item.text = builder
-            ChatAdapterUtils.bindAnimatedSpans(item, animateGifs)
+            ChatAdapterUtils.bindAnimatedSpans(item, animateGifs && !animationsPaused)
         }
     }
 
@@ -176,7 +176,7 @@ class ChatAdapter(
 
     override fun onViewAttachedToWindow(holder: ViewHolder) {
         super.onViewAttachedToWindow(holder)
-        ChatAdapterUtils.bindAnimatedSpans(holder.textView, animateGifs)
+        ChatAdapterUtils.bindAnimatedSpans(holder.textView, animateGifs && !animationsPaused)
     }
 
     override fun onViewDetachedFromWindow(holder: ViewHolder) {
@@ -198,6 +198,25 @@ class ChatAdapter(
         super.onDetachedFromRecyclerView(recyclerView)
     }
 
+    var animationsPaused = false
+        private set
+
+    fun setAnimationsPaused(paused: Boolean, recyclerView: RecyclerView?) {
+        if (animationsPaused == paused) return
+        animationsPaused = paused
+        if (!animateGifs || recyclerView == null) return
+        val childCount = recyclerView.childCount
+        for (i in 0 until childCount) {
+            (recyclerView.getChildAt(i) as? TextView)?.let { tv ->
+                if (paused) {
+                    ChatAdapterUtils.stopAnimatedSpans(tv)
+                } else {
+                    ChatAdapterUtils.bindAnimatedSpans(tv, true)
+                }
+            }
+        }
+    }
+
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
         val textView = itemView as TextView
@@ -207,7 +226,7 @@ class ChatAdapter(
             boundMessage = chatMessage
             textView.apply {
                 text = formattedMessage
-                ChatAdapterUtils.bindAnimatedSpans(this, animateGifs)
+                ChatAdapterUtils.bindAnimatedSpans(this, animateGifs && !animationsPaused)
                 textSize = messageTextSize
                 setHorizontallyScrolling(singleLine)
                 if (chatMessage.type == ChatMessage.REPLY_MESSAGE) {

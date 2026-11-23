@@ -55,17 +55,22 @@ object TvPreviewSource {
     }
 
     /** Delay between the focus on a card and the start of its preview. */
-    const val START_DELAY = 100L
+    const val START_DELAY = 250L
 
     /** Player of the previews: 360p for a fast start, with the sound when the option is on. */
     fun createPlayer(context: Context): ExoPlayer {
-        return ExoPlayer.Builder(context).build().also {
-            it.volume = if (context.prefs().getBoolean(C.UI_TV_PREVIEW_SOUND, false)) 1f else 0f
-            it.repeatMode = Player.REPEAT_MODE_OFF
-            it.trackSelectionParameters = it.trackSelectionParameters.buildUpon()
-                .setMaxVideoSize(640, 360)
-                .build()
-        }
+        val wantSound = hasSound(context)
+        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+        return ExoPlayer.Builder(context, renderersFactory)
+            .setVideoChangeFrameRateStrategy(androidx.media3.common.C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
+            .build().also {
+                it.volume = if (wantSound) 1f else 0f
+                it.repeatMode = Player.REPEAT_MODE_OFF
+                it.trackSelectionParameters = it.trackSelectionParameters.buildUpon()
+                    .setMaxVideoSize(640, 360)
+                    .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, !wantSound)
+                    .build()
+            }
     }
 
     fun hasSound(context: Context) = context.prefs().getBoolean(C.UI_TV_PREVIEW_SOUND, false)

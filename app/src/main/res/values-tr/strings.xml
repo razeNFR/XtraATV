@@ -1392,4 +1392,6 @@
     <string name="tv_chat_polls_popup">Anketler (sohbet gizliyken)</string>
     <string name="tv_poll_started">Anket başladı</string>
     <string name="tv_poll_ended">Anket sona erdi</string>
+    <string name="tv_mini_player_auto_slide">Mini oynatıcıyı otomatik kaydır</string>
+    <string name="tv_mini_player_auto_slide_summary">Seçili öğe altına geldiğinde mini oynatıcıyı diğer tarafa kaydırır</string>
 </resources>

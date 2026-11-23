@@ -55,7 +55,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
@@ -1924,25 +1923,26 @@ class MediaPlayerService : BasePlaybackService() {
     private fun savePosition() {
         player?.let { player ->
             if (player.duration != -1) {
+                val currentPosition = player.currentPosition.toLong()
                 if (prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
                     when (type) {
                         VIDEO -> {
-                            videoId?.toLongOrNull()?.let {
-                                runBlocking {
-                                    xtraModule.playerRepository.saveVideoPosition(VideoPosition(it, player.currentPosition.toLong()))
+                            videoId?.toLongOrNull()?.let { id ->
+                                xtraModule.dbWriteScope.launch {
+                                    xtraModule.playerRepository.saveVideoPosition(VideoPosition(id, currentPosition))
                                 }
                             }
                         }
                         OFFLINE_VIDEO -> {
-                            offlineVideoId?.let {
-                                runBlocking {
-                                    xtraModule.offlineVideosRepository.updatePosition(it, player.currentPosition.toLong())
+                            offlineVideoId?.let { id ->
+                                xtraModule.dbWriteScope.launch {
+                                    xtraModule.offlineVideosRepository.updatePosition(id, currentPosition)
                                 }
                             }
                         }
                     }
                 }
-                runBlocking {
+                xtraModule.dbWriteScope.launch {
                     xtraModule.playerRepository.deletePlaybackStates()
                 }
             }
@@ -1986,30 +1986,29 @@ class MediaPlayerService : BasePlaybackService() {
         player?.let { player ->
             if (player.duration != -1) {
                 val currentPosition = player.currentPosition.toLong()
+                val paused = !player.isPlaying
                 val savedPosition = lastSavedPosition
                 if (savedPosition == null || currentPosition - savedPosition !in 0..2000) {
                     lastSavedPosition = currentPosition
                     if (prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
                         when (type) {
                             VIDEO -> {
-                                videoId?.toLongOrNull()?.let {
-                                    runBlocking {
-                                        xtraModule.playerRepository.saveVideoPosition(VideoPosition(it, currentPosition))
+                                videoId?.toLongOrNull()?.let { id ->
+                                    xtraModule.dbWriteScope.launch {
+                                        xtraModule.playerRepository.saveVideoPosition(VideoPosition(id, currentPosition))
                                     }
                                 }
                             }
                             OFFLINE_VIDEO -> {
-                                offlineVideoId?.let {
-                                    runBlocking {
-                                        xtraModule.offlineVideosRepository.updatePosition(it, currentPosition)
+                                offlineVideoId?.let { id ->
+                                    xtraModule.dbWriteScope.launch {
+                                        xtraModule.offlineVideosRepository.updatePosition(id, currentPosition)
                                     }
                                 }
                             }
                         }
                     }
-                    runBlocking {
-                        savePlaybackState(currentPosition, !player.isPlaying)
-                    }
+                    enqueuePlaybackStateSave(currentPosition, paused)
                 }
             }
         }

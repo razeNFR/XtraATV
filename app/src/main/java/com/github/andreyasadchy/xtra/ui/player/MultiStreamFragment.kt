@@ -343,6 +343,7 @@ class MultiStreamFragment : Fragment() {
         val player = ExoPlayer.Builder(requireContext(), renderersFactory)
             .setLoadControl(tileLoadControl)
             .setHandleAudioBecomingNoisy(false)
+            .setVideoChangeFrameRateStrategy(androidx.media3.common.C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
             .build().apply {
                 // the sound of a film, the audio focus held by the multi-stream itself (TvPlaybackSignals)
                 setAudioAttributes(com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.playerAttributes, false)

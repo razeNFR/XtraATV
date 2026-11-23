@@ -1758,6 +1758,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         gravity = Gravity.END
                     }
                     chatLayout.visibility = View.GONE
+                    chatFragment?.onChatHidden()
                     val (minimizedScaleX, minimizedScaleY) = getScaleValues()
                     slidingLayout.scaleX = minimizedScaleX
                     slidingLayout.scaleY = minimizedScaleY
@@ -1770,9 +1771,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         val scaledYDiff = (slidingLayout.height * (1f - minimizedScaleY)) / 2
                         if (isTv) {
                             val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
-                            val newX = slidingLayout.width - (slidingLayout.width * minimizedScaleX) - tvMargin
                             val newY = slidingLayout.height - (slidingLayout.height * minimizedScaleY) - tvMargin
-                            slidingLayout.translationX = -scaledXDiff + newX
+                            slidingLayout.translationX = computeTvMinimizedTranslationX(slidingLayout.width, minimizedScaleX)
                             slidingLayout.translationY = -scaledYDiff + newY
                         } else {
                             val windowInsets = ViewCompat.getRootWindowInsets(requireView())
@@ -2030,6 +2030,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(chatLayout.windowToken, 0)
             chatLayout.clearFocus()
             chatLayout.visibility = View.GONE
+            chatFragment?.onChatHidden()
         }
     }
 
@@ -6163,20 +6164,28 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val widthRatio = (0.64f + (scale - 1f) * 0.22f).coerceAtMost(0.74f)
         val comfortableCap = ((playerW * widthRatio).toInt() - avatarW).coerceAtLeast((180f * density).toInt())
         val maxBlockW = minOf(availableByRight, comfortableCap)
-        b.playerControls.title.maxWidth = maxBlockW
+        if (b.playerControls.title.maxWidth != maxBlockW) {
+            b.playerControls.title.maxWidth = maxBlockW
+        }
         val favReserved = if (b.playerControls.tvFavoriteChip?.isVisible == true) ((28f * scale + 6f) * density).toInt() else 0
         val usableRowW = (maxBlockW - favReserved).coerceAtLeast((150f * density).toInt())
         val catIconAllowance = ((36f * scale) * density).toInt()
         val bothChips = b.playerControls.channel.isVisible && b.playerControls.tvCategoryChip?.isVisible == true
-        if (bothChips) {
+        val (targetChMax, targetCatMax) = if (bothChips) {
             val chipBudget = (usableRowW - (8f * density).toInt()).coerceAtLeast((150f * density).toInt())
             val chMax = (chipBudget * 0.50f).toInt().coerceIn((105f * density).toInt(), ((280f * scale) * density).toInt())
             val catMax = (chipBudget - chMax - catIconAllowance).coerceIn((85f * density).toInt(), ((260f * scale) * density).toInt())
-            b.playerControls.channel.maxWidth = chMax
-            b.playerControls.category.maxWidth = catMax
+            chMax to catMax
         } else {
-            b.playerControls.channel.maxWidth = minOf(usableRowW, ((320f * scale) * density).toInt())
-            b.playerControls.category.maxWidth = minOf((usableRowW - catIconAllowance).coerceAtLeast((105f * density).toInt()), ((300f * scale) * density).toInt())
+            val chMax = minOf(usableRowW, ((320f * scale) * density).toInt())
+            val catMax = minOf((usableRowW - catIconAllowance).coerceAtLeast((105f * density).toInt()), ((300f * scale) * density).toInt())
+            chMax to catMax
+        }
+        if (b.playerControls.channel.maxWidth != targetChMax) {
+            b.playerControls.channel.maxWidth = targetChMax
+        }
+        if (b.playerControls.category.maxWidth != targetCatMax) {
+            b.playerControls.category.maxWidth = targetCatMax
         }
     }
 
@@ -7770,20 +7779,37 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     protected open fun onTvMinimizedChanged(minimized: Boolean) {}
-    protected open fun onTvMinimizedGhostChanged(ghosted: Boolean, alpha: Float) {}
 
-    protected var isTvMinimizedGhosted = false
-    protected var tvMinimizedGhostAlpha = 1f
+    private var tvMiniPlayerOnLeft = false
     private var tvMiniGhostListenersAttached = false
-    private var tvMiniGhostTargetAlpha = 1f
-    private var tvMiniGhostAlphaAnimator: android.animation.ValueAnimator? = null
-    private val tvMiniGhostCheckRunnable = Runnable { refreshTvMinimizedGhostOpacity(immediate = false) }
-    private val tvMiniGhostSettleCheckRunnable = Runnable { refreshTvMinimizedGhostOpacity(immediate = false) }
+    private var tvMiniDodgeAnimator: android.animation.ObjectAnimator? = null
+    private val tvMiniDodgeInterpolator = androidx.interpolator.view.animation.FastOutSlowInInterpolator()
+    private val tvMiniDodgeCheckRunnable = Runnable { refreshTvMinimizedPosition() }
     private val tvMiniGhostFocusListener = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, _ ->
         scheduleTvMinimizedGhostCheck()
     }
     private val tvMiniGhostComposeCallback: () -> Unit = {
         scheduleTvMinimizedGhostCheck()
+    }
+
+    private fun tvMinimizedLeftMarginPx(): Float {
+        val density = resources.displayMetrics.density
+        return if (requireContext().prefs().getBoolean(C.TV_COMPACT_RAIL, true)) {
+            84f * density
+        } else {
+            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
+        }
+    }
+
+    private fun computeTvMinimizedTranslationX(fullW: Int, scaleX: Float, onLeft: Boolean = tvMiniPlayerOnLeft): Float {
+        val scaledXDiff = (fullW * (1f - scaleX)) / 2f
+        val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
+        val newX = if (onLeft) {
+            tvMinimizedLeftMarginPx()
+        } else {
+            fullW - (fullW * scaleX) - tvMargin
+        }
+        return -scaledXDiff + newX
     }
 
     private fun attachTvMinimizedGhostListeners() {
@@ -7795,8 +7821,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun detachTvMinimizedGhostListeners() {
-        _binding?.root?.removeCallbacks(tvMiniGhostCheckRunnable)
-        _binding?.root?.removeCallbacks(tvMiniGhostSettleCheckRunnable)
+        _binding?.root?.removeCallbacks(tvMiniDodgeCheckRunnable)
         if (tvMiniGhostListenersAttached) {
             activity?.window?.decorView?.viewTreeObserver?.takeIf { it.isAlive }?.let { vto ->
                 vto.removeOnGlobalFocusChangeListener(tvMiniGhostFocusListener)
@@ -7808,16 +7833,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    fun scheduleTvMinimizedGhostCheck() {
+    fun scheduleTvMinimizedGhostCheck(immediate: Boolean = false) {
         val b = _binding ?: return
         if (!isTv || isMaximized) return
-        b.root.removeCallbacks(tvMiniGhostCheckRunnable)
-        b.root.removeCallbacks(tvMiniGhostSettleCheckRunnable)
-        if ((activity as? MainActivity)?.isMinimizedGhostScreen() == true) {
-            refreshTvMinimizedGhostOpacity(immediate = false)
+        b.root.removeCallbacks(tvMiniDodgeCheckRunnable)
+        val act = activity as? MainActivity
+        if (immediate || act?.isTvSideMenuOpen() == true) {
+            refreshTvMinimizedPosition(forceRealign = immediate)
         } else {
-            b.root.postDelayed(tvMiniGhostCheckRunnable, 90L)
-            b.root.postDelayed(tvMiniGhostSettleCheckRunnable, 250L)
+            b.root.postDelayed(tvMiniDodgeCheckRunnable, 180L)
         }
     }
 
@@ -7832,92 +7856,93 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return view.javaClass.name.contains("AndroidComposeView")
     }
 
-    private fun shouldGhostTvMinimizedPlayer(): Boolean {
-        val act = activity as? MainActivity ?: return false
-        val b = _binding ?: return false
-        if (!isTv || isMaximized || tvAudioOnly) return false
-        if (act.isMinimizedGhostScreen()) return true
-        if (act.isTvSideMenuOpen()) return false
-
-        val (scaleX, scaleY) = getScaleValues()
-        val fullW = b.slidingLayout.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-        val fullH = b.slidingLayout.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-        val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics).toInt()
-        val miniW = (fullW * scaleX).toInt()
-        val miniH = (fullH * scaleY).toInt()
-        val rootLoc = IntArray(2)
-        b.root.getLocationInWindow(rootLoc)
-        val miniRight = rootLoc[0] + fullW - tvMargin
-        val miniBottom = rootLoc[1] + fullH - tvMargin
-        val miniRect = android.graphics.Rect(miniRight - miniW, miniBottom - miniH, miniRight, miniBottom)
-
-        val focus = act.currentFocus ?: return false
+    private fun focusedElementWindowRect(act: MainActivity, fullW: Int, fullH: Int): android.graphics.Rect? {
+        val focus = act.currentFocus ?: return null
         if (isComposeBackedView(focus)) {
-            if (!com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.hasFocusedCard) return false
-            return android.graphics.Rect.intersects(com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.focusedCardRect, miniRect)
+            if (!com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.hasFocusedCard) return null
+            return com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.focusedCardRect
         }
         if (focus.width <= 0 || focus.height <= 0 ||
             focus.width > (fullW * 0.85f).toInt() || focus.height > (fullH * 0.75f).toInt()
         ) {
-            return false
+            return null
         }
         val fLoc = IntArray(2)
         focus.getLocationInWindow(fLoc)
-        val fRect = android.graphics.Rect(fLoc[0], fLoc[1], fLoc[0] + focus.width, fLoc[1] + focus.height)
-        return android.graphics.Rect.intersects(fRect, miniRect)
+        return android.graphics.Rect(fLoc[0], fLoc[1], fLoc[0] + focus.width, fLoc[1] + focus.height)
     }
 
-    fun refreshTvMinimizedGhostOpacity(immediate: Boolean = false) {
+    private fun refreshTvMinimizedPosition(forceRealign: Boolean = false) {
         val b = _binding ?: return
-        if (!isTv) return
-        b.slidingLayout.alpha = 1f
-        if (isMaximized) {
-            tvMiniGhostAlphaAnimator?.cancel()
-            tvMiniGhostAlphaAnimator = null
-            tvMiniGhostTargetAlpha = 1f
-            tvMinimizedGhostAlpha = 1f
-            isTvMinimizedGhosted = false
-            b.dragView.alpha = 1f
-            onTvMinimizedGhostChanged(false, 1f)
+        val act = activity as? MainActivity ?: return
+        if (!isTv || isMaximized || tvAudioOnly) {
+            tvMiniDodgeAnimator?.cancel()
+            tvMiniDodgeAnimator = null
+            tvMiniPlayerOnLeft = false
             return
         }
-        val target = if (shouldGhostTvMinimizedPlayer()) 0.20f else 1.0f
-        if (!immediate && kotlin.math.abs(tvMiniGhostTargetAlpha - target) < 0.001f) {
+        if (isAnimating) {
+            b.root.removeCallbacks(tvMiniDodgeCheckRunnable)
+            b.root.postDelayed(tvMiniDodgeCheckRunnable, 120L)
             return
         }
-        tvMiniGhostTargetAlpha = target
-        tvMiniGhostAlphaAnimator?.cancel()
-        tvMiniGhostAlphaAnimator = null
-        if (immediate || kotlin.math.abs(tvMinimizedGhostAlpha - target) < 0.01f) {
-            tvMinimizedGhostAlpha = target
-            isTvMinimizedGhosted = target < 0.99f
-            b.dragView.alpha = target
-            onTvMinimizedGhostChanged(isTvMinimizedGhosted, target)
-        } else {
-            val startVal = tvMinimizedGhostAlpha
-            if (target < 0.99f && !isTvMinimizedGhosted) {
-                isTvMinimizedGhosted = true
-                onTvMinimizedGhostChanged(true, startVal)
-            }
-            tvMiniGhostAlphaAnimator = android.animation.ValueAnimator.ofFloat(startVal, target).apply {
-                duration = 180L
-                addUpdateListener { anim ->
-                    if (_binding == null) return@addUpdateListener
-                    val a = anim.animatedValue as Float
-                    tvMinimizedGhostAlpha = a
-                    onTvMinimizedGhostChanged(true, a)
-                }
-                addListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        if (_binding == null || tvMiniGhostAlphaAnimator !== animation) return
-                        tvMiniGhostAlphaAnimator = null
-                        tvMinimizedGhostAlpha = target
-                        isTvMinimizedGhosted = target < 0.99f
-                        onTvMinimizedGhostChanged(isTvMinimizedGhosted, target)
+        val fullW = b.slidingLayout.width.takeIf { it > 0 } ?: return
+        val fullH = b.slidingLayout.height.takeIf { it > 0 } ?: return
+        val (scaleX, scaleY) = getScaleValues()
+        val autoSlide = requireContext().prefs().getBoolean(C.TV_MINI_PLAYER_AUTO_SLIDE, true)
+
+        val desiredOnLeft = when {
+            !autoSlide || act.isTvSideMenuOpen() -> false
+            act.isTvSettingsScreen() -> act.isTvSettingsRightColumnFocused()
+            else -> {
+                val fRect = focusedElementWindowRect(act, fullW, fullH)
+                if (fRect == null) {
+                    tvMiniPlayerOnLeft
+                } else {
+                    val density = resources.displayMetrics.density
+                    val pad = (8f * density).toInt()
+                    val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics).toInt()
+                    val leftMargin = tvMinimizedLeftMarginPx().toInt()
+                    val miniW = (fullW * scaleX).toInt()
+                    val miniH = (fullH * scaleY).toInt()
+                    val rootLoc = IntArray(2)
+                    b.root.getLocationInWindow(rootLoc)
+                    val miniBottom = rootLoc[1] + fullH - tvMargin
+                    val miniRight = rootLoc[0] + fullW - tvMargin
+                    val miniLeft = rootLoc[0] + leftMargin
+                    val rightRect = android.graphics.Rect(miniRight - miniW - pad, miniBottom - miniH - pad, miniRight + pad, miniBottom + pad)
+                    val leftRect = android.graphics.Rect(miniLeft - pad, miniBottom - miniH - pad, miniLeft + miniW + pad, miniBottom + pad)
+                    if (!tvMiniPlayerOnLeft) {
+                        android.graphics.Rect.intersects(fRect, rightRect) && !android.graphics.Rect.intersects(fRect, leftRect)
+                    } else {
+                        !(android.graphics.Rect.intersects(fRect, leftRect) && !android.graphics.Rect.intersects(fRect, rightRect))
                     }
-                })
-                start()
+                }
             }
+        }
+
+        val targetTx = computeTvMinimizedTranslationX(fullW, scaleX, desiredOnLeft)
+        if (desiredOnLeft == tvMiniPlayerOnLeft && (!forceRealign || kotlin.math.abs(b.slidingLayout.translationX - targetTx) < 0.5f)) {
+            return
+        }
+        tvMiniPlayerOnLeft = desiredOnLeft
+        tvMiniDodgeAnimator?.cancel()
+        tvMiniDodgeAnimator = null
+        if (kotlin.math.abs(b.slidingLayout.translationX - targetTx) < 1f) {
+            b.slidingLayout.translationX = targetTx
+            return
+        }
+        tvMiniDodgeAnimator = android.animation.ObjectAnimator.ofFloat(b.slidingLayout, View.TRANSLATION_X, targetTx).apply {
+            duration = 240L
+            interpolator = tvMiniDodgeInterpolator
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (tvMiniDodgeAnimator === animation) {
+                        tvMiniDodgeAnimator = null
+                    }
+                }
+            })
+            start()
         }
     }
 
@@ -7926,13 +7951,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (!isTv) return
         tvMinimizedBorderAnimator?.cancel()
         tvMinimizedBorderAnimator = null
+        tvMiniDodgeAnimator?.cancel()
+        tvMiniDodgeAnimator = null
         if (!minimized) {
             detachTvMinimizedGhostListeners()
-            tvMiniGhostAlphaAnimator?.cancel()
-            tvMiniGhostAlphaAnimator = null
-            tvMiniGhostTargetAlpha = 1f
-            tvMinimizedGhostAlpha = 1f
-            isTvMinimizedGhosted = false
+            tvMiniPlayerOnLeft = false
             b.slidingLayout.alpha = 1f
             b.dragView.alpha = 1f
             b.playerLayout.setBackgroundColor(Color.BLACK)
@@ -7971,7 +7994,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         b.dragView.background = border
         attachTvMinimizedGhostListeners()
         onTvMinimizedChanged(true)
-        refreshTvMinimizedGhostOpacity(immediate = true)
+        scheduleTvMinimizedGhostCheck()
     }
 
     fun getIsPortrait() = isPortrait
@@ -8437,6 +8460,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             useController = false
             hideController(true)
             if (isTv) {
+                tvMiniPlayerOnLeft = false
                 applyTvMinimizedFrame(true)
             } else {
                 dragView.setBackgroundResource(R.drawable.player_minimized_focus)
@@ -8452,9 +8476,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 val targetTy: Float
                 if (isTv) {
                     val tvMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics)
-                    val newX = slidingLayout.width - (slidingLayout.width * minimizedScaleX) - tvMargin
                     val newY = slidingLayout.height - (slidingLayout.height * minimizedScaleY) - tvMargin
-                    targetTx = -scaledXDiff + newX
+                    targetTx = computeTvMinimizedTranslationX(slidingLayout.width, minimizedScaleX)
                     targetTy = -scaledYDiff + newY
                 } else {
                     val windowInsets = ViewCompat.getRootWindowInsets(requireView())
@@ -8490,6 +8513,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 isAnimating = false
                                 setListener(null)
                                 activePointerId = -1
+                                if (isTv && !isMaximized) {
+                                    scheduleTvMinimizedGhostCheck()
+                                }
                             }
                         }
                     )
@@ -8498,6 +8524,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             if (isPortrait) {
                 chatLayout.visibility = View.GONE
+                chatFragment?.onChatHidden()
                 slidingLayout.doOnLayout {
                     animate()
                 }

@@ -1,14 +1,22 @@
-# Xtra TV 1.4.6.6
+# Xtra TV 1.4.6.7
 
 ### New & Polish
-- **Hardware-overlay Mini-Player, 1440p glitch fix & UI performance boost**:
-  - Kept the minimized player on its zero-GPU **`SurfaceView` Hardware Overlay** whenever at `100 %` opacity (without forcing track/codec switches or reloading `1440p60` streams when minimizing or restoring), fixing `TextureView` display corruption on 1440p60 streams on Amlogic boxes (such as Onn 4K Pro Gen 2).
-  - Eliminated the full-screen `ViewGroup` alpha FBO layer during `20 %` mini-player ghost mode while clearing the player frame's black backdrop so underlying stream cards show cleanly through the `20 %` preview, removed the global per-pixel `OnScrollChangedListener`, and restricted `FocusCard` coordinate tracking on **Home** strictly to the single focused card when the mini-player is open.
-- **Crisp anti-aliased badges on VOD & Live stream cards**: fixed `TextWithShadow` drawing badge text 7 times on top of itself on TV — VOD and Live badges (*Past broadcast*, views, viewers, duration, uptime, dates) now render in a single anti-aliased pass matching the Home screen while cutting badge text draw calls by `7×`.
-- ***Polls (chat hidden)* overlay matching Predictions**: added **Polls (chat hidden)** (**Off** / **On (30s)** / **On (full voting)**) in the live player **Chat > Options** panel and in **Settings > Chat**, displaying active poll choices, live vote percentages/counts, countdown timer, and final winner summary in the top-right overlay while chat is hidden.
-- ***Points & Drops* panel refinements**: active Drop campaigns (`< 100 %`) now display as clean non-clickable progress cards (only `100 %` ready-to-claim Drops are clickable buttons), opening the panel keeps the scroll anchored at the top so your Channel Points balance and header remain visible, and pressing **Down / Up** past the last reward smoothly scrolls through all active Drop campaigns.
-- ***Press `OK` to adjust* Sliders in Settings**: sliders in the two-column **Settings** screen now require pressing **`OK`** before `Left / Right` changes their value (`◀ value ▶` accent badge; `OK` or `Back` confirms), so pressing **Left** while browsing settings returns cleanly to the left category list without accidentally altering slider values.
-- **Cleaner Chat toggle**: removed the redundant *"Chat shown"* / *"Chat hidden"* OSD popup when toggling chat visibility.
+- **100 % `SurfaceView` Hardware-Overlay Mini-Player & smooth Right ↔ Left auto-slide**:
+  - Kept the minimized player permanently on its native **`SurfaceView` Hardware Overlay** (eliminating all `SurfaceView` ↔ `TextureView` surface switches and `freeAllBuffers` stalls), fixing the NVIDIA Shield `OMX.Nvidia.h264.decode` / `NvRmStream` green-flash looping video bug as well as `1440p60` `TextureView` display glitches on Amlogic boxes without reloading streams.
+  - Replaced ghost transparency with a smooth **`240 ms` horizontal slide** between **Bottom-Right** and **Bottom-Left** (respecting the compact side rail margin, the two-column **Settings** layout, and an anti-ping-pong `180 ms` debounce + hysteresis during fast D-pad scrolling).
+  - Added **Auto-move mini player** (**On** by default) in **Settings > Player > Xtra TV Player Settings** so horizontal auto-sliding can be toggled at any time.
+- **Automatic MediaCodec decoder fallback**: enabled `DefaultRenderersFactory.setEnableDecoderFallback(true)` on both primary and secondary (ad-free swap) `ExoPlayer` instances as well as card previews, allowing seamless fallback to a secondary or software decoder if a hardware codec instance fails.
+- **Eliminated live-stream `MediaSession` / Notification / Bluetooth IPC spam**:
+  - Deduplicated `MediaMetadata`, `MediaSession` queue, and `PlaybackState` updates across live HLS playlist refreshes so channel bitmaps and metadata are no longer re-serialized over Binder IPC and Bluetooth AVRCP every `1–2 s`.
+  - Unified channel avatar fetching between `MediaMetadata` and foreground notifications so concurrent calls no longer cancel each other's download or briefly reuse a previous channel's artwork.
+- **Lighter card video previews & secondary `TextureView` players**:
+  - Disabled audio track decoding (`TRACK_TYPE_AUDIO`) on muted card previews and seek previews (dynamically re-enabling it when preview sound is turned on) to avoid spawning unused AAC decoders and `AudioTrack`s while browsing, increased the preview hover delay to `250 ms`, and fixed a leaked `Player.Listener` when leaving a card before its first frame.
+  - Set `VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF` on `TextureView`-backed secondary players (card previews, PiP, Multi-Stream, seek preview) to stop `SurfaceFlinger` `IGraphicBufferProducer` frame-rate errors.
+- **Paused animated chat emotes while chat is hidden**: stopped animated GIF / 7TV / BTTV / FFZ emote drawables when hiding chat or minimizing the player and resumed them cleanly when chat is shown again, saving UI-thread CPU and GPU work while keeping live messages, Polls, and Predictions running normally.
+- **Fixed `Cronet` / `HttpEngine` / `OkHttp` native & GZIP resource leaks**:
+  - Checked `OkHttp` playlist-proxy routing before allocating native `Cronet` / `HttpEngine` `UrlRequest` instances (fixing `FinalizerDaemon` `dispose` warnings), closed orphaned GZIP `Response` bodies on interrupted calls, and cached proxy `CronetEngine` / `HttpEngine` instances in `XtraModule` instead of creating new native thread pools per stream.
+- **Removed UI-thread SQLite stalls & redundant HUD relayouts**:
+  - Replaced main-thread `runBlocking` Room writes in playback services with FIFO-serialized background writes (`Mutex` + `Dispatchers.IO`), and guarded player header `maxWidth` updates to avoid duplicate `requestLayout()` passes during layout.
 
 ### Install
-Download `XtraTV-1.4.6.6-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.4.6.7-tv.apk` below and install it over the previous version, your settings and account are kept.

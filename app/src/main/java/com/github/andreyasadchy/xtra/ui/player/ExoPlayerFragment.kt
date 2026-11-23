@@ -57,86 +57,29 @@ class ExoPlayerFragment : PlayerFragment() {
     /** TV: the settings or the login were opened over the app, the stream went on and the service stayed bound. */
     private var keptAcrossStop = false
 
-    /** TV minimized player: renders into a TextureView while minimized so View alpha (20% ghost mode) applies cleanly. */
-    private var tvMiniTextureView: android.view.TextureView? = null
-
-    private fun ensureTvMiniTextureView(): android.view.TextureView {
-        tvMiniTextureView?.let { return it }
-        val tex = android.view.TextureView(requireContext()).apply {
-            isOpaque = false
-        }
-        val idx = binding.aspectRatioFrameLayout.indexOfChild(binding.adHideOverlay).takeIf { it >= 0 }
-            ?: binding.aspectRatioFrameLayout.childCount
-        binding.aspectRatioFrameLayout.addView(
-            tex,
-            idx,
-            android.widget.FrameLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-            )
-        )
-        tvMiniTextureView = tex
-        return tex
-    }
-
     private fun applyCurrentVideoOutput(secondaryOverride: Boolean? = null) {
         if (view == null || !isAdded) return
         val service = playbackService
         val secondaryPlayer = secondaryOverride ?: (service?.isSwapping == true)
         val hideMain = service?.shouldHidePlayerSurface() == true
-        val useMiniTexture = isTv && !isMaximized && isTvMinimizedGhosted
 
-        if (useMiniTexture) {
-            binding.playerLayout.setBackgroundColor(Color.TRANSPARENT)
-            binding.slidingLayout.elevation = 0f
-            service?.player?.clearVideoSurfaceView(binding.playerSurface)
-            service?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
-            binding.playerSurface.visibility = View.GONE
-            binding.secondaryPlayerSurface.visibility = View.GONE
-            val tex = ensureTvMiniTextureView()
-            tex.alpha = tvMinimizedGhostAlpha
-            binding.dragView.alpha = tvMinimizedGhostAlpha
-            binding.adHideOverlay.alpha = tvMinimizedGhostAlpha
-            if (hideMain) {
-                service?.player?.clearVideoTextureView(tex)
-                service?.secondaryPlayer?.clearVideoTextureView(tex)
-                tex.visibility = View.GONE
-                binding.adHideOverlay.isVisible = service?.isHidingAds == true
-            } else if (secondaryPlayer) {
-                binding.adHideOverlay.visibility = View.GONE
-                service?.player?.clearVideoTextureView(tex)
-                tex.visibility = View.VISIBLE
-                service?.secondaryPlayer?.setVideoTextureView(tex)
-            } else {
-                service?.secondaryPlayer?.clearVideoTextureView(tex)
-                tex.visibility = View.VISIBLE
-                service?.player?.setVideoTextureView(tex)
-                binding.adHideOverlay.isVisible = service?.isHidingAds == true
-            }
+        binding.playerLayout.setBackgroundColor(Color.BLACK)
+        binding.slidingLayout.elevation = if (isTv && !isMaximized) 20f * resources.displayMetrics.density else 0f
+        binding.dragView.alpha = 1f
+        binding.adHideOverlay.alpha = 1f
+
+        binding.playerSurface.visibility = if (hideMain) View.GONE else View.VISIBLE
+        if (!hideMain) {
+            service?.player?.setVideoSurfaceView(binding.playerSurface)
+        }
+        if (secondaryPlayer && !hideMain) {
+            binding.adHideOverlay.visibility = View.GONE
+            binding.secondaryPlayerSurface.visibility = View.VISIBLE
+            service?.secondaryPlayer?.setVideoSurfaceView(binding.secondaryPlayerSurface)
         } else {
-            binding.playerLayout.setBackgroundColor(Color.BLACK)
-            binding.slidingLayout.elevation = if (isTv && !isMaximized) 20f * resources.displayMetrics.density else 0f
-            binding.dragView.alpha = 1f
-            binding.adHideOverlay.alpha = 1f
-            tvMiniTextureView?.let { tex ->
-                service?.player?.clearVideoTextureView(tex)
-                service?.secondaryPlayer?.clearVideoTextureView(tex)
-                tex.alpha = 1f
-                tex.visibility = View.GONE
-            }
-            binding.playerSurface.visibility = if (hideMain) View.GONE else View.VISIBLE
-            if (!hideMain) {
-                service?.player?.setVideoSurfaceView(binding.playerSurface)
-            }
-            if (secondaryPlayer && !hideMain) {
-                binding.adHideOverlay.visibility = View.GONE
-                binding.secondaryPlayerSurface.visibility = View.VISIBLE
-                service?.secondaryPlayer?.setVideoSurfaceView(binding.secondaryPlayerSurface)
-            } else {
-                service?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
-                binding.secondaryPlayerSurface.visibility = View.GONE
-                binding.adHideOverlay.isVisible = service?.isHidingAds == true
-            }
+            service?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
+            binding.secondaryPlayerSurface.visibility = View.GONE
+            binding.adHideOverlay.isVisible = service?.isHidingAds == true
         }
 
         playerListener?.let { listener ->
@@ -155,19 +98,6 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun onTvMinimizedChanged(minimized: Boolean) {
         applyCurrentVideoOutput()
-    }
-
-    override fun onTvMinimizedGhostChanged(ghosted: Boolean, alpha: Float) {
-        if (view == null || !isAdded) return
-        if (isTv && !isMaximized && ghosted && tvMiniTextureView?.isVisible == true) {
-            binding.playerLayout.setBackgroundColor(Color.TRANSPARENT)
-            binding.slidingLayout.elevation = 0f
-            tvMiniTextureView?.alpha = alpha
-            binding.dragView.alpha = alpha
-            binding.adHideOverlay.alpha = alpha
-        } else {
-            applyCurrentVideoOutput()
-        }
     }
 
     private fun syncVodMutedSegmentsFromManifest() {
@@ -360,13 +290,7 @@ class ExoPlayerFragment : PlayerFragment() {
                 } else {
                     parameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_VIDEO)
                 }
-                if (isTv && !isMaximized && isTvMinimizedGhosted) {
-                    binding.playerSurface.visibility = View.GONE
-                    tvMiniTextureView?.visibility = if (hideMainSurface) View.GONE else View.VISIBLE
-                } else {
-                    tvMiniTextureView?.visibility = View.GONE
-                    binding.playerSurface.visibility = if (hideMainSurface) View.GONE else View.VISIBLE
-                }
+                binding.playerSurface.visibility = if (hideMainSurface) View.GONE else View.VISIBLE
                 binding.adHideOverlay.isVisible = service?.isHidingAds == true
             }
         }
@@ -903,11 +827,6 @@ class ExoPlayerFragment : PlayerFragment() {
         service.serviceListener = null
         service.player?.clearVideoSurfaceView(binding.playerSurface)
         service.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
-        tvMiniTextureView?.let { tex ->
-            service.player?.clearVideoTextureView(tex)
-            service.secondaryPlayer?.clearVideoTextureView(tex)
-            tex.visibility = View.GONE
-        }
         binding.secondaryPlayerSurface.visibility = View.GONE
         binding.adHideOverlay.visibility = View.GONE
         service.prepareStreamSwitch()
@@ -929,11 +848,6 @@ class ExoPlayerFragment : PlayerFragment() {
         if (view != null) {
             playbackService?.player?.clearVideoSurfaceView(binding.playerSurface)
             playbackService?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
-            tvMiniTextureView?.let { tex ->
-                playbackService?.player?.clearVideoTextureView(tex)
-                playbackService?.secondaryPlayer?.clearVideoTextureView(tex)
-                tex.visibility = View.GONE
-            }
             binding.secondaryPlayerSurface.visibility = View.GONE
             binding.adHideOverlay.visibility = View.GONE
         }
@@ -951,11 +865,6 @@ class ExoPlayerFragment : PlayerFragment() {
     override fun onDestroyView() {
         lastMutedScanPlaylist = null
         binding.playerControls.root.removeCallbacks(updateProgressAction)
-        tvMiniTextureView?.let { tex ->
-            playbackService?.player?.clearVideoTextureView(tex)
-            playbackService?.secondaryPlayer?.clearVideoTextureView(tex)
-        }
-        tvMiniTextureView = null
         if (keptAcrossStop) {
             // the screen is made again (a setting changed): the service is let go here, the new player binds it again
             keptAcrossStop = false

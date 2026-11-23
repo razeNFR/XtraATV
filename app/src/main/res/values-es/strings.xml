@@ -1396,4 +1396,6 @@
     <string name="tv_chat_polls_popup">Encuestas (chat oculto)</string>
     <string name="tv_poll_started">Encuesta iniciada</string>
     <string name="tv_poll_ended">Encuesta finalizada</string>
+    <string name="tv_mini_player_auto_slide">Desplazar automáticamente el minirreproductor</string>
+    <string name="tv_mini_player_auto_slide_summary">Desliza el minirreproductor al lado opuesto cuando el elemento seleccionado pasa por debajo</string>
 </resources>

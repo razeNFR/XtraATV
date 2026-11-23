@@ -1154,6 +1154,17 @@ class MainActivity : AppCompatActivity() {
         return destId == R.id.tvSettingsFragment || destId == R.id.tvStatsFragment
     }
 
+    fun isTvSettingsScreen(): Boolean {
+        if (!isTv || !::navController.isInitialized) return false
+        return navController.currentDestination?.id == R.id.tvSettingsFragment
+    }
+
+    fun isTvSettingsRightColumnFocused(): Boolean = currentTvSettings()?.isRightColumnFocused() == true
+
+    fun refreshTvMiniPlayerPosition(immediate: Boolean = false) {
+        (playerFragment as? PlayerFragment)?.scheduleTvMinimizedGhostCheck(immediate)
+    }
+
     /** The volume of the full screen stream follows the sound chosen for the small window(s). */
     fun refreshPlayerVolume() {
         (playerFragment as? PlayerFragment)?.refreshVolume()

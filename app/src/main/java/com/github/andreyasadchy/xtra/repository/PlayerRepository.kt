@@ -48,6 +48,8 @@ import com.github.andreyasadchy.xtra.util.NetworkUtils
 import com.github.andreyasadchy.xtra.util.NetworkUtils.executeAsync
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -137,38 +139,12 @@ class PlayerRepository(
                 val body = graphQLRepository.getPlaybackAccessTokenRequestBody(channelLogin, "", platform, playerType)
                 when {
                     networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> @SuppressLint("NewApi") {
-                        val proxyHeaders = if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                            listOf(android.util.Pair("Proxy-Authorization", Base64.encodeToString("$proxyUser:$proxyPassword".toByteArray(), Base64.NO_WRAP)))
-                        } else emptyList()
-                        val builder = HttpEngine.Builder(context)
-                        val httpEngine = try {
-                            builder.setProxyOptions(ProxyOptions.fromProxyList(
-                                listOf(
-                                    android.net.http.Proxy.createHttpProxy(
-                                        android.net.http.Proxy.SCHEME_HTTP,
-                                        proxyHost,
-                                        proxyPort,
-                                        cronetExecutor.value,
-                                        object : android.net.http.Proxy.HttpConnectCallback {
-                                            override fun onBeforeRequest(request: android.net.http.Proxy.HttpConnectCallback.Request) {
-                                                request.proceed(proxyHeaders)
-                                            }
-
-                                            override fun onResponseReceived(responseHeaders: List<android.util.Pair<String?, String?>?>, statusCode: Int): Int {
-                                                return android.net.http.Proxy.HttpConnectCallback.RESPONSE_ACTION_PROCEED
-                                            }
-                                        }
-                                    )
-                                ),
-                                ProxyOptions.ALL_PROXIES_FAILED_BEHAVIOR_DISALLOW_DIRECT
-                            ))
-                        } catch (e: NoClassDefFoundError) {
-                            null
-                        }?.build()
-                        if (httpEngine != null) {
+                        val proxyEngine = (context.applicationContext as com.github.andreyasadchy.xtra.XtraApp)
+                            .xtraModule.getOrCreateProxyHttpEngine(context, proxyHost, proxyPort, proxyUser, proxyPassword)
+                        if (proxyEngine != null) {
                             val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.HttpEngineTimeout(proxyTimeout?.toLong() ?: 3000)
-                                val request = httpEngine.newUrlRequestBuilder(
+                                val request = proxyEngine.newUrlRequestBuilder(
                                     url,
                                     cronetExecutor.value,
                                     NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
@@ -212,45 +188,12 @@ class PlayerRepository(
                         }
                     }
                     networkLibrary == C.CRONET && cronetEngine.value != null -> {
-                        val cronetEngine = if (CronetProvider.getAllProviders(context).any { it.isEnabled }) {
-                            val proxyHeaders = if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                mapOf("Proxy-Authorization" to Base64.encodeToString("$proxyUser:$proxyPassword".toByteArray(), Base64.NO_WRAP)).entries.toList()
-                            } else emptyList()
-                            val builder = CronetEngine.Builder(context).apply {
-                                val userAgent = "Cronet/" + defaultUserAgent.substringAfter("Cronet/", "").substringBefore(')')
-                                setUserAgent(userAgent)
-                                @QuicOptions.Experimental
-                                setQuicOptions(QuicOptions.builder().setHandshakeUserAgent(userAgent).build())
-                            }
-                            try {
-                                @org.chromium.net.ProxyOptions.Experimental
-                                builder.setProxyOptions(org.chromium.net.ProxyOptions(
-                                    listOf(
-                                        org.chromium.net.Proxy(
-                                            org.chromium.net.Proxy.HTTP,
-                                            proxyHost,
-                                            proxyPort,
-                                            cronetExecutor.value,
-                                            object : org.chromium.net.Proxy.Callback() {
-                                                override fun onBeforeTunnelRequest(request: Request) {
-                                                    request.proceed(proxyHeaders)
-                                                }
-
-                                                override fun onTunnelHeadersReceived(responseHeaders: List<Map.Entry<String?, String?>?>, statusCode: Int): Boolean {
-                                                    return true
-                                                }
-                                            }
-                                        )
-                                    )
-                                ))
-                            } catch (e: UnsupportedOperationException) {
-                                null
-                            }?.build()
-                        } else null
-                        if (cronetEngine != null) {
+                        val proxyEngine = (context.applicationContext as com.github.andreyasadchy.xtra.XtraApp)
+                            .xtraModule.getOrCreateProxyCronetEngine(context, proxyHost, proxyPort, proxyUser, proxyPassword)
+                        if (proxyEngine != null) {
                             val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.CronetTimeout(proxyTimeout?.toLong() ?: 3000)
-                                val request = cronetEngine.newUrlRequestBuilder(
+                                val request = proxyEngine.newUrlRequestBuilder(
                                     url,
                                     NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
                                     cronetExecutor.value
@@ -352,38 +295,12 @@ class PlayerRepository(
                 }
                 when {
                     networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> @SuppressLint("NewApi") {
-                        val proxyHeaders = if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                            listOf(android.util.Pair("Proxy-Authorization", Base64.encodeToString("$proxyUser:$proxyPassword".toByteArray(), Base64.NO_WRAP)))
-                        } else emptyList()
-                        val builder = HttpEngine.Builder(context)
-                        val httpEngine = try {
-                            builder.setProxyOptions(ProxyOptions.fromProxyList(
-                                listOf(
-                                    android.net.http.Proxy.createHttpProxy(
-                                        android.net.http.Proxy.SCHEME_HTTP,
-                                        proxyHost,
-                                        proxyPort,
-                                        cronetExecutor.value,
-                                        object : android.net.http.Proxy.HttpConnectCallback {
-                                            override fun onBeforeRequest(request: android.net.http.Proxy.HttpConnectCallback.Request) {
-                                                request.proceed(proxyHeaders)
-                                            }
-
-                                            override fun onResponseReceived(responseHeaders: List<android.util.Pair<String?, String?>?>, statusCode: Int): Int {
-                                                return android.net.http.Proxy.HttpConnectCallback.RESPONSE_ACTION_PROCEED
-                                            }
-                                        }
-                                    )
-                                ),
-                                ProxyOptions.ALL_PROXIES_FAILED_BEHAVIOR_DISALLOW_DIRECT
-                            ))
-                        } catch (e: NoClassDefFoundError) {
-                            null
-                        }?.build()
-                        if (httpEngine != null) {
+                        val proxyEngine = (context.applicationContext as com.github.andreyasadchy.xtra.XtraApp)
+                            .xtraModule.getOrCreateProxyHttpEngine(context, proxyHost, proxyPort, proxyUser, proxyPassword)
+                        if (proxyEngine != null) {
                             val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.HttpEngineTimeout(proxyTimeout?.toLong() ?: 3000)
-                                val request = httpEngine.newUrlRequestBuilder(
+                                val request = proxyEngine.newUrlRequestBuilder(
                                     url,
                                     cronetExecutor.value,
                                     NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
@@ -431,45 +348,12 @@ class PlayerRepository(
                         }
                     }
                     networkLibrary == C.CRONET && cronetEngine.value != null -> {
-                        val cronetEngine = if (CronetProvider.getAllProviders(context).any { it.isEnabled }) {
-                            val proxyHeaders = if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                mapOf("Proxy-Authorization" to Base64.encodeToString("$proxyUser:$proxyPassword".toByteArray(), Base64.NO_WRAP)).entries.toList()
-                            } else emptyList()
-                            val builder = CronetEngine.Builder(context).apply {
-                                val userAgent = "Cronet/" + defaultUserAgent.substringAfter("Cronet/", "").substringBefore(')')
-                                setUserAgent(userAgent)
-                                @QuicOptions.Experimental
-                                setQuicOptions(QuicOptions.builder().setHandshakeUserAgent(userAgent).build())
-                            }
-                            try {
-                                @org.chromium.net.ProxyOptions.Experimental
-                                builder.setProxyOptions(org.chromium.net.ProxyOptions(
-                                    listOf(
-                                        org.chromium.net.Proxy(
-                                            org.chromium.net.Proxy.HTTP,
-                                            proxyHost,
-                                            proxyPort,
-                                            cronetExecutor.value,
-                                            object : org.chromium.net.Proxy.Callback() {
-                                                override fun onBeforeTunnelRequest(request: Request) {
-                                                    request.proceed(proxyHeaders)
-                                                }
-
-                                                override fun onTunnelHeadersReceived(responseHeaders: List<Map.Entry<String?, String?>?>, statusCode: Int): Boolean {
-                                                    return true
-                                                }
-                                            }
-                                        )
-                                    )
-                                ))
-                            } catch (e: UnsupportedOperationException) {
-                                null
-                            }?.build()
-                        } else null
-                        if (cronetEngine != null) {
+                        val proxyEngine = (context.applicationContext as com.github.andreyasadchy.xtra.XtraApp)
+                            .xtraModule.getOrCreateProxyCronetEngine(context, proxyHost, proxyPort, proxyUser, proxyPassword)
+                        if (proxyEngine != null) {
                             val response = suspendCancellableCoroutine { continuation ->
                                 val timeout = NetworkUtils.CronetTimeout(proxyTimeout?.toLong() ?: 3000)
-                                val request = cronetEngine.newUrlRequestBuilder(
+                                val request = proxyEngine.newUrlRequestBuilder(
                                     url,
                                     NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
                                     cronetExecutor.value
@@ -2256,30 +2140,44 @@ class PlayerRepository(
         videoSwapDao.update(item)
     }
 
+    private val stateMutex = Mutex()
+
     fun loadVideoPositions() = videoPositions.getAll()
 
-    suspend fun getVideoPosition(id: Long) = withContext(Dispatchers.IO) {
-        videoPositions.getById(id)
+    suspend fun getVideoPosition(id: Long) = stateMutex.withLock {
+        withContext(Dispatchers.IO) {
+            videoPositions.getById(id)
+        }
     }
 
-    suspend fun saveVideoPosition(position: VideoPosition) = withContext(Dispatchers.IO) {
-        videoPositions.insert(position)
+    suspend fun saveVideoPosition(position: VideoPosition) = stateMutex.withLock {
+        withContext(Dispatchers.IO) {
+            videoPositions.insert(position)
+        }
     }
 
-    suspend fun deleteVideoPositions() = withContext(Dispatchers.IO) {
-        videoPositions.deleteAll()
+    suspend fun deleteVideoPositions() = stateMutex.withLock {
+        withContext(Dispatchers.IO) {
+            videoPositions.deleteAll()
+        }
     }
 
-    suspend fun getPlaybackStates() = withContext(Dispatchers.IO) {
-        playbackStatesDao.getAll()
+    suspend fun getPlaybackStates() = stateMutex.withLock {
+        withContext(Dispatchers.IO) {
+            playbackStatesDao.getAll()
+        }
     }
 
-    suspend fun savePlaybackStates(items: List<PlaybackState>) = withContext(Dispatchers.IO) {
-        playbackStatesDao.replaceItems(items)
+    suspend fun savePlaybackStates(items: List<PlaybackState>) = stateMutex.withLock {
+        withContext(Dispatchers.IO) {
+            playbackStatesDao.replaceItems(items)
+        }
     }
 
-    suspend fun deletePlaybackStates() = withContext(Dispatchers.IO) {
-        playbackStatesDao.deleteAll()
+    suspend fun deletePlaybackStates() = stateMutex.withLock {
+        withContext(Dispatchers.IO) {
+            playbackStatesDao.deleteAll()
+        }
     }
 
     companion object {

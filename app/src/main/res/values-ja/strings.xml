@@ -1391,4 +1391,6 @@
     <string name="tv_chat_polls_popup">アンケート（チャット非表示時）</string>
     <string name="tv_poll_started">アンケートが開始されました</string>
     <string name="tv_poll_ended">アンケートが終了しました</string>
+    <string name="tv_mini_player_auto_slide">ミニプレーヤーを自動移動</string>
+    <string name="tv_mini_player_auto_slide_summary">選択中の項目が下に来たとき、ミニプレーヤーを反対側へスライドします</string>
 </resources>

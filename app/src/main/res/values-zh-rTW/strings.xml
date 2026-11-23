@@ -1391,4 +1391,6 @@
     <string name="tv_chat_polls_popup">投票活動（隱藏聊天室時）</string>
     <string name="tv_poll_started">投票已開始</string>
     <string name="tv_poll_ended">投票已結束</string>
+    <string name="tv_mini_player_auto_slide">自動避讓迷你播放器</string>
+    <string name="tv_mini_player_auto_slide_summary">當選取項目移到迷你播放器下方時將其平滑移至另一側</string>
 </resources>
