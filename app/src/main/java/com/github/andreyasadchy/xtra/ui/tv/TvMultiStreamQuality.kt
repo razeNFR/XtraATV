@@ -51,7 +51,7 @@ object TvMultiStreamQuality {
         val c6: Int,
     )
 
-    private val PROFILES = listOf(
+    val PROFILES = listOf(
         PROFILE_POTATO,
         PROFILE_LOW,
         PROFILE_MEDIUM,

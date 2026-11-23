@@ -99,19 +99,21 @@ object TvDialogs {
             }
         }
         val accent = MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, Color.rgb(145, 71, 255))
-        dialog.setContentView(ComposeView(context).apply {
-            setContent {
-                TvTheme(accent) {
-                    content { dialog.dismiss() }
-                }
-            }
-        }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         dialog.window?.apply {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setDimAmount(0.35f)
+            setDimAmount(0.08f)
         }
+        dialog.setContentView(ComposeView(context).apply {
+            setContent {
+                androidx.compose.runtime.CompositionLocalProvider(LocalTvDialogWindow provides dialog.window) {
+                    TvTheme(accent) {
+                        content { dialog.dismiss() }
+                    }
+                }
+            }
+        }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         dialog.show()
         return dialog
     }
@@ -173,6 +175,37 @@ object TvDialogs {
     }
 }
 
+val LocalTvDialogWindow = androidx.compose.runtime.staticCompositionLocalOf<android.view.Window?> { null }
+
+private class SidePanelBlurOutlineDrawable(
+    var panelWidthPx: Int,
+    var alignEnd: Boolean,
+    var cornerRadiusPx: Float,
+) : android.graphics.drawable.Drawable() {
+    override fun draw(canvas: android.graphics.Canvas) {}
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {}
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+
+    override fun getOutline(outline: android.graphics.Outline) {
+        val b = bounds
+        if (b.isEmpty || panelWidthPx <= 0) {
+            outline.setEmpty()
+            return
+        }
+        val w = panelWidthPx.coerceAtMost(b.width())
+        val left = if (alignEnd) b.right - w else b.left
+        val right = if (alignEnd) b.right else b.left + w
+        val r = cornerRadiusPx.coerceAtLeast(0f)
+        val rInt = r.toInt()
+        val outLeft = if (alignEnd) left else left - rInt
+        val outRight = if (alignEnd) right + rInt else right
+        outline.setRoundRect(outLeft, b.top, outRight, b.bottom, r)
+        outline.alpha = 1f
+    }
+}
+
 @Composable
 fun TvTheme(accent: Int, content: @Composable () -> Unit) {
     MaterialTheme(
@@ -189,17 +222,46 @@ fun TvTheme(accent: Int, content: @Composable () -> Unit) {
 }
 
 object TvColors {
-    val panel = ComposeColor(0xF2141318)
-    val item = ComposeColor(0x14FFFFFF)
+    val panel = ComposeColor(0xBE12111A)
+    val panelInner = ComposeColor(0xA6161520)
+    val item = ComposeColor(0x1CFFFFFF)
     val focused = ComposeColor(0xFFF2F2F7)
     /** Text and icons of a focused (white) item: the ambiance color, dark enough to read. */
     val onFocused get() = ComposeColor(TvAccent.onLight)
     /** The ambiance color (violet of Twitch without one). */
     val accent get() = ComposeColor(TvAccent.onDark)
-    val secondaryText = ComposeColor(0xB3FFFFFF)
+    val secondaryText = ComposeColor(0xB8FFFFFF)
 }
 
-/** Panel on one side of the screen, full height. */
+fun Modifier.tvPanelFirstRow(
+    requester: FocusRequester,
+    upTarget: () -> FocusRequester,
+): Modifier = this
+    .focusRequester(requester)
+    .onPreviewKeyEvent { ev ->
+        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionUp) {
+            runCatching { upTarget().requestFocus() }
+            true
+        } else {
+            false
+        }
+    }
+
+fun Modifier.tvPanelLastRow(
+    requester: FocusRequester?,
+    downTarget: FocusRequester,
+): Modifier = this
+    .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
+    .onPreviewKeyEvent { ev ->
+        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
+            runCatching { downTarget.requestFocus() }
+            true
+        } else {
+            false
+        }
+    }
+
+/** Panel on one side of the screen, full height, with smoked-glass translucency and Android 12+ hardware blur. */
 @Composable
 fun SidePanel(
     title: String,
@@ -214,16 +276,54 @@ fun SidePanel(
     footer: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
+    val dialogWindow = LocalTvDialogWindow.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val widthPx = with(density) { width.roundToPx() }
+    val cornerPx = with(density) { 20.dp.toPx() }
+    val blurRadiusPx = with(density) { 28.dp.roundToPx() }
+
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && dialogWindow != null) {
+        androidx.compose.runtime.DisposableEffect(dialogWindow, widthPx, alignEnd, cornerPx) {
+            runCatching {
+                val existing = dialogWindow.decorView.background as? SidePanelBlurOutlineDrawable
+                if (existing != null) {
+                    existing.panelWidthPx = widthPx
+                    existing.alignEnd = alignEnd
+                    existing.cornerRadiusPx = cornerPx
+                    existing.invalidateSelf()
+                    dialogWindow.decorView.invalidateOutline()
+                } else {
+                    dialogWindow.setBackgroundDrawable(SidePanelBlurOutlineDrawable(widthPx, alignEnd, cornerPx))
+                    dialogWindow.setBackgroundBlurRadius(blurRadiusPx)
+                }
+            }
+            onDispose {
+                runCatching {
+                    dialogWindow.setBackgroundBlurRadius(0)
+                    dialogWindow.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+                }
+            }
+        }
+    }
+
+    val panelShape = if (alignEnd) {
+        RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
+    } else {
+        RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp)
+    }
+
     Box(Modifier.fillMaxSize(), contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart) {
         Column(
             Modifier
                 .width(width)
                 .fillMaxHeight()
+                .clip(panelShape)
                 .background(
                     Brush.horizontalGradient(
-                        if (alignEnd) listOf(ComposeColor(0xE6141318), TvColors.panel) else listOf(TvColors.panel, ComposeColor(0xE6141318))
+                        if (alignEnd) listOf(TvColors.panelInner, TvColors.panel) else listOf(TvColors.panel, TvColors.panelInner)
                     )
                 )
+                .border(1.dp, ComposeColor(0x26FFFFFF), panelShape)
                 .padding(horizontal = if (compactHeader) 18.dp else 32.dp, vertical = if (compactHeader) 22.dp else 36.dp)
         ) {
             Text(

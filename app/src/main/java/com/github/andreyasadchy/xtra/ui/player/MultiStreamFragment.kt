@@ -23,13 +23,25 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.chat.ChatFragment
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
-import com.github.andreyasadchy.xtra.ui.tv.TvActionPanel
+import com.github.andreyasadchy.xtra.ui.tv.ButtonRow
+import com.github.andreyasadchy.xtra.ui.tv.FocusRow
+import com.github.andreyasadchy.xtra.ui.tv.FooterActionChip
+import com.github.andreyasadchy.xtra.ui.tv.PanelTabs
+import com.github.andreyasadchy.xtra.ui.tv.SelectorRow
+import com.github.andreyasadchy.xtra.ui.tv.SidePanel
+import com.github.andreyasadchy.xtra.ui.tv.SliderRow
+import com.github.andreyasadchy.xtra.ui.tv.TvColors
+import com.github.andreyasadchy.xtra.ui.tv.TvDialogs
 import com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamQuality
 import com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamSound
+import com.github.andreyasadchy.xtra.ui.tv.tvPanelFirstRow
+import com.github.andreyasadchy.xtra.ui.tv.tvPanelLastRow
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
@@ -675,209 +687,540 @@ class MultiStreamFragment : Fragment() {
     /** Focus / mosaic mode: the big stream (the first one when none was chosen). */
     private fun bigTile() = tiles.find { it.stream.channelLogin != null && it.stream.channelLogin == bigLogin } ?: tiles.firstOrNull()
 
-    /** Panel of a stream: open it, its chat, change it, add a stream, its size. */
+    /** Compact 3-tab Multi-Stream panel matching Chat & PiP: Display & Chat · Audio · Options + pinned footer. */
     private fun showPanel(tile: Tile) {
         val activity = activity as? MainActivity ?: return
+        val context = context ?: return
         val login = tile.stream.channelLogin ?: return
         val name = tile.stream.channelName ?: login
-        val actions = mutableListOf<TvActionPanel.Action>()
-        actions += TvActionPanel.Action(getString(R.string.tv_multistream_open_full), R.drawable.tv_ic_open_full) {
-            activity.closeMultiStream()
-            activity.startStream(tile.stream)
-        }
-        if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false)) {
-            if (isTileChatLoggedIn(requireContext())) {
-                val lockMsg = computeTileChatLockMessage(tile)
-                actions += TvActionPanel.Action(
-                    getString(R.string.tv_write_message),
-                    if (lockMsg != null) R.drawable.tv_ic_chat_send_locked else R.drawable.tv_ic_chat_send,
-                ) {
-                    openTileChatComposer(tile)
-                }
+        loadSound()
+        val prefs = context.prefs()
+        val chatDisabled = prefs.getBoolean(C.CHAT_DISABLE, false)
+        val loggedIn = !chatDisabled && isTileChatLoggedIn(context)
+        val lockMsg = if (loggedIn) computeTileChatLockMessage(tile) else null
+        val tileIndex = tiles.indexOf(tile)
+        val streamCount = tiles.size
+        val shownAudioTiles = tiles.filter { it.stream.channelLogin != null }
+        val currentStreams = tiles.map { it.stream }
+        val groupId = if (streamCount >= 2) com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.idOf(currentStreams) else ""
+
+        val rootW = (tile.view.parent as? View)?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val alignEnd = (tile.view.x + tile.view.width / 2f) <= rootW / 2f
+
+        val tabs = listOf(
+            R.drawable.tv_ic_view_quilt to getString(R.string.tv_panel_tab_display),
+            R.drawable.tv_ic_volume to getString(R.string.tv_panel_tab_audio),
+            R.drawable.tv_ic_tune to getString(R.string.tv_panel_tab_options),
+        )
+        val profileOptions = TvMultiStreamQuality.PROFILES.map { TvMultiStreamQuality.profileLabel(context, it) }
+        val overrideCaps: List<Int?> = listOf(null) + TvMultiStreamQuality.CAPS
+        val overrideOptions = listOf(getString(R.string.tv_multistream_quality_follow_profile)) +
+            TvMultiStreamQuality.CAPS.map { TvMultiStreamQuality.capLabel(context, it) }
+
+        TvDialogs.show(context) { dismiss ->
+            val selectedTab = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+            val tabRequesters = androidx.compose.runtime.remember { List(3) { androidx.compose.ui.focus.FocusRequester() } }
+            val firstRowReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val lastRowReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val footerFullReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val footerRemoveReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+
+            val stackedState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(stacked2) }
+            val focusState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(isFocusLayout() && bigLogin == login) }
+            val mosaicState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(isMosaicLayout()) }
+            val chatShown2State = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(login in chatsShown) }
+            val swapChats2State = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(swapSideChats2) }
+            val chatOnTop2State = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(login in chatsOnTop) }
+            val cellChatHiddenState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(cellChatHidden) }
+            val pinnedChatState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(pinnedChat == login) }
+
+            val mixState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(soundMix) }
+            val keepSoundState = androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableStateOf(prefs.getBoolean(C.TV_MULTISTREAM_SOUND_KEEP, false))
             }
-            when (tiles.size) {
-                2 -> {
-                    val shown = login in chatsShown
-                    actions += TvActionPanel.Action(getString(if (shown) R.string.tv_multistream_hide_chat else R.string.tv_multistream_show_chat), R.drawable.tv_ic_chat) {
-                        if (shown) chatsShown.remove(login) else chatsShown.add(login)
-                        updateChats()
+
+            val streamOverrideState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(tile.qualityOverrideHeight) }
+            val profileState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(TvMultiStreamQuality.profile(context)) }
+            val groupSavedState = androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableStateOf(
+                    groupId.isNotEmpty() && com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.isSaved(context, currentStreams)
+                )
+            }
+
+            val hasSizeSlider = streamCount == 2 && !stackedState.value && tileIndex >= 0
+            val isAnyFocusLayout = focusState.value || (focusMode && streamCount >= 3)
+            val hasChatToggle = !chatDisabled && (streamCount == 2 || ((streamCount == 3 || streamCount == 5) && !isAnyFocusLayout))
+            val hasChatSecondary = !chatDisabled && when {
+                streamCount == 2 -> chatShown2State.value
+                (streamCount == 3 || streamCount == 5) && !isAnyFocusLayout -> !cellChatHiddenState.value
+                else -> false
+            }
+            val tab0Count = 1 +
+                (if (hasSizeSlider) 1 else 0) +
+                (if (hasChatToggle) 1 else 0) +
+                (if (hasChatSecondary) 1 else 0) +
+                (if (loggedIn) 1 else 0)
+            val tab1Count = if (mixState.value) 1 + shownAudioTiles.size + 1 else 1
+            val hasCustomCapsBtn = profileState.value == TvMultiStreamQuality.PROFILE_CUSTOM
+            val hasAddStream = streamCount < MAX
+            val hasSaveGroup = groupId.isNotEmpty()
+            val tab2Count = 2 +
+                (if (hasCustomCapsBtn) 1 else 0) +
+                1 +
+                (if (hasAddStream) 1 else 0) +
+                (if (hasSaveGroup) 1 else 0)
+
+            val activeTabRowCount = when (selectedTab.intValue) {
+                0 -> tab0Count
+                1 -> tab1Count
+                else -> tab2Count
+            }
+            val footerUpTarget = if (activeTabRowCount <= 1) firstRowReq else lastRowReq
+            val canRemoveTile = streamCount > 2
+
+            fun androidx.compose.ui.Modifier.rowFocus(idx: Int, total: Int): androidx.compose.ui.Modifier {
+                var m = this
+                if (idx == 0) {
+                    m = m.tvPanelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] }
+                }
+                if (idx == total - 1) {
+                    m = m.tvPanelLastRow(if (idx == 0) null else lastRowReq, footerFullReq)
+                }
+                return m
+            }
+
+            SidePanel(
+                title = name,
+                width = 392.dp,
+                compactHeader = true,
+                scrollable = true,
+                alignEnd = alignEnd,
+                headerExtra = {
+                    PanelTabs(
+                        tabs = tabs,
+                        selectedTab = selectedTab.intValue,
+                        tabRequesters = tabRequesters,
+                        downTarget = firstRowReq,
+                        onSelect = { selectedTab.intValue = it },
+                    )
+                },
+                footer = {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                    ) {
+                        FooterActionChip(
+                            label = getString(R.string.tv_multistream_open_full),
+                            icon = R.drawable.tv_ic_open_full,
+                            requester = footerFullReq,
+                            rightTarget = if (canRemoveTile) footerRemoveReq else null,
+                            upTarget = footerUpTarget,
+                        ) {
+                            dismiss()
+                            activity.closeMultiStream()
+                            activity.startStream(tile.stream)
+                        }
+                        if (canRemoveTile) {
+                            FooterActionChip(
+                                label = getString(R.string.tv_multistream_remove),
+                                icon = R.drawable.tv_ic_delete,
+                                requester = footerRemoveReq,
+                                leftTarget = footerFullReq,
+                                upTarget = footerUpTarget,
+                            ) {
+                                dismiss()
+                                if (view != null && tiles.size > 2) {
+                                    removeTile(tile)
+                                }
+                            }
+                        }
                     }
-                    if (shown) {
-                        if (stacked2) {
-                            actions += TvActionPanel.Action(getString(R.string.tv_multistream_swap_side_chats), R.drawable.tv_ic_swap) {
-                                swapSideChats2 = !swapSideChats2
-                                context?.prefs()?.edit()?.putBoolean(C.TV_MULTISTREAM_2_SWAP_CHATS, swapSideChats2)?.apply()
+                },
+            ) {
+                when (selectedTab.intValue) {
+                    0 -> {
+                        var r = 0
+                        if (streamCount == 2) {
+                            ButtonRow(
+                                label = getString(if (stackedState.value) R.string.tv_multistream_2_side_by_side else R.string.tv_multistream_2_stacked),
+                                icon = R.drawable.tv_ic_fullscreen,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                            ) {
+                                stacked2 = !stacked2
+                                stackedState.value = stacked2
+                                prefs.edit().putBoolean(C.TV_MULTISTREAM_2_STACKED, stacked2).apply()
                                 layoutTiles()
+                            }
+                            if (hasSizeSlider) {
+                                SliderRow(
+                                    label = getString(R.string.tv_multistream_size),
+                                    value = if (tileIndex == 0) split else 100 - split,
+                                    range = 30..70,
+                                    step = 5,
+                                    valueText = { "$it %" },
+                                    icon = R.drawable.tv_ic_open_full,
+                                    compact = true,
+                                    modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                                ) { value ->
+                                    split = if (tileIndex == 0) value else 100 - value
+                                    layoutTiles()
+                                }
+                            }
+                        } else if (streamCount == 5 || streamCount == 6) {
+                            val layoutModeIdx = when {
+                                focusMode && bigLogin == login -> 2
+                                mosaicState.value && !focusMode -> 1
+                                else -> 0
+                            }
+                            SelectorRow(
+                                label = getString(R.string.tv_panel_tab_display),
+                                options = listOf(
+                                    getString(R.string.tv_multistream_grid),
+                                    getString(R.string.tv_multistream_mosaic),
+                                    getString(R.string.tv_multistream_focus),
+                                ),
+                                selected = layoutModeIdx,
+                                icon = R.drawable.tv_ic_fullscreen,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                            ) { chosen ->
+                                when (chosen) {
+                                    0 -> {
+                                        focusMode = false
+                                        setMosaic56(false)
+                                        focusState.value = false
+                                        mosaicState.value = false
+                                    }
+                                    1 -> {
+                                        focusMode = false
+                                        setMosaic56(true)
+                                        bigLogin = login
+                                        focusState.value = false
+                                        mosaicState.value = true
+                                    }
+                                    else -> {
+                                        focusMode = true
+                                        bigLogin = login
+                                        focusState.value = true
+                                        mosaicState.value = false
+                                    }
+                                }
+                                layoutTiles()
+                                updateCellChat()
                             }
                         } else {
-                            // this stream only: its chat above or under it
-                            val onTop = login in chatsOnTop
-                            actions += TvActionPanel.Action(getString(if (onTop) R.string.tv_multistream_chat_bottom else R.string.tv_multistream_chat_top), R.drawable.tv_ic_forum) {
-                                if (onTop) chatsOnTop.remove(login) else chatsOnTop.add(login)
+                            val isThisFocused = focusMode && bigLogin == login
+                            SelectorRow(
+                                label = getString(R.string.tv_panel_tab_display),
+                                options = listOf(
+                                    getString(R.string.tv_multistream_grid),
+                                    getString(R.string.tv_multistream_focus),
+                                ),
+                                selected = if (isThisFocused) 1 else 0,
+                                icon = R.drawable.tv_ic_fullscreen,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                            ) { chosen ->
+                                if (chosen == 1) {
+                                    focusMode = true
+                                    bigLogin = login
+                                    focusState.value = true
+                                } else {
+                                    focusMode = false
+                                    focusState.value = false
+                                }
                                 layoutTiles()
+                                updateCellChat()
+                            }
+                        }
+
+                        if (hasChatToggle) {
+                            if (streamCount == 2) {
+                                ButtonRow(
+                                    label = getString(if (chatShown2State.value) R.string.tv_multistream_hide_chat else R.string.tv_multistream_show_chat),
+                                    icon = R.drawable.tv_ic_chat,
+                                    compact = true,
+                                    modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                                ) {
+                                    if (chatShown2State.value) chatsShown.remove(login) else chatsShown.add(login)
+                                    chatShown2State.value = login in chatsShown
+                                    updateChats()
+                                }
+                            } else {
+                                ButtonRow(
+                                    label = getString(if (cellChatHiddenState.value) R.string.tv_multistream_show_chat else R.string.tv_multistream_hide_chat),
+                                    icon = R.drawable.tv_ic_chat,
+                                    compact = true,
+                                    modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                                ) {
+                                    cellChatHidden = !cellChatHidden
+                                    cellChatHiddenState.value = cellChatHidden
+                                    updateCellChat()
+                                }
+                            }
+                        }
+
+                        if (hasChatSecondary) {
+                            if (streamCount == 2) {
+                                if (stackedState.value) {
+                                    ButtonRow(
+                                        label = getString(R.string.tv_multistream_swap_side_chats),
+                                        icon = R.drawable.tv_ic_swap,
+                                        compact = true,
+                                        modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                                    ) {
+                                        swapSideChats2 = !swapSideChats2
+                                        swapChats2State.value = swapSideChats2
+                                        prefs.edit().putBoolean(C.TV_MULTISTREAM_2_SWAP_CHATS, swapSideChats2).apply()
+                                        layoutTiles()
+                                    }
+                                } else {
+                                    ButtonRow(
+                                        label = getString(if (chatOnTop2State.value) R.string.tv_multistream_chat_bottom else R.string.tv_multistream_chat_top),
+                                        icon = R.drawable.tv_ic_forum,
+                                        compact = true,
+                                        modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                                    ) {
+                                        if (chatOnTop2State.value) chatsOnTop.remove(login) else chatsOnTop.add(login)
+                                        chatOnTop2State.value = login in chatsOnTop
+                                        layoutTiles()
+                                    }
+                                }
+                            } else {
+                                ButtonRow(
+                                    label = getString(if (pinnedChatState.value) R.string.tv_multistream_unpin_chat else R.string.tv_multistream_pin_chat),
+                                    icon = R.drawable.tv_ic_pin,
+                                    compact = true,
+                                    modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                                ) {
+                                    pinnedChat = if (pinnedChat == login) null else login
+                                    pinnedChatState.value = pinnedChat == login
+                                    updateCellChat()
+                                }
+                            }
+                        }
+
+                        if (loggedIn) {
+                            ButtonRow(
+                                label = getString(R.string.tv_write_message),
+                                icon = if (lockMsg != null) R.drawable.tv_ic_chat_send_locked else R.drawable.tv_ic_chat_send,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                            ) {
+                                dismiss()
+                                openTileChatComposer(tile)
+                            }
+                        }
+                    }
+
+                    1 -> {
+                        var r = 0
+                        SelectorRow(
+                            label = getString(R.string.tv_multistream_sound),
+                            options = listOf(
+                                getString(R.string.tv_multistream_sound_selected),
+                                getString(R.string.tv_multistream_sound_mix),
+                            ),
+                            selected = if (mixState.value) 1 else 0,
+                            icon = R.drawable.tv_ic_volume,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab1Count),
+                        ) { idx ->
+                            val nextMix = idx == 1
+                            mixState.value = nextMix
+                            soundMix = nextMix
+                            if (prefs.getBoolean(C.TV_MULTISTREAM_SOUND_KEEP, false)) {
+                                prefs.edit().putBoolean(C.TV_MULTISTREAM_SOUND_MIX, nextMix).apply()
+                            }
+                            applySound()
+                        }
+                        if (mixState.value) {
+                            shownAudioTiles.forEach { audioTile ->
+                                val tLogin = audioTile.stream.channelLogin.orEmpty()
+                                val tName = audioTile.stream.channelName ?: tLogin
+                                SliderRow(
+                                    label = tName,
+                                    value = streamVolume(audioTile),
+                                    range = 0..100,
+                                    step = 10,
+                                    valueText = { "$it %" },
+                                    compact = true,
+                                    modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab1Count),
+                                ) { value ->
+                                    if (tLogin.isNotEmpty()) {
+                                        sessionVolumes[tLogin] = value
+                                        if (prefs.getBoolean(C.TV_MULTISTREAM_SOUND_KEEP, false)) {
+                                            prefs.edit().putInt(C.TV_MULTISTREAM_VOLUME_PREFIX + tLogin, value).apply()
+                                        }
+                                    }
+                                    applySound()
+                                }
+                            }
+                            FocusRow(
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab1Count),
+                                onClick = {
+                                    val nextKeep = !keepSoundState.value
+                                    keepSoundState.value = nextKeep
+                                    prefs.edit().apply {
+                                        putBoolean(C.TV_MULTISTREAM_SOUND_KEEP, nextKeep)
+                                        putBoolean(C.TV_MULTISTREAM_SOUND_MIX, nextKeep && soundMix)
+                                        if (nextKeep) {
+                                            tiles.forEach { t ->
+                                                t.stream.channelLogin?.let { putInt(C.TV_MULTISTREAM_VOLUME_PREFIX + it, streamVolume(t)) }
+                                            }
+                                        }
+                                    }.apply()
+                                },
+                            ) { focused ->
+                                val color = if (focused) TvColors.onFocused else androidx.compose.ui.graphics.Color.White
+                                val shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                    androidx.compose.foundation.layout.Box(
+                                        androidx.compose.ui.Modifier
+                                            .size(18.dp)
+                                            .border(2.dp, if (keepSoundState.value) androidx.tv.material3.MaterialTheme.colorScheme.primary else color, shape)
+                                            .background(
+                                                if (keepSoundState.value) androidx.tv.material3.MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
+                                                shape,
+                                            ),
+                                        contentAlignment = androidx.compose.ui.Alignment.Center,
+                                    ) {
+                                        if (keepSoundState.value) {
+                                            androidx.tv.material3.Text("✓", fontSize = 12.sp, color = androidx.tv.material3.MaterialTheme.colorScheme.onPrimary)
+                                        }
+                                    }
+                                    androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(10.dp))
+                                    androidx.tv.material3.Text(
+                                        getString(R.string.tv_multistream_sound_keep),
+                                        fontSize = 15.sp,
+                                        color = color,
+                                        maxLines = 2,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    else -> {
+                        var r = 0
+                        val overrideIdx = overrideCaps.indexOf(streamOverrideState.value).coerceAtLeast(0)
+                        SelectorRow(
+                            label = getString(R.string.tv_remote_action_quality),
+                            options = overrideOptions,
+                            selected = overrideIdx,
+                            icon = R.drawable.tv_ic_hd,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab2Count),
+                        ) { idx ->
+                            val nextCap = overrideCaps.getOrNull(idx)
+                            streamOverrideState.value = nextCap
+                            if (view != null && tile in tiles) {
+                                tile.qualityOverrideHeight = nextCap
+                                resetQualityStepDown(tile)
+                                updateVideoSizes()
+                            }
+                        }
+
+                        val profIdx = TvMultiStreamQuality.PROFILES.indexOf(profileState.value).coerceAtLeast(0)
+                        SelectorRow(
+                            label = getString(R.string.tv_multistream_quality_profile),
+                            options = profileOptions,
+                            selected = profIdx,
+                            icon = R.drawable.tv_ic_tune,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab2Count),
+                        ) { idx ->
+                            val chosen = TvMultiStreamQuality.PROFILES.getOrElse(idx) { TvMultiStreamQuality.PROFILE_HIGH }
+                            profileState.value = chosen
+                            prefs.edit().putString(C.TV_MULTISTREAM_QUALITY, chosen).apply()
+                            if (view != null) {
+                                tiles.forEach { resetQualityStepDown(it) }
+                                updateVideoSizes()
+                            }
+                        }
+
+                        if (hasCustomCapsBtn) {
+                            ButtonRow(
+                                label = getString(R.string.tv_multistream_quality),
+                                icon = R.drawable.tv_ic_settings,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab2Count),
+                            ) {
+                                dismiss()
+                                showQualityPanel(tile)
+                            }
+                        }
+
+                        ButtonRow(
+                            label = getString(R.string.tv_multistream_change),
+                            icon = R.drawable.tv_ic_swap,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab2Count),
+                        ) {
+                            dismiss()
+                            TvMultiStreamPicker.pickOne(
+                                activity,
+                                tiles.mapNotNull { it.stream.channelLogin }.toSet(),
+                                getString(R.string.tv_multistream_change),
+                                tile.stream,
+                            ) { picked ->
+                                if (view != null) {
+                                    replaceStream(tile, picked)
+                                }
+                            }
+                        }
+
+                        if (hasAddStream) {
+                            ButtonRow(
+                                label = getString(R.string.tv_multistream_add),
+                                icon = R.drawable.tv_ic_add,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab2Count),
+                            ) {
+                                dismiss()
+                                TvMultiStreamPicker.pickOne(
+                                    activity,
+                                    tiles.mapNotNull { it.stream.channelLogin }.toSet(),
+                                    getString(R.string.tv_multistream_add),
+                                    tile.stream,
+                                ) { picked ->
+                                    if (view != null && tiles.size < MAX) {
+                                        val added = addTile(picked)
+                                        updateChats()
+                                        updateCellChat()
+                                        added.view.requestFocus()
+                                    }
+                                }
+                            }
+                        }
+
+                        if (hasSaveGroup) {
+                            ButtonRow(
+                                label = getString(if (groupSavedState.value) R.string.tv_multistream_remove_group else R.string.tv_multistream_save_group),
+                                icon = if (groupSavedState.value) R.drawable.tv_ic_delete else R.drawable.tv_ic_star,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab2Count),
+                            ) {
+                                if (groupSavedState.value) {
+                                    com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(context, groupId)
+                                    groupSavedState.value = false
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_multistream_group_removed, android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.save(context, currentStreams)
+                                    groupSavedState.value = true
+                                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_multistream_group_saved, android.widget.Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                     }
                 }
-                3, 5 -> if (!isFocusLayout()) {
-                    actions += TvActionPanel.Action(
-                        getString(if (cellChatHidden) R.string.tv_multistream_show_chat else R.string.tv_multistream_hide_chat),
-                        R.drawable.tv_ic_chat,
-                    ) {
-                        cellChatHidden = !cellChatHidden
-                        updateCellChat()
-                    }
-                    if (!cellChatHidden) {
-                        val pinned = pinnedChat == login
-                        actions += TvActionPanel.Action(getString(if (pinned) R.string.tv_multistream_unpin_chat else R.string.tv_multistream_pin_chat), R.drawable.tv_ic_pin) {
-                            pinnedChat = if (pinned) null else login
-                            updateCellChat()
-                        }
-                    }
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    runCatching { firstRowReq.requestFocus() }
                 }
             }
         }
-        actions += TvActionPanel.Action(getString(R.string.tv_multistream_change), R.drawable.tv_ic_swap) {
-            TvMultiStreamPicker.pickOne(activity, tiles.mapNotNull { it.stream.channelLogin }.toSet(), getString(R.string.tv_multistream_change), tile.stream) { picked ->
-                if (view != null) {
-                    replaceStream(tile, picked)
-                }
-            }
-        }
-        if (tiles.size < MAX) {
-            actions += TvActionPanel.Action(getString(R.string.tv_multistream_add), R.drawable.tv_ic_add) {
-                TvMultiStreamPicker.pickOne(activity, tiles.mapNotNull { it.stream.channelLogin }.toSet(), getString(R.string.tv_multistream_add), tile.stream) { picked ->
-                    if (view != null && tiles.size < MAX) {
-                        val added = addTile(picked)
-                        // the chats follow the new layout (under the streams at 2, in the empty cell at 3)
-                        updateChats()
-                        updateCellChat()
-                        added.view.requestFocus()
-                    }
-                }
-            }
-        }
-        if (tiles.size == 2) {
-            actions += TvActionPanel.Action(
-                getString(if (stacked2) R.string.tv_multistream_2_side_by_side else R.string.tv_multistream_2_stacked),
-                R.drawable.tv_ic_fullscreen,
-            ) {
-                stacked2 = !stacked2
-                context?.prefs()?.edit()?.putBoolean(C.TV_MULTISTREAM_2_STACKED, stacked2)?.apply()
-                layoutTiles()
-            }
-        } else if (tiles.size == 5 || tiles.size == 6) {
-            when {
-                isFocusLayout() -> {
-                    actions += TvActionPanel.Action(getString(R.string.tv_multistream_mosaic), R.drawable.tv_ic_fullscreen) {
-                        focusMode = false
-                        setMosaic56(true)
-                        layoutTiles()
-                        updateCellChat()
-                    }
-                    actions += TvActionPanel.Action(getString(R.string.tv_multistream_grid), R.drawable.tv_ic_fullscreen) {
-                        focusMode = false
-                        setMosaic56(false)
-                        layoutTiles()
-                        updateCellChat()
-                    }
-                }
-                isMosaicLayout() -> {
-                    actions += TvActionPanel.Action(getString(R.string.tv_multistream_grid), R.drawable.tv_ic_fullscreen) {
-                        focusMode = false
-                        setMosaic56(false)
-                        layoutTiles()
-                        updateCellChat()
-                    }
-                    actions += TvActionPanel.Action(getString(R.string.tv_multistream_focus), R.drawable.tv_ic_fullscreen) {
-                        focusMode = true
-                        bigLogin = login
-                        layoutTiles()
-                        updateCellChat()
-                    }
-                }
-                else -> {
-                    actions += TvActionPanel.Action(getString(R.string.tv_multistream_mosaic), R.drawable.tv_ic_fullscreen) {
-                        focusMode = false
-                        setMosaic56(true)
-                        bigLogin = login
-                        layoutTiles()
-                        updateCellChat()
-                    }
-                    actions += TvActionPanel.Action(getString(R.string.tv_multistream_focus), R.drawable.tv_ic_fullscreen) {
-                        focusMode = true
-                        bigLogin = login
-                        layoutTiles()
-                        updateCellChat()
-                    }
-                }
-            }
-        } else if (tiles.size >= 3) {
-            if (isFocusLayout()) {
-                actions += TvActionPanel.Action(getString(R.string.tv_multistream_grid), R.drawable.tv_ic_fullscreen) {
-                    focusMode = false
-                    layoutTiles()
-                    updateCellChat()
-                }
-            } else {
-                actions += TvActionPanel.Action(getString(R.string.tv_multistream_focus), R.drawable.tv_ic_fullscreen) {
-                    focusMode = true
-                    bigLogin = login
-                    layoutTiles()
-                    updateCellChat()
-                }
-            }
-        }
-        actions += TvActionPanel.Action(getString(R.string.tv_multistream_sound), R.drawable.tv_ic_volume) {
-            showSoundPanel()
-        }
-        val qualityLabel = tile.qualityOverrideHeight?.let { cap ->
-            "${getString(R.string.tv_remote_action_quality)} (${TvMultiStreamQuality.capLabel(requireContext(), cap)})"
-        } ?: getString(R.string.tv_remote_action_quality)
-        actions += TvActionPanel.Action(qualityLabel, R.drawable.tv_ic_hd) {
-            showQualityPanel(tile)
-        }
-        if (tiles.size >= 2) {
-            val currentStreams = tiles.map { it.stream }
-            val groupId = com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.idOf(currentStreams)
-            if (groupId.isNotEmpty()) {
-                val saved = com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.isSaved(requireContext(), currentStreams)
-                actions += TvActionPanel.Action(
-                    getString(if (saved) R.string.tv_multistream_remove_group else R.string.tv_multistream_save_group),
-                    if (saved) R.drawable.tv_ic_delete else R.drawable.tv_ic_star,
-                ) {
-                    if (saved) {
-                        com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.remove(requireContext(), groupId)
-                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_multistream_group_removed, android.widget.Toast.LENGTH_SHORT).show()
-                    } else {
-                        com.github.andreyasadchy.xtra.ui.tv.TvMultiStreamGroups.save(requireContext(), currentStreams)
-                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_multistream_group_saved, android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
-        if (tiles.size > 2) {
-            actions += TvActionPanel.Action(getString(R.string.tv_multistream_remove), R.drawable.tv_ic_delete) {
-                if (view != null && tiles.size > 2) {
-                    removeTile(tile)
-                }
-            }
-        }
-        // 2 streams side by side: the share of the screen of this stream
-        val slider = if (tiles.size == 2 && !stacked2) {
-            val index = tiles.indexOf(tile)
-            TvActionPanel.Slider(
-                label = getString(R.string.tv_multistream_size),
-                value = if (index == 0) split else 100 - split,
-                range = 30..70,
-                step = 5,
-                valueText = { "$it %" },
-            ) { value ->
-                split = if (index == 0) value else 100 - value
-                layoutTiles()
-            }
-        } else null
-        TvActionPanel.show(requireContext(), name, actions, slider)
     }
 
     private fun isTileChatLoggedIn(context: android.content.Context): Boolean {

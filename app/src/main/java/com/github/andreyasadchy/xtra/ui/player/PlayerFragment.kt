@@ -227,8 +227,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** Live broadcast screen (excluding DVR/VOD). */
     fun isLiveStreamScreen(): Boolean = isStreamScreen()
 
-    /** Live broadcast or live-rewind DVR broadcast (where left/right and channel +/- switch streamers). */
+    /** Live broadcast or live-rewind DVR broadcast (where channel +/- and favorites stay enabled). */
     fun isLiveOrDvrScreen(): Boolean = isStreamScreen() || isDvrScreen()
+
+    /** True only when watching a live broadcast at its live edge (false when rewound into DVR VOD or experimental/RAM timeshift). */
+    private fun isAtLiveEdgeForStreamSwitch(): Boolean {
+        if (!isStreamScreen() || isDvrScreen()) return false
+        val exo = playbackService as? ExoPlayerService
+        if (exo != null) {
+            if (exo.experimentalVodActive && exo.experimentalVodUserRewound) return false
+            if (!exo.experimentalVodActive && exo.getLiveTimeShiftBehindMs() > 15_000L) return false
+        }
+        return true
+    }
 
     private fun effectiveDpadAction(action: String, pipOpen: Boolean): String {
         val Keys = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys
@@ -243,10 +254,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /**
      * TV: returns -1 or +1 when [keyCode] is configured to switch to the previous/next streamer while controls are
-     * hidden on a live or live-rewind DVR screen (also before the new player view is inflated during quick switches).
+     * hidden on a live broadcast at the live edge (also before the new player view is inflated during quick switches).
      */
     fun handlesDpadSwitchDirection(keyCode: Int): Int? {
-        if (!isTv || !isMaximized || !isLiveOrDvrScreen() || hudOpenedByUser) {
+        if (!isTv || !isMaximized || !isAtLiveEdgeForStreamSwitch() || hudOpenedByUser) {
             return null
         }
         if (_binding != null && binding.chatLayout.hasFocus()) {
@@ -898,7 +909,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             val pipOpen = (activity as? MainActivity)?.isTvPipOpen() == true
                             val dpadAction = effectiveDpadAction(Keys.dpadForKeyCode(requireContext(), keyCode), pipOpen)
                             val isSwitch = dpadAction == Keys.ACTION_SWITCH_PREV || dpadAction == Keys.ACTION_SWITCH_NEXT
-                            if ((isSwitch && isLiveOrDvrScreen()) || (!isSwitch && dpadAction != Keys.ACTION_DEFAULT)) {
+                            if ((isSwitch && isAtLiveEdgeForStreamSwitch()) || (!isSwitch && dpadAction != Keys.ACTION_DEFAULT)) {
                                 binding.dragView.requestFocus()
                                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                                     executeTvRemoteAction(dpadAction)
@@ -987,11 +998,32 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var dvrInitialHudShown = false
+
+    private fun openHudOnTimelineForDvr() {
+        if (!isTv || !isAdded || _binding == null || !isMaximized) return
+        hudOpenedByUser = true
+        endHudPeek()
+        showController(force = true)
+        binding.playerControls.root.post {
+            val b = _binding ?: return@post
+            if (!isAdded || !isMaximized || !b.playerControls.root.isVisible) return@post
+            b.playerControls.progressBar.isFocusable = true
+            if (!(b.playerControls.progressBar.isShown && b.playerControls.progressBar.requestFocus())) {
+                focusPrimaryControl()
+            }
+        }
+    }
+
     fun start() {
         setupTvHud()
         setupSeekPreview()
-        // a switch of stream (left / right): the HUD of the stream reached for a moment, without the focus
-        if (isTv && peekHudOnStart) {
+        if (isTv && !dvrInitialHudShown && arguments?.getBoolean(KEY_DVR) == true && isMaximized) {
+            dvrInitialHudShown = true
+            peekHudOnStart = false
+            peekHudImmediateSwitch = false
+            openHudOnTimelineForDvr()
+        } else if (isTv && peekHudOnStart) {
             peekHudOnStart = false
             val immediate = peekHudImmediateSwitch
             peekHudImmediateSwitch = false
@@ -2878,6 +2910,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     val originPos = if (tvScrubOriginPosition >= 0L) tvScrubOriginPosition else tvScrubPosition
                     (seekPreview ?: createSeekPreview()).apply {
                         setStartEpochMs(resolveSeekStartEpochMs())
+                        (playbackService as? ExoPlayerService)?.getExperimentalSeekPreviewUrl()?.let { expUrl ->
+                            updateVideoFallback(expUrl)
+                        }
                     }.show(
                         position = tvScrubPosition,
                         duration = duration,
@@ -2888,6 +2923,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
                 KeyEvent.ACTION_UP -> {
                     if (tvScrubPosition >= 0) {
+                        seekPreview?.onScrubGestureIdle()
                         root.removeCallbacks(tvScrubCommitRunnable)
                         root.postDelayed(tvScrubCommitRunnable, 700L)
                     }
@@ -2999,14 +3035,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return seekPreviews ?: animatedPreviewUrl?.let { "${it.substringBeforeLast("/")}/$videoId-info.json" }
     }
 
-    /** Live: thumbnails come from the storyboards of the VOD being recorded. */
+    /** Live: thumbnails come from the storyboards of the VOD being recorded (or Experimental Adblock's ongoing DVR playlist). */
     private fun setupLiveSeekPreview() {
         val login = playbackService?.channelLogin ?: return
         val preview = createSeekPreview()
         viewLifecycleOwner.lifecycleScope.launch {
             val url = getLiveStoryboardUrl(login, playbackService?.createdAt)
-            if (url != null && view != null) {
-                preview.load(url, refresh = true)
+            val expPlaylist = (playbackService as? ExoPlayerService)?.getExperimentalSeekPreviewUrl()
+            if ((url != null || expPlaylist != null) && view != null) {
+                preview.load(url, refresh = true, videoPlaylist = expPlaylist)
             }
         }
     }
@@ -7452,7 +7489,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (isTv && hudHiddenOrPeek) {
                     val action = effectiveDpadAction(Keys.dpadForKeyCode(requireContext(), keyCode), pipOpen)
                     if (action == Keys.ACTION_SWITCH_PREV || action == Keys.ACTION_SWITCH_NEXT) {
-                        if (isLiveOrDvrScreen()) {
+                        if (isAtLiveEdgeForStreamSwitch()) {
                             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                                 executeTvRemoteAction(action)
                             }
@@ -7473,6 +7510,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         binding.playerControls.progressBar.requestFocus()
                     }
                     onTimeBarKey(keyCode, event)
+                } else if (isTv && !isAtLiveEdgeForStreamSwitch()) {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        openHudOnTimelineForDvr()
+                    }
+                    true
                 } else {
                     false
                 }

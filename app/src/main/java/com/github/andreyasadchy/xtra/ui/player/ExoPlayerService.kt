@@ -374,7 +374,13 @@ class ExoPlayerService : BasePlaybackService() {
     private var expLastRawEdgeElapsedMs = 0L
     private var expDisplayEdgeHighWaterMs = 0L
     private var experimentalVodCreatedAtMs: Long? = null
+    private var experimentalVodBaseDir: String? = null
     private var experimentalVodUpgradeJob: Job? = null
+
+    fun getExperimentalSeekPreviewUrl(): String? {
+        if (!experimentalVodActive) return null
+        return TvExperimentalAdblock.getSeekPreviewUrl(channelLogin, streamId, experimentalVodBaseDir)
+    }
     private var experimentalFallback = ExperimentalFallback.NONE
     private var experimentalNoticeTitleRes = 0
     private var experimentalNoticeSubtitleRes = 0
@@ -1262,6 +1268,7 @@ class ExoPlayerService : BasePlaybackService() {
                     experimentalVodActive = false
                     experimentalVodUserRewound = false
                     experimentalVodCreatedAtMs = null
+                    experimentalVodBaseDir = null
                     experimentalVodUpgradeJob?.cancel()
                     experimentalVodUpgradeJob = null
                     clearLivePauseState()
@@ -1532,6 +1539,7 @@ class ExoPlayerService : BasePlaybackService() {
                     if (streamId.isNullOrBlank()) streamId = outcome.streamId
                     if (createdAt.isNullOrBlank()) createdAt = outcome.createdAtIso
                     experimentalVodCreatedAtMs = outcome.createdAtMs
+                    experimentalVodBaseDir = vod.baseDir
                     experimentalVodActive = true
                     experimentalVodUserRewound = false
                     experimentalFallback = ExperimentalFallback.NONE
@@ -1613,6 +1621,7 @@ class ExoPlayerService : BasePlaybackService() {
                 experimentalVodCreatedAtMs = outcome.createdAtMs
                 val vod = outcome.vod
                 if (vod != null && vod.vodDurationMs >= TvExperimentalAdblock.MIN_INITIAL_VOD_DURATION_MS) {
+                    experimentalVodBaseDir = vod.baseDir
                     experimentalVodActive = true
                     experimentalVodUserRewound = false
                     experimentalFallback = ExperimentalFallback.NONE
@@ -1644,6 +1653,7 @@ class ExoPlayerService : BasePlaybackService() {
                     return
                 } else {
                     experimentalVodActive = false
+                    experimentalVodBaseDir = null
                     experimentalVodUserRewound = false
                     if (playlistUrl?.contains("/tv_exp_vod/") == true) {
                         playlistUrl = null
@@ -1672,6 +1682,7 @@ class ExoPlayerService : BasePlaybackService() {
                 experimentalFallback = ExperimentalFallback.NONE
                 clearExperimentalBadgeNotice()
                 experimentalVodCreatedAtMs = null
+                experimentalVodBaseDir = null
                 if (playlistUrl?.contains("/tv_exp_vod/") == true) {
                     playlistUrl = null
                     qualities = null
@@ -3639,6 +3650,7 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodActive = false
         experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
+        experimentalVodBaseDir = null
         clearLivePauseState()
         // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
         // no sound), it must not come back on the screen for a moment when the backup player goes
@@ -3706,6 +3718,7 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodActive = false
         experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
+        experimentalVodBaseDir = null
         clearLivePauseState()
         playingAds = false
         backLiveFrom = 0L
@@ -5201,6 +5214,7 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalFallback = ExperimentalFallback.NONE
         clearExperimentalBadgeNotice()
         experimentalVodCreatedAtMs = null
+        experimentalVodBaseDir = null
         freezeWatchJob?.cancel()
         freezeWatchJob = null
         adMainWatchJob?.cancel()

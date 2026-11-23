@@ -3,9 +3,12 @@ package com.github.andreyasadchy.xtra.ui.player
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.SystemClock
 import android.text.TextUtils
 import android.text.format.DateUtils
 import android.util.TypedValue
@@ -63,8 +66,10 @@ import com.github.andreyasadchy.xtra.ui.tv.TvColors
 import com.github.andreyasadchy.xtra.ui.tv.TvDialogs
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -86,8 +91,18 @@ class TvSeekPreview(
 
     private var board: Board? = null
     private var chapters: List<Game> = emptyList()
-    private val sprites = HashMap<String, Bitmap>()
-    private val loading = HashSet<String>()
+    private val sprites = object : LinkedHashMap<String, Bitmap>(28, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean = size > 24
+    }
+    private var activeSpriteUrl: String? = null
+    private var activeSpriteCall: Call? = null
+    private var activeSpriteJob: Job? = null
+    private var croppedBitmap: Bitmap? = null
+    private var cropCanvas: Canvas? = null
+    private val cropSrcRect = Rect()
+    private val cropDstRect = Rect()
+    private var lastRenderedSpriteUrl: String? = null
+    private var lastRenderedSpriteCell = -1
     private var lastPosition = -1L
     private var lastDuration = 0L
     private var lastDeltaMs: Long? = null
@@ -237,8 +252,14 @@ class TvSeekPreview(
     private var videoBase: String? = null
     private var videoFallback: String? = null
     private var videoPlayer: ExoPlayer? = null
+    private var videoPlayerListener: Player.Listener? = null
     private var textureView: TextureView? = null
     private var videoLoading = false
+    private var hasRenderedVideoFrame = false
+    private var videoSeekInFlight = false
+    private var lastVideoSeekAtMs = 0L
+    private var pendingVideoSeekPos = -1L
+    private val videoPumpRunnable = Runnable { flushPendingVideoSeek() }
 
     /**
      * [infoUrl] is the storyboard description of the video (seekPreviewsURL), the sprites are next to it.
@@ -248,10 +269,21 @@ class TvSeekPreview(
     fun load(infoUrl: String?, refresh: Boolean = false, videoPlaylist: String? = null) {
         this.infoUrl = infoUrl
         this.refresh = refresh
-        this.videoFallback = videoPlaylist
+        if (!videoPlaylist.isNullOrBlank()) {
+            this.videoFallback = videoPlaylist
+        }
         if (infoUrl != null) {
             loadBoard()
         } else {
+            useVideo()
+        }
+    }
+
+    /** Attaches or updates a fallback DVR video playlist (e.g. Experimental Adblock ongoing VOD) when no public storyboard exists. */
+    fun updateVideoFallback(videoPlaylist: String?) {
+        if (videoPlaylist.isNullOrBlank() || videoPlaylist == videoFallback) return
+        videoFallback = videoPlaylist
+        if (board == null && !boardLoading && videoBase == null && !videoLoading) {
             useVideo()
         }
     }
@@ -308,7 +340,8 @@ class TvSeekPreview(
             return
         }
         val folder = infoUrl?.takeIf { it.contains("/storyboards/") }?.substringBefore("/storyboards/")
-        val candidates = buildList {
+            ?: videoFallback?.takeIf { it.endsWith("/index-dvr.m3u8") }?.substringBeforeLast("/")?.substringBeforeLast("/")
+        val candidates = LinkedHashSet<String>().apply {
             if (folder != null) {
                 add("$folder/160p30/index-dvr.m3u8")
                 add("$folder/360p30/index-dvr.m3u8")
@@ -407,7 +440,7 @@ class TvSeekPreview(
 
         if (videoBase != null) {
             showVideo(position)
-            place(position, duration, showThumbnail = true)
+            place(position, duration, showThumbnail = hasRenderedVideoFrame)
             return
         }
         if (infoUrl != null && (board == null || (refresh && System.currentTimeMillis() - boardLoadedAt > 60_000L))) {
@@ -415,6 +448,9 @@ class TvSeekPreview(
         }
         val currentBoard = board
         if (currentBoard == null || currentBoard.interval <= 0) {
+            if (infoUrl == null && videoFallback != null) {
+                useVideo()
+            }
             place(position, duration, showThumbnail = false)
             return
         }
@@ -435,21 +471,47 @@ class TvSeekPreview(
             val x = (cell % currentBoard.cols) * currentBoard.width
             val y = (cell / currentBoard.cols) * currentBoard.height
             if (x + currentBoard.width <= sprite.width && y + currentBoard.height <= sprite.height) {
-                imageView.setImageBitmap(Bitmap.createBitmap(sprite, x, y, currentBoard.width, currentBoard.height))
+                if (url != lastRenderedSpriteUrl || cell != lastRenderedSpriteCell) {
+                    val w = currentBoard.width
+                    val h = currentBoard.height
+                    var dstBmp = croppedBitmap
+                    if (dstBmp == null || dstBmp.width != w || dstBmp.height != h) {
+                        dstBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        croppedBitmap = dstBmp
+                        cropCanvas = Canvas(dstBmp)
+                    }
+                    cropSrcRect.set(x, y, x + w, y + h)
+                    cropDstRect.set(0, 0, w, h)
+                    cropCanvas?.drawBitmap(sprite, cropSrcRect, cropDstRect, null)
+                    imageView.setImageBitmap(dstBmp)
+                    imageView.invalidate()
+                    lastRenderedSpriteUrl = url
+                    lastRenderedSpriteCell = cell
+                }
                 hasPreviewBitmap = true
             }
-        } else if (loading.add(url)) {
-            scope.launch {
+        } else if (activeSpriteUrl != url) {
+            // LIFO priority during fast long-press scrubbing: cancel any skipped sprite sheet download
+            // so the sprite sheet currently under the cursor downloads immediately.
+            activeSpriteCall?.cancel()
+            activeSpriteJob?.cancel()
+            activeSpriteUrl = url
+            val call = client.newCall(Request.Builder().url(url).build())
+            activeSpriteCall = call
+            activeSpriteJob = scope.launch {
                 val bitmap = withContext(Dispatchers.IO) {
                     try {
-                        client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                        call.execute().use { response ->
                             if (response.isSuccessful) BitmapFactory.decodeStream(response.body.byteStream()) else null
                         }
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         null
                     }
                 }
-                loading.remove(url)
+                if (activeSpriteUrl == url) {
+                    activeSpriteUrl = null
+                    activeSpriteCall = null
+                }
                 if (bitmap != null) {
                     sprites[url] = bitmap
                     if (frame.isShown || seekInfoBox.isShown) {
@@ -461,30 +523,111 @@ class TvSeekPreview(
         place(position, duration, showThumbnail = hasPreviewBitmap)
     }
 
+    /** Called on key release so any throttled long-press video seek snaps immediately to the exact target position. */
+    fun onScrubGestureIdle() {
+        val player = videoPlayer ?: return
+        val pending = pendingVideoSeekPos
+        if (pending >= 0L) {
+            container.removeCallbacks(videoPumpRunnable)
+            pendingVideoSeekPos = -1L
+            videoSeekInFlight = true
+            lastVideoSeekAtMs = SystemClock.elapsedRealtime()
+            val windowDuration = player.duration.takeIf { it > 0 }
+            player.seekTo(if (windowDuration != null) pending.coerceIn(0, windowDuration) else pending)
+        }
+    }
+
+    private fun flushPendingVideoSeek() {
+        container.removeCallbacks(videoPumpRunnable)
+        val player = videoPlayer ?: return
+        val pending = pendingVideoSeekPos
+        if (pending < 0L) {
+            videoSeekInFlight = false
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        val elapsed = now - lastVideoSeekAtMs
+        val minIntervalMs = if (player.playbackState == Player.STATE_READY) 140L else 240L
+        if (videoSeekInFlight && elapsed < minIntervalMs) {
+            container.postDelayed(videoPumpRunnable, (minIntervalMs - elapsed).coerceAtLeast(30L))
+            return
+        }
+        pendingVideoSeekPos = -1L
+        videoSeekInFlight = true
+        lastVideoSeekAtMs = now
+        val windowDuration = player.duration.takeIf { it > 0 }
+        player.seekTo(if (windowDuration != null) pending.coerceIn(0, windowDuration) else pending)
+        container.postDelayed(videoPumpRunnable, 240L)
+    }
+
     private fun showVideo(position: Long) {
         val url = videoBase ?: return
-        val player = videoPlayer ?: ExoPlayer.Builder(container.context)
-            .setVideoChangeFrameRateStrategy(androidx.media3.common.C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
-            .build().also { player ->
-            val texture = TextureView(container.context)
-            frame.addView(texture, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            textureView = texture
-            imageView.visibility = View.GONE
-            player.volume = 0f
-            player.playWhenReady = false
-            player.repeatMode = Player.REPEAT_MODE_OFF
-            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, true)
-                .build()
-            // the key frames of the segments: the frame comes fast, a few seconds from the chosen position at most
-            player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
-            player.setVideoTextureView(texture)
-            player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
-            player.prepare()
-            videoPlayer = player
+        val player = videoPlayer ?: run {
+            val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(container.context)
+                .setEnableDecoderFallback(true)
+            ExoPlayer.Builder(container.context, renderersFactory)
+                .setVideoChangeFrameRateStrategy(androidx.media3.common.C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
+                .build().also { player ->
+                    val texture = TextureView(container.context)
+                    frame.addView(texture, 0, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                    textureView = texture
+                    imageView.visibility = View.GONE
+                    player.volume = 0f
+                    player.playWhenReady = false
+                    player.repeatMode = Player.REPEAT_MODE_OFF
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, true)
+                        .build()
+                    // the key frames of the segments: the frame comes fast, a few seconds from the chosen position at most
+                    player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+                    val listener = object : Player.Listener {
+                        override fun onRenderedFirstFrame() {
+                            hasRenderedVideoFrame = true
+                            videoSeekInFlight = false
+                            if (seekInfoBox.isShown && lastPosition >= 0L && lastDuration > 0L) {
+                                place(lastPosition, lastDuration, showThumbnail = true)
+                            }
+                            if (pendingVideoSeekPos >= 0L) {
+                                flushPendingVideoSeek()
+                            }
+                        }
+
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == Player.STATE_READY) {
+                                if (!hasRenderedVideoFrame && seekInfoBox.isShown && lastPosition >= 0L && lastDuration > 0L) {
+                                    hasRenderedVideoFrame = true
+                                    place(lastPosition, lastDuration, showThumbnail = true)
+                                }
+                                videoSeekInFlight = false
+                                if (pendingVideoSeekPos >= 0L) {
+                                    flushPendingVideoSeek()
+                                }
+                            }
+                        }
+                    }
+                    videoPlayerListener = listener
+                    player.addListener(listener)
+                    player.setVideoTextureView(texture)
+                    player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+                    player.prepare()
+                    videoPlayer = player
+                }
         }
         val windowDuration = player.duration.takeIf { it > 0 }
-        player.seekTo(if (windowDuration != null) position.coerceIn(0, windowDuration) else position)
+        val targetPos = if (windowDuration != null) position.coerceIn(0, windowDuration) else position
+        val now = SystemClock.elapsedRealtime()
+        if (!videoSeekInFlight || now - lastVideoSeekAtMs >= 240L) {
+            container.removeCallbacks(videoPumpRunnable)
+            pendingVideoSeekPos = -1L
+            videoSeekInFlight = true
+            lastVideoSeekAtMs = now
+            player.seekTo(targetPos)
+            container.postDelayed(videoPumpRunnable, 240L)
+        } else {
+            // Coalesce 50ms key-repeats during long-press so ExoPlayer finishes decoding the current keyframe
+            // before jumping to the latest position.
+            pendingVideoSeekPos = targetPos
+        }
     }
 
     /** Above the timeline, following the scrubber. */
@@ -529,6 +672,9 @@ class TvSeekPreview(
 
     fun hide() {
         container.removeCallbacks(hideAction)
+        container.removeCallbacks(videoPumpRunnable)
+        pendingVideoSeekPos = -1L
+        videoSeekInFlight = false
         frame.visibility = View.GONE
         seekInfoBox.visibility = View.GONE
         if (videoPlayer != null) {
@@ -538,10 +684,17 @@ class TvSeekPreview(
     }
 
     private fun releaseVideo() {
+        container.removeCallbacks(videoPumpRunnable)
+        pendingVideoSeekPos = -1L
+        videoSeekInFlight = false
+        hasRenderedVideoFrame = false
+        videoPlayerListener?.let { videoPlayer?.removeListener(it) }
+        videoPlayerListener = null
         videoPlayer?.release()
         videoPlayer = null
         textureView?.let { frame.removeView(it) }
         textureView = null
+        imageView.visibility = View.VISIBLE
     }
 
     /** After a short press the thumbnail stays a moment, long enough to see it. */
@@ -555,8 +708,19 @@ class TvSeekPreview(
     fun release() {
         container.removeCallbacks(hideAction)
         container.removeCallbacks(releaseAction)
+        container.removeCallbacks(videoPumpRunnable)
+        activeSpriteCall?.cancel()
+        activeSpriteCall = null
+        activeSpriteJob?.cancel()
+        activeSpriteJob = null
+        activeSpriteUrl = null
         hide()
         releaseVideo()
+        sprites.clear()
+        croppedBitmap = null
+        cropCanvas = null
+        lastRenderedSpriteUrl = null
+        lastRenderedSpriteCell = -1
     }
 
     companion object {
