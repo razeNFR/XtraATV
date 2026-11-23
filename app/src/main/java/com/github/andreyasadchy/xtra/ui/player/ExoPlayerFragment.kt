@@ -62,7 +62,9 @@ class ExoPlayerFragment : PlayerFragment() {
 
     private fun ensureTvMiniTextureView(): android.view.TextureView {
         tvMiniTextureView?.let { return it }
-        val tex = android.view.TextureView(requireContext())
+        val tex = android.view.TextureView(requireContext()).apply {
+            isOpaque = false
+        }
         val idx = binding.aspectRatioFrameLayout.indexOfChild(binding.adHideOverlay).takeIf { it >= 0 }
             ?: binding.aspectRatioFrameLayout.childCount
         binding.aspectRatioFrameLayout.addView(
@@ -82,14 +84,19 @@ class ExoPlayerFragment : PlayerFragment() {
         val service = playbackService
         val secondaryPlayer = secondaryOverride ?: (service?.isSwapping == true)
         val hideMain = service?.shouldHidePlayerSurface() == true
-        val useMiniTexture = isTv && !isMaximized
+        val useMiniTexture = isTv && !isMaximized && isTvMinimizedGhosted
 
         if (useMiniTexture) {
+            binding.playerLayout.setBackgroundColor(Color.TRANSPARENT)
+            binding.slidingLayout.elevation = 0f
             service?.player?.clearVideoSurfaceView(binding.playerSurface)
             service?.secondaryPlayer?.clearVideoSurfaceView(binding.secondaryPlayerSurface)
             binding.playerSurface.visibility = View.GONE
             binding.secondaryPlayerSurface.visibility = View.GONE
             val tex = ensureTvMiniTextureView()
+            tex.alpha = tvMinimizedGhostAlpha
+            binding.dragView.alpha = tvMinimizedGhostAlpha
+            binding.adHideOverlay.alpha = tvMinimizedGhostAlpha
             if (hideMain) {
                 service?.player?.clearVideoTextureView(tex)
                 service?.secondaryPlayer?.clearVideoTextureView(tex)
@@ -107,9 +114,14 @@ class ExoPlayerFragment : PlayerFragment() {
                 binding.adHideOverlay.isVisible = service?.isHidingAds == true
             }
         } else {
+            binding.playerLayout.setBackgroundColor(Color.BLACK)
+            binding.slidingLayout.elevation = if (isTv && !isMaximized) 20f * resources.displayMetrics.density else 0f
+            binding.dragView.alpha = 1f
+            binding.adHideOverlay.alpha = 1f
             tvMiniTextureView?.let { tex ->
                 service?.player?.clearVideoTextureView(tex)
                 service?.secondaryPlayer?.clearVideoTextureView(tex)
+                tex.alpha = 1f
                 tex.visibility = View.GONE
             }
             binding.playerSurface.visibility = if (hideMain) View.GONE else View.VISIBLE
@@ -143,6 +155,19 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun onTvMinimizedChanged(minimized: Boolean) {
         applyCurrentVideoOutput()
+    }
+
+    override fun onTvMinimizedGhostChanged(ghosted: Boolean, alpha: Float) {
+        if (view == null || !isAdded) return
+        if (isTv && !isMaximized && ghosted && tvMiniTextureView?.isVisible == true) {
+            binding.playerLayout.setBackgroundColor(Color.TRANSPARENT)
+            binding.slidingLayout.elevation = 0f
+            tvMiniTextureView?.alpha = alpha
+            binding.dragView.alpha = alpha
+            binding.adHideOverlay.alpha = alpha
+        } else {
+            applyCurrentVideoOutput()
+        }
     }
 
     private fun syncVodMutedSegmentsFromManifest() {
@@ -335,10 +360,11 @@ class ExoPlayerFragment : PlayerFragment() {
                 } else {
                     parameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_VIDEO)
                 }
-                if (isTv && !isMaximized) {
+                if (isTv && !isMaximized && isTvMinimizedGhosted) {
                     binding.playerSurface.visibility = View.GONE
                     tvMiniTextureView?.visibility = if (hideMainSurface) View.GONE else View.VISIBLE
                 } else {
+                    tvMiniTextureView?.visibility = View.GONE
                     binding.playerSurface.visibility = if (hideMainSurface) View.GONE else View.VISIBLE
                 }
                 binding.adHideOverlay.isVisible = service?.isHidingAds == true

@@ -1388,4 +1388,7 @@
     <string name="tv_hud_header_size_large">Grande</string>
     <string name="tv_hud_header_size_xlarge">Moi grande</string>
     <string name="tv_player_favorite_star">Estrela de streamer favorito</string>
+    <string name="tv_chat_polls_popup">Enquisas (chat oculto)</string>
+    <string name="tv_poll_started">Enquisa iniciada</string>
+    <string name="tv_poll_ended">Enquisa rematada</string>
 </resources>

@@ -27,6 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,9 +77,11 @@ object TvRewardsPanel {
             var claimedKeys by remember { mutableStateOf(emptySet<String>()) }
             var busy by remember { mutableStateOf(false) }
             val firstRequester = remember { FocusRequester() }
+            val lastRequester = remember { FocusRequester() }
             val closeRequester = remember { FocusRequester() }
             val scrollState = androidx.compose.foundation.rememberScrollState()
             var initialFocusDone by remember { mutableStateOf(false) }
+            var manualTailScrollAnchor by remember { mutableIntStateOf(-1) }
 
             LaunchedEffect(refreshTick) {
                 loading = true
@@ -94,6 +101,41 @@ object TvRewardsPanel {
                 loading = false
             }
 
+            fun isDropClaimable(drop: GraphQLRepository.DropProgressItem): Boolean {
+                val reqMin = drop.requiredMinutes.coerceAtLeast(1)
+                return !drop.isClaimed &&
+                    drop.dropId !in claimedKeys &&
+                    !drop.dropInstanceId.isNullOrBlank() &&
+                    drop.dropInstanceId !in claimedKeys &&
+                    drop.currentMinutes >= reqMin
+            }
+
+            val currentStore = store
+            val visibleDrops = drops.filter { drop ->
+                !drop.isClaimed &&
+                    drop.dropId !in claimedKeys &&
+                    (drop.dropInstanceId == null || drop.dropInstanceId !in claimedKeys)
+            }
+            val hasStreamCategory = !gameId.isNullOrBlank() || !gameName.isNullOrBlank()
+            fun matchesStreamCategory(drop: GraphQLRepository.DropProgressItem): Boolean {
+                if (!gameId.isNullOrBlank() && !drop.gameId.isNullOrBlank()) {
+                    return drop.gameId == gameId
+                }
+                if (!gameName.isNullOrBlank() && !drop.gameName.isNullOrBlank()) {
+                    return drop.gameName.equals(gameName, ignoreCase = true)
+                }
+                return false
+            }
+            val streamDrops = if (hasStreamCategory) visibleDrops.filter(::matchesStreamCategory) else visibleDrops
+            val otherDrops = if (hasStreamCategory) visibleDrops.filterNot(::matchesStreamCategory) else emptyList()
+
+            val claimId = currentStore?.availableClaimId
+            val resolvedChannelId = currentStore?.channelId?.takeIf { it.isNotBlank() } ?: channelId
+            val hasBonusButton = !channelLogin.isNullOrBlank() && !claimId.isNullOrBlank() && !resolvedChannelId.isNullOrBlank()
+            val rewardsList = if (!channelLogin.isNullOrBlank()) currentStore?.rewards.orEmpty() else emptyList()
+            val claimableDropsCount = streamDrops.count(::isDropClaimable) + otherDrops.count(::isDropClaimable)
+            val totalInteractive = (if (hasBonusButton) 1 else 0) + rewardsList.size + claimableDropsCount
+
             SidePanel(
                 title = context.getString(R.string.tv_points_and_drops),
                 width = 480.dp,
@@ -102,22 +144,100 @@ object TvRewardsPanel {
                 footer = {
                     ButtonRow(
                         label = context.getString(R.string.close_player),
-                        modifier = Modifier.focusRequester(closeRequester),
+                        modifier = Modifier
+                            .focusRequester(closeRequester)
+                            .onPreviewKeyEvent { ev ->
+                                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when (ev.key) {
+                                    Key.DirectionDown -> {
+                                        if (scrollState.value < scrollState.maxValue - 4) {
+                                            scope.launch {
+                                                scrollState.animateScrollTo((scrollState.value + 220).coerceAtMost(scrollState.maxValue))
+                                            }
+                                            true
+                                        } else {
+                                            true
+                                        }
+                                    }
+                                    Key.DirectionUp -> {
+                                        if (totalInteractive == 0) {
+                                            if (scrollState.value > 0) {
+                                                scope.launch {
+                                                    scrollState.animateScrollTo((scrollState.value - 220).coerceAtLeast(0))
+                                                }
+                                            }
+                                            true
+                                        } else if (manualTailScrollAnchor >= 0) {
+                                            val targetAnchor = manualTailScrollAnchor
+                                            val prev = (scrollState.value - 220).coerceAtLeast(targetAnchor)
+                                            if (prev <= targetAnchor + 4) {
+                                                manualTailScrollAnchor = -1
+                                                runCatching { lastRequester.requestFocus() }
+                                                scope.launch {
+                                                    androidx.compose.runtime.withFrameNanos { }
+                                                    scrollState.animateScrollTo(targetAnchor)
+                                                }
+                                            } else {
+                                                scope.launch { scrollState.animateScrollTo(prev) }
+                                            }
+                                            true
+                                        } else {
+                                            runCatching { lastRequester.requestFocus() }
+                                            true
+                                        }
+                                    }
+                                    else -> false
+                                }
+                            },
                         onClick = dismiss,
                     )
                 },
             ) {
-                var assignedFirstFocus = false
-                fun firstFocusModifier(): Modifier {
-                    return if (!assignedFirstFocus) {
-                        assignedFirstFocus = true
-                        Modifier.focusRequester(firstRequester)
-                    } else {
-                        Modifier
+                var interactiveCursor = 0
+                fun nextInteractiveModifier(): Modifier {
+                    val idx = interactiveCursor++
+                    val isFirst = idx == 0
+                    val isLast = idx == totalInteractive - 1
+                    var m: Modifier = Modifier
+                    if (isFirst) m = m.focusRequester(firstRequester)
+                    if (isLast) m = m.focusRequester(lastRequester)
+                    if (isFirst || isLast) {
+                        m = m.onPreviewKeyEvent { ev ->
+                            if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (ev.key) {
+                                Key.DirectionDown -> {
+                                    if (isLast) {
+                                        if (scrollState.value < scrollState.maxValue - 4) {
+                                            manualTailScrollAnchor = scrollState.value
+                                            val next = (scrollState.value + 220).coerceAtMost(scrollState.maxValue)
+                                            runCatching { closeRequester.requestFocus() }
+                                            scope.launch { scrollState.animateScrollTo(next) }
+                                        } else {
+                                            manualTailScrollAnchor = -1
+                                            runCatching { closeRequester.requestFocus() }
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                Key.DirectionUp -> {
+                                    if (isFirst && scrollState.value > 0) {
+                                        scope.launch {
+                                            scrollState.animateScrollTo((scrollState.value - 220).coerceAtLeast(0))
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                else -> false
+                            }
+                        }
                     }
+                    return m
                 }
 
-                val currentStore = store
                 if (!channelLogin.isNullOrBlank()) {
                     val pointsTitle = currentStore?.pointsName?.takeIf { it.isNotBlank() }
                         ?: context.getString(R.string.tv_points_default_name)
@@ -143,12 +263,10 @@ object TvRewardsPanel {
                         )
                     }
 
-                    val claimId = currentStore?.availableClaimId
-                    val resolvedChannelId = currentStore?.channelId?.takeIf { it.isNotBlank() } ?: channelId
-                    if (!claimId.isNullOrBlank() && !resolvedChannelId.isNullOrBlank()) {
+                    if (hasBonusButton && !claimId.isNullOrBlank() && !resolvedChannelId.isNullOrBlank()) {
                         ButtonRow(
                             label = "🎁 " + context.getString(R.string.tv_points_claim_bonus),
-                            modifier = firstFocusModifier(),
+                            modifier = nextInteractiveModifier(),
                         ) {
                             if (busy) return@ButtonRow
                             busy = true
@@ -169,8 +287,7 @@ object TvRewardsPanel {
                     }
 
                     Spacer(Modifier.height(6.dp))
-                    val rewards = currentStore?.rewards.orEmpty()
-                    if (!loading && rewards.isEmpty()) {
+                    if (!loading && rewardsList.isEmpty()) {
                         Text(
                             text = context.getString(R.string.tv_points_no_rewards),
                             fontSize = 14.sp,
@@ -179,7 +296,7 @@ object TvRewardsPanel {
                         )
                     } else {
                         val balance = currentStore?.balance ?: Int.MAX_VALUE
-                        rewards.forEach { reward ->
+                        rewardsList.forEach { reward ->
                             val affordable = balance >= reward.cost
                             val nowMs = System.currentTimeMillis()
                             val onCooldown = reward.cooldownExpiresAtMs != null && reward.cooldownExpiresAtMs > nowMs
@@ -193,7 +310,7 @@ object TvRewardsPanel {
                             }
 
                             FocusRow(
-                                modifier = firstFocusModifier(),
+                                modifier = nextInteractiveModifier(),
                                 onClick = {
                                     if (busy) return@FocusRow
                                     if (!canRedeem) {
@@ -345,24 +462,6 @@ object TvRewardsPanel {
                     Spacer(Modifier.height(16.dp))
                 }
 
-                val visibleDrops = drops.filter { drop ->
-                    !drop.isClaimed &&
-                        drop.dropId !in claimedKeys &&
-                        (drop.dropInstanceId == null || drop.dropInstanceId !in claimedKeys)
-                }
-                val hasStreamCategory = !gameId.isNullOrBlank() || !gameName.isNullOrBlank()
-                fun matchesStreamCategory(drop: GraphQLRepository.DropProgressItem): Boolean {
-                    if (!gameId.isNullOrBlank() && !drop.gameId.isNullOrBlank()) {
-                        return drop.gameId == gameId
-                    }
-                    if (!gameName.isNullOrBlank() && !drop.gameName.isNullOrBlank()) {
-                        return drop.gameName.equals(gameName, ignoreCase = true)
-                    }
-                    return false
-                }
-                val streamDrops = if (hasStreamCategory) visibleDrops.filter(::matchesStreamCategory) else visibleDrops
-                val otherDrops = if (hasStreamCategory) visibleDrops.filterNot(::matchesStreamCategory) else emptyList()
-
                 // Twitch Drops Section (current stream category)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -419,10 +518,11 @@ object TvRewardsPanel {
                     )
                 } else {
                     streamDrops.forEach { drop ->
+                        val claimable = isDropClaimable(drop)
                         DropItemRow(
                             context = context,
                             drop = drop,
-                            modifier = firstFocusModifier(),
+                            modifier = if (claimable) nextInteractiveModifier() else Modifier,
                             onClaim = { claimDrop(drop) },
                         )
                     }
@@ -451,10 +551,11 @@ object TvRewardsPanel {
                         )
                     }
                     otherDrops.forEach { drop ->
+                        val claimable = isDropClaimable(drop)
                         DropItemRow(
                             context = context,
                             drop = drop,
-                            modifier = firstFocusModifier(),
+                            modifier = if (claimable) nextInteractiveModifier() else Modifier,
                             onClaim = { claimDrop(drop) },
                         )
                     }
@@ -462,19 +563,23 @@ object TvRewardsPanel {
 
                 Spacer(Modifier.height(6.dp))
 
-                val hasTopFocusable = assignedFirstFocus
-                LaunchedEffect(loading, hasTopFocusable) {
+                val hasTopFocusable = totalInteractive > 0 && (!hasBonusButton && rewardsList.isEmpty()).not()
+                LaunchedEffect(loading, totalInteractive) {
                     if (loading && !initialFocusDone) {
                         runCatching { closeRequester.requestFocus() }
                     } else if (!loading && !initialFocusDone) {
                         initialFocusDone = true
+                        manualTailScrollAnchor = -1
                         androidx.compose.runtime.withFrameNanos { }
+                        scrollState.scrollTo(0)
                         if (hasTopFocusable) {
+                            runCatching { firstRequester.requestFocus() }
+                            scrollState.scrollTo(0)
+                        } else if (totalInteractive > 0 && scrollState.maxValue == 0) {
                             runCatching { firstRequester.requestFocus() }
                         } else {
                             runCatching { closeRequester.requestFocus() }
                         }
-                        scrollState.scrollTo(0)
                     }
                 }
             }
@@ -500,12 +605,8 @@ object TvRewardsPanel {
             context.getString(R.string.tv_drops_remaining, pct, remaining)
         }
 
-        FocusRow(
-            modifier = modifier,
-            onClick = {
-                if (claimable) onClaim()
-            },
-        ) { focused ->
+        @Composable
+        fun DropContent(focused: Boolean) {
             val fg = if (focused) TvColors.onFocused else ComposeColor.White
             val sub = if (focused) TvColors.onFocused.copy(alpha = 0.8f) else TvColors.secondaryText
             Column(Modifier.fillMaxWidth()) {
@@ -546,6 +647,26 @@ object TvRewardsPanel {
                     fontWeight = if (claimable) FontWeight.Bold else FontWeight.Normal,
                     color = if (claimable && !focused) TvColors.accent else sub,
                 )
+            }
+        }
+
+        if (claimable) {
+            FocusRow(
+                modifier = modifier,
+                onClick = onClaim,
+            ) { focused ->
+                DropContent(focused = focused)
+            }
+        } else {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 3.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(ComposeColor(0x14FFFFFF))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                DropContent(focused = false)
             }
         }
     }

@@ -1986,14 +1986,20 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
         }
         requireContext().prefs().edit { putBoolean(C.KEY_CHAT_OPENED, false) }
-        if (isTv && isMaximized && C.getTvPredictionsPopupMode(requireContext().prefs()) == 2) {
-            tvActivePrediction.value?.takeIf { it.status == "ACTIVE" }?.let { onTvPredictionEvent(it) }
+        if (isTv && isMaximized) {
+            if (C.getTvPredictionsPopupMode(requireContext().prefs()) == 2) {
+                tvActivePrediction.value?.takeIf { it.status == "ACTIVE" }?.let { onTvPredictionEvent(it) }
+            }
+            if (C.getTvPollsPopupMode(requireContext().prefs()) == 2) {
+                tvActivePoll.value?.takeIf { it.status == "ACTIVE" }?.let { onTvPollEvent(it) }
+            }
         }
     }
 
     fun showChat() {
         isChatOpen = true
         hideTvPredictionPopup()
+        hideTvPollPopup()
         showChatLayout()
         if (requireContext().prefs().getBoolean(C.PLAYER_CHAT_TOGGLE, true)) {
             binding.playerControls.toggleChat.apply {
@@ -3967,6 +3973,32 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             prefs.edit { putInt(C.TV_CHAT_PINNED_MODE, it) }
                             chatFragment?.refreshPinnedBanner()
                         }
+                        val pollPopup = androidx.compose.runtime.remember {
+                            androidx.compose.runtime.mutableIntStateOf(C.getTvPollsPopupMode(prefs))
+                        }
+                        com.github.andreyasadchy.xtra.ui.tv.SelectorRow(
+                            label = getString(R.string.tv_chat_polls_popup),
+                            options = listOf(
+                                getString(R.string.tv_chat_delay_off),
+                                getString(R.string.tv_chat_predictions_30s),
+                                getString(R.string.tv_chat_predictions_full),
+                            ),
+                            selected = pollPopup.intValue,
+                            icon = R.drawable.tv_ic_bar_chart,
+                            compact = true,
+                        ) {
+                            pollPopup.intValue = it
+                            prefs.edit { putInt(C.TV_CHAT_POLLS_MODE, it) }
+                            if (it == 0) {
+                                hideTvPollPopup()
+                            } else if (!isChatOpen) {
+                                if (it == 2) {
+                                    tvActivePoll.value?.takeIf { p -> p.status == "ACTIVE" }?.let { p -> onTvPollEvent(p) }
+                                } else if (it == 1 && tvPollView?.isVisible == true && tvPollCurrent?.status == "ACTIVE") {
+                                    showTvPollPopup(autoHideMs = 30_000L)
+                                }
+                            }
+                        }
                         val predPopup = androidx.compose.runtime.remember {
                             androidx.compose.runtime.mutableIntStateOf(C.getTvPredictionsPopupMode(prefs))
                         }
@@ -4989,7 +5021,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         if (!isChatOpen) {
             showChat()
-            showTvPlayerOsd(getString(R.string.tv_osd_chat_shown), R.drawable.tv_ic_chat)
             return
         }
         val mode = prefs.getInt(C.TV_CHAT_MODE, 0)
@@ -5125,10 +5156,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
                     if (isChatOpen) {
                         hideChat()
-                        showTvPlayerOsd(getString(R.string.tv_osd_chat_hidden), R.drawable.tv_ic_chat)
                     } else {
                         showChat()
-                        showTvPlayerOsd(getString(R.string.tv_osd_chat_shown), R.drawable.tv_ic_chat)
                     }
                 }
             }
@@ -6285,6 +6314,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var tvPredictionStartShownId: String? = null
     private var tvPredictionEndShownId: String? = null
     private val tvPredictionHideRunnable = Runnable { hideTvPredictionPopup() }
+    private var tvPollView: TextView? = null
+    private var tvPollCurrent: com.github.andreyasadchy.xtra.model.chat.Poll? = null
+    private var tvPollSeconds: Int? = null
+    private var tvPollStartShownId: String? = null
+    private var tvPollEndShownId: String? = null
+    private val tvPollHideRunnable = Runnable { hideTvPollPopup() }
     private var frameRateModeCandidate = 0
     private var frameRateModeApplied = 0
     private var frameRateModeChecks = 0
@@ -6476,16 +6511,26 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     if (next <= 0) {
                         tvActivePoll.value = null
                         tvActivePollSeconds.value = null
+                        tvPollSeconds = null
                         syncTvPollsPredictionsButton()
                     } else {
                         tvActivePollSeconds.value = next
+                        tvPollSeconds = next
+                        if (tvPollView?.isVisible == true) {
+                            renderTvPollPopup()
+                        }
                     }
                 }
                 val pred = tvActivePrediction.value
                 val prSec = tvActivePredictionSeconds.value
                 if (pred != null && pred.status == "ACTIVE" && prSec != null) {
                     val next = prSec - 1
-                    tvActivePredictionSeconds.value = if (next > 0) next else null
+                    val updated = if (next > 0) next else null
+                    tvActivePredictionSeconds.value = updated
+                    tvPredictionSeconds = updated
+                    if (tvPredictionView?.isVisible == true) {
+                        renderTvPredictionPopup()
+                    }
                 }
                 if (tvActivePoll.value == null && tvActivePrediction.value == null) {
                     break
@@ -6520,7 +6565,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (tvLiveEventsLookupKey != key) return@launch
             if (loaded.poll != null && tvActivePoll.value == null) {
                 tvActivePoll.value = loaded.poll
-                tvActivePollSeconds.value = loaded.poll.remainingMilliseconds?.let { (it / 1000).coerceAtLeast(1) }
+                val remSec = loaded.poll.remainingMilliseconds?.let { (it / 1000).coerceAtLeast(1) }
+                tvActivePollSeconds.value = remSec
+                tvPollSeconds = remSec
+                if (!isChatOpen) {
+                    onTvPollEvent(loaded.poll)
+                }
             }
             if (loaded.prediction != null && tvActivePrediction.value == null) {
                 tvActivePrediction.value = loaded.prediction
@@ -6528,7 +6578,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 val win = loaded.prediction.predictionWindowSeconds
                 if (loaded.prediction.status == "ACTIVE" && created != null && win != null && win > 0) {
                     val remSec = (((created + win * 1000L) - System.currentTimeMillis()) / 1000L).toInt()
-                    if (remSec > 0) tvActivePredictionSeconds.value = remSec
+                    if (remSec > 0) {
+                        tvActivePredictionSeconds.value = remSec
+                        tvPredictionSeconds = remSec
+                    }
+                }
+                if (!isChatOpen) {
+                    onTvPredictionEvent(loaded.prediction)
                 }
             }
             if (loaded.selfBetOutcomeId != null && tvSelfBetOutcomeId.value == null) {
@@ -6571,36 +6627,174 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             selfBetOutcomeIdFlow = tvSelfBetOutcomeId,
             selfBetPointsFlow = tvSelfBetPoints,
             selfVotedPollChoicesFlow = tvSelfVotedPollChoices,
-            onOptimisticPollUpdate = { updated -> tvActivePoll.value = updated },
+            onOptimisticPollUpdate = { updated ->
+                tvActivePoll.value = updated
+                if (tvPollView?.isVisible == true) {
+                    tvPollCurrent = updated
+                    renderTvPollPopup()
+                }
+            },
             onOptimisticPredictionUpdate = { updated -> tvActivePrediction.value = updated },
         )
     }
 
     fun onTvPollEvent(poll: com.github.andreyasadchy.xtra.model.chat.Poll) {
-        if (!isTv) return
-        if (poll.status == "ACTIVE") {
-            tvActivePoll.value = poll
-            if (poll.remainingMilliseconds != null && poll.remainingMilliseconds > 0) {
-                tvActivePollSeconds.value = (poll.remainingMilliseconds / 1000).coerceAtLeast(1)
+        val ctx = context ?: return
+        if (isTv) {
+            if (poll.status == "ACTIVE") {
+                tvActivePoll.value = poll
+                if (poll.remainingMilliseconds != null && poll.remainingMilliseconds > 0) {
+                    val sec = (poll.remainingMilliseconds / 1000).coerceAtLeast(1)
+                    tvActivePollSeconds.value = sec
+                    tvPollSeconds = sec
+                }
+                startTvLiveEventsLocalTickerIfNeeded()
+            } else {
+                tvActivePoll.value = null
+                tvActivePollSeconds.value = null
+                tvPollSeconds = null
             }
-            startTvLiveEventsLocalTickerIfNeeded()
-        } else {
-            tvActivePoll.value = null
-            tvActivePollSeconds.value = null
+            syncTvPollsPredictionsButton()
         }
-        syncTvPollsPredictionsButton()
+        val pollMode = C.getTvPollsPopupMode(ctx.prefs())
+        if (!isTv || _binding == null || isChatOpen || !isMaximized || pollMode == 0) {
+            hideTvPollPopup()
+            return
+        }
+        val pollId = poll.id ?: poll.title ?: return
+        when (poll.status) {
+            "ACTIVE" -> {
+                if (pollMode == 2) {
+                    tvPollStartShownId = pollId
+                    tvPollEndShownId = null
+                    tvPollCurrent = poll
+                    showTvPollPopup(autoHideMs = 0L)
+                } else if (tvPollStartShownId != pollId) {
+                    tvPollStartShownId = pollId
+                    tvPollEndShownId = null
+                    tvPollCurrent = poll
+                    showTvPollPopup(autoHideMs = 30_000L)
+                } else if (tvPollView?.isVisible == true) {
+                    tvPollCurrent = poll
+                    renderTvPollPopup()
+                }
+            }
+            "COMPLETED", "TERMINATED", "ARCHIVED" -> {
+                if (tvPollEndShownId != pollId) {
+                    tvPollEndShownId = pollId
+                    tvPollCurrent = poll
+                    tvPollSeconds = null
+                    showTvPollPopup(autoHideMs = 15_000L)
+                } else if (tvPollView?.isVisible == true) {
+                    tvPollCurrent = poll
+                    renderTvPollPopup()
+                }
+            }
+            else -> hideTvPollPopup()
+        }
     }
 
     fun onTvPollSecondsLeft(seconds: Int?) {
         if (!isTv) return
+        tvPollSeconds = seconds
         tvActivePollSeconds.value = seconds
+        if (tvPollView?.isVisible == true) {
+            renderTvPollPopup()
+        }
     }
 
     fun onTvPollHidden() {
         if (!isTv) return
         tvActivePoll.value = null
         tvActivePollSeconds.value = null
+        tvPollSeconds = null
         syncTvPollsPredictionsButton()
+        hideTvPollPopup()
+    }
+
+    private fun showTvPollPopup(autoHideMs: Long) {
+        val ctx = context ?: return
+        val card = tvPollView ?: TextView(ctx).apply {
+            setBackgroundResource(R.drawable.tv_chat_overlay_background)
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            isFocusable = false
+            isClickable = false
+            val density = resources.displayMetrics.density
+            maxWidth = (360 * density).toInt()
+            setPadding((14 * density).toInt(), (10 * density).toInt(), (14 * density).toInt(), (10 * density).toInt())
+            getTopRightStack().addView(this, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = (8 * density).toInt()
+            })
+            tvPollView = this
+        }
+        renderTvPollPopup()
+        card.visibility = View.VISIBLE
+        card.removeCallbacks(tvPollHideRunnable)
+        if (autoHideMs > 0L) {
+            card.postDelayed(tvPollHideRunnable, autoHideMs)
+        }
+    }
+
+    private fun renderTvPollPopup() {
+        val card = tvPollView ?: return
+        val poll = tvPollCurrent ?: return
+        val ended = poll.status in setOf("COMPLETED", "TERMINATED", "ARCHIVED")
+        val header = buildString {
+            append(getString(if (ended) R.string.tv_poll_ended else R.string.tv_poll_started))
+            val sec = tvPollSeconds
+            if (!ended && poll.status == "ACTIVE" && sec != null && sec > 0) {
+                append(" · ")
+                append(DateUtils.formatElapsedTime(sec.toLong()))
+            }
+        }
+        val sb = android.text.SpannableStringBuilder()
+        sb.append(header)
+        sb.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.setSpan(android.text.style.ForegroundColorSpan(com.github.andreyasadchy.xtra.ui.tv.TvAccent.color), 0, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (!poll.title.isNullOrBlank()) {
+            sb.append("\n")
+            val titleStart = sb.length
+            sb.append(poll.title)
+            sb.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), titleStart, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        val choices = poll.choices.orEmpty()
+        if (choices.isNotEmpty()) {
+            val totalVotes = (poll.totalVotes?.toLong() ?: choices.sumOf { (it.totalVotes ?: 0).toLong() }).coerceAtLeast(1L)
+            val winningVotes = if (ended) (choices.maxOfOrNull { it.totalVotes ?: 0 } ?: 0) else -1
+            val nf = java.text.NumberFormat.getInstance()
+            choices.forEach { choice ->
+                sb.append("\n")
+                val lineStart = sb.length
+                val votes = choice.totalVotes ?: 0
+                val isWinner = ended && winningVotes > 0 && votes == winningVotes
+                val pct = kotlin.math.round((votes.toLong() * 100.0) / totalVotes).toInt()
+                sb.append(
+                    getString(
+                        if (isWinner) R.string.poll_choice_winner else R.string.poll_choice,
+                        pct,
+                        nf.format(votes),
+                        choice.title ?: "",
+                    )
+                )
+                sb.setSpan(android.text.style.RelativeSizeSpan(0.9f), lineStart, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                if (isWinner) {
+                    sb.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), lineStart, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                } else {
+                    sb.setSpan(android.text.style.ForegroundColorSpan(0xD9FFFFFF.toInt()), lineStart, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
+        }
+        if (card.text?.toString() != sb.toString()) {
+            card.text = sb
+        }
+    }
+
+    fun hideTvPollPopup() {
+        tvPollView?.let {
+            it.removeCallbacks(tvPollHideRunnable)
+            it.visibility = View.GONE
+        }
     }
 
     fun onTvPredictionEvent(prediction: com.github.andreyasadchy.xtra.model.chat.Prediction) {
@@ -7576,15 +7770,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     protected open fun onTvMinimizedChanged(minimized: Boolean) {}
+    protected open fun onTvMinimizedGhostChanged(ghosted: Boolean, alpha: Float) {}
 
+    protected var isTvMinimizedGhosted = false
+    protected var tvMinimizedGhostAlpha = 1f
     private var tvMiniGhostListenersAttached = false
     private var tvMiniGhostTargetAlpha = 1f
-    private var tvMiniGhostAlphaAnimator: android.animation.ObjectAnimator? = null
+    private var tvMiniGhostAlphaAnimator: android.animation.ValueAnimator? = null
     private val tvMiniGhostCheckRunnable = Runnable { refreshTvMinimizedGhostOpacity(immediate = false) }
+    private val tvMiniGhostSettleCheckRunnable = Runnable { refreshTvMinimizedGhostOpacity(immediate = false) }
     private val tvMiniGhostFocusListener = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, _ ->
-        scheduleTvMinimizedGhostCheck()
-    }
-    private val tvMiniGhostScrollListener = android.view.ViewTreeObserver.OnScrollChangedListener {
         scheduleTvMinimizedGhostCheck()
     }
     private val tvMiniGhostComposeCallback: () -> Unit = {
@@ -7595,17 +7790,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (tvMiniGhostListenersAttached) return
         val vto = activity?.window?.decorView?.viewTreeObserver?.takeIf { it.isAlive } ?: return
         vto.addOnGlobalFocusChangeListener(tvMiniGhostFocusListener)
-        vto.addOnScrollChangedListener(tvMiniGhostScrollListener)
         com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.onChanged = tvMiniGhostComposeCallback
         tvMiniGhostListenersAttached = true
     }
 
     private fun detachTvMinimizedGhostListeners() {
         _binding?.root?.removeCallbacks(tvMiniGhostCheckRunnable)
+        _binding?.root?.removeCallbacks(tvMiniGhostSettleCheckRunnable)
         if (tvMiniGhostListenersAttached) {
             activity?.window?.decorView?.viewTreeObserver?.takeIf { it.isAlive }?.let { vto ->
                 vto.removeOnGlobalFocusChangeListener(tvMiniGhostFocusListener)
-                vto.removeOnScrollChangedListener(tvMiniGhostScrollListener)
             }
             tvMiniGhostListenersAttached = false
         }
@@ -7618,10 +7812,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val b = _binding ?: return
         if (!isTv || isMaximized) return
         b.root.removeCallbacks(tvMiniGhostCheckRunnable)
+        b.root.removeCallbacks(tvMiniGhostSettleCheckRunnable)
         if ((activity as? MainActivity)?.isMinimizedGhostScreen() == true) {
             refreshTvMinimizedGhostOpacity(immediate = false)
         } else {
-            b.root.postDelayed(tvMiniGhostCheckRunnable, 140L)
+            b.root.postDelayed(tvMiniGhostCheckRunnable, 90L)
+            b.root.postDelayed(tvMiniGhostSettleCheckRunnable, 250L)
         }
     }
 
@@ -7674,11 +7870,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun refreshTvMinimizedGhostOpacity(immediate: Boolean = false) {
         val b = _binding ?: return
         if (!isTv) return
+        b.slidingLayout.alpha = 1f
         if (isMaximized) {
             tvMiniGhostAlphaAnimator?.cancel()
             tvMiniGhostAlphaAnimator = null
             tvMiniGhostTargetAlpha = 1f
-            b.slidingLayout.alpha = 1f
+            tvMinimizedGhostAlpha = 1f
+            isTvMinimizedGhosted = false
+            b.dragView.alpha = 1f
+            onTvMinimizedGhostChanged(false, 1f)
             return
         }
         val target = if (shouldGhostTvMinimizedPlayer()) 0.20f else 1.0f
@@ -7688,16 +7888,34 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvMiniGhostTargetAlpha = target
         tvMiniGhostAlphaAnimator?.cancel()
         tvMiniGhostAlphaAnimator = null
-        if (immediate || kotlin.math.abs(b.slidingLayout.alpha - target) < 0.01f) {
-            b.slidingLayout.alpha = target
+        if (immediate || kotlin.math.abs(tvMinimizedGhostAlpha - target) < 0.01f) {
+            tvMinimizedGhostAlpha = target
+            isTvMinimizedGhosted = target < 0.99f
+            b.dragView.alpha = target
+            onTvMinimizedGhostChanged(isTvMinimizedGhosted, target)
         } else {
-            tvMiniGhostAlphaAnimator = android.animation.ObjectAnimator.ofFloat(
-                b.slidingLayout,
-                View.ALPHA,
-                b.slidingLayout.alpha,
-                target,
-            ).apply {
-                duration = 200L
+            val startVal = tvMinimizedGhostAlpha
+            if (target < 0.99f && !isTvMinimizedGhosted) {
+                isTvMinimizedGhosted = true
+                onTvMinimizedGhostChanged(true, startVal)
+            }
+            tvMiniGhostAlphaAnimator = android.animation.ValueAnimator.ofFloat(startVal, target).apply {
+                duration = 180L
+                addUpdateListener { anim ->
+                    if (_binding == null) return@addUpdateListener
+                    val a = anim.animatedValue as Float
+                    tvMinimizedGhostAlpha = a
+                    onTvMinimizedGhostChanged(true, a)
+                }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        if (_binding == null || tvMiniGhostAlphaAnimator !== animation) return
+                        tvMiniGhostAlphaAnimator = null
+                        tvMinimizedGhostAlpha = target
+                        isTvMinimizedGhosted = target < 0.99f
+                        onTvMinimizedGhostChanged(isTvMinimizedGhosted, target)
+                    }
+                })
                 start()
             }
         }
@@ -7708,47 +7926,52 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (!isTv) return
         tvMinimizedBorderAnimator?.cancel()
         tvMinimizedBorderAnimator = null
-        onTvMinimizedChanged(minimized)
-        if (minimized) {
-            val density = resources.displayMetrics.density
-            val (scaleX, _) = getScaleValues()
-            val cornerPx = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) (12f * density) / scaleX else 0f
-            val strokePx = ((2.5f * density) / scaleX).toInt().coerceAtLeast(2)
-            val outline = object : android.view.ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: android.graphics.Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, cornerPx)
-                }
-            }
-            b.playerBackground.clipChildren = false
-            b.slidingLayout.clipChildren = false
-            b.slidingLayout.outlineProvider = outline
-            b.slidingLayout.elevation = 20f * density
-            b.playerLayout.outlineProvider = outline
-            b.playerLayout.clipToOutline = cornerPx > 0f
-            val borderColor = currentTvMinimizedBorderColor()
-            tvMinimizedBorderStrokePx = strokePx
-            tvMinimizedBorderColor = borderColor
-            val border = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = cornerPx
-                setStroke(strokePx, borderColor)
-            }
-            tvMinimizedBorderDrawable = border
-            b.dragView.background = border
-            attachTvMinimizedGhostListeners()
-            refreshTvMinimizedGhostOpacity(immediate = false)
-        } else {
+        if (!minimized) {
             detachTvMinimizedGhostListeners()
             tvMiniGhostAlphaAnimator?.cancel()
             tvMiniGhostAlphaAnimator = null
             tvMiniGhostTargetAlpha = 1f
+            tvMinimizedGhostAlpha = 1f
+            isTvMinimizedGhosted = false
             b.slidingLayout.alpha = 1f
+            b.dragView.alpha = 1f
+            b.playerLayout.setBackgroundColor(Color.BLACK)
             tvMinimizedBorderDrawable = null
             b.slidingLayout.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
             b.slidingLayout.elevation = 0f
             b.playerLayout.clipToOutline = false
             b.playerLayout.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
             b.dragView.background = null
+            onTvMinimizedChanged(false)
+            return
         }
+        val density = resources.displayMetrics.density
+        val (scaleX, _) = getScaleValues()
+        val cornerPx = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) (12f * density) / scaleX else 0f
+        val strokePx = ((2.5f * density) / scaleX).toInt().coerceAtLeast(2)
+        val outline = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, cornerPx)
+            }
+        }
+        b.playerBackground.clipChildren = false
+        b.slidingLayout.clipChildren = false
+        b.slidingLayout.outlineProvider = outline
+        b.slidingLayout.elevation = 20f * density
+        b.playerLayout.outlineProvider = outline
+        b.playerLayout.clipToOutline = cornerPx > 0f
+        val borderColor = currentTvMinimizedBorderColor()
+        tvMinimizedBorderStrokePx = strokePx
+        tvMinimizedBorderColor = borderColor
+        val border = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = cornerPx
+            setStroke(strokePx, borderColor)
+        }
+        tvMinimizedBorderDrawable = border
+        b.dragView.background = border
+        attachTvMinimizedGhostListeners()
+        onTvMinimizedChanged(true)
+        refreshTvMinimizedGhostOpacity(immediate = true)
     }
 
     fun getIsPortrait() = isPortrait
@@ -8201,6 +8424,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 // the mini player is not reached with the D-pad, "Now playing" in the side menu brings it back
                 dragView.isFocusable = false
                 hideTvPredictionPopup()
+                hideTvPollPopup()
                 updateTvClockVisibility(false)
                 (activity as? MainActivity)?.updateTvNowPlaying()
             }
@@ -8719,6 +8943,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvSeekStartEpochMs = null
         tvPredictionView?.removeCallbacks(tvPredictionHideRunnable)
         tvPredictionView = null
+        tvPollView?.removeCallbacks(tvPollHideRunnable)
+        tvPollView = null
         tvStreamEndNextTarget = null
         tvStreamEndBannerView = null
         tvOledProtectionActive = false

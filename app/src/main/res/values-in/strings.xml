@@ -1389,4 +1389,7 @@
     <string name="tv_hud_header_size_large">Besar</string>
     <string name="tv_hud_header_size_xlarge">Sangat besar</string>
     <string name="tv_player_favorite_star">Bintang streamer favorit</string>
+    <string name="tv_chat_polls_popup">Polling (chat disembunyikan)</string>
+    <string name="tv_poll_started">Polling dimulai</string>
+    <string name="tv_poll_ended">Polling selesai</string>
 </resources>

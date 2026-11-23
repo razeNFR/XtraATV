@@ -1388,4 +1388,7 @@
     <string name="tv_hud_header_size_large">كبير</string>
     <string name="tv_hud_header_size_xlarge">كبير جدًا</string>
     <string name="tv_player_favorite_star">نجمة الستريمر المفضل</string>
+    <string name="tv_chat_polls_popup">الاستطلاعات (الدردشة مخفية)</string>
+    <string name="tv_poll_started">بدأ الاستطلاع</string>
+    <string name="tv_poll_ended">انتهى الاستطلاع</string>
 </resources>

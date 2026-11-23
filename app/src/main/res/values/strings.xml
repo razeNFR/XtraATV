@@ -1408,4 +1408,7 @@
     <string name="tv_hud_header_size_large">Large</string>
     <string name="tv_hud_header_size_xlarge">Extra large</string>
     <string name="tv_player_favorite_star">Favorite streamer star</string>
+    <string name="tv_chat_polls_popup">Polls (chat hidden)</string>
+    <string name="tv_poll_started">Poll started</string>
+    <string name="tv_poll_ended">Poll ended</string>
 </resources>

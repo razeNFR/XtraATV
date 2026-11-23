@@ -15,9 +15,11 @@ object TvMiniPlayerFocus {
     var hasFocusedCard = false
         private set
     var onChanged: (() -> Unit)? = null
+    val isListening: Boolean
+        get() = onChanged != null
 
     fun reportCoordinates(token: Any, coords: LayoutCoordinates) {
-        if (!coords.isAttached) return
+        if (onChanged == null || !coords.isAttached) return
         val b = coords.boundsInWindow()
         if (b.isEmpty) return
         updateCard(

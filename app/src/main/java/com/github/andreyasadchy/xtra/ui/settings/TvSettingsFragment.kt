@@ -200,6 +200,7 @@ class TvSettingsFragment : Fragment() {
     private val searchQueryState = mutableStateOf("")
     private val returnFocusKeyState = mutableStateOf<String?>(null)
     private val rightColumnFocusedState = mutableStateOf(false)
+    private val editingSliderKeyState = mutableStateOf<String?>(null)
 
     private var restoreResultLauncher: ActivityResultLauncher<Intent>? = null
     private var voiceSearchLauncher: ActivityResultLauncher<Intent>? = null
@@ -207,10 +208,20 @@ class TvSettingsFragment : Fragment() {
     private var updateDownloadDialog: AlertDialog? = null
 
     fun canHandleTvBackPress(): Boolean {
-        return isAdded && !isHidden && (subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank() || rightColumnFocusedState.value)
+        return isAdded && !isHidden && (
+            editingSliderKeyState.value != null ||
+                subScreenStack.isNotEmpty() ||
+                searchQueryState.value.isNotBlank() ||
+                rightColumnFocusedState.value
+            )
     }
 
     fun handleTvBackPress(): Boolean {
+        if (editingSliderKeyState.value != null) {
+            editingSliderKeyState.value = null
+            updateBackCallback()
+            return true
+        }
         if (subScreenStack.isNotEmpty()) {
             val popped = subScreenStack.removeAt(subScreenStack.lastIndex)
             returnFocusKeyState.value = popped.parentItemKey
@@ -323,7 +334,7 @@ class TvSettingsFragment : Fragment() {
 
     private fun updateBackCallback() {
         subScreenBackCallback.isEnabled = isResumed && !isHidden &&
-            (subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank() || rightColumnFocusedState.value)
+            (editingSliderKeyState.value != null || subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank() || rightColumnFocusedState.value)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1194,6 +1205,14 @@ class TvSettingsFragment : Fragment() {
         val context = LocalContext.current
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
+        val isEditingSlider = item.kind is Kind.Slider && editingSliderKeyState.value == item.key
+
+        LaunchedEffect(focused) {
+            if (!focused && editingSliderKeyState.value == item.key) {
+                editingSliderKeyState.value = null
+                updateBackCallback()
+            }
+        }
 
         Row(
             modifier = modifier
@@ -1201,14 +1220,23 @@ class TvSettingsFragment : Fragment() {
                 .alpha(if (item.enabled) 1f else 0.48f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (focused) TvColors.focused else Color(0x14FFFFFF))
+                .then(
+                    if (isEditingSlider) {
+                        Modifier.border(2.dp, TvColors.accent, RoundedCornerShape(12.dp))
+                    } else {
+                        Modifier
+                    }
+                )
                 .onPreviewKeyEvent { ev ->
                     if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when (ev.key) {
                         Key.DirectionLeft -> {
                             val slider = item.kind as? Kind.Slider
-                            if (item.enabled && slider != null && slider.value > slider.min) {
-                                val next = (slider.value - slider.step).coerceAtLeast(slider.min)
-                                applySliderValue(context, item.key, next)
+                            if (item.enabled && slider != null && isEditingSlider) {
+                                if (slider.value > slider.min) {
+                                    val next = (slider.value - slider.step).coerceAtLeast(slider.min)
+                                    applySliderValue(context, item.key, next)
+                                }
                             } else {
                                 onNavigateLeft()
                             }
@@ -1216,17 +1244,25 @@ class TvSettingsFragment : Fragment() {
                         }
                         Key.DirectionRight -> {
                             val slider = item.kind as? Kind.Slider
-                            if (item.enabled && slider != null && slider.value < slider.max) {
+                            if (item.enabled && slider != null && isEditingSlider && slider.value < slider.max) {
                                 val next = (slider.value + slider.step).coerceAtMost(slider.max)
                                 applySliderValue(context, item.key, next)
                             }
                             true
                         }
                         Key.DirectionUp -> {
+                            if (isEditingSlider) {
+                                editingSliderKeyState.value = null
+                                updateBackCallback()
+                            }
                             onNavigateUp()
                             true
                         }
                         Key.DirectionDown -> {
+                            if (isEditingSlider) {
+                                editingSliderKeyState.value = null
+                                updateBackCallback()
+                            }
                             onNavigateDown()
                             true
                         }
@@ -1342,15 +1378,15 @@ class TvSettingsFragment : Fragment() {
                     Box(
                         Modifier
                             .fillMaxWidth(0.75f)
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(3.dp))
+                            .height(if (isEditingSlider) 7.dp else 5.dp)
+                            .clip(RoundedCornerShape(4.dp))
                             .background(if (focused) TvColors.onFocused.copy(alpha = 0.22f) else Color(0x26FFFFFF))
                     ) {
                         Box(
                             Modifier
                                 .fillMaxWidth(frac)
                                 .fillMaxHeight()
-                                .background(if (focused) TvColors.onFocused else TvColors.accent)
+                                .background(if (isEditingSlider) TvColors.accent else if (focused) TvColors.onFocused else TvColors.accent)
                         )
                     }
                 }
@@ -1396,13 +1432,30 @@ class TvSettingsFragment : Fragment() {
             when (val k = item.kind) {
                 is Kind.Toggle -> TvListPanel.Switch(k.checked, focused)
                 is Kind.Slider -> {
-                    Text(
-                        text = k.value.toString(),
-                        fontSize = 13.sp,
-                        lineHeight = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (focused) TvColors.onFocused else TvColors.accent,
-                    )
+                    if (isEditingSlider) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(TvColors.accent)
+                                .padding(horizontal = 9.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "◀ ${k.value} ▶",
+                                fontSize = 12.5.sp,
+                                lineHeight = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = k.value.toString(),
+                            fontSize = 13.sp,
+                            lineHeight = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (focused) TvColors.onFocused else TvColors.accent,
+                        )
+                    }
                 }
                 is Kind.Choice -> {
                     if (inlineRightBadge == null && item.key == C.TV_AMBIENT_COLOR) {
@@ -2251,6 +2304,22 @@ class TvSettingsFragment : Fragment() {
                     C.TV_HOME_ROWS -> valueBadge = TvHomeRows.summary(context)
                     C.CHAT_HIGHLIGHTED_USERS -> valueBadge = ChatBlocklist.highlightedSummary(context)
                     C.CHAT_BLOCKED_USERS -> valueBadge = ChatBlocklist.summary(context)
+                    "tv_chat_polls_popup" -> {
+                        val labels = listOf(
+                            context.getString(R.string.tv_chat_delay_off),
+                            context.getString(R.string.tv_chat_predictions_30s),
+                            context.getString(R.string.tv_chat_predictions_full),
+                        )
+                        valueBadge = labels.getOrElse(C.getTvPollsPopupMode(prefs)) { labels[0] }
+                    }
+                    "tv_chat_predictions_popup" -> {
+                        val labels = listOf(
+                            context.getString(R.string.tv_chat_delay_off),
+                            context.getString(R.string.tv_chat_predictions_30s),
+                            context.getString(R.string.tv_chat_predictions_full),
+                        )
+                        valueBadge = labels.getOrElse(C.getTvPredictionsPopupMode(prefs)) { labels[0] }
+                    }
                     "custom_proxy_settings" -> {
                         val on = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                         val adsOnly = prefs.getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == "1"
@@ -2428,8 +2497,8 @@ class TvSettingsFragment : Fragment() {
                 }
             }
             is Kind.Slider -> {
-                val next = if (kind.value + kind.step <= kind.max) kind.value + kind.step else kind.min
-                applySliderValue(context, key, next)
+                editingSliderKeyState.value = if (editingSliderKeyState.value == key) null else key
+                updateBackCallback()
             }
             is Kind.TextInput -> {
                 showTextInputDialog(context, item.title, kind) { newText ->
@@ -2447,6 +2516,42 @@ class TvSettingsFragment : Fragment() {
 
     private fun handleActionClick(context: Context, item: PrefNode.Item) {
         when (item.key) {
+            "tv_chat_polls_popup" -> {
+                val options = listOf(
+                    context.getString(R.string.tv_chat_delay_off),
+                    context.getString(R.string.tv_chat_predictions_30s),
+                    context.getString(R.string.tv_chat_predictions_full),
+                )
+                TvDialogs.showChoices(
+                    context = context,
+                    title = item.title,
+                    options = options,
+                    selected = C.getTvPollsPopupMode(context.prefs()),
+                ) { idx ->
+                    context.prefs().edit { putInt(C.TV_CHAT_POLLS_MODE, idx.coerceIn(0, 2)) }
+                    refreshStamp.intValue++
+                }
+            }
+            "tv_chat_predictions_popup" -> {
+                val options = listOf(
+                    context.getString(R.string.tv_chat_delay_off),
+                    context.getString(R.string.tv_chat_predictions_30s),
+                    context.getString(R.string.tv_chat_predictions_full),
+                )
+                TvDialogs.showChoices(
+                    context = context,
+                    title = item.title,
+                    options = options,
+                    selected = C.getTvPredictionsPopupMode(context.prefs()),
+                ) { idx ->
+                    val mode = idx.coerceIn(0, 2)
+                    context.prefs().edit {
+                        putInt(C.TV_CHAT_PREDICTIONS_MODE, mode)
+                        putBoolean(C.TV_CHAT_PREDICTIONS_POPUP, mode != 0)
+                    }
+                    refreshStamp.intValue++
+                }
+            }
             // Sub-screens
             "tv_xtratv_sub_home" -> pushXmlSubScreen(R.xml.tv_xtratv_home, context.getString(R.string.tv_xtratv_sub_home_title), item.key)
             "tv_xtratv_sub_remote" -> pushXmlSubScreen(R.xml.tv_xtratv_remote, context.getString(R.string.tv_xtratv_sub_remote_title), item.key)

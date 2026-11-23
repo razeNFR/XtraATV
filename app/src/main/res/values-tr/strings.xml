@@ -1389,4 +1389,7 @@
     <string name="tv_hud_header_size_large">Büyük</string>
     <string name="tv_hud_header_size_xlarge">Çok büyük</string>
     <string name="tv_player_favorite_star">Favori yayıncı yıldızı</string>
+    <string name="tv_chat_polls_popup">Anketler (sohbet gizliyken)</string>
+    <string name="tv_poll_started">Anket başladı</string>
+    <string name="tv_poll_ended">Anket sona erdi</string>
 </resources>
