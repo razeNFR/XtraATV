@@ -1391,4 +1391,7 @@
     <string name="tv_chat_polls_popup">Enquetes (chat oculto)</string>
     <string name="tv_poll_started">Enquete iniciada</string>
     <string name="tv_poll_ended">Enquete encerrada</string>
+    <string name="tv_mini_player_auto_slide">Mover miniplayer automaticamente</string>
+    <string name="tv_mini_player_auto_slide_summary">Desliza o miniplayer para o lado oposto quando o item selecionado passa por baixo dele</string>
+    <string name="tv_section_hidden_toast">“%1$s” está oculta no menu lateral (reative nas configurações)</string>
 </resources>

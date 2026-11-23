@@ -1391,4 +1391,7 @@
     <string name="tv_chat_polls_popup">Голосования (при скрытом чате)</string>
     <string name="tv_poll_started">Голосование началось</string>
     <string name="tv_poll_ended">Голосование завершено</string>
+    <string name="tv_mini_player_auto_slide">Автоматически сдвигать мини-плеер</string>
+    <string name="tv_mini_player_auto_slide_summary">Сдвигает мини-плеер в противоположную сторону, когда выбранный элемент оказывается под ним</string>
+    <string name="tv_section_hidden_toast">Раздел «%1$s» скрыт в боковом меню (включите его в настройках)</string>
 </resources>

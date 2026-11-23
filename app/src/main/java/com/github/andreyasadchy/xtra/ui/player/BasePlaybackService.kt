@@ -9,6 +9,7 @@ import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -107,8 +108,8 @@ abstract class BasePlaybackService : LifecycleService() {
         }
     }
 
-    protected suspend fun savePlaybackState(position: Long?, paused: Boolean) {
-        val item = PlaybackState(
+    protected fun buildPlaybackStateSnapshot(position: Long?, paused: Boolean): PlaybackState {
+        return PlaybackState(
             type = type,
             streamId = streamId,
             videoId = videoId,
@@ -150,6 +151,17 @@ abstract class BasePlaybackService : LifecycleService() {
             currentStreamProxy = currentStreamProxy,
             skipAccessToken = skipAccessToken,
         )
+    }
+
+    protected fun enqueuePlaybackStateSave(position: Long?, paused: Boolean) {
+        val snapshot = buildPlaybackStateSnapshot(position, paused)
+        xtraModule.dbWriteScope.launch {
+            xtraModule.playerRepository.savePlaybackStates(listOf(snapshot))
+        }
+    }
+
+    protected suspend fun savePlaybackState(position: Long?, paused: Boolean) {
+        val item = buildPlaybackStateSnapshot(position, paused)
         xtraModule.playerRepository.savePlaybackStates(listOf(item))
     }
 

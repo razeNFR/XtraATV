@@ -93,6 +93,121 @@ class XtraModule(application: Application) {
         Json { ignoreUnknownKeys = true }
     }
 
+    val dbWriteScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate
+    )
+
+    private val cachedProxyCronetEngines = object : LinkedHashMap<String, CronetEngine>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CronetEngine>?): Boolean = size > 6
+    }
+    private val cachedProxyHttpEngines = object : LinkedHashMap<String, HttpEngine>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, HttpEngine>?): Boolean = size > 6
+    }
+
+    @Synchronized
+    fun getOrCreateProxyCronetEngine(
+        context: android.content.Context,
+        host: String,
+        port: Int,
+        user: String?,
+        password: String?,
+    ): CronetEngine? {
+        val app = context.applicationContext
+        if (!CronetProvider.getAllProviders(app).any { it.isEnabled }) return null
+        val key = "$host:$port:${user.orEmpty()}:${password.orEmpty()}"
+        cachedProxyCronetEngines[key]?.let { return it }
+        val proxyHeaders = if (!user.isNullOrBlank() && !password.isNullOrBlank()) {
+            mapOf("Proxy-Authorization" to android.util.Base64.encodeToString("$user:$password".toByteArray(), android.util.Base64.NO_WRAP)).entries.toList()
+        } else emptyList()
+        val builder = CronetEngine.Builder(app).apply {
+            val userAgent = "Cronet/" + defaultUserAgent.substringAfter("Cronet/", "").substringBefore(')')
+            setUserAgent(userAgent)
+            @QuicOptions.Experimental
+            setQuicOptions(QuicOptions.builder().setHandshakeUserAgent(userAgent).build())
+        }
+        val created = try {
+            @org.chromium.net.ProxyOptions.Experimental
+            builder.setProxyOptions(
+                org.chromium.net.ProxyOptions(
+                    listOf(
+                        org.chromium.net.Proxy(
+                            org.chromium.net.Proxy.HTTP,
+                            host,
+                            port,
+                            cronetExecutor.value,
+                            object : org.chromium.net.Proxy.Callback() {
+                                override fun onBeforeTunnelRequest(request: org.chromium.net.Proxy.Callback.Request) {
+                                    request.proceed(proxyHeaders)
+                                }
+
+                                override fun onTunnelHeadersReceived(
+                                    responseHeaders: List<Map.Entry<String?, String?>?>,
+                                    statusCode: Int,
+                                ): Boolean = true
+                            },
+                        )
+                    )
+                )
+            )
+        } catch (_: UnsupportedOperationException) {
+            null
+        }?.build()
+        if (created != null) {
+            cachedProxyCronetEngines[key] = created
+        }
+        return created
+    }
+
+    @android.annotation.SuppressLint("NewApi")
+    @Synchronized
+    fun getOrCreateProxyHttpEngine(
+        context: android.content.Context,
+        host: String,
+        port: Int,
+        user: String?,
+        password: String?,
+    ): HttpEngine? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) < 7) return null
+        val app = context.applicationContext
+        val key = "$host:$port:${user.orEmpty()}:${password.orEmpty()}"
+        cachedProxyHttpEngines[key]?.let { return it }
+        val proxyHeaders = if (!user.isNullOrBlank() && !password.isNullOrBlank()) {
+            listOf(android.util.Pair("Proxy-Authorization", android.util.Base64.encodeToString("$user:$password".toByteArray(), android.util.Base64.NO_WRAP)))
+        } else emptyList()
+        val builder = HttpEngine.Builder(app)
+        val created = try {
+            builder.setProxyOptions(
+                android.net.http.ProxyOptions.fromProxyList(
+                    listOf(
+                        android.net.http.Proxy.createHttpProxy(
+                            android.net.http.Proxy.SCHEME_HTTP,
+                            host,
+                            port,
+                            cronetExecutor.value,
+                            object : android.net.http.Proxy.HttpConnectCallback {
+                                override fun onBeforeRequest(request: android.net.http.Proxy.HttpConnectCallback.Request) {
+                                    request.proceed(proxyHeaders)
+                                }
+
+                                override fun onResponseReceived(
+                                    responseHeaders: List<android.util.Pair<String?, String?>?>,
+                                    statusCode: Int,
+                                ): Int = android.net.http.Proxy.HttpConnectCallback.RESPONSE_ACTION_PROCEED
+                            },
+                        )
+                    ),
+                    android.net.http.ProxyOptions.ALL_PROXIES_FAILED_BEHAVIOR_DISALLOW_DIRECT,
+                )
+            )
+        } catch (_: NoClassDefFoundError) {
+            null
+        }?.build()
+        if (created != null) {
+            cachedProxyHttpEngines[key] = created
+        }
+        return created
+    }
+
     private val databaseLazy = lazy {
         Room.databaseBuilder(application, AppDatabase::class.java, "database").apply {
             addMigrations(

@@ -1391,4 +1391,7 @@
     <string name="tv_chat_polls_popup">Sondaggi (chat nascosta)</string>
     <string name="tv_poll_started">Sondaggio iniziato</string>
     <string name="tv_poll_ended">Sondaggio terminato</string>
+    <string name="tv_mini_player_auto_slide">Sposta automaticamente il mini lettore</string>
+    <string name="tv_mini_player_auto_slide_summary">Fa scorrere il mini lettore sul lato opposto quando l\'elemento selezionato passa sotto</string>
+    <string name="tv_section_hidden_toast">«%1$s» è nascosta nel menu laterale (riattivala nelle impostazioni)</string>
 </resources>

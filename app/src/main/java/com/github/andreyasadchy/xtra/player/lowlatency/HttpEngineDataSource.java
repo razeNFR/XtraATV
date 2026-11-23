@@ -529,6 +529,12 @@ public final class HttpEngineDataSource extends BaseDataSource implements HttpDa
     }
     resetConnectTimeout(timeout);
     currentDataSpec = dataSpec;
+    if (multivariantPlaylistProxyOkHttpClient != null && host != null && host.matches(ExoPlayerService.MULTIVARIANT_PLAYLIST_REGEX)) { // xtra: proxy
+      return openOkHttp(dataSpec, multivariantPlaylistProxyOkHttpClient);
+    }
+    if (mediaPlaylistProxyOkHttpClient != null && host != null && host.matches(ExoPlayerService.MEDIA_PLAYLIST_REGEX) && getProxyMediaPlaylist.invoke()) {
+      return openOkHttp(dataSpec, mediaPlaylistProxyOkHttpClient);
+    }
     UrlRequestWrapper urlRequestWrapper;
     try {
       urlRequestWrapper = buildRequestWrapper(dataSpec);
@@ -540,12 +546,6 @@ public final class HttpEngineDataSource extends BaseDataSource implements HttpDa
         throw new OpenException(
             e, dataSpec, PlaybackException.ERROR_CODE_IO_UNSPECIFIED, Status.IDLE);
       }
-    }
-    if (multivariantPlaylistProxyOkHttpClient != null && host != null && host.matches(ExoPlayerService.MULTIVARIANT_PLAYLIST_REGEX)) { // xtra: proxy
-      return openOkHttp(dataSpec, multivariantPlaylistProxyOkHttpClient);
-    }
-    if (mediaPlaylistProxyOkHttpClient != null && host != null && host.matches(ExoPlayerService.MEDIA_PLAYLIST_REGEX) && getProxyMediaPlaylist.invoke()) {
-      return openOkHttp(dataSpec, mediaPlaylistProxyOkHttpClient);
     }
     urlRequestWrapper.start();
 
@@ -1215,7 +1215,9 @@ public final class HttpEngineDataSource extends BaseDataSource implements HttpDa
 
           @Override
           public void onResponse(Call call, Response response) {
-                future.set(response);
+                if (!future.set(response)) {
+                  response.close();
+                }
               }
         });
 
@@ -1223,6 +1225,12 @@ public final class HttpEngineDataSource extends BaseDataSource implements HttpDa
       return future.get();
     } catch (InterruptedException e) {
       call.cancel();
+      if (future.isDone()) {
+        try {
+          future.get().close();
+        } catch (Exception ignored) {
+        }
+      }
       throw new InterruptedIOException();
     } catch (ExecutionException ee) {
       throw new IOException(ee);

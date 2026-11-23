@@ -50,7 +50,6 @@ object TvMiniPlayerFocus {
             activeToken = null
             hasFocusedCard = false
             focusedCardRect.setEmpty()
-            onChanged?.invoke()
         }
     }
 }

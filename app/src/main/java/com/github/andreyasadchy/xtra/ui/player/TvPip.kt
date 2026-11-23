@@ -352,6 +352,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         slot.player = ExoPlayer.Builder(context, renderersFactory)
             .setLoadControl(pipLoadControl)
             .setHandleAudioBecomingNoisy(false)
+            .setVideoChangeFrameRateStrategy(androidx.media3.common.C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
             .build().apply {
                 volume = 0f
                 if (texture != null) {

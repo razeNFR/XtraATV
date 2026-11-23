@@ -55,6 +55,9 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSel
 
     private var selectedTags = mutableListOf<String>()
     private var selectedLanguages: Array<String> = emptyArray()
+    private var appliedSortId: Int = R.id.viewers_high
+    private var appliedTags: Array<String> = emptyArray()
+    private var appliedLanguages: Array<String> = emptyArray()
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
@@ -66,16 +69,52 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSel
         return binding.root
     }
 
+    private fun updateLanguagesButtonLabel() {
+        val b = _binding ?: return
+        if (!resources.getBoolean(R.bool.isTv)) return
+        b.selectLanguages.text = if (selectedLanguages.isNotEmpty()) {
+            "${getString(R.string.languages)} · ${selectedLanguages.joinToString { it.uppercase() }}"
+        } else {
+            getString(R.string.languages)
+        }
+    }
+
+    private fun addTagChip(name: String, isTv: Boolean) {
+        val b = _binding ?: return
+        b.tagGroup.addView(
+            Chip(requireContext()).apply {
+                text = name
+                isCloseIconVisible = true
+                setOnCloseIconClickListener {
+                    selectedTags.remove(name)
+                    b.tagGroup.removeView(this)
+                    if (isTv) {
+                        applyTvNow(dismissAfter = false)
+                    }
+                }
+            }
+        )
+    }
+
+    private fun applyTvNow(dismissAfter: Boolean) {
+        if (_binding == null) return
+        applyFilters(appliedSortId, appliedTags, appliedLanguages, saveFilters = false, saveSort = false, saveDefault = true)
+        if (dismissAfter) {
+            dismiss()
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val behavior = BottomSheetBehavior.from(view.parent as View)
         behavior.skipCollapsed = true
         behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        val isTv = resources.getBoolean(R.bool.isTv)
         with(binding) {
             val args = requireArguments()
             when (parentFragment) {
                 is GameStreamsFragment -> {
-                    saveSortLayout.isVisible = parentFragment?.arguments?.getString(C.GAME_ID).isNullOrBlank() == false
+                    saveSortLayout.isVisible = !isTv && parentFragment?.arguments?.getString(C.GAME_ID).isNullOrBlank() == false
                 }
                 is TopStreamsFragment -> {
                     saveSortLayout.visibility = View.GONE
@@ -92,23 +131,31 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSel
             }
             val originalTags = args.getStringArray(TAGS) ?: emptyArray()
             val originalLanguages = args.getStringArray(LANGUAGES) ?: emptyArray()
-            if (!args.getBoolean(SAVED)) {
+            appliedSortId = originalSortId
+            appliedTags = originalTags.sortedArray()
+            appliedLanguages = originalLanguages.sortedArray()
+            if (!args.getBoolean(SAVED) || isTv) {
                 deleteSavedSort.visibility = View.GONE
             }
             sort.check(originalSortId)
             selectedTags = originalTags.toMutableList()
             selectedLanguages = originalLanguages
             originalTags.forEach { name ->
-                tagGroup.addView(
-                    Chip(requireContext()).apply {
-                        text = name
-                        isCloseIconVisible = true
-                        setOnCloseIconClickListener {
-                            selectedTags.remove(name)
-                            tagGroup.removeView(this)
-                        }
+                addTagChip(name, isTv)
+            }
+            if (isTv) {
+                selectTags.text = getString(R.string.tags_filter)
+                updateLanguagesButtonLabel()
+                saveFilters.visibility = View.GONE
+                saveSortLayout.visibility = View.GONE
+                saveDefault.visibility = View.GONE
+                apply.visibility = View.GONE
+                listOf(recommended, viewersHigh, viewersLow, recent).forEach { radio ->
+                    radio.setOnClickListener {
+                        sort.check(radio.id)
+                        applyTvNow(dismissAfter = true)
                     }
-                )
+                }
             }
             selectTags.setOnClickListener {
                 SearchTagsDialog.newInstance(false).show(childFragmentManager, null)
@@ -143,7 +190,12 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSel
         with(binding) {
             val checkedSortId = sort.checkedRadioButtonId
             val tags = selectedTags.toTypedArray().sortedArray()
+            val langs = selectedLanguages.sortedArray()
             val sortBtn = requireView().findViewById<RadioButton>(checkedSortId)
+            val hasChanged = checkedSortId != originalSortId || !tags.contentEquals(originalTags.sortedArray()) || !langs.contentEquals(originalLanguages.sortedArray())
+            appliedSortId = checkedSortId
+            appliedTags = tags
+            appliedLanguages = langs
             listener.onChange(
                 when (checkedSortId) {
                     R.id.recommended -> SORT_RELEVANCE
@@ -154,8 +206,8 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSel
                 },
                 sortBtn.text,
                 tags,
-                selectedLanguages,
-                checkedSortId != originalSortId || !tags.contentEquals(originalTags) || !selectedLanguages.contentEquals(originalLanguages),
+                langs,
+                hasChanged,
                 saveFilters,
                 saveSort,
                 saveDefault
@@ -164,25 +216,24 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SearchTagsDialog.OnTagSel
     }
 
     override fun onTagSelected(tag: Tag) {
+        val isTv = resources.getBoolean(R.bool.isTv)
         tag.name?.let { name ->
             if (!selectedTags.contains(name)) {
                 selectedTags.add(name)
-                binding.tagGroup.addView(
-                    Chip(requireContext()).apply {
-                        text = name
-                        isCloseIconVisible = true
-                        setOnCloseIconClickListener {
-                            selectedTags.remove(name)
-                            binding.tagGroup.removeView(this)
-                        }
-                    }
-                )
+                addTagChip(name, isTv)
+                if (isTv) {
+                    applyTvNow(dismissAfter = false)
+                }
             }
         }
     }
 
     override fun onChange(languages: Array<String>) {
         selectedLanguages = languages
+        if (resources.getBoolean(R.bool.isTv)) {
+            updateLanguagesButtonLabel()
+            applyTvNow(dismissAfter = false)
+        }
     }
 
     override fun onDestroyView() {

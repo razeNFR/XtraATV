@@ -175,6 +175,21 @@ object TvExperimentalAdblock {
         }
     }
 
+    fun getSeekPreviewUrl(login: String?, streamId: String?, baseDir: String? = null): String? {
+        val normLogin = login?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        val cached = if (normLogin != null && !streamId.isNullOrBlank()) cachedVods["${normLogin}_${streamId}"] else null
+        val dir = baseDir?.takeIf { it.isNotBlank() } ?: cached?.baseDir ?: return null
+        val lowestFolder = cached?.variants
+            ?.filter { it.folder != "audio_only" }
+            ?.lastOrNull()
+            ?.folder
+        return if (lowestFolder != null) {
+            "$dir/$lowestFolder/index-dvr.m3u8"
+        } else {
+            "$dir/chunked/index-dvr.m3u8"
+        }
+    }
+
     fun liveConfiguration(): MediaItem.LiveConfiguration =
         MediaItem.LiveConfiguration.Builder()
             .setTargetOffsetMs(TARGET_OFFSET_MS)

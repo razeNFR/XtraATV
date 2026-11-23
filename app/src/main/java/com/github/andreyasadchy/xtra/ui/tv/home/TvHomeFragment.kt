@@ -438,7 +438,25 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                                 if (langCode != null) {
                                     val streams = languageRows[langCode]
                                     if (!streams.isNullOrEmpty()) {
-                                        add(TvHomeSection.Streams(entry.id, TvHomeRow(getString(R.string.tv_popular_in, languageName(langCode)), streams, 0, R.drawable.tv_ic_globe)))
+                                        add(
+                                            TvHomeSection.Streams(
+                                                entry.id,
+                                                TvHomeRow(
+                                                    title = getString(R.string.tv_popular_in, languageName(langCode)),
+                                                    items = streams,
+                                                    seeAllId = 0,
+                                                    icon = R.drawable.tv_ic_globe,
+                                                    onSeeAll = {
+                                                        stopPreview()
+                                                        findNavController().navigate(
+                                                            com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections.actionGlobalTopFragment(
+                                                                languages = arrayOf(langCode),
+                                                            )
+                                                        )
+                                                    },
+                                                )
+                                            )
+                                        )
                                     } else if (isRefreshing && streams == null) {
                                         add(TvHomeSection.Skeleton(entry.id))
                                     }
@@ -817,7 +835,13 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             val player = previewPlayer.value ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.createPlayer(context).also {
                 previewPlayer.value = it
             }
-            player.volume = if (!muted && com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.hasSound(context)) 1f else 0f
+            val wantSound = !muted && com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.hasSound(context)
+            player.volume = if (wantSound) 1f else 0f
+            if (player.trackSelectionParameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_AUDIO) == wantSound) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, !wantSound)
+                    .build()
+            }
             player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
             player.prepare()
             player.playWhenReady = true

@@ -300,6 +300,7 @@ object C {
     const val TV_CHAT_OPACITY = "tv_chat_opacity"
     const val TV_CHAT_MODE = "tv_chat_mode"
     const val TV_CHAT_LINES = "tv_chat_lines"
+    const val TV_MINI_PLAYER_AUTO_SLIDE = "tv_mini_player_auto_slide"
     const val PLAYER_STREAM_HEADERS = "player_stream_headers"
     const val PLAYER_SHOW_UPTIME = "player_show_uptime"
     const val PROXY_PLAYBACK_ACCESS_TOKEN = "proxy_playback_access_token"

@@ -1421,7 +1421,7 @@ private fun StreamRow(
             if (row.seeAllId != 0 || row.onSeeAll != null) {
                 item(key = "seeAll") {
                     val seeAllIndex = row.items.size
-                    SeeAllCard(width = 220.dp, aspect = 16f / 9f, modifier = cardModifier(seeAllIndex, "seeAll")) {
+                    SeeAllCard(width = 124.dp, height = cardWidth * (9f / 16f), modifier = cardModifier(seeAllIndex, "seeAll")) {
                         onCardSelected(seeAllIndex, "seeAll")
                         row.onSeeAll?.invoke() ?: actions.seeAll(row.seeAllId)
                     }
@@ -1755,7 +1755,7 @@ private fun GameRow(
             if (row.seeAllId != 0 || row.onSeeAll != null) {
                 item(key = "seeAll") {
                     val seeAllIndex = row.items.size
-                    SeeAllCard(width = 120.dp, aspect = 3f / 4f, modifier = cardModifier(seeAllIndex, "seeAll")) {
+                    SeeAllCard(width = 112.dp, height = 160.dp, modifier = cardModifier(seeAllIndex, "seeAll")) {
                         onCardSelected(seeAllIndex, "seeAll")
                         row.onSeeAll?.invoke() ?: actions.seeAll(row.seeAllId)
                     }
@@ -2849,29 +2849,64 @@ private fun GameCard(
 }
 
 @Composable
-private fun SeeAllCard(width: Dp, aspect: Float, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun SeeAllCard(width: Dp, height: Dp, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    val onAccent = MaterialTheme.colorScheme.onPrimary
+    val shape = RoundedCornerShape(14.dp)
     FocusCard(width = width, modifier = modifier, onClick = onClick) { focused ->
+        val cardBrush = if (focused) {
+            androidx.compose.ui.graphics.Brush.verticalGradient(
+                listOf(TvColors.focused, Color(0xFFE6E5EE)),
+            )
+        } else {
+            androidx.compose.ui.graphics.Brush.verticalGradient(
+                listOf(
+                    androidx.compose.ui.graphics.lerp(Color(0xEB1B1A26), accent, 0.16f),
+                    Color(0xE613121B),
+                ),
+            )
+        }
+        val borderColor = if (focused) Color.White else androidx.compose.ui.graphics.lerp(Color(0x2BFFFFFF), accent, 0.30f)
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(aspect)
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (focused) TvColors.focused else Color(0x1FFFFFFF)),
-            contentAlignment = Alignment.Center
+                .height(height)
+                .clip(shape)
+                .background(cardBrush)
+                .border(if (focused) 2.dp else 1.dp, borderColor, shape)
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    painterResource(R.drawable.tv_arrow_forward),
-                    contentDescription = null,
-                    tint = if (focused) TvColors.onFocused else Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(Modifier.height(6.dp))
+                Box(
+                    Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (focused) accent else androidx.compose.ui.graphics.lerp(Color(0xE6262536), accent, 0.28f),
+                        )
+                        .border(
+                            1.dp,
+                            if (focused) Color.Transparent else accent.copy(alpha = 0.55f),
+                            CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painterResource(R.drawable.tv_arrow_forward),
+                        contentDescription = null,
+                        tint = if (focused) onAccent else Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                Spacer(Modifier.height(9.dp))
                 Text(
-                    androidx.compose.ui.platform.LocalContext.current.getString(R.string.tv_see_all),
-                    fontSize = 14.sp,
+                    LocalContext.current.getString(R.string.tv_see_all),
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (focused) TvColors.onFocused else Color.White
+                    color = if (focused) TvColors.onFocused else Color(0xF0FFFFFF),
+                    maxLines = 2,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
         }

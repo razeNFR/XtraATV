@@ -1019,10 +1019,16 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     fun onChatShown() {
         if (!isAdded) return
+        adapter?.setAnimationsPaused(false, _binding?.recyclerView)
         syncAdapterAndScroll()
         if (!requireArguments().getBoolean(KEY_IS_LIVE)) {
             viewModel.syncReplayWithPlayer()
         }
+    }
+
+    fun onChatHidden() {
+        if (!isAdded) return
+        adapter?.setAnimationsPaused(true, _binding?.recyclerView)
     }
 
     override fun onResume() {

@@ -58,6 +58,7 @@ object TvSettingIcons {
         "player_frame_rate_matching" to R.drawable.tv_ic_hd,
         "tv_player_clock" to R.drawable.tv_ic_schedule,
         "tv_back_action" to R.drawable.tv_ic_replay,
+        "tv_mini_player_auto_slide" to R.drawable.tv_ic_swap,
         "tv_keep_sound_on_leave" to R.drawable.tv_ic_volume,
         "tv_stream_end_action" to R.drawable.tv_ic_live,
         "tv_oled_protection" to R.drawable.tv_ic_oled,

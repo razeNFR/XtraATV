@@ -39,6 +39,7 @@ class TvStreamPreview(
     override fun stopPreview() = if (TvPreviewSource.suspended) release() else stop()
 
     private var player: ExoPlayer? = null
+    private var firstFrameListener: Player.Listener? = null
     private var textureView: TextureView? = null
     private var thumbnailResize: Pair<View, View.OnLayoutChangeListener>? = null
     private var card: View? = null
@@ -97,12 +98,22 @@ class TvStreamPreview(
             thumbnail.addOnLayoutChangeListener(resize)
             thumbnailResize = thumbnail to resize
             val player = player ?: TvPreviewSource.createPlayer(context).also { player = it }
-            player.volume = if (TvPreviewSource.hasSound(context)) 1f else 0f
+            firstFrameListener?.let { player.removeListener(it) }
+            val wantSound = TvPreviewSource.hasSound(context)
+            player.volume = if (wantSound) 1f else 0f
+            if (player.trackSelectionParameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_AUDIO) == wantSound) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, !wantSound)
+                    .build()
+            }
             player.clearVideoSurface()
             player.setVideoTextureView(textureView)
-            player.addListener(object : Player.Listener {
+            val listener = object : Player.Listener {
                 override fun onRenderedFirstFrame() {
                     player.removeListener(this)
+                    if (firstFrameListener === this) {
+                        firstFrameListener = null
+                    }
                     if (this@TvStreamPreview.card != card) {
                         // another preview took the player meanwhile
                         return
@@ -119,7 +130,9 @@ class TvStreamPreview(
                         TvPreviewSource.notifyPreviewSound(context, true)
                     }
                 }
-            })
+            }
+            firstFrameListener = listener
+            player.addListener(listener)
             player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
             player.prepare()
             player.playWhenReady = true
@@ -135,6 +148,8 @@ class TvStreamPreview(
         // the last picture of the preview, shown while the stream opens
         textureView?.takeIf { it.alpha > 0.5f }?.let { com.github.andreyasadchy.xtra.ui.tv.TvPreviewFrames.capture(playingLogin, it) }
         playingLogin = null
+        firstFrameListener?.let { player?.removeListener(it) }
+        firstFrameListener = null
         player?.stop()
         player?.clearVideoSurface()
         textureView?.let { (it.parent as? FrameLayout)?.removeView(it) }

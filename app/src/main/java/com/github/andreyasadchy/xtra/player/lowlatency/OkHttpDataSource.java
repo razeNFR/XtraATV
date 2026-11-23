@@ -477,7 +477,9 @@ public class OkHttpDataSource extends BaseDataSource implements HttpDataSource {
 
           @Override
           public void onResponse(Call call, Response response) {
-            future.set(response);
+            if (!future.set(response)) {
+              response.close();
+            }
           }
         });
 
@@ -485,6 +487,12 @@ public class OkHttpDataSource extends BaseDataSource implements HttpDataSource {
       return future.get();
     } catch (InterruptedException e) {
       call.cancel();
+      if (future.isDone()) {
+        try {
+          future.get().close();
+        } catch (Exception ignored) {
+        }
+      }
       throw new InterruptedIOException();
     } catch (ExecutionException ee) {
       throw new IOException(ee);

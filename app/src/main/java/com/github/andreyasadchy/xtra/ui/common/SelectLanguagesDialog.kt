@@ -44,6 +44,7 @@ class SelectLanguagesDialog : BottomSheetDialogFragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = DialogSelectLanguagesBinding.inflate(inflater, container, false)
+        val isTv = resources.getBoolean(R.bool.isTv)
         requireArguments().getStringArray(SELECTED_LANGUAGES)?.let { selectedLanguages = it.toMutableList() }
         val languageEntries = resources.getStringArray(R.array.gqlUserLanguageEntries)
         resources.getStringArray(R.array.gqlUserLanguageValues).forEachIndexed { index, language ->
@@ -57,6 +58,9 @@ class SelectLanguagesDialog : BottomSheetDialogFragment() {
                     } else {
                         selectedLanguages.add(language)
                     }
+                    if (isTv) {
+                        listener.onChange(selectedLanguages.toTypedArray().sortedArray())
+                    }
                 }
             })
         }
@@ -69,7 +73,11 @@ class SelectLanguagesDialog : BottomSheetDialogFragment() {
         val behavior = BottomSheetBehavior.from(view.parent as View)
         behavior.skipCollapsed = true
         behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        val isTv = resources.getBoolean(R.bool.isTv)
         with(binding) {
+            if (isTv) {
+                apply.visibility = View.GONE
+            }
             languageScrollView.setOnTouchListener { view, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> behavior.isDraggable = false

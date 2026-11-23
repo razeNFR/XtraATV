@@ -332,9 +332,12 @@ class TvSettingsFragment : Fragment() {
         }
     }
 
+    fun isRightColumnFocused(): Boolean = rightColumnFocusedState.value
+
     private fun updateBackCallback() {
         subScreenBackCallback.isEnabled = isResumed && !isHidden &&
             (editingSliderKeyState.value != null || subScreenStack.isNotEmpty() || searchQueryState.value.isNotBlank() || rightColumnFocusedState.value)
+        (activity as? MainActivity)?.refreshTvMiniPlayerPosition()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -2456,6 +2459,9 @@ class TvSettingsFragment : Fragment() {
                         context.prefs().edit { putBoolean(key, next) }
                         if (key == C.TV_COMPACT_RAIL || key == C.TV_HIDE_MENU_STATS) {
                             (activity as? MainActivity)?.refreshTvNavigationUi()
+                        }
+                        if (key == C.TV_MINI_PLAYER_AUTO_SLIDE || key == C.TV_COMPACT_RAIL) {
+                            (activity as? MainActivity)?.refreshTvMiniPlayerPosition(immediate = true)
                         }
                     }
                 }

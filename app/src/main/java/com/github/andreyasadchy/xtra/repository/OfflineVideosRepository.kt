@@ -4,6 +4,8 @@ import com.github.andreyasadchy.xtra.db.BookmarksDao
 import com.github.andreyasadchy.xtra.db.OfflineVideosDao
 import com.github.andreyasadchy.xtra.model.ui.OfflineVideo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -68,11 +70,17 @@ class OfflineVideosRepository(
         offlineVideosDao.update(video)
     }
 
-    suspend fun updatePosition(id: Int, position: Long) = withContext(Dispatchers.IO) {
-        offlineVideosDao.updatePosition(id, position)
+    private val positionMutex = Mutex()
+
+    suspend fun updatePosition(id: Int, position: Long) = positionMutex.withLock {
+        withContext(Dispatchers.IO) {
+            offlineVideosDao.updatePosition(id, position)
+        }
     }
 
-    suspend fun deletePositions() = withContext(Dispatchers.IO) {
-        offlineVideosDao.deletePositions()
+    suspend fun deletePositions() = positionMutex.withLock {
+        withContext(Dispatchers.IO) {
+            offlineVideosDao.deletePositions()
+        }
     }
 }

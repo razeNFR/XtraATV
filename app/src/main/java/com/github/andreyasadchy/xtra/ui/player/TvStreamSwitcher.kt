@@ -304,18 +304,31 @@ object TvStreamSwitcher {
             setPadding(horizontalPadding, (8 * density).toInt(), horizontalPadding, (8 * density).toInt())
         }
         var lastFocusedCardPos = RecyclerView.NO_POSITION
+        var lastFocusedCardTab = initialTab
         // card the focus goes to once it is shown (left / right pressed faster than the row scrolls)
         var pendingTarget = RecyclerView.NO_POSITION
         recyclerView.layoutManager = object : LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false) {
             // left / right stay in the row: the next card not shown yet, the row scrolls smoothly to it and the focus
             // follows when it is there (no jump, the tabs above are never reached); at the end the last card keeps it
             override fun onInterceptFocusSearch(focused: View, direction: Int): View? {
-                if (direction == View.FOCUS_UP && selection != null && validate != null && validate.isShown &&
-                    (checked?.size ?: 0) >= minChecked
-                ) {
-                    findContainingItemView(focused)?.let { lastFocusedCardPos = getPosition(it) }
-                    tabsScrollView?.scrollTo(0, 0)
-                    return validate
+                if (direction == View.FOCUS_UP) {
+                    findContainingItemView(focused)?.let {
+                        lastFocusedCardPos = getPosition(it)
+                        lastFocusedCardTab = currentTab
+                    }
+                    val activeTabView = tabViews.getOrNull(currentTab.coerceIn(0, (tabViews.size - 1).coerceAtLeast(0)))
+                    if (activeTabView != null && activeTabView.isShown) {
+                        tabsScrollView?.let { scroll ->
+                            val targetX = ((activeTabView.left + activeTabView.right) / 2 - scroll.width / 2).coerceAtLeast(0)
+                            scroll.smoothScrollTo(targetX, 0)
+                        }
+                        return activeTabView
+                    }
+                    if (validate != null && validate.isShown) {
+                        tabsScrollView?.smoothScrollTo(0, 0)
+                        return validate
+                    }
+                    return null
                 }
                 if (direction != View.FOCUS_RIGHT && direction != View.FOCUS_LEFT) {
                     return null
@@ -381,12 +394,17 @@ object TvStreamSwitcher {
         if (validate != null && validate.parent == null) {
             header.addView(validate)
         }
+        validate?.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                tabsScrollView?.smoothScrollTo(0, 0)
+            }
+        }
         // down from "Validate": the cards
         validate?.setOnKeyListener { _, keyCode, event ->
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN) {
-                val remembered = lastFocusedCardPos.takeIf { it != RecyclerView.NO_POSITION }
-                    ?.let { recyclerView.layoutManager?.findViewByPosition(it) }
-                    ?.takeIf { it.isShown }
+                val remembered = if (lastFocusedCardTab == currentTab && lastFocusedCardPos != RecyclerView.NO_POSITION) {
+                    recyclerView.layoutManager?.findViewByPosition(lastFocusedCardPos)?.takeIf { it.isShown }
+                } else null
                 (remembered
                     ?: recyclerView.layoutManager?.findViewByPosition((recyclerView.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition())
                     ?: recyclerView.getChildAt(0))?.requestFocus()
@@ -498,8 +516,31 @@ object TvStreamSwitcher {
         root.addView(recyclerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         // a tab with the focus shows its list (loaded once), after a short stop on it
         var tabJob: kotlinx.coroutines.Job? = null
+        var loadingTabIndex = -1
+        var focusCardsWhenLoaded = false
         var searchQuery = ""
+        val restoreTabLabels = {
+            tabViews.forEachIndexed { i, tab ->
+                tab.text = if (i == searchTabIndex && searchQuery.isNotEmpty()) {
+                    "${activity.getString(R.string.search)}: $searchQuery"
+                } else {
+                    tabTitles[i]
+                }
+            }
+        }
+        val focusCardFromTab = {
+            val remembered = if (lastFocusedCardTab == currentTab && lastFocusedCardPos != RecyclerView.NO_POSITION) {
+                recyclerView.layoutManager?.findViewByPosition(lastFocusedCardPos)?.takeIf { it.isShown }
+            } else null
+            val firstVisible = (recyclerView.layoutManager as? LinearLayoutManager)?.findFirstVisibleItemPosition()
+                ?.takeIf { it != RecyclerView.NO_POSITION }
+                ?.let { recyclerView.layoutManager?.findViewByPosition(it) }
+            (remembered ?: firstVisible ?: recyclerView.getChildAt(0))?.requestFocus()
+        }
         val showTab = { index: Int, list: List<Stream> ->
+            if (lastFocusedCardTab != index) {
+                lastFocusedCardPos = RecyclerView.NO_POSITION
+            }
             currentTab = index
             pendingTarget = RecyclerView.NO_POSITION
             moreJob?.cancel()
@@ -516,8 +557,11 @@ object TvStreamSwitcher {
                 searchQuery = trimmed
                 val label = "${activity.getString(R.string.search)}: $trimmed"
                 tabJob?.cancel()
-                tabViews.forEachIndexed { i, tab -> tab.text = if (i == searchTabIndex && searchQuery.isNotEmpty()) label else tabTitles[i] }
+                loadingTabIndex = -1
+                focusCardsWhenLoaded = false
+                restoreTabLabels()
                 tabJob = activity.lifecycleScope.launch {
+                    loadingTabIndex = searchTabIndex
                     view.text = activity.getString(R.string.tv_switch_loading, label)
                     val searchPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages {
                         com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.search(activity, trimmed)
@@ -526,6 +570,7 @@ object TvStreamSwitcher {
                     val list = searchPages.next()?.distinctBy { it.channelLogin }
                         ?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }
                         ?.also { loadedTabs[searchTabIndex] = it }
+                    loadingTabIndex = -1
                     view.text = label
                     if (!dialog.isShowing) {
                         return@launch
@@ -539,8 +584,95 @@ object TvStreamSwitcher {
                 }
             }
         }
+        val selectTab: (Int, TextView, Long, Boolean) -> Unit = selectTab@{ index, view, debounceMs, focusCardsAfter ->
+            if (index == searchTabIndex) {
+                val cachedSearch = loadedTabs[searchTabIndex]
+                if (!cachedSearch.isNullOrEmpty()) {
+                    tabJob?.cancel()
+                    loadingTabIndex = -1
+                    restoreTabLabels()
+                    focusCardsWhenLoaded = focusCardsAfter
+                    tabJob = activity.lifecycleScope.launch {
+                        if (debounceMs > 0L) kotlinx.coroutines.delay(debounceMs)
+                        if (!dialog.isShowing) return@launch
+                        showTab(searchTabIndex, cachedSearch)
+                        if (focusCardsWhenLoaded) {
+                            focusCardsWhenLoaded = false
+                            recyclerView.post { focusCardFromTab() }
+                        }
+                    }
+                } else {
+                    tabJob?.cancel()
+                    loadingTabIndex = -1
+                    focusCardsWhenLoaded = false
+                    restoreTabLabels()
+                }
+                return@selectTab
+            }
+            if (index == currentTab && loadingTabIndex == -1 && loadedTabs[index] != null) {
+                tabJob?.cancel()
+                restoreTabLabels()
+                tabViews.forEachIndexed { i, tv -> tv.isSelected = i == currentTab }
+                if (focusCardsAfter && adapter.itemCount > 0) {
+                    focusCardFromTab()
+                }
+                return@selectTab
+            }
+            if (loadingTabIndex == index && debounceMs == 0L) {
+                if (focusCardsAfter) focusCardsWhenLoaded = true
+                return@selectTab
+            }
+            tabJob?.cancel()
+            loadingTabIndex = -1
+            focusCardsWhenLoaded = focusCardsAfter
+            restoreTabLabels()
+            tabJob = activity.lifecycleScope.launch {
+                if (debounceMs > 0L) {
+                    kotlinx.coroutines.delay(debounceMs)
+                }
+                if (!dialog.isShowing) return@launch
+                currentTab = index
+                tabViews.forEachIndexed { i, tv -> tv.isSelected = i == index }
+                val cached = loadedTabs[index]
+                val list = if (cached != null) {
+                    cached
+                } else {
+                    loadingTabIndex = index
+                    view.text = activity.getString(R.string.tv_switch_loading, tabTitles[index])
+                    val fetched = rowOf(index)?.let { row ->
+                        val rowPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(row.source)
+                        pages[index] = rowPages
+                        rowPages.next()?.distinctBy { it.channelLogin }
+                    }?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }?.also { loadedTabs[index] = it }
+                    loadingTabIndex = -1
+                    restoreTabLabels()
+                    fetched
+                }
+                if (!dialog.isShowing) return@launch
+                if (list == null) {
+                    showTab(index, emptyList())
+                    focusCardsWhenLoaded = false
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_switch_error, android.widget.Toast.LENGTH_SHORT).show()
+                } else if (list.isEmpty()) {
+                    showTab(index, emptyList())
+                    focusCardsWhenLoaded = false
+                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    showTab(index, list)
+                    if (focusCardsWhenLoaded) {
+                        focusCardsWhenLoaded = false
+                        recyclerView.post { focusCardFromTab() }
+                    }
+                }
+            }
+        }
         tabViews.forEachIndexed { index, view ->
-            // OK on a tab shows its list (loaded once); on Search it always opens the search box
+            view.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    selectTab(index, view, 140L, false)
+                }
+            }
+            // OK on Search opens the search box; on any category tab it drops focus into its stream cards
             view.setOnClickListener {
                 if (index == searchTabIndex) {
                     com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(activity) { dismiss ->
@@ -555,41 +687,18 @@ object TvStreamSwitcher {
                     }
                     return@setOnClickListener
                 }
-                if (index == currentTab && !loadedTabs[index].isNullOrEmpty()) {
-                    recyclerView.getChildAt(0)?.requestFocus()
-                    return@setOnClickListener
-                }
-                tabJob?.cancel()
-                tabViews.forEachIndexed { i, tab -> tab.text = if (i == searchTabIndex && searchQuery.isNotEmpty()) "${activity.getString(R.string.search)}: $searchQuery" else tabTitles[i] }
-                tabJob = activity.lifecycleScope.launch {
-                    val cached = loadedTabs[index]
-                    val list = cached ?: run {
-                        // loading: the tab says so until the list comes
-                        view.text = activity.getString(R.string.tv_switch_loading, tabTitles[index])
-                        rowOf(index)?.let { row ->
-                            val rowPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(row.source)
-                            pages[index] = rowPages
-                            rowPages.next()?.distinctBy { it.channelLogin }
-                        }?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }?.also { loadedTabs[index] = it }
-                    }
-                    view.text = tabTitles[index]
-                    if (!dialog.isShowing) {
-                        return@launch
-                    }
-                    if (list.isNullOrEmpty()) {
-                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, if (list == null) R.string.tv_switch_error else R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
-                    } else {
-                        showTab(index, list)
-                        // the list is there: the focus goes to its first stream
-                        recyclerView.post { recyclerView.layoutManager?.findViewByPosition(0)?.requestFocus() }
-                    }
-                }
+                selectTab(index, view, 0L, true)
             }
-            // down from a tab: the cards of the list shown
+            // down from a tab: the cards of the list shown (returning to the remembered card if on the same tab)
             view.setOnKeyListener { _, keyCode, event ->
                 if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN) {
-                    (recyclerView.layoutManager?.findViewByPosition((recyclerView.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition())
-                        ?: recyclerView.getChildAt(0))?.requestFocus()
+                    if (index == searchTabIndex && loadedTabs[searchTabIndex].isNullOrEmpty()) {
+                        if (adapter.itemCount > 0) focusCardFromTab()
+                    } else if (currentTab != index || loadingTabIndex == index || loadedTabs[index] == null) {
+                        selectTab(index, view, 0L, true)
+                    } else if (adapter.itemCount > 0) {
+                        focusCardFromTab()
+                    }
                     true
                 } else false
             }

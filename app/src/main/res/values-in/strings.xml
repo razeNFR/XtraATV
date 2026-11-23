@@ -1392,4 +1392,7 @@
     <string name="tv_chat_polls_popup">Polling (chat disembunyikan)</string>
     <string name="tv_poll_started">Polling dimulai</string>
     <string name="tv_poll_ended">Polling selesai</string>
+    <string name="tv_mini_player_auto_slide">Geser pemutar mini otomatis</string>
+    <string name="tv_mini_player_auto_slide_summary">Menggeser pemutar mini ke sisi berlawanan saat item yang dipilih berada di bawahnya</string>
+    <string name="tv_section_hidden_toast">“%1$s” disembunyikan di menu samping (aktifkan kembali di pengaturan)</string>
 </resources>

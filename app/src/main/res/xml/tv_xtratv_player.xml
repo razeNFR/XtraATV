@@ -38,6 +38,14 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_mini_player_auto_slide"
+        android:summary="@string/tv_mini_player_auto_slide_summary"
+        android:title="@string/tv_mini_player_auto_slide"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <ListPreference
         android:defaultValue="never"
         android:entries="@array/tvKeepSoundEntries"

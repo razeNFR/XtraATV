@@ -604,6 +604,12 @@ public class CronetDataSource extends BaseDataSource implements HttpDataSource {
     }
     resetConnectTimeout(timeout);
     currentDataSpec = dataSpec;
+    if (multivariantPlaylistProxyOkHttpClient != null && host != null && host.matches(ExoPlayerService.MULTIVARIANT_PLAYLIST_REGEX)) { // xtra: proxy
+      return openOkHttp(dataSpec, multivariantPlaylistProxyOkHttpClient);
+    }
+    if (mediaPlaylistProxyOkHttpClient != null && host != null && host.matches(ExoPlayerService.MEDIA_PLAYLIST_REGEX) && getProxyMediaPlaylist.invoke()) {
+      return openOkHttp(dataSpec, mediaPlaylistProxyOkHttpClient);
+    }
     UrlRequest urlRequest;
     try {
       createCurrentUrlRequestAndCallback(dataSpec);
@@ -615,12 +621,6 @@ public class CronetDataSource extends BaseDataSource implements HttpDataSource {
         throw new OpenException(
             e, dataSpec, PlaybackException.ERROR_CODE_IO_UNSPECIFIED, Status.IDLE);
       }
-    }
-    if (multivariantPlaylistProxyOkHttpClient != null && host != null && host.matches(ExoPlayerService.MULTIVARIANT_PLAYLIST_REGEX)) { // xtra: proxy
-      return openOkHttp(dataSpec, multivariantPlaylistProxyOkHttpClient);
-    }
-    if (mediaPlaylistProxyOkHttpClient != null && host != null && host.matches(ExoPlayerService.MEDIA_PLAYLIST_REGEX) && getProxyMediaPlaylist.invoke()) {
-      return openOkHttp(dataSpec, mediaPlaylistProxyOkHttpClient);
     }
     urlRequest.start();
 
@@ -1325,7 +1325,9 @@ public class CronetDataSource extends BaseDataSource implements HttpDataSource {
 
           @Override
           public void onResponse(Call call, Response response) {
-                future.set(response);
+                if (!future.set(response)) {
+                  response.close();
+                }
               }
         });
 
@@ -1333,6 +1335,12 @@ public class CronetDataSource extends BaseDataSource implements HttpDataSource {
       return future.get();
     } catch (InterruptedException e) {
       call.cancel();
+      if (future.isDone()) {
+        try {
+          future.get().close();
+        } catch (Exception ignored) {
+        }
+      }
       throw new InterruptedIOException();
     } catch (ExecutionException ee) {
       throw new IOException(ee);
