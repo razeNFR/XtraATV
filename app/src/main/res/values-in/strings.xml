@@ -1395,4 +1395,22 @@
     <string name="tv_mini_player_auto_slide">Geser pemutar mini otomatis</string>
     <string name="tv_mini_player_auto_slide_summary">Menggeser pemutar mini ke sisi berlawanan saat item yang dipilih berada di bawahnya</string>
     <string name="tv_section_hidden_toast">“%1$s” disembunyikan di menu samping (aktifkan kembali di pengaturan)</string>
+    <string name="tv_home_row_recent_channels">Saluran yang baru ditonton</string>
+    <string name="tv_recent_channels_filter">Saluran yang baru ditonton</string>
+    <string name="tv_recent_channels_filter_all">Semua saluran</string>
+    <string name="tv_recent_channels_filter_unfollowed">Hanya saluran yang belum diikuti</string>
+    <string name="tv_recent_channels_remove">Hapus dari baru ditonton</string>
+    <string name="tv_recent_channels_removed">%1$s dihapus dari saluran baru ditonton</string>
+    <string name="tv_recent_channels_clear">Bersihkan saluran baru ditonton</string>
+    <string name="tv_recent_channels_clear_summary">Hapus semua saluran dari baris Saluran yang baru ditonton</string>
+    <string name="tv_recent_channels_cleared">Saluran baru ditonton dibersihkan</string>
+    <string name="tv_sync_vod_history">Sinkronkan riwayat VOD dengan Twitch</string>
+    <string name="tv_sync_vod_history_summary">Sinkronkan posisi lanjutkan VOD dan Lanjutkan menonton di PC, ponsel, dan TV</string>
+    <string name="tv_about_changelog">Yang baru / Catatan perubahan</string>
+    <string name="tv_about_changelog_summary">Baca catatan pembaruan terbaru dan versi sebelumnya</string>
+    <string name="tv_changelog_installed">Terpasang</string>
+    <string name="tv_changelog_new">Baru</string>
+    <string name="tv_changelog_loading">Memuat versi sebelumnya…</string>
+    <string name="tv_changelog_empty">Belum ada catatan rilis yang tersedia saat ini</string>
+    <string name="tv_changelog_back">Kembali ke daftar versi</string>
 </resources>

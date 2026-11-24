@@ -415,6 +415,9 @@ object TvToast {
         R.string.tv_blacklist_category_unhidden,
         R.string.tv_blacklist_keyword_added -> R.drawable.tv_ic_block
 
+        R.string.tv_recent_channels_removed,
+        R.string.tv_recent_channels_cleared -> R.drawable.tv_ic_delete
+
         R.string.timer_canceled -> R.drawable.tv_ic_timer
 
         R.string.tv_backup_saved,
@@ -465,6 +468,7 @@ object TvToast {
         R.string.tv_blacklist_category_hidden, R.drawable.tv_ic_block,
         R.string.tv_blacklist_category_unhidden, R.drawable.tv_ic_block,
         R.string.tv_blacklist_keyword_added, R.drawable.tv_ic_block,
+        R.string.tv_recent_channels_removed, R.drawable.tv_ic_delete,
         R.string.playback_will_stop, R.drawable.tv_ic_timer,
         R.string.tv_backup_saved, R.drawable.tv_ic_check,
         R.string.tv_multistream_stream_ended, R.drawable.tv_ic_multistream,

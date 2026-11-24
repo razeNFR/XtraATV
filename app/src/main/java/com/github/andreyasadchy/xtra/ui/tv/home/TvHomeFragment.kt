@@ -244,6 +244,27 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     )
                 )
             },
+            openRecentChannel = { item, rowItems ->
+                stopPreview()
+                val live = item.liveStream
+                if (live != null) {
+                    val liveQueue = rowItems.mapNotNull { it.liveStream }
+                    (activity as? MainActivity)?.startStream(live, liveQueue, null)
+                } else {
+                    (activity as? MainActivity)?.openTvChannel(
+                        Stream(
+                            channelId = item.channelId,
+                            channelLogin = item.login,
+                            channelName = item.displayName,
+                            channelImageURL = item.entry.avatarUrl,
+                        ),
+                        null,
+                    )
+                }
+            },
+            showRecentChannelActions = { item, rowItems ->
+                showRecentChannelActions(item, rowItems)
+            },
         )
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.stamp.collect { homeStamp.longValue = it }
@@ -299,6 +320,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 val recommended by viewModel.recommended.collectAsState()
                 val followedGames by viewModel.followedGames.collectAsState()
                 val offlineChannels by viewModel.offlineChannels.collectAsState()
+                val recentChannels by viewModel.recentChannels.collectAsState()
                 val games by viewModel.games.collectAsState()
                 val languageRows by viewModel.languageRows.collectAsState()
                 val categoryRows by viewModel.categoryRows.collectAsState()
@@ -382,6 +404,24 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                             TvHomeRows.ROW_RESUME -> {
                                 resumeItems.value.takeIf { it.isNotEmpty() }?.let { list ->
                                     add(TvHomeSection.Resume(entry.id, TvHomeRow(getString(R.string.tv_continue_watching), list, 0, R.drawable.tv_ic_history)))
+                                }
+                            }
+                            TvHomeRows.ROW_RECENT_CHANNELS -> {
+                                val list = recentChannels
+                                if (list == null && com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.count(context) > 0) {
+                                    add(TvHomeSection.Skeleton(entry.id))
+                                } else if (!list.isNullOrEmpty()) {
+                                    add(
+                                        TvHomeSection.RecentChannels(
+                                            entry.id,
+                                            TvHomeRow(
+                                                title = getString(R.string.tv_home_row_recent_channels),
+                                                items = list,
+                                                seeAllId = 0,
+                                                icon = R.drawable.tv_ic_history,
+                                            ),
+                                        )
+                                    )
                                 }
                             }
                             TvHomeRows.ROW_FOLLOWED_VIDEOS -> {
@@ -695,6 +735,61 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(activity, item.group.label, actions)
     }
 
+    private fun showRecentChannelActions(
+        item: com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem,
+        rowItems: List<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>,
+    ) {
+        stopPreview()
+        val activity = activity as? MainActivity ?: return
+        val live = item.liveStream
+        val stream = live ?: Stream(
+            channelId = item.channelId,
+            channelLogin = item.login,
+            channelName = item.displayName,
+            channelImageURL = item.entry.avatarUrl,
+        )
+        val firstAction = if (live != null) {
+            com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(
+                getString(R.string.watch_live),
+                R.drawable.tv_ic_play,
+            ) {
+                activity.startStream(live, rowItems.mapNotNull { it.liveStream }, null)
+            }
+        } else {
+            null
+        }
+        val extraActions = listOf(
+            com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(
+                getString(R.string.tv_recent_channels_remove),
+                R.drawable.tv_ic_delete,
+            ) {
+                com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.remove(activity, item.login)
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    activity,
+                    getString(R.string.tv_recent_channels_removed, item.displayName),
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            },
+            com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.Extra(
+                getString(R.string.tv_recent_channels_clear),
+                R.drawable.tv_ic_delete,
+            ) {
+                com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.clear(activity)
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    activity,
+                    R.string.tv_recent_channels_cleared,
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            },
+        )
+        com.github.andreyasadchy.xtra.ui.tv.TvStreamActions.show(
+            activity = activity,
+            stream = stream,
+            first = firstAction,
+            last = extraActions,
+        )
+    }
+
     /** Name of a language in the language of the app ("fr" -> "Français"). */
     private fun languageName(code: String): String {
         val name = java.util.Locale.forLanguageTag(code).getDisplayLanguage(resources.configuration.locales[0])
@@ -864,7 +959,8 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         scheduledMuted = false
         previewJob?.cancel()
         previewJob = null
-        if (previewLogin.value != null && !previewMuted) {
+        val wasPlaying = previewLogin.value != null
+        if (wasPlaying && !previewMuted) {
             context?.let { com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.notifyPreviewSound(it, false) }
         }
         previewLogin.value = null
@@ -872,8 +968,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             previewPlayer.value?.release()
             previewPlayer.value = null
         } else {
-            previewPlayer.value?.stop()
-            previewPlayer.value?.clearMediaItems()
+            val player = previewPlayer.value
+            if (player != null && (wasPlaying || player.mediaItemCount > 0)) {
+                player.stop()
+                player.clearMediaItems()
+            }
         }
     }
 

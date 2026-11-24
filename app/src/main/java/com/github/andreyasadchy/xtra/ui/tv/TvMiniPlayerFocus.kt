@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.tv
 
 import android.graphics.Rect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import kotlin.math.roundToInt
@@ -11,12 +12,17 @@ import kotlin.math.roundToInt
  */
 object TvMiniPlayerFocus {
     private var activeToken: Any? = null
+    private val listeningState = mutableStateOf(false)
     val focusedCardRect = Rect()
     var hasFocusedCard = false
         private set
     var onChanged: (() -> Unit)? = null
+        set(value) {
+            field = value
+            listeningState.value = value != null
+        }
     val isListening: Boolean
-        get() = onChanged != null
+        get() = listeningState.value
 
     fun reportCoordinates(token: Any, coords: LayoutCoordinates) {
         if (onChanged == null || !coords.isAttached) return

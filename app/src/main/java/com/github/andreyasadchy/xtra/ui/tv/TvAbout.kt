@@ -90,6 +90,18 @@ object TvAbout {
                     Spacer(Modifier.height(8.dp))
                     Text(targetUrl, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = ComposeColor.White)
                     Spacer(Modifier.height(12.dp))
+                    if (!discord) {
+                        ButtonRow(
+                            label = context.getString(R.string.tv_about_changelog),
+                            icon = R.drawable.tv_ic_list,
+                            alignStart = false,
+                            onClick = {
+                                dismiss()
+                                TvChangelog.show(context)
+                            },
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
                     ButtonRow(
                         label = context.getString(R.string.close_player),
                         modifier = Modifier.focusRequester(closeRequester),

@@ -1394,4 +1394,22 @@
     <string name="tv_mini_player_auto_slide">自动避让迷你播放器</string>
     <string name="tv_mini_player_auto_slide_summary">当选中项移到迷你播放器下方时将其平滑移至另一侧</string>
     <string name="tv_section_hidden_toast">“%1$s”已在侧边菜单中隐藏（可在设置中重新启用）</string>
+    <string name="tv_home_row_recent_channels">最近观看的频道</string>
+    <string name="tv_recent_channels_filter">最近观看的频道</string>
+    <string name="tv_recent_channels_filter_all">所有频道</string>
+    <string name="tv_recent_channels_filter_unfollowed">仅未关注的频道</string>
+    <string name="tv_recent_channels_remove">从最近观看中移除</string>
+    <string name="tv_recent_channels_removed">已将 %1$s 从最近观看的频道中移除</string>
+    <string name="tv_recent_channels_clear">清空最近观看的频道</string>
+    <string name="tv_recent_channels_clear_summary">移除最近观看的频道行中的所有频道</string>
+    <string name="tv_recent_channels_cleared">已清空最近观看的频道</string>
+    <string name="tv_sync_vod_history">与 Twitch 同步录像历史</string>
+    <string name="tv_sync_vod_history_summary">在电脑、手机和电视之间同步录像观看进度与继续观看列表</string>
+    <string name="tv_about_changelog">更新内容 / 更新日志</string>
+    <string name="tv_about_changelog_summary">查看最新及以往版本的更新说明</string>
+    <string name="tv_changelog_installed">当前安装</string>
+    <string name="tv_changelog_new">新版本</string>
+    <string name="tv_changelog_loading">正在加载历史版本…</string>
+    <string name="tv_changelog_empty">暂无可用的版本更新说明</string>
+    <string name="tv_changelog_back">返回版本列表</string>
 </resources>

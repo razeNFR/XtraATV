@@ -1,13 +1,10 @@
 package com.github.andreyasadchy.xtra.ui.tv
 
-import androidx.lifecycle.lifecycleScope
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.XtraApp
-import com.github.andreyasadchy.xtra.model.VideoPosition
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.model.ui.Video
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
-import kotlinx.coroutines.launch
 
 /**
  * TV: the one panel of the actions of a video, the same on the home ("Continue watching", videos of the followed
@@ -48,17 +45,12 @@ object TvVideoActions {
             val id = video.id
             if (started && !id.isNullOrBlank()) {
                 add(TvActionPanel.Action(activity.getString(R.string.tv_remove_from_history), R.drawable.tv_ic_delete) {
-                    TvResumeHistory.remove(activity, id)
-                    id.toLongOrNull()?.let { number ->
-                        activity.lifecycleScope.launch {
-                            try {
-                                (activity.application as XtraApp).xtraModule.playerRepository.saveVideoPosition(VideoPosition(number, 0))
-                            } catch (e: Exception) {
-
-                            }
-                            onHistoryRemoved?.invoke()
-                        }
-                    } ?: onHistoryRemoved?.invoke()
+                    TvVodHistorySync.removeFromHistory(
+                        context = activity,
+                        xtraModule = (activity.application as XtraApp).xtraModule,
+                        videoId = id,
+                        onLocalDone = onHistoryRemoved,
+                    )
                 })
             }
             if (showChannel && (!video.channelLogin.isNullOrBlank() || !video.channelId.isNullOrBlank())) {

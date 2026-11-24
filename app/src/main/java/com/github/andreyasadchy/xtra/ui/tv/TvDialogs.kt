@@ -836,7 +836,13 @@ fun ButtonRow(
  * has scrolled ([scrolled], read when drawing), so its first row is whole at the top.
  */
 fun Modifier.tvTopFade(height: Dp = 36.dp, scrolled: () -> Boolean): Modifier = this
-    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .graphicsLayer {
+        compositingStrategy = if (scrolled()) {
+            androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+        } else {
+            androidx.compose.ui.graphics.CompositingStrategy.Auto
+        }
+    }
     .drawWithContent {
         drawContent()
         if (scrolled()) {
@@ -859,7 +865,13 @@ fun Modifier.tvHorizontalFade(
     scrolledStart: () -> Boolean,
     scrolledEnd: () -> Boolean = { false },
 ): Modifier = this
-    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .graphicsLayer {
+        compositingStrategy = if (scrolledStart() || scrolledEnd()) {
+            androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+        } else {
+            androidx.compose.ui.graphics.CompositingStrategy.Auto
+        }
+    }
     .drawWithContent {
         drawContent()
         if (scrolledStart()) {

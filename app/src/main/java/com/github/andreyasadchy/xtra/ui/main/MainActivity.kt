@@ -3657,6 +3657,15 @@ class MainActivity : AppCompatActivity() {
             video.id?.toLongOrNull()?.let { id ->
                 viewModel.saveVideoPosition(id, offset ?: 0)
             }
+            if (isTv && (offset == null || offset == 0L) && !video.id.isNullOrBlank()) {
+                com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pushPositionAsync(
+                    context = this,
+                    xtraModule = (application as com.github.andreyasadchy.xtra.XtraApp).xtraModule,
+                    videoId = video.id,
+                    positionMs = 0L,
+                    force = true,
+                )
+            }
         }
         val fragment = when (prefs.getString(C.PLAYER, C.EXOPLAYER)) {
             C.MEDIA_PLAYER -> MediaPlayerFragment()

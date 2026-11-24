@@ -1394,4 +1394,22 @@
     <string name="tv_mini_player_auto_slide">Sposta automaticamente il mini lettore</string>
     <string name="tv_mini_player_auto_slide_summary">Fa scorrere il mini lettore sul lato opposto quando l\'elemento selezionato passa sotto</string>
     <string name="tv_section_hidden_toast">«%1$s» è nascosta nel menu laterale (riattivala nelle impostazioni)</string>
+    <string name="tv_home_row_recent_channels">Canali guardati di recente</string>
+    <string name="tv_recent_channels_filter">Canali guardati di recente</string>
+    <string name="tv_recent_channels_filter_all">Tutti i canali</string>
+    <string name="tv_recent_channels_filter_unfollowed">Solo canali non seguiti</string>
+    <string name="tv_recent_channels_remove">Rimuovi dai recenti</string>
+    <string name="tv_recent_channels_removed">%1$s rimosso dai canali recenti</string>
+    <string name="tv_recent_channels_clear">Svuota canali recenti</string>
+    <string name="tv_recent_channels_clear_summary">Rimuove tutti i canali dalla riga Canali guardati di recente</string>
+    <string name="tv_recent_channels_cleared">Canali recenti svuotati</string>
+    <string name="tv_sync_vod_history">Sincronizza cronologia VOD con Twitch</string>
+    <string name="tv_sync_vod_history_summary">Sincronizza la posizione dei VOD e Continua a guardare tra PC, mobile e TV</string>
+    <string name="tv_about_changelog">Novità / Changelog</string>
+    <string name="tv_about_changelog_summary">Leggi le note di rilascio dell\'ultimo aggiornamento e dei precedenti</string>
+    <string name="tv_changelog_installed">Installata</string>
+    <string name="tv_changelog_new">Nuovo</string>
+    <string name="tv_changelog_loading">Caricamento delle versioni precedenti…</string>
+    <string name="tv_changelog_empty">Nessuna nota di rilascio disponibile al momento</string>
+    <string name="tv_changelog_back">Torna alle versioni</string>
 </resources>

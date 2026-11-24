@@ -322,6 +322,10 @@ object TvAmbient {
         is com.github.andreyasadchy.xtra.model.ui.Bookmark -> listOf(item.thumbnail, item.userLogo)
         is com.github.andreyasadchy.xtra.model.ui.OfflineVideo -> listOf(item.thumbnail, item.channelLogo)
         is TvResumeHistory.Item -> listOf(item.thumbnail?.takeUnless { TvVideoThumbnail.isMissing(it) }, item.channelImage)
+        is TvRecentChannels.ResolvedItem -> listOf(
+            item.liveStream?.thumbnail?.takeUnless { item.liveStream.thumbnailURL.isNullOrBlank() },
+            item.avatarUrl,
+        )
         else -> null
     }
 

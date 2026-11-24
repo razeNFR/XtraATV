@@ -151,6 +151,15 @@ class TvHomeActions(
     /** Offline followed channels row: OK opens the channel page, OK held opens channel actions. */
     val openOfflineChannel: (com.github.andreyasadchy.xtra.model.ui.User) -> Unit = {},
     val showOfflineChannelActions: (com.github.andreyasadchy.xtra.model.ui.User) -> Unit = {},
+    /** Recently watched channels row: OK opens the live stream when live or the channel page when offline. */
+    val openRecentChannel: (
+        com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem,
+        List<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>,
+    ) -> Unit = { _, _ -> },
+    val showRecentChannelActions: (
+        com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem,
+        List<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>,
+    ) -> Unit = { _, _ -> },
 )
 
 class TvHomeRow<T>(
@@ -167,6 +176,7 @@ sealed class TvHomeSection(val key: String) {
     class Streams(key: String, val row: TvHomeRow<Stream>) : TvHomeSection(key)
     class MultiStreams(key: String, val row: TvHomeRow<TvHomeMultiStream>) : TvHomeSection(key)
     class Resume(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>) : TvHomeSection(key)
+    class RecentChannels(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>) : TvHomeSection(key)
     class Videos(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video>) : TvHomeSection(key)
     class Clips(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Clip>) : TvHomeSection(key)
     class Stats(key: String, val stats: TvHomeStats) : TvHomeSection(key)
@@ -175,6 +185,15 @@ sealed class TvHomeSection(val key: String) {
 }
 
 private class HomeRowInfo(val rowIndex: Int, val key: String, val itemKeys: List<String>)
+
+private class HomeCardSignals(
+    val isFavorite: (String?) -> Boolean = { false },
+    val playbackBadge: (android.content.Context, String?) -> com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.Badge? = { _, _ -> null },
+    val coStreamCount: (String?, String?) -> Int = { _, _ -> 0 },
+    val isVerticalScrolling: () -> Boolean = { false },
+)
+
+private val LocalHomeCardSignals = androidx.compose.runtime.staticCompositionLocalOf { HomeCardSignals() }
 
 /**
  * Rows: the focus moves over the cards on screen and the row only slides when the focused card gets near an edge,
@@ -225,6 +244,24 @@ fun TvHomeScreen(
             listState.animateScrollToItem(index, if (index <= 0) 0 else -peek)
         }
     }
+    val favoritesState = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
+    val favoriteLoginsState = remember {
+        derivedStateOf { favoritesState.value.mapTo(HashSet()) { it.login.lowercase() } }
+    }
+    val playbackState = com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.state.collectAsState()
+    val coStreamVersionState = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.version.collectAsState()
+    val cardSignals = remember(listState) {
+        HomeCardSignals(
+            isFavorite = { login -> !login.isNullOrBlank() && favoriteLoginsState.value.contains(login.lowercase()) },
+            playbackBadge = { ctx, login ->
+                com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.badgeFor(ctx, login, playbackState.value)
+            },
+            coStreamCount = { channelId, channelLogin ->
+                com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.getCount(channelId, channelLogin, coStreamVersionState.value)
+            },
+            isVerticalScrolling = { listState.isScrollInProgress },
+        )
+    }
     val hasHero = hero != null
     val heroOffset = if (hasHero) 1 else 0
     // the first row is still loading: the focus waits on its first grey card, then goes to its first stream/card
@@ -262,6 +299,11 @@ fun TvHomeScreen(
                         add(HomeRowInfo(listIndex, section.key, section.row.items.map { it.id }))
                     }
                 }
+                is TvHomeSection.RecentChannels -> {
+                    if (section.row.items.isNotEmpty()) {
+                        add(HomeRowInfo(listIndex, section.key, section.row.items.map { it.login.lowercase() }))
+                    }
+                }
                 is TvHomeSection.Videos -> {
                     if (section.row.items.isNotEmpty()) {
                         add(HomeRowInfo(listIndex, section.key, section.row.items.mapIndexed { i, v -> v.id ?: "video$i" }))
@@ -296,8 +338,10 @@ fun TvHomeScreen(
     // the focus never lands on it
     val refreshRequester = remember { FocusRequester() }
     var refreshAllowed by remember { mutableStateOf(false) }
-    // item of the list that has the focus (0: the first row)
-    var focusedItem by remember { androidx.compose.runtime.mutableIntStateOf(-1) }
+    // item of the list that has the focus (0: the first row), stored as refs to avoid recomposing the whole Home tree on each row step
+    val focusedItemRef = remember { intArrayOf(-1) }
+    val focusedRowKeyRef = remember { arrayOfNulls<String>(1) }
+    val lastFocusedKeyByRow = remember { mutableMapOf<String, String>() }
     // state of each row and its cards, to put the focus back on a card
     val rowStates = remember { mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
     val cardRequesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -400,7 +444,9 @@ fun TvHomeScreen(
                 androidx.compose.runtime.withFrameNanos { }
                 if (isPlayerCovering()) return@LaunchedEffect
                 if (runCatching { cardRequesters["${rowInfo.key}/$itemKey"]?.requestFocus() }.getOrNull() == true) {
-                    focusedItem = rowInfo.rowIndex
+                    focusedItemRef[0] = rowInfo.rowIndex
+                    focusedRowKeyRef[0] = rowInfo.key
+                    lastFocusedKeyByRow[rowInfo.key] = itemKey
                     done()
                     return@LaunchedEffect
                 }
@@ -414,12 +460,17 @@ fun TvHomeScreen(
                     androidx.compose.runtime.withFrameNanos { }
                     if (isPlayerCovering()) return@LaunchedEffect
                     if (runCatching { cardRequesters["${rowInfo.key}/$firstRowItemKey"]?.requestFocus() }.getOrNull() == true) {
-                        focusedItem = rowInfo.rowIndex
+                        focusedItemRef[0] = rowInfo.rowIndex
+                        focusedRowKeyRef[0] = rowInfo.key
+                        lastFocusedKeyByRow[rowInfo.key] = firstRowItemKey
                         done()
                         return@LaunchedEffect
                     }
                 }
             }
+        }
+        if (!request.toLast) {
+            lastFocusedKeyByRow.clear()
         }
         listState.scrollToItem(0)
         allRows.firstOrNull()?.let { rowStates[it.key]?.scrollToItem(0) }
@@ -492,7 +543,10 @@ fun TvHomeScreen(
                 sweep.snapTo(-1f)
             }
         }
-        CompositionLocalProvider(LocalBringIntoViewSpec provides NoScrollSpec) {
+        CompositionLocalProvider(
+            LocalBringIntoViewSpec provides NoScrollSpec,
+            LocalHomeCardSignals provides cardSignals,
+        ) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -522,7 +576,7 @@ fun TvHomeScreen(
                             onGhost = false
                         }
                         // up from the first row: "refresh"
-                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && focusedItem == 0) {
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && focusedItemRef[0] == 0) {
                             refreshAllowed = true
                             runCatching { refreshRequester.requestFocus() }
                             true
@@ -532,8 +586,18 @@ fun TvHomeScreen(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (hasHero) {
-                    item(key = "hero") {
-                        Box(Modifier.padding(start = startInset, end = endInset).onFocusChanged { if (it.hasFocus) { focusedItem = 0; bringRow(0) } }) {
+                    item(key = "hero", contentType = "hero") {
+                        Box(
+                            Modifier
+                                .padding(start = startInset, end = endInset)
+                                .onFocusChanged {
+                                    if (it.hasFocus) {
+                                        focusedItemRef[0] = 0
+                                        focusedRowKeyRef[0] = "hero"
+                                        bringRow(0)
+                                    }
+                                }
+                        ) {
                             HeroBanner(
                                 stream = hero!!,
                                 queue = heroQueue,
@@ -543,8 +607,14 @@ fun TvHomeScreen(
                                 firstRequester = firstCard,
                                 watchRequester = cardRequesters.getOrPut("hero/watch") { FocusRequester() },
                                 channelRequester = cardRequesters.getOrPut("hero/channel") { FocusRequester() },
-                                onFocusedPill = { idx, itemKey -> focus.rememberCard("hero", itemKey, idx) },
-                                onSelectedPill = { idx, itemKey -> focus.rememberCard("hero", itemKey, idx, force = true) },
+                                onFocusedPill = { idx, itemKey ->
+                                    lastFocusedKeyByRow["hero"] = itemKey
+                                    focus.rememberCard("hero", itemKey, idx)
+                                },
+                                onSelectedPill = { idx, itemKey ->
+                                    lastFocusedKeyByRow["hero"] = itemKey
+                                    focus.rememberCard("hero", itemKey, idx, force = true)
+                                },
                             )
                         }
                     }
@@ -555,21 +625,35 @@ fun TvHomeScreen(
                     val rowFirstCard = if (!hasHero && sectionIndex == firstNonSkeletonSectionIndex) firstCard else null
                     when (section) {
                         is TvHomeSection.Skeleton -> {
-                            item(key = "${key}_skeleton") {
+                            item(key = "${key}_skeleton", contentType = "skeleton") {
                                 SkeletonRow(
                                     actions,
                                     startInset = startInset,
                                     firstCardModifier = if (listIndex == 0) {
                                         Modifier
                                             .focusRequester(ghostCard)
-                                            .onFocusChanged { if (it.hasFocus) { if (!userMoved) onGhost = true; focusedItem = listIndex } }
+                                            .onFocusChanged {
+                                                if (it.hasFocus) {
+                                                    if (!userMoved) onGhost = true
+                                                    focusedItemRef[0] = listIndex
+                                                    focusedRowKeyRef[0] = null
+                                                }
+                                            }
                                     } else null,
                                 )
                             }
                         }
                         is TvHomeSection.Streams -> {
-                            item(key = key) {
-                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                            item(key = key, contentType = "streams") {
+                                Box(
+                                    Modifier.onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focusedItemRef[0] = listIndex
+                                            focusedRowKeyRef[0] = key
+                                            bringRow(listIndex)
+                                        }
+                                    }
+                                ) {
                                     StreamRow(
                                         section.row, previewLogin, previewPlayer, actions, rowFirstCard,
                                         startInset = startInset,
@@ -580,18 +664,30 @@ fun TvHomeScreen(
                                                 .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
                                                 .onFocusChanged {
                                                     if (it.hasFocus) {
+                                                        lastFocusedKeyByRow[key] = itemKey
                                                         focus.rememberCard(key, itemKey, idx)
                                                     }
                                                 }
                                         },
-                                        onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                                        onCardSelected = { idx, itemKey ->
+                                            lastFocusedKeyByRow[key] = itemKey
+                                            focus.rememberCard(key, itemKey, idx, force = true)
+                                        },
                                     )
                                 }
                             }
                         }
                         is TvHomeSection.MultiStreams -> {
-                            item(key = key) {
-                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                            item(key = key, contentType = "multistreams") {
+                                Box(
+                                    Modifier.onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focusedItemRef[0] = listIndex
+                                            focusedRowKeyRef[0] = key
+                                            bringRow(listIndex)
+                                        }
+                                    }
+                                ) {
                                     MultiStreamRow(
                                         section.row, actions, rowFirstCard,
                                         startInset = startInset,
@@ -602,18 +698,30 @@ fun TvHomeScreen(
                                                 .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
                                                 .onFocusChanged {
                                                     if (it.hasFocus) {
+                                                        lastFocusedKeyByRow[key] = itemKey
                                                         focus.rememberCard(key, itemKey, idx)
                                                     }
                                                 }
                                         },
-                                        onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                                        onCardSelected = { idx, itemKey ->
+                                            lastFocusedKeyByRow[key] = itemKey
+                                            focus.rememberCard(key, itemKey, idx, force = true)
+                                        },
                                     )
                                 }
                             }
                         }
                         is TvHomeSection.Resume -> {
-                            item(key = key) {
-                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                            item(key = key, contentType = "resume") {
+                                Box(
+                                    Modifier.onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focusedItemRef[0] = listIndex
+                                            focusedRowKeyRef[0] = key
+                                            bringRow(listIndex)
+                                        }
+                                    }
+                                ) {
                                     ResumeRow(
                                         section.row, actions, rowFirstCard,
                                         startInset = startInset,
@@ -624,18 +732,64 @@ fun TvHomeScreen(
                                                 .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
                                                 .onFocusChanged {
                                                     if (it.hasFocus) {
+                                                        lastFocusedKeyByRow[key] = itemKey
                                                         focus.rememberCard(key, itemKey, idx)
                                                     }
                                                 }
                                         },
-                                        onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                                        onCardSelected = { idx, itemKey ->
+                                            lastFocusedKeyByRow[key] = itemKey
+                                            focus.rememberCard(key, itemKey, idx, force = true)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        is TvHomeSection.RecentChannels -> {
+                            item(key = key, contentType = "recent_channels") {
+                                Box(
+                                    Modifier.onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focusedItemRef[0] = listIndex
+                                            focusedRowKeyRef[0] = key
+                                            bringRow(listIndex)
+                                        }
+                                    }
+                                ) {
+                                    RecentChannelRow(
+                                        section.row, actions, rowFirstCard,
+                                        startInset = startInset,
+                                        endInset = endInset,
+                                        state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
+                                        cardModifier = { idx, itemKey ->
+                                            Modifier
+                                                .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
+                                                .onFocusChanged {
+                                                    if (it.hasFocus) {
+                                                        lastFocusedKeyByRow[key] = itemKey
+                                                        focus.rememberCard(key, itemKey, idx)
+                                                    }
+                                                }
+                                        },
+                                        onCardSelected = { idx, itemKey ->
+                                            lastFocusedKeyByRow[key] = itemKey
+                                            focus.rememberCard(key, itemKey, idx, force = true)
+                                        },
                                     )
                                 }
                             }
                         }
                         is TvHomeSection.Videos -> {
-                            item(key = key) {
-                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                            item(key = key, contentType = "videos") {
+                                Box(
+                                    Modifier.onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focusedItemRef[0] = listIndex
+                                            focusedRowKeyRef[0] = key
+                                            bringRow(listIndex)
+                                        }
+                                    }
+                                ) {
                                     VideoRow(
                                         section.row, actions, rowFirstCard,
                                         startInset = startInset,
@@ -646,18 +800,30 @@ fun TvHomeScreen(
                                                 .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
                                                 .onFocusChanged {
                                                     if (it.hasFocus) {
+                                                        lastFocusedKeyByRow[key] = itemKey
                                                         focus.rememberCard(key, itemKey, idx)
                                                     }
                                                 }
                                         },
-                                        onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                                        onCardSelected = { idx, itemKey ->
+                                            lastFocusedKeyByRow[key] = itemKey
+                                            focus.rememberCard(key, itemKey, idx, force = true)
+                                        },
                                     )
                                 }
                             }
                         }
                         is TvHomeSection.Clips -> {
-                            item(key = key) {
-                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                            item(key = key, contentType = "clips") {
+                                Box(
+                                    Modifier.onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focusedItemRef[0] = listIndex
+                                            focusedRowKeyRef[0] = key
+                                            bringRow(listIndex)
+                                        }
+                                    }
+                                ) {
                                     ClipRow(
                                         section.row, actions, rowFirstCard,
                                         startInset = startInset,
@@ -668,18 +834,30 @@ fun TvHomeScreen(
                                                 .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
                                                 .onFocusChanged {
                                                     if (it.hasFocus) {
+                                                        lastFocusedKeyByRow[key] = itemKey
                                                         focus.rememberCard(key, itemKey, idx)
                                                     }
                                                 }
                                         },
-                                        onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                                        onCardSelected = { idx, itemKey ->
+                                            lastFocusedKeyByRow[key] = itemKey
+                                            focus.rememberCard(key, itemKey, idx, force = true)
+                                        },
                                     )
                                 }
                             }
                         }
                         is TvHomeSection.Stats -> {
-                            item(key = key) {
-                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                            item(key = key, contentType = "stats") {
+                                Box(
+                                    Modifier.onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focusedItemRef[0] = listIndex
+                                            focusedRowKeyRef[0] = key
+                                            bringRow(listIndex)
+                                        }
+                                    }
+                                ) {
                                     StatsCard(
                                         section.stats, actions,
                                         startInset = startInset,
@@ -689,16 +867,44 @@ fun TvHomeScreen(
                                             .focusRequester(cardRequesters.getOrPut("$key/stats") { FocusRequester() })
                                             .onFocusChanged {
                                                 if (it.hasFocus) {
+                                                    lastFocusedKeyByRow[key] = "stats"
                                                     focus.rememberCard(key, "stats", 0)
                                                 }
+                                            }
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.type == KeyEventType.KeyDown &&
+                                                    (event.key == Key.DirectionDown || (event.key == Key.DirectionUp && listIndex > 0))
+                                                ) {
+                                                    val statsIdx = allRows.indexOfFirst { it.key == key }
+                                                    val step = if (event.key == Key.DirectionDown) 1 else -1
+                                                    val nextRow = if (statsIdx >= 0) allRows.getOrNull(statsIdx + step) else null
+                                                    if (nextRow != null && nextRow.key !in lastFocusedKeyByRow) {
+                                                        val firstVisibleIdx = rowStates[nextRow.key]?.firstVisibleItemIndex ?: 0
+                                                        val firstKey = nextRow.itemKeys.getOrNull(firstVisibleIdx) ?: nextRow.itemKeys.firstOrNull()
+                                                        if (firstKey != null &&
+                                                            runCatching { cardRequesters["${nextRow.key}/$firstKey"]?.requestFocus() }.getOrNull() == true
+                                                        ) {
+                                                            return@onPreviewKeyEvent true
+                                                        }
+                                                    }
+                                                }
+                                                false
                                             },
                                     )
                                 }
                             }
                         }
                         is TvHomeSection.Games -> {
-                            item(key = key) {
-                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                            item(key = key, contentType = "games") {
+                                Box(
+                                    Modifier.onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focusedItemRef[0] = listIndex
+                                            focusedRowKeyRef[0] = key
+                                            bringRow(listIndex)
+                                        }
+                                    }
+                                ) {
                                     GameRow(
                                         section.row, actions, rowFirstCard,
                                         startInset = startInset,
@@ -709,18 +915,30 @@ fun TvHomeScreen(
                                                 .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
                                                 .onFocusChanged {
                                                     if (it.hasFocus) {
+                                                        lastFocusedKeyByRow[key] = itemKey
                                                         focus.rememberCard(key, itemKey, idx)
                                                     }
                                                 }
                                         },
-                                        onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                                        onCardSelected = { idx, itemKey ->
+                                            lastFocusedKeyByRow[key] = itemKey
+                                            focus.rememberCard(key, itemKey, idx, force = true)
+                                        },
                                     )
                                 }
                             }
                         }
                         is TvHomeSection.OfflineChannels -> {
-                            item(key = key) {
-                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                            item(key = key, contentType = "offline_channels") {
+                                Box(
+                                    Modifier.onFocusChanged {
+                                        if (it.hasFocus) {
+                                            focusedItemRef[0] = listIndex
+                                            focusedRowKeyRef[0] = key
+                                            bringRow(listIndex)
+                                        }
+                                    }
+                                ) {
                                     OfflineChannelRow(
                                         section.row, actions, rowFirstCard,
                                         startInset = startInset,
@@ -731,11 +949,15 @@ fun TvHomeScreen(
                                                 .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
                                                 .onFocusChanged {
                                                     if (it.hasFocus) {
+                                                        lastFocusedKeyByRow[key] = itemKey
                                                         focus.rememberCard(key, itemKey, idx)
                                                     }
                                                 }
                                         },
-                                        onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                                        onCardSelected = { idx, itemKey ->
+                                            lastFocusedKeyByRow[key] = itemKey
+                                            focus.rememberCard(key, itemKey, idx, force = true)
+                                        },
                                     )
                                 }
                             }
@@ -811,8 +1033,8 @@ private fun HeroBanner(
     onSelectedPill: (Int, String) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
-    val isFavorite = favorites.any { it.login == stream.channelLogin }
+    val signals = LocalHomeCardSignals.current
+    val isFavorite = signals.isFavorite(stream.channelLogin)
     var heroFocused by remember { mutableStateOf(false) }
     // the focus as the banner reports it: going from one of its buttons to the other may report it lost for an instant,
     // the video must not start again for that
@@ -914,8 +1136,7 @@ private fun HeroBanner(
                     Spacer(Modifier.width(5.dp))
                     Text("LIVE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                 }
-                val heroPlaybackSnapshot by com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.state.collectAsState()
-                com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.badgeFor(context, stream.channelLogin, heroPlaybackSnapshot)?.let { badge ->
+                signals.playbackBadge(context, stream.channelLogin)?.let { badge ->
                     PlaybackBadgePill(badge = badge, small = false)
                 }
                 Text(
@@ -1840,8 +2061,8 @@ private fun OfflineChannelCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
-    val isFavorite = favorites.any { it.login.equals(user.login, ignoreCase = true) }
+    val signals = LocalHomeCardSignals.current
+    val isFavorite = signals.isFavorite(user.login)
     val lastText = remember(user.lastBroadcast) {
         val lastMs = user.lastBroadcast?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } }
         lastMs?.let {
@@ -1920,6 +2141,229 @@ private fun OfflineChannelCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RecentChannelRow(
+    row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>,
+    actions: TvHomeActions,
+    firstRequester: FocusRequester?,
+    startInset: Dp = 0.dp,
+    endInset: Dp = 0.dp,
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
+    onCardSelected: (Int, String) -> Unit = { _, _ -> },
+) {
+    Column {
+        RowTitle(row.title, row.icon, startPadding = startInset + 12.dp)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
+            LazyRow(
+                state = state,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvHorizontalFade(
+                        startWidth = 56.dp,
+                        endWidth = 56.dp,
+                        scrolledStart = { state.canScrollBackward },
+                        scrolledEnd = { state.canScrollForward },
+                    )
+                    .focusRestorer(),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 12.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(row.items, key = { _, item -> item.login.lowercase() }) { index, item ->
+                    val itemKey = item.login.lowercase()
+                    RecentChannelCard(
+                        item = item,
+                        actions = actions,
+                        modifier = Modifier
+                            .leftEdge(index, actions.openMenu)
+                            .then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier)
+                            .then(cardModifier(index, itemKey)),
+                        onClick = {
+                            onCardSelected(index, itemKey)
+                            actions.openRecentChannel(item, row.items)
+                        },
+                        onLongClick = {
+                            onCardSelected(index, itemKey)
+                            actions.showRecentChannelActions(item, row.items)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentChannelCard(
+    item: com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem,
+    actions: TvHomeActions,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val signals = LocalHomeCardSignals.current
+    val isFavorite = signals.isFavorite(item.login)
+    val playbackBadge = signals.playbackBadge(context, item.login)
+    val live = item.liveStream
+    val watchedRelativeText = remember(item.entry.watchedAt) {
+        item.entry.watchedAt.takeIf { it > 0L }?.let { ts ->
+            android.text.format.DateUtils.getRelativeTimeSpanString(
+                ts,
+                System.currentTimeMillis(),
+                android.text.format.DateUtils.MINUTE_IN_MILLIS,
+            ).toString().replaceFirstChar { c -> c.uppercase() }
+        }
+    }
+    val glowColor = if (live != null) Color(0xFFFF3B30) else MaterialTheme.colorScheme.primary
+    val liveRingBrush = Brush.linearGradient(
+        listOf(Color(0xFFFF3B30), MaterialTheme.colorScheme.primary),
+    )
+
+    FocusCard(
+        width = 136.dp,
+        modifier = modifier,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onFocus = { if (it) actions.onPictureFocused(item) },
+    ) { focused ->
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Box(
+                Modifier
+                    .size(92.dp)
+                    .tvCardFocusGlow(focused, glowColor, cornerRadius = 46.dp)
+                    .then(
+                        when {
+                            focused -> Modifier.border(3.dp, Color.White, CircleShape)
+                            live != null -> Modifier.border(2.5.dp, liveRingBrush, CircleShape)
+                            else -> Modifier.border(1.dp, Color(0x24FFFFFF), CircleShape)
+                        }
+                    )
+                    .padding(if (live != null || focused) 3.dp else 0.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF26252C))
+            ) {
+                AsyncImage(
+                    model = item.avatarUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (playbackBadge != null) {
+                PlaybackBadgePill(
+                    badge = playbackBadge,
+                    small = true,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            } else if (live != null) {
+                val badgeShape = RoundedCornerShape(999.dp)
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .clip(badgeShape)
+                        .background(Color(0xFFE91916))
+                        .border(1.5.dp, Color(0xFF12111A), badgeShape)
+                        .padding(horizontal = 7.dp, vertical = 1.5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(5.dp).background(Color.White, CircleShape))
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "LIVE",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isFavorite) {
+                Icon(
+                    painterResource(R.drawable.tv_ic_star),
+                    contentDescription = null,
+                    tint = Color(0xFFFACC15),
+                    modifier = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                item.displayName,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (live != null || focused) Color.White else Color(0xE6FFFFFF),
+                maxLines = 1,
+                overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                modifier = if (focused) Modifier.titleMarquee() else Modifier,
+            )
+        }
+        if (live != null) {
+            val gameLabel = live.gameName?.takeIf { it.isNotBlank() }
+            if (gameLabel != null) {
+                Spacer(Modifier.height(2.dp))
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        gameLabel,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                    )
+                }
+            }
+            live.viewerCount?.takeIf { it > 0 }?.let { viewers ->
+                Spacer(Modifier.height(1.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painterResource(R.drawable.tv_ic_eye),
+                        contentDescription = null,
+                        tint = TvColors.secondaryText,
+                        modifier = Modifier.size(11.dp),
+                    )
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        actions.formatCount(viewers),
+                        fontSize = 11.sp,
+                        color = TvColors.secondaryText,
+                        maxLines = 1,
+                    )
+                }
+            }
+        } else if (!watchedRelativeText.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    watchedRelativeText,
+                    fontSize = 12.sp,
+                    color = TvColors.secondaryText,
+                    maxLines = 1,
+                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                )
+            }
+        }
+    }
+}
+
 /** Focused card: the frame, and a real growth while its preview plays (the other cards move to make room). */
 @Composable
 private fun FocusCard(
@@ -1939,24 +2383,46 @@ private fun FocusCard(
     // the growth of the card can be turned off in the Xtra TV settings
     val context = androidx.compose.ui.platform.LocalContext.current
     val zoom = remember { context.prefs().getBoolean(C.TV_CARD_ZOOM, false) }
-    val big = zoom && focused && growth > 1f && grown()
-    val animatedWidth by androidx.compose.animation.core.animateDpAsState(
-        if (big) width * growth else width,
-        animationSpec = androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-        label = "width"
-    )
-    // once grown, the whole card is brought on screen (it may go past the right edge)
-    val bringIntoView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
-    LaunchedEffect(big) {
-        if (big) {
-            kotlinx.coroutines.delay(340)
-            bringIntoView.bringIntoView()
+    val canZoom = zoom && growth > 1f
+    val sizeModifier = if (canZoom) {
+        val big = focused && grown()
+        val animatedWidth by androidx.compose.animation.core.animateDpAsState(
+            if (big) width * growth else width,
+            animationSpec = androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            label = "width"
+        )
+        // once grown, the whole card is brought on screen (it may go past the right edge)
+        val bringIntoView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+        LaunchedEffect(big) {
+            if (big) {
+                kotlinx.coroutines.delay(340)
+                bringIntoView.bringIntoView()
+            }
         }
+        Modifier
+            .width(animatedWidth)
+            .bringIntoViewRequester(bringIntoView)
+    } else {
+        Modifier.width(width)
     }
     var longPressed by remember { mutableStateOf(false) }
     val focusToken = remember { Any() }
+    val signals = LocalHomeCardSignals.current
+    val miniPlayerListening = com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.isListening
+    val coordsRef = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    if (focused && miniPlayerListening) {
+        val verticalScrolling = signals.isVerticalScrolling()
+        LaunchedEffect(verticalScrolling) {
+            if (!verticalScrolling) {
+                coordsRef[0]?.let { coords ->
+                    com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                }
+            }
+        }
+    }
     LaunchedEffect(focused) {
         if (!focused) {
+            coordsRef[0] = null
             com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
         }
     }
@@ -1965,12 +2431,14 @@ private fun FocusCard(
     }
     Column(
         modifier
-            .width(animatedWidth)
-            .bringIntoViewRequester(bringIntoView)
+            .then(sizeModifier)
             .then(
-                if (focused) {
+                if (focused && miniPlayerListening) {
                     Modifier.onGloballyPositioned { coords ->
-                        com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                        coordsRef[0] = coords
+                        if (!signals.isVerticalScrolling()) {
+                            com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                        }
                     }
                 } else {
                     Modifier
@@ -2023,6 +2491,7 @@ private fun StreamCard(
 ) {
     // many cards a row: smaller texts, the count alone in the badge
     val small = width < 230.dp
+    val signals = LocalHomeCardSignals.current
     // only the card that shows the preview recomposes when the preview changes
     val previewing by remember(stream.channelLogin) { derivedStateOf { stream.channelLogin != null && previewLogin() == stream.channelLogin } }
     FocusCard(
@@ -2112,8 +2581,7 @@ private fun StreamCard(
             )
             // discreet Playing / PiP pill at bottom-start of the thumbnail
             val playbackContext = LocalContext.current
-            val playbackSnapshot by com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.state.collectAsState()
-            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.badgeFor(playbackContext, stream.channelLogin, playbackSnapshot)?.let { badge ->
+            signals.playbackBadge(playbackContext, stream.channelLogin)?.let { badge ->
                 PlaybackBadgePill(
                     badge = badge,
                     small = small,
@@ -2153,9 +2621,8 @@ private fun StreamCard(
             Spacer(Modifier.width(if (small) 8.dp else 10.dp))
             Column {
                 // a star before the name of a favorite channel
-                val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (favorites.any { it.login == stream.channelLogin }) {
+                    if (signals.isFavorite(stream.channelLogin)) {
                         Icon(
                             painterResource(R.drawable.tv_ic_star),
                             contentDescription = null,
@@ -2206,11 +2673,14 @@ private fun CoStreamCountPill(
     small: Boolean = false,
 ) {
     val context = LocalContext.current
-    val tick by com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.version.collectAsState()
+    val signals = LocalHomeCardSignals.current
     LaunchedEffect(stream.channelId, stream.channelLogin) {
+        if (signals.isVerticalScrolling()) {
+            kotlinx.coroutines.delay(180L)
+        }
         com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.enqueue(context, stream)
     }
-    val count = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.getCount(stream.channelId, stream.channelLogin, tick)
+    val count = signals.coStreamCount(stream.channelId, stream.channelLogin)
     if (count > 0) {
         Spacer(Modifier.width(if (hero) 10.dp else 5.dp))
         val corner = RoundedCornerShape(if (hero) 7.dp else 5.dp)
@@ -2571,8 +3041,22 @@ private fun StatsCard(
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val focusToken = remember { Any() }
+    val signals = LocalHomeCardSignals.current
+    val miniPlayerListening = com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.isListening
+    val coordsRef = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    if (focused && miniPlayerListening) {
+        val verticalScrolling = signals.isVerticalScrolling()
+        LaunchedEffect(verticalScrolling) {
+            if (!verticalScrolling) {
+                coordsRef[0]?.let { coords ->
+                    com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                }
+            }
+        }
+    }
     LaunchedEffect(focused) {
         if (!focused) {
+            coordsRef[0] = null
             com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
         }
     }
@@ -2586,9 +3070,12 @@ private fun StatsCard(
             modifier
                 .fillMaxWidth()
                 .then(
-                    if (focused) {
+                    if (focused && miniPlayerListening) {
                         Modifier.onGloballyPositioned { coords ->
-                            com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                            coordsRef[0] = coords
+                            if (!signals.isVerticalScrolling()) {
+                                com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.reportCoordinates(focusToken, coords)
+                            }
                         }
                     } else {
                         Modifier

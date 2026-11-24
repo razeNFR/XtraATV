@@ -1,14 +1,28 @@
 package com.github.andreyasadchy.xtra.ui.player
 
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatDialog
+import androidx.activity.ComponentDialog
+import androidx.core.graphics.ColorUtils
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil3.imageLoader
@@ -21,13 +35,20 @@ import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentStreamsListItemBinding
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import com.github.andreyasadchy.xtra.ui.tv.TvAccent
 import com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource
-import com.github.andreyasadchy.xtra.ui.view.TvStreamPreview
+import com.github.andreyasadchy.xtra.ui.tv.TvToast
 import com.github.andreyasadchy.xtra.ui.view.TvCards
+import com.github.andreyasadchy.xtra.ui.view.TvStreamPreview
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * TV: row of the streams from the list the current stream was opened from, shown over the player
@@ -44,7 +65,7 @@ object TvStreamSwitcher {
     }
 
     /**
-     * Selection mode of the row (multi-stream): OK checks or unchecks a stream (green badge) up to [max],
+     * Selection mode of the row (multi-stream): OK checks or unchecks a stream (accent badge) up to [max],
      * the "Validate" button gives the checked ones.
      */
     class Selection(
@@ -63,6 +84,99 @@ object TvStreamSwitcher {
         val isSearch: Boolean = false,
         val iconRes: Int? = null,
     )
+
+    private fun measureFixedCardsHeight(activity: MainActivity, cardWidthPx: Int, verticalPaddingPx: Int): Int {
+        return runCatching {
+            val dummyParent = FrameLayout(activity)
+            val sample = FragmentStreamsListItemBinding.inflate(LayoutInflater.from(activity), dummyParent, false)
+            val lp = sample.root.layoutParams as? ViewGroup.MarginLayoutParams
+            val topMargin = lp?.topMargin ?: 0
+            val bottomMargin = lp?.bottomMargin ?: 0
+            sample.thumbnail.visibility = View.VISIBLE
+            sample.userImage.visibility = View.VISIBLE
+            sample.title.visibility = View.VISIBLE
+            sample.title.text = "Sample stream title"
+            sample.username.visibility = View.VISIBLE
+            sample.username.text = "Streamer"
+            sample.gameName.visibility = View.VISIBLE
+            sample.gameName.text = "Category"
+            sample.uptime.visibility = View.GONE
+            sample.tagsLayout.visibility = View.GONE
+            val wSpec = View.MeasureSpec.makeMeasureSpec(cardWidthPx, View.MeasureSpec.EXACTLY)
+            val hSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            sample.root.measure(wSpec, hSpec)
+            val measured = sample.root.measuredHeight
+            if (measured > 0) {
+                measured + topMargin + bottomMargin + verticalPaddingPx
+            } else {
+                error("unmeasured")
+            }
+        }.getOrElse {
+            val density = activity.resources.displayMetrics.density
+            (cardWidthPx * 9) / 16 + (78 * density).roundToInt() + verticalPaddingPx
+        }
+    }
+
+    /**
+     * Styles a category pill inside the Unified Smoked-Glass Rail (Option A):
+     * - [focused]: solid light pill (`#FFF2F2F7`) with high-contrast dark accent text/icon.
+     * - [active] (selected while focus is down on the stream cards): rich `TvAccent` tinted pill + border + crisp white label.
+     * - inactive: transparent pill inside the smoked-glass capsule rail.
+     */
+    private fun applyRailTabStyle(
+        tab: TextView,
+        icon: Drawable?,
+        density: Float,
+        active: Boolean,
+        focused: Boolean,
+        loading: Boolean,
+    ) {
+        val accent = TvAccent.color
+        val accentOnDark = TvAccent.onDark
+        val accentOnLight = TvAccent.onLight
+        when {
+            focused -> {
+                tab.background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 999f * density
+                    setColor(0xFFF2F2F7.toInt())
+                }
+                tab.setTextColor(accentOnLight)
+                tab.setTypeface(null, Typeface.BOLD)
+                tab.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+                icon?.setTint(accentOnLight)
+                tab.alpha = 1f
+            }
+            active -> {
+                val topTint = ColorUtils.blendARGB(0xFF1E192B.toInt(), accent, 0.56f)
+                val bottomTint = ColorUtils.blendARGB(0xFF161320.toInt(), accent, 0.34f)
+                val strokeColor = (accentOnDark and 0x00FFFFFF) or 0xDE000000.toInt()
+                tab.background = GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(topTint, bottomTint),
+                ).apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 999f * density
+                    setStroke(maxOf(1, (1.5f * density).roundToInt()), strokeColor)
+                }
+                tab.setTextColor(Color.WHITE)
+                tab.setTypeface(null, Typeface.BOLD)
+                tab.setShadowLayer(3f * density, 0f, 1f * density, 0x8C000000.toInt())
+                icon?.setTint(Color.WHITE)
+                tab.alpha = if (loading) 0.78f else 1f
+            }
+            else -> {
+                tab.background = null
+                val fg = 0xD4FFFFFF.toInt()
+                val iconFg = 0xBFFFFFFF.toInt()
+                tab.setTextColor(fg)
+                tab.setTypeface(null, Typeface.NORMAL)
+                tab.setShadowLayer(2f * density, 0f, 1f * density, 0x66000000)
+                icon?.setTint(iconFg)
+                tab.alpha = if (loading) 0.65f else 1f
+            }
+        }
+    }
 
     /**
      * [rows]: other lists the row can show (Stream Together, followed, popular, languages, category), picked with tabs above the cards:
@@ -95,9 +209,10 @@ object TvStreamSwitcher {
             -1
         }
         val originFallbackTitle = activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)
+        val originFallbackIcon = if (selection != null) R.drawable.tv_ic_multistream else R.drawable.tv_ic_list
         val baseEntries = when {
-            effectiveRows.isEmpty() -> listOf(TabEntry(originFallbackTitle, isOrigin = true))
-            selection != null -> listOf(TabEntry(originFallbackTitle, isOrigin = true)) + effectiveRows.map {
+            effectiveRows.isEmpty() -> listOf(TabEntry(originFallbackTitle, isOrigin = true, iconRes = originFallbackIcon))
+            selection != null -> listOf(TabEntry(originFallbackTitle, isOrigin = true, iconRes = originFallbackIcon)) + effectiveRows.map {
                 TabEntry(it.title, row = it, iconRes = it.iconRes)
             }
             omitEmptyCurrentTab -> effectiveRows.map {
@@ -117,7 +232,7 @@ object TvStreamSwitcher {
                     if (coStreamRow != null) {
                         add(TabEntry(coStreamRow.title, row = coStreamRow, iconRes = coStreamRow.iconRes))
                     }
-                    add(TabEntry(originFallbackTitle, isOrigin = true))
+                    add(TabEntry(originFallbackTitle, isOrigin = true, iconRes = originFallbackIcon))
                     restRows.forEach { add(TabEntry(it.title, row = it, iconRes = it.iconRes)) }
                 }
             }
@@ -130,7 +245,6 @@ object TvStreamSwitcher {
         val tabTitles = tabEntries.map { it.title }
         val searchTabIndex = tabEntries.indexOfFirst { it.isSearch }
         val originTab = tabEntries.indexOfFirst { it.isOrigin }
-        // the row a tab shows, null for the list of the stream or Search
         val rowOf: (Int) -> com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Row? = { index ->
             tabEntries.getOrNull(index)?.row
         }
@@ -156,58 +270,86 @@ object TvStreamSwitcher {
         var currentTab = initialTab
         val initialStreams = loadedTabs[initialTab].orEmpty()
         val seen = LinkedHashMap<String, Stream>()
-        val dialog = AppCompatDialog(activity)
+
+        // Fullscreen edge-to-edge dialog so Android 14 WindowManager never slides or resizes a WRAP_CONTENT bottom surface
+        val dialog = object : ComponentDialog(activity, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen) {
+            override fun onStart() {
+                super.onStart()
+                TvToast.onDialogShown(this)
+            }
+
+            override fun onStop() {
+                TvToast.onDialogDismissed(this)
+                super.onStop()
+            }
+        }
         val density = activity.resources.displayMetrics.density
         val horizontalPadding = activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+
+        val outer = FrameLayout(activity).apply {
+            isFocusable = false
+            setOnClickListener { dialog.dismiss() }
+        }
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
+            isClickable = true
+            isFocusable = false
             setBackgroundResource(R.drawable.tv_player_scrim_bottom)
             // no side padding here: the row goes to the edges of the screen, the cards are not cut while it scrolls
             setPadding(0, (48 * density).toInt(), 0, activity.resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical))
         }
+        outer.addView(
+            root,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM,
+            ),
+        )
+
         val header = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (4 * density).toInt())
         }
-        // multi-stream: the icon of the multi-stream before its title, numbered streams and smaller cards (the row of
-        // the other streams stays as it is)
         header.addView(TextView(activity).apply {
             text = selection?.title ?: activity.getString(R.string.tv_switch_stream)
             if (selection != null) {
                 val icon = activity.getDrawable(R.drawable.tv_ic_multistream)?.mutate()?.apply {
-                    setTint(com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
+                    setTint(TvAccent.color)
                     setBounds(0, 0, (26 * density).toInt(), (26 * density).toInt())
                 }
                 setCompoundDrawablesRelative(icon, null, null, null)
                 compoundDrawablePadding = (10 * density).toInt()
             }
-            setTextColor(0xFFFFFFFF.toInt())
+            setTextColor(Color.WHITE)
             textSize = 20f
-            // readable over a bright video
             setShadowLayer(8 * density, 0f, 2 * density, 0xE6000000.toInt())
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        // selection: "Validate (n)", first on the line of the tabs (seen even with many tabs), else in the header
-        val validate = if (selection != null && checked != null) {
+
+        // Multi-stream with >1 streams to pick: "Validate (n)" detached to the left of the smoked-glass tab rail
+        val validate = if (selection != null && selection.max > 1 && checked != null) {
             TextView(activity).apply {
                 setTextColor(activity.getColorStateList(R.color.tv_pill_text))
                 setBackgroundResource(R.drawable.tv_validate_background)
-                textSize = 18f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                textSize = 16.5f
+                setTypeface(typeface, Typeface.BOLD)
                 elevation = 6 * density
                 isFocusable = true
-                val padding = (10 * density).toInt()
-                setPadding(padding * 2, padding, padding * 2, padding)
+                val hPad = (18 * density).toInt()
+                val vPad = (9 * density).toInt()
+                setPadding(hPad, vPad, hPad, vPad)
                 val icon = activity.getDrawable(R.drawable.tv_ic_check)?.mutate()?.apply {
                     setTintList(activity.getColorStateList(R.color.tv_pill_text))
-                    setBounds(0, 0, (20 * density).toInt(), (20 * density).toInt())
+                    setBounds(0, 0, (19 * density).toInt(), (19 * density).toInt())
                 }
                 setCompoundDrawablesRelative(icon, null, null, null)
                 compoundDrawablePadding = (8 * density).toInt()
             }
         } else null
+
         root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        // multi-stream with several streams to pick: what OK does
+
         if (selection != null && selection.max > 1) {
             root.addView(TextView(activity).apply {
                 text = activity.getString(R.string.tv_multistream_hint, selection.max)
@@ -217,25 +359,25 @@ object TvStreamSwitcher {
                 setPadding(horizontalPadding + (10 * density).toInt(), 0, horizontalPadding, (2 * density).toInt())
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        // what OK held does, over the row (not when picking the streams of a multi-stream)
+
         if (selection == null && onPip != null) {
             val hintRow = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(horizontalPadding + (8 * density).toInt(), (4 * density).toInt(), horizontalPadding, (4 * density).toInt())
             }
-            val accentColor = com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark
+            val accentColor = TvAccent.onDark
             val hintBadge = TextView(activity).apply {
                 text = activity.getString(R.string.tv_switch_pip_hint)
-                setTextColor(0xFFFFFFFF.toInt())
+                setTextColor(Color.WHITE)
                 textSize = 14.5f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                setTypeface(typeface, Typeface.BOLD)
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
                     cornerRadius = 999f * density
                     setColor(0xE016151E.toInt())
                     setStroke(
-                        maxOf(1, kotlin.math.round(1.5f * density).toInt()),
+                        maxOf(1, (1.5f * density).roundToInt()),
                         (accentColor and 0x00FFFFFF) or 0xCC000000.toInt(),
                     )
                 }
@@ -252,76 +394,178 @@ object TvStreamSwitcher {
             hintRow.addView(hintBadge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             root.addView(hintRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
+
         // a multi-stream needs 2 streams at least
         val minChecked = if ((selection?.max ?: 0) > 1) 2 else 1
-        // tabs of the lists: Stream Together first when active, the list of the stream, the other rows, and Search at the end
+
+        // Option A: Unified Smoked-Glass Rail wrapping all category tabs
         val tabViews = mutableListOf<TextView>()
-        var tabsScrollView: android.widget.HorizontalScrollView? = null
+        val tabIcons = mutableListOf<Drawable?>()
+        var tabsScrollView: HorizontalScrollView? = null
+        var railContainer: LinearLayout? = null
+        var loadingTabIndex = -1
+
+        val refreshTabStyles = {
+            tabViews.forEachIndexed { idx, tv ->
+                val isActive = (!omitEmptyCurrentTab || initialStreams.isNotEmpty() || loadedTabs[currentTab] != null) && idx == currentTab
+                tv.isSelected = isActive
+                applyRailTabStyle(
+                    tab = tv,
+                    icon = tabIcons.getOrNull(idx),
+                    density = density,
+                    active = isActive,
+                    focused = tv.hasFocus(),
+                    loading = loadingTabIndex == idx,
+                )
+            }
+        }
+
         if (tabEntries.size > 1) {
-            val tabsLayout = LinearLayout(activity).apply {
+            val tabsOuterLayout = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(horizontalPadding + (4 * density).toInt(), (8 * density).toInt(), horizontalPadding, (2 * density).toInt())
+                clipChildren = false
+                clipToPadding = false
+                setPadding(horizontalPadding + (4 * density).toInt(), (8 * density).toInt(), horizontalPadding, (4 * density).toInt())
             }
             validate?.let { button ->
-                tabsLayout.addView(button, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    marginEnd = (18 * density).toInt()
-                })
+                tabsOuterLayout.addView(
+                    button,
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                        marginEnd = (14 * density).toInt()
+                    },
+                )
             }
-            tabEntries.forEach { entry ->
-                tabViews += TextView(activity).apply {
-                    text = entry.title
-                    textSize = 15f
-                    isFocusable = true
-                    setTextColor(activity.getColorStateList(R.color.tv_pill_text))
-                    setBackgroundResource(R.drawable.tv_tab_chip_background)
-                    val padding = (8 * density).toInt()
-                    setPadding(padding * 2, padding, padding * 2, padding)
-                    setShadowLayer(4 * density, 0f, 1 * density, 0x99000000.toInt())
-                    entry.iconRes?.let { iconId ->
-                        val icon = activity.getDrawable(iconId)?.mutate()?.apply {
-                            setTintList(activity.getColorStateList(R.color.tv_pill_text))
-                            setBounds(0, 0, (18 * density).toInt(), (18 * density).toInt())
-                        }
-                        setCompoundDrawablesRelative(icon, null, null, null)
-                        compoundDrawablePadding = (6 * density).toInt()
+            val railPad = (4 * density).roundToInt()
+            val rail = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(railPad, railPad, railPad, railPad)
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 999f * density
+                    setColor(0xEB12111A.toInt())
+                    setStroke(maxOf(1, (1f * density).roundToInt()), 0x30FFFFFF)
+                }
+                elevation = 6 * density
+            }
+            railContainer = rail
+            tabEntries.forEachIndexed { idx, entry ->
+                val iconDrawable = entry.iconRes?.let { iconId ->
+                    activity.getDrawable(iconId)?.mutate()?.apply {
+                        val px = (17 * density).roundToInt()
+                        setBounds(0, 0, px, px)
                     }
-                }.also { tabsLayout.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = (10 * density).toInt() }) }
+                }
+                tabIcons += iconDrawable
+                val tv = TextView(activity).apply {
+                    text = entry.title
+                    textSize = 14.5f
+                    isSingleLine = true
+                    isFocusable = true
+                    gravity = Gravity.CENTER_VERTICAL
+                    val hPad = (15 * density).roundToInt()
+                    val vPad = (8 * density).roundToInt()
+                    setPadding(hPad, vPad, hPad, vPad)
+                    if (iconDrawable != null) {
+                        setCompoundDrawablesRelative(iconDrawable, null, null, null)
+                        compoundDrawablePadding = (6 * density).roundToInt()
+                    }
+                }
+                tabViews += tv
+                rail.addView(
+                    tv,
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                        if (idx < tabEntries.lastIndex) {
+                            marginEnd = (3 * density).roundToInt()
+                        }
+                    },
+                )
             }
-            if (!omitEmptyCurrentTab || initialStreams.isNotEmpty()) {
-                tabViews.getOrNull(initialTab)?.isSelected = true
-            }
-            tabsScrollView = android.widget.HorizontalScrollView(activity).apply {
+            tabsOuterLayout.addView(rail, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            refreshTabStyles()
+            tabsScrollView = HorizontalScrollView(activity).apply {
                 isHorizontalScrollBarEnabled = false
                 isFocusable = false
-                addView(tabsLayout)
+                clipChildren = false
+                clipToPadding = false
+                addView(tabsOuterLayout)
             }
             root.addView(tabsScrollView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+
+        val cardWidthPx = ((if (selection != null) 175 else 216) * density).toInt()
+        val rvVerticalPad = (8 * density).toInt()
+        val fixedCardsHeightPx = measureFixedCardsHeight(activity, cardWidthPx, rvVerticalPad * 2)
+
+        val cardsContainer = FrameLayout(activity).apply {
+            clipChildren = false
+            clipToPadding = false
         }
         val recyclerView = RecyclerView(activity).apply {
             clipToPadding = false
             clipChildren = false
-            setPadding(horizontalPadding, (8 * density).toInt(), horizontalPadding, (8 * density).toInt())
+            itemAnimator = null
+            setPadding(horizontalPadding, rvVerticalPad, horizontalPadding, rvVerticalPad)
         }
+        val emptyStateView = TextView(activity).apply {
+            text = activity.getString(R.string.tv_switch_empty)
+            setTextColor(0xB8FFFFFF.toInt())
+            textSize = 15f
+            gravity = Gravity.CENTER
+            isFocusable = false
+            setShadowLayer(4 * density, 0f, 1 * density, 0x99000000.toInt())
+            visibility = View.GONE
+        }
+        val loadingSpinner = ProgressBar(activity).apply {
+            isIndeterminate = true
+            indeterminateTintList = ColorStateList.valueOf(TvAccent.onDark)
+            isFocusable = false
+            visibility = View.GONE
+        }
+        cardsContainer.addView(
+            recyclerView,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
+        cardsContainer.addView(
+            emptyStateView,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER),
+        )
+        val spinnerSize = (30 * density).roundToInt()
+        cardsContainer.addView(
+            loadingSpinner,
+            FrameLayout.LayoutParams(spinnerSize, spinnerSize, Gravity.CENTER),
+        )
+
         var lastFocusedCardPos = RecyclerView.NO_POSITION
         var lastFocusedCardTab = initialTab
-        // card the focus goes to once it is shown (left / right pressed faster than the row scrolls)
         var pendingTarget = RecyclerView.NO_POSITION
+
+        val scrollTabIntoCenter = { tabView: View ->
+            tabsScrollView?.let { scroll ->
+                val railLeft = railContainer?.left ?: 0
+                val centerInScroll = railLeft + (tabView.left + tabView.right) / 2
+                val targetX = (centerInScroll - scroll.width / 2).coerceAtLeast(0)
+                scroll.smoothScrollTo(targetX, 0)
+            }
+        }
+
         recyclerView.layoutManager = object : LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false) {
-            // left / right stay in the row: the next card not shown yet, the row scrolls smoothly to it and the focus
-            // follows when it is there (no jump, the tabs above are never reached); at the end the last card keeps it
             override fun onInterceptFocusSearch(focused: View, direction: Int): View? {
                 if (direction == View.FOCUS_UP) {
                     findContainingItemView(focused)?.let {
                         lastFocusedCardPos = getPosition(it)
                         lastFocusedCardTab = currentTab
                     }
+                    // Multi-Stream priority: once at least 1 extra streamer is selected (total >= minChecked),
+                    // pressing UP goes directly to the Validate button!
+                    if (selection != null && validate != null && validate.isShown && (checked?.size ?: 0) >= minChecked) {
+                        tabsScrollView?.smoothScrollTo(0, 0)
+                        return validate
+                    }
                     val activeTabView = tabViews.getOrNull(currentTab.coerceIn(0, (tabViews.size - 1).coerceAtLeast(0)))
                     if (activeTabView != null && activeTabView.isShown) {
-                        tabsScrollView?.let { scroll ->
-                            val targetX = ((activeTabView.left + activeTabView.right) / 2 - scroll.width / 2).coerceAtLeast(0)
-                            scroll.smoothScrollTo(targetX, 0)
-                        }
+                        scrollTabIntoCenter(activeTabView)
                         return activeTabView
                     }
                     if (validate != null && validate.isShown) {
@@ -366,7 +610,6 @@ object TvStreamSwitcher {
                     return
                 }
                 val view = recyclerView.layoutManager?.findViewByPosition(target)
-                // the card fully in the row (or the scroll ended): it takes the focus
                 if (view != null && (idle || (view.left >= 0 && view.right <= recyclerView.width))) {
                     pendingTarget = RecyclerView.NO_POSITION
                     view.requestFocus()
@@ -375,7 +618,7 @@ object TvStreamSwitcher {
                 }
             }
         })
-        // live previews like on the lists, the stream behind is silenced while a preview with sound plays
+
         val preview = if (activity.prefs().getBoolean(C.UI_TV_PREVIEW, true)) {
             TvStreamPreview(recyclerView, inPlayer = true) { playing ->
                 if (TvPreviewSource.hasSound(activity)) {
@@ -383,14 +626,13 @@ object TvStreamSwitcher {
                 }
             }
         } else null
+
         lateinit var adapter: Adapter
         val updateValidate = {
             validate?.text = activity.getString(R.string.tv_multistream_validate, checked?.size ?: 0)
-            // not enough streams checked: the button is dimmed and does nothing
             validate?.alpha = if ((checked?.size ?: 0) < minChecked) 0.45f else 1f
         }
         updateValidate()
-        // no tabs: "Validate" at the right of the title
         if (validate != null && validate.parent == null) {
             header.addView(validate)
         }
@@ -399,7 +641,6 @@ object TvStreamSwitcher {
                 tabsScrollView?.smoothScrollTo(0, 0)
             }
         }
-        // down from "Validate": the cards
         validate?.setOnKeyListener { _, keyCode, event ->
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN) {
                 val remembered = if (lastFocusedCardTab == currentTab && lastFocusedCardPos != RecyclerView.NO_POSITION) {
@@ -409,28 +650,39 @@ object TvStreamSwitcher {
                     ?: recyclerView.layoutManager?.findViewByPosition((recyclerView.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition())
                     ?: recyclerView.getChildAt(0))?.requestFocus()
                 true
-            } else false
+            } else if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                val firstTab = tabViews.firstOrNull()?.takeIf { it.isShown }
+                if (firstTab != null) {
+                    scrollTabIntoCenter(firstTab)
+                    firstTab.requestFocus()
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
         }
-        // multi-stream: smaller cards, more streams in sight; stream switcher slightly more compact than before while staying larger than multi-stream
-        adapter = Adapter(initialStreams, ((if (selection != null) 175 else 216) * density).toInt(), preview, checked) { stream ->
+
+        adapter = Adapter(initialStreams, cardWidthPx, preview, checked) { stream ->
             if (selection != null && checked != null) {
                 val login = stream.channelLogin ?: return@Adapter
                 when {
                     login in checked -> checked.remove(login)
                     selection.max == 1 -> {
-                        // one stream to pick (change or add a stream): picked at once
                         dialog.dismiss()
                         selection.onValidate(listOf(stream))
                         return@Adapter
                     }
                     checked.size >= selection.max -> {
-                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, activity.getString(R.string.tv_multistream_max, selection.max), android.widget.Toast.LENGTH_SHORT).show()
+                        TvToast.makeText(activity, activity.getString(R.string.tv_multistream_max, selection.max), android.widget.Toast.LENGTH_SHORT).show()
                         return@Adapter
                     }
                     else -> checked.add(login)
                 }
-                // the numbers of the other selected streams follow (one taken away: the next ones move up)
-                adapter.notifyItemRangeChanged(0, adapter.itemCount)
+                if (adapter.itemCount > 0) {
+                    adapter.notifyItemRangeChanged(0, adapter.itemCount, PAYLOAD_SELECTION)
+                }
                 updateValidate()
             } else {
                 if (!stream.channelLogin.isNullOrBlank() && stream.channelLogin.equals(currentChannelLogin, ignoreCase = true)) {
@@ -438,11 +690,9 @@ object TvStreamSwitcher {
                     return@Adapter
                 }
                 dialog.dismiss()
-                // the info of the stream reached for a moment, like left / right
                 PlayerFragment.peekHudOnStart = true
                 val row = rowOf(currentTab)
                 if (row != null && row.kind != com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.KIND_COSTREAM) {
-                    // a stream of another list: that list becomes the one of left / right and of this row
                     activity.startStream(stream, adapter.streams, row.source)
                 } else {
                     activity.startStream(stream)
@@ -454,8 +704,7 @@ object TvStreamSwitcher {
                 if (stream.channelLogin != null &&
                     (stream.channelLogin.equals(currentChannelLogin, ignoreCase = true) || activity.isStreamInTvPip(stream.channelLogin))
                 ) {
-                    // the stream watched is already on the screen: no small window of it
-                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
+                    TvToast.makeText(activity, R.string.tv_pip_already_shown, android.widget.Toast.LENGTH_SHORT).show()
                 } else {
                     dialog.dismiss()
                     onPip(stream)
@@ -463,12 +712,41 @@ object TvStreamSwitcher {
             }
         }
         recyclerView.adapter = adapter
-        // more of the list near its end (30 streams by page), for the list of the stream and the other tabs
+
         val pages = mutableMapOf<Int, com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages>()
         if (source != null && originTab >= 0) {
             pages[originTab] = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(source)
         }
-        var moreJob: kotlinx.coroutines.Job? = null
+        val inFlightTabLoads = mutableMapOf<Int, Deferred<List<Stream>?>>()
+        var preloadJob: Job? = null
+        var moreJob: Job? = null
+
+        val fetchOrAwaitTab: suspend (Int) -> List<Stream>? = fetch@{ tabIdx ->
+            loadedTabs[tabIdx]?.let { return@fetch it }
+            val existing = inFlightTabLoads[tabIdx]
+            if (existing != null && existing.isActive) {
+                return@fetch existing.await()
+            }
+            val row = rowOf(tabIdx) ?: return@fetch emptyList()
+            val deferred = activity.lifecycleScope.async {
+                val rowPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(row.source)
+                pages[tabIdx] = rowPages
+                val fetched = runCatching {
+                    rowPages.next()?.distinctBy { it.channelLogin }
+                }.getOrNull()
+                fetched?.filter { !it.channelLogin.isNullOrBlank() && it.channelLogin !in exclude }
+                    ?.also { loadedTabs[tabIdx] = it }
+            }
+            inFlightTabLoads[tabIdx] = deferred
+            try {
+                deferred.await()
+            } finally {
+                if (inFlightTabLoads[tabIdx] === deferred) {
+                    inFlightTabLoads.remove(tabIdx)
+                }
+            }
+        }
+
         adapter.onFocused = { position ->
             val tab = currentTab
             val tabPages = pages[tab]
@@ -476,13 +754,12 @@ object TvStreamSwitcher {
                 moreJob = activity.lifecycleScope.launch {
                     val known = adapter.streams.mapNotNull { it.channelLogin }.toMutableSet()
                     val added = mutableListOf<Stream>()
-                    // the list of the stream starts again from its first page: the pages already in the row are passed
                     var tries = 0
                     while (added.isEmpty() && tabPages.hasMore && tries++ < 8) {
                         val page = tabPages.next() ?: break
                         page.forEach { stream ->
                             val login = stream.channelLogin
-                            if (login != null && login !in known && login !in (selection?.exclude ?: emptySet())) {
+                            if (login != null && login !in known && login !in exclude) {
                                 known += login
                                 added += stream
                             }
@@ -502,32 +779,39 @@ object TvStreamSwitcher {
                 }
             }
         }
+
         validate?.setOnClickListener {
             val logins = checked ?: return@setOnClickListener
             if (logins.size < minChecked) {
-                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, activity.getString(R.string.tv_multistream_min, minChecked), android.widget.Toast.LENGTH_SHORT).show()
+                TvToast.makeText(activity, activity.getString(R.string.tv_multistream_min, minChecked), android.widget.Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             dialog.dismiss()
-            // in the order of the row, the current stream first
             val all = (adapter.streams + streams + seen.values).distinctBy { it.channelLogin }
             selection?.onValidate(all.filter { it.channelLogin in logins }.sortedBy { if (it.channelLogin == currentChannelLogin) 0 else 1 })
         }
-        root.addView(recyclerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        // a tab with the focus shows its list (loaded once), after a short stop on it
-        var tabJob: kotlinx.coroutines.Job? = null
-        var loadingTabIndex = -1
+
+        // Fixed constant height prevents any vertical jump/slide when switching categories or hitting an empty tab
+        root.addView(cardsContainer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, fixedCardsHeightPx))
+
+        var tabJob: Job? = null
         var focusCardsWhenLoaded = false
         var searchQuery = ""
+
         val restoreTabLabels = {
             tabViews.forEachIndexed { i, tab ->
-                tab.text = if (i == searchTabIndex && searchQuery.isNotEmpty()) {
+                val wanted = if (i == searchTabIndex && searchQuery.isNotEmpty()) {
                     "${activity.getString(R.string.search)}: $searchQuery"
                 } else {
                     tabTitles[i]
                 }
+                if (tab.text?.toString() != wanted) {
+                    tab.text = wanted
+                }
             }
+            refreshTabStyles()
         }
+
         val focusCardFromTab = {
             val remembered = if (lastFocusedCardTab == currentTab && lastFocusedCardPos != RecyclerView.NO_POSITION) {
                 recyclerView.layoutManager?.findViewByPosition(lastFocusedCardPos)?.takeIf { it.isShown }
@@ -537,6 +821,15 @@ object TvStreamSwitcher {
                 ?.let { recyclerView.layoutManager?.findViewByPosition(it) }
             (remembered ?: firstVisible ?: recyclerView.getChildAt(0))?.requestFocus()
         }
+
+        val setCardsLoadingState = { loading: Boolean ->
+            loadingSpinner.visibility = if (loading) View.VISIBLE else View.GONE
+            recyclerView.alpha = if (loading) 0.35f else 1f
+            if (loading) {
+                emptyStateView.visibility = View.GONE
+            }
+        }
+
         val showTab = { index: Int, list: List<Stream> ->
             if (lastFocusedCardTab != index) {
                 lastFocusedCardPos = RecyclerView.NO_POSITION
@@ -544,39 +837,51 @@ object TvStreamSwitcher {
             currentTab = index
             pendingTarget = RecyclerView.NO_POSITION
             moreJob?.cancel()
-            tabViews.forEachIndexed { i, view -> view.isSelected = i == index }
             preview?.stop()
+            setCardsLoadingState(false)
             list.forEach { stream -> stream.channelLogin?.let { seen.putIfAbsent(it, stream) } }
-            adapter.streams = list
-            adapter.notifyDataSetChanged()
-            recyclerView.scrollToPosition(0)
+            adapter.submitList(list)
+            emptyStateView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+            if (list.isNotEmpty()) {
+                recyclerView.scrollToPosition(0)
+            }
+            refreshTabStyles()
         }
-        val runSearch: (String, TextView) -> Unit = { query, view ->
+
+        val runSearch: (String, TextView) -> Unit = { query, _ ->
             val trimmed = query.trim()
             if (trimmed.isNotEmpty()) {
                 searchQuery = trimmed
-                val label = "${activity.getString(R.string.search)}: $trimmed"
                 tabJob?.cancel()
                 loadingTabIndex = -1
                 focusCardsWhenLoaded = false
                 restoreTabLabels()
                 tabJob = activity.lifecycleScope.launch {
                     loadingTabIndex = searchTabIndex
-                    view.text = activity.getString(R.string.tv_switch_loading, label)
+                    currentTab = searchTabIndex
+                    refreshTabStyles()
+                    setCardsLoadingState(true)
                     val searchPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages {
                         com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.search(activity, trimmed)
                     }
                     pages[searchTabIndex] = searchPages
-                    val list = searchPages.next()?.distinctBy { it.channelLogin }
-                        ?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }
+                    val list = runCatching {
+                        searchPages.next()?.distinctBy { it.channelLogin }
+                    }.getOrNull()
+                        ?.filter { !it.channelLogin.isNullOrBlank() && it.channelLogin !in exclude }
                         ?.also { loadedTabs[searchTabIndex] = it }
                     loadingTabIndex = -1
-                    view.text = label
+                    setCardsLoadingState(false)
+                    restoreTabLabels()
                     if (!dialog.isShowing) {
                         return@launch
                     }
-                    if (list.isNullOrEmpty()) {
-                        com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, if (list == null) R.string.tv_switch_error else R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
+                    if (list == null) {
+                        showTab(searchTabIndex, emptyList())
+                        TvToast.makeText(activity, R.string.tv_switch_error, android.widget.Toast.LENGTH_SHORT).show()
+                    } else if (list.isEmpty()) {
+                        showTab(searchTabIndex, emptyList())
+                        TvToast.makeText(activity, R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
                     } else {
                         showTab(searchTabIndex, list)
                         recyclerView.post { recyclerView.layoutManager?.findViewByPosition(0)?.requestFocus() }
@@ -584,16 +889,18 @@ object TvStreamSwitcher {
                 }
             }
         }
-        val selectTab: (Int, TextView, Long, Boolean) -> Unit = selectTab@{ index, view, debounceMs, focusCardsAfter ->
+
+        val selectTab: (Int, TextView, Long, Boolean) -> Unit = selectTab@{ index, _, debounceMs, focusCardsAfter ->
             if (index == searchTabIndex) {
                 val cachedSearch = loadedTabs[searchTabIndex]
                 if (!cachedSearch.isNullOrEmpty()) {
                     tabJob?.cancel()
                     loadingTabIndex = -1
+                    setCardsLoadingState(false)
                     restoreTabLabels()
                     focusCardsWhenLoaded = focusCardsAfter
                     tabJob = activity.lifecycleScope.launch {
-                        if (debounceMs > 0L) kotlinx.coroutines.delay(debounceMs)
+                        if (debounceMs > 0L) delay(debounceMs)
                         if (!dialog.isShowing) return@launch
                         showTab(searchTabIndex, cachedSearch)
                         if (focusCardsWhenLoaded) {
@@ -605,14 +912,15 @@ object TvStreamSwitcher {
                     tabJob?.cancel()
                     loadingTabIndex = -1
                     focusCardsWhenLoaded = false
+                    setCardsLoadingState(false)
                     restoreTabLabels()
                 }
                 return@selectTab
             }
             if (index == currentTab && loadingTabIndex == -1 && loadedTabs[index] != null) {
                 tabJob?.cancel()
+                setCardsLoadingState(false)
                 restoreTabLabels()
-                tabViews.forEachIndexed { i, tv -> tv.isSelected = i == currentTab }
                 if (focusCardsAfter && adapter.itemCount > 0) {
                     focusCardFromTab()
                 }
@@ -627,24 +935,36 @@ object TvStreamSwitcher {
             focusCardsWhenLoaded = focusCardsAfter
             restoreTabLabels()
             tabJob = activity.lifecycleScope.launch {
+                val alreadyCached = loadedTabs[index]
+                if (alreadyCached != null) {
+                    // Cached tab: tiny 60ms settle while gliding across tabs, instant on click
+                    if (debounceMs > 0L) delay(60L)
+                    if (!dialog.isShowing) return@launch
+                    showTab(index, alreadyCached)
+                    if (focusCardsWhenLoaded && alreadyCached.isNotEmpty()) {
+                        focusCardsWhenLoaded = false
+                        recyclerView.post { focusCardFromTab() }
+                    } else {
+                        focusCardsWhenLoaded = false
+                    }
+                    return@launch
+                }
+
                 if (debounceMs > 0L) {
-                    kotlinx.coroutines.delay(debounceMs)
+                    delay(debounceMs)
                 }
                 if (!dialog.isShowing) return@launch
                 currentTab = index
-                tabViews.forEachIndexed { i, tv -> tv.isSelected = i == index }
-                val cached = loadedTabs[index]
-                val list = if (cached != null) {
-                    cached
+                val nowCached = loadedTabs[index]
+                val list = if (nowCached != null) {
+                    nowCached
                 } else {
                     loadingTabIndex = index
-                    view.text = activity.getString(R.string.tv_switch_loading, tabTitles[index])
-                    val fetched = rowOf(index)?.let { row ->
-                        val rowPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(row.source)
-                        pages[index] = rowPages
-                        rowPages.next()?.distinctBy { it.channelLogin }
-                    }?.filter { it.channelLogin !in (selection?.exclude ?: emptySet()) }?.also { loadedTabs[index] = it }
+                    refreshTabStyles()
+                    setCardsLoadingState(true)
+                    val fetched = fetchOrAwaitTab(index)
                     loadingTabIndex = -1
+                    setCardsLoadingState(false)
                     restoreTabLabels()
                     fetched
                 }
@@ -652,11 +972,10 @@ object TvStreamSwitcher {
                 if (list == null) {
                     showTab(index, emptyList())
                     focusCardsWhenLoaded = false
-                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_switch_error, android.widget.Toast.LENGTH_SHORT).show()
+                    TvToast.makeText(activity, R.string.tv_switch_error, android.widget.Toast.LENGTH_SHORT).show()
                 } else if (list.isEmpty()) {
                     showTab(index, emptyList())
                     focusCardsWhenLoaded = false
-                    com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(activity, R.string.tv_switch_empty, android.widget.Toast.LENGTH_SHORT).show()
                 } else {
                     showTab(index, list)
                     if (focusCardsWhenLoaded) {
@@ -666,13 +985,15 @@ object TvStreamSwitcher {
                 }
             }
         }
+
         tabViews.forEachIndexed { index, view ->
             view.setOnFocusChangeListener { _, hasFocus ->
+                refreshTabStyles()
                 if (hasFocus) {
-                    selectTab(index, view, 140L, false)
+                    scrollTabIntoCenter(view)
+                    selectTab(index, view, 120L, false)
                 }
             }
-            // OK on Search opens the search box; on any category tab it drops focus into its stream cards
             view.setOnClickListener {
                 if (index == searchTabIndex) {
                     com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(activity) { dismiss ->
@@ -689,27 +1010,57 @@ object TvStreamSwitcher {
                 }
                 selectTab(index, view, 0L, true)
             }
-            // down from a tab: the cards of the list shown (returning to the remembered card if on the same tab)
             view.setOnKeyListener { _, keyCode, event ->
-                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN) {
-                    if (index == searchTabIndex && loadedTabs[searchTabIndex].isNullOrEmpty()) {
-                        if (adapter.itemCount > 0) focusCardFromTab()
-                    } else if (currentTab != index || loadingTabIndex == index || loadedTabs[index] == null) {
-                        selectTab(index, view, 0L, true)
-                    } else if (adapter.itemCount > 0) {
-                        focusCardFromTab()
+                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (index == searchTabIndex && loadedTabs[searchTabIndex].isNullOrEmpty()) {
+                            if (adapter.itemCount > 0) focusCardFromTab()
+                        } else if (currentTab != index || loadingTabIndex == index || loadedTabs[index] == null) {
+                            selectTab(index, view, 0L, true)
+                        } else if (adapter.itemCount > 0) {
+                            focusCardFromTab()
+                        }
+                        true
                     }
-                    true
-                } else false
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (index == 0) {
+                            if (validate != null && validate.isShown) {
+                                tabsScrollView?.smoothScrollTo(0, 0)
+                                validate.requestFocus()
+                            }
+                            true
+                        } else {
+                            val prev = tabViews.getOrNull(index - 1)
+                            if (prev != null) {
+                                scrollTabIntoCenter(prev)
+                                prev.requestFocus()
+                            }
+                            true
+                        }
+                    }
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        val next = tabViews.getOrNull(index + 1)
+                        if (next != null) {
+                            scrollTabIntoCenter(next)
+                            next.requestFocus()
+                        }
+                        true
+                    }
+                    else -> false
+                }
             }
         }
+
         initialStreams.forEach { stream -> stream.channelLogin?.let { seen.putIfAbsent(it, stream) } }
         streams.forEach { stream -> stream.channelLogin?.let { seen.putIfAbsent(it, stream) } }
-        // left / right held: one card at a time at a pace the row can follow
+        emptyStateView.visibility = if (initialStreams.isEmpty() && !omitEmptyCurrentTab) View.VISIBLE else View.GONE
+
         var lastMove = 0L
         dialog.setOnKeyListener { _, keyCode, event ->
             if ((keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT || keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) &&
-                event.action == android.view.KeyEvent.ACTION_DOWN && recyclerView.hasFocus()) {
+                event.action == android.view.KeyEvent.ACTION_DOWN && recyclerView.hasFocus()
+            ) {
                 val now = android.os.SystemClock.uptimeMillis()
                 if (event.repeatCount > 0 && now - lastMove < 120L) {
                     return@setOnKeyListener true
@@ -718,36 +1069,53 @@ object TvStreamSwitcher {
             }
             false
         }
-        dialog.setContentView(root)
+
+        dialog.setContentView(
+            outer,
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(0))
-            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            setGravity(Gravity.BOTTOM)
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0f)
+            WindowCompat.setDecorFitsSystemWindows(this, false)
+            WindowInsetsControllerCompat(this, decorView).apply {
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(WindowInsetsCompat.Type.systemBars())
+            }
         }
+
         val currentIndex = if (initialTab == originTab) {
             initialStreams.indexOfFirst { it.channelLogin != null && it.channelLogin == currentChannelLogin }.coerceAtLeast(0)
         } else {
             0
         }
-        recyclerView.scrollToPosition(currentIndex)
+        if (initialStreams.isNotEmpty()) {
+            recyclerView.scrollToPosition(currentIndex)
+        }
+
         dialog.setOnShowListener {
+            // Silently preload uncached category tabs in the background so tab switches are immediate and jump-free
+            preloadJob = activity.lifecycleScope.launch {
+                for (candidate in tabEntries.indices) {
+                    if (!dialog.isShowing) break
+                    if (candidate == searchTabIndex || tabEntries[candidate].row == null) continue
+                    if (loadedTabs[candidate] != null) continue
+                    fetchOrAwaitTab(candidate)
+                }
+            }
+
             if (initialStreams.isEmpty() && omitEmptyCurrentTab) {
                 tabViews.firstOrNull()?.requestFocus()
                 tabJob?.cancel()
                 tabJob = activity.lifecycleScope.launch {
+                    setCardsLoadingState(true)
                     var chosenTab = 0
                     var list: List<Stream>? = null
                     for (candidate in tabEntries.indices) {
-                        val row = tabEntries[candidate].row ?: continue
-                        val tabView = tabViews.getOrNull(candidate)
-                        tabView?.text = activity.getString(R.string.tv_switch_loading, tabTitles[candidate])
-                        val rowPages = com.github.andreyasadchy.xtra.ui.tv.TvStreamSources.Pages(row.source)
-                        pages[candidate] = rowPages
-                        val fetched = rowPages.next()?.distinctBy { it.channelLogin }
-                            ?.filter { it.channelLogin !in exclude }
-                            ?.also { loadedTabs[candidate] = it }
-                        tabView?.text = tabTitles[candidate]
+                        if (tabEntries[candidate].row == null) continue
+                        val fetched = fetchOrAwaitTab(candidate)
                         if (!dialog.isShowing) return@launch
                         if (!fetched.isNullOrEmpty()) {
                             chosenTab = candidate
@@ -755,9 +1123,12 @@ object TvStreamSwitcher {
                             break
                         }
                     }
+                    setCardsLoadingState(false)
                     if (!list.isNullOrEmpty()) {
                         showTab(chosenTab, list)
                         recyclerView.post { recyclerView.layoutManager?.findViewByPosition(0)?.requestFocus() }
+                    } else {
+                        showTab(0, emptyList())
                     }
                 }
             } else {
@@ -769,8 +1140,8 @@ object TvStreamSwitcher {
                 }
             }
         }
+
         val update: (List<Stream>) -> Unit = update@{ list ->
-            // only when streamers came or went or moved, not for new viewer counts: the row does not move for nothing
             if (!dialog.isShowing || list.isEmpty() || originTab < 0 || list.map { it.channelLogin } == loadedTabs[originTab]?.map { it.channelLogin }) {
                 return@update
             }
@@ -780,15 +1151,15 @@ object TvStreamSwitcher {
             }
             val old = adapter.streams
             if (list.size > old.size && list.subList(0, old.size).map { it.channelLogin } == old.map { it.channelLogin }) {
-                // only more streams at the end: added after the row, the focus does not move
                 adapter.streams = list
                 adapter.notifyItemRangeInserted(old.size, list.size - old.size)
+                emptyStateView.visibility = View.GONE
                 return@update
             }
             val focusedLogin = recyclerView.focusedChild?.let { recyclerView.getChildAdapterPosition(it) }
                 ?.let { adapter.streams.getOrNull(it)?.channelLogin }
-            adapter.streams = list
-            adapter.notifyDataSetChanged()
+            adapter.submitList(list)
+            emptyStateView.visibility = View.GONE
             val index = list.indexOfFirst { it.channelLogin != null && it.channelLogin == focusedLogin }
             if (index >= 0) {
                 recyclerView.scrollToPosition(index)
@@ -803,24 +1174,31 @@ object TvStreamSwitcher {
                 updater = null
             }
             preview?.release()
+            preloadJob?.cancel()
+            inFlightTabLoads.values.forEach { it.cancel() }
+            inFlightTabLoads.clear()
             tabJob?.cancel()
             moreJob?.cancel()
         }
         dialog.show()
         if (initialStreams.isEmpty() && !omitEmptyCurrentTab) {
-            // nothing in the list shown: the next non-search tab is opened
             val fallbackTab = (initialTab + 1).takeIf { it in 0 until searchTabIndex }
             if (fallbackTab != null) {
-                tabViews.getOrNull(fallbackTab)?.post { tabViews[fallbackTab].requestFocus(); tabViews[fallbackTab].performClick() }
+                tabViews.getOrNull(fallbackTab)?.post {
+                    tabViews[fallbackTab].requestFocus()
+                    tabViews[fallbackTab].performClick()
+                }
             }
         }
     }
+
+    private const val PAYLOAD_SELECTION = "selection_badge"
 
     private class Adapter(
         var streams: List<Stream>,
         private val itemWidth: Int,
         private val preview: TvStreamPreview?,
-        /** Selection mode: the logins checked, they get a green badge. */
+        /** Selection mode: the logins checked, they get an accent badge. */
         private val checked: Set<String>?,
         private val onClick: (Stream) -> Unit,
     ) : RecyclerView.Adapter<Adapter.ViewHolder>() {
@@ -834,6 +1212,39 @@ object TvStreamSwitcher {
         class ViewHolder(val binding: FragmentStreamsListItemBinding, val badge: TextView) : RecyclerView.ViewHolder(binding.root)
 
         override fun getItemCount() = streams.size
+
+        fun submitList(newList: List<Stream>) {
+            val oldList = streams
+            if (oldList === newList) return
+            if (oldList.isEmpty() && newList.isEmpty()) return
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize(): Int = oldList.size
+                override fun getNewListSize(): Int = newList.size
+
+                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                    val a = oldList[oldItemPosition]
+                    val b = newList[newItemPosition]
+                    return if (!a.channelLogin.isNullOrBlank() && !b.channelLogin.isNullOrBlank()) {
+                        a.channelLogin.equals(b.channelLogin, ignoreCase = true)
+                    } else {
+                        a.id == b.id && a.channelId == b.channelId
+                    }
+                }
+
+                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                    val a = oldList[oldItemPosition]
+                    val b = newList[newItemPosition]
+                    return a.title == b.title &&
+                        a.gameName == b.gameName &&
+                        a.viewerCount == b.viewerCount &&
+                        a.thumbnailURL == b.thumbnailURL &&
+                        a.channelName == b.channelName &&
+                        a.channelImageURL == b.channelImageURL
+                }
+            })
+            streams = newList
+            diff.dispatchUpdatesTo(this)
+        }
 
         override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
             super.onAttachedToRecyclerView(recyclerView)
@@ -854,25 +1265,33 @@ object TvStreamSwitcher {
             binding.root.layoutParams = binding.root.layoutParams.apply { width = itemWidth }
             TvCards.prepare(binding.root)
             val density = parent.resources.displayMetrics.density
-            // number of a selected stream (its place in the multi-stream), at the top right of the card, in the color of accent
             val badge = TextView(parent.context).apply {
                 gravity = Gravity.CENTER
-                setTextColor(com.github.andreyasadchy.xtra.ui.tv.TvAccent.onAccent)
+                setTextColor(TvAccent.onAccent)
                 textSize = 15f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
-                    setStroke((2 * density).toInt(), android.graphics.Color.WHITE)
+                setTypeface(typeface, Typeface.BOLD)
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(TvAccent.color)
+                    setStroke((2 * density).toInt(), Color.WHITE)
                 }
                 visibility = View.GONE
                 elevation = 8 * density
             }
-            (binding.root as? android.widget.FrameLayout)?.addView(badge, android.widget.FrameLayout.LayoutParams((32 * density).toInt(), (32 * density).toInt(), Gravity.TOP or Gravity.END).apply {
-                val margin = (8 * density).toInt()
-                setMargins(margin, margin, margin, margin)
-            })
+            (binding.root as? FrameLayout)?.addView(
+                badge,
+                FrameLayout.LayoutParams((32 * density).toInt(), (32 * density).toInt(), Gravity.TOP or Gravity.END).apply {
+                    val margin = (8 * density).toInt()
+                    setMargins(margin, margin, margin, margin)
+                },
+            )
             return ViewHolder(binding, badge)
+        }
+
+        private fun bindSelectionBadge(holder: ViewHolder, stream: Stream) {
+            val number = checked?.indexOf(stream.channelLogin)?.takeIf { it >= 0 }?.plus(1)
+            holder.badge.visibility = if (number != null) View.VISIBLE else View.GONE
+            holder.badge.text = number?.toString()
         }
 
         private fun bindUsername(holder: ViewHolder, stream: Stream) {
@@ -892,9 +1311,13 @@ object TvStreamSwitcher {
             val validPayloads = setOf(
                 com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM,
                 com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.PAYLOAD_PLAYBACK,
+                PAYLOAD_SELECTION,
             )
             if (payloads.isNotEmpty() && payloads.all { it in validPayloads }) {
                 streams.getOrNull(position)?.let { stream ->
+                    if (PAYLOAD_SELECTION in payloads) {
+                        bindSelectionBadge(holder, stream)
+                    }
                     if (com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.PAYLOAD_COSTREAM in payloads) {
                         bindUsername(holder, stream)
                     }
@@ -910,9 +1333,7 @@ object TvStreamSwitcher {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val stream = streams[position]
             val context = holder.itemView.context
-            val number = checked?.indexOf(stream.channelLogin)?.takeIf { it >= 0 }?.plus(1)
-            holder.badge.visibility = if (number != null) View.VISIBLE else View.GONE
-            holder.badge.text = number?.toString()
+            bindSelectionBadge(holder, stream)
             bindPlaybackBadge(holder, stream)
             with(holder.binding) {
                 root.setOnClickListener { onClick(stream) }

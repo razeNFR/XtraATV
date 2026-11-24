@@ -1041,6 +1041,10 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
             }
+            findPreference<Preference>("about_changelog")?.setOnPreferenceClickListener {
+                com.github.andreyasadchy.xtra.ui.tv.TvChangelog.show(requireContext())
+                true
+            }
             findPreference<Preference>("about_github")?.setOnPreferenceClickListener {
                 com.github.andreyasadchy.xtra.ui.tv.TvAbout.show(requireContext())
                 true
@@ -2150,6 +2154,23 @@ class SettingsActivity : AppCompatActivity() {
                     }
                     true
                 }
+            }
+            findPreference<ListPreference>(C.TV_RECENT_CHANNELS_FILTER)?.setOnPreferenceChangeListener { _, newValue ->
+                val mode = newValue?.toString() ?: com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.FILTER_ALL
+                com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.setFilterMode(requireContext(), mode)
+                (requireActivity() as? SettingsActivity)?.setResult()
+                true
+            }
+            findPreference<Preference>(C.TV_CLEAR_RECENT_CHANNELS)?.setOnPreferenceClickListener {
+                val context = requireContext()
+                com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.clear(context)
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    context,
+                    R.string.tv_recent_channels_cleared,
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+                (requireActivity() as? SettingsActivity)?.setResult()
+                true
             }
             findPreference<ListPreference>(C.TV_STREAM_END_ACTION)?.let { preference ->
                 if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {

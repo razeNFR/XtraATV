@@ -29,8 +29,15 @@ android {
         applicationId = "com.github.razenfr.xtratv"
         minSdk = 24
         targetSdk = 37
-        versionCode = 168
-        versionName = "1.4.6.7-tv"
+        versionCode = 169
+        versionName = "1.4.6.8-tv"
+        val releaseNotesFile = rootProject.file("docs/release-notes.md")
+        val escapedReleaseNotes = (if (releaseNotesFile.isFile) releaseNotesFile.readText(Charsets.UTF_8) else "")
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "")
+            .replace("\n", "\\n")
+        buildConfigField("String", "RELEASE_NOTES", "\"$escapedReleaseNotes\"")
     }
 
     buildTypes {

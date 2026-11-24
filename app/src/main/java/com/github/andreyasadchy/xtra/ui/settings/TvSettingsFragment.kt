@@ -2305,6 +2305,10 @@ class TvSettingsFragment : Fragment() {
                     "tv_dpad_shortcuts" -> valueBadge = TvRemoteKeys.dpadSummary(context)
                     C.TV_CUSTOM_KEYS -> valueBadge = TvRemoteKeys.customKeysSummary(context)
                     C.TV_HOME_ROWS -> valueBadge = TvHomeRows.summary(context)
+                    C.TV_CLEAR_RECENT_CHANNELS -> {
+                        val count = com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.count(context)
+                        if (count > 0) valueBadge = count.toString()
+                    }
                     C.CHAT_HIGHLIGHTED_USERS -> valueBadge = ChatBlocklist.highlightedSummary(context)
                     C.CHAT_BLOCKED_USERS -> valueBadge = ChatBlocklist.summary(context)
                     "tv_chat_polls_popup" -> {
@@ -2334,6 +2338,7 @@ class TvSettingsFragment : Fragment() {
                         summary = context.getString(R.string.tv_proxies_1440p)
                     }
                     "about_app" -> summary = TvAbout.CREDIT_TEXT
+                    "about_changelog" -> valueBadge = BuildConfig.VERSION_NAME
                     "about_device" -> summary = caps.deviceSummary
                 }
                 Kind.Action(hasChevron = key in CHEVRON_KEYS)
@@ -2463,6 +2468,18 @@ class TvSettingsFragment : Fragment() {
                         if (key == C.TV_MINI_PLAYER_AUTO_SLIDE || key == C.TV_COMPACT_RAIL) {
                             (activity as? MainActivity)?.refreshTvMiniPlayerPosition(immediate = true)
                         }
+                        if (key == C.TV_SYNC_VOD_HISTORY && next) {
+                            val app = context.applicationContext as? XtraApp
+                            if (app != null) {
+                                viewLifecycleOwner.lifecycleScope.launch {
+                                    com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pullFromTwitch(
+                                        context = app,
+                                        xtraModule = app.xtraModule,
+                                        force = true,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 refreshStamp.intValue++
@@ -2483,6 +2500,8 @@ class TvSettingsFragment : Fragment() {
                         AppCompatDelegate.setApplicationLocales(
                             LocaleListCompat.forLanguageTags(if (chosen == "auto") null else chosen)
                         )
+                    } else if (key == C.TV_RECENT_CHANNELS_FILTER) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.setFilterMode(context, chosen)
                     } else {
                         val previous = context.prefs().getString(key, null)
                         context.prefs().edit { putString(key, chosen) }
@@ -2522,6 +2541,15 @@ class TvSettingsFragment : Fragment() {
 
     private fun handleActionClick(context: Context, item: PrefNode.Item) {
         when (item.key) {
+            C.TV_CLEAR_RECENT_CHANNELS -> {
+                com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.clear(context)
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    context,
+                    R.string.tv_recent_channels_cleared,
+                    Toast.LENGTH_SHORT,
+                ).show()
+                refreshStamp.intValue++
+            }
             "tv_chat_polls_popup" -> {
                 val options = listOf(
                     context.getString(R.string.tv_chat_delay_off),
@@ -2848,6 +2876,7 @@ class TvSettingsFragment : Fragment() {
                 IntegrityDialog.newInstance(null).show(childFragmentManager, null)
             }
             "about_app", "about_github", "about_device" -> TvAbout.show(context)
+            "about_changelog" -> com.github.andreyasadchy.xtra.ui.tv.TvChangelog.show(context)
             "about_discord" -> TvAbout.show(context, discord = true)
         }
     }
@@ -3277,7 +3306,7 @@ class TvSettingsFragment : Fragment() {
             "ui_navigation_tab_list_dialog", "ui_following_tabs_dialog", "ui_saved_tabs_dialog",
             "ui_game_tabs_dialog", "ui_search_tabs_dialog", "ui_channel_tabs_dialog",
             C.CHAT_HIGHLIGHTED_USERS, C.CHAT_BLOCKED_USERS, "downloaded_languages",
-            "backup_settings", "restore_settings",
+            "backup_settings", "restore_settings", "about_changelog",
         )
 
         private val PLAYER_BUTTON_ICONS = mapOf(

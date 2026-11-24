@@ -1394,4 +1394,22 @@
     <string name="tv_mini_player_auto_slide">تحريك المشغل المصغر تلقائياً</string>
     <string name="tv_mini_player_auto_slide_summary">يحرك المشغل المصغر إلى الجانب المقابل عندما يمر العنصر المحدد تحته</string>
     <string name="tv_section_hidden_toast">تم إخفاء «%1$s» من القائمة الجانبية (أعد تفعيله من الإعدادات)</string>
+    <string name="tv_home_row_recent_channels">القنوات المشاهدة مؤخرًا</string>
+    <string name="tv_recent_channels_filter">القنوات المشاهدة مؤخرًا</string>
+    <string name="tv_recent_channels_filter_all">جميع القنوات</string>
+    <string name="tv_recent_channels_filter_unfollowed">القنوات غير المتابَعة فقط</string>
+    <string name="tv_recent_channels_remove">إزالة من المشاهدة مؤخرًا</string>
+    <string name="tv_recent_channels_removed">تمت إزالة %1$s من القنوات الأخيرة</string>
+    <string name="tv_recent_channels_clear">مسح القنوات المشاهدة مؤخرًا</string>
+    <string name="tv_recent_channels_clear_summary">إزالة جميع القنوات من صف القنوات المشاهدة مؤخرًا</string>
+    <string name="tv_recent_channels_cleared">تم مسح القنوات المشاهدة مؤخرًا</string>
+    <string name="tv_sync_vod_history">مزامنة سجل الفيديوهات مع Twitch</string>
+    <string name="tv_sync_vod_history_summary">مزامنة موضع استئناف الفيديوهات ومتابعة المشاهدة بين الكمبيوتر والهاتف والتلفزيون</string>
+    <string name="tv_about_changelog">الجديد / سجل التغييرات</string>
+    <string name="tv_about_changelog_summary">عرض ملاحظات الإصدار للتحديث الأخير والتحديثات السابقة</string>
+    <string name="tv_changelog_installed">مثبّت</string>
+    <string name="tv_changelog_new">جديد</string>
+    <string name="tv_changelog_loading">جارٍ تحميل الإصدارات السابقة…</string>
+    <string name="tv_changelog_empty">لا توجد ملاحظات إصدار متاحة حاليًا</string>
+    <string name="tv_changelog_back">العودة إلى الإصدارات</string>
 </resources>

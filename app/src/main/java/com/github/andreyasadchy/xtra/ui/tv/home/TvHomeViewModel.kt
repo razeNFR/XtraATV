@@ -73,6 +73,7 @@ class TvHomeViewModel(
     val recommended = MutableStateFlow<List<Stream>?>(null)
     val followedGames = MutableStateFlow<List<Game>?>(null)
     val offlineChannels = MutableStateFlow<List<User>?>(null)
+    val recentChannels = MutableStateFlow<List<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>?>(null)
     val games = MutableStateFlow<List<Game>?>(null)
     /** Rows of the popular streams of one language (`lang:<code>` -> streams). */
     val languageRows = MutableStateFlow<Map<String, List<Stream>>>(emptyMap())
@@ -164,6 +165,11 @@ class TvHomeViewModel(
                 com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(u.id, u.login)
             }
         }
+        recentChannels.value?.let { list ->
+            recentChannels.value = list.filterNot { item ->
+                com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isChannelBlocked(item.channelId, item.login)
+            }
+        }
         if (languageRows.value.isNotEmpty()) {
             languageRows.value = languageRows.value.mapValues { (_, list) ->
                 com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.filterStreams(list)
@@ -218,6 +224,16 @@ class TvHomeViewModel(
                     first = false
                 } else {
                     refreshMultiStreams()
+                }
+            }
+        }
+        viewModelScope.launch {
+            var first = true
+            com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.changes.collect {
+                if (first) {
+                    first = false
+                } else {
+                    refreshRecentChannels()
                 }
             }
         }
@@ -458,6 +474,24 @@ class TvHomeViewModel(
             }
         } else {
             categoryRows.value = emptyMap()
+        }
+
+        if (TvHomeRows.ROW_RECENT_CHANNELS in activeSet) {
+            jobs += viewModelScope.launch {
+                refreshRecentChannels(followedJob)
+            }
+        } else {
+            recentChannels.value = emptyList()
+        }
+
+        if (com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.isEnabled(applicationContext)) {
+            jobs += viewModelScope.launch {
+                com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pullFromTwitch(
+                    context = applicationContext,
+                    xtraModule = (applicationContext as XtraApp).xtraModule,
+                    force = force,
+                )
+            }
         }
 
         if (TvHomeRows.ROW_GAMES in activeSet) {
@@ -709,6 +743,101 @@ class TvHomeViewModel(
                 liveStreams = live,
                 totalViewers = totalViewers,
                 sharedGame = sharedGame,
+            )
+        }
+    }
+
+    fun refreshRecentChannelsNow() {
+        viewModelScope.launch {
+            refreshRecentChannels()
+        }
+    }
+
+    private suspend fun refreshRecentChannels(followedJobToWait: Job? = null) {
+        val active = TvHomeRows.load(applicationContext).any { it.id == TvHomeRows.ROW_RECENT_CHANNELS && it.enabled }
+        if (!active) {
+            recentChannels.value = emptyList()
+            return
+        }
+        val entries = com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.list(applicationContext)
+        if (entries.isEmpty()) {
+            recentChannels.value = emptyList()
+            return
+        }
+        val prefs = applicationContext.prefs()
+        val networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP)
+        val headers = TwitchApiHelper.getGQLHeaders(applicationContext)
+        val accountHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true)
+        val unfollowedOnly = com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.filterMode(applicationContext) ==
+            com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.FILTER_UNFOLLOWED
+
+        val liveByLogin = mutableMapOf<String, Stream>()
+        val metaUpdates = mutableMapOf<String, Triple<String?, String?, String?>>()
+        runCatching {
+            val logins = entries.map { it.login }.distinct()
+            graphQLRepository.loadQueryUsersStream(networkLibrary, headers, logins = logins)
+                .data?.users?.forEach { user ->
+                    val login = user?.login ?: return@forEach
+                    val lower = login.lowercase()
+                    metaUpdates[lower] = Triple(user.id, user.displayName, user.profileImageURL?.toString())
+                    val st = user.stream ?: return@forEach
+                    liveByLogin[lower] = Stream(
+                        id = st.id,
+                        channelId = user.id,
+                        channelLogin = login,
+                        channelName = user.displayName ?: login,
+                        channelImageURL = user.profileImageURL?.toString(),
+                        gameId = st.game?.id,
+                        gameSlug = st.game?.slug,
+                        gameName = st.game?.displayName,
+                        title = st.broadcaster?.broadcastSettings?.title,
+                        thumbnailURL = st.previewImageURL?.toString(),
+                        createdAt = st.createdAt?.toString(),
+                        viewerCount = st.viewersCount,
+                        tags = st.freeformTags?.mapNotNull { it?.name },
+                    )
+                }
+        }
+        if (metaUpdates.isNotEmpty()) {
+            com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.updateMetadataIfPresent(applicationContext, metaUpdates)
+        }
+
+        val followedSet = if (unfollowedOnly) {
+            val set = HashSet<String>()
+            followedJobToWait?.join()
+            followed.value.orEmpty().forEach { s ->
+                s.channelLogin?.lowercase()?.let { set.add(it) }
+            }
+            runCatching {
+                localChannelFollowsRepository.getAll().forEach { local ->
+                    local.userLogin?.lowercase()?.let { set.add(it) }
+                }
+            }
+            val setting = prefs.getString(C.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0
+            if (setting == 0 && !accountHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+                val remoteFollowed = graphQLRepository.fetchFollowedLoginsSubset(
+                    networkLibrary = networkLibrary,
+                    headers = accountHeaders,
+                    logins = entries.map { it.login }.distinct(),
+                )
+                remoteFollowed?.let { set.addAll(it) }
+            }
+            set
+        } else {
+            emptySet()
+        }
+
+        val refreshedEntries = com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.list(applicationContext)
+        recentChannels.value = refreshedEntries.mapNotNull { entry ->
+            val lower = entry.login.lowercase()
+            if (unfollowedOnly && lower in followedSet) return@mapNotNull null
+            val live = liveByLogin[lower]
+            if (live != null && com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.isCategoryBlocked(live.gameId, live.gameSlug, live.gameName)) {
+                return@mapNotNull null
+            }
+            com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem(
+                entry = entry,
+                liveStream = live,
             )
         }
     }
