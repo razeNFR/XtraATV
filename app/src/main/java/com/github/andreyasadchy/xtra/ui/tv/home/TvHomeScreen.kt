@@ -1073,10 +1073,10 @@ private fun HeroBanner(
                     drawRect(
                         brush = Brush.horizontalGradient(
                             0.00f to Color.Transparent,
-                            0.20f to Color(0x45FFFFFF),
-                            0.46f to Color(0xD9FFFFFF),
-                            0.70f to Color.White,
-                            0.90f to Color(0xD9FFFFFF),
+                            0.16f to Color(0x38FFFFFF),
+                            0.42f to Color(0xD0FFFFFF),
+                            0.68f to Color.White,
+                            0.88f to Color(0xCCFFFFFF),
                             1.00f to Color.Transparent,
                         ),
                         blendMode = BlendMode.DstIn,
@@ -1084,9 +1084,10 @@ private fun HeroBanner(
                     drawRect(
                         brush = Brush.verticalGradient(
                             0.00f to Color.Transparent,
-                            0.14f to Color(0xCCFFFFFF),
-                            0.34f to Color.White,
-                            0.64f to Color(0xD9FFFFFF),
+                            0.09f to Color(0x52FFFFFF),
+                            0.24f to Color(0xD9FFFFFF),
+                            0.44f to Color.White,
+                            0.66f to Color(0xD9FFFFFF),
                             0.88f to Color(0x40FFFFFF),
                             1.00f to Color.Transparent,
                         ),
@@ -1116,25 +1117,6 @@ private fun HeroBanner(
                     )
                 }
             }
-        }
-
-        // Soft, edge-free radial dark halo behind the spotlight text when a bright wallpaper is active
-        if (com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context)) {
-            Box(
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .fillMaxWidth(0.70f)
-                    .fillMaxHeight()
-                    .drawBehind {
-                        drawRect(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color(0xBD090910), Color(0x78090910), Color.Transparent),
-                                center = Offset(size.width * 0.34f, size.height * 0.52f),
-                                radius = maxOf(size.width * 0.68f, size.height * 0.85f),
-                            )
-                        )
-                    }
-            )
         }
 
         // Stream metadata and action pills on the left

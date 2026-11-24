@@ -572,7 +572,6 @@ class TvSettingsFragment : Fragment() {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (hasWallpaper) Modifier.background(Color(0x6608080F)) else Modifier)
                 .onKeyEvent { ev ->
                     ev.type == KeyEventType.KeyDown && (
                         ev.key == Key.DirectionUp ||
@@ -587,15 +586,15 @@ class TvSettingsFragment : Fragment() {
             // Left Column: Title, Search, 9 Categories
             Column(
                 modifier = Modifier
-                    .width(if (hasWallpaper) 278.dp else 264.dp)
+                    .width(if (hasWallpaper) 280.dp else 264.dp)
                     .fillMaxHeight()
                     .then(
                         if (hasWallpaper) {
                             Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xDB13121C))
-                                .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(16.dp))
-                                .padding(horizontal = 10.dp, vertical = 12.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(Color(0xD613121C))
+                                .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(24.dp))
+                                .padding(horizontal = 12.dp, vertical = 14.dp)
                         } else {
                             Modifier
                         }
@@ -787,16 +786,16 @@ class TvSettingsFragment : Fragment() {
                             updateBackCallback()
                         }
                     }
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (hasWallpaper) Color(0xE013121C) else Color(0x12FFFFFF))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(if (hasWallpaper) Color(0xD913121C) else Color(0x12FFFFFF))
                     .then(
                         if (hasWallpaper) {
-                            Modifier.border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(16.dp))
+                            Modifier.border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(24.dp))
                         } else {
                             Modifier
                         }
                     )
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                    .padding(start = 20.dp, end = 20.dp, top = 18.dp),
             ) {
                 when (activeSub) {
                     is SubScreen.CustomProxies -> CustomProxiesSubScreen(

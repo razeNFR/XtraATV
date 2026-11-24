@@ -61,6 +61,7 @@ class TvVolumePill(
     private var centerDownSeen = false
     private var centerLongHandled = false
     private var backDownSeen = false
+    private var navCloseKeyCode = 0
 
     private val autoCloseRunnable = Runnable {
         dismiss(restoreAnchorFocus = true)
@@ -92,6 +93,7 @@ class TvVolumePill(
         centerDownSeen = false
         centerLongHandled = false
         backDownSeen = false
+        navCloseKeyCode = 0
 
         val view = ensureView()
         view.beakCenterX = pillWidthPx / 2f
@@ -196,6 +198,13 @@ class TvVolumePill(
     }
 
     fun onKeyEvent(event: KeyEvent): Boolean {
+        if (navCloseKeyCode != 0 && event.keyCode == navCloseKeyCode) {
+            if (event.action == KeyEvent.ACTION_UP || event.action == KeyEvent.ACTION_CANCEL) {
+                navCloseKeyCode = 0
+            }
+            return true
+        }
+        navCloseKeyCode = 0
         if (!isShowing) return false
         val keyCode = event.keyCode
         val isSelect = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
@@ -261,8 +270,17 @@ class TvVolumePill(
             }
 
             keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_DPAD_UP -> {
-                if (event.action == KeyEvent.ACTION_DOWN) {
-                    dismiss(restoreAnchorFocus = true)
+                when (event.action) {
+                    KeyEvent.ACTION_DOWN -> {
+                        if (event.repeatCount == 0) {
+                            navCloseKeyCode = keyCode
+                            dismiss(restoreAnchorFocus = true)
+                        }
+                    }
+                    KeyEvent.ACTION_UP -> {
+                        navCloseKeyCode = 0
+                    }
+                    else -> navCloseKeyCode = 0
                 }
                 return true
             }

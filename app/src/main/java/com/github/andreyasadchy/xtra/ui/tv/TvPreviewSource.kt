@@ -20,9 +20,16 @@ object TvPreviewSource {
     // autoplay first: the player type of the previews on the website, it starts fast in low quality
     private val PLAYER_TYPES = listOf(
         "android" to "autoplay",
+        "web" to "picture-by-picture",
         "web" to "embed",
+        "web" to "thunderdome",
         "web" to "popout",
         "web" to "site",
+    )
+
+    data class BackupPlaylist(
+        val url: String,
+        val adFree: Boolean,
     )
 
     /** A list that plays previews: they are all stopped when a player opens. */
@@ -79,45 +86,106 @@ object TvPreviewSource {
 
     fun hasSound(context: Context) = context.prefs().getBoolean(C.UI_TV_PREVIEW_SOUND, false)
 
-    suspend fun getPlaylistUrl(context: Context, channelLogin: String): String? {
+    private suspend fun resolveSwapTypes(context: Context, includeSiteTail: Boolean): List<Pair<String, String>> {
+        val xtraModule = (context.applicationContext as XtraApp).xtraModule
+        val configured = runCatching {
+            xtraModule.playerRepository.getVideoSwapItems(context)
+                .filter { it.enabled && !it.platform.isNullOrBlank() && !it.playerType.isNullOrBlank() }
+                .sortedBy { it.position }
+                .map { it.platform!! to it.playerType!! }
+        }.getOrDefault(emptyList())
+        val base = (configured + com.github.andreyasadchy.xtra.repository.PlayerRepository.DEFAULT_VIDEO_SWAP).distinct()
+        return if (includeSiteTail) (base + ("web" to "site")).distinct() else base
+    }
+
+    private suspend fun fetchStreamCandidateUrl(
+        context: Context,
+        channelLogin: String,
+        platform: String,
+        playerType: String,
+        supportedCodecs: String?,
+        includeAccountToken: Boolean,
+    ): String? {
         val xtraModule = (context.applicationContext as XtraApp).xtraModule
         val prefs = context.prefs()
-        val adblock = prefs.getBoolean(C.PLAYER_ADBLOCK, true)
-        val types = if (adblock) PLAYER_TYPES else listOf((prefs.getString(C.TOKEN_PLATFORM, "web") ?: "web") to (prefs.getString(C.TOKEN_PLAYER_TYPE, "site") ?: "site"))
+        return try {
+            xtraModule.playerRepository.loadStreamPlaylistUrl(
+                context = context,
+                networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                gqlHeaders = if (platform == "web") {
+                    TwitchApiHelper.getGQLWebHeaders(context, includeAccountToken)
+                } else {
+                    TwitchApiHelper.getGQLHeaders(context, includeAccountToken)
+                },
+                channelLogin = channelLogin,
+                platform = platform,
+                playerType = playerType,
+                supportedCodecs = supportedCodecs,
+                proxyPlaybackAccessToken = false,
+                proxyHost = null,
+                proxyPort = null,
+                proxyUser = null,
+                proxyPassword = null,
+                proxyTimeout = null,
+                enableIntegrity = false,
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun getPlaylistUrl(context: Context, channelLogin: String): String? {
+        val app = context.applicationContext as XtraApp
+        val xtraModule = app.xtraModule
+        val prefs = context.prefs()
+        if (TvExperimentalAdblock.isAnyProxyEnabled(context)) {
+            runCatching {
+                com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.loadStreamPlaylistUrl(app, xtraModule, channelLogin)
+            }.getOrNull()?.let { return it }
+        }
+        val adblock = TvExperimentalAdblock.isSwapAdblockEnabled(context)
+        if (!adblock) {
+            val platform = prefs.getString(C.TOKEN_PLATFORM, "web") ?: "web"
+            val playerType = prefs.getString(C.TOKEN_PLAYER_TYPE, "site") ?: "site"
+            val includeToken = prefs.getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)
+            return fetchStreamCandidateUrl(context, channelLogin, platform, playerType, "h264", includeToken)
+        }
+        val types = resolveSwapTypes(context, includeSiteTail = true)
         var fallback: String? = null
+        // Fetch Video Swap candidates anonymously so Twitch does not stitch account-targeted ads onto every backup
         for ((platform, playerType) in types) {
-            val url = try {
-                xtraModule.playerRepository.loadStreamPlaylistUrl(
-                    context = context,
-                    networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    gqlHeaders = if (platform == "web") {
-                        TwitchApiHelper.getGQLWebHeaders(context, prefs.getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true))
-                    } else {
-                        TwitchApiHelper.getGQLHeaders(context, prefs.getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true))
-                    },
-                    channelLogin = channelLogin,
-                    platform = platform,
-                    playerType = playerType,
-                    supportedCodecs = "h264",
-                    proxyPlaybackAccessToken = false,
-                    proxyHost = null,
-                    proxyPort = null,
-                    proxyUser = null,
-                    proxyPassword = null,
-                    proxyTimeout = null,
-                    enableIntegrity = false,
-                )
-            } catch (e: Exception) {
-                null
-            } ?: continue
-            if (!adblock) {
-                return url
-            }
+            val url = fetchStreamCandidateUrl(
+                context = context,
+                channelLogin = channelLogin,
+                platform = platform,
+                playerType = playerType,
+                supportedCodecs = "h264",
+                includeAccountToken = false,
+            ) ?: continue
             if (fallback == null) {
                 fallback = url
             }
             if (!hasAds(xtraModule.okHttpClient.value, url)) {
                 return url
+            }
+        }
+        // Subscriber-only / restricted broadcast fallback if anonymous requests returned nothing
+        if (fallback == null && prefs.getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)) {
+            for ((platform, playerType) in types) {
+                val url = fetchStreamCandidateUrl(
+                    context = context,
+                    channelLogin = channelLogin,
+                    platform = platform,
+                    playerType = playerType,
+                    supportedCodecs = "h264",
+                    includeAccountToken = true,
+                ) ?: continue
+                if (fallback == null) {
+                    fallback = url
+                }
+                if (!hasAds(xtraModule.okHttpClient.value, url)) {
+                    return url
+                }
             }
         }
         return fallback
@@ -126,44 +194,53 @@ object TvPreviewSource {
     /**
      * Multi-stream: playlist of the backup player types while an ad plays on the normal one, autoplay first like the
      * video swap of the player (their qualities are limited, it is only for the time of the ad).
+     * Requested anonymously (`includeAccountToken = false`) so Twitch does not stitch account-targeted ads onto backups.
      */
-    suspend fun getBackupPlaylistUrl(context: Context, channelLogin: String): String? {
+    suspend fun findBackupPlaylist(context: Context, channelLogin: String): BackupPlaylist? {
         val xtraModule = (context.applicationContext as XtraApp).xtraModule
         val prefs = context.prefs()
+        val codecs = prefs.getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264")
+        val types = resolveSwapTypes(context, includeSiteTail = false)
         var fallback: String? = null
-        for ((platform, playerType) in listOf("android" to "autoplay", "web" to "embed")) {
-            val url = try {
-                xtraModule.playerRepository.loadStreamPlaylistUrl(
-                    context = context,
-                    networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    gqlHeaders = if (platform == "web") {
-                        TwitchApiHelper.getGQLWebHeaders(context, prefs.getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true))
-                    } else {
-                        TwitchApiHelper.getGQLHeaders(context, prefs.getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true))
-                    },
-                    channelLogin = channelLogin,
-                    platform = platform,
-                    playerType = playerType,
-                    supportedCodecs = prefs.getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
-                    proxyPlaybackAccessToken = false,
-                    proxyHost = null,
-                    proxyPort = null,
-                    proxyUser = null,
-                    proxyPassword = null,
-                    proxyTimeout = null,
-                    enableIntegrity = false,
-                )
-            } catch (e: Exception) {
-                null
-            } ?: continue
+        for ((platform, playerType) in types) {
+            val url = fetchStreamCandidateUrl(
+                context = context,
+                channelLogin = channelLogin,
+                platform = platform,
+                playerType = playerType,
+                supportedCodecs = codecs,
+                includeAccountToken = false,
+            ) ?: continue
             if (fallback == null) {
                 fallback = url
             }
             if (!hasAds(xtraModule.okHttpClient.value, url)) {
-                return url
+                return BackupPlaylist(url = url, adFree = true)
             }
         }
-        return fallback
+        if (fallback == null && prefs.getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)) {
+            for ((platform, playerType) in types) {
+                val url = fetchStreamCandidateUrl(
+                    context = context,
+                    channelLogin = channelLogin,
+                    platform = platform,
+                    playerType = playerType,
+                    supportedCodecs = codecs,
+                    includeAccountToken = true,
+                ) ?: continue
+                if (fallback == null) {
+                    fallback = url
+                }
+                if (!hasAds(xtraModule.okHttpClient.value, url)) {
+                    return BackupPlaylist(url = url, adFree = true)
+                }
+            }
+        }
+        return fallback?.let { BackupPlaylist(url = it, adFree = false) }
+    }
+
+    suspend fun getBackupPlaylistUrl(context: Context, channelLogin: String): String? {
+        return findBackupPlaylist(context, channelLogin)?.url
     }
 
     /** True when the stream of this playlist plays an ad now. */
@@ -177,7 +254,10 @@ object TvPreviewSource {
             val multivariant = client.newCall(Request.Builder().url(multivariantUrl).build()).execute().use { it.body.string() }
             val mediaUrl = multivariant.lineSequence().lastOrNull { it.startsWith("http") } ?: return@withContext false
             val media = client.newCall(Request.Builder().url(mediaUrl).build()).execute().use { it.body.string() }
-            media.contains("stitched-ad", true) || media.contains("X-TV-TWITCH-AD", true) || media.contains("twitch-stitched-ad", true)
+            media.contains("stitched-ad", true) ||
+                media.contains("X-TV-TWITCH-AD", true) ||
+                media.contains("twitch-stitched-ad", true) ||
+                media.contains("COMMERCIAL-BREAK", true)
         } catch (e: Exception) {
             false
         }

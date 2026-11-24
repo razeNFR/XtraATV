@@ -2015,6 +2015,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             btn.setColorFilter(Color.WHITE)
         } else {
             btn.setBackgroundResource(R.drawable.tv_player_button_background)
+            btn.refreshDrawableState()
+            btn.jumpDrawablesToCurrentState()
             btn.setColorFilter(
                 when {
                     btn.hasFocus() -> com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight
