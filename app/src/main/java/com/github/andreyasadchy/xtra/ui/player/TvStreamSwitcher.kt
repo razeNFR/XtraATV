@@ -209,9 +209,10 @@ object TvStreamSwitcher {
             -1
         }
         val originFallbackTitle = activity.getString(if (selection != null) R.string.tv_switch_suggested else R.string.tv_switch_current)
+        val originFallbackIcon = if (selection != null) R.drawable.tv_ic_multistream else R.drawable.tv_ic_list
         val baseEntries = when {
-            effectiveRows.isEmpty() -> listOf(TabEntry(originFallbackTitle, isOrigin = true))
-            selection != null -> listOf(TabEntry(originFallbackTitle, isOrigin = true)) + effectiveRows.map {
+            effectiveRows.isEmpty() -> listOf(TabEntry(originFallbackTitle, isOrigin = true, iconRes = originFallbackIcon))
+            selection != null -> listOf(TabEntry(originFallbackTitle, isOrigin = true, iconRes = originFallbackIcon)) + effectiveRows.map {
                 TabEntry(it.title, row = it, iconRes = it.iconRes)
             }
             omitEmptyCurrentTab -> effectiveRows.map {
@@ -231,7 +232,7 @@ object TvStreamSwitcher {
                     if (coStreamRow != null) {
                         add(TabEntry(coStreamRow.title, row = coStreamRow, iconRes = coStreamRow.iconRes))
                     }
-                    add(TabEntry(originFallbackTitle, isOrigin = true))
+                    add(TabEntry(originFallbackTitle, isOrigin = true, iconRes = originFallbackIcon))
                     restRows.forEach { add(TabEntry(it.title, row = it, iconRes = it.iconRes)) }
                 }
             }

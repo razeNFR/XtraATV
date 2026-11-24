@@ -959,7 +959,8 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         scheduledMuted = false
         previewJob?.cancel()
         previewJob = null
-        if (previewLogin.value != null && !previewMuted) {
+        val wasPlaying = previewLogin.value != null
+        if (wasPlaying && !previewMuted) {
             context?.let { com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.notifyPreviewSound(it, false) }
         }
         previewLogin.value = null
@@ -967,8 +968,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             previewPlayer.value?.release()
             previewPlayer.value = null
         } else {
-            previewPlayer.value?.stop()
-            previewPlayer.value?.clearMediaItems()
+            val player = previewPlayer.value
+            if (player != null && (wasPlaying || player.mediaItemCount > 0)) {
+                player.stop()
+                player.clearMediaItems()
+            }
         }
     }
 

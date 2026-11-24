@@ -344,29 +344,54 @@ object TvStreamSources {
             when {
                 entry.id == TvSwitcherRows.ROW_FOLLOWED -> {
                     if (hasFollows && seenKinds.add("followed")) {
-                        rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.tv_followed_live), { followed(context) }, "followed")
+                        rows += Row(
+                            title = context.getString(com.github.andreyasadchy.xtra.R.string.tv_followed_live),
+                            source = { followed(context) },
+                            kind = "followed",
+                            iconRes = com.github.andreyasadchy.xtra.R.drawable.tv_ic_heart,
+                        )
                     }
                 }
                 entry.id == TvSwitcherRows.ROW_FAVORITES -> {
                     if (hasFavorites && seenKinds.add("favorites")) {
-                        rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.tv_home_row_favorites), { favorites(context) }, "favorites")
+                        rows += Row(
+                            title = context.getString(com.github.andreyasadchy.xtra.R.string.tv_home_row_favorites),
+                            source = { favorites(context) },
+                            kind = "favorites",
+                            iconRes = com.github.andreyasadchy.xtra.R.drawable.tv_ic_star,
+                        )
                     }
                 }
                 entry.id == TvSwitcherRows.ROW_RECOMMENDED -> {
                     if (gqlLoggedIn && seenKinds.add("recommended")) {
-                        rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.tv_sort_recommended), { recommended(context) }, "recommended")
+                        rows += Row(
+                            title = context.getString(com.github.andreyasadchy.xtra.R.string.tv_sort_recommended),
+                            source = { recommended(context) },
+                            kind = "recommended",
+                            iconRes = com.github.andreyasadchy.xtra.R.drawable.tv_ic_streamers,
+                        )
                     }
                 }
                 entry.id == TvSwitcherRows.ROW_POPULAR -> {
                     if (seenKinds.add("popular")) {
-                        rows += Row(context.getString(com.github.andreyasadchy.xtra.R.string.popular), { popular(context) }, "popular")
+                        rows += Row(
+                            title = context.getString(com.github.andreyasadchy.xtra.R.string.popular),
+                            source = { popular(context) },
+                            kind = "popular",
+                            iconRes = com.github.andreyasadchy.xtra.R.drawable.tv_ic_trending,
+                        )
                     }
                 }
                 entry.id == TvSwitcherRows.ROW_CURRENT_GAME -> {
                     if (current != null && !current.gameName.isNullOrBlank()) {
                         val kind = "game:" + (current.gameId ?: current.gameSlug ?: current.gameName)
                         if (seenKinds.add(kind)) {
-                            rows += Row(current.gameName!!, { game(context, current.gameId, current.gameSlug, current.gameName) }, kind)
+                            rows += Row(
+                                title = current.gameName!!,
+                                source = { game(context, current.gameId, current.gameSlug, current.gameName) },
+                                kind = kind,
+                                iconRes = com.github.andreyasadchy.xtra.R.drawable.tv_ic_gamepad,
+                            )
                         }
                     }
                 }
@@ -376,9 +401,10 @@ object TvStreamSources {
                         val kind = "game:${cat.gameId}"
                         if (seenKinds.add(kind)) {
                             rows += Row(
-                                cat.name,
-                                { game(context, cat.gameId, cat.slug.ifBlank { null }, cat.name, cat.langMode) },
-                                kind,
+                                title = cat.name,
+                                source = { game(context, cat.gameId, cat.slug.ifBlank { null }, cat.name, cat.langMode) },
+                                kind = kind,
+                                iconRes = com.github.andreyasadchy.xtra.R.drawable.tv_ic_gamepad,
                             )
                         }
                     } else {
@@ -387,9 +413,10 @@ object TvStreamSources {
                             val kind = "language:$language"
                             if (seenKinds.add(kind)) {
                                 rows += Row(
-                                    context.getString(com.github.andreyasadchy.xtra.R.string.tv_popular_in, languageName(context, language)),
-                                    { popular(context, listOf(language)) },
-                                    kind,
+                                    title = context.getString(com.github.andreyasadchy.xtra.R.string.tv_popular_in, languageName(context, language)),
+                                    source = { popular(context, listOf(language)) },
+                                    kind = kind,
+                                    iconRes = com.github.andreyasadchy.xtra.R.drawable.tv_ic_globe,
                                 )
                             }
                         }
