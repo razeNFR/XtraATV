@@ -360,9 +360,15 @@ object TvResumeHistory {
         val durationSeconds: Int?,
         val positionMs: Long,
         val type: String?,
+        val updatedAtMs: Long = 0L,
     )
 
-    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(FILE + TvAccounts.storageSuffix(context), Context.MODE_PRIVATE)
+
+    fun notifyAccountSwitched() {
+        changes.value = System.nanoTime()
+    }
 
     @Synchronized
     fun list(context: Context): List<Item> {
@@ -383,6 +389,7 @@ object TvResumeHistory {
                     durationSeconds = item.optInt("duration", 0).takeIf { it > 0 },
                     positionMs = item.optLong("position", 0),
                     type = item.optString("type").ifBlank { null },
+                    updatedAtMs = item.optLong("updatedAt", 0L),
                 )
             }
         }
@@ -395,8 +402,42 @@ object TvResumeHistory {
         val others = list(context).filter { it.id != item.id }
         val finished = durationMs > 0 && item.positionMs > durationMs - 60_000L
         val started = item.positionMs >= 30_000L
-        val items = if (!finished && started) listOf(item) + others else others
+        val stamped = if (item.updatedAtMs > 0L) item else Item(
+            id = item.id,
+            title = item.title,
+            channelId = item.channelId,
+            channelLogin = item.channelLogin,
+            channelName = item.channelName,
+            channelImage = item.channelImage,
+            gameId = item.gameId,
+            gameName = item.gameName,
+            thumbnail = item.thumbnail,
+            createdAt = item.createdAt,
+            durationSeconds = item.durationSeconds,
+            positionMs = item.positionMs,
+            type = item.type,
+            updatedAtMs = System.currentTimeMillis(),
+        )
+        val items = if (!finished && started) listOf(stamped) + others else others
         write(context, items.take(MAX))
+    }
+
+    @Synchronized
+    fun replaceAll(context: Context, items: List<Item>) {
+        val capped = items.take(MAX)
+        val existing = list(context)
+        val same = existing.size == capped.size && existing.indices.all { idx ->
+            val a = existing[idx]
+            val b = capped[idx]
+            a.id == b.id &&
+                a.positionMs == b.positionMs &&
+                a.title == b.title &&
+                a.thumbnail == b.thumbnail &&
+                a.channelImage == b.channelImage
+        }
+        if (!same) {
+            write(context, capped)
+        }
     }
 
     @Synchronized
@@ -421,6 +462,7 @@ object TvResumeHistory {
                 put("duration", item.durationSeconds ?: 0)
                 put("position", item.positionMs)
                 put("type", item.type ?: "")
+                put("updatedAt", item.updatedAtMs)
             })
         }
         prefs(context).edit { putString(ITEMS, array.toString()) }

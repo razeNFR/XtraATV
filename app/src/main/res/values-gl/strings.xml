@@ -1394,4 +1394,15 @@
     <string name="tv_mini_player_auto_slide">Desprazar automaticamente o minirreprodutor</string>
     <string name="tv_mini_player_auto_slide_summary">Desliza o minirreprodutor ao lado oposto cando o elemento seleccionado pasa por debaixo</string>
     <string name="tv_section_hidden_toast">«%1$s» está oculta no menú lateral (reactívaa nos axustes)</string>
+    <string name="tv_home_row_recent_channels">Canles vistas recentemente</string>
+    <string name="tv_recent_channels_filter">Canles vistas recentemente</string>
+    <string name="tv_recent_channels_filter_all">Todas as canles</string>
+    <string name="tv_recent_channels_filter_unfollowed">Só canles non seguidas</string>
+    <string name="tv_recent_channels_remove">Quitar das recentes</string>
+    <string name="tv_recent_channels_removed">%1$s quitouse das canles recentes</string>
+    <string name="tv_recent_channels_clear">Limpar canles recentes</string>
+    <string name="tv_recent_channels_clear_summary">Elimina todas as canles da fila Canles vistas recentemente</string>
+    <string name="tv_recent_channels_cleared">Canles recentes limpadas</string>
+    <string name="tv_sync_vod_history">Sincronizar o historial de VOD con Twitch</string>
+    <string name="tv_sync_vod_history_summary">Mantén sincronizadas as posicións dos VOD e Seguir vendo entre PC, móbil e TV</string>
 </resources>

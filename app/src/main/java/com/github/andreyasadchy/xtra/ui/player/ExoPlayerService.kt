@@ -350,6 +350,41 @@ class ExoPlayerService : BasePlaybackService() {
                 updatePlaybackState()
             }
         }
+        // TV "Recently watched channels": record a live channel only after 30s of actual playback on that stream
+        lifecycleScope.launch {
+            var trackedGen = -1
+            var trackedLogin: String? = null
+            var accumulatedPlayMs = 0L
+            var recorded = false
+            while (true) {
+                delay(5_000L)
+                val login = channelLogin?.takeIf { it.isNotBlank() }
+                if (isTvDevice && type == STREAM && login != null && visiblePlayer?.isPlaying == true) {
+                    if (streamGeneration != trackedGen || !login.equals(trackedLogin, ignoreCase = true)) {
+                        trackedGen = streamGeneration
+                        trackedLogin = login
+                        accumulatedPlayMs = 5_000L
+                        recorded = false
+                    } else {
+                        accumulatedPlayMs += 5_000L
+                    }
+                    if (!recorded && accumulatedPlayMs >= 30_000L) {
+                        recorded = true
+                        com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.recordWatched(
+                            this@ExoPlayerService,
+                            channelId = channelId,
+                            login = login,
+                            displayName = channelName,
+                            avatarUrl = channelImage,
+                        )
+                    }
+                } else if (type != STREAM || login == null) {
+                    trackedLogin = null
+                    accumulatedPlayMs = 0L
+                    recorded = false
+                }
+            }
+        }
         startLiveWatchdog()
     }
 
@@ -2048,7 +2083,17 @@ class ExoPlayerService : BasePlaybackService() {
     private suspend fun loadVideo(restorePauseState: Boolean = false) {
         videoId?.let { videoId ->
             val playbackPosition = (if (prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
-                videoId.toLongOrNull()?.let { xtraModule.playerRepository.getVideoPosition(it)?.position }
+                val localPos = videoId.toLongOrNull()?.let { xtraModule.playerRepository.getVideoPosition(it)?.position }
+                if (isTvDevice && savedPosition == null) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.resolvePositionOnOpen(
+                        context = this@ExoPlayerService,
+                        xtraModule = xtraModule,
+                        videoId = videoId,
+                        localDbPositionMs = localPos,
+                    )
+                } else {
+                    localPos
+                }
             } else {
                 null
             } ?: savedPosition ?: 0L).coerceAtLeast(0L)
@@ -5088,6 +5133,15 @@ class ExoPlayerService : BasePlaybackService() {
                                     xtraModule.playerRepository.saveVideoPosition(VideoPosition(id, currentPosition))
                                 }
                                 saveTvResume(id, currentPosition)
+                                if (isTvDevice) {
+                                    com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pushPositionAsync(
+                                        context = this,
+                                        xtraModule = xtraModule,
+                                        videoId = videoId,
+                                        positionMs = currentPosition,
+                                        force = true,
+                                    )
+                                }
                             }
                         }
                         OFFLINE_VIDEO -> {
@@ -5144,6 +5198,15 @@ class ExoPlayerService : BasePlaybackService() {
                                         xtraModule.playerRepository.saveVideoPosition(VideoPosition(id, currentPosition))
                                     }
                                     saveTvResume(id, currentPosition)
+                                    if (isTvDevice) {
+                                        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pushPositionAsync(
+                                            context = this,
+                                            xtraModule = xtraModule,
+                                            videoId = videoId,
+                                            positionMs = currentPosition,
+                                            force = isPaused,
+                                        )
+                                    }
                                 }
                             }
                             OFFLINE_VIDEO -> {

@@ -86,6 +86,7 @@ object TvHomeRows {
     const val ROW_POPULAR = "popular"
     const val ROW_RECOMMENDED = "recommended"
     const val ROW_RESUME = "resume"
+    const val ROW_RECENT_CHANNELS = "recent_channels"
     const val ROW_FOLLOWED_VIDEOS = "followed_videos"
     const val ROW_FOLLOWED_CLIPS = "followed_clips"
     const val ROW_FOLLOWED_GAMES = "followed_games"
@@ -103,6 +104,7 @@ object TvHomeRows {
         ROW_POPULAR,
         ROW_RECOMMENDED,
         ROW_RESUME,
+        ROW_RECENT_CHANNELS,
         ROW_FOLLOWED_VIDEOS,
         ROW_FOLLOWED_CLIPS,
         ROW_FOLLOWED_GAMES,
@@ -172,6 +174,7 @@ object TvHomeRows {
             }
             add(Entry(ROW_RECOMMENDED, false))
             add(Entry(ROW_RESUME, true))
+            add(Entry(ROW_RECENT_CHANNELS, true))
             add(Entry(ROW_FOLLOWED_VIDEOS, videosEnabled))
             add(Entry(ROW_FOLLOWED_CLIPS, false))
             add(Entry(ROW_FOLLOWED_GAMES, false))
@@ -182,7 +185,7 @@ object TvHomeRows {
     }
 
     private fun defaultEnabledForBuiltin(context: Context, id: String): Boolean = when (id) {
-        ROW_FOLLOWED, ROW_POPULAR, ROW_RESUME, ROW_STATS, ROW_GAMES -> true
+        ROW_FOLLOWED, ROW_POPULAR, ROW_RESUME, ROW_RECENT_CHANNELS, ROW_STATS, ROW_GAMES -> true
         ROW_MULTISTREAMS -> context.prefs().getBoolean(C.TV_HOME_MULTISTREAM, true)
         ROW_FOLLOWED_VIDEOS -> context.prefs().getBoolean(C.TV_HOME_FOLLOWED_VIDEOS, true)
         else -> false
@@ -335,6 +338,7 @@ object TvHomeRows {
         id == ROW_POPULAR -> R.drawable.tv_ic_trending
         id == ROW_RECOMMENDED -> R.drawable.tv_ic_streamers
         id == ROW_RESUME -> R.drawable.tv_ic_history
+        id == ROW_RECENT_CHANNELS -> R.drawable.tv_ic_history
         id == ROW_FOLLOWED_VIDEOS -> R.drawable.tv_ic_video_library
         id == ROW_FOLLOWED_CLIPS -> R.drawable.tv_ic_play
         id == ROW_FOLLOWED_GAMES -> R.drawable.tv_ic_heart
@@ -356,6 +360,16 @@ object TvHomeRows {
         }
         parseLanguage(id)?.let { code ->
             return context.getString(R.string.tv_popular_in, languageDisplayName(context, code))
+        }
+        if (id == ROW_RECENT_CHANNELS) {
+            val base = context.getString(R.string.tv_home_row_recent_channels)
+            return if (includeLangModeHint &&
+                com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.filterMode(context) == com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.FILTER_UNFOLLOWED
+            ) {
+                "$base (${context.getString(R.string.tv_recent_channels_filter_unfollowed)})"
+            } else {
+                base
+            }
         }
         return when (id) {
             ROW_FOLLOWED -> context.getString(R.string.tv_followed_live)
@@ -668,6 +682,42 @@ object TvHomeRows {
                         onUpdate(next, item.id, entries.lastIndex)
                     }
                 )
+            }
+            if (item.id == ROW_RECENT_CHANNELS) {
+                val unfollowedOnly = com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.filterMode(context) ==
+                    com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.FILTER_UNFOLLOWED
+                add(
+                    RowOption(
+                        label = context.getString(
+                            if (unfollowedOnly) R.string.tv_recent_channels_filter_all
+                            else R.string.tv_recent_channels_filter_unfollowed
+                        ),
+                        icon = R.drawable.tv_ic_tune,
+                    ) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.setFilterMode(
+                            context,
+                            if (unfollowedOnly) com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.FILTER_ALL
+                            else com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.FILTER_UNFOLLOWED,
+                        )
+                        onUpdate(entries, item.id, -1)
+                    }
+                )
+                if (com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.count(context) > 0) {
+                    add(
+                        RowOption(
+                            label = context.getString(R.string.tv_recent_channels_clear),
+                            icon = R.drawable.tv_ic_delete,
+                        ) {
+                            com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.clear(context)
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                                context,
+                                R.string.tv_recent_channels_cleared,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            onUpdate(entries, item.id, -1)
+                        }
+                    )
+                }
             }
             if (isRemovable(item.id)) {
                 add(

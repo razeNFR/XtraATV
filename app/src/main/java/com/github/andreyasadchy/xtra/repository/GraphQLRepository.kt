@@ -3192,4 +3192,224 @@ class GraphQLRepository(
             }
         }.getOrDefault(PollPredictionActionResult(false, "NETWORK_ERROR"))
     }
+
+    data class RemoteViewedVideo(
+        val id: String,
+        val title: String?,
+        val channelId: String?,
+        val channelLogin: String?,
+        val channelName: String?,
+        val channelImageUrl: String?,
+        val gameId: String?,
+        val gameName: String?,
+        val thumbnailUrl: String?,
+        val createdAt: String?,
+        val durationSeconds: Int?,
+        val broadcastType: String?,
+        val positionSeconds: Int,
+        val updatedAtMs: Long,
+    )
+
+    data class SingleVideoViewingHistory(
+        val positionSeconds: Int,
+        val updatedAtMs: Long,
+        val durationSeconds: Int?,
+    )
+
+    suspend fun fetchViewedVideos(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        limit: Int = 25,
+    ): List<RemoteViewedVideo>? = withContext(Dispatchers.IO) {
+        if (headers[C.HEADER_TOKEN].isNullOrBlank()) return@withContext null
+        val rawBody = buildJsonObject {
+            put(
+                "query",
+                "query(\$limit: Int!) { currentUser { viewedVideos(first: \$limit) { edges { history { position updatedAt } node { id title broadcastType createdAt publishedAt lengthSeconds previewThumbnailURL(width: 640, height: 360) owner { id login displayName profileImageURL(width: 300) } game { id displayName name } } } } } }",
+            )
+            putJsonObject("variables") {
+                put("limit", limit)
+            }
+        }.toString()
+        val persistedBody = buildJsonObject {
+            put("operationName", "ResumeWatchingVideosQuery")
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", "1543abd5de45fdef0ab9715cc52aafbc5cb45b43735b2ceedffbab2d92689dd2")
+                }
+            }
+            putJsonObject("variables") {
+                put("limit", limit)
+            }
+        }.toString()
+
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+            fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.intOrNull
+
+            var raw = sendPersistedQuery(networkLibrary, headers, rawBody)
+            var parsed = json.parseToJsonElement(raw)
+            var root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
+            var currentUser = root?.get("data").obj()?.get("currentUser").obj()
+            if (currentUser == null && (raw.contains("PersistedQuery") || root?.get("errors") != null)) {
+                raw = sendPersistedQuery(networkLibrary, headers, persistedBody)
+                parsed = json.parseToJsonElement(raw)
+                root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
+                currentUser = root?.get("data").obj()?.get("currentUser").obj()
+            }
+            if (currentUser == null) return@runCatching null
+            val edges = currentUser["viewedVideos"].obj()?.get("edges").arr() ?: return@runCatching emptyList()
+            edges.mapNotNull { edgeEl ->
+                val edge = edgeEl.obj() ?: return@mapNotNull null
+                val node = edge["node"].obj() ?: return@mapNotNull null
+                val id = node["id"].str()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val history = edge["history"].obj()
+                    ?: node["self"].obj()?.get("viewingHistory").obj()
+                    ?: return@mapNotNull null
+                val posSec = history["position"].int()
+                    ?: history["position"].str()?.toDoubleOrNull()?.toInt()
+                    ?: return@mapNotNull null
+                val updatedAtMs = history["updatedAt"].str()
+                    ?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                    ?: 0L
+                val owner = node["owner"].obj()
+                val game = node["game"].obj()
+                RemoteViewedVideo(
+                    id = id,
+                    title = node["title"].str()?.takeIf { it.isNotBlank() },
+                    channelId = owner?.get("id").str()?.takeIf { it.isNotBlank() },
+                    channelLogin = owner?.get("login").str()?.takeIf { it.isNotBlank() },
+                    channelName = owner?.get("displayName").str()?.takeIf { it.isNotBlank() },
+                    channelImageUrl = owner?.get("profileImageURL").str()?.takeIf { it.isNotBlank() },
+                    gameId = game?.get("id").str()?.takeIf { it.isNotBlank() },
+                    gameName = (game?.get("displayName").str() ?: game?.get("name").str())?.takeIf { it.isNotBlank() },
+                    thumbnailUrl = node["previewThumbnailURL"].str()?.takeIf { it.isNotBlank() },
+                    createdAt = (node["createdAt"].str() ?: node["publishedAt"].str())?.takeIf { it.isNotBlank() },
+                    durationSeconds = node["lengthSeconds"].int()?.takeIf { it > 0 },
+                    broadcastType = node["broadcastType"].str()?.takeIf { it.isNotBlank() },
+                    positionSeconds = posSec.coerceAtLeast(0),
+                    updatedAtMs = updatedAtMs,
+                )
+            }
+        }.getOrNull()
+    }
+
+    suspend fun fetchSingleVideoViewingHistory(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        videoId: String,
+    ): SingleVideoViewingHistory? = withContext(Dispatchers.IO) {
+        if (videoId.isBlank() || headers[C.HEADER_TOKEN].isNullOrBlank()) return@withContext null
+        val body = buildJsonObject {
+            put(
+                "query",
+                "query(\$id: ID!) { video(id: \$id) { lengthSeconds self { viewingHistory { position updatedAt } } } }",
+            )
+            putJsonObject("variables") {
+                put("id", videoId)
+            }
+        }.toString()
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+            fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.intOrNull
+
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val parsed = json.parseToJsonElement(raw)
+            val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
+            val video = root?.get("data").obj()?.get("video").obj() ?: return@runCatching null
+            val vh = video["self"].obj()?.get("viewingHistory").obj() ?: return@runCatching null
+            val posSec = vh["position"].int()
+                ?: vh["position"].str()?.toDoubleOrNull()?.toInt()
+                ?: return@runCatching null
+            val updatedAtMs = vh["updatedAt"].str()
+                ?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                ?: 0L
+            SingleVideoViewingHistory(
+                positionSeconds = posSec.coerceAtLeast(0),
+                updatedAtMs = updatedAtMs,
+                durationSeconds = video["lengthSeconds"].int()?.takeIf { it > 0 },
+            )
+        }.getOrNull()
+    }
+
+    suspend fun updateViewedVideoPosition(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        userId: String,
+        videoId: String,
+        positionSeconds: Int,
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (userId.isBlank() || videoId.isBlank() || headers[C.HEADER_TOKEN].isNullOrBlank()) {
+            return@withContext false
+        }
+        val body = buildJsonObject {
+            put("operationName", "XtraUpdateUserViewedVideo")
+            put(
+                "query",
+                "mutation XtraUpdateUserViewedVideo(\$input: UpdateUserViewedVideoInput!) { updateUserViewedVideo(input: \$input) { video { id } } }",
+            )
+            putJsonObject("variables") {
+                putJsonObject("input") {
+                    put("userID", userId)
+                    put("videoID", videoId)
+                    put("position", positionSeconds.coerceAtLeast(0))
+                    put("videoType", "VOD")
+                }
+            }
+        }.toString()
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val parsed = json.parseToJsonElement(raw)
+            val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj() ?: return@runCatching false
+            if (root["errors"].arr()?.isNotEmpty() == true) return@runCatching false
+            root["data"].obj()?.get("updateUserViewedVideo") != null
+        }.getOrDefault(false)
+    }
+
+    suspend fun fetchFollowedLoginsSubset(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        logins: List<String>,
+    ): Set<String>? = withContext(Dispatchers.IO) {
+        if (logins.isEmpty() || headers[C.HEADER_TOKEN].isNullOrBlank()) return@withContext null
+        val body = buildJsonObject {
+            put(
+                "query",
+                "query(\$logins: [String!]!) { users(logins: \$logins) { login self { follower { followedAt } } } }",
+            )
+            putJsonObject("variables") {
+                putJsonArray("logins") {
+                    logins.forEach { add(it) }
+                }
+            }
+        }.toString()
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.arr(): JsonArray? = this as? JsonArray
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val parsed = json.parseToJsonElement(raw)
+            val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj() ?: return@runCatching null
+            val users = root["data"].obj()?.get("users").arr() ?: return@runCatching null
+            val followed = HashSet<String>()
+            users.forEach { uEl ->
+                val u = uEl.obj() ?: return@forEach
+                val login = u["login"].str()?.lowercase() ?: return@forEach
+                val followedAt = u["self"].obj()?.get("follower").obj()?.get("followedAt").str()
+                if (!followedAt.isNullOrBlank()) {
+                    followed.add(login)
+                }
+            }
+            followed
+        }.getOrNull()
+    }
 }

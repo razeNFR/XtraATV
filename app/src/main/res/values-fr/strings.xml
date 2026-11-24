@@ -1394,4 +1394,15 @@
     <string name="tv_mini_player_auto_slide">Décaler automatiquement le mini-lecteur</string>
     <string name="tv_mini_player_auto_slide_summary">Glisse le mini-lecteur de l\'autre côté en bas lorsque l\'élément sélectionné passe dessous</string>
     <string name="tv_section_hidden_toast">La page « %1$s » est masquée dans le menu latéral (réactivez-la dans les paramètres)</string>
+    <string name="tv_home_row_recent_channels">Chaînes récemment regardées</string>
+    <string name="tv_recent_channels_filter">Chaînes récemment regardées</string>
+    <string name="tv_recent_channels_filter_all">Toutes les chaînes</string>
+    <string name="tv_recent_channels_filter_unfollowed">Chaînes non suivies uniquement</string>
+    <string name="tv_recent_channels_remove">Retirer des chaînes récentes</string>
+    <string name="tv_recent_channels_removed">%1$s retirée des chaînes récentes</string>
+    <string name="tv_recent_channels_clear">Vider les chaînes récentes</string>
+    <string name="tv_recent_channels_clear_summary">Efface toutes les chaînes de la ligne Chaînes récemment regardées</string>
+    <string name="tv_recent_channels_cleared">Chaînes récentes effacées</string>
+    <string name="tv_sync_vod_history">Synchroniser l\'historique VOD avec Twitch</string>
+    <string name="tv_sync_vod_history_summary">Synchronise la reprise des VOD et Reprendre la lecture entre PC, mobile et TV</string>
 </resources>

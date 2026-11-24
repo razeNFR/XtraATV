@@ -1395,4 +1395,15 @@
     <string name="tv_mini_player_auto_slide">Mini oynatıcıyı otomatik kaydır</string>
     <string name="tv_mini_player_auto_slide_summary">Seçili öğe altına geldiğinde mini oynatıcıyı diğer tarafa kaydırır</string>
     <string name="tv_section_hidden_toast">“%1$s” yan menüde gizli (ayarlardan yeniden etkinleştirin)</string>
+    <string name="tv_home_row_recent_channels">Son izlenen kanallar</string>
+    <string name="tv_recent_channels_filter">Son izlenen kanallar</string>
+    <string name="tv_recent_channels_filter_all">Tüm kanallar</string>
+    <string name="tv_recent_channels_filter_unfollowed">Yalnızca takip edilmeyen kanallar</string>
+    <string name="tv_recent_channels_remove">Son izlenenlerden kaldır</string>
+    <string name="tv_recent_channels_removed">%1$s son izlenen kanallardan kaldırıldı</string>
+    <string name="tv_recent_channels_clear">Son izlenen kanalları temizle</string>
+    <string name="tv_recent_channels_clear_summary">Son izlenen kanallar satırındaki tüm kanalları kaldırır</string>
+    <string name="tv_recent_channels_cleared">Son izlenen kanallar temizlendi</string>
+    <string name="tv_sync_vod_history">VOD geçmişini Twitch ile eşitle</string>
+    <string name="tv_sync_vod_history_summary">VOD kaldığı yer ve İzlemeye devam et listesini PC, mobil ve TV arasında eşitler</string>
 </resources>

@@ -1394,4 +1394,15 @@
     <string name="tv_mini_player_auto_slide">ミニプレーヤーを自動移動</string>
     <string name="tv_mini_player_auto_slide_summary">選択中の項目が下に来たとき、ミニプレーヤーを反対側へスライドします</string>
     <string name="tv_section_hidden_toast">「%1$s」はサイドメニューで非表示になっています（設定から再有効化できます）</string>
+    <string name="tv_home_row_recent_channels">最近視聴したチャンネル</string>
+    <string name="tv_recent_channels_filter">最近視聴したチャンネル</string>
+    <string name="tv_recent_channels_filter_all">すべてのチャンネル</string>
+    <string name="tv_recent_channels_filter_unfollowed">未フォローのチャンネルのみ</string>
+    <string name="tv_recent_channels_remove">最近の履歴から削除</string>
+    <string name="tv_recent_channels_removed">%1$s を最近視聴したチャンネルから削除しました</string>
+    <string name="tv_recent_channels_clear">最近視聴したチャンネルを消去</string>
+    <string name="tv_recent_channels_clear_summary">最近視聴したチャンネルの列からすべてのチャンネルを削除します</string>
+    <string name="tv_recent_channels_cleared">最近視聴したチャンネルを消去しました</string>
+    <string name="tv_sync_vod_history">VOD視聴履歴をTwitchと同期</string>
+    <string name="tv_sync_vod_history_summary">PC・スマホ・TV間でVODの再生位置と視聴を続けるを同期します</string>
 </resources>

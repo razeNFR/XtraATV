@@ -81,6 +81,14 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="tv_sync_vod_history"
+        android:summary="@string/tv_sync_vod_history_summary"
+        android:title="@string/tv_sync_vod_history"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <Preference
         android:key="tv_multistream_quality"
         android:persistent="false"

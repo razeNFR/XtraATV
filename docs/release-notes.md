@@ -1,36 +1,20 @@
-# Xtra TV 1.4.6.7
+# Xtra TV 1.4.6.8
 
 ### New & Polish
-- **100 % `SurfaceView` Hardware-Overlay Mini-Player & smooth Right ↔ Left auto-slide**:
-  - Kept the minimized player permanently on its native **`SurfaceView` Hardware Overlay** (eliminating all `SurfaceView` ↔ `TextureView` surface switches and `freeAllBuffers` stalls), fixing the NVIDIA Shield `OMX.Nvidia.h264.decode` / `NvRmStream` green-flash looping video bug as well as `1440p60` `TextureView` display glitches on Amlogic boxes without reloading streams.
-  - Replaced ghost transparency with a smooth **`240 ms` horizontal slide** between **Bottom-Right** and **Bottom-Left** (respecting the compact side rail margin, the two-column **Settings** layout, and an anti-ping-pong `180 ms` debounce + hysteresis during fast D-pad scrolling).
-  - Added **Auto-move mini player** (**On** by default) in **Settings > Player > Xtra TV Player Settings** so horizontal auto-sliding can be toggled at any time.
-- **Refined "Edge Dock" Left / Right Streamer Switch Overlay**:
-  - Redesigned `TvSwitchOverlay` into symmetrical **`200 × 62 dp`** smoked-glass **Edge Dock** tabs flush (`0 dp`) against the left and right edges of the screen with an ambiance-accented `4 dp` outer stripe, `42 dp` ringed avatar, larger TV-legible typography, and smooth slide-in/out animations without overlapping live chat messages.
-- **Instant Tab Navigation & Active-Tab Focus Memory in Stream Switcher & Multi-Stream Picker**:
-  - Category tabs (*Suggestions*, *Followed*, *Recommended for you*, *Popular*, custom categories & languages) now switch automatically on focus without pressing OK (while **Validate** in Multi-Stream and opening the **Search** keyboard stay click-only).
-  - Pressing **Up** from any streamer card now reliably returns focus to the currently active tab instead of jumping to whichever tab happens to sit above the card.
-- **Simplified 1-Click Sort & Filter Menus on TV**:
-  - Selecting a sort option now applies immediately and saves it as your default across screens (*Popular*, *Categories*, *Videos/Clips*, *Followed Channels*, *Bookmarks*) without requiring **Apply** or **Save as default**.
-  - Removed redundant mobile buttons (*Apply*, *Save as default*, *Save sort for this game*, *Save filters*), renamed tag filtering clearly to **Filter by tags…**, and applied tag/language changes automatically.
-- **TV Home Language Rows, Redesigned "See All" Card & Disabled-Section Feedback**:
-  - Multi-page initial fetch (up to 30 streams) on pinned language rows (e.g. *Popular · French*) and category rows, plus wired **See all** on language rows to open the full language-filtered stream grid.
-  - Redesigned the end-of-row **See all** tile into a compact smoked-glass accent card with a circular arrow badge.
-  - Added a clear `TvToast` message when clicking **See all** for a section that was hidden from the left navigation menu in settings.
-- **Live Rewind (DVR) & Timeline Seek Preview Improvements**:
-  - **Experimental Adblock timeline thumbnails**: wired Experimental Adblock's ongoing CDN VOD (`160p30/index-dvr.m3u8` / fallback variants) into `TvSeekPreview`, bringing live timeline thumbnails even on channels with unlisted/private VODs.
-  - **Seamless DVR timeline focus & anti-accidental streamer switch**: entering live-rewind DVR (`KEY_DVR`) in Swap Adblock or Proxy mode now opens the HUD focused directly on the timeline (`progressBar`), and pressing **Left / Right** while rewound (across Swap Adblock, Proxy, and Experimental Adblock) reopens the timeline instead of accidentally switching to the previous/next streamer.
-  - **Smooth thumbnails during long-press scrubbing**: coalesced `videoPlayer` seeks (`~140–240 ms` keyframe pacing + immediate snap on key release) and added **LIFO** priority + reusable bitmap cropping for storyboard sprite sheets so thumbnails update continuously while holding **Left / Right**.
-- **Tabbed Compact Multi-Stream Panel & Smoked-Glass / Hardware-Blur Side Panels**:
-  - Rebuilt the **Multi-Stream** tile menu into a compact `392 dp` 3-tab `SidePanel` (**Display** · **Audio** · **Options** + pinned **Open full** / **Remove** footer) matching **Chat** and **PiP** panels, with live layout, chat, audio mix, and quality controls.
-  - Styled TV `SidePanel` menus with crisp smoked glass (`~90–93 %` opacity, dense dark-tinted tabs/rows, inner rounded corners, subtle `16 %` screen dim) and automatic **Android 12+ native `Window.setBackgroundBlurRadius`** scoped strictly to the panel outline so text stays perfectly legible while the live stream remains visible beside menus.
-- **Automatic MediaCodec decoder fallback**: enabled `DefaultRenderersFactory.setEnableDecoderFallback(true)` on primary, secondary (ad-free swap), card preview, and seek preview `ExoPlayer` instances.
-- **Eliminated live-stream `MediaSession` / Notification / Bluetooth IPC spam**:
-  - Deduplicated `MediaMetadata`, `MediaSession` queue, and `PlaybackState` updates across live HLS playlist refreshes and unified channel avatar fetching between `MediaMetadata` and foreground notifications.
-- **Lighter card video previews & paused hidden-chat emote animations**:
-  - Disabled audio track decoding (`TRACK_TYPE_AUDIO`) on muted card/seek previews, raised hover delay to `250 ms`, fixed `firstFrameListener` cleanup, set `VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF` on `TextureView` secondary players, and paused animated GIF / 7TV / BTTV / FFZ spans while chat is hidden or minimized.
-- **Fixed `Cronet` / `HttpEngine` / `OkHttp` leaks & UI-thread SQLite stalls**:
-  - Routed `openOkHttp` before allocating native `Cronet` / `HttpEngine` `UrlRequest`s, closed interrupted GZIP `Response`s, cached proxy `CronetEngine` / `HttpEngine` instances in `XtraModule`, replaced `runBlocking` Room writes with FIFO `Mutex` background writes, and guarded HUD header `maxWidth` relayouts.
+- **New TV Home Row — "Recently Watched Channels" (Last 20 Unique Channels)**:
+  - Automatically records a live channel once watched for at least **`30 seconds`** (avoiding pollution while zapping quickly with **Left / Right**), keeping the **20 most recent unique channels** sorted newest-first across restarts and isolated per account.
+  - **Filter mode**: choose between **All channels** (default) and **Unfollowed channels only** either in **Settings > Xtra TV > Home & Side menu** or directly from the row's options inside **Home rows**.
+  - **Live status & smart action**: checks live status in a single batched GraphQL query — live channels display a glowing live ring, `LIVE` badge, current category, and viewer count, and open the **live stream** directly on **OK**; offline channels open the **channel page** on **OK**.
+  - **Long-press OK** on any recent channel card offers standard channel actions (*Watch live*, *Open channel*, *Channel videos*, *Follow*, *Favorite*, *Hide*) alongside **Remove from recent** and **Clear recent channels**.
+- **Two-Way Twitch Account VOD History & Resume Position Sync (PC ↔ Mobile ↔ TVs)**:
+  - **Cross-device pull**: syncs `currentUser.viewedVideos` on Home load and `video.self.viewingHistory` when opening a VOD so broadcasts started on PC (`twitch.tv`), mobile, or another TV running Xtra TV appear in **Continue watching** and keep VOD progress bars up to date.
+  - **Live position push & synced removal**: pushes VOD playback progress to Twitch (`updateUserViewedVideo`) periodically while watching and immediately on pause/close, and resets Twitch's saved position when choosing **Remove from history** or **Watch from the beginning**.
+  - Added **Sync VOD history with Twitch** (**On** by default) in **Settings > Xtra TV > TV Player & Multi-stream**, with automatic local-only fallback when logged out or in Guest mode.
+- **Redesigned Stream Switcher & Multi-Stream Tab Rail + Android 14 Flicker & Focus Fixes**:
+  - **Unified Smoked-Glass Tab Rail**: wrapped category tabs inside a dark smoked-glass capsule rail with an ambiance-accented active tab pill + border when browsing cards and a high-contrast light pill when focused, keeping **Validate (n)** cleanly detached on the left in Multi-Stream mode.
+  - **Instant, jump-free tab switching**: silently preloads uncached category tabs in the background when the switcher opens, keeps tab pill widths steady while loading, and updates stream cards smoothly via `DiffUtil` without blank thumbnail flashes.
+  - **Fixed Android 14 bottom-edge flash / downward slide**: converted the switcher overlay to an edge-to-edge fullscreen dialog anchored at the bottom and locked the card container to a deterministic constant height (including on empty categories) so the surface never shifts downward when switching tabs.
+  - **Restored Multi-Stream Up → Validate focus**: pressing **Up** from stream cards in Multi-Stream mode now jumps directly to **Validate** as soon as at least 1 extra streamer is selected, while returning to the active category tab otherwise.
 
 ### Install
-Download `XtraTV-1.4.6.7-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.4.6.8-tv.apk` below and install it over the previous version, your settings and account are kept.

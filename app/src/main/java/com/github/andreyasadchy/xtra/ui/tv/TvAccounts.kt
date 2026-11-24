@@ -248,6 +248,8 @@ object TvAccounts {
         TvFavorites.reload(context)
         TvBlacklist.reload(context)
         TvStats.notifyAccountSwitched()
+        TvResumeHistory.notifyAccountSwitched()
+        TvRecentChannels.notifyAccountSwitched()
         TvHomeRows.notifyAccountSwitched()
     }
 

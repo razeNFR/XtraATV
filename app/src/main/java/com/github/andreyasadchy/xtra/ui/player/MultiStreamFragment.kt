@@ -262,6 +262,41 @@ class MultiStreamFragment : Fragment() {
                 }
             }
         }
+        // TV "Recently watched channels": record Multi-Stream channels after 30s of actual playback
+        viewLifecycleOwner.lifecycleScope.launch {
+            val playMsByLogin = HashMap<String, Long>()
+            val recordedLogins = HashSet<String>()
+            while (true) {
+                kotlinx.coroutines.delay(5_000L)
+                val ctx = context ?: continue
+                val currentLogins = HashSet<String>()
+                val activeLogin = tiles.find {
+                    it.player.isPlaying && ((isFocusLayout() || isMosaicLayout()) && it.stream.channelLogin == bigLogin)
+                }?.stream?.channelLogin
+                    ?: tiles.find { it.player.isPlaying && (it === selectedTile || it.view.hasFocus()) }?.stream?.channelLogin
+                // Process non-active tiles first so the primary/focused tile ends up at index 0
+                val orderedPlaying = tiles.filter { it.player.isPlaying }.sortedBy {
+                    if (it.stream.channelLogin != null && it.stream.channelLogin.equals(activeLogin, ignoreCase = true)) 1 else 0
+                }
+                for (tile in orderedPlaying) {
+                    val s = tile.stream
+                    val key = s.channelLogin?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: continue
+                    currentLogins.add(key)
+                    val nextMs = (playMsByLogin[key] ?: 0L) + 5_000L
+                    playMsByLogin[key] = nextMs
+                    if (nextMs >= 30_000L && recordedLogins.add(key)) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.recordWatched(
+                            ctx,
+                            channelId = s.channelId,
+                            login = s.channelLogin,
+                            displayName = s.channelName,
+                            avatarUrl = s.channelImage,
+                        )
+                    }
+                }
+                playMsByLogin.keys.retainAll(currentLogins)
+            }
+        }
     }
 
     private fun addTile(stream: Stream): Tile {

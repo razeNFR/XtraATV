@@ -172,6 +172,16 @@
         <item>6</item>
     </string-array>
 
+    <string-array name="tvRecentChannelsFilterEntries">
+        <item>@string/tv_recent_channels_filter_all</item>
+        <item>@string/tv_recent_channels_filter_unfollowed</item>
+    </string-array>
+
+    <string-array name="tvRecentChannelsFilterValues" translatable="false">
+        <item>all</item>
+        <item>unfollowed</item>
+    </string-array>
+
     <!-- shortcuts of the TV side menu to the tabs of the followed channels -->
     <string-array name="tvMenuExtrasEntries">
         <item>@string/tv_menu_followed_videos</item>

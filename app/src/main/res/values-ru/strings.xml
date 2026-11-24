@@ -1394,4 +1394,15 @@
     <string name="tv_mini_player_auto_slide">Автоматически сдвигать мини-плеер</string>
     <string name="tv_mini_player_auto_slide_summary">Сдвигает мини-плеер в противоположную сторону, когда выбранный элемент оказывается под ним</string>
     <string name="tv_section_hidden_toast">Раздел «%1$s» скрыт в боковом меню (включите его в настройках)</string>
+    <string name="tv_home_row_recent_channels">Недавно просмотренные каналы</string>
+    <string name="tv_recent_channels_filter">Недавно просмотренные каналы</string>
+    <string name="tv_recent_channels_filter_all">Все каналы</string>
+    <string name="tv_recent_channels_filter_unfollowed">Только неотслеживаемые каналы</string>
+    <string name="tv_recent_channels_remove">Убрать из недавних</string>
+    <string name="tv_recent_channels_removed">Канал %1$s убран из недавних</string>
+    <string name="tv_recent_channels_clear">Очистить недавние каналы</string>
+    <string name="tv_recent_channels_clear_summary">Удалить все каналы из строки Недавно просмотренные каналы</string>
+    <string name="tv_recent_channels_cleared">Недавние каналы очищены</string>
+    <string name="tv_sync_vod_history">Синхронизировать историю VOD с Twitch</string>
+    <string name="tv_sync_vod_history_summary">Синхронизирует позицию просмотра VOD и Продолжить просмотр между ПК, телефоном и ТВ</string>
 </resources>

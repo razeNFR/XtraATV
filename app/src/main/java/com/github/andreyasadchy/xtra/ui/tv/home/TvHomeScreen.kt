@@ -151,6 +151,15 @@ class TvHomeActions(
     /** Offline followed channels row: OK opens the channel page, OK held opens channel actions. */
     val openOfflineChannel: (com.github.andreyasadchy.xtra.model.ui.User) -> Unit = {},
     val showOfflineChannelActions: (com.github.andreyasadchy.xtra.model.ui.User) -> Unit = {},
+    /** Recently watched channels row: OK opens the live stream when live or the channel page when offline. */
+    val openRecentChannel: (
+        com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem,
+        List<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>,
+    ) -> Unit = { _, _ -> },
+    val showRecentChannelActions: (
+        com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem,
+        List<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>,
+    ) -> Unit = { _, _ -> },
 )
 
 class TvHomeRow<T>(
@@ -167,6 +176,7 @@ sealed class TvHomeSection(val key: String) {
     class Streams(key: String, val row: TvHomeRow<Stream>) : TvHomeSection(key)
     class MultiStreams(key: String, val row: TvHomeRow<TvHomeMultiStream>) : TvHomeSection(key)
     class Resume(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>) : TvHomeSection(key)
+    class RecentChannels(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>) : TvHomeSection(key)
     class Videos(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Video>) : TvHomeSection(key)
     class Clips(key: String, val row: TvHomeRow<com.github.andreyasadchy.xtra.model.ui.Clip>) : TvHomeSection(key)
     class Stats(key: String, val stats: TvHomeStats) : TvHomeSection(key)
@@ -260,6 +270,11 @@ fun TvHomeScreen(
                 is TvHomeSection.Resume -> {
                     if (section.row.items.isNotEmpty()) {
                         add(HomeRowInfo(listIndex, section.key, section.row.items.map { it.id }))
+                    }
+                }
+                is TvHomeSection.RecentChannels -> {
+                    if (section.row.items.isNotEmpty()) {
+                        add(HomeRowInfo(listIndex, section.key, section.row.items.map { it.login.lowercase() }))
                     }
                 }
                 is TvHomeSection.Videos -> {
@@ -615,6 +630,28 @@ fun TvHomeScreen(
                             item(key = key) {
                                 Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
                                     ResumeRow(
+                                        section.row, actions, rowFirstCard,
+                                        startInset = startInset,
+                                        endInset = endInset,
+                                        state = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() },
+                                        cardModifier = { idx, itemKey ->
+                                            Modifier
+                                                .focusRequester(cardRequesters.getOrPut("$key/$itemKey") { FocusRequester() })
+                                                .onFocusChanged {
+                                                    if (it.hasFocus) {
+                                                        focus.rememberCard(key, itemKey, idx)
+                                                    }
+                                                }
+                                        },
+                                        onCardSelected = { idx, itemKey -> focus.rememberCard(key, itemKey, idx, force = true) },
+                                    )
+                                }
+                            }
+                        }
+                        is TvHomeSection.RecentChannels -> {
+                            item(key = key) {
+                                Box(Modifier.onFocusChanged { if (it.hasFocus) { focusedItem = listIndex; bringRow(listIndex) } }) {
+                                    RecentChannelRow(
                                         section.row, actions, rowFirstCard,
                                         startInset = startInset,
                                         endInset = endInset,
@@ -1909,6 +1946,230 @@ private fun OfflineChannelCard(
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
                     lastText,
+                    fontSize = 12.sp,
+                    color = TvColors.secondaryText,
+                    maxLines = 1,
+                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RecentChannelRow(
+    row: TvHomeRow<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>,
+    actions: TvHomeActions,
+    firstRequester: FocusRequester?,
+    startInset: Dp = 0.dp,
+    endInset: Dp = 0.dp,
+    state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    cardModifier: (Int, String) -> Modifier = { _, _ -> Modifier },
+    onCardSelected: (Int, String) -> Unit = { _, _ -> },
+) {
+    Column {
+        RowTitle(row.title, row.icon, startPadding = startInset + 12.dp)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides PivotSpec) {
+            LazyRow(
+                state = state,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvHorizontalFade(
+                        startWidth = 56.dp,
+                        endWidth = 56.dp,
+                        scrolledStart = { state.canScrollBackward },
+                        scrolledEnd = { state.canScrollForward },
+                    )
+                    .focusRestorer(),
+                contentPadding = PaddingValues(start = startInset + 12.dp, end = endInset + 12.dp, top = 12.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(row.items, key = { _, item -> item.login.lowercase() }) { index, item ->
+                    val itemKey = item.login.lowercase()
+                    RecentChannelCard(
+                        item = item,
+                        actions = actions,
+                        modifier = Modifier
+                            .leftEdge(index, actions.openMenu)
+                            .then(if (index == 0 && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier)
+                            .then(cardModifier(index, itemKey)),
+                        onClick = {
+                            onCardSelected(index, itemKey)
+                            actions.openRecentChannel(item, row.items)
+                        },
+                        onLongClick = {
+                            onCardSelected(index, itemKey)
+                            actions.showRecentChannelActions(item, row.items)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentChannelCard(
+    item: com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem,
+    actions: TvHomeActions,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val favorites by com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
+    val isFavorite = favorites.any { it.login.equals(item.login, ignoreCase = true) }
+    val playbackSnapshot by com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.state.collectAsState()
+    val playbackBadge = com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.badgeFor(context, item.login, playbackSnapshot)
+    val live = item.liveStream
+    val watchedRelativeText = remember(item.entry.watchedAt) {
+        item.entry.watchedAt.takeIf { it > 0L }?.let { ts ->
+            android.text.format.DateUtils.getRelativeTimeSpanString(
+                ts,
+                System.currentTimeMillis(),
+                android.text.format.DateUtils.MINUTE_IN_MILLIS,
+            ).toString().replaceFirstChar { c -> c.uppercase() }
+        }
+    }
+    val glowColor = if (live != null) Color(0xFFFF3B30) else MaterialTheme.colorScheme.primary
+    val liveRingBrush = Brush.linearGradient(
+        listOf(Color(0xFFFF3B30), MaterialTheme.colorScheme.primary),
+    )
+
+    FocusCard(
+        width = 136.dp,
+        modifier = modifier,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onFocus = { if (it) actions.onPictureFocused(item) },
+    ) { focused ->
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Box(
+                Modifier
+                    .size(92.dp)
+                    .tvCardFocusGlow(focused, glowColor, cornerRadius = 46.dp)
+                    .then(
+                        when {
+                            focused -> Modifier.border(3.dp, Color.White, CircleShape)
+                            live != null -> Modifier.border(2.5.dp, liveRingBrush, CircleShape)
+                            else -> Modifier.border(1.dp, Color(0x24FFFFFF), CircleShape)
+                        }
+                    )
+                    .padding(if (live != null || focused) 3.dp else 0.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF26252C))
+            ) {
+                AsyncImage(
+                    model = item.avatarUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (playbackBadge != null) {
+                PlaybackBadgePill(
+                    badge = playbackBadge,
+                    small = true,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            } else if (live != null) {
+                val badgeShape = RoundedCornerShape(999.dp)
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .clip(badgeShape)
+                        .background(Color(0xFFE91916))
+                        .border(1.5.dp, Color(0xFF12111A), badgeShape)
+                        .padding(horizontal = 7.dp, vertical = 1.5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(5.dp).background(Color.White, CircleShape))
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "LIVE",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isFavorite) {
+                Icon(
+                    painterResource(R.drawable.tv_ic_star),
+                    contentDescription = null,
+                    tint = Color(0xFFFACC15),
+                    modifier = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                item.displayName,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (live != null || focused) Color.White else Color(0xE6FFFFFF),
+                maxLines = 1,
+                overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                modifier = if (focused) Modifier.titleMarquee() else Modifier,
+            )
+        }
+        if (live != null) {
+            val gameLabel = live.gameName?.takeIf { it.isNotBlank() }
+            if (gameLabel != null) {
+                Spacer(Modifier.height(2.dp))
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        gameLabel,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                    )
+                }
+            }
+            live.viewerCount?.takeIf { it > 0 }?.let { viewers ->
+                Spacer(Modifier.height(1.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painterResource(R.drawable.tv_ic_eye),
+                        contentDescription = null,
+                        tint = TvColors.secondaryText,
+                        modifier = Modifier.size(11.dp),
+                    )
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        actions.formatCount(viewers),
+                        fontSize = 11.sp,
+                        color = TvColors.secondaryText,
+                        maxLines = 1,
+                    )
+                }
+            }
+        } else if (!watchedRelativeText.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    watchedRelativeText,
                     fontSize = 12.sp,
                     color = TvColors.secondaryText,
                     maxLines = 1,

@@ -1394,4 +1394,15 @@
     <string name="tv_mini_player_auto_slide">Mini-Player automatisch verschieben</string>
     <string name="tv_mini_player_auto_slide_summary">Schiebt den Mini-Player auf die andere Seite, wenn das ausgewählte Element darunter liegt</string>
     <string name="tv_section_hidden_toast">„%1$s“ ist im Seitenmenü ausgeblendet (in den Einstellungen wieder aktivieren)</string>
+    <string name="tv_home_row_recent_channels">Zuletzt gesehene Kanäle</string>
+    <string name="tv_recent_channels_filter">Zuletzt gesehene Kanäle</string>
+    <string name="tv_recent_channels_filter_all">Alle Kanäle</string>
+    <string name="tv_recent_channels_filter_unfollowed">Nur nicht gefolgte Kanäle</string>
+    <string name="tv_recent_channels_remove">Aus zuletzt gesehen entfernen</string>
+    <string name="tv_recent_channels_removed">%1$s aus zuletzt gesehenen Kanälen entfernt</string>
+    <string name="tv_recent_channels_clear">Zuletzt gesehene Kanäle leeren</string>
+    <string name="tv_recent_channels_clear_summary">Alle Kanäle aus der Zeile Zuletzt gesehene Kanäle entfernen</string>
+    <string name="tv_recent_channels_cleared">Zuletzt gesehene Kanäle geleert</string>
+    <string name="tv_sync_vod_history">VOD-Verlauf mit Twitch synchronisieren</string>
+    <string name="tv_sync_vod_history_summary">VOD-Wiedergabepositionen und Weiterschauen zwischen PC, Mobilgerät und TV synchronisieren</string>
 </resources>

@@ -2305,6 +2305,10 @@ class TvSettingsFragment : Fragment() {
                     "tv_dpad_shortcuts" -> valueBadge = TvRemoteKeys.dpadSummary(context)
                     C.TV_CUSTOM_KEYS -> valueBadge = TvRemoteKeys.customKeysSummary(context)
                     C.TV_HOME_ROWS -> valueBadge = TvHomeRows.summary(context)
+                    C.TV_CLEAR_RECENT_CHANNELS -> {
+                        val count = com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.count(context)
+                        if (count > 0) valueBadge = count.toString()
+                    }
                     C.CHAT_HIGHLIGHTED_USERS -> valueBadge = ChatBlocklist.highlightedSummary(context)
                     C.CHAT_BLOCKED_USERS -> valueBadge = ChatBlocklist.summary(context)
                     "tv_chat_polls_popup" -> {
@@ -2463,6 +2467,18 @@ class TvSettingsFragment : Fragment() {
                         if (key == C.TV_MINI_PLAYER_AUTO_SLIDE || key == C.TV_COMPACT_RAIL) {
                             (activity as? MainActivity)?.refreshTvMiniPlayerPosition(immediate = true)
                         }
+                        if (key == C.TV_SYNC_VOD_HISTORY && next) {
+                            val app = context.applicationContext as? XtraApp
+                            if (app != null) {
+                                viewLifecycleOwner.lifecycleScope.launch {
+                                    com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pullFromTwitch(
+                                        context = app,
+                                        xtraModule = app.xtraModule,
+                                        force = true,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 refreshStamp.intValue++
@@ -2483,6 +2499,8 @@ class TvSettingsFragment : Fragment() {
                         AppCompatDelegate.setApplicationLocales(
                             LocaleListCompat.forLanguageTags(if (chosen == "auto") null else chosen)
                         )
+                    } else if (key == C.TV_RECENT_CHANNELS_FILTER) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.setFilterMode(context, chosen)
                     } else {
                         val previous = context.prefs().getString(key, null)
                         context.prefs().edit { putString(key, chosen) }
@@ -2522,6 +2540,15 @@ class TvSettingsFragment : Fragment() {
 
     private fun handleActionClick(context: Context, item: PrefNode.Item) {
         when (item.key) {
+            C.TV_CLEAR_RECENT_CHANNELS -> {
+                com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.clear(context)
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    context,
+                    R.string.tv_recent_channels_cleared,
+                    Toast.LENGTH_SHORT,
+                ).show()
+                refreshStamp.intValue++
+            }
             "tv_chat_polls_popup" -> {
                 val options = listOf(
                     context.getString(R.string.tv_chat_delay_off),

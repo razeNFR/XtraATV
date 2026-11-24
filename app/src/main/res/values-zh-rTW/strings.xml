@@ -1394,4 +1394,15 @@
     <string name="tv_mini_player_auto_slide">自動避讓迷你播放器</string>
     <string name="tv_mini_player_auto_slide_summary">當選取項目移到迷你播放器下方時將其平滑移至另一側</string>
     <string name="tv_section_hidden_toast">「%1$s」已在側邊選單中隱藏（可在設定中重新啟用）</string>
+    <string name="tv_home_row_recent_channels">最近觀看的頻道</string>
+    <string name="tv_recent_channels_filter">最近觀看的頻道</string>
+    <string name="tv_recent_channels_filter_all">所有頻道</string>
+    <string name="tv_recent_channels_filter_unfollowed">僅未追隨的頻道</string>
+    <string name="tv_recent_channels_remove">從最近觀看中移除</string>
+    <string name="tv_recent_channels_removed">已將 %1$s 從最近觀看的頻道中移除</string>
+    <string name="tv_recent_channels_clear">清除最近觀看的頻道</string>
+    <string name="tv_recent_channels_clear_summary">移除最近觀看的頻道列中的所有頻道</string>
+    <string name="tv_recent_channels_cleared">已清除最近觀看的頻道</string>
+    <string name="tv_sync_vod_history">與 Twitch 同步 VOD 觀看紀錄</string>
+    <string name="tv_sync_vod_history_summary">在電腦、手機與電視之間同步 VOD 觀看進度與繼續觀看清單</string>
 </resources>
