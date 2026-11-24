@@ -44,6 +44,7 @@ object TvSettingIcons {
         "restore_settings" to R.drawable.tv_ic_history,
         "download_settings" to R.drawable.tv_ic_download,
         "about_app" to R.drawable.tv_ic_info,
+        "about_changelog" to R.drawable.tv_ic_list,
         "about_github" to R.drawable.tv_ic_share,
         "about_discord" to R.drawable.tv_ic_discord,
         "about_device" to R.drawable.tv_ic_tv_small,

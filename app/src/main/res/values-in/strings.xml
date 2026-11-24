@@ -1406,4 +1406,11 @@
     <string name="tv_recent_channels_cleared">Saluran baru ditonton dibersihkan</string>
     <string name="tv_sync_vod_history">Sinkronkan riwayat VOD dengan Twitch</string>
     <string name="tv_sync_vod_history_summary">Sinkronkan posisi lanjutkan VOD dan Lanjutkan menonton di PC, ponsel, dan TV</string>
+    <string name="tv_about_changelog">Yang baru / Catatan perubahan</string>
+    <string name="tv_about_changelog_summary">Baca catatan pembaruan terbaru dan versi sebelumnya</string>
+    <string name="tv_changelog_installed">Terpasang</string>
+    <string name="tv_changelog_new">Baru</string>
+    <string name="tv_changelog_loading">Memuat versi sebelumnya…</string>
+    <string name="tv_changelog_empty">Belum ada catatan rilis yang tersedia saat ini</string>
+    <string name="tv_changelog_back">Kembali ke daftar versi</string>
 </resources>

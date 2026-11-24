@@ -1406,4 +1406,11 @@
     <string name="tv_recent_channels_cleared">Son izlenen kanallar temizlendi</string>
     <string name="tv_sync_vod_history">VOD geçmişini Twitch ile eşitle</string>
     <string name="tv_sync_vod_history_summary">VOD kaldığı yer ve İzlemeye devam et listesini PC, mobil ve TV arasında eşitler</string>
+    <string name="tv_about_changelog">Yenilikler / Değişiklik günlüğü</string>
+    <string name="tv_about_changelog_summary">Son ve önceki güncellemelerin yama notlarını görüntüleyin</string>
+    <string name="tv_changelog_installed">Yüklü</string>
+    <string name="tv_changelog_new">Yeni</string>
+    <string name="tv_changelog_loading">Önceki sürümler yükleniyor…</string>
+    <string name="tv_changelog_empty">Şu anda kullanılabilir sürüm notu yok</string>
+    <string name="tv_changelog_back">Sürümlere dön</string>
 </resources>

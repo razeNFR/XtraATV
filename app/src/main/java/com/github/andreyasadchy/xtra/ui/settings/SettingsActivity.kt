@@ -1041,6 +1041,10 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
             }
+            findPreference<Preference>("about_changelog")?.setOnPreferenceClickListener {
+                com.github.andreyasadchy.xtra.ui.tv.TvChangelog.show(requireContext())
+                true
+            }
             findPreference<Preference>("about_github")?.setOnPreferenceClickListener {
                 com.github.andreyasadchy.xtra.ui.tv.TvAbout.show(requireContext())
                 true

@@ -1405,4 +1405,11 @@
     <string name="tv_recent_channels_cleared">تم مسح القنوات المشاهدة مؤخرًا</string>
     <string name="tv_sync_vod_history">مزامنة سجل الفيديوهات مع Twitch</string>
     <string name="tv_sync_vod_history_summary">مزامنة موضع استئناف الفيديوهات ومتابعة المشاهدة بين الكمبيوتر والهاتف والتلفزيون</string>
+    <string name="tv_about_changelog">الجديد / سجل التغييرات</string>
+    <string name="tv_about_changelog_summary">عرض ملاحظات الإصدار للتحديث الأخير والتحديثات السابقة</string>
+    <string name="tv_changelog_installed">مثبّت</string>
+    <string name="tv_changelog_new">جديد</string>
+    <string name="tv_changelog_loading">جارٍ تحميل الإصدارات السابقة…</string>
+    <string name="tv_changelog_empty">لا توجد ملاحظات إصدار متاحة حاليًا</string>
+    <string name="tv_changelog_back">العودة إلى الإصدارات</string>
 </resources>

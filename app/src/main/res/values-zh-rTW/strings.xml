@@ -1405,4 +1405,11 @@
     <string name="tv_recent_channels_cleared">已清除最近觀看的頻道</string>
     <string name="tv_sync_vod_history">與 Twitch 同步 VOD 觀看紀錄</string>
     <string name="tv_sync_vod_history_summary">在電腦、手機與電視之間同步 VOD 觀看進度與繼續觀看清單</string>
+    <string name="tv_about_changelog">最新內容 / 更新日誌</string>
+    <string name="tv_about_changelog_summary">查看最新與過往版本的更新說明</string>
+    <string name="tv_changelog_installed">目前已安裝</string>
+    <string name="tv_changelog_new">新版本</string>
+    <string name="tv_changelog_loading">正在載入過往版本…</string>
+    <string name="tv_changelog_empty">目前沒有可用的版本更新說明</string>
+    <string name="tv_changelog_back">返回版本列表</string>
 </resources>

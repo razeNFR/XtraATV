@@ -2338,6 +2338,7 @@ class TvSettingsFragment : Fragment() {
                         summary = context.getString(R.string.tv_proxies_1440p)
                     }
                     "about_app" -> summary = TvAbout.CREDIT_TEXT
+                    "about_changelog" -> valueBadge = BuildConfig.VERSION_NAME
                     "about_device" -> summary = caps.deviceSummary
                 }
                 Kind.Action(hasChevron = key in CHEVRON_KEYS)
@@ -2875,6 +2876,7 @@ class TvSettingsFragment : Fragment() {
                 IntegrityDialog.newInstance(null).show(childFragmentManager, null)
             }
             "about_app", "about_github", "about_device" -> TvAbout.show(context)
+            "about_changelog" -> com.github.andreyasadchy.xtra.ui.tv.TvChangelog.show(context)
             "about_discord" -> TvAbout.show(context, discord = true)
         }
     }
@@ -3304,7 +3306,7 @@ class TvSettingsFragment : Fragment() {
             "ui_navigation_tab_list_dialog", "ui_following_tabs_dialog", "ui_saved_tabs_dialog",
             "ui_game_tabs_dialog", "ui_search_tabs_dialog", "ui_channel_tabs_dialog",
             C.CHAT_HIGHLIGHTED_USERS, C.CHAT_BLOCKED_USERS, "downloaded_languages",
-            "backup_settings", "restore_settings",
+            "backup_settings", "restore_settings", "about_changelog",
         )
 
         private val PLAYER_BUTTON_ICONS = mapOf(

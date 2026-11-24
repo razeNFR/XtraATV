@@ -1405,4 +1405,11 @@
     <string name="tv_recent_channels_cleared">最近視聴したチャンネルを消去しました</string>
     <string name="tv_sync_vod_history">VOD視聴履歴をTwitchと同期</string>
     <string name="tv_sync_vod_history_summary">PC・スマホ・TV間でVODの再生位置と視聴を続けるを同期します</string>
+    <string name="tv_about_changelog">新機能 / 更新履歴</string>
+    <string name="tv_about_changelog_summary">最新および過去のアップデートの更新内容を確認します</string>
+    <string name="tv_changelog_installed">インストール済み</string>
+    <string name="tv_changelog_new">新着</string>
+    <string name="tv_changelog_loading">過去のリリースを読み込み中…</string>
+    <string name="tv_changelog_empty">現在表示できるリリースノートはありません</string>
+    <string name="tv_changelog_back">バージョン一覧に戻る</string>
 </resources>

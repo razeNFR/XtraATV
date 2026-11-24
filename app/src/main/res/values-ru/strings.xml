@@ -1405,4 +1405,11 @@
     <string name="tv_recent_channels_cleared">Недавние каналы очищены</string>
     <string name="tv_sync_vod_history">Синхронизировать историю VOD с Twitch</string>
     <string name="tv_sync_vod_history_summary">Синхронизирует позицию просмотра VOD и Продолжить просмотр между ПК, телефоном и ТВ</string>
+    <string name="tv_about_changelog">Что нового / Список изменений</string>
+    <string name="tv_about_changelog_summary">Просмотр примечаний к последнему и предыдущим обновлениям</string>
+    <string name="tv_changelog_installed">Установлена</string>
+    <string name="tv_changelog_new">Новое</string>
+    <string name="tv_changelog_loading">Загрузка предыдущих версий…</string>
+    <string name="tv_changelog_empty">Примечания к выпуску сейчас недоступны</string>
+    <string name="tv_changelog_back">Назад к версиям</string>
 </resources>

@@ -1405,4 +1405,11 @@
     <string name="tv_recent_channels_cleared">Canles recentes limpadas</string>
     <string name="tv_sync_vod_history">Sincronizar o historial de VOD con Twitch</string>
     <string name="tv_sync_vod_history_summary">Mantén sincronizadas as posicións dos VOD e Seguir vendo entre PC, móbil e TV</string>
+    <string name="tv_about_changelog">Novidades / Rexistro de cambios</string>
+    <string name="tv_about_changelog_summary">Consultar as notas da última actualización e das anteriores</string>
+    <string name="tv_changelog_installed">Instalada</string>
+    <string name="tv_changelog_new">Novo</string>
+    <string name="tv_changelog_loading">Cargando versións anteriores…</string>
+    <string name="tv_changelog_empty">Non hai notas de versión dispoñibles neste momento</string>
+    <string name="tv_changelog_back">Volver ás versións</string>
 </resources>

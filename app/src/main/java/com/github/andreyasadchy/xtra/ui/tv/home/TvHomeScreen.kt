@@ -12,7 +12,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -239,35 +238,10 @@ fun TvHomeScreen(
     val scope = rememberCoroutineScope()
     val firstCard = remember { FocusRequester() }
     val peek = with(LocalDensity.current) { 56.dp.roundToPx() }
-    val scrollJobRef = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
-    val lastBringAtMsRef = remember { longArrayOf(0L) }
     // a row with the focus glides to the top, with the end of the row above still in sight (Google TV)
     val bringRow: (Int) -> Unit = { index ->
-        val now = android.os.SystemClock.uptimeMillis()
-        val rapid = now - lastBringAtMsRef[0] < 145L
-        lastBringAtMsRef[0] = now
-        scrollJobRef[0]?.cancel()
-        scrollJobRef[0] = scope.launch {
-            val targetOffset = if (index <= 0) 0 else -peek
-            val visible = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
-            if (visible != null) {
-                val delta = visible.offset - targetOffset
-                if (kotlin.math.abs(delta) > 2) {
-                    if (rapid) {
-                        listState.scrollToItem(index, targetOffset)
-                    } else {
-                        listState.animateScrollBy(
-                            delta.toFloat(),
-                            androidx.compose.animation.core.tween(
-                                durationMillis = 180,
-                                easing = androidx.compose.animation.core.FastOutSlowInEasing,
-                            ),
-                        )
-                    }
-                }
-            } else {
-                listState.scrollToItem(index, targetOffset)
-            }
+        scope.launch {
+            listState.animateScrollToItem(index, if (index <= 0) 0 else -peek)
         }
     }
     val favoritesState = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.items.collectAsState()
@@ -601,51 +575,12 @@ fun TvHomeScreen(
                             userMoved = true
                             onGhost = false
                         }
-                        if (event.type == KeyEventType.KeyDown && (event.key == Key.DirectionUp || event.key == Key.DirectionDown)) {
-                            val currentIdxInAll = focusedRowKeyRef[0]?.let { rk ->
-                                allRows.indexOfFirst { it.key == rk }.takeIf { it >= 0 }
-                            } ?: allRows.indexOfFirst { it.rowIndex == focusedItemRef[0] }
-                            // up from the first row: "refresh"
-                            if (event.key == Key.DirectionUp && (focusedItemRef[0] == 0 || currentIdxInAll == 0)) {
-                                refreshAllowed = true
-                                runCatching { refreshRequester.requestFocus() }
-                                return@onPreviewKeyEvent true
-                            }
-                            if (currentIdxInAll >= 0) {
-                                val step = if (event.key == Key.DirectionDown) 1 else -1
-                                val nextEntry = allRows.getOrNull(currentIdxInAll + step)
-                                if (nextEntry != null) {
-                                    val rowState = rowStates[nextEntry.key]
-                                    val firstVisibleKey = nextEntry.itemKeys.getOrNull(rowState?.firstVisibleItemIndex ?: 0)
-                                        ?: nextEntry.itemKeys.firstOrNull()
-                                    val savedKey = lastFocusedKeyByRow[nextEntry.key]?.takeIf { it in nextEntry.itemKeys }
-                                    val focusedSaved = savedKey != null &&
-                                        runCatching { cardRequesters["${nextEntry.key}/$savedKey"]?.requestFocus() }.getOrNull() == true
-                                    val focusedFirst = !focusedSaved && firstVisibleKey != null &&
-                                        runCatching { cardRequesters["${nextEntry.key}/$firstVisibleKey"]?.requestFocus() }.getOrNull() == true
-                                    if (focusedSaved || focusedFirst) {
-                                        return@onPreviewKeyEvent true
-                                    }
-                                    if (listState.layoutInfo.visibleItemsInfo.none { it.index == nextEntry.rowIndex }) {
-                                        scrollJobRef[0]?.cancel()
-                                        scrollJobRef[0] = scope.launch {
-                                            listState.scrollToItem(nextEntry.rowIndex, if (nextEntry.rowIndex <= 0) 0 else -peek)
-                                            androidx.compose.runtime.withFrameNanos { }
-                                            if (!isPlayerCovering()) {
-                                                val wanted = savedKey ?: firstVisibleKey
-                                                val ok = wanted != null &&
-                                                    runCatching { cardRequesters["${nextEntry.key}/$wanted"]?.requestFocus() }.getOrNull() == true
-                                                if (!ok && firstVisibleKey != null) {
-                                                    runCatching { cardRequesters["${nextEntry.key}/$firstVisibleKey"]?.requestFocus() }
-                                                }
-                                            }
-                                        }
-                                        return@onPreviewKeyEvent true
-                                    }
-                                }
-                            }
-                        }
-                        false
+                        // up from the first row: "refresh"
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && focusedItemRef[0] == 0) {
+                            refreshAllowed = true
+                            runCatching { refreshRequester.requestFocus() }
+                            true
+                        } else false
                     },
                 contentPadding = PaddingValues(top = 0.dp, bottom = 240.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -935,6 +870,25 @@ fun TvHomeScreen(
                                                     lastFocusedKeyByRow[key] = "stats"
                                                     focus.rememberCard(key, "stats", 0)
                                                 }
+                                            }
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.type == KeyEventType.KeyDown &&
+                                                    (event.key == Key.DirectionDown || (event.key == Key.DirectionUp && listIndex > 0))
+                                                ) {
+                                                    val statsIdx = allRows.indexOfFirst { it.key == key }
+                                                    val step = if (event.key == Key.DirectionDown) 1 else -1
+                                                    val nextRow = if (statsIdx >= 0) allRows.getOrNull(statsIdx + step) else null
+                                                    if (nextRow != null && nextRow.key !in lastFocusedKeyByRow) {
+                                                        val firstVisibleIdx = rowStates[nextRow.key]?.firstVisibleItemIndex ?: 0
+                                                        val firstKey = nextRow.itemKeys.getOrNull(firstVisibleIdx) ?: nextRow.itemKeys.firstOrNull()
+                                                        if (firstKey != null &&
+                                                            runCatching { cardRequesters["${nextRow.key}/$firstKey"]?.requestFocus() }.getOrNull() == true
+                                                        ) {
+                                                            return@onPreviewKeyEvent true
+                                                        }
+                                                    }
+                                                }
+                                                false
                                             },
                                     )
                                 }

@@ -11,6 +11,13 @@
         app:singleLineTitle="false" />
 
     <Preference
+        android:key="about_changelog"
+        android:summary="@string/tv_about_changelog_summary"
+        android:title="@string/tv_about_changelog"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
         android:key="about_github"
         android:summary="https://github.com/razeNFR/XtraATV"
         android:title="@string/tv_about_github"
