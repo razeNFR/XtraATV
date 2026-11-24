@@ -60,7 +60,7 @@ class TvStreamPreview(
         }
         pendingCard = card
         pendingLogin = channelLogin
-        recyclerView.postDelayed(startAction, TvPreviewSource.START_DELAY)
+        recyclerView.postDelayed(startAction, TvPreviewSource.startDelayMs(recyclerView.context))
     }
 
     private fun start() {

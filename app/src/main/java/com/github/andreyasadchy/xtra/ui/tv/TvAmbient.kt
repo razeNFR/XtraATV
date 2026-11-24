@@ -160,6 +160,26 @@ object TvAmbient {
         }
     }
 
+    /** Smoothly crossfades [root]'s background to the current ambient/wallpaper state (used by wallpaper auto-rotation). */
+    fun crossfadeToCurrentBackground(root: View, base: Int) {
+        val next = background(root.context, base)
+        val previous = root.background
+        if (previous != null) {
+            val currentLayer = if (previous is TransitionDrawable && previous.numberOfLayers > 1) {
+                previous.getDrawable(previous.numberOfLayers - 1)
+            } else {
+                previous
+            }
+            val transition = TransitionDrawable(arrayOf(currentLayer, next)).apply {
+                isCrossFadeEnabled = false
+            }
+            root.background = transition
+            transition.startTransition(520)
+        } else {
+            root.background = next
+        }
+    }
+
     /** A picture already drawn (the picture of a header): its color, kept when the picture has none. */
     fun updateFromBitmap(context: Context, cacheKey: String?, bitmap: Bitmap?, scope: CoroutineScope) {
         if (!isDynamic(context) || bitmap == null) return

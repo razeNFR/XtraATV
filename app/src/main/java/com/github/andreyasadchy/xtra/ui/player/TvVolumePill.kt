@@ -23,9 +23,10 @@ import kotlin.math.roundToInt
 
 /**
  * Compact smoked-glass volume pill anchored directly above the TV player's Volume button:
+ * - Bright active focus ring + circular slider thumb + ‹ › D-pad arrows make it unmistakable that focus is inside the pill.
  * - Left / Right adjusts volume live in 5% steps without covering the stream.
  * - Long-press OK (or tapping the speaker icon) toggles Mute / Unmute instantly.
- * - Short OK, Down, Up, Back, or 3 seconds of inactivity closes the pill cleanly while keeping focus on Volume.
+ * - Short OK, Down, Up, Back, or 3 seconds of inactivity closes the pill cleanly while restoring focus on Volume.
  */
 class TvVolumePill(
     private val hostRoot: RelativeLayout,
@@ -38,14 +39,15 @@ class TvVolumePill(
     companion object {
         private const val AUTO_CLOSE_MS = 3_000L
         private const val STEP_PERCENT = 5
+        private const val ARROW_PULSE_MS = 170L
     }
 
     private val context: Context = hostRoot.context
     private val density: Float = context.resources.displayMetrics.density
     private val scaledDensity: Float = context.resources.displayMetrics.scaledDensity
 
-    private val pillWidthPx = (194f * density).roundToInt()
-    private val bodyHeightPx = (42f * density).roundToInt()
+    private val pillWidthPx = (232f * density).roundToInt()
+    private val bodyHeightPx = (44f * density).roundToInt()
     private val beakHeightPx = (7f * density).roundToInt()
     private val beakHalfWidthPx = 6.5f * density
     private val totalHeightPx = bodyHeightPx + beakHeightPx
@@ -62,6 +64,13 @@ class TvVolumePill(
 
     private val autoCloseRunnable = Runnable {
         dismiss(restoreAnchorFocus = true)
+    }
+
+    private val clearPulseRunnable = Runnable {
+        pillView?.let {
+            it.pulseSide = 0
+            it.invalidate()
+        }
     }
 
     private val longPressMuteRunnable = Runnable {
@@ -87,6 +96,7 @@ class TvVolumePill(
         val view = ensureView()
         view.beakCenterX = pillWidthPx / 2f
         view.percent = currentPercent
+        view.pulseSide = 0
         view.invalidate()
 
         visibleState = true
@@ -100,15 +110,21 @@ class TvVolumePill(
         view.animate().cancel()
         if (view.visibility != View.VISIBLE) {
             view.alpha = 0f
+            view.scaleX = 0.94f
+            view.scaleY = 0.94f
             view.translationY += 4f * density
             view.visibility = View.VISIBLE
             view.animate()
                 .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
                 .translationY(view.targetTranslationY)
                 .setDuration(140L)
                 .start()
         } else {
             view.alpha = 1f
+            view.scaleX = 1f
+            view.scaleY = 1f
             view.translationY = view.targetTranslationY
         }
 
@@ -124,16 +140,27 @@ class TvVolumePill(
         }
     }
 
+    private fun pulseArrow(side: Int) {
+        pillView?.let {
+            it.pulseSide = side
+            it.invalidate()
+        }
+        hostRoot.removeCallbacks(clearPulseRunnable)
+        hostRoot.postDelayed(clearPulseRunnable, ARROW_PULSE_MS)
+    }
+
     fun dismiss(restoreAnchorFocus: Boolean = false, immediate: Boolean = false) {
         val view = pillView
         hostRoot.removeCallbacks(autoCloseRunnable)
         hostRoot.removeCallbacks(longPressMuteRunnable)
+        hostRoot.removeCallbacks(clearPulseRunnable)
         centerDownSeen = false
         centerLongHandled = false
         backDownSeen = false
         val wasVisible = visibleState
         visibleState = false
         if (view == null) return
+        view.pulseSide = 0
         view.animate().cancel()
         if (immediate || !wasVisible || view.visibility != View.VISIBLE) {
             view.visibility = View.GONE
@@ -142,6 +169,8 @@ class TvVolumePill(
         }
         view.animate()
             .alpha(0f)
+            .scaleX(0.96f)
+            .scaleY(0.96f)
             .setDuration(120L)
             .withEndAction {
                 if (!visibleState) {
@@ -155,6 +184,7 @@ class TvVolumePill(
     fun destroy() {
         hostRoot.removeCallbacks(autoCloseRunnable)
         hostRoot.removeCallbacks(longPressMuteRunnable)
+        hostRoot.removeCallbacks(clearPulseRunnable)
         visibleState = false
         pillView?.let { v ->
             v.animate().cancel()
@@ -179,8 +209,10 @@ class TvVolumePill(
 
             keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (event.action == KeyEvent.ACTION_DOWN) {
-                    val delta = if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -STEP_PERCENT else STEP_PERCENT
+                    val isLeft = keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+                    val delta = if (isLeft) -STEP_PERCENT else STEP_PERCENT
                     val next = (currentPercent + delta).coerceIn(0, 100)
+                    pulseArrow(if (isLeft) -1 else 1)
                     if (next != currentPercent) {
                         setVolumePercent(next)
                         onVolumeChanged(next)
@@ -270,7 +302,7 @@ class TvVolumePill(
         }
         val created = PillCanvasView(context).apply {
             layoutParams = RelativeLayout.LayoutParams(pillWidthPx, totalHeightPx)
-            elevation = 8f * density
+            elevation = 10f * density
             visibility = View.GONE
             isFocusable = false
             isClickable = true
@@ -300,7 +332,6 @@ class TvVolumePill(
             val tlLoc = IntArray(2)
             timeline.getLocationInWindow(tlLoc)
             val tlTop = (tlLoc[1] - rootLoc[1]).toFloat()
-            // Keep the pill body cleanly above the horizontal progress line with the beak pointing down to Volume
             minOf(tlTop + 8f * density, anchorTop - 6f * density)
         } else {
             anchorTop - 8f * density
@@ -309,6 +340,8 @@ class TvVolumePill(
         view.translationX = clampedLeft
         view.targetTranslationY = targetY
         view.translationY = targetY
+        view.pivotX = view.beakCenterX
+        view.pivotY = totalHeightPx.toFloat()
         view.invalidate()
     }
 
@@ -316,37 +349,52 @@ class TvVolumePill(
         var percent: Int = 100
         var beakCenterX: Float = pillWidthPx / 2f
         var targetTranslationY: Float = 0f
+        var pulseSide: Int = 0
 
         private val bubblePath = Path()
-        private val chevronPath = Path()
+        private val arrowPath = Path()
         private val trackRect = RectF()
         private val fillRect = RectF()
 
         private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
-            color = 0xEC222228.toInt()
+            color = 0xF21B1A24.toInt()
         }
-        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        private val haloStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 1f * density
-            color = 0x33FFFFFF
+            strokeWidth = 3.6f * density
         }
-        private val chevronPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        private val focusStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 1.35f * density
+            strokeWidth = 1.85f * density
+            color = 0xF0FFFFFF.toInt()
+        }
+        private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1.75f * density
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
-            color = 0x99FFFFFF.toInt()
         }
         private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
-            color = 0x3DFFFFFF
+            color = 0x42FFFFFF
         }
         private val progressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
         }
+        private val thumbShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = 0x5C000000
+        }
+        private val thumbPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.WHITE
+        }
+        private val thumbCorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+        }
         private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xF5FFFFFF.toInt()
+            color = 0xFAFFFFFF.toInt()
             textSize = 14.5f * scaledDensity
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             textAlign = Paint.Align.RIGHT
@@ -361,14 +409,15 @@ class TvVolumePill(
             val bodyH = bodyHeightPx.toFloat()
             if (w <= 0f || bodyH <= 0f) return
 
-            val inset = 0.75f * density
+            val accent = TvAccent.onDark
+            val inset = 2.0f * density
             val left = inset
             val top = inset
             val right = w - inset
             val bottom = bodyH
             val r = (bottom - top) / 2f
             val bx = beakCenterX.coerceIn(left + r + beakHalfWidthPx, right - r - beakHalfWidthPx)
-            val tipY = totalHeightPx - inset
+            val tipY = totalHeightPx - 1.2f * density
 
             // Seamless stadium capsule + downward pointer beak
             bubblePath.reset()
@@ -382,18 +431,10 @@ class TvVolumePill(
             bubblePath.arcTo(RectF(left, top, left + 2f * r, bottom), 90f, 180f, false)
             bubblePath.close()
 
+            haloStrokePaint.color = (accent and 0x00FFFFFF) or (0x4D shl 24)
+            canvas.drawPath(bubblePath, haloStrokePaint)
             canvas.drawPath(bubblePath, fillPaint)
-            canvas.drawPath(bubblePath, strokePaint)
-
-            // Subtle downward chevron cue inside the beak base
-            val chevHalfW = 2.6f * density
-            val chevTopY = bottom - 1.4f * density
-            val chevTipY = bottom + 1.6f * density
-            chevronPath.reset()
-            chevronPath.moveTo(bx - chevHalfW, chevTopY)
-            chevronPath.lineTo(bx, chevTipY)
-            chevronPath.lineTo(bx + chevHalfW, chevTopY)
-            canvas.drawPath(chevronPath, chevronPaint)
+            canvas.drawPath(bubblePath, focusStrokePaint)
 
             val centerY = (top + bottom) / 2f
             val padH = 14f * density
@@ -403,7 +444,8 @@ class TvVolumePill(
 
             val activeIcon = if (percent <= 0) iconMuted else iconSpeaker
             activeIcon?.let { d ->
-                DrawableCompat.setTint(d, if (percent <= 0) 0xA6FFFFFF.toInt() else 0xF5FFFFFF.toInt())
+                val iconTint = if (percent <= 0) 0x9EFFFFFF.toInt() else accent
+                DrawableCompat.setTint(d, iconTint)
                 d.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize)
                 d.draw(canvas)
             }
@@ -415,20 +457,64 @@ class TvVolumePill(
             val textBaseline = centerY - (fm.ascent + fm.descent) / 2f
             canvas.drawText(percent.toString(), textRight, textBaseline, textPaint)
 
-            // Rounded progress bar in the center
-            val barLeft = iconLeft + iconSize + 11f * density
-            val barRight = (textRight - textSlotWidth - 8f * density).coerceAtLeast(barLeft + 24f * density)
+            // Left ‹ and Right › D-pad chevrons flanking the slider track so TV focus is self-evident
+            val chevW = 4.2f * density
+            val chevH = 4.8f * density
+            val leftChevCx = iconLeft + iconSize + 9.5f * density
+            val rightChevCx = textRight - textSlotWidth - 7.5f * density
+
+            // Left chevron ‹
+            arrowPaint.color = when {
+                pulseSide < 0 -> Color.WHITE
+                percent <= 0 -> 0x42FFFFFF
+                else -> 0xCCFFFFFF.toInt()
+            }
+            arrowPaint.strokeWidth = (if (pulseSide < 0) 2.3f else 1.7f) * density
+            arrowPath.reset()
+            arrowPath.moveTo(leftChevCx + chevW * 0.5f, centerY - chevH)
+            arrowPath.lineTo(leftChevCx - chevW * 0.5f, centerY)
+            arrowPath.lineTo(leftChevCx + chevW * 0.5f, centerY + chevH)
+            canvas.drawPath(arrowPath, arrowPaint)
+
+            // Right chevron ›
+            arrowPaint.color = when {
+                pulseSide > 0 -> Color.WHITE
+                percent >= 100 -> 0x42FFFFFF
+                else -> 0xCCFFFFFF.toInt()
+            }
+            arrowPaint.strokeWidth = (if (pulseSide > 0) 2.3f else 1.7f) * density
+            arrowPath.reset()
+            arrowPath.moveTo(rightChevCx - chevW * 0.5f, centerY - chevH)
+            arrowPath.lineTo(rightChevCx + chevW * 0.5f, centerY)
+            arrowPath.lineTo(rightChevCx - chevW * 0.5f, centerY + chevH)
+            canvas.drawPath(arrowPath, arrowPaint)
+
+            // Rounded progress bar + crisp circular focus thumb between the ‹ and › chevrons
+            val barLeft = leftChevCx + 9.5f * density
+            val barRight = (rightChevCx - 9.5f * density).coerceAtLeast(barLeft + 24f * density)
             val barH = 6f * density
             val barR = barH / 2f
             trackRect.set(barLeft, centerY - barH / 2f, barRight, centerY + barH / 2f)
             canvas.drawRoundRect(trackRect, barR, barR, trackPaint)
 
+            val ratio = (percent / 100f).coerceIn(0f, 1f)
+            val thumbX = trackRect.left + trackRect.width() * ratio
+
             if (percent > 0) {
-                progressPaint.color = TvAccent.onDark
-                val ratio = percent / 100f
-                val fillW = (trackRect.width() * ratio).coerceAtLeast(barH)
-                fillRect.set(trackRect.left, trackRect.top, (trackRect.left + fillW).coerceAtMost(trackRect.right), trackRect.bottom)
+                progressPaint.color = accent
+                val fillRight = thumbX.coerceIn(trackRect.left + barH, trackRect.right)
+                fillRect.set(trackRect.left, trackRect.top, fillRight, trackRect.bottom)
                 canvas.drawRoundRect(fillRect, barR, barR, progressPaint)
+            }
+
+            // Circular focus thumb (●)
+            val thumbRadius = 5.6f * density
+            canvas.drawCircle(thumbX, centerY, thumbRadius + 1.3f * density, thumbShadowPaint)
+            thumbPaint.color = if (percent <= 0) 0xC8FFFFFF.toInt() else Color.WHITE
+            canvas.drawCircle(thumbX, centerY, thumbRadius, thumbPaint)
+            if (percent > 0) {
+                thumbCorePaint.color = accent
+                canvas.drawCircle(thumbX, centerY, 2.2f * density, thumbCorePaint)
             }
         }
 
@@ -444,7 +530,7 @@ class TvVolumePill(
                         setVolumePercent(updated)
                     } else if (trackRect.width() > 0f && event.x >= iconZoneRight) {
                         val frac = ((event.x - trackRect.left) / trackRect.width()).coerceIn(0f, 1f)
-                        val snapped = ((frac * 100f).roundToInt())
+                        val snapped = (frac * 100f).roundToInt()
                         if (snapped != currentPercent) {
                             setVolumePercent(snapped)
                             onVolumeChanged(snapped)

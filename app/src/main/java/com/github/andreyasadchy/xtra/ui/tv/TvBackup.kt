@@ -92,6 +92,7 @@ object TvBackup {
     private const val TV_STATS_ENTRY = "tv_stats.xml"
     private const val TV_BLACKLIST_ENTRY = "tv_blacklist.xml"
     private const val TV_WALLPAPER_ENTRY = "tv_wallpaper_custom.jpg"
+    private const val TV_WALLPAPERS_PREFIX = "tv_wallpapers/"
     private const val DB_ENTRY = "database"
     private const val PENDING_TIMEOUT_MS = 5 * 60_000L
     private val SQLITE_MAGIC = "SQLite format 3".toByteArray(Charsets.US_ASCII)
@@ -115,6 +116,7 @@ object TvBackup {
         val tvBlacklistXml: ByteArray?,
         val dbBytes: ByteArray?,
         val tvWallpaperBytes: ByteArray?,
+        val tvWallpaperFiles: Map<String, ByteArray>,
     )
 
     /** True when the app has full read/write/overwrite access to shared `Download/` across Android 7..14+. */
@@ -535,8 +537,8 @@ object TvBackup {
                 dbFile.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
             }
-            TvWallpaper.readCustomBytesForBackup(appContext)?.let { wpBytes ->
-                zip.putNextEntry(ZipEntry(TV_WALLPAPER_ENTRY))
+            for ((fileName, wpBytes) in TvWallpaper.exportCustomWallpapersForBackup(appContext)) {
+                zip.putNextEntry(ZipEntry("$TV_WALLPAPERS_PREFIX$fileName"))
                 zip.write(wpBytes)
                 zip.closeEntry()
             }
@@ -556,15 +558,20 @@ object TvBackup {
             var tvBlacklistXml: ByteArray? = null
             var dbBytes: ByteArray? = null
             var tvWallpaperBytes: ByteArray? = null
+            val tvWallpaperFiles = LinkedHashMap<String, ByteArray>()
             var sawAnyEntry = false
             ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
                     sawAnyEntry = true
                     if (!entry.isDirectory) {
-                        val name = entry.name.substringAfterLast('/')
+                        val normPath = entry.name.replace('\\', '/').trimStart('/')
+                        val name = normPath.substringAfterLast('/')
                         val content = zip.readBytes()
                         when {
+                            normPath.startsWith(TV_WALLPAPERS_PREFIX) && name.startsWith("wp_") && name.endsWith(".jpg") -> {
+                                if (content.size > 128) tvWallpaperFiles[name] = content
+                            }
                             name == TV_FAVORITES_ENTRY -> tvFavoritesXml = content
                             name == TV_STATS_ENTRY -> tvStatsXml = content
                             name == TV_BLACKLIST_ENTRY -> tvBlacklistXml = content
@@ -584,10 +591,12 @@ object TvBackup {
             if (tvStatsXml != null && parseSharedPrefsXml(tvStatsXml) == null) return null
             if (tvBlacklistXml != null && parseSharedPrefsXml(tvBlacklistXml) == null) return null
             if (dbBytes != null && !isValidSqliteBytes(dbBytes)) return null
-            if (mainPrefsXml == null && tvFavoritesXml == null && tvStatsXml == null && tvBlacklistXml == null && dbBytes == null && tvWallpaperBytes == null) {
+            if (mainPrefsXml == null && tvFavoritesXml == null && tvStatsXml == null && tvBlacklistXml == null &&
+                dbBytes == null && tvWallpaperBytes == null && tvWallpaperFiles.isEmpty()
+            ) {
                 return null
             }
-            ParsedBackup(mainPrefsXml, tvFavoritesXml, tvStatsXml, tvBlacklistXml, dbBytes, tvWallpaperBytes)
+            ParsedBackup(mainPrefsXml, tvFavoritesXml, tvStatsXml, tvBlacklistXml, dbBytes, tvWallpaperBytes, tvWallpaperFiles)
         } catch (_: Exception) {
             null
         }
@@ -605,6 +614,7 @@ object TvBackup {
         tvBlacklistXml: ByteArray? = null,
         dbBytes: ByteArray? = null,
         tvWallpaperBytes: ByteArray? = null,
+        tvWallpaperFiles: Map<String, ByteArray> = emptyMap(),
         onPostPrefsCommit: ((Map<String, Any>) -> Unit)? = null,
     ): Boolean {
         val appContext = context.applicationContext
@@ -614,7 +624,10 @@ object TvBackup {
         val validatedBl = tvBlacklistXml?.takeIf { isSharedPrefsXmlBytes(it) && parseSharedPrefsXml(it) != null }
         val validatedDb = dbBytes?.takeIf { isValidSqliteBytes(it) }
         val validatedWp = tvWallpaperBytes?.takeIf { it.size > 128 }
-        if (validatedMain == null && validatedFav == null && validatedStats == null && validatedBl == null && validatedDb == null && validatedWp == null) {
+        val validatedMultiWp = tvWallpaperFiles.filterValues { it.size > 128 }
+        if (validatedMain == null && validatedFav == null && validatedStats == null && validatedBl == null &&
+            validatedDb == null && validatedWp == null && validatedMultiWp.isEmpty()
+        ) {
             return false
         }
 
@@ -634,11 +647,11 @@ object TvBackup {
                 runCatching { onPostPrefsCommit?.invoke(parsed) }
             }
         }
-        if (validatedWp != null) {
-            TvWallpaper.restoreCustomBytesFromBackup(appContext, validatedWp)
+        if (validatedMultiWp.isNotEmpty() || validatedWp != null) {
+            TvWallpaper.restoreWallpapersFromBackup(appContext, validatedMultiWp, validatedWp)
             restoredAny = true
-        } else if (validatedMain != null && appContext.prefs().getString(C.TV_WALLPAPER, TvWallpaper.STYLE_DEFAULT) != TvWallpaper.STYLE_CUSTOM) {
-            TvWallpaper.restoreCustomBytesFromBackup(appContext, null)
+        } else if (validatedMain != null && !TvWallpaper.isCustomStyleKey(appContext.prefs().getString(C.TV_WALLPAPER, TvWallpaper.STYLE_DEFAULT))) {
+            TvWallpaper.restoreWallpapersFromBackup(appContext, emptyMap(), null)
         }
         if (validatedFav != null) {
             val favPrefs = appContext.getSharedPreferences("tv_favorites$suffix", Context.MODE_PRIVATE)
@@ -724,6 +737,7 @@ object TvBackup {
                 tvBlacklistXml = parsed.tvBlacklistXml,
                 dbBytes = parsed.dbBytes,
                 tvWallpaperBytes = parsed.tvWallpaperBytes,
+                tvWallpaperFiles = parsed.tvWallpaperFiles,
                 onPostPrefsCommit = onPostPrefsCommit,
             )
         }

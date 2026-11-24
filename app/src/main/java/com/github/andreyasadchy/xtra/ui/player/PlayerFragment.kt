@@ -1180,6 +1180,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         showController(force = true)
                         showVolumeDialog()
                     }
+                    volume.setOnLongClickListener {
+                        showController(force = true)
+                        hideTooltip()
+                        if (tvVolumePill?.isShowing == true) {
+                            tvVolumePill?.dismiss(restoreAnchorFocus = true, immediate = true)
+                        }
+                        togglePlayerMute()
+                        true
+                    }
                 }
                 if (requireContext().prefs().getBoolean(C.PLAYER_SETTINGS, true)) {
                     quality.visibility = View.VISIBLE
@@ -1989,6 +1998,33 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         )
     }
 
+    /**
+     * While [TvVolumePill] is open above the Volume button, replace the button's solid white focus disc with a subtle
+     * translucent accent ring so the user's eye sees unmistakable active focus on the pill above rather than the button below.
+     */
+    private fun applyTvVolumeButtonPillState(pillOpen: Boolean) {
+        if (!isTv || _binding == null) return
+        val btn = binding.playerControls.volume
+        if (pillOpen) {
+            val density = btn.resources.displayMetrics.density
+            btn.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(0x59181822)
+                setStroke((1.8f * density + 0.5f).toInt(), com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark)
+            }
+            btn.setColorFilter(Color.WHITE)
+        } else {
+            btn.setBackgroundResource(R.drawable.tv_player_button_background)
+            btn.setColorFilter(
+                when {
+                    btn.hasFocus() -> com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight
+                    btn.isEnabled -> Color.WHITE
+                    else -> Color.GRAY
+                }
+            )
+        }
+    }
+
     private fun ensureTvVolumePill(): TvVolumePill {
         tvVolumePill?.let { return it }
         val created = TvVolumePill(
@@ -2001,18 +2037,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 updateTvVolumeButtonIcon(next)
             },
             onToggleMute = {
-                val ctx = context ?: return@TvVolumePill 0
-                val cur = currentVolumePercent()
-                val next = if (cur > 0) {
-                    unmutedVolume = cur
-                    0
-                } else {
-                    unmutedVolume.takeIf { it > 0 } ?: 100
-                }
-                ctx.prefs().edit { putInt(C.PLAYER_VOLUME, next) }
-                changeVolume(next / 100f)
-                updateTvVolumeButtonIcon(next)
-                next
+                togglePlayerMute()
+                currentVolumePercent()
             },
             onKeepHudAlive = {
                 if (_binding != null && areControlsShown()) {
@@ -2029,6 +2055,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             ?: binding.playerControls.menu.takeIf { it.isVisible && it.isFocusable }
                         target?.requestFocus()
                     }
+                    applyTvVolumeButtonPillState(pillOpen = false)
                     if (areControlsShown() && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
                         binding.playerControls.root.removeCallbacks(controllerHideAction)
                         binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
@@ -2066,6 +2093,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 timeline = binding.playerControls.progressBar,
                 initialPercent = pct,
             )
+            applyTvVolumeButtonPillState(pillOpen = true)
             return
         }
         PlayerVolumeDialog.newInstance(getCurrentVolume()).show(childFragmentManager, "closeOnPip")
@@ -5203,7 +5231,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun togglePlayerMute() {
         val ctx = context ?: return
         val prefs = ctx.prefs()
-        val current = ((getCurrentVolume() ?: 1f) * 100).toInt()
+        val current = currentVolumePercent()
         if (current > 0) {
             unmutedVolume = current
             prefs.edit { putInt(C.PLAYER_VOLUME, 0) }
@@ -5928,6 +5956,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     when (v) {
                         is android.widget.ImageView -> v.setColorFilter(
                             when {
+                                v === volume && tvVolumePill?.isShowing == true -> Color.WHITE
                                 hasFocus -> focusedIcon
                                 v.isEnabled -> Color.WHITE
                                 else -> Color.GRAY

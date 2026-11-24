@@ -164,6 +164,9 @@ class MainActivity : AppCompatActivity() {
         migrateSettings()
         forceDisplaySettings()
         if (resources.getBoolean(R.bool.isTv)) {
+            if (savedInstanceState == null) {
+                com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.advanceRotationIfDue(this, onLaunch = true)
+            }
             // the color of accent, read again (the app restarts this screen when the ambiance color changes)
             com.github.andreyasadchy.xtra.ui.tv.TvAccent.init(this)
             // favorite channels, read before the followed streams are loaded
@@ -269,6 +272,13 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
                     kotlinx.coroutines.delay(30_000L)
+                    if (isTv && !isTvPlayerOverContent() && hasWindowFocus()) {
+                        if (com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.advanceRotationIfDue(this@MainActivity, onLaunch = false)) {
+                            tvBaseBackgroundColor?.let { base ->
+                                com.github.andreyasadchy.xtra.ui.tv.TvAmbient.crossfadeToCurrentBackground(binding.root, base)
+                            }
+                        }
+                    }
                     if (!isTvPlayerOverContent() && hasWindowFocus() &&
                         android.os.SystemClock.elapsedRealtime() - lastUserInteractionAt >= 2 * 60_000L
                     ) {

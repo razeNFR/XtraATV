@@ -49,6 +49,7 @@ object TvSettingIcons {
         "about_discord" to R.drawable.tv_ic_discord,
         "about_device" to R.drawable.tv_ic_tv_small,
         // Xtra TV
+        "tv_xtratv_sub_customization" to R.drawable.tv_ic_palette,
         "tv_xtratv_sub_home" to R.drawable.tv_ic_home,
         "tv_xtratv_sub_remote" to R.drawable.tv_ic_gamepad,
         "tv_xtratv_sub_player" to R.drawable.tv_ic_play,
@@ -75,6 +76,7 @@ object TvSettingIcons {
         "tv_disable_soft_keyboard" to R.drawable.tv_ic_gamepad,
         "tv_dpad_up_down" to R.drawable.tv_ic_streamers,
         "ui_tv_preview" to R.drawable.tv_ic_play,
+        "tv_preview_delay" to R.drawable.tv_ic_timer,
         "ui_tv_preview_sound" to R.drawable.tv_ic_volume,
         "tv_card_zoom" to R.drawable.tv_ic_open_full,
         "tv_hide_menu_on_launch" to R.drawable.tv_ic_view_quilt,

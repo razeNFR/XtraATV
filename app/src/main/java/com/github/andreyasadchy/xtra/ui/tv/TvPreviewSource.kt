@@ -54,8 +54,12 @@ object TvPreviewSource {
         }
     }
 
-    /** Delay between the focus on a card and the start of its preview. */
+    /** Default delay between the focus on a card and the start of its preview (and card expansion). */
     const val START_DELAY = 250L
+
+    fun startDelayMs(context: Context): Long =
+        (context.prefs().getString(C.TV_PREVIEW_DELAY, "250")?.toLongOrNull() ?: START_DELAY)
+            .coerceIn(250L, 10_000L)
 
     /** Player of the previews: 360p for a fast start, with the sound when the option is on. */
     fun createPlayer(context: Context): ExoPlayer {

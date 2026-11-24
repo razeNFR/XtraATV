@@ -2059,6 +2059,7 @@ class TvSettingsFragment : Fragment() {
         val xtraTitle = context.getString(R.string.xtratv_settings)
         val sources: List<Triple<Int, String, SubScreen?>> = listOf(
             Triple(R.xml.tv_settings_xtratv, xtraTitle, null),
+            Triple(R.xml.tv_xtratv_customization, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_customization_title)}", SubScreen.Xml(R.xml.tv_xtratv_customization, context.getString(R.string.tv_xtratv_sub_customization_title))),
             Triple(R.xml.tv_xtratv_home, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_home_title)}", SubScreen.Xml(R.xml.tv_xtratv_home, context.getString(R.string.tv_xtratv_sub_home_title))),
             Triple(R.xml.tv_xtratv_remote, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_remote_title)}", SubScreen.Xml(R.xml.tv_xtratv_remote, context.getString(R.string.tv_xtratv_sub_remote_title))),
             Triple(R.xml.tv_xtratv_player, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_player_title)}", SubScreen.Xml(R.xml.tv_xtratv_player, context.getString(R.string.tv_xtratv_sub_player_title))),
@@ -2588,6 +2589,7 @@ class TvSettingsFragment : Fragment() {
                 }
             }
             // Sub-screens
+            "tv_xtratv_sub_customization" -> pushXmlSubScreen(R.xml.tv_xtratv_customization, context.getString(R.string.tv_xtratv_sub_customization_title), item.key)
             "tv_xtratv_sub_home" -> pushXmlSubScreen(R.xml.tv_xtratv_home, context.getString(R.string.tv_xtratv_sub_home_title), item.key)
             "tv_xtratv_sub_remote" -> pushXmlSubScreen(R.xml.tv_xtratv_remote, context.getString(R.string.tv_xtratv_sub_remote_title), item.key)
             "tv_xtratv_sub_player" -> pushXmlSubScreen(R.xml.tv_xtratv_player, context.getString(R.string.tv_xtratv_sub_player_title), item.key)
@@ -3315,7 +3317,7 @@ class TvSettingsFragment : Fragment() {
         )
 
         private val CHEVRON_KEYS = setOf(
-            "tv_xtratv_sub_home", "tv_xtratv_sub_remote", "tv_xtratv_sub_player", "tv_xtratv_sub_previews",
+            "tv_xtratv_sub_customization", "tv_xtratv_sub_home", "tv_xtratv_sub_remote", "tv_xtratv_sub_player", "tv_xtratv_sub_previews",
             "tv_xtratv_sub_languages", "player_settings", "playback_settings", "buffer_settings",
             "player_button_settings", "player_menu_settings", "ui_settings", "adblock_settings", "update_settings",
             "api_token_settings", "debug_settings", "video_swap_settings", "stream_proxy_settings",
@@ -3358,6 +3360,7 @@ class TvSettingsFragment : Fragment() {
 
         private val ALL_PREWARM_XMLS = listOf(
             R.xml.tv_settings_xtratv,
+            R.xml.tv_xtratv_customization,
             R.xml.tv_xtratv_home,
             R.xml.tv_xtratv_remote,
             R.xml.tv_xtratv_player,

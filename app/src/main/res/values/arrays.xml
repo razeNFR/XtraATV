@@ -510,4 +510,22 @@
         <item>large</item>
         <item>xlarge</item>
     </string-array>
+    <string-array name="tvPreviewDelayEntries">
+        <item>@string/tv_preview_delay_default</item>
+        <item>0.5 s</item>
+        <item>1 s</item>
+        <item>1.5 s</item>
+        <item>2 s</item>
+        <item>3 s</item>
+        <item>5 s</item>
+    </string-array>
+    <string-array name="tvPreviewDelayValues" translatable="false">
+        <item>250</item>
+        <item>500</item>
+        <item>1000</item>
+        <item>1500</item>
+        <item>2000</item>
+        <item>3000</item>
+        <item>5000</item>
+    </string-array>
 </resources>

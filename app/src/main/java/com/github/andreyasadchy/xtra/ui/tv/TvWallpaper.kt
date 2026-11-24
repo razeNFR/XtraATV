@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.tv
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BlurMaskFilter
@@ -17,29 +18,39 @@ import android.graphics.Shader
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.util.LruCache
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentDialog
-import androidx.compose.foundation.Canvas as ComposeCanvas
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,15 +61,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.github.andreyasadchy.xtra.R
@@ -67,6 +87,8 @@ import com.github.andreyasadchy.xtra.util.prefs
 import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -78,61 +100,150 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.random.Random
 import androidx.compose.ui.graphics.Color as ComposeColor
 
 /**
- * TV Home & screens wallpaper engine + live-preview customization side panel:
- * - Procedural vector styles ("AMOLED Topographic", "Gaming Prisms", "Ribbons", "Aurora") that automatically adopt
- *   the active ambient color (including Dynamic ambiance crossfades).
- * - Custom image wallpaper uploaded over local Wi-Fi via phone QR code (gallery photo or direct image URL).
- * - Live-adjustable Visibility (10..100%) and Blur (0..100%), plus one-click Reset.
+ * TV Home & screens wallpaper engine + visual gallery side panel:
+ * - 6 ACES-tonemapped Studio & OLED procedural shaders (Velvet Drape, Dichroic Glass, Glass Rings,
+ *   Starry Night OLED, Twilight Dunes with 4x sub-pixel RGSS, Northern Lights) + 4 geometric vector styles,
+ *   all dynamically adopting the active ambient color (including Dynamic ambiance crossfades).
+ * - Unlimited custom images stored in `filesDir/tv_wallpapers/`, uploaded in batches or sequentially via a
+ *   persistent local Wi-Fi QR phone portal (gallery multi-select + image URLs).
+ * - Automatic wallpaper rotation / playlist mode (Every launch, 5 min, 10 min, 30 min, 1 h, 3 h + Shuffle)
+ *   across any checked combination of built-in styles and custom photos.
+ * - Live-adjustable Visibility (10..100%) and Blur (0..100%).
  */
 object TvWallpaper {
 
     const val STYLE_DEFAULT = "default"
+
+    // Studio & OLED shader collection
+    const val STYLE_VELVET_DRAPE = "velvet_drape"
+    const val STYLE_DICHROIC_GLASS = "dichroic_glass"
+    const val STYLE_GLASS_RINGS = "glass_rings"
+    const val STYLE_STARRY_OLED = "starry_oled"
+    const val STYLE_TWILIGHT_DUNES = "twilight_dunes"
+    const val STYLE_ARCTIC_AURORA = "arctic_aurora"
+
+    // Classic geometric vector collection
     const val STYLE_TOPOGRAPHIC = "topographic"
     const val STYLE_PRISMS = "prisms"
     const val STYLE_RIBBONS = "ribbons"
     const val STYLE_AURORA = "aurora"
+
+    // Legacy / prefix key for custom images ("custom:<fileName>")
     const val STYLE_CUSTOM = "custom"
+    private const val CUSTOM_PREFIX = "custom:"
 
     const val DEFAULT_VISIBILITY = 55
     const val DEFAULT_BLUR = 0
 
     const val CUSTOM_FILE_NAME = "tv_wallpaper_custom.jpg"
+    private const val WALLPAPERS_DIR_NAME = "tv_wallpapers"
+    private const val THUMB_PREFIX = "thumb_"
+    private const val PREF_ROTATION_LAST_MS = "tv_wallpaper_rotation_last_ms"
+
     private const val VECTOR_RENDER_W = 1280
     private const val VECTOR_RENDER_H = 720
+    private const val THUMB_W = 320
+    private const val THUMB_H = 180
     private const val MAX_CUSTOM_W = 1920
     private const val MAX_CUSTOM_H = 1080
     private const val MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
-    val STYLES = listOf(
+    val BUILTIN_STYLES = listOf(
         STYLE_DEFAULT,
+        STYLE_VELVET_DRAPE,
+        STYLE_DICHROIC_GLASS,
+        STYLE_GLASS_RINGS,
+        STYLE_STARRY_OLED,
+        STYLE_TWILIGHT_DUNES,
+        STYLE_ARCTIC_AURORA,
         STYLE_TOPOGRAPHIC,
         STYLE_PRISMS,
         STYLE_RIBBONS,
         STYLE_AURORA,
-        STYLE_CUSTOM,
     )
 
-    @Volatile
-    private var customFileStamp: Long = 0L
-    @Volatile
-    private var cachedCustomRawStamp: Long = -1L
-    @Volatile
-    private var cachedCustomRawBitmap: Bitmap? = null
+    private val STUDIO_STYLES = setOf(
+        STYLE_VELVET_DRAPE,
+        STYLE_DICHROIC_GLASS,
+        STYLE_GLASS_RINGS,
+        STYLE_STARRY_OLED,
+        STYLE_TWILIGHT_DUNES,
+        STYLE_ARCTIC_AURORA,
+    )
 
-    private val renderedCache = object : LruCache<String, Bitmap>(6) {
+    val ROTATION_INTERVAL_VALUES = listOf(0, -1, 5, 10, 30, 60, 180)
+
+    data class CustomWallpaperItem(
+        val fileName: String,
+        val file: File,
+        val thumbFile: File,
+        val displayIndex: Int,
+    ) {
+        val styleKey: String get() = "$CUSTOM_PREFIX$fileName"
+    }
+
+    @Volatile
+    private var legacyMigrated: Boolean = false
+    private val uploadSeq = AtomicInteger(1)
+
+    @Volatile
+    private var cacheGeneration: Long = 1L
+
+    private val rawCustomCache = object : LruCache<String, Bitmap>(3) {
         override fun sizeOf(key: String, value: Bitmap): Int = 1
+    }
+
+    private val renderedCache = object : LruCache<String, Bitmap>(8) {
+        override fun sizeOf(key: String, value: Bitmap): Int = 1
+    }
+
+    private val previewThumbCache = object : LruCache<String, Bitmap>(28) {
+        override fun sizeOf(key: String, value: Bitmap): Int = 1
+    }
+
+    private val workerCount = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+    private val shaderPool = Executors.newFixedThreadPool(workerCount) { r ->
+        Thread(r, "TvWallpaperShader").apply {
+            isDaemon = true
+            priority = Thread.NORM_PRIORITY
+        }
+    }
+
+    private const val EXP_LUT_SIZE = 4096
+    private const val EXP_LUT_MAX = 16f
+    private const val EXP_LUT_SCALE = (EXP_LUT_SIZE - 1) / EXP_LUT_MAX
+    private val EXP_NEG_LUT = FloatArray(EXP_LUT_SIZE) { i ->
+        exp(-(i.toFloat() / EXP_LUT_SCALE).toDouble()).toFloat()
+    }
+
+    private const val ACES_LUT_SIZE = 4096
+    private const val ACES_LUT_MAX = 3.5f
+    private const val ACES_LUT_SCALE = (ACES_LUT_SIZE - 1) / ACES_LUT_MAX
+    private val ACES_SRGB_LUT = FloatArray(ACES_LUT_SIZE) { i ->
+        val x = i.toFloat() / ACES_LUT_SCALE
+        val num = x * (2.51f * x + 0.03f)
+        val den = x * (2.43f * x + 0.59f) + 0.14f
+        val mapped = (num / den).coerceIn(0f, 1f)
+        mapped.toDouble().pow(1.0 / 2.2).toFloat()
     }
 
     private val httpClient by lazy {
@@ -143,18 +254,93 @@ object TvWallpaper {
             .build()
     }
 
-    fun customFile(context: Context): File = File(context.applicationContext.filesDir, CUSTOM_FILE_NAME)
-
-    fun hasCustomImage(context: Context): Boolean {
-        val f = customFile(context)
-        return f.isFile && f.length() > 128L
+    private fun fastExpNeg(x: Float): Float {
+        if (x <= 0f) return 1f
+        if (x >= EXP_LUT_MAX) return 0f
+        return EXP_NEG_LUT[(x * EXP_LUT_SCALE).toInt()]
     }
 
+    private fun acesGamma(x: Float): Float {
+        if (x <= 0f) return 0f
+        if (x >= ACES_LUT_MAX) return ACES_SRGB_LUT[ACES_LUT_SIZE - 1]
+        return ACES_SRGB_LUT[(x * ACES_LUT_SCALE).toInt()]
+    }
+
+    fun wallpapersDir(context: Context): File =
+        File(context.applicationContext.filesDir, WALLPAPERS_DIR_NAME).apply { mkdirs() }
+
+    fun legacyCustomFile(context: Context): File =
+        File(context.applicationContext.filesDir, CUSTOM_FILE_NAME)
+
+    fun isCustomStyleKey(key: String?): Boolean =
+        key == STYLE_CUSTOM || (key != null && key.startsWith(CUSTOM_PREFIX))
+
+    private fun ensureMigrated(context: Context) {
+        if (legacyMigrated) return
+        synchronized(this) {
+            if (legacyMigrated) return
+            val appCtx = context.applicationContext
+            val legacy = legacyCustomFile(appCtx)
+            if (legacy.isFile && legacy.length() > 128L) {
+                val dir = wallpapersDir(appCtx)
+                val migratedName = "wp_0000000000001_legacy.jpg"
+                val dest = File(dir, migratedName)
+                runCatching {
+                    if (!dest.exists()) {
+                        legacy.copyTo(dest, overwrite = true)
+                    }
+                    legacy.delete()
+                    ensureThumbForFile(dest, File(dir, "$THUMB_PREFIX$migratedName"))
+                }
+                val prefs = appCtx.prefs()
+                val cur = prefs.getString(C.TV_WALLPAPER, STYLE_DEFAULT)
+                val migratedKey = "$CUSTOM_PREFIX$migratedName"
+                if (cur == STYLE_CUSTOM) {
+                    prefs.edit { putString(C.TV_WALLPAPER, migratedKey) }
+                }
+                val pool = prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null)
+                if (pool != null && STYLE_CUSTOM in pool) {
+                    val updated = LinkedHashSet(pool).apply {
+                        remove(STYLE_CUSTOM)
+                        add(migratedKey)
+                    }
+                    prefs.edit { putStringSet(C.TV_WALLPAPER_ROTATION_POOL, updated) }
+                }
+            }
+            legacyMigrated = true
+        }
+    }
+
+    fun listCustomImages(context: Context): List<CustomWallpaperItem> {
+        ensureMigrated(context)
+        val dir = wallpapersDir(context)
+        val files = dir.listFiles { f ->
+            f.isFile && f.name.startsWith("wp_") && f.name.endsWith(".jpg") && f.length() > 128L
+        }?.sortedBy { it.name }.orEmpty()
+        return files.mapIndexed { idx, f ->
+            CustomWallpaperItem(
+                fileName = f.name,
+                file = f,
+                thumbFile = File(dir, "$THUMB_PREFIX${f.name}"),
+                displayIndex = idx + 1,
+            )
+        }
+    }
+
+    fun hasCustomImage(context: Context): Boolean = listCustomImages(context).isNotEmpty()
+
     fun style(context: Context): String {
+        ensureMigrated(context)
         val raw = context.prefs().getString(C.TV_WALLPAPER, STYLE_DEFAULT) ?: STYLE_DEFAULT
-        if (raw !in STYLES) return STYLE_DEFAULT
-        if (raw == STYLE_CUSTOM && !hasCustomImage(context)) return STYLE_DEFAULT
-        return raw
+        if (raw in BUILTIN_STYLES) return raw
+        if (isCustomStyleKey(raw)) {
+            val customs = listCustomImages(context)
+            if (customs.isEmpty()) return STYLE_DEFAULT
+            if (raw == STYLE_CUSTOM) return customs.last().styleKey
+            val match = customs.firstOrNull { it.styleKey == raw }
+            return match?.styleKey ?: customs.last().styleKey
+        }
+        return STYLE_DEFAULT
     }
 
     fun isActive(context: Context): Boolean = style(context) != STYLE_DEFAULT
@@ -165,42 +351,239 @@ object TvWallpaper {
     fun blur(context: Context): Int =
         context.prefs().getInt(C.TV_WALLPAPER_BLUR, DEFAULT_BLUR).coerceIn(0, 100)
 
-    fun styleLabel(context: Context, styleKey: String): String = when (styleKey) {
-        STYLE_TOPOGRAPHIC -> context.getString(R.string.tv_wallpaper_topographic)
-        STYLE_PRISMS -> context.getString(R.string.tv_wallpaper_prisms)
-        STYLE_RIBBONS -> context.getString(R.string.tv_wallpaper_ribbons)
-        STYLE_AURORA -> context.getString(R.string.tv_wallpaper_aurora)
-        STYLE_CUSTOM -> context.getString(R.string.tv_wallpaper_custom)
+    fun rotationInterval(context: Context): Int {
+        val v = context.prefs().getInt(C.TV_WALLPAPER_ROTATION_INTERVAL, 0)
+        return if (v in ROTATION_INTERVAL_VALUES) v else 0
+    }
+
+    fun rotationShuffle(context: Context): Boolean =
+        context.prefs().getBoolean(C.TV_WALLPAPER_ROTATION_SHUFFLE, false)
+
+    fun allSelectablePoolKeys(context: Context): List<String> {
+        val builtins = BUILTIN_STYLES.filter { it != STYLE_DEFAULT }
+        val customs = listCustomImages(context).map { it.styleKey }
+        return builtins + customs
+    }
+
+    fun effectiveRotationPool(context: Context): List<String> {
+        val validOrder = allSelectablePoolKeys(context)
+        val saved = context.prefs().getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null).orEmpty()
+        return validOrder.filter { it in saved }
+    }
+
+    fun defaultSeedPool(context: Context): Set<String> {
+        val customs = listCustomImages(context).map { it.styleKey }
+        val active = style(context)
+        val seed = LinkedHashSet<String>()
+        if (active != STYLE_DEFAULT) seed.add(active)
+        if (customs.size >= 2) {
+            seed.addAll(customs)
+        } else {
+            seed.addAll(customs)
+            seed.add(STYLE_VELVET_DRAPE)
+            seed.add(STYLE_DICHROIC_GLASS)
+            seed.add(STYLE_STARRY_OLED)
+            seed.add(STYLE_TWILIGHT_DUNES)
+            seed.add(STYLE_ARCTIC_AURORA)
+        }
+        return seed
+    }
+
+    /**
+     * Advances wallpaper auto-rotation if configured and due.
+     * Returns `true` when [C.TV_WALLPAPER] changed so the caller can crossfade the screen background.
+     */
+    fun advanceRotationIfDue(context: Context, onLaunch: Boolean): Boolean {
+        val interval = rotationInterval(context)
+        if (interval == 0) return false
+        val pool = effectiveRotationPool(context)
+        if (pool.size < 2) return false
+
+        val prefs = context.prefs()
+        val now = System.currentTimeMillis()
+        if (interval == -1) {
+            if (!onLaunch) return false
+            return stepRotationToNext(context, pool, now) != null
+        }
+
+        val intervalMs = interval * 60_000L
+        val last = prefs.getLong(PREF_ROTATION_LAST_MS, 0L)
+        if (last <= 0L) {
+            prefs.edit { putLong(PREF_ROTATION_LAST_MS, now) }
+            return false
+        }
+        if (now - last < intervalMs) return false
+        return stepRotationToNext(context, pool, now) != null
+    }
+
+    fun advanceRotationNow(context: Context): String? {
+        val pool = effectiveRotationPool(context)
+        if (pool.isEmpty()) return null
+        if (pool.size == 1) {
+            val only = pool.first()
+            context.prefs().edit {
+                putString(C.TV_WALLPAPER, only)
+                putLong(PREF_ROTATION_LAST_MS, System.currentTimeMillis())
+            }
+            return only
+        }
+        return stepRotationToNext(context, pool, System.currentTimeMillis())
+    }
+
+    private fun stepRotationToNext(context: Context, pool: List<String>, nowMs: Long): String? {
+        if (pool.isEmpty()) return null
+        val prefs = context.prefs()
+        val cur = style(context)
+        val shuffle = rotationShuffle(context)
+        val next = if (shuffle && pool.size > 1) {
+            val candidates = pool.filter { it != cur }
+            candidates[Random.nextInt(candidates.size)]
+        } else {
+            val idx = pool.indexOf(cur)
+            if (idx < 0) pool.first() else pool[(idx + 1) % pool.size]
+        }
+        if (next == cur) {
+            prefs.edit { putLong(PREF_ROTATION_LAST_MS, nowMs) }
+            return null
+        }
+        prefs.edit {
+            putString(C.TV_WALLPAPER, next)
+            putLong(PREF_ROTATION_LAST_MS, nowMs)
+        }
+        return next
+    }
+
+    fun rotationIntervalLabel(context: Context, value: Int): String = when (value) {
+        -1 -> context.getString(R.string.tv_wallpaper_rotation_launch)
+        5 -> "5 min"
+        10 -> "10 min"
+        30 -> "30 min"
+        60 -> "1 h"
+        180 -> "3 h"
+        else -> context.getString(R.string.tv_chat_delay_off)
+    }
+
+    fun styleLabel(context: Context, styleKey: String): String = when {
+        styleKey == STYLE_VELVET_DRAPE -> context.getString(R.string.tv_wallpaper_velvet_drape)
+        styleKey == STYLE_DICHROIC_GLASS -> context.getString(R.string.tv_wallpaper_dichroic_glass)
+        styleKey == STYLE_GLASS_RINGS -> context.getString(R.string.tv_wallpaper_glass_rings)
+        styleKey == STYLE_STARRY_OLED -> context.getString(R.string.tv_wallpaper_starry_oled)
+        styleKey == STYLE_TWILIGHT_DUNES -> context.getString(R.string.tv_wallpaper_twilight_dunes)
+        styleKey == STYLE_ARCTIC_AURORA -> context.getString(R.string.tv_wallpaper_arctic_aurora)
+        styleKey == STYLE_TOPOGRAPHIC -> context.getString(R.string.tv_wallpaper_topographic)
+        styleKey == STYLE_PRISMS -> context.getString(R.string.tv_wallpaper_prisms)
+        styleKey == STYLE_RIBBONS -> context.getString(R.string.tv_wallpaper_ribbons)
+        styleKey == STYLE_AURORA -> context.getString(R.string.tv_wallpaper_aurora)
+        isCustomStyleKey(styleKey) -> {
+            val customs = listCustomImages(context)
+            val match = customs.firstOrNull { it.styleKey == styleKey }
+            val base = context.getString(R.string.tv_wallpaper_custom)
+            if (customs.size > 1 && match != null) "$base #${match.displayIndex}" else base
+        }
         else -> context.getString(R.string.tv_wallpaper_default)
     }
 
-    fun summary(context: Context): String = styleLabel(context, style(context))
+    fun summary(context: Context): String {
+        val activeLabel = styleLabel(context, style(context))
+        val interval = rotationInterval(context)
+        val pool = effectiveRotationPool(context)
+        return if (interval != 0 && pool.size >= 2) {
+            "${context.getString(R.string.tv_wallpaper_rotation_badge, pool.size)} · $activeLabel"
+        } else {
+            activeLabel
+        }
+    }
 
     fun invalidateCaches() {
-        customFileStamp = System.nanoTime()
-        cachedCustomRawStamp = -1L
-        cachedCustomRawBitmap = null
+        cacheGeneration++
+        rawCustomCache.evictAll()
         renderedCache.evictAll()
+        previewThumbCache.evictAll()
     }
 
-    fun readCustomBytesForBackup(context: Context): ByteArray? {
-        val f = customFile(context)
-        if (!f.isFile || f.length() <= 128L) return null
-        return runCatching { f.readBytes() }.getOrNull()
-    }
-
-    fun restoreCustomBytesFromBackup(context: Context, bytes: ByteArray?) {
-        val f = customFile(context)
-        if (bytes == null || bytes.isEmpty()) {
-            if (f.exists()) f.delete()
-            invalidateCaches()
-            return
+    /** Exports all custom wallpaper images (`wp_*.jpg`) for `TvBackup`. */
+    fun exportCustomWallpapersForBackup(context: Context): Map<String, ByteArray> {
+        val out = LinkedHashMap<String, ByteArray>()
+        for (item in listCustomImages(context)) {
+            val bytes = runCatching { item.file.readBytes() }.getOrNull()
+            if (bytes != null && bytes.size > 128) {
+                out[item.fileName] = bytes
+            }
         }
-        runCatching {
-            val tmp = File(f.parentFile, "$CUSTOM_FILE_NAME.tmp")
-            FileOutputStream(tmp).use { it.write(bytes) }
-            if (f.exists()) f.delete()
-            tmp.renameTo(f)
+        return out
+    }
+
+    /** Restores multi-image `tv_wallpapers/` (and/or legacy single `tv_wallpaper_custom.jpg`) from `TvBackup`. */
+    fun restoreWallpapersFromBackup(
+        context: Context,
+        multiFiles: Map<String, ByteArray>,
+        legacySingleBytes: ByteArray?,
+    ) {
+        val appCtx = context.applicationContext
+        val dir = wallpapersDir(appCtx)
+        dir.listFiles()?.forEach { runCatching { it.delete() } }
+        runCatching { legacyCustomFile(appCtx).delete() }
+        legacyMigrated = true
+
+        if (multiFiles.isNotEmpty()) {
+            for ((rawName, bytes) in multiFiles) {
+                if (bytes.size <= 128) continue
+                val cleanName = rawName.substringAfterLast('/').takeIf {
+                    it.startsWith("wp_") && it.endsWith(".jpg") && !it.contains("..")
+                } ?: continue
+                val dest = File(dir, cleanName)
+                runCatching {
+                    FileOutputStream(dest).use { it.write(bytes) }
+                    ensureThumbForFile(dest, File(dir, "$THUMB_PREFIX$cleanName"))
+                }
+            }
+        } else if (legacySingleBytes != null && legacySingleBytes.size > 128) {
+            val migratedName = "wp_0000000000001_legacy.jpg"
+            val dest = File(dir, migratedName)
+            runCatching {
+                FileOutputStream(dest).use { it.write(legacySingleBytes) }
+                ensureThumbForFile(dest, File(dir, "$THUMB_PREFIX$migratedName"))
+            }
+            val prefs = appCtx.prefs()
+            if (prefs.getString(C.TV_WALLPAPER, STYLE_DEFAULT) == STYLE_CUSTOM) {
+                prefs.edit { putString(C.TV_WALLPAPER, "$CUSTOM_PREFIX$migratedName") }
+            }
+        }
+        invalidateCaches()
+    }
+
+    fun deleteCustomImage(context: Context, fileName: String) {
+        val dir = wallpapersDir(context)
+        runCatching { File(dir, fileName).delete() }
+        runCatching { File(dir, "$THUMB_PREFIX$fileName").delete() }
+        val removedKey = "$CUSTOM_PREFIX$fileName"
+        val prefs = context.prefs()
+        val pool = prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null)
+        if (pool != null && removedKey in pool) {
+            val nextPool = LinkedHashSet(pool).apply { remove(removedKey) }
+            prefs.edit { putStringSet(C.TV_WALLPAPER_ROTATION_POOL, nextPool) }
+        }
+        val cur = prefs.getString(C.TV_WALLPAPER, STYLE_DEFAULT)
+        if (cur == removedKey || cur == STYLE_CUSTOM) {
+            val remaining = listCustomImages(context)
+            val fallback = remaining.lastOrNull()?.styleKey ?: STYLE_DEFAULT
+            prefs.edit { putString(C.TV_WALLPAPER, fallback) }
+        }
+        invalidateCaches()
+    }
+
+    fun deleteAllCustomImages(context: Context) {
+        val dir = wallpapersDir(context)
+        dir.listFiles()?.forEach { runCatching { it.delete() } }
+        runCatching { legacyCustomFile(context).delete() }
+        val prefs = context.prefs()
+        val pool = prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null)
+        if (pool != null) {
+            val filtered = pool.filterNot { isCustomStyleKey(it) }.toSet()
+            prefs.edit { putStringSet(C.TV_WALLPAPER_ROTATION_POOL, filtered) }
+        }
+        if (isCustomStyleKey(prefs.getString(C.TV_WALLPAPER, STYLE_DEFAULT))) {
+            prefs.edit { putString(C.TV_WALLPAPER, STYLE_DEFAULT) }
         }
         invalidateCaches()
     }
@@ -216,15 +599,36 @@ object TvWallpaper {
         val vis = visibility(context)
         val blurPct = blur(context)
         val effectiveAccent = ambientColor ?: 0xFFCBD5E1.toInt()
-        val stamp = if (activeStyle == STYLE_CUSTOM) {
-            if (customFileStamp == 0L) customFile(context).lastModified() else customFileStamp
-        } else 0L
+        val cacheKey = "$activeStyle|$baseColor|$effectiveAccent|${ambientColor != null}|$vis|$blurPct|$cacheGeneration"
 
-        val cacheKey = "$activeStyle|$baseColor|$effectiveAccent|${ambientColor != null}|$vis|$blurPct|$stamp"
         val bitmap = renderedCache.get(cacheKey) ?: run {
-            val built = when (activeStyle) {
-                STYLE_CUSTOM -> buildCustomWallpaperBitmap(context, baseColor, ambientColor, vis, blurPct, stamp)
-                else -> buildVectorWallpaperBitmap(activeStyle, baseColor, effectiveAccent, ambientColor != null, vis, blurPct)
+            val built = when {
+                isCustomStyleKey(activeStyle) -> buildCustomWallpaperBitmap(
+                    context = context,
+                    styleKey = activeStyle,
+                    baseColor = baseColor,
+                    ambientColor = ambientColor,
+                    visibilityPct = vis,
+                    blurPct = blurPct,
+                )
+                activeStyle in STUDIO_STYLES -> buildStudioShaderBitmap(
+                    styleKey = activeStyle,
+                    w = VECTOR_RENDER_W,
+                    h = VECTOR_RENDER_H,
+                    accentColor = effectiveAccent,
+                    visibilityPct = vis,
+                    blurPct = blurPct,
+                )
+                else -> buildVectorWallpaperBitmap(
+                    styleKey = activeStyle,
+                    w = VECTOR_RENDER_W,
+                    h = VECTOR_RENDER_H,
+                    baseColor = baseColor,
+                    accentColor = effectiveAccent,
+                    hasAmbientGlow = ambientColor != null,
+                    visibilityPct = vis,
+                    blurPct = blurPct,
+                )
             } ?: return null
             renderedCache.put(cacheKey, built)
             built
@@ -232,33 +636,101 @@ object TvWallpaper {
         return CenterCropBitmapDrawable(bitmap, baseColor)
     }
 
-    private fun loadCustomRawBitmap(context: Context, stamp: Long): Bitmap? {
-        val cached = cachedCustomRawBitmap
-        if (cached != null && !cached.isRecycled && cachedCustomRawStamp == stamp) {
-            return cached
+    /** Returns a crisp `320x180` (`16:9`) preview thumbnail bitmap for the visual gallery cards. */
+    private fun getGalleryPreviewBitmap(
+        context: Context,
+        styleKey: String,
+        accentColor: Int,
+    ): Bitmap? {
+        val key = "thumb|$styleKey|$accentColor|$cacheGeneration"
+        previewThumbCache.get(key)?.takeIf { !it.isRecycled }?.let { return it }
+
+        val baseColor = 0xFF0E0E14.toInt()
+        val built: Bitmap? = when {
+            isCustomStyleKey(styleKey) -> {
+                val item = listCustomImages(context).firstOrNull { it.styleKey == styleKey } ?: return null
+                ensureThumbForFile(item.file, item.thumbFile)
+                runCatching {
+                    BitmapFactory.decodeFile(
+                        if (item.thumbFile.isFile) item.thumbFile.absolutePath else item.file.absolutePath,
+                        BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 },
+                    )
+                }.getOrNull()
+            }
+            styleKey == STYLE_DEFAULT -> {
+                val bmp = Bitmap.createBitmap(THUMB_W, THUMB_H, Bitmap.Config.ARGB_8888)
+                val c = Canvas(bmp)
+                c.drawColor(baseColor)
+                val p1 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = RadialGradient(
+                        THUMB_W * 0.06f, 0f, THUMB_W * 0.85f,
+                        intArrayOf(withAlpha(accentColor, 0x8A), withAlpha(accentColor, 0x26), Color.TRANSPARENT),
+                        floatArrayOf(0f, 0.5f, 1f),
+                        Shader.TileMode.CLAMP,
+                    )
+                }
+                c.drawRect(0f, 0f, THUMB_W.toFloat(), THUMB_H.toFloat(), p1)
+                val p2 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = RadialGradient(
+                        THUMB_W.toFloat(), THUMB_H.toFloat(), THUMB_W * 0.60f,
+                        withAlpha(accentColor, 0x48), Color.TRANSPARENT, Shader.TileMode.CLAMP,
+                    )
+                }
+                c.drawRect(0f, 0f, THUMB_W.toFloat(), THUMB_H.toFloat(), p2)
+                bmp
+            }
+            styleKey in STUDIO_STYLES -> {
+                buildStudioShaderBitmap(
+                    styleKey = styleKey,
+                    w = THUMB_W,
+                    h = THUMB_H,
+                    accentColor = accentColor,
+                    visibilityPct = 78,
+                    blurPct = 0,
+                )
+            }
+            else -> {
+                buildVectorWallpaperBitmap(
+                    styleKey = styleKey,
+                    w = THUMB_W,
+                    h = THUMB_H,
+                    baseColor = baseColor,
+                    accentColor = accentColor,
+                    hasAmbientGlow = true,
+                    visibilityPct = 82,
+                    blurPct = 0,
+                )
+            }
         }
-        val file = customFile(context)
-        if (!file.isFile || file.length() <= 128L) return null
+        if (built != null) {
+            previewThumbCache.put(key, built)
+        }
+        return built
+    }
+
+    private fun loadCustomRawBitmap(context: Context, styleKey: String): Bitmap? {
+        val item = listCustomImages(context).firstOrNull { it.styleKey == styleKey } ?: return null
+        val cacheKey = "${item.fileName}|${item.file.lastModified()}"
+        rawCustomCache.get(cacheKey)?.takeIf { !it.isRecycled }?.let { return it }
         val decoded = runCatching {
             val opts = BitmapFactory.Options().apply {
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
-            BitmapFactory.decodeFile(file.absolutePath, opts)
+            BitmapFactory.decodeFile(item.file.absolutePath, opts)
         }.getOrNull() ?: return null
-        cachedCustomRawBitmap = decoded
-        cachedCustomRawStamp = stamp
+        rawCustomCache.put(cacheKey, decoded)
         return decoded
     }
 
     private fun buildCustomWallpaperBitmap(
         context: Context,
+        styleKey: String,
         baseColor: Int,
         ambientColor: Int?,
         visibilityPct: Int,
         blurPct: Int,
-        stamp: Long,
     ): Bitmap? {
-        val raw = loadCustomRawBitmap(context, stamp) ?: return null
+        val raw = loadCustomRawBitmap(context, styleKey) ?: return null
         val outW = if (blurPct > 0) VECTOR_RENDER_W else min(raw.width.coerceAtLeast(640), MAX_CUSTOM_W)
         val outH = if (blurPct > 0) VECTOR_RENDER_H else min(raw.height.coerceAtLeast(360), MAX_CUSTOM_H)
 
@@ -266,7 +738,6 @@ object TvWallpaper {
         val canvas = Canvas(out)
         canvas.drawColor(baseColor)
 
-        // Center-crop raw into out
         val scale = max(outW.toFloat() / raw.width.toFloat(), outH.toFloat() / raw.height.toFloat())
         val dx = (outW - raw.width * scale) * 0.5f
         val dy = (outH - raw.height * scale) * 0.5f
@@ -282,22 +753,20 @@ object TvWallpaper {
             stackBlurInPlace(out, radius)
         }
 
-        // Visibility controls how brightly the photo shines through vs protective dark TV readability scrim
         val visFrac = (visibilityPct / 100f).coerceIn(0.10f, 1f)
         val scrimAlpha = ((1f - visFrac * 0.84f) * 255f).roundToInt().coerceIn(36, 232)
         canvas.drawColor(Color.argb(scrimAlpha, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor)))
 
-        // Subtle left & bottom legibility vignette so side rail and text rows always stay crisp
-        val vignettePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        vignettePaint.shader = LinearGradient(
-            0f, 0f, outW * 0.42f, 0f,
-            Color.argb((95 * (1.15f - visFrac * 0.45f)).roundToInt().coerceIn(28, 120), 0, 0, 0),
-            Color.TRANSPARENT,
-            Shader.TileMode.CLAMP,
-        )
+        val vignettePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f, 0f, outW * 0.42f, 0f,
+                Color.argb((95 * (1.15f - visFrac * 0.45f)).roundToInt().coerceIn(28, 120), 0, 0, 0),
+                Color.TRANSPARENT,
+                Shader.TileMode.CLAMP,
+            )
+        }
         canvas.drawRect(0f, 0f, outW.toFloat(), outH.toFloat(), vignettePaint)
 
-        // Gentle ambient tint in the top-left corner when ambient color is enabled
         if (ambientColor != null) {
             val light = Color.luminance(ambientColor) > 0.45f
             val glowAlpha = ((if (light) 0x26 else 0x3C) * (0.55f + 0.45f * visFrac)).roundToInt().coerceIn(0, 110)
@@ -317,16 +786,924 @@ object TvWallpaper {
         return out
     }
 
+    // =========================================================================
+    // STUDIO & OLED PROCEDURAL SHADERS (Multi-threaded ACES filmic HDR engine)
+    // =========================================================================
+
+    private fun buildStudioShaderBitmap(
+        styleKey: String,
+        w: Int,
+        h: Int,
+        accentColor: Int,
+        visibilityPct: Int,
+        blurPct: Int,
+    ): Bitmap {
+        val acc = floatArrayOf(
+            Color.red(accentColor) / 255f,
+            Color.green(accentColor) / 255f,
+            Color.blue(accentColor) / 255f,
+        )
+        val light = Color.luminance(accentColor) > 0.52f
+        val visNorm = (visibilityPct / 100f).coerceIn(0.10f, 1f)
+        val inten = (0.24f + 0.96f * visNorm) * (if (light) 0.80f else 1.0f)
+
+        val pixels = IntArray(w * h)
+        when (styleKey) {
+            STYLE_VELVET_DRAPE -> renderVelvetDrape(pixels, w, h, acc, inten)
+            STYLE_DICHROIC_GLASS -> renderDichroicGlass(pixels, w, h, acc, inten)
+            STYLE_GLASS_RINGS -> renderGlassRings(pixels, w, h, acc, inten)
+            STYLE_STARRY_OLED -> renderStarryOled(pixels, w, h, acc, inten)
+            STYLE_TWILIGHT_DUNES -> renderTwilightDunes(pixels, w, h, acc, inten)
+            STYLE_ARCTIC_AURORA -> renderArcticAurora(pixels, w, h, acc, inten)
+        }
+
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        out.setPixels(pixels, 0, w, 0, 0, w, h)
+        if (blurPct > 0) {
+            val radius = ((blurPct / 100f) * 30f).roundToInt().coerceIn(1, 32)
+            stackBlurInPlace(out, radius)
+        }
+        return out
+    }
+
+    private fun runParallelRows(h: Int, block: (yStart: Int, yEnd: Int) -> Unit) {
+        if (h < 220 || workerCount <= 1) {
+            block(0, h)
+            return
+        }
+        val tasks = ArrayList<Callable<Unit>>(workerCount)
+        val chunk = (h + workerCount - 1) / workerCount
+        var start = 0
+        while (start < h) {
+            val s = start
+            val e = min(h, start + chunk)
+            tasks.add(Callable { block(s, e) })
+            start = e
+        }
+        shaderPool.invokeAll(tasks)
+    }
+
+    private fun shaderSmoothstep(edge0: Float, edge1: Float, x: Float): Float {
+        val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
+    private fun shaderShiftHue(col: FloatArray, deg: Float, satMul: Float, valMul: Float): FloatArray {
+        val r = col[0]
+        val g = col[1]
+        val b = col[2]
+        val maxC = max(r, max(g, b))
+        val minC = min(r, min(g, b))
+        val d = maxC - minC
+        val sat = if (maxC > 1e-6f) d / maxC else 0f
+        if (sat < 0.12f) {
+            return floatArrayOf(
+                (r * valMul).coerceIn(0f, 1.3f),
+                (g * valMul).coerceIn(0f, 1.3f),
+                (b * valMul).coerceIn(0f, 1.3f),
+            )
+        }
+        var hue = when (maxC) {
+            r -> ((g - b) / d) % 6f
+            g -> ((b - r) / d) + 2f
+            else -> ((r - g) / d) + 4f
+        } / 6f
+        if (hue < 0f) hue += 1f
+        hue = (hue + deg / 360f) % 1f
+        if (hue < 0f) hue += 1f
+
+        val newS = (sat * satMul).coerceIn(0f, 1f)
+        val newV = (maxC * valMul).coerceIn(0f, 1.3f)
+
+        val h6 = hue * 6f
+        val sector = floor(h6).toInt()
+        val f = h6 - sector
+        val p = newV * (1f - newS)
+        val q = newV * (1f - newS * f)
+        val t = newV * (1f - newS * (1f - f))
+        return when (sector % 6) {
+            0 -> floatArrayOf(newV, t, p)
+            1 -> floatArrayOf(q, newV, p)
+            2 -> floatArrayOf(p, newV, t)
+            3 -> floatArrayOf(p, q, newV)
+            4 -> floatArrayOf(t, p, newV)
+            else -> floatArrayOf(newV, p, q)
+        }
+    }
+
+    private fun packHdrPixel(hr: Float, hg: Float, hb: Float, x: Int, y: Int): Int {
+        var h = (x * 374761393) xor (y * 668265263)
+        h = (h xor (h ushr 13)) * 1274126177
+        val grain = (((h ushr 16) and 0xFF) / 255f - 0.5f) * 0.011f
+        val r = ((acesGamma(hr) + grain).coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+        val g = ((acesGamma(hg) + grain).coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+        val b = ((acesGamma(hb) + grain).coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+        return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    }
+
+    private fun fract(v: Float): Float = v - floor(v)
+
+    private fun hash12(px: Float, py: Float): Float {
+        var p3x = fract(px * 0.1031f)
+        var p3y = fract(py * 0.1031f)
+        var p3z = p3x
+        val dot = p3x * (p3y + 33.33f) + p3y * (p3z + 33.33f) + p3z * (p3x + 33.33f)
+        p3x += dot
+        p3y += dot
+        p3z += dot
+        return fract((p3x + p3y) * p3z)
+    }
+
+    private fun hash22x(px: Float, py: Float): Float {
+        var p3x = fract(px * 0.1031f)
+        var p3y = fract(py * 0.1030f)
+        var p3z = fract(px * 0.0973f)
+        val dot = p3x * (p3y + 33.33f) + p3y * (p3z + 33.33f) + p3z * (p3x + 33.33f)
+        p3x += dot
+        p3y += dot
+        p3z += dot
+        return fract((p3x + p3y) * p3z)
+    }
+
+    private fun hash22y(px: Float, py: Float): Float {
+        var p3x = fract(px * 0.1031f)
+        var p3y = fract(py * 0.1030f)
+        var p3z = fract(px * 0.0973f)
+        val dot = p3x * (p3y + 33.33f) + p3y * (p3z + 33.33f) + p3z * (p3x + 33.33f)
+        p3x += dot
+        p3y += dot
+        p3z += dot
+        return fract((p3x + p3z) * p3y)
+    }
+
+    private fun vnoise(px: Float, py: Float): Float {
+        val ix = floor(px)
+        val iy = floor(py)
+        val fx = px - ix
+        val fy = py - iy
+        val ux = fx * fx * fx * (fx * (fx * 6f - 15f) + 10f)
+        val uy = fy * fy * fy * (fy * (fy * 6f - 15f) + 10f)
+        val a = hash12(ix, iy)
+        val b = hash12(ix + 1f, iy)
+        val c = hash12(ix, iy + 1f)
+        val d = hash12(ix + 1f, iy + 1f)
+        val ab = a + (b - a) * ux
+        val cd = c + (d - c) * ux
+        return ab + (cd - ab) * uy
+    }
+
+    private fun smoothFbm(startX: Float, startY: Float): Float {
+        var px = startX
+        var py = startY
+        var v = 0f
+        var amp = 0.55f
+        repeat(4) {
+            v += amp * vnoise(px, py)
+            val nx = (0.80f * px - 0.60f * py) * 1.95f + 13.7f
+            val ny = (0.60f * px + 0.80f * py) * 1.95f + 27.3f
+            px = nx
+            py = ny
+            amp *= 0.48f
+        }
+        return v
+    }
+
+    /**
+     * Splat-based exact equivalent of GLSL `starLayer`: iterates only over existing stars (`h >= density`)
+     * and accumulates sub-pixel Gaussian core + halo into the linear HDR RGB buffer.
+     */
+    private fun splatStarLayer(
+        hdrR: FloatArray,
+        hdrG: FloatArray,
+        hdrB: FloatArray,
+        w: Int,
+        h: Int,
+        uvOffsetX: Float,
+        uvOffsetY: Float,
+        scale: Float,
+        density: Float,
+        brightness: Float,
+        tintA: FloatArray,
+        tintB: FloatArray,
+        minUvY: Float = 0f,
+        fadeUvY0: Float = 0f,
+        fadeUvY1: Float = 0f,
+    ) {
+        val cellsX = 16f * scale
+        val cellsY = 9f * scale
+        val minIdX = floor(uvOffsetX * cellsX).toInt() - 1
+        val maxIdX = floor((1f + uvOffsetX) * cellsX).toInt() + 1
+        val minIdY = floor((minUvY + uvOffsetY) * cellsY).toInt() - 1
+        val maxIdY = floor((1f + uvOffsetY) * cellsY).toInt() + 1
+
+        val pxPerCellX = w.toFloat() / cellsX
+        val pxPerCellY = h.toFloat() / cellsY
+        val radiusCells = 0.72f
+
+        for (idy in minIdY..maxIdY) {
+            val fIdy = idy.toFloat()
+            for (idx in minIdX..maxIdX) {
+                val fIdx = idx.toFloat()
+                val hv = hash12(fIdx, fIdy)
+                if (hv < density) continue
+
+                val jx = (hash22x(fIdx + 17.3f, fIdy + 17.3f) - 0.5f) * 0.66f
+                val jy = (hash22y(fIdx + 17.3f, fIdy + 17.3f) - 0.5f) * 0.66f
+                val starCellX = fIdx + 0.5f + jx
+                val starCellY = fIdy + 0.5f + jy
+
+                val starUvX = starCellX / cellsX - uvOffsetX
+                val starUvY = starCellY / cellsY - uvOffsetY
+                if (starUvX < -0.02f || starUvX > 1.02f || starUvY < minUvY - 0.02f || starUvY > 1.02f) continue
+
+                val yFade = if (fadeUvY1 > fadeUvY0) shaderSmoothstep(fadeUvY0, fadeUvY1, starUvY) else 1f
+                if (yFade <= 0.001f) continue
+
+                val strength = (hv - density) / (1f - density)
+                val coreSharpness = 95f + (42f - 95f) * strength
+                val haloFactor = 0.22f * strength * strength
+                val amp = (0.28f + 0.72f * strength * strength) * brightness * yFade
+
+                val mixAB = hash12(fIdx + 91.1f, fIdy + 91.1f)
+                val tintMix = 0.45f * hash12(fIdx + 43.7f, fIdy + 43.7f)
+                val tr = tintA[0] + (tintB[0] - tintA[0]) * mixAB
+                val tg = tintA[1] + (tintB[1] - tintA[1]) * mixAB
+                val tb = tintA[2] + (tintB[2] - tintA[2]) * mixAB
+                val sr = (0.92f + (tr - 0.92f) * tintMix) * amp
+                val sg = (0.95f + (tg - 0.95f) * tintMix) * amp
+                val sb = (1.00f + (tb - 1.00f) * tintMix) * amp
+
+                val centerPxX = starUvX * w
+                val centerPxY = (1f - starUvY) * h
+                val rx = max(2, (radiusCells * pxPerCellX + 1f).toInt())
+                val ry = max(2, (radiusCells * pxPerCellY + 1f).toInt())
+                val x0 = (centerPxX.toInt() - rx).coerceAtLeast(0)
+                val x1 = (centerPxX.toInt() + rx).coerceAtMost(w - 1)
+                val y0 = (centerPxY.toInt() - ry).coerceAtLeast(0)
+                val y1 = (centerPxY.toInt() + ry).coerceAtMost(h - 1)
+
+                for (py in y0..y1) {
+                    val uvY = 1f - (py + 0.5f) / h.toFloat()
+                    if (uvY < minUvY) continue
+                    val dyCell = (uvY + uvOffsetY) * cellsY - starCellY
+                    val rowOff = py * w
+                    for (px in x0..x1) {
+                        val uvX = (px + 0.5f) / w.toFloat()
+                        val dxCell = (uvX + uvOffsetX) * cellsX - starCellX
+                        val d2 = dxCell * dxCell + dyCell * dyCell
+                        if (d2 > 0.55f) continue
+                        val d = sqrt(d2)
+                        val intensity = fastExpNeg(d2 * coreSharpness) + fastExpNeg(d * 9.5f) * haloFactor
+                        if (intensity > 1e-4f) {
+                            val idxPx = rowOff + px
+                            hdrR[idxPx] += sr * intensity
+                            hdrG[idxPx] += sg * intensity
+                            hdrB[idxPx] += sb * intensity
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** 1. Drapé de Velours — sweeping bicolored matte-velvet folds over deep OLED black. */
+    private fun renderVelvetDrape(pixels: IntArray, w: Int, h: Int, acc: FloatArray, inten: Float) {
+        val cWarm = shaderShiftHue(acc, 32f, 0.95f, 1.08f)
+        val cCool = shaderShiftHue(acc, -34f, 1.0f, 0.98f)
+
+        val pxArr = FloatArray(w) { x -> ((x + 0.5f) / w.toFloat() - 0.5f) * 2.6f }
+        // Precompute per-fold X terms
+        val foldBaseX = Array(5) { fi ->
+            val f = fi.toFloat()
+            val phase = f * 0.78f - 1.1f
+            FloatArray(w) { x ->
+                val px = pxArr[x]
+                px * 0.68f + 0.18f * cos(px * 2.9f + f * 1.1f) - phase * 0.42f
+            }
+        }
+        val foldSinArgX = Array(5) { fi ->
+            val f = fi.toFloat()
+            FloatArray(w) { x -> pxArr[x] * 1.65f - f * 0.55f }
+        }
+        val foldBodyScaleR = Array(5) { FloatArray(w) }
+        val foldBodyScaleG = Array(5) { FloatArray(w) }
+        val foldBodyScaleB = Array(5) { FloatArray(w) }
+        val foldCrestScaleR = Array(5) { FloatArray(w) }
+        val foldCrestScaleG = Array(5) { FloatArray(w) }
+        val foldCrestScaleB = Array(5) { FloatArray(w) }
+
+        for (fi in 0 until 5) {
+            val f = fi.toFloat()
+            val midR = acc[0] + (cWarm[0] - acc[0]) * (f / 4f)
+            val midG = acc[1] + (cWarm[1] - acc[1]) * (f / 4f)
+            val midB = acc[2] + (cWarm[2] - acc[2]) * (f / 4f)
+            val bodyFactor = (0.28f + 0.16f * (1f - f / 4f)) * inten
+            val crestFactor = (0.26f - f * 0.032f) * inten
+            for (x in 0 until w) {
+                val px = pxArr[x]
+                val tMix = shaderSmoothstep(-1.2f, 1.2f, px)
+                val tr = cCool[0] + (midR - cCool[0]) * tMix
+                val tg = cCool[1] + (midG - cCool[1]) * tMix
+                val tb = cCool[2] + (midB - cCool[2]) * tMix
+                val xMask = shaderSmoothstep(-1.45f, -0.1f, px + f * 0.12f) *
+                    shaderSmoothstep(1.55f, 0.15f, px - f * 0.08f)
+                val bm = bodyFactor * (0.35f + 0.65f * xMask)
+                val cm = crestFactor * (0.30f + 0.70f * xMask)
+                foldBodyScaleR[fi][x] = tr * bm
+                foldBodyScaleG[fi][x] = tg * bm
+                foldBodyScaleB[fi][x] = tb * bm
+                foldCrestScaleR[fi][x] = (tr + (1f - tr) * 0.42f) * cm
+                foldCrestScaleG[fi][x] = (tg + (1f - tg) * 0.42f) * cm
+                foldCrestScaleB[fi][x] = (tb + (1f - tb) * 0.42f) * cm
+            }
+        }
+
+        runParallelRows(h) { yStart, yEnd ->
+            for (y in yStart until yEnd) {
+                val uvY = 1f - (y + 0.5f) / h.toFloat()
+                val py = (uvY - 0.5f) * 1.55f
+                val pyLinear = py * 1.35f
+                val cosPy = 0.5f * cos(py * 1.8f)
+                val rowOff = y * w
+                for (x in 0 until w) {
+                    var cr = 0.0004f
+                    var cg = 0.0004f
+                    var cb = 0.0010f
+                    for (fi in 0 until 5) {
+                        val wave = pyLinear + foldBaseX[fi][x] + 0.36f * sin(foldSinArgX[fi][x] + cosPy)
+                        if (wave > -0.38f) {
+                            val fb = shaderSmoothstep(-0.38f, 0f, wave) * fastExpNeg(max(0f, wave) * 5.6f)
+                            val fbPow = fb * sqrt(fb) // ~pow(fb, 1.35..1.5)
+                            cr += foldBodyScaleR[fi][x] * fbPow
+                            cg += foldBodyScaleG[fi][x] * fbPow
+                            cb += foldBodyScaleB[fi][x] * fbPow
+                        }
+                        val absW = abs(wave)
+                        if (absW < 0.55f) {
+                            val crest = fastExpNeg(absW * 26f)
+                            cr += foldCrestScaleR[fi][x] * crest
+                            cg += foldCrestScaleG[fi][x] * crest
+                            cb += foldCrestScaleB[fi][x] * crest
+                        }
+                    }
+                    pixels[rowOff + x] = packHdrPixel(cr, cg, cb, x, y)
+                }
+            }
+        }
+    }
+
+    /** 2. Verre Dichroïque — refractive curved glass sheets with RGB chromatic rim dispersion. */
+    private fun renderDichroicGlass(pixels: IntArray, w: Int, h: Int, acc: FloatArray, inten: Float) {
+        val cWarm = shaderShiftHue(acc, 38f, 0.95f, 1.1f)
+        val cCool = shaderShiftHue(acc, -38f, 1.0f, 1.0f)
+
+        val c1Arr = FloatArray(w)
+        val c2Arr = FloatArray(w)
+        val c3Arr = FloatArray(w)
+        val t1R = FloatArray(w); val t1G = FloatArray(w); val t1B = FloatArray(w)
+        val t2R = FloatArray(w); val t2G = FloatArray(w); val t2B = FloatArray(w)
+        val t3R = FloatArray(w); val t3G = FloatArray(w); val t3B = FloatArray(w)
+        val uxSqArr = FloatArray(w)
+
+        for (x in 0 until w) {
+            val ux = (x + 0.5f) / w.toFloat()
+            c1Arr[x] = 0.14f + 0.58f * shaderSmoothstep(-0.08f, 1.08f, ux) + 0.13f * sin(ux * 3.5f + 0.4f)
+            c2Arr[x] = 0.84f - 0.50f * ux + 0.15f * sin(ux * 3.9f + 2.1f)
+            c3Arr[x] = 0.34f + 0.22f * sin(ux * 3.0f - 0.7f) + 0.18f * ux
+            val m = shaderSmoothstep(0.08f, 0.92f, ux)
+            t1R[x] = acc[0] + (cWarm[0] - acc[0]) * m
+            t1G[x] = acc[1] + (cWarm[1] - acc[1]) * m
+            t1B[x] = acc[2] + (cWarm[2] - acc[2]) * m
+            t2R[x] = cCool[0] + (acc[0] - cCool[0]) * m
+            t2G[x] = cCool[1] + (acc[1] - cCool[1]) * m
+            t2B[x] = cCool[2] + (acc[2] - cCool[2]) * m
+            t3R[x] = cWarm[0] + (cCool[0] - cWarm[0]) * m
+            t3G[x] = cWarm[1] + (cCool[1] - cWarm[1]) * m
+            t3B[x] = cWarm[2] + (cCool[2] - cWarm[2]) * m
+            val dx = (ux - 0.5f) * 1.12f
+            uxSqArr[x] = dx * dx
+        }
+
+        runParallelRows(h) { yStart, yEnd ->
+            for (y in yStart until yEnd) {
+                val uvY = 1f - (y + 0.5f) / h.toFloat()
+                val dyVig = (uvY - 0.5f) * 1.22f
+                val dySq = dyVig * dyVig
+                val rowOff = y * w
+
+                for (x in 0 until w) {
+                    var cr = 0.0005f
+                    var cg = 0.0005f
+                    var cb = 0.0012f
+
+                    // Sheet 1
+                    run {
+                        val d = uvY - c1Arr[x]
+                        if (d > -0.04f) {
+                            val body = shaderSmoothstep(-0.003f, 0.005f, d) * fastExpNeg(max(0f, d) * 7.5f)
+                            val bPow = body * sqrt(body) * 0.52f * inten
+                            cr += t1R[x] * bPow
+                            cg += t1G[x] * bPow
+                            cb += t1B[x] * bPow
+                        }
+                        val rr = 0.0024f / (abs(d - 0.0018f) + 0.0032f)
+                        val rg = 0.0024f / (abs(d) + 0.0032f)
+                        val rb = 0.0024f / (abs(d + 0.0020f) + 0.0032f)
+                        val s = 0.46f * inten
+                        cr += (t1R[x] * 0.45f + 0.55f) * (rr * sqrt(rr)) * s
+                        cg += (t1G[x] * 0.45f + 0.55f) * (rg * sqrt(rg)) * s
+                        cb += (t1B[x] * 0.45f + 0.55f) * (rb * sqrt(rb)) * s
+                    }
+                    // Sheet 2
+                    run {
+                        val d = c2Arr[x] - uvY
+                        if (d > -0.04f) {
+                            val body = shaderSmoothstep(-0.003f, 0.005f, d) * fastExpNeg(max(0f, d) * 6.8f)
+                            val bPow = body * sqrt(body) * 0.52f * inten
+                            cr += t2R[x] * bPow
+                            cg += t2G[x] * bPow
+                            cb += t2B[x] * bPow
+                        }
+                        val rr = 0.0024f / (abs(d - 0.0018f) + 0.0032f)
+                        val rg = 0.0024f / (abs(d) + 0.0032f)
+                        val rb = 0.0024f / (abs(d + 0.0020f) + 0.0032f)
+                        val s = 0.46f * inten
+                        cr += (t2R[x] * 0.45f + 0.55f) * (rr * sqrt(rr)) * s
+                        cg += (t2G[x] * 0.45f + 0.55f) * (rg * sqrt(rg)) * s
+                        cb += (t2B[x] * 0.45f + 0.55f) * (rb * sqrt(rb)) * s
+                    }
+                    // Sheet 3
+                    run {
+                        val d = c3Arr[x] - uvY
+                        val inten3 = inten * 0.82f
+                        if (d > -0.04f) {
+                            val body = shaderSmoothstep(-0.003f, 0.005f, d) * fastExpNeg(max(0f, d) * 8.8f)
+                            val bPow = body * sqrt(body) * 0.52f * inten3
+                            cr += t3R[x] * bPow
+                            cg += t3G[x] * bPow
+                            cb += t3B[x] * bPow
+                        }
+                        val rr = 0.0024f / (abs(d - 0.0018f) + 0.0032f)
+                        val rg = 0.0024f / (abs(d) + 0.0032f)
+                        val rb = 0.0024f / (abs(d + 0.0020f) + 0.0032f)
+                        val s = 0.46f * inten3
+                        cr += (t3R[x] * 0.45f + 0.55f) * (rr * sqrt(rr)) * s
+                        cg += (t3G[x] * 0.45f + 0.55f) * (rg * sqrt(rg)) * s
+                        cb += (t3B[x] * 0.45f + 0.55f) * (rb * sqrt(rb)) * s
+                    }
+
+                    val vig = 0.28f + 0.72f * shaderSmoothstep(1.38f, 0.32f, sqrt(uxSqArr[x] + dySq))
+                    pixels[rowOff + x] = packHdrPixel(cr * vig, cg * vig, cb * vig, x, y)
+                }
+            }
+        }
+    }
+
+    /** 3. Ondes de Verre — off-center frosted glass concentric ripples lit from upper-left. */
+    private fun renderGlassRings(pixels: IntArray, w: Int, h: Int, acc: FloatArray, inten: Float) {
+        val cSec = shaderShiftHue(acc, -36f, 1.0f, 1.0f)
+        val cWarm = shaderShiftHue(acc, 32f, 0.92f, 1.1f)
+        val aspect = w.toFloat() / h.toFloat()
+
+        val cosRef = cos(2.55f)
+        val sinRef = sin(2.55f)
+        val cosFi = FloatArray(6) { cos(it.toFloat()) }
+        val sinFi = FloatArray(6) { sin(it.toFloat()) }
+        val ringR = FloatArray(6)
+        val ringG = FloatArray(6)
+        val ringB = FloatArray(6)
+        val rimColR = FloatArray(6)
+        val rimColG = FloatArray(6)
+        val rimColB = FloatArray(6)
+        for (i in 0 until 6) {
+            val t = i / 5f
+            val mr = cSec[0] + (cWarm[0] - cSec[0]) * t
+            val mg = cSec[1] + (cWarm[1] - cSec[1]) * t
+            val mb = cSec[2] + (cWarm[2] - cSec[2]) * t
+            val rr = acc[0] + (mr - acc[0]) * 0.55f
+            val rg = acc[1] + (mg - acc[1]) * 0.55f
+            val rb = acc[2] + (mb - acc[2]) * 0.55f
+            ringR[i] = rr; ringG[i] = rg; ringB[i] = rb
+            rimColR[i] = rr + (1f - rr) * 0.52f
+            rimColG[i] = rg + (1f - rg) * 0.52f
+            rimColB[i] = rb + (1f - rb) * 0.52f
+        }
+
+        val dxArr = FloatArray(w) { x -> ((x + 0.5f) / w.toFloat() - 0.76f) * aspect }
+
+        runParallelRows(h) { yStart, yEnd ->
+            for (y in yStart until yEnd) {
+                val uvY = 1f - (y + 0.5f) / h.toFloat()
+                val dy = uvY - 0.26f
+                val dySq = dy * dy
+                val rowOff = y * w
+
+                for (x in 0 until w) {
+                    val dx = dxArr[x]
+                    val rSq = dx * dx + dySq
+                    val r = sqrt(rSq).coerceAtLeast(1e-5f)
+                    val invR = 1f / r
+                    val cosDiff = (dx * cosRef + dy * sinRef) * invR
+                    val baseArc = (0.5f + 0.5f * cosDiff).coerceIn(0f, 1f)
+                    val lightArc = baseArc * sqrt(baseArc) // ~pow(baseArc, 1.5..1.6)
+
+                    // Exact double-angle identities: sin(2*ang) = 2*dx*dy/r^2, cos(2*ang) = (dx^2 - dy^2)/r^2
+                    val invRSq = invR * invR
+                    val sin2A = 2f * dx * dy * invRSq
+                    val cos2A = (dx * dx - dySq) * invRSq
+
+                    var cr = 0.0003f
+                    var cg = 0.0004f
+                    var cb = 0.0009f
+
+                    for (i in 0 until 6) {
+                        val rad = 0.18f + i * 0.195f + 0.018f * (sin2A * cosFi[i] + cos2A * sinFi[i])
+                        val dr = r - rad
+                        val atten = (1f - i * 0.11f) * (0.22f + 0.78f * lightArc) * inten
+                        val negDr = -dr
+                        if (negDr > -0.01f) {
+                            val body = shaderSmoothstep(-0.004f, 0.006f, negDr) * fastExpNeg(max(0f, negDr) * 14f)
+                            val bTerm = (body * sqrt(sqrt(body))) * 0.44f * atten
+                            cr += ringR[i] * bTerm
+                            cg += ringG[i] * bTerm
+                            cb += ringB[i] * bTerm
+                        }
+                        val rim = 0.0018f / (abs(dr) + 0.0028f)
+                        val rTerm = (rim * sqrt(rim)) * 0.34f * atten
+                        cr += rimColR[i] * rTerm
+                        cg += rimColG[i] * rTerm
+                        cb += rimColB[i] * rTerm
+                    }
+                    pixels[rowOff + x] = packHdrPixel(cr, cg, cb, x, y)
+                }
+            }
+        }
+    }
+
+    /** 4. Nuit Étoilée OLED — pure `#000000` OLED starfield + understated diagonal Milky-Way veil (no black hole). */
+    private fun renderStarryOled(pixels: IntArray, w: Int, h: Int, acc: FloatArray, inten: Float) {
+        val cSec = shaderShiftHue(acc, -36f, 1.0f, 1.0f)
+        val cWarm = shaderShiftHue(acc, 28f, 0.85f, 1.1f)
+
+        // Evaluate smooth low-frequency Milky-Way dust veil on a coarse 160x90 grid and bilinearly interpolate
+        val gw = 160
+        val gh = 90
+        val gridR = FloatArray((gw + 1) * (gh + 1))
+        val gridG = FloatArray((gw + 1) * (gh + 1))
+        val gridB = FloatArray((gw + 1) * (gh + 1))
+
+        for (gy in 0..gh) {
+            val uvY = 1f - gy.toFloat() / gh.toFloat()
+            val mwY = uvY - 0.52f
+            for (gx in 0..gw) {
+                val uvX = gx.toFloat() / gw.toFloat()
+                val mwX = uvX - 0.54f
+                val diag = mwX * 0.58f - mwY * 0.81f
+                val along = mwX * 0.81f + mwY * 0.58f
+                val band = fastExpNeg(diag * diag * 9.5f) * shaderSmoothstep(0.95f, 0f, abs(along))
+                if (band > 0.001f) {
+                    val cloud = smoothFbm(uvX * 4.2f + 1.8f, uvY * 2.6f + 3.1f)
+                    val sCloud = shaderSmoothstep(0.28f, 0.88f, cloud)
+                    val nebula = band * (sCloud * sqrt(sCloud))
+                    val dustLane = smoothFbm(uvX * 6.5f + 5.2f, uvY * 3.8f + 1.4f)
+                    val dustAtten = 1f - 0.45f * band * shaderSmoothstep(0.52f, 0.82f, dustLane)
+                    val tMix = shaderSmoothstep(-0.4f, 0.4f, along)
+                    val scale = nebula * 0.16f * inten * dustAtten
+                    val gi = gy * (gw + 1) + gx
+                    gridR[gi] = (cSec[0] + (acc[0] - cSec[0]) * tMix) * scale
+                    gridG[gi] = (cSec[1] + (acc[1] - cSec[1]) * tMix) * scale
+                    gridB[gi] = (cSec[2] + (acc[2] - cSec[2]) * tMix) * scale
+                }
+            }
+        }
+
+        val hdrR = FloatArray(w * h)
+        val hdrG = FloatArray(w * h)
+        val hdrB = FloatArray(w * h)
+
+        runParallelRows(h) { yStart, yEnd ->
+            for (y in yStart until yEnd) {
+                val fy = (y + 0.5f) / h.toFloat() * gh
+                val iy = fy.toInt().coerceIn(0, gh - 1)
+                val ty = fy - iy
+                val r0 = iy * (gw + 1)
+                val r1 = (iy + 1) * (gw + 1)
+                val rowOff = y * w
+                for (x in 0 until w) {
+                    val fx = (x + 0.5f) / w.toFloat() * gw
+                    val ix = fx.toInt().coerceIn(0, gw - 1)
+                    val tx = fx - ix
+                    val w00 = (1f - tx) * (1f - ty)
+                    val w10 = tx * (1f - ty)
+                    val w01 = (1f - tx) * ty
+                    val w11 = tx * ty
+                    val p = rowOff + x
+                    hdrR[p] = gridR[r0 + ix] * w00 + gridR[r0 + ix + 1] * w10 + gridR[r1 + ix] * w01 + gridR[r1 + ix + 1] * w11
+                    hdrG[p] = gridG[r0 + ix] * w00 + gridG[r0 + ix + 1] * w10 + gridG[r1 + ix] * w01 + gridG[r1 + ix + 1] * w11
+                    hdrB[p] = gridB[r0 + ix] * w00 + gridB[r0 + ix + 1] * w10 + gridB[r1 + ix] * w01 + gridB[r1 + ix + 1] * w11
+                }
+            }
+        }
+
+        // 3 multi-scale crisp sub-pixel star layers
+        splatStarLayer(
+            hdrR, hdrG, hdrB, w, h, 0f, 0f, 13.5f, 0.90f, 0.55f * inten,
+            floatArrayOf(acc[0] * 0.45f + 0.55f, acc[1] * 0.45f + 0.55f, acc[2] * 0.45f + 0.55f),
+            floatArrayOf(cSec[0] * 0.40f + 0.60f, cSec[1] * 0.40f + 0.60f, cSec[2] * 0.40f + 0.60f),
+        )
+        splatStarLayer(
+            hdrR, hdrG, hdrB, w, h, 0.37f, 0.19f, 7.5f, 0.945f, 1.05f * inten,
+            floatArrayOf(acc[0] * 0.55f + 0.45f, acc[1] * 0.55f + 0.45f, acc[2] * 0.55f + 0.45f),
+            floatArrayOf(cWarm[0] * 0.45f + 0.55f, cWarm[1] * 0.45f + 0.55f, cWarm[2] * 0.45f + 0.55f),
+        )
+        splatStarLayer(
+            hdrR, hdrG, hdrB, w, h, 0.71f, 0.63f, 3.8f, 0.972f, 1.65f * inten,
+            floatArrayOf(acc[0] * 0.50f + 0.50f, acc[1] * 0.50f + 0.50f, acc[2] * 0.50f + 0.50f),
+            floatArrayOf(0.92f, 0.96f, 1.0f),
+        )
+
+        runParallelRows(h) { yStart, yEnd ->
+            for (y in yStart until yEnd) {
+                val rowOff = y * w
+                for (x in 0 until w) {
+                    val p = rowOff + x
+                    pixels[p] = packHdrPixel(hdrR[p], hdrG[p], hdrB[p], x, y)
+                }
+            }
+        }
+    }
+
+    /** 5. Dunes Crépusculaires — 4x RGSS + exact slope-corrected Euclidean crest anti-aliasing (zero stair-stepping). */
+    private fun renderTwilightDunes(pixels: IntArray, w: Int, h: Int, acc: FloatArray, inten: Float) {
+        val cWarm = shaderShiftHue(acc, 28f, 0.92f, 1.08f)
+        val skyTintR = acc[0] + (cWarm[0] - acc[0]) * 0.45f
+        val skyTintG = acc[1] + (cWarm[1] - acc[1]) * 0.45f
+        val skyTintB = acc[2] + (cWarm[2] - acc[2]) * 0.45f
+        val orbTintR = cWarm[0] + (1f - cWarm[0]) * 0.42f
+        val orbTintG = cWarm[1] + (1f - cWarm[1]) * 0.42f
+        val orbTintB = cWarm[2] + (1f - cWarm[2]) * 0.42f
+        val litTintR = acc[0] + (cWarm[0] - acc[0]) * 0.52f
+        val litTintG = acc[1] + (cWarm[1] - acc[1]) * 0.52f
+        val litTintB = acc[2] + (cWarm[2] - acc[2]) * 0.52f
+        val mistTintR = acc[0] + (cWarm[0] - acc[0]) * 0.35f
+        val mistTintG = acc[1] + (cWarm[1] - acc[1]) * 0.35f
+        val mistTintB = acc[2] + (cWarm[2] - acc[2]) * 0.35f
+        val rimTintR = cWarm[0] + (1f - cWarm[0]) * 0.52f
+        val rimTintG = cWarm[1] + (1f - cWarm[1]) * 0.52f
+        val rimTintB = cWarm[2] + (1f - cWarm[2]) * 0.52f
+
+        // Splat stars into sky HDR buffer first so dunes cleanly occlude them
+        val starR = FloatArray(w * h)
+        val starG = FloatArray(w * h)
+        val starB = FloatArray(w * h)
+        splatStarLayer(
+            starR, starG, starB, w, h, 0f, 0f, 9.5f, 0.955f, 0.68f * inten,
+            floatArrayOf(acc[0] * 0.40f + 0.60f, acc[1] * 0.40f + 0.60f, acc[2] * 0.40f + 0.60f),
+            floatArrayOf(1f, 1f, 1f),
+            minUvY = 0.46f,
+            fadeUvY0 = 0.46f,
+            fadeUvY1 = 0.88f,
+        )
+
+        val pxUv = 1f / max(h.toFloat(), 360f)
+        val aaWidth = 1.35f * pxUv
+        val aspectSq = (h.toFloat() * h.toFloat()) / max(w.toFloat() * w.toFloat(), 1f)
+
+        // 4x RGSS sub-pixel offsets (matching WebGL reference 1:1)
+        val rgssDx = floatArrayOf(0.125f / w, -0.375f / w, 0.375f / w, -0.125f / w)
+        val rgssDy = floatArrayOf(0.375f / h, 0.125f / h, -0.125f / h, -0.375f / h)
+
+        // Precompute dune crestY, invGradNorm, and dWave*5.8 for all 4 dunes x 4 RGSS samples across X
+        val crestPre = Array(16) { FloatArray(w) }
+        val invGradPre = Array(16) { FloatArray(w) }
+        val dWavePre = Array(16) { FloatArray(w) }
+        val orbDxSq = FloatArray(w) { x ->
+            val dx = ((x + 0.5f) / w.toFloat() - 0.64f) * 1.1f
+            dx * dx
+        }
+
+        for (i in 0 until 4) {
+            val fi = i.toFloat()
+            val baseY = 0.44f - fi * 0.085f
+            val freq = 2.1f + fi * 0.35f
+            for (s in 0 until 4) {
+                val slot = i * 4 + s
+                val dxSub = rgssDx[s]
+                for (x in 0 until w) {
+                    val uvX = (x + 0.5f) / w.toFloat() + dxSub
+                    val xShift = uvX * freq + fi * 2.35f
+                    val wave = sin(xShift) * 0.055f + cos(xShift * 0.55f - 0.8f) * 0.042f
+                    val dWave = cos(xShift) * 0.055f - sin(xShift * 0.55f - 0.8f) * 0.0231f
+                    val dWaveDx = dWave * freq
+                    crestPre[slot][x] = baseY + wave
+                    invGradPre[slot][x] = 1f / sqrt(1f + dWaveDx * dWaveDx * aspectSq)
+                    dWavePre[slot][x] = dWave * 5.8f
+                }
+            }
+        }
+
+        runParallelRows(h) { yStart, yEnd ->
+            for (y in yStart until yEnd) {
+                val baseUvY = 1f - (y + 0.5f) / h.toFloat()
+                val skyGlow = fastExpNeg(max(0f, baseUvY - 0.36f) * 4.6f)
+                val skyGlowPow = skyGlow * sqrt(skyGlow) * 0.42f * inten
+                val baseSkyR = 0.0008f + skyTintR * skyGlowPow
+                val baseSkyG = 0.0008f + skyTintG * skyGlowPow
+                val baseSkyB = 0.0022f + skyTintB * skyGlowPow
+                val orbDy = (baseUvY - 0.50f) * 1.9f
+                val orbDySq = orbDy * orbDy
+                val rowOff = y * w
+
+                for (x in 0 until w) {
+                    val pIdx = rowOff + x
+                    val orb = fastExpNeg(sqrt(orbDxSq[x] + orbDySq) * 3.4f) * 0.38f * inten
+                    val initR = baseSkyR + orbTintR * orb + starR[pIdx]
+                    val initG = baseSkyG + orbTintG * orb + starG[pIdx]
+                    val initB = baseSkyB + orbTintB * orb + starB[pIdx]
+
+                    var sumR = 0f
+                    var sumG = 0f
+                    var sumB = 0f
+
+                    for (s in 0 until 4) {
+                        val uvY = baseUvY + rgssDy[s]
+                        var cr = initR
+                        var cg = initG
+                        var cb = initB
+
+                        for (i in 0 until 4) {
+                            val slot = i * 4 + s
+                            val crestY = crestPre[slot][x]
+                            val orthoDist = (crestY - uvY) * invGradPre[slot][x]
+                            if (orthoDist > -aaWidth) {
+                                val coverage = shaderSmoothstep(-aaWidth, aaWidth, orthoDist)
+                                if (coverage > 0.0005f) {
+                                    val depth = i / 3f
+                                    val distDown = max(0f, crestY - uvY)
+                                    val spineSlope = if ((i and 1) == 0) 0.8f else -0.8f
+                                    val spineOffset = dWavePre[slot][x] - distDown * spineSlope
+                                    val sunSide = shaderSmoothstep(-0.18f, 0.22f, spineOffset)
+
+                                    val darkFactor = 0.014f * (1f - depth) * inten
+                                    val dR = 0.0007f + acc[0] * darkFactor
+                                    val dG = 0.0007f + acc[1] * darkFactor
+                                    val dB = 0.0018f + acc[2] * darkFactor
+
+                                    val litScale = (0.28f - 0.13f * depth) * fastExpNeg(distDown * 3.8f) * inten
+                                    val lR = litTintR * litScale
+                                    val lG = litTintG * litScale
+                                    val lB = litTintB * litScale
+
+                                    var duneR = dR + (lR - dR) * sunSide
+                                    var duneG = dG + (lG - dG) * sunSide
+                                    var duneB = dB + (lB - dB) * sunSide
+
+                                    val mist = fastExpNeg(distDown * 14f) * (1f - depth * 0.78f) * 0.11f * inten
+                                    duneR += mistTintR * mist
+                                    duneG += mistTintG * mist
+                                    duneB += mistTintB * mist
+
+                                    val rim = fastExpNeg(max(0f, orthoDist) * 95f) * (0.25f + 0.75f * sunSide) * (0.48f - 0.20f * depth) * inten
+                                    duneR += rimTintR * rim
+                                    duneG += rimTintG * rim
+                                    duneB += rimTintB * rim
+
+                                    cr += (duneR - cr) * coverage
+                                    cg += (duneG - cg) * coverage
+                                    cb += (duneB - cb) * coverage
+                                }
+                            }
+                        }
+                        sumR += cr
+                        sumG += cg
+                        sumB += cb
+                    }
+
+                    pixels[pIdx] = packHdrPixel(sumR * 0.25f, sumG * 0.25f, sumB * 0.25f, x, y)
+                }
+            }
+        }
+    }
+
+    /** 6. Aurore Boréale — starry night sky + sweeping northern-lights curtains fading seamlessly into `#000000` black. */
+    private fun renderArcticAurora(pixels: IntArray, w: Int, h: Int, acc: FloatArray, inten: Float) {
+        val cUpper = shaderShiftHue(acc, -44f, 1.0f, 1.05f)
+        val cSec = shaderShiftHue(acc, 26f, 0.95f, 1.0f)
+
+        val starR = FloatArray(w * h)
+        val starG = FloatArray(w * h)
+        val starB = FloatArray(w * h)
+        splatStarLayer(
+            starR, starG, starB, w, h, 0f, 0f, 11.5f, 0.935f, 0.75f * inten,
+            floatArrayOf(acc[0] * 0.40f + 0.60f, acc[1] * 0.40f + 0.60f, acc[2] * 0.40f + 0.60f),
+            floatArrayOf(0.94f, 0.97f, 1.0f),
+            minUvY = 0.08f,
+            fadeUvY0 = 0.08f,
+            fadeUvY1 = 0.55f,
+        )
+        splatStarLayer(
+            starR, starG, starB, w, h, 0.41f, 0.23f, 5.8f, 0.968f, 1.15f * inten,
+            floatArrayOf(cSec[0] * 0.45f + 0.55f, cSec[1] * 0.45f + 0.55f, cSec[2] * 0.45f + 0.55f),
+            floatArrayOf(1f, 1f, 1f),
+            minUvY = 0.08f,
+            fadeUvY0 = 0.08f,
+            fadeUvY1 = 0.55f,
+        )
+
+        // Precompute X terms for both aurora ribbons
+        val arc1Y = FloatArray(w); val hFade1 = FloatArray(w); val foldPhase1 = FloatArray(w); val shimPhase1 = FloatArray(w)
+        val arc2Y = FloatArray(w); val hFade2 = FloatArray(w); val foldPhase2 = FloatArray(w); val shimPhase2 = FloatArray(w)
+        val bloomDxSq = FloatArray(w)
+
+        for (x in 0 until w) {
+            val uvX = (x + 0.5f) / w.toFloat()
+            val bdx = (uvX - 0.52f) * 1.1f
+            bloomDxSq[x] = bdx * bdx
+
+            val rx1 = uvX - 0.5f
+            arc1Y[x] = 0.44f + 0.15f * sin(rx1 * 2.5f - 0.35f) + 0.11f * rx1
+            hFade1[x] = 0.38f + 0.62f * shaderSmoothstep(-0.62f, -0.14f, rx1) * shaderSmoothstep(0.64f, 0.16f, rx1)
+            foldPhase1[x] = rx1 * 15f + sin(rx1 * 5.2f) * 2.5f
+            shimPhase1[x] = rx1 * 36f
+
+            val rx2 = (uvX + 0.14f) - 0.5f
+            arc2Y[x] = 0.40f + 0.15f * sin(rx2 * 2.5f * 1.15f - 0.35f) + 0.11f * rx2
+            hFade2[x] = 0.38f + 0.62f * shaderSmoothstep(-0.62f, -0.14f, rx2) * shaderSmoothstep(0.64f, 0.16f, rx2)
+            foldPhase2[x] = rx2 * 15f * 1.15f + sin(rx2 * 5.2f) * 2.5f
+            shimPhase2[x] = rx2 * 36f * 1.15f
+        }
+
+        val cBase1R = acc[0] * 0.84f + 0.16f; val cBase1G = acc[1] * 0.84f + 0.16f; val cBase1B = acc[2] * 0.84f + 0.16f
+        val cBase2R = cSec[0] * 0.84f + 0.16f; val cBase2G = cSec[1] * 0.84f + 0.16f; val cBase2B = cSec[2] * 0.84f + 0.16f
+
+        runParallelRows(h) { yStart, yEnd ->
+            for (y in yStart until yEnd) {
+                val uvY = 1f - (y + 0.5f) / h.toFloat()
+                val skyFade = shaderSmoothstep(0f, 0.55f, uvY)
+                val bottomCalm = shaderSmoothstep(0.02f, 0.34f, uvY)
+                val bdy = (uvY - 0.56f) * 1.9f
+                val bdySq = bdy * bdy
+                val rowOff = y * w
+
+                for (x in 0 until w) {
+                    val pIdx = rowOff + x
+                    val bloom = fastExpNeg(sqrt(bloomDxSq[x] + bdySq) * 2.6f) * 0.09f * inten
+                    var cr = 0.0003f * skyFade + acc[0] * bloom + starR[pIdx]
+                    var cg = 0.0005f * skyFade + acc[1] * bloom + starG[pIdx]
+                    var cb = 0.0014f * skyFade + acc[2] * bloom + starB[pIdx]
+
+                    if (bottomCalm > 0.001f) {
+                        // Primary aurora ribbon
+                        val dy1 = uvY - arc1Y[x]
+                        if (dy1 > -0.16f) {
+                            val env1 = shaderSmoothstep(-0.16f, 0.05f, dy1) * fastExpNeg(max(0f, dy1 - 0.02f) * 4.2f)
+                            if (env1 > 0.001f) {
+                                val folds1 = (0.54f + 0.46f * sin(foldPhase1[x] + dy1 * 3.2f)).coerceAtLeast(0f)
+                                val shim1 = 0.76f + 0.24f * sin(shimPhase1[x] - dy1 * 6.5f)
+                                val tCol1 = ((dy1 + 0.04f) * 2.8f).coerceIn(0f, 1f)
+                                val w1 = env1 * (folds1 * sqrt(folds1)) * shim1 * hFade1[x] * inten * 1.32f * bottomCalm
+                                cr += (cBase1R + (cUpper[0] - cBase1R) * tCol1) * w1
+                                cg += (cBase1G + (cUpper[1] - cBase1G) * tCol1) * w1
+                                cb += (cBase1B + (cUpper[2] - cBase1B) * tCol1) * w1
+                            }
+                        }
+
+                        // Secondary aurora ribbon
+                        val dy2 = (uvY - 0.07f) - arc2Y[x]
+                        if (dy2 > -0.16f) {
+                            val env2 = shaderSmoothstep(-0.16f, 0.05f, dy2) * fastExpNeg(max(0f, dy2 - 0.02f) * 4.2f)
+                            if (env2 > 0.001f) {
+                                val folds2 = (0.54f + 0.46f * sin(foldPhase2[x] + dy2 * 3.2f)).coerceAtLeast(0f)
+                                val shim2 = 0.76f + 0.24f * sin(shimPhase2[x] - dy2 * 6.5f)
+                                val tCol2 = ((dy2 + 0.04f) * 2.8f).coerceIn(0f, 1f)
+                                val w2 = env2 * (folds2 * sqrt(folds2)) * shim2 * hFade2[x] * inten * 0.68f * bottomCalm
+                                cr += (cBase2R + (cUpper[0] - cBase2R) * tCol2) * w2
+                                cg += (cBase2G + (cUpper[1] - cBase2G) * tCol2) * w2
+                                cb += (cBase2B + (cUpper[2] - cBase2B) * tCol2) * w2
+                            }
+                        }
+                    }
+
+                    pixels[pIdx] = packHdrPixel(cr, cg, cb, x, y)
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // CLASSIC GEOMETRIC VECTOR WALLPAPERS (Canvas 2D)
+    // =========================================================================
+
     private fun buildVectorWallpaperBitmap(
         styleKey: String,
+        w: Int,
+        h: Int,
         baseColor: Int,
         accentColor: Int,
         hasAmbientGlow: Boolean,
         visibilityPct: Int,
         blurPct: Int,
     ): Bitmap {
-        val w = VECTOR_RENDER_W
-        val h = VECTOR_RENDER_H
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
 
@@ -349,11 +1726,6 @@ object TvWallpaper {
         return out
     }
 
-    /**
-     * Style 1 — AMOLED Topographic:
-     * True pitch-black `#000000` OLED canvas with smooth marching-squares elevation contour lines
-     * and subtle glowing major ridge contours in the active ambient color.
-     */
     private fun drawTopographic(
         canvas: Canvas,
         w: Int,
@@ -393,14 +1765,13 @@ object TvWallpaper {
             canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), cornerPaint)
         }
 
-        val cols = 96
-        val rows = 54
+        val cols = if (w <= 400) 48 else 96
+        val rows = if (w <= 400) 27 else 54
         val field = Array(rows + 1) { FloatArray(cols + 1) }
         for (r in 0..rows) {
             val ny = r.toFloat() / rows.toFloat()
             for (c in 0..cols) {
                 val nx = c.toFloat() / cols.toFloat()
-                // Smooth multi-harmonic terrain with organic ridges and valleys
                 val v1 = sin(nx * 4.4f + ny * 2.6f + 0.5f) * 0.42f
                 val v2 = cos(nx * 2.7f - ny * 4.9f + 1.3f) * 0.34f
                 val v3 = sin((nx * nx + ny * ny) * 5.8f - 0.8f) * 0.24f
@@ -476,13 +1847,14 @@ object TvWallpaper {
             }
         }
 
+        val scaleStroke = (w / 1280f).coerceAtLeast(0.55f)
         val minorAlpha = (0x46 * intensity).roundToInt().coerceIn(10, 120)
         val majorAlpha = (0x9E * intensity).roundToInt().coerceIn(22, 215)
         val glowAlpha = (0x3A * intensity).roundToInt().coerceIn(0, 95)
 
         val minorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 1.05f
+            strokeWidth = 1.05f * scaleStroke
             strokeCap = Paint.Cap.ROUND
             color = withAlpha(accent, minorAlpha)
         }
@@ -491,23 +1863,22 @@ object TvWallpaper {
         if (glowAlpha > 4) {
             val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
-                strokeWidth = 4.2f
+                strokeWidth = 4.2f * scaleStroke
                 strokeCap = Paint.Cap.ROUND
                 color = withAlpha(accent, glowAlpha)
-                maskFilter = BlurMaskFilter(4.5f, BlurMaskFilter.Blur.NORMAL)
+                maskFilter = BlurMaskFilter(4.5f * scaleStroke, BlurMaskFilter.Blur.NORMAL)
             }
             canvas.drawPath(majorPath, haloPaint)
         }
 
         val majorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 1.75f
+            strokeWidth = 1.75f * scaleStroke
             strokeCap = Paint.Cap.ROUND
             color = withAlpha(lightenColor(accent, 0.22f), majorAlpha)
         }
         canvas.drawPath(majorPath, majorPaint)
 
-        // Subtle center readability vignette so contours softly recede behind main content cards
         val centerFade = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = RadialGradient(
                 w * 0.45f,
@@ -521,10 +1892,6 @@ object TvWallpaper {
         canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), centerFade)
     }
 
-    /**
-     * Style 2 — Gaming Prisms:
-     * Low-poly 3D faceted crystal mesh catching directional ambient light with crisp hairline facet edges.
-     */
     private fun drawGamingPrisms(
         canvas: Canvas,
         w: Int,
@@ -545,6 +1912,7 @@ object TvWallpaper {
 
         val cellW = w.toFloat() / cols.toFloat()
         val cellH = h.toFloat() / rows.toFloat()
+        val zScale = w / 1280f
 
         for (r in 0..rows) {
             for (c in 0..cols) {
@@ -553,11 +1921,10 @@ object TvWallpaper {
                 val jy = if (r == 0 || r == rows) 0f else (hashUnit(seed * 31 + 7) - 0.5f) * cellH * 0.68f
                 vx[r][c] = c * cellW + jx
                 vy[r][c] = r * cellH + jy
-                vz[r][c] = (sin(c * 0.85f + r * 0.65f) * 42f) + (hashUnit(seed * 53 + 11) - 0.5f) * 58f
+                vz[r][c] = ((sin(c * 0.85f + r * 0.65f) * 42f) + (hashUnit(seed * 53 + 11) - 0.5f) * 58f) * zScale
             }
         }
 
-        // Light vector from top-left-front
         val lx = -0.52f
         val ly = -0.46f
         val lz = 0.72f
@@ -566,7 +1933,7 @@ object TvWallpaper {
         val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 0.9f
+            strokeWidth = 0.9f * (w / 1280f).coerceAtLeast(0.6f)
             strokeJoin = Paint.Join.BEVEL
             color = withAlpha(lightenColor(accent, 0.25f), (0x2E * intensity).roundToInt().coerceIn(8, 72))
         }
@@ -577,19 +1944,13 @@ object TvWallpaper {
             x3: Float, y3: Float, z3: Float,
             facetSeed: Int,
         ) {
-            val ux = x2 - x1
-            val uy = y2 - y1
-            val uz = z2 - z1
-            val wx = x3 - x1
-            val wy = y3 - y1
-            val wz = z3 - z1
+            val ux = x2 - x1; val uy = y2 - y1; val uz = z2 - z1
+            val wx = x3 - x1; val wy = y3 - y1; val wz = z3 - z1
             var nx = uy * wz - uz * wy
             var ny = uz * wx - ux * wz
             var nz = abs(ux * wy - uy * wx) * 0.012f + 1f
             val len = sqrt(nx * nx + ny * ny + nz * nz).coerceAtLeast(1e-4f)
-            nx /= len
-            ny /= len
-            nz /= len
+            nx /= len; ny /= len; nz /= len
 
             val ndotl = (nx * lx + ny * ly + nz * lz).coerceIn(0f, 1f)
             val cx = (x1 + x2 + x3) / (3f * w)
@@ -615,31 +1976,11 @@ object TvWallpaper {
                 val flip = ((r + c) and 1) == 0
                 val seedBase = r * 31 + c * 17
                 if (flip) {
-                    drawFacet(
-                        vx[r][c], vy[r][c], vz[r][c],
-                        vx[r][c + 1], vy[r][c + 1], vz[r][c + 1],
-                        vx[r + 1][c + 1], vy[r + 1][c + 1], vz[r + 1][c + 1],
-                        seedBase,
-                    )
-                    drawFacet(
-                        vx[r][c], vy[r][c], vz[r][c],
-                        vx[r + 1][c + 1], vy[r + 1][c + 1], vz[r + 1][c + 1],
-                        vx[r + 1][c], vy[r + 1][c], vz[r + 1][c],
-                        seedBase + 101,
-                    )
+                    drawFacet(vx[r][c], vy[r][c], vz[r][c], vx[r][c + 1], vy[r][c + 1], vz[r][c + 1], vx[r + 1][c + 1], vy[r + 1][c + 1], vz[r + 1][c + 1], seedBase)
+                    drawFacet(vx[r][c], vy[r][c], vz[r][c], vx[r + 1][c + 1], vy[r + 1][c + 1], vz[r + 1][c + 1], vx[r + 1][c], vy[r + 1][c], vz[r + 1][c], seedBase + 101)
                 } else {
-                    drawFacet(
-                        vx[r][c], vy[r][c], vz[r][c],
-                        vx[r][c + 1], vy[r][c + 1], vz[r][c + 1],
-                        vx[r + 1][c], vy[r + 1][c], vz[r + 1][c],
-                        seedBase,
-                    )
-                    drawFacet(
-                        vx[r][c + 1], vy[r][c + 1], vz[r][c + 1],
-                        vx[r + 1][c + 1], vy[r + 1][c + 1], vz[r + 1][c + 1],
-                        vx[r + 1][c], vy[r + 1][c], vz[r + 1][c],
-                        seedBase + 101,
-                    )
+                    drawFacet(vx[r][c], vy[r][c], vz[r][c], vx[r][c + 1], vy[r][c + 1], vz[r][c + 1], vx[r + 1][c], vy[r + 1][c], vz[r + 1][c], seedBase)
+                    drawFacet(vx[r][c + 1], vy[r][c + 1], vz[r][c + 1], vx[r + 1][c + 1], vy[r + 1][c + 1], vz[r + 1][c + 1], vx[r + 1][c], vy[r + 1][c], vz[r + 1][c], seedBase + 101)
                 }
             }
         }
@@ -657,10 +1998,6 @@ object TvWallpaper {
         }
     }
 
-    /**
-     * Style 3 — Ribbons:
-     * Smooth layered silk waves sweeping across the screen with soft translucent gradients and luminous crests.
-     */
     private fun drawRibbons(
         canvas: Canvas,
         w: Int,
@@ -687,6 +2024,7 @@ object TvWallpaper {
 
         val secondaryAccent = shiftHue(accent, 24f)
         val steps = 64
+        val scaleStroke = (w / 1280f).coerceAtLeast(0.6f)
 
         for (idx in 0 until 5) {
             val baseYFrac = 0.24f + idx * 0.145f
@@ -747,7 +2085,7 @@ object TvWallpaper {
             val crestAlpha = ((0x96 - idx * 10) * intensity).roundToInt().coerceIn(16, 195)
             val crestPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
-                strokeWidth = if (idx == 1) 2.0f else 1.35f
+                strokeWidth = (if (idx == 1) 2.0f else 1.35f) * scaleStroke
                 strokeCap = Paint.Cap.ROUND
                 shader = LinearGradient(
                     0f, 0f, w.toFloat(), 0f,
@@ -765,11 +2103,6 @@ object TvWallpaper {
         }
     }
 
-    /**
-     * Style 4 — Aurora:
-     * Atmospheric northern-lights curtains & shimmering vertical rays blending the active ambient hue
-     * with a harmonious analogous sky hue.
-     */
     private fun drawAurora(
         canvas: Canvas,
         w: Int,
@@ -788,7 +2121,6 @@ object TvWallpaper {
         val secondary = shiftHue(accent, 38f)
         val tertiary = shiftHue(accent, -28f)
 
-        // Broad atmospheric nebula clouds behind the curtains
         val cloud1 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = RadialGradient(
                 w * 0.28f, h * 0.18f, w * 0.62f,
@@ -809,11 +2141,11 @@ object TvWallpaper {
         }
         canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), cloud2)
 
-        // Shimmering vertical aurora curtain bands
         val rayCount = 34
+        val blurScale = (w / 1280f).coerceAtLeast(0.35f)
         val rayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
-            maskFilter = BlurMaskFilter(18f, BlurMaskFilter.Blur.NORMAL)
+            maskFilter = BlurMaskFilter(18f * blurScale, BlurMaskFilter.Blur.NORMAL)
         }
         val rayRect = RectF()
 
@@ -848,10 +2180,10 @@ object TvWallpaper {
         }
     }
 
-    /**
-     * Opens the live-preview Wallpaper customization side panel on the right with zero screen dim
-     * so changes to style, QR image, visibility, and blur are previewed live on the screen behind.
-     */
+    // =========================================================================
+    // VISUAL GALLERY & CUSTOMIZATION SIDE PANEL (Compose)
+    // =========================================================================
+
     fun showPanel(
         context: Context,
         onLiveRefresh: () -> Unit,
@@ -885,7 +2217,9 @@ object TvWallpaper {
                     event.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
                     event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
                 if (dropHeldSelect && isSelect) {
-                    if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    if (event.action == android.view.KeyEvent.KEYCODE_ACTION_DOWN_COMPAT ||
+                        (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0)
+                    ) {
                         dropHeldSelect = false
                     } else {
                         return true
@@ -927,241 +2261,443 @@ object TvWallpaper {
         dialog.show()
     }
 
+    private const val KEYCODE_ACTION_DOWN_COMPAT = android.view.KeyEvent.ACTION_DOWN
+
+    private sealed interface GalleryGridEntry {
+        val id: String
+        data class StyleCard(val styleKey: String, val customItem: CustomWallpaperItem? = null) : GalleryGridEntry {
+            override val id: String get() = styleKey
+        }
+        data object AddQrCard : GalleryGridEntry {
+            override val id: String get() = "__add_qr__"
+        }
+    }
+
+    private sealed interface GalleryListRow {
+        data class Section(val title: String) : GalleryListRow
+        data class PairRow(val rowIndex: Int, val left: GalleryGridEntry, val right: GalleryGridEntry?) : GalleryListRow
+    }
+
     @Composable
     private fun WallpaperPanelContent(
         context: Context,
-        prefs: android.content.SharedPreferences,
+        prefs: SharedPreferences,
         onNotifyAndRefresh: () -> Unit,
     ) {
         val scope = rememberCoroutineScope()
-        var currentStyle by remember { mutableStateOf(style(context)) }
-        var hasCustom by remember { mutableStateOf(hasCustomImage(context)) }
-        var currentVis by remember { mutableIntStateOf(visibility(context)) }
-        var currentBlur by remember { mutableIntStateOf(blur(context)) }
-        var resetTick by remember { mutableIntStateOf(0) }
-        var customThumbStamp by remember { mutableStateOf(customFileStamp) }
+        var selectedTab by remember { mutableIntStateOf(0) }
+        var refreshCounter by remember { mutableIntStateOf(0) }
 
-        val styleRequesters = remember { STYLES.map { FocusRequester() } }
-        val accentCompose = MaterialTheme.colorScheme.primary
+        var currentStyle by remember(refreshCounter) { mutableStateOf(style(context)) }
+        var customItems by remember(refreshCounter) { mutableStateOf(listCustomImages(context)) }
+        var currentVis by remember(refreshCounter) { mutableIntStateOf(visibility(context)) }
+        var currentBlur by remember(refreshCounter) { mutableIntStateOf(blur(context)) }
+        var rotInterval by remember(refreshCounter) { mutableIntStateOf(rotationInterval(context)) }
+        var rotShuffle by remember(refreshCounter) { mutableStateOf(rotationShuffle(context)) }
+        var rotPool by remember(refreshCounter) {
+            mutableStateOf(prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null)?.toSet().orEmpty())
+        }
+
+        val tabRequesters = remember { List(3) { FocusRequester() } }
+        val firstContentRequester = remember { FocusRequester() }
+        val footerQrRequester = remember { FocusRequester() }
+        val footerResetRequester = remember { FocusRequester() }
+        var lastBodyRequester by remember { mutableStateOf(firstContentRequester) }
+
+        val ambientInt = TvAmbient.color(context) ?: TvAccent.onDark
+
+        fun syncState() {
+            refreshCounter++
+            currentStyle = style(context)
+            customItems = listCustomImages(context)
+            currentVis = visibility(context)
+            currentBlur = blur(context)
+            rotInterval = rotationInterval(context)
+            rotShuffle = rotationShuffle(context)
+            rotPool = prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null)?.toSet().orEmpty()
+        }
+
+        fun applyStyleKey(styleKey: String) {
+            currentStyle = styleKey
+            prefs.edit {
+                putString(C.TV_WALLPAPER, styleKey)
+                putLong(PREF_ROTATION_LAST_MS, System.currentTimeMillis())
+            }
+            onNotifyAndRefresh()
+        }
+
+        fun togglePoolMembership(styleKey: String) {
+            if (styleKey == STYLE_DEFAULT) return
+            val next = LinkedHashSet(rotPool)
+            if (!next.add(styleKey)) {
+                next.remove(styleKey)
+            }
+            rotPool = next
+            prefs.edit { putStringSet(C.TV_WALLPAPER_ROTATION_POOL, next) }
+            onNotifyAndRefresh()
+        }
 
         fun openQrUploader() {
-            showQrUploadModal(context, scope) {
-                hasCustom = hasCustomImage(context)
-                currentStyle = STYLE_CUSTOM
-                customThumbStamp = customFileStamp
+            showQrUploadModal(context, scope) { newStyleKey ->
+                if (rotInterval != 0) {
+                    val nextPool = LinkedHashSet(prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null).orEmpty())
+                    nextPool.add(newStyleKey)
+                    prefs.edit { putStringSet(C.TV_WALLPAPER_ROTATION_POOL, nextPool) }
+                }
+                syncState()
                 onNotifyAndRefresh()
             }
         }
 
-        SidePanel(
-            title = context.getString(R.string.tv_wallpaper),
-            subtitle = context.getString(R.string.tv_wallpaper_summary),
-            width = 456.dp,
-            scrollable = true,
-            compactHeader = true,
-        ) {
-            key(resetTick) {
-                STYLES.forEachIndexed { idx, styleKey ->
-                    val label = styleLabel(context, styleKey)
-                    val checked = currentStyle == styleKey
-                    FocusRow(
-                        compact = true,
-                        modifier = Modifier.focusRequester(styleRequesters[idx]),
-                        onClick = {
-                            if (styleKey == STYLE_CUSTOM && !hasCustomImage(context)) {
-                                openQrUploader()
-                            } else {
-                                currentStyle = styleKey
-                                prefs.edit { putString(C.TV_WALLPAPER, styleKey) }
-                                onNotifyAndRefresh()
-                            }
-                        },
-                    ) { focused ->
-                        val textColor = if (focused) TvColors.onFocused else ComposeColor.White
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            StyleMiniSwatch(
-                                context = context,
-                                styleKey = styleKey,
-                                accent = accentCompose,
-                                hasCustom = hasCustom,
-                                customStamp = customThumbStamp,
-                                checked = checked,
-                                focused = focused,
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    label,
-                                    fontSize = 15.5.sp,
-                                    fontWeight = if (checked || focused) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = textColor,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                if (styleKey == STYLE_CUSTOM && !hasCustom) {
-                                    Text(
-                                        context.getString(R.string.tv_wallpaper_qr_button),
-                                        fontSize = 12.sp,
-                                        color = if (focused) TvColors.onFocused.copy(alpha = 0.78f) else TvColors.secondaryText,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            RadioDot(checked = checked, focused = focused)
-                        }
-                    }
+        fun openCardOptions(styleKey: String, customItem: CustomWallpaperItem?) {
+            val label = styleLabel(context, styleKey)
+            val inPool = styleKey in rotPool
+            val options = buildList {
+                add(context.getString(R.string.tv_wallpaper_web_send))
+                if (styleKey != STYLE_DEFAULT) {
+                    val rotLabel = context.getString(R.string.tv_wallpaper_rotation_toggle) +
+                        if (inPool) "  ✓" else ""
+                    add(rotLabel)
                 }
-
-                Spacer(Modifier.height(6.dp))
-                ButtonRow(
-                    label = context.getString(R.string.tv_wallpaper_qr_button),
-                    icon = R.drawable.tv_ic_wifi,
-                    compact = true,
-                    onClick = { openQrUploader() },
-                )
-
-                if (currentStyle != STYLE_DEFAULT) {
-                    Spacer(Modifier.height(6.dp))
-                    SliderRow(
-                        label = context.getString(R.string.tv_wallpaper_visibility),
-                        value = currentVis,
-                        range = 10..100,
-                        step = 5,
-                        compact = true,
-                        valueText = { "$it%" },
-                    ) { v ->
-                        currentVis = v
-                        prefs.edit { putInt(C.TV_WALLPAPER_VISIBILITY, v) }
+                if (customItem != null) {
+                    add(context.getString(R.string.tv_wallpaper_delete_image))
+                }
+            }
+            val icons = buildList<Int?> {
+                add(R.drawable.tv_ic_check)
+                if (styleKey != STYLE_DEFAULT) add(R.drawable.tv_ic_refresh)
+                if (customItem != null) add(R.drawable.tv_ic_delete)
+            }
+            TvDialogs.showChoices(
+                context = context,
+                title = label,
+                options = options,
+                selected = 0,
+                icons = icons,
+            ) { idx ->
+                when {
+                    idx == 0 -> applyStyleKey(styleKey)
+                    styleKey != STYLE_DEFAULT && idx == 1 -> togglePoolMembership(styleKey)
+                    customItem != null -> {
+                        deleteCustomImage(context, customItem.fileName)
+                        syncState()
                         onNotifyAndRefresh()
                     }
-                    SliderRow(
-                        label = context.getString(R.string.tv_wallpaper_blur),
-                        value = currentBlur,
-                        range = 0..100,
-                        step = 5,
-                        compact = true,
-                        valueText = { "$it%" },
-                    ) { v ->
-                        currentBlur = v
-                        prefs.edit { putInt(C.TV_WALLPAPER_BLUR, v) }
-                        onNotifyAndRefresh()
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-                ButtonRow(
-                    label = context.getString(R.string.tv_reset),
-                    icon = R.drawable.tv_ic_replay,
-                    compact = true,
-                ) {
-                    customFile(context).let { if (it.exists()) it.delete() }
-                    invalidateCaches()
-                    prefs.edit {
-                        putString(C.TV_WALLPAPER, STYLE_DEFAULT)
-                        putInt(C.TV_WALLPAPER_VISIBILITY, DEFAULT_VISIBILITY)
-                        putInt(C.TV_WALLPAPER_BLUR, DEFAULT_BLUR)
-                    }
-                    hasCustom = false
-                    currentStyle = STYLE_DEFAULT
-                    currentVis = DEFAULT_VISIBILITY
-                    currentBlur = DEFAULT_BLUR
-                    resetTick++
-                    onNotifyAndRefresh()
                 }
             }
         }
 
-        LaunchedEffect(resetTick) {
-            val targetIdx = STYLES.indexOf(currentStyle).coerceAtLeast(0)
-            runCatching { styleRequesters[targetIdx].requestFocus() }
+        val tabs = remember(context) {
+            listOf(
+                R.drawable.tv_ic_image to context.getString(R.string.tv_wallpaper_tab_gallery),
+                R.drawable.tv_ic_refresh to context.getString(R.string.tv_wallpaper_tab_rotation),
+                R.drawable.tv_ic_tune to context.getString(R.string.tv_wallpaper_tab_adjust),
+            )
+        }
+
+        SidePanel(
+            title = context.getString(R.string.tv_wallpaper),
+            subtitle = context.getString(R.string.tv_wallpaper_long_press_hint),
+            width = 564.dp,
+            scrollable = false,
+            compactHeader = true,
+            headerExtra = {
+                PanelTabs(
+                    tabs = tabs,
+                    selectedTab = selectedTab,
+                    tabRequesters = tabRequesters,
+                    downTarget = firstContentRequester,
+                    onSelect = { idx -> selectedTab = idx },
+                )
+            },
+            footer = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FooterActionChip(
+                        label = context.getString(R.string.tv_wallpaper_add_qr_card),
+                        icon = R.drawable.tv_ic_wifi,
+                        requester = footerQrRequester,
+                        rightTarget = footerResetRequester,
+                        upTarget = lastBodyRequester,
+                        onClick = { openQrUploader() },
+                    )
+                    FooterActionChip(
+                        label = context.getString(R.string.tv_reset),
+                        icon = R.drawable.tv_ic_replay,
+                        requester = footerResetRequester,
+                        leftTarget = footerQrRequester,
+                        upTarget = lastBodyRequester,
+                        onClick = {
+                            prefs.edit {
+                                putString(C.TV_WALLPAPER, STYLE_DEFAULT)
+                                putInt(C.TV_WALLPAPER_VISIBILITY, DEFAULT_VISIBILITY)
+                                putInt(C.TV_WALLPAPER_BLUR, DEFAULT_BLUR)
+                                putInt(C.TV_WALLPAPER_ROTATION_INTERVAL, 0)
+                            }
+                            syncState()
+                            onNotifyAndRefresh()
+                        },
+                    )
+                }
+            },
+        ) {
+            when (selectedTab) {
+                0 -> GalleryTabBody(
+                    context = context,
+                    currentStyle = currentStyle,
+                    customItems = customItems,
+                    ambientInt = ambientInt,
+                    rotInterval = rotInterval,
+                    rotPool = rotPool,
+                    refreshCounter = refreshCounter,
+                    tabRequester = tabRequesters[0],
+                    firstContentRequester = firstContentRequester,
+                    footerRequester = footerQrRequester,
+                    onTrackBodyRequester = { lastBodyRequester = it },
+                    onSelectStyle = ::applyStyleKey,
+                    onLongPressCard = ::openCardOptions,
+                    onOpenQr = ::openQrUploader,
+                )
+                1 -> RotationTabBody(
+                    context = context,
+                    prefs = prefs,
+                    currentStyle = currentStyle,
+                    customItems = customItems,
+                    ambientInt = ambientInt,
+                    rotInterval = rotInterval,
+                    rotShuffle = rotShuffle,
+                    rotPool = rotPool,
+                    refreshCounter = refreshCounter,
+                    tabRequester = tabRequesters[1],
+                    firstContentRequester = firstContentRequester,
+                    footerRequester = footerQrRequester,
+                    onTrackBodyRequester = { lastBodyRequester = it },
+                    onIntervalChanged = { newInt ->
+                        if (newInt != 0 && rotPool.isEmpty()) {
+                            val seeded = defaultSeedPool(context)
+                            rotPool = seeded
+                            prefs.edit { putStringSet(C.TV_WALLPAPER_ROTATION_POOL, seeded) }
+                        }
+                        rotInterval = newInt
+                        prefs.edit {
+                            putInt(C.TV_WALLPAPER_ROTATION_INTERVAL, newInt)
+                            putLong(PREF_ROTATION_LAST_MS, System.currentTimeMillis())
+                        }
+                        onNotifyAndRefresh()
+                    },
+                    onShuffleChanged = { shuf ->
+                        rotShuffle = shuf
+                        prefs.edit { putBoolean(C.TV_WALLPAPER_ROTATION_SHUFFLE, shuf) }
+                    },
+                    onStepNextNow = {
+                        val applied = advanceRotationNow(context)
+                        if (applied != null) {
+                            currentStyle = applied
+                            onNotifyAndRefresh()
+                        }
+                    },
+                    onTogglePool = ::togglePoolMembership,
+                    onSetFullPool = { newSet ->
+                        rotPool = newSet
+                        prefs.edit { putStringSet(C.TV_WALLPAPER_ROTATION_POOL, newSet) }
+                        onNotifyAndRefresh()
+                    },
+                )
+                2 -> AdjustmentsTabBody(
+                    context = context,
+                    prefs = prefs,
+                    currentVis = currentVis,
+                    currentBlur = currentBlur,
+                    customCount = customItems.size,
+                    tabRequester = tabRequesters[2],
+                    firstContentRequester = firstContentRequester,
+                    footerRequester = footerQrRequester,
+                    onTrackBodyRequester = { lastBodyRequester = it },
+                    onVisChanged = { v ->
+                        currentVis = v
+                        prefs.edit { putInt(C.TV_WALLPAPER_VISIBILITY, v) }
+                        onNotifyAndRefresh()
+                    },
+                    onBlurChanged = { b ->
+                        currentBlur = b
+                        prefs.edit { putInt(C.TV_WALLPAPER_BLUR, b) }
+                        onNotifyAndRefresh()
+                    },
+                    onOpenQr = ::openQrUploader,
+                    onDeleteAllCustom = {
+                        deleteAllCustomImages(context)
+                        syncState()
+                        onNotifyAndRefresh()
+                    },
+                )
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            runCatching { firstContentRequester.requestFocus() }
         }
     }
 
     @Composable
-    private fun StyleMiniSwatch(
+    private fun GalleryTabBody(
         context: Context,
-        styleKey: String,
-        accent: ComposeColor,
-        hasCustom: Boolean,
-        customStamp: Long,
-        checked: Boolean,
-        focused: Boolean,
+        currentStyle: String,
+        customItems: List<CustomWallpaperItem>,
+        ambientInt: Int,
+        rotInterval: Int,
+        rotPool: Set<String>,
+        refreshCounter: Int,
+        tabRequester: FocusRequester,
+        firstContentRequester: FocusRequester,
+        footerRequester: FocusRequester,
+        onTrackBodyRequester: (FocusRequester) -> Unit,
+        onSelectStyle: (String) -> Unit,
+        onLongPressCard: (String, CustomWallpaperItem?) -> Unit,
+        onOpenQr: () -> Unit,
     ) {
-        val shape = RoundedCornerShape(7.dp)
-        val borderColor = when {
-            focused -> TvColors.onFocused.copy(alpha = 0.65f)
-            checked -> accent
-            else -> ComposeColor(0x38FFFFFF)
-        }
-        val customPreview = remember(hasCustom, customStamp) {
-            if (styleKey == STYLE_CUSTOM && hasCustom) {
-                loadCustomRawBitmap(context, if (customStamp == 0L) customFile(context).lastModified() else customStamp)
-            } else null
+        val rows = remember(customItems, context) {
+            val out = mutableListOf<GalleryListRow>()
+            var pairIdx = 0
+
+            out.add(GalleryListRow.Section(context.getString(R.string.tv_wallpaper_section_studio)))
+            val builtinEntries = BUILTIN_STYLES.map { GalleryGridEntry.StyleCard(it) }
+            builtinEntries.chunked(2).forEach { chunk ->
+                out.add(GalleryListRow.PairRow(pairIdx++, chunk[0], chunk.getOrNull(1)))
+            }
+
+            val customHeader = if (customItems.isEmpty()) {
+                context.getString(R.string.tv_wallpaper_section_custom)
+            } else {
+                "${context.getString(R.string.tv_wallpaper_section_custom)} (${customItems.size})"
+            }
+            out.add(GalleryListRow.Section(customHeader))
+            val customEntries = customItems.map { GalleryGridEntry.StyleCard(it.styleKey, it) } + GalleryGridEntry.AddQrCard
+            customEntries.chunked(2).forEach { chunk ->
+                out.add(GalleryListRow.PairRow(pairIdx++, chunk[0], chunk.getOrNull(1)))
+            }
+            out to pairIdx
         }
 
-        Box(
+        val listRows = rows.first
+        val totalPairRows = rows.second
+        val cardRequesters = remember(totalPairRows) {
+            Array(totalPairRows) { arrayOf(FocusRequester(), FocusRequester()) }
+        }
+        val listState = rememberLazyListState()
+
+        LazyColumn(
+            state = listState,
             modifier = Modifier
-                .size(width = 44.dp, height = 26.dp)
-                .clip(shape)
-                .background(ComposeColor(0xFF0A0A0F))
-                .border(if (checked) 1.5.dp else 1.dp, borderColor, shape),
-            contentAlignment = Alignment.Center,
+                .fillMaxSize()
+                .tvTopFade { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 },
+            contentPadding = PaddingValues(bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (styleKey == STYLE_CUSTOM && customPreview != null) {
-                Image(
-                    bitmap = customPreview.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.matchParentSize(),
-                )
-            } else {
-                ComposeCanvas(Modifier.matchParentSize()) {
-                    val w = size.width
-                    val h = size.height
-                    when (styleKey) {
-                        STYLE_DEFAULT -> {
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(accent.copy(alpha = 0.65f), ComposeColor.Transparent),
-                                    center = Offset(w * 0.15f, h * 0.15f),
-                                    radius = w * 0.85f,
-                                ),
-                                radius = w,
-                                center = Offset(w * 0.15f, h * 0.15f),
-                            )
-                        }
-                        STYLE_TOPOGRAPHIC -> {
-                            drawRect(ComposeColor.Black)
-                            for (i in 1..3) {
-                                val r = w * (0.22f * i)
-                                drawCircle(
-                                    color = accent.copy(alpha = if (i == 2) 0.85f else 0.45f),
-                                    radius = r,
-                                    center = Offset(w * 0.82f, h * 0.25f),
-                                    style = Stroke(width = if (i == 2) 1.6f else 1f),
+            items(listRows.size) { idx ->
+                when (val row = listRows[idx]) {
+                    is GalleryListRow.Section -> {
+                        Text(
+                            row.title,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TvColors.secondaryText,
+                            modifier = Modifier.padding(top = if (idx == 0) 2.dp else 8.dp, bottom = 2.dp, start = 4.dp),
+                        )
+                    }
+                    is GalleryListRow.PairRow -> {
+                        val rIdx = row.rowIndex
+                        val leftReq = if (rIdx == 0) firstContentRequester else cardRequesters[rIdx][0]
+                        val rightReq = cardRequesters[rIdx][1]
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Box(Modifier.weight(1f)) {
+                                GalleryEntryTile(
+                                    context = context,
+                                    entry = row.left,
+                                    currentStyle = currentStyle,
+                                    ambientInt = ambientInt,
+                                    showRotationBadge = rotInterval != 0,
+                                    inRotationPool = (row.left as? GalleryGridEntry.StyleCard)?.styleKey in rotPool,
+                                    refreshCounter = refreshCounter,
+                                    requester = leftReq,
+                                    onFocused = { onTrackBodyRequester(leftReq) },
+                                    onMoveUp = if (rIdx == 0) {
+                                        { runCatching { tabRequester.requestFocus() }; true }
+                                    } else {
+                                        {
+                                            val prevReq = if (rIdx - 1 == 0) firstContentRequester else cardRequesters[rIdx - 1][0]
+                                            runCatching { prevReq.requestFocus() }
+                                            true
+                                        }
+                                    },
+                                    onMoveDown = if (rIdx == totalPairRows - 1) {
+                                        { runCatching { footerRequester.requestFocus() }; true }
+                                    } else {
+                                        {
+                                            runCatching { cardRequesters[rIdx + 1][0].requestFocus() }
+                                            true
+                                        }
+                                    },
+                                    onMoveLeft = { true },
+                                    onMoveRight = {
+                                        if (row.right != null) {
+                                            runCatching { rightReq.requestFocus() }
+                                        }
+                                        true
+                                    },
+                                    onSelectStyle = onSelectStyle,
+                                    onLongPressCard = onLongPressCard,
+                                    onOpenQr = onOpenQr,
                                 )
                             }
-                        }
-                        STYLE_PRISMS -> {
-                            drawLine(accent.copy(alpha = 0.55f), Offset(0f, h), Offset(w * 0.52f, 0f), strokeWidth = 1.2f)
-                            drawLine(accent.copy(alpha = 0.45f), Offset(w * 0.52f, 0f), Offset(w, h * 0.75f), strokeWidth = 1.2f)
-                            drawLine(accent.copy(alpha = 0.70f), Offset(0f, h * 0.35f), Offset(w, h * 0.65f), strokeWidth = 1.2f)
-                        }
-                        STYLE_RIBBONS -> {
-                            drawLine(accent.copy(alpha = 0.80f), Offset(0f, h * 0.72f), Offset(w, h * 0.28f), strokeWidth = 2.5f)
-                            drawLine(accent.copy(alpha = 0.45f), Offset(0f, h * 0.92f), Offset(w, h * 0.52f), strokeWidth = 2.0f)
-                        }
-                        STYLE_AURORA -> {
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    listOf(accent.copy(alpha = 0.65f), ComposeColor(0xFF22D3EE).copy(alpha = 0.55f)),
-                                )
-                            )
-                        }
-                        STYLE_CUSTOM -> {
-                            drawCircle(accent.copy(alpha = 0.45f), radius = 4.dp.toPx(), center = Offset(w * 0.5f, h * 0.5f))
+                            Box(Modifier.weight(1f)) {
+                                if (row.right != null) {
+                                    GalleryEntryTile(
+                                        context = context,
+                                        entry = row.right,
+                                        currentStyle = currentStyle,
+                                        ambientInt = ambientInt,
+                                        showRotationBadge = rotInterval != 0,
+                                        inRotationPool = (row.right as? GalleryGridEntry.StyleCard)?.styleKey in rotPool,
+                                        refreshCounter = refreshCounter,
+                                        requester = rightReq,
+                                        onFocused = { onTrackBodyRequester(rightReq) },
+                                        onMoveUp = if (rIdx == 0) {
+                                            { runCatching { tabRequester.requestFocus() }; true }
+                                        } else {
+                                            {
+                                                runCatching { cardRequesters[rIdx - 1][1].requestFocus() }
+                                                true
+                                            }
+                                        },
+                                        onMoveDown = if (rIdx == totalPairRows - 1) {
+                                            { runCatching { footerRequester.requestFocus() }; true }
+                                        } else {
+                                            {
+                                                val nextHasRight = listRows
+                                                    .filterIsInstance<GalleryListRow.PairRow>()
+                                                    .getOrNull(rIdx + 1)?.right != null
+                                                val target = if (nextHasRight) cardRequesters[rIdx + 1][1] else cardRequesters[rIdx + 1][0]
+                                                runCatching { target.requestFocus() }
+                                                true
+                                            }
+                                        },
+                                        onMoveLeft = {
+                                            runCatching { leftReq.requestFocus() }
+                                            true
+                                        },
+                                        onMoveRight = { true },
+                                        onSelectStyle = onSelectStyle,
+                                        onLongPressCard = onLongPressCard,
+                                        onOpenQr = onOpenQr,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1169,14 +2705,531 @@ object TvWallpaper {
         }
     }
 
-    /**
-     * Opens a temporary local Wi-Fi HTTP server + QR modal allowing the user to send an image file
-     * or paste an image URL from their phone.
-     */
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    private fun GalleryEntryTile(
+        context: Context,
+        entry: GalleryGridEntry,
+        currentStyle: String,
+        ambientInt: Int,
+        showRotationBadge: Boolean,
+        inRotationPool: Boolean,
+        refreshCounter: Int,
+        requester: FocusRequester,
+        onFocused: () -> Unit,
+        onMoveUp: () -> Boolean,
+        onMoveDown: () -> Boolean,
+        onMoveLeft: () -> Boolean,
+        onMoveRight: () -> Boolean,
+        onSelectStyle: (String) -> Unit,
+        onLongPressCard: (String, CustomWallpaperItem?) -> Unit,
+        onOpenQr: () -> Unit,
+    ) {
+        val scope = rememberCoroutineScope()
+        val interaction = remember { MutableInteractionSource() }
+        val focused by interaction.collectIsFocusedAsState()
+        val scale by animateFloatAsState(if (focused) 1.035f else 1f, label = "cardScale")
+        val shape = RoundedCornerShape(13.dp)
+        val accentCompose = MaterialTheme.colorScheme.primary
+
+        var holdJob by remember { mutableStateOf<Job?>(null) }
+        var longTriggered by remember { mutableStateOf(false) }
+
+        fun handleShortAction() {
+            when (entry) {
+                is GalleryGridEntry.AddQrCard -> onOpenQr()
+                is GalleryGridEntry.StyleCard -> onSelectStyle(entry.styleKey)
+            }
+        }
+
+        fun handleLongAction() {
+            if (entry is GalleryGridEntry.StyleCard) {
+                onLongPressCard(entry.styleKey, entry.customItem)
+            } else {
+                onOpenQr()
+            }
+        }
+
+        val isSelected = entry is GalleryGridEntry.StyleCard && entry.styleKey == currentStyle
+        val borderWidth = when {
+            focused -> 2.4.dp
+            isSelected -> 1.8.dp
+            else -> 1.dp
+        }
+        val borderColor = when {
+            focused -> ComposeColor.White
+            isSelected -> accentCompose
+            else -> ComposeColor(0x2EFFFFFF)
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .focusRequester(requester)
+                .onFocusChanged { if (it.isFocused) onFocused() }
+                .onPreviewKeyEvent { ev ->
+                    val isSelect = ev.key == Key.DirectionCenter || ev.key == Key.Enter || ev.key == Key.NumPadEnter
+                    if (isSelect) {
+                        when (ev.type) {
+                            KeyEventType.KeyDown -> {
+                                if (holdJob == null && !longTriggered) {
+                                    val timeout = ViewConfiguration.getLongPressTimeout().toLong().coerceIn(380L, 580L)
+                                    holdJob = scope.launch {
+                                        delay(timeout)
+                                        longTriggered = true
+                                        handleLongAction()
+                                    }
+                                }
+                                true
+                            }
+                            KeyEventType.KeyUp -> {
+                                val wasLong = longTriggered
+                                holdJob?.cancel()
+                                holdJob = null
+                                longTriggered = false
+                                if (!wasLong) handleShortAction()
+                                true
+                            }
+                            else -> true
+                        }
+                    } else if (ev.type == KeyEventType.KeyDown) {
+                        when (ev.key) {
+                            Key.DirectionUp -> onMoveUp()
+                            Key.DirectionDown -> onMoveDown()
+                            Key.DirectionLeft -> onMoveLeft()
+                            Key.DirectionRight -> onMoveRight()
+                            else -> false
+                        }
+                    } else {
+                        false
+                    }
+                }
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(shape)
+                .background(ComposeColor(0xFF101018))
+                .border(borderWidth, borderColor, shape)
+                .combinedClickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    onClick = { handleShortAction() },
+                    onLongClick = { handleLongAction() },
+                ),
+        ) {
+            when (entry) {
+                is GalleryGridEntry.AddQrCard -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        accentCompose.copy(alpha = if (focused) 0.34f else 0.18f),
+                                        ComposeColor(0xFF161522),
+                                    )
+                                )
+                            )
+                            .padding(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(if (focused) ComposeColor.White else accentCompose.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.tv_ic_wifi),
+                                contentDescription = null,
+                                tint = if (focused) TvColors.onFocused else ComposeColor.White,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(7.dp))
+                        Text(
+                            context.getString(R.string.tv_wallpaper_add_qr_card),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = ComposeColor.White,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                is GalleryGridEntry.StyleCard -> {
+                    val thumb = remember(entry.styleKey, ambientInt, refreshCounter) {
+                        getGalleryPreviewBitmap(context, entry.styleKey, ambientInt)
+                    }
+                    if (thumb != null && !thumb.isRecycled) {
+                        Image(
+                            bitmap = thumb.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+
+                    // Bottom legibility gradient + title
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(ComposeColor.Transparent, ComposeColor(0xDC08080E))
+                                )
+                            )
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.BottomStart,
+                    ) {
+                        Text(
+                            styleLabel(context, entry.styleKey),
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected || focused) FontWeight.SemiBold else FontWeight.Medium,
+                            color = ComposeColor.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+
+                    // Top-right active badge
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(7.dp)
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(accentCompose)
+                                .border(1.dp, ComposeColor.White, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.tv_ic_check),
+                                contentDescription = null,
+                                tint = ComposeColor.White,
+                                modifier = Modifier.size(13.dp),
+                            )
+                        }
+                    }
+
+                    // Top-left rotation playlist badge when rotation is enabled or item is in pool
+                    if (entry.styleKey != STYLE_DEFAULT && (showRotationBadge || inRotationPool)) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(7.dp)
+                                .size(19.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(if (inRotationPool) ComposeColor(0xE614141E) else ComposeColor(0x880C0C12))
+                                .border(
+                                    1.dp,
+                                    if (inRotationPool) accentCompose else ComposeColor(0x55FFFFFF),
+                                    RoundedCornerShape(5.dp),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (inRotationPool) {
+                                Icon(
+                                    painter = painterResource(R.drawable.tv_ic_check),
+                                    contentDescription = null,
+                                    tint = accentCompose,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun RotationTabBody(
+        context: Context,
+        prefs: SharedPreferences,
+        currentStyle: String,
+        customItems: List<CustomWallpaperItem>,
+        ambientInt: Int,
+        rotInterval: Int,
+        rotShuffle: Boolean,
+        rotPool: Set<String>,
+        refreshCounter: Int,
+        tabRequester: FocusRequester,
+        firstContentRequester: FocusRequester,
+        footerRequester: FocusRequester,
+        onTrackBodyRequester: (FocusRequester) -> Unit,
+        onIntervalChanged: (Int) -> Unit,
+        onShuffleChanged: (Boolean) -> Unit,
+        onStepNextNow: () -> Unit,
+        onTogglePool: (String) -> Unit,
+        onSetFullPool: (Set<String>) -> Unit,
+    ) {
+        val intervalOptions = remember(context) {
+            ROTATION_INTERVAL_VALUES.map { rotationIntervalLabel(context, it) }
+        }
+        val selectedIdx = ROTATION_INTERVAL_VALUES.indexOf(rotInterval).coerceAtLeast(0)
+        val selectableKeys = remember(customItems) {
+            BUILTIN_STYLES.filter { it != STYLE_DEFAULT } + customItems.map { it.styleKey }
+        }
+        val customMap = remember(customItems) { customItems.associateBy { it.styleKey } }
+        val listState = rememberLazyListState()
+        val lastItemRequester = remember { FocusRequester() }
+        val accentCompose = MaterialTheme.colorScheme.primary
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .tvTopFade { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 },
+            contentPadding = PaddingValues(bottom = 8.dp),
+        ) {
+            item {
+                SelectorRow(
+                    label = context.getString(R.string.tv_wallpaper_rotation_timer),
+                    options = intervalOptions,
+                    selected = selectedIdx,
+                    icon = R.drawable.tv_ic_timer,
+                    compact = true,
+                    modifier = Modifier
+                        .tvPanelFirstRow(firstContentRequester) { tabRequester }
+                        .onFocusChanged { if (it.isFocused) onTrackBodyRequester(firstContentRequester) },
+                ) { idx ->
+                    val chosen = ROTATION_INTERVAL_VALUES.getOrElse(idx) { 0 }
+                    onIntervalChanged(chosen)
+                }
+            }
+
+            item {
+                FocusRow(
+                    compact = true,
+                    onClick = { onShuffleChanged(!rotShuffle) },
+                ) { focused ->
+                    val textColor = if (focused) TvColors.onFocused else ComposeColor.White
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painter = painterResource(R.drawable.tv_ic_swap),
+                            contentDescription = null,
+                            tint = if (focused) TvColors.onFocused else ComposeColor(0xD8FFFFFF),
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(9.dp))
+                        Text(
+                            context.getString(R.string.tv_wallpaper_rotation_shuffle),
+                            fontSize = 15.sp,
+                            color = textColor,
+                            modifier = Modifier.weight(1f),
+                        )
+                        RadioDot(checked = rotShuffle, focused = focused)
+                    }
+                }
+            }
+
+            if (selectableKeys.count { it in rotPool } >= 2) {
+                item {
+                    ButtonRow(
+                        label = context.getString(R.string.tv_wallpaper_rotation_next),
+                        icon = R.drawable.tv_ic_refresh,
+                        compact = true,
+                        onClick = onStepNextNow,
+                    )
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val allChecked = selectableKeys.all { it in rotPool }
+                    Box(Modifier.weight(1f)) {
+                        ButtonRow(
+                            label = context.getString(
+                                if (allChecked) R.string.tv_wallpaper_rotation_clear_all else R.string.tv_wallpaper_rotation_select_all
+                            ),
+                            icon = R.drawable.tv_ic_check,
+                            compact = true,
+                            onClick = {
+                                onSetFullPool(if (allChecked) emptySet() else selectableKeys.toSet())
+                            },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+
+            items(selectableKeys.size) { i ->
+                val key = selectableKeys[i]
+                val checked = key in rotPool
+                val isActiveNow = key == currentStyle
+                val isLast = i == selectableKeys.lastIndex
+                val thumb = remember(key, ambientInt, refreshCounter) {
+                    getGalleryPreviewBitmap(context, key, ambientInt)
+                }
+
+                FocusRow(
+                    compact = true,
+                    modifier = if (isLast) {
+                        Modifier
+                            .tvPanelLastRow(lastItemRequester, footerRequester)
+                            .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) }
+                    } else {
+                        Modifier
+                    },
+                    onClick = { onTogglePool(key) },
+                ) { focused ->
+                    val textColor = if (focused) TvColors.onFocused else ComposeColor.White
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 48.dp, height = 28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(ComposeColor(0xFF0E0E14))
+                                .border(
+                                    1.dp,
+                                    if (isActiveNow) accentCompose else ComposeColor(0x38FFFFFF),
+                                    RoundedCornerShape(6.dp),
+                                ),
+                        ) {
+                            if (thumb != null && !thumb.isRecycled) {
+                                Image(
+                                    bitmap = thumb.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(11.dp))
+                        Text(
+                            styleLabel(context, key) + if (customMap.containsKey(key)) "" else "",
+                            fontSize = 15.sp,
+                            fontWeight = if (checked || focused) FontWeight.SemiBold else FontWeight.Normal,
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(
+                                    when {
+                                        checked && focused -> TvColors.onFocused
+                                        checked -> accentCompose
+                                        else -> ComposeColor.Transparent
+                                    }
+                                )
+                                .border(
+                                    1.8.dp,
+                                    when {
+                                        focused -> TvColors.onFocused
+                                        checked -> accentCompose
+                                        else -> ComposeColor(0x70FFFFFF)
+                                    },
+                                    RoundedCornerShape(5.dp),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (checked) {
+                                Icon(
+                                    painter = painterResource(R.drawable.tv_ic_check),
+                                    contentDescription = null,
+                                    tint = ComposeColor.White,
+                                    modifier = Modifier.size(13.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun AdjustmentsTabBody(
+        context: Context,
+        prefs: SharedPreferences,
+        currentVis: Int,
+        currentBlur: Int,
+        customCount: Int,
+        tabRequester: FocusRequester,
+        firstContentRequester: FocusRequester,
+        footerRequester: FocusRequester,
+        onTrackBodyRequester: (FocusRequester) -> Unit,
+        onVisChanged: (Int) -> Unit,
+        onBlurChanged: (Int) -> Unit,
+        onOpenQr: () -> Unit,
+        onDeleteAllCustom: () -> Unit,
+    ) {
+        val lastItemRequester = remember { FocusRequester() }
+        Column(modifier = Modifier.fillMaxSize()) {
+            SliderRow(
+                label = context.getString(R.string.tv_wallpaper_visibility),
+                value = currentVis,
+                range = 10..100,
+                step = 5,
+                icon = R.drawable.tv_ic_oled,
+                compact = true,
+                valueText = { "$it%" },
+                modifier = Modifier
+                    .tvPanelFirstRow(firstContentRequester) { tabRequester }
+                    .onFocusChanged { if (it.isFocused) onTrackBodyRequester(firstContentRequester) },
+                onChange = onVisChanged,
+            )
+            SliderRow(
+                label = context.getString(R.string.tv_wallpaper_blur),
+                value = currentBlur,
+                range = 0..100,
+                step = 5,
+                icon = R.drawable.tv_ic_tune,
+                compact = true,
+                valueText = { "$it%" },
+                onChange = onBlurChanged,
+            )
+            Spacer(Modifier.height(6.dp))
+            ButtonRow(
+                label = context.getString(R.string.tv_wallpaper_qr_button),
+                icon = R.drawable.tv_ic_wifi,
+                compact = true,
+                modifier = if (customCount == 0) {
+                    Modifier
+                        .tvPanelLastRow(lastItemRequester, footerRequester)
+                        .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) }
+                } else {
+                    Modifier
+                },
+                onClick = onOpenQr,
+            )
+            if (customCount > 0) {
+                ButtonRow(
+                    label = context.getString(R.string.tv_wallpaper_delete_all_custom, customCount),
+                    icon = R.drawable.tv_ic_delete,
+                    compact = true,
+                    modifier = Modifier
+                        .tvPanelLastRow(lastItemRequester, footerRequester)
+                        .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) },
+                    onClick = onDeleteAllCustom,
+                )
+            }
+        }
+    }
+
+    // =========================================================================
+    // PERSISTENT MULTI-IMAGE PHONE QR UPLOAD SERVER & MODAL
+    // =========================================================================
+
     fun showQrUploadModal(
         context: Context,
         scope: CoroutineScope,
-        onApplied: () -> Unit,
+        onImageAdded: (newStyleKey: String) -> Unit,
     ) {
         val appContext = context.applicationContext
         scope.launch {
@@ -1189,20 +3242,22 @@ object TvWallpaper {
             val url = "http://$ip:${server.localPort}/"
             val qrBitmap = withContext(Dispatchers.Default) { QrCode.encode(url, 520) }
 
-            var dialogRef: ComponentDialog? = null
+            val sessionAddedCount = mutableIntStateOf(0)
+
             val dialog = TvDialogs.show(context) { dismiss ->
                 SidePanel(title = context.getString(R.string.tv_wallpaper_qr_title)) {
                     val closeRequester = remember { FocusRequester() }
+                    val added = sessionAddedCount.intValue
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         Text(
                             context.getString(R.string.tv_wallpaper_qr_help),
                             fontSize = 14.5.sp,
                             color = TvColors.secondaryText,
                         )
-                        Spacer(Modifier.height(18.dp))
+                        Spacer(Modifier.height(16.dp))
                         Box(
                             Modifier
-                                .size(220.dp)
+                                .size(216.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(ComposeColor.White)
                                 .padding(10.dp),
@@ -1211,11 +3266,36 @@ object TvWallpaper {
                             Image(
                                 bitmap = qrBitmap.asImageBitmap(),
                                 contentDescription = url,
-                                modifier = Modifier.size(200.dp),
+                                modifier = Modifier.size(196.dp),
                             )
                         }
                         Spacer(Modifier.height(12.dp))
                         Text(url, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ComposeColor.White)
+                        if (added > 0) {
+                            Spacer(Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.24f))
+                                    .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(999.dp))
+                                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.tv_ic_check),
+                                    contentDescription = null,
+                                    tint = ComposeColor.White,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    context.getString(R.string.tv_wallpaper_qr_added_count, added),
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ComposeColor.White,
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(18.dp))
                         ButtonRow(
                             label = context.getString(R.string.close_player),
@@ -1228,19 +3308,26 @@ object TvWallpaper {
                     }
                 }
             }
-            dialogRef = dialog
+            // Keep 0f dim behind the QR modal too so every uploaded photo previews live behind it!
+            dialog.window?.apply {
+                clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                setDimAmount(0f)
+            }
 
             val serverJob = scope.launch(Dispatchers.IO) {
                 while (!server.isClosed) {
                     val client = runCatching { server.accept() }.getOrNull() ?: break
                     launch(Dispatchers.IO) {
-                        val applied = handleWallpaperClient(client, appContext)
-                        if (applied) {
-                            appContext.prefs().edit { putString(C.TV_WALLPAPER, STYLE_CUSTOM) }
+                        val savedKey = handleWallpaperClient(client, appContext)
+                        if (savedKey != null) {
+                            appContext.prefs().edit {
+                                putString(C.TV_WALLPAPER, savedKey)
+                                putLong(PREF_ROTATION_LAST_MS, System.currentTimeMillis())
+                            }
                             withContext(Dispatchers.Main) {
-                                onApplied()
+                                sessionAddedCount.intValue++
+                                onImageAdded(savedKey)
                                 TvToast.makeText(appContext, R.string.tv_wallpaper_applied, Toast.LENGTH_SHORT).show()
-                                runCatching { dialogRef?.dismiss() }
                             }
                         }
                     }
@@ -1253,11 +3340,11 @@ object TvWallpaper {
         }
     }
 
-    private fun handleWallpaperClient(socket: Socket, context: Context): Boolean {
+    private fun handleWallpaperClient(socket: Socket, context: Context): String? {
         socket.use { s ->
             s.soTimeout = 30_000
             val input = s.getInputStream()
-            val requestLine = readHttpLine(input) ?: return false
+            val requestLine = readHttpLine(input) ?: return null
             var contentLength = 0
             while (true) {
                 val line = readHttpLine(input) ?: break
@@ -1271,26 +3358,26 @@ object TvWallpaper {
             if (requestLine.startsWith("POST /upload") && contentLength in 1..MAX_UPLOAD_BYTES) {
                 val body = readExactBytes(input, contentLength) ?: run {
                     writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
-                    return false
+                    return null
                 }
-                val ok = decodeAndSaveCustomImage(context, body)
-                if (ok) {
+                val savedKey = decodeAndSaveNewCustomImage(context, body)
+                if (savedKey != null) {
                     writePlainResponse(out, 200, context.getString(R.string.tv_wallpaper_applied))
                 } else {
                     writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
                 }
-                return ok
+                return savedKey
             }
 
             if (requestLine.startsWith("POST /url") && contentLength in 1..8192) {
                 val rawBytes = readExactBytes(input, contentLength) ?: run {
                     writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
-                    return false
+                    return null
                 }
                 val targetUrl = String(rawBytes, Charsets.UTF_8).trim()
                 if (!targetUrl.startsWith("http://", ignoreCase = true) && !targetUrl.startsWith("https://", ignoreCase = true)) {
                     writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
-                    return false
+                    return null
                 }
                 val fetched = runCatching {
                     val req = Request.Builder()
@@ -1305,13 +3392,13 @@ object TvWallpaper {
                     }
                 }.getOrNull()
 
-                val ok = fetched != null && decodeAndSaveCustomImage(context, fetched)
-                if (ok) {
+                val savedKey = if (fetched != null) decodeAndSaveNewCustomImage(context, fetched) else null
+                if (savedKey != null) {
                     writePlainResponse(out, 200, context.getString(R.string.tv_wallpaper_applied))
                 } else {
                     writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
                 }
-                return ok
+                return savedKey
             }
 
             val pageTitle = escapeHtml(context.getString(R.string.tv_wallpaper_qr_title))
@@ -1327,23 +3414,24 @@ object TvWallpaper {
                 <title>Xtra TV</title>
                 <style>
                 *{box-sizing:border-box}
-                body{background:#0e0e13;color:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:28px 18px;text-align:center}
-                .card{max-width:420px;margin:0 auto 18px;background:#1a1924;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:20px}
+                body{background:#0e0e13;color:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:26px 16px;text-align:center}
+                .card{max-width:440px;margin:0 auto 16px;background:#1a1924;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:20px}
                 h2{margin:0 0 6px;font-size:22px}
-                p.sub{margin:0 0 22px;color:#b8b8c7;font-size:14px}
+                p.sub{margin:0 0 20px;color:#b8b8c7;font-size:14px}
                 label.lbl{display:block;font-weight:600;margin-bottom:12px;font-size:15px}
                 input[type=file]{display:block;width:100%;margin:0 auto 14px;color:#ddd;font-size:14px}
                 input[type=url]{width:100%;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:#101017;color:#fff;font-size:15px;margin-bottom:12px}
                 button{width:100%;padding:13px 20px;background:#9147ff;color:#fff;border:0;border-radius:10px;font-weight:700;font-size:16px;cursor:pointer}
                 button:disabled{opacity:.55}
-                #st{margin-top:14px;font-size:14px;font-weight:600;min-height:20px;color:#c4b5fd}
+                #st{margin-top:12px;font-size:14px;font-weight:600;min-height:20px;color:#c4b5fd}
+                #cnt{margin-top:6px;font-size:13px;color:#a1a1b5}
                 </style></head><body>
                 <h2>Xtra TV</h2>
                 <p class="sub">$pageTitle</p>
                 <div class="card">
                   <label class="lbl">$pickLabel</label>
-                  <input type="file" id="f" accept="image/*">
-                  <button id="bf" onclick="sendFile()">$sendLabel</button>
+                  <input type="file" id="f" accept="image/*" multiple>
+                  <button id="bf" onclick="sendFiles()">$sendLabel</button>
                 </div>
                 <div class="card">
                   <label class="lbl">$urlLabel</label>
@@ -1351,34 +3439,58 @@ object TvWallpaper {
                   <button id="bu" onclick="sendUrl()">$sendLabel</button>
                 </div>
                 <div id="st"></div>
+                <div id="cnt"></div>
                 <script>
+                var sentTotal=0;
                 function setStatus(m,ok){var e=document.getElementById('st');e.style.color=ok?'#6ee7b7':'#fb7185';e.innerText=m;}
-                function uploadRaw(blob){
-                  fetch('/upload',{method:'POST',body:blob}).then(function(r){
-                    return r.text().then(function(t){setStatus(t||'$doneMsg',r.ok);});
-                  }).catch(function(){setStatus('$errMsg',false);});
-                }
-                function sendFile(){
-                  var f=document.getElementById('f').files[0];if(!f)return;
-                  setStatus('...',true);
-                  if(typeof createImageBitmap==='function'){
-                    createImageBitmap(f).then(function(bmp){
-                      var mw=1920,mh=1080,w=bmp.width,h=bmp.height;
-                      var s=Math.min(1,Math.max(mw/w,mh/h));
-                      if(w>mw||h>mh){s=Math.min(mw/w,mh/h);if(w*s<mw&&h*s<mh)s=1;}
+                function setBusy(b){document.getElementById('bf').disabled=b;document.getElementById('bu').disabled=b;}
+                function resizeOne(file){
+                  return new Promise(function(resolve){
+                    if(typeof createImageBitmap!=='function'){resolve(file);return;}
+                    createImageBitmap(file).then(function(bmp){
+                      var mw=1920,mh=1080,w=bmp.width,h=bmp.height,s=1;
+                      if(w>mw||h>mh){s=Math.max(mw/w,mh/h);if(s>1)s=1;}
                       var cw=Math.round(w*s),ch=Math.round(h*s);
                       var c=document.createElement('canvas');c.width=cw;c.height=ch;
                       c.getContext('2d').drawImage(bmp,0,0,cw,ch);
-                      c.toBlob(function(b){uploadRaw(b||f);},'image/jpeg',0.92);
-                    }).catch(function(){uploadRaw(f);});
-                  }else{uploadRaw(f);}
+                      c.toBlob(function(b){resolve(b||file);},'image/jpeg',0.92);
+                    }).catch(function(){resolve(file);});
+                  });
+                }
+                async function sendFiles(){
+                  var input=document.getElementById('f');
+                  var files=Array.prototype.slice.call(input.files||[]);
+                  if(!files.length)return;
+                  setBusy(true);
+                  var okCount=0;
+                  for(var i=0;i<files.length;i++){
+                    setStatus((i+1)+' / '+files.length+' ...',true);
+                    try{
+                      var blob=await resizeOne(files[i]);
+                      var r=await fetch('/upload',{method:'POST',body:blob});
+                      if(r.ok){okCount++;sentTotal++;}
+                    }catch(e){}
+                  }
+                  setBusy(false);
+                  input.value='';
+                  if(okCount>0){
+                    setStatus('$doneMsg ('+okCount+'/'+files.length+')',true);
+                    document.getElementById('cnt').innerText='✓ '+sentTotal+' image(s)';
+                  }else{
+                    setStatus('$errMsg',false);
+                  }
                 }
                 function sendUrl(){
-                  var u=document.getElementById('u').value.trim();if(!u)return;
-                  setStatus('...',true);
+                  var inp=document.getElementById('u');
+                  var u=inp.value.trim();if(!u)return;
+                  setBusy(true);setStatus('...',true);
                   fetch('/url',{method:'POST',body:u}).then(function(r){
-                    return r.text().then(function(t){setStatus(t||'$doneMsg',r.ok);});
-                  }).catch(function(){setStatus('$errMsg',false);});
+                    setBusy(false);
+                    return r.text().then(function(t){
+                      if(r.ok){sentTotal++;inp.value='';document.getElementById('cnt').innerText='✓ '+sentTotal+' image(s)';}
+                      setStatus(t||'$doneMsg',r.ok);
+                    });
+                  }).catch(function(){setBusy(false);setStatus('$errMsg',false);});
                 }
                 </script></body></html>
             """.trimIndent().toByteArray(Charsets.UTF_8)
@@ -1386,16 +3498,17 @@ object TvWallpaper {
             out.write(header.toByteArray(Charsets.UTF_8))
             out.write(html)
             out.flush()
-            return false
+            return null
         }
     }
 
-    private fun decodeAndSaveCustomImage(context: Context, bytes: ByteArray): Boolean {
-        if (bytes.size < 32) return false
+    private fun decodeAndSaveNewCustomImage(context: Context, bytes: ByteArray): String? {
+        if (bytes.size < 32) return null
+        ensureMigrated(context)
         return runCatching {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return false
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
             var sample = 1
             while (bounds.outWidth / (sample * 2) >= MAX_CUSTOM_W && bounds.outHeight / (sample * 2) >= MAX_CUSTOM_H) {
@@ -1405,7 +3518,7 @@ object TvWallpaper {
                 inSampleSize = sample
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
-            var decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts) ?: return false
+            var decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts) ?: return null
 
             val exifDegrees = readJpegOrientationDegrees(bytes)
             val scale = min(
@@ -1426,21 +3539,65 @@ object TvWallpaper {
                 }
             }
 
-            val dest = customFile(context)
-            val tmp = File(dest.parentFile, "$CUSTOM_FILE_NAME.tmp")
+            val dir = wallpapersDir(context)
+            val seq = uploadSeq.getAndIncrement()
+            val fileName = String.format(java.util.Locale.US, "wp_%013d_%03d.jpg", System.currentTimeMillis(), seq)
+            val dest = File(dir, fileName)
+            val tmp = File(dir, "$fileName.tmp")
             FileOutputStream(tmp).use { fos ->
-                if (!decoded.compress(Bitmap.CompressFormat.JPEG, 92, fos)) return false
+                if (!decoded.compress(Bitmap.CompressFormat.JPEG, 92, fos)) return null
             }
-            if (dest.exists()) dest.delete()
             if (!tmp.renameTo(dest)) {
                 tmp.copyTo(dest, overwrite = true)
                 tmp.delete()
             }
+            writeBitmapThumb(decoded, File(dir, "$THUMB_PREFIX$fileName"))
             invalidateCaches()
-            cachedCustomRawBitmap = decoded
-            cachedCustomRawStamp = customFileStamp
-            true
-        }.getOrDefault(false)
+            rawCustomCache.put("$fileName|${dest.lastModified()}", decoded)
+            "$CUSTOM_PREFIX$fileName"
+        }.getOrNull()
+    }
+
+    private fun ensureThumbForFile(sourceFile: File, thumbFile: File) {
+        if (thumbFile.isFile && thumbFile.length() > 128L) return
+        if (!sourceFile.isFile) return
+        runCatching {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(sourceFile.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return
+            var sample = 1
+            while (bounds.outWidth / (sample * 2) >= THUMB_W && bounds.outHeight / (sample * 2) >= THUMB_H) {
+                sample *= 2
+            }
+            val bmp = BitmapFactory.decodeFile(
+                sourceFile.absolutePath,
+                BitmapFactory.Options().apply {
+                    inSampleSize = sample
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                },
+            ) ?: return
+            writeBitmapThumb(bmp, thumbFile)
+            bmp.recycle()
+        }
+    }
+
+    private fun writeBitmapThumb(src: Bitmap, thumbFile: File) {
+        runCatching {
+            val thumb = Bitmap.createBitmap(THUMB_W, THUMB_H, Bitmap.Config.ARGB_8888)
+            val c = Canvas(thumb)
+            val scale = max(THUMB_W.toFloat() / src.width.toFloat(), THUMB_H.toFloat() / src.height.toFloat())
+            val dx = (THUMB_W - src.width * scale) * 0.5f
+            val dy = (THUMB_H - src.height * scale) * 0.5f
+            val m = Matrix().apply {
+                postScale(scale, scale)
+                postTranslate(dx, dy)
+            }
+            c.drawBitmap(src, m, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            FileOutputStream(thumbFile).use { fos ->
+                thumb.compress(Bitmap.CompressFormat.JPEG, 85, fos)
+            }
+            thumb.recycle()
+        }
     }
 
     /** Minimal pure-Kotlin JPEG EXIF orientation reader (tag 0x0112) so phone photos never appear rotated. */
@@ -1599,7 +3756,7 @@ object TvWallpaper {
 
     private fun expFalloff(dx: Float, dy: Float, sigma: Float): Float {
         val d2 = (dx * dx + dy * dy) / (2f * sigma * sigma)
-        return kotlin.math.exp(-d2)
+        return fastExpNeg(d2)
     }
 
     private fun hypotNorm(dx: Float, dy: Float): Float = sqrt(dx * dx + dy * dy)
@@ -1615,15 +3772,11 @@ object TvWallpaper {
         bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
 
         val r = radius.coerceIn(1, min(w - 1, h - 1))
-        // Two-pass separable sliding-window box blur repeated twice -> smooth Gaussian-like kernel in O(W*H)
         repeat(2) {
-            // Horizontal pass: pixels -> temp
             val div = 2 * r + 1
             for (y in 0 until h) {
                 val rowOffset = y * w
-                var sumR = 0
-                var sumG = 0
-                var sumB = 0
+                var sumR = 0; var sumG = 0; var sumB = 0
                 for (i in -r..r) {
                     val p = pixels[rowOffset + i.coerceIn(0, w - 1)]
                     sumR += (p ushr 16) and 0xFF
@@ -1641,11 +3794,8 @@ object TvWallpaper {
                     sumB += (pIn and 0xFF) - (pOut and 0xFF)
                 }
             }
-            // Vertical pass: temp -> pixels
             for (x in 0 until w) {
-                var sumR = 0
-                var sumG = 0
-                var sumB = 0
+                var sumR = 0; var sumG = 0; var sumB = 0
                 for (i in -r..r) {
                     val p = temp[i.coerceIn(0, h - 1) * w + x]
                     sumR += (p ushr 16) and 0xFF
