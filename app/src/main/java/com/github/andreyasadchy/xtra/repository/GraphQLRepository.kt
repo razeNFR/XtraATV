@@ -3208,12 +3208,24 @@ class GraphQLRepository(
         val broadcastType: String?,
         val positionSeconds: Int,
         val updatedAtMs: Long,
+        val status: String? = null,
+        val ownerLiveStreamId: String? = null,
+        val ownerLiveStreamCreatedAt: String? = null,
+        val ownerLiveArchiveVideoId: String? = null,
     )
 
     data class SingleVideoViewingHistory(
         val positionSeconds: Int,
         val updatedAtMs: Long,
         val durationSeconds: Int?,
+        val status: String? = null,
+        val createdAt: String? = null,
+        val broadcastType: String? = null,
+        val channelId: String? = null,
+        val channelLogin: String? = null,
+        val ownerLiveStreamId: String? = null,
+        val ownerLiveStreamCreatedAt: String? = null,
+        val ownerLiveArchiveVideoId: String? = null,
     )
 
     suspend fun fetchViewedVideos(
@@ -3222,10 +3234,19 @@ class GraphQLRepository(
         limit: Int = 25,
     ): List<RemoteViewedVideo>? = withContext(Dispatchers.IO) {
         if (headers[C.HEADER_TOKEN].isNullOrBlank()) return@withContext null
-        val rawBody = buildJsonObject {
+        val rawBodyFull = buildJsonObject {
             put(
                 "query",
-                "query(\$limit: Int!) { currentUser { viewedVideos(first: \$limit) { edges { history { position updatedAt } node { id title broadcastType createdAt publishedAt lengthSeconds previewThumbnailURL(width: 640, height: 360) owner { id login displayName profileImageURL(width: 300) } game { id displayName name } } } } } }",
+                "query(\$limit: Int!) { currentUser { viewedVideos(first: \$limit) { edges { history { position updatedAt } node { id title status broadcastType createdAt publishedAt lengthSeconds previewThumbnailURL(width: 640, height: 360) owner { id login displayName profileImageURL(width: 300) stream { id createdAt archiveVideo { id } } } game { id displayName name } } } } } }",
+            )
+            putJsonObject("variables") {
+                put("limit", limit)
+            }
+        }.toString()
+        val rawBodyCompat = buildJsonObject {
+            put(
+                "query",
+                "query(\$limit: Int!) { currentUser { viewedVideos(first: \$limit) { edges { history { position updatedAt } node { id title status broadcastType createdAt publishedAt lengthSeconds previewThumbnailURL(width: 640, height: 360) owner { id login displayName profileImageURL(width: 300) stream { id createdAt } } game { id displayName name } } } } } }",
             )
             putJsonObject("variables") {
                 put("limit", limit)
@@ -3250,15 +3271,23 @@ class GraphQLRepository(
             fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
             fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.intOrNull
 
-            var raw = sendPersistedQuery(networkLibrary, headers, rawBody)
-            var parsed = json.parseToJsonElement(raw)
-            var root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
-            var currentUser = root?.get("data").obj()?.get("currentUser").obj()
-            if (currentUser == null && (raw.contains("PersistedQuery") || root?.get("errors") != null)) {
-                raw = sendPersistedQuery(networkLibrary, headers, persistedBody)
-                parsed = json.parseToJsonElement(raw)
-                root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
-                currentUser = root?.get("data").obj()?.get("currentUser").obj()
+            suspend fun tryQuery(body: String): Pair<String, JsonObject?> {
+                val r = sendPersistedQuery(networkLibrary, headers, body)
+                val p = runCatching { json.parseToJsonElement(r) }.getOrNull()
+                val root = (p as? JsonArray)?.firstOrNull().obj() ?: p.obj()
+                val cu = root?.get("data").obj()?.get("currentUser").obj()
+                return r to (cu?.takeIf { root?.get("errors") == null || cu["viewedVideos"] != null })
+            }
+
+            var (raw, currentUser) = tryQuery(rawBodyFull)
+            if (currentUser == null && !raw.contains("PersistedQuery")) {
+                val second = tryQuery(rawBodyCompat)
+                raw = second.first
+                currentUser = second.second
+            }
+            if (currentUser == null) {
+                val third = tryQuery(persistedBody)
+                currentUser = third.second
             }
             if (currentUser == null) return@runCatching null
             val edges = currentUser["viewedVideos"].obj()?.get("edges").arr() ?: return@runCatching emptyList()
@@ -3276,6 +3305,7 @@ class GraphQLRepository(
                     ?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
                     ?: 0L
                 val owner = node["owner"].obj()
+                val ownerStream = owner?.get("stream").obj()
                 val game = node["game"].obj()
                 RemoteViewedVideo(
                     id = id,
@@ -3292,6 +3322,10 @@ class GraphQLRepository(
                     broadcastType = node["broadcastType"].str()?.takeIf { it.isNotBlank() },
                     positionSeconds = posSec.coerceAtLeast(0),
                     updatedAtMs = updatedAtMs,
+                    status = node["status"].str()?.takeIf { it.isNotBlank() },
+                    ownerLiveStreamId = ownerStream?.get("id").str()?.takeIf { it.isNotBlank() },
+                    ownerLiveStreamCreatedAt = ownerStream?.get("createdAt").str()?.takeIf { it.isNotBlank() },
+                    ownerLiveArchiveVideoId = ownerStream?.get("archiveVideo").obj()?.get("id").str()?.takeIf { it.isNotBlank() },
                 )
             }
         }.getOrNull()
@@ -3303,10 +3337,19 @@ class GraphQLRepository(
         videoId: String,
     ): SingleVideoViewingHistory? = withContext(Dispatchers.IO) {
         if (videoId.isBlank() || headers[C.HEADER_TOKEN].isNullOrBlank()) return@withContext null
-        val body = buildJsonObject {
+        val fullBody = buildJsonObject {
             put(
                 "query",
-                "query(\$id: ID!) { video(id: \$id) { lengthSeconds self { viewingHistory { position updatedAt } } } }",
+                "query(\$id: ID!) { video(id: \$id) { status broadcastType createdAt publishedAt lengthSeconds owner { id login stream { id createdAt archiveVideo { id } } } self { viewingHistory { position updatedAt } } } }",
+            )
+            putJsonObject("variables") {
+                put("id", videoId)
+            }
+        }.toString()
+        val compatBody = buildJsonObject {
+            put(
+                "query",
+                "query(\$id: ID!) { video(id: \$id) { status broadcastType createdAt lengthSeconds owner { id login stream { id createdAt } } self { viewingHistory { position updatedAt } } } }",
             )
             putJsonObject("variables") {
                 put("id", videoId)
@@ -3318,10 +3361,15 @@ class GraphQLRepository(
             fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
             fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.intOrNull
 
-            val raw = sendPersistedQuery(networkLibrary, headers, body)
-            val parsed = json.parseToJsonElement(raw)
-            val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
-            val video = root?.get("data").obj()?.get("video").obj() ?: return@runCatching null
+            suspend fun tryVideo(b: String): JsonObject? {
+                val raw = sendPersistedQuery(networkLibrary, headers, b)
+                val parsed = runCatching { json.parseToJsonElement(raw) }.getOrNull()
+                val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj()
+                val v = root?.get("data").obj()?.get("video").obj()
+                return v?.takeIf { root?.get("errors") == null || v["self"] != null }
+            }
+
+            val video = tryVideo(fullBody) ?: tryVideo(compatBody) ?: return@runCatching null
             val vh = video["self"].obj()?.get("viewingHistory").obj() ?: return@runCatching null
             val posSec = vh["position"].int()
                 ?: vh["position"].str()?.toDoubleOrNull()?.toInt()
@@ -3329,10 +3377,20 @@ class GraphQLRepository(
             val updatedAtMs = vh["updatedAt"].str()
                 ?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() }
                 ?: 0L
+            val owner = video["owner"].obj()
+            val ownerStream = owner?.get("stream").obj()
             SingleVideoViewingHistory(
                 positionSeconds = posSec.coerceAtLeast(0),
                 updatedAtMs = updatedAtMs,
                 durationSeconds = video["lengthSeconds"].int()?.takeIf { it > 0 },
+                status = video["status"].str()?.takeIf { it.isNotBlank() },
+                createdAt = (video["createdAt"].str() ?: video["publishedAt"].str())?.takeIf { it.isNotBlank() },
+                broadcastType = video["broadcastType"].str()?.takeIf { it.isNotBlank() },
+                channelId = owner?.get("id").str()?.takeIf { it.isNotBlank() },
+                channelLogin = owner?.get("login").str()?.takeIf { it.isNotBlank() },
+                ownerLiveStreamId = ownerStream?.get("id").str()?.takeIf { it.isNotBlank() },
+                ownerLiveStreamCreatedAt = ownerStream?.get("createdAt").str()?.takeIf { it.isNotBlank() },
+                ownerLiveArchiveVideoId = ownerStream?.get("archiveVideo").obj()?.get("id").str()?.takeIf { it.isNotBlank() },
             )
         }.getOrNull()
     }

@@ -92,6 +92,7 @@ class MultiStreamFragment : Fragment() {
         var texture: TextureView? = null
         /** Playing a backup player type for the time of an ad, back to the normal one once it is over. */
         var onBackup = false
+        var adMuted = false
         var adPulseAnimator: android.animation.ValueAnimator? = null
         var playJob: kotlinx.coroutines.Job? = null
         var expUpgradeJob: kotlinx.coroutines.Job? = null
@@ -284,6 +285,14 @@ class MultiStreamFragment : Fragment() {
                     currentLogins.add(key)
                     val nextMs = (playMsByLogin[key] ?: 0L) + 5_000L
                     playMsByLogin[key] = nextMs
+                    com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+                        context = ctx,
+                        channelId = s.channelId,
+                        channelLogin = s.channelLogin,
+                        streamId = s.id,
+                        streamCreatedAt = s.createdAt,
+                        forcePersist = false,
+                    )
                     if (nextMs >= 30_000L && recordedLogins.add(key)) {
                         com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.recordWatched(
                             ctx,
@@ -300,6 +309,13 @@ class MultiStreamFragment : Fragment() {
     }
 
     private fun addTile(stream: Stream): Tile {
+        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+            context = requireContext(),
+            channelId = stream.channelId,
+            channelLogin = stream.channelLogin,
+            streamId = stream.id,
+            streamCreatedAt = stream.createdAt,
+        )
         val density = resources.displayMetrics.density
         val texture = TextureView(requireContext())
         val label = TextView(requireContext()).apply {
@@ -1856,6 +1872,7 @@ class MultiStreamFragment : Fragment() {
         tile.resolvedChannelId = null
         tile.qualityOverrideHeight = null
         tile.onBackup = false
+        tile.adMuted = false
         tile.experimentalVodActive = false
         tile.experimentalCreatedAtMs = null
         tile.playJob?.cancel()
@@ -2354,14 +2371,32 @@ class MultiStreamFragment : Fragment() {
             var lastSwitch = 0L
             val listener = object : Player.Listener {
                 override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
-                    if (tile.experimentalVodActive) return
+                    if (tile.experimentalVodActive || view == null || tile !in tiles || tile.stream.channelLogin != login) return
                     val playlist = (player.currentManifest as? androidx.media3.exoplayer.hls.HlsManifest)?.mediaPlaylist ?: return
-                    val ads = playlist.tags.any { it.contains("stitched-ad", true) || it.contains("X-TV-TWITCH-AD", true) }
+                    val ads = playlist.tags.any {
+                        it.contains("stitched-ad", true) ||
+                            it.contains("X-TV-TWITCH-AD", true) ||
+                            it.contains("twitch-stitched-ad", true) ||
+                            it.contains("COMMERCIAL-BREAK", true)
+                    }
                     val now = System.currentTimeMillis()
-                    if (ads && now - lastSwitch > 20_000L && view != null && tile.stream.channelLogin == login) {
-                        // an ad started: a backup player type (autoplay first) until the ad is over
-                        lastSwitch = now
-                        playStream(login, player, tile, backup = true)
+                    if (ads) {
+                        if (!tile.onBackup) {
+                            lastSwitch = now
+                            playStream(login, player, tile, backup = true)
+                        } else {
+                            if (!tile.adMuted) {
+                                tile.adMuted = true
+                                applySound()
+                            }
+                            if (now - lastSwitch > 4_000L) {
+                                lastSwitch = now
+                                playStream(login, player, tile, backup = true)
+                            }
+                        }
+                    } else if (tile.adMuted) {
+                        tile.adMuted = false
+                        applySound()
                     }
                 }
             }
@@ -2481,6 +2516,8 @@ class MultiStreamFragment : Fragment() {
                     tile.experimentalVodActive = true
                     tile.experimentalCreatedAtMs = vod.createdAtMs
                     tile.onBackup = false
+                    tile.adMuted = false
+                    applySound()
                     updateAdBadge(tile)
                     player.setMediaSource(
                         com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.buildMediaSource(
@@ -2507,6 +2544,7 @@ class MultiStreamFragment : Fragment() {
                 tile.experimentalVodActive = false
                 tile.experimentalCreatedAtMs = null
             }
+            val swapEnabled = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(context)
             val normal = if (!backup) {
                 try {
                     ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, login)
@@ -2514,10 +2552,18 @@ class MultiStreamFragment : Fragment() {
                     null
                 }
             } else null
-            val url = normal ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getBackupPlaylistUrl(app, login)
+            val normalHasAds = normal != null && swapEnabled &&
+                com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.playlistHasAds(app, normal)
+            val backupChoice = if (backup || normal == null || normalHasAds) {
+                com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.findBackupPlaylist(app, login)
+            } else null
+            val url = if (!backup && normal != null && !normalHasAds) normal else backupChoice?.url
             if (url != null && view != null && tile in tiles && tile.stream.channelLogin == login) {
                 tile.experimentalVodActive = false
-                tile.onBackup = normal == null
+                val usingBackup = backup || normal == null || normalHasAds
+                tile.onBackup = usingBackup
+                tile.adMuted = usingBackup && backupChoice?.adFree == false
+                applySound()
                 updateAdBadge(tile)
                 player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
                 player.repeatMode = Player.REPEAT_MODE_OFF
@@ -2565,9 +2611,11 @@ class MultiStreamFragment : Fragment() {
                     if (view != null && tile in tiles && tile.stream.channelLogin == login && !tile.experimentalVodActive) {
                         tile.backJob?.cancel()
                         tile.onBackup = false
+                        tile.adMuted = false
                         tile.experimentalVodActive = true
                         tile.experimentalCreatedAtMs = vod.createdAtMs
                         tile.playingSince = 0L
+                        applySound()
                         updateAdBadge(tile)
                         tile.player.setMediaSource(
                             com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.buildMediaSource(
@@ -2594,16 +2642,34 @@ class MultiStreamFragment : Fragment() {
         }
     }
 
-    /** On a backup player type: every 30 s, back to the normal one as soon as its playlist has no ad. */
+    /**
+     * On a backup player type:
+     * - While muted because every candidate temporarily had an ad pod (`tile.adMuted`), re-probes backups every 4 s so
+     *   `autoplay` / `picture-by-picture` / `embed` takes over as soon as its short pre-roll clears.
+     * - Once playing clean ad-free backup video, checks the normal full-quality playlist every 15 s to switch back as soon
+     *   as the ad break ends.
+     */
     private fun waitForEndOfAd(login: String, player: ExoPlayer, tile: Tile) {
         tile.backJob?.cancel()
         tile.backJob = viewLifecycleOwner.lifecycleScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(30_000L)
+                kotlinx.coroutines.delay(if (tile.adMuted) 4_000L else 15_000L)
                 if (view == null || tile !in tiles || tile.stream.channelLogin != login || !tile.onBackup) {
                     return@launch
                 }
                 val app = (context?.applicationContext as? com.github.andreyasadchy.xtra.XtraApp) ?: return@launch
+                if (tile.adMuted) {
+                    val freshBackup = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.findBackupPlaylist(app, login)
+                    if (freshBackup != null && freshBackup.adFree && view != null && tile in tiles && tile.stream.channelLogin == login) {
+                        tile.adMuted = false
+                        applySound()
+                        tile.playingSince = 0L
+                        player.setMediaItem(MediaItem.Builder().setUri(freshBackup.url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+                        player.prepare()
+                        player.playWhenReady = true
+                        continue
+                    }
+                }
                 val normal = try {
                     ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, login)
                 } catch (e: Exception) {
@@ -2611,6 +2677,8 @@ class MultiStreamFragment : Fragment() {
                 } ?: continue
                 if (!com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.playlistHasAds(app, normal) && view != null && tile in tiles && tile.stream.channelLogin == login) {
                     tile.onBackup = false
+                    tile.adMuted = false
+                    applySound()
                     updateAdBadge(tile)
                     tile.playingSince = 0L
                     player.setMediaItem(MediaItem.Builder().setUri(normal).setMimeType(MimeTypes.APPLICATION_M3U8).build())
@@ -2710,7 +2778,7 @@ class MultiStreamFragment : Fragment() {
         val selected = selectedTile?.takeIf { it in tiles } ?: tiles.firstOrNull()
         tiles.forEach { tile ->
             tile.player.volume = when {
-                leaveMuted -> 0f
+                leaveMuted || tile.adMuted -> 0f
                 soundMix -> streamVolume(tile) / 100f
                 tile == selected -> 1f
                 else -> 0f

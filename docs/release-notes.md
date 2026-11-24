@@ -1,26 +1,30 @@
-# Xtra TV 1.4.6.8
+# Xtra TV 1.4.6.9
 
 ### New & Polish
-- **New TV Home Row — "Recently Watched Channels" (Last 20 Unique Channels)**:
-  - Automatically records a live channel once watched for at least **`30 seconds`** (avoiding pollution while zapping quickly with **Left / Right**), keeping the **20 most recent unique channels** sorted newest-first across restarts and isolated per account.
-  - **Filter mode**: choose between **All channels** (default) and **Unfollowed channels only** either in **Settings > Xtra TV > Home & Side menu** or directly from the row's options inside **Home rows**.
-  - **Live status & smart action**: checks live status in a single batched GraphQL query — live channels display a glowing live ring, `LIVE` badge, current category, and viewer count, and open the **live stream** directly on **OK**; offline channels open the **channel page** on **OK**.
-  - **Long-press OK** on any recent channel card offers standard channel actions (*Watch live*, *Open channel*, *Channel videos*, *Follow*, *Favorite*, *Hide*) alongside **Remove from recent** and **Clear recent channels**.
-- **Two-Way Twitch Account VOD History & Resume Position Sync (PC ↔ Mobile ↔ TVs)**:
-  - **Cross-device pull**: syncs `currentUser.viewedVideos` on Home load and `video.self.viewingHistory` when opening a VOD so broadcasts started on PC (`twitch.tv`), mobile, or another TV running Xtra TV appear in **Continue watching** and keep VOD progress bars up to date.
-  - **Live position push & synced removal**: pushes VOD playback progress to Twitch (`updateUserViewedVideo`) periodically while watching and immediately on pause/close, and resets Twitch's saved position when choosing **Remove from history** or **Watch from the beginning**.
-  - Added **Sync VOD history with Twitch** (**On** by default) in **Settings > Xtra TV > TV Player & Multi-stream**, with automatic local-only fallback when logged out or in Guest mode.
-- **Redesigned Stream Switcher & Multi-Stream Tab Rail + Android 14 Flicker & Focus Fixes**:
-  - **Unified Smoked-Glass Tab Rail**: wrapped category tabs inside a dark smoked-glass capsule rail with an ambiance-accented active tab pill + border when browsing cards and a high-contrast light pill when focused, keeping **Validate (n)** cleanly detached on the left in Multi-Stream mode.
-  - **Instant, jump-free tab switching**: silently preloads uncached category tabs in the background when the switcher opens, keeps tab pill widths steady while loading, and updates stream cards smoothly via `DiffUtil` without blank thumbnail flashes.
-  - **Fixed Android 14 bottom-edge flash / downward slide**: converted the switcher overlay to an edge-to-edge fullscreen dialog anchored at the bottom and locked the card container to a deterministic constant height (including on empty categories) so the surface never shifts downward when switching tabs.
-  - **Native vector icons on all tabs**: every tab in both the **Other streams** switcher and **Multi-stream** picker now displays a matching Xtra TV vector icon (*Suggested*, *Current list*, *Stream Together*, *Followed*, *Favorites*, *Recommended*, *Popular*, *Categories*, *Languages*, and *Search*) tinted automatically for focused, active, and resting states.
-  - **Restored Multi-Stream Up → Validate focus**: pressing **Up** from stream cards in Multi-Stream mode now jumps directly to **Validate** as soon as at least 1 extra streamer is selected, while returning to the active category tab otherwise.
-- **In-App Changelog ("What's new / Changelog" in Settings > About)**:
-  - Added **What's new / Changelog** directly under **Settings > About** (and inside the **About** version panel) so you can browse patch notes from the installed version and previous updates anytime on your TV, with local caching and bundled release-notes fallback.
-- **TV Home Performance Optimizations & Focus Polish (NVIDIA Shield / Android TV)**:
-  - **Under-the-hood Home rendering optimizations** (preserving the natural Google TV row glide): hoisted shared card state flows (`TvFavorites`, `TvPlaybackState`, `TvCoStreamCache`) to the Home root, eliminated root recompositions on row focus changes, enabled `LazyColumn` `contentType` row reuse, skipped unused width animations/offscreen GPU layers at rest, and bypassed redundant main-thread `ExoPlayer.stop()` calls when passing over cards before preview start.
-  - **1st-card focus from Statistics banner**: pressing **Down** from the full-width **Statistics** banner into **Categories** (when unvisited) now lands cleanly on the **1st card** instead of jumping to the 4th card, while preserving last-focused card restoration on revisited rows.
+- **New "Customization" Category in Settings > Xtra TV**:
+  - Dedicated **Customization** section grouping **Ambient color**, **Wallpaper**, **Card sizes** (Home & grids), **Featured banner**, **Home greeting**, **Stats badge**, **Compact side rail**, and **Side menu stats**, keeping **Home & Side menu** focused on rows, favorites, hidden content, and recent channels.
+- **TV Wallpapers — Studio & OLED Shaders, Visual Gallery, Multi-Photo Phone QR & Auto-Rotation**:
+  - **10 ambient-reactive procedural wallpapers**: 6 ACES-tonemapped **Studio & OLED shaders** (*Velvet Drape*, *Dichroic Glass*, *Glass Rings*, *Starry Night OLED*, *Twilight Dunes*, and *Northern Lights*) + 4 geometric vector styles (*AMOLED Topographic*, *Gaming Prisms*, *Ribbons*, and *Aurora*), all dynamically tinted by your active **Ambient color** (including live **Dynamic** crossfades).
+  - **Unlimited custom images & persistent multi-upload QR portal**: scan the local Wi-Fi QR code once from your phone to select multiple gallery photos at once (`multiple`) or send several photos and image URLs in a row without closing the QR window; all custom wallpapers are preserved in Xtra TV backups.
+  - **Visual 16:9 Gallery & Auto-Rotation playlist**: tabbed smoked-glass side panel (*Gallery*, *Rotation*, *Adjustments*) with live unobstructed background preview, **Auto-rotation** timer (*Every launch*, *5 min*, *10 min*, *30 min*, *1 h*, *3 h*) + **Shuffle** across any checked mix of built-in styles and custom photos, per-image **Long-press OK** options/delete, **Visibility** (`10–100%`), and **Blur** (`0–100%`).
+- **Configurable Live Preview & Card Zoom Delay**:
+  - Added **Preview & zoom delay** in **Settings > Xtra TV > Previews & Live alerts** (`0.25 s` default, `0.5 s`, `1 s`, `1.5 s`, `2 s`, `3 s`, `5 s`) to control how long focus stays on a card before starting the live video preview and card expansion.
+- **Compact Smoked-Glass Volume Pill & Direct Long-Press Mute in the TV Player**:
+  - Pressing **OK** on **Volume** opens a compact smoked-glass pill directly above the Volume icon with a bright active focus border, circular slider thumb (`●`), and `‹` `›` D-pad arrows (**Left / Right** adjusts volume in **5%** steps; **OK**, **Down**, **Back**, or **3 s** closes it).
+  - **Hold OK directly on the Volume button** (even when the pill is closed, as well as when open) to toggle **Mute / Unmute** instantly.
+- **Unified Smoked-Glass Cards & High-Contrast Readability Over Wallpapers**:
+  - Lightweight zero-blur smoked-glass dark capsules (`1dp` rim at rest, crisp white border on focus) unify thumbnails and metadata across **Home** cards (streams, multi-streams, continue watching, videos, clips, categories, and channel tiles), **Popular / Categories / Following** grids, and **Statistics** panels.
+  - Added rounded smoked-glass column panels in **Settings**, frameless soft-feathered **Home** spotlight banner, pinned footer in the **Phone QR** upload modal, and focus-scale edge padding in the **Wallpaper** gallery.
+
+### Fixes
+- **Restored Video Swap Adblock Across Player, Multi-Stream, PiP & Previews + Fixed Post-Ad Black Screen**:
+  - Video Swap backup streams (`android/autoplay`, `web/picture-by-picture`, `web/embed`, `web/thunderdome`, `web/popout`) now request playback tokens **anonymously** across the **main player**, **Multi-Stream**, **PiP**, and **live card previews** (stripping the account OAuth token that caused Twitch to stitch account-targeted ads onto backups) while keeping the main stream authenticated in the background for Channel Points, Drops, and Sub status.
+  - Added immediate pre-roll bypass & periodic silent backup re-probing during active ad pods, prevented main hardware decoder thrashing when falling back to ad-hiding, and added rendered-frame stall recovery when returning to live.
+- **Fixed Random Stream Reopening or "Playing" Badge After Exiting & Restarting the App**:
+  - When **Keep sound when leaving the app** is disabled, leaving or closing Xtra TV now stops playback, clears `TvPlaybackState`, and purges saved playback state immediately in `onStop()` / exit instead of waiting for a delayed callback that Android TV's process freezer could interrupt; cold starts always open cleanly on Home.
+- **Fixed Watched Live Streams Appearing as Viewed VODs in "Continue Watching"**:
+  - **Ongoing recording filter**: `TvVodHistorySync` queries Twitch GraphQL `Video.status` and active `owner.stream` metadata to ignore broadcasts still being recorded (`status != RECORDED`, `404_processing` thumbnails, or currently airing `archiveVideo`s).
+  - **Local live-session guard**: remembers live broadcasts opened in Xtra TV (single player, stream switcher, PiP, and Multi-Stream) so Twitch's auto-recorded `currentUser.viewedVideos` entry never surfaces on its own in **Continue watching** even after the stream ends, unless you explicitly open that VOD yourself.
 
 ### Install
-Download `XtraTV-1.4.6.8-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.4.6.9-tv.apk` below and install it over the previous version, your settings and account are kept.

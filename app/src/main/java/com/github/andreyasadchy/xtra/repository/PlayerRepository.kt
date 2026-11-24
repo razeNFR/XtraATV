@@ -2117,6 +2117,22 @@ class PlayerRepository(
             prefs.edit().putBoolean(C.VIDEO_SWAP_AUTOPLAY_FIRST, true).apply()
             changed = true
         }
+        if (!prefs.getBoolean("video_swap_v3_pbp_thunderdome", false)) {
+            val current = videoSwapDao.getAll()
+            val missingExtra = DEFAULT_VIDEO_SWAP.filter { (platform, playerType) ->
+                current.none { it.platform == platform && it.playerType == playerType }
+            }
+            if (missingExtra.isNotEmpty()) {
+                val start = (current.maxOfOrNull { it.position } ?: -1) + 1
+                videoSwapDao.insertList(
+                    missingExtra.mapIndexed { index, (platform, playerType) ->
+                        VideoSwap(platform, playerType, start + index)
+                    }
+                )
+                changed = true
+            }
+            prefs.edit().putBoolean("video_swap_v3_pbp_thunderdome", true).apply()
+        }
         if (changed) videoSwapDao.getAll() else items
     }
 
@@ -2184,7 +2200,9 @@ class PlayerRepository(
         // autoplay first: with it last, the ads played while embed and popout were tried
         val DEFAULT_VIDEO_SWAP = listOf(
             "android" to "autoplay",
+            "web" to "picture-by-picture",
             "web" to "embed",
+            "web" to "thunderdome",
             "web" to "popout",
         )
     }

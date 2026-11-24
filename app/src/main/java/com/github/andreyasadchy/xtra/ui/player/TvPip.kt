@@ -156,6 +156,13 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         slot.suspendedByMain = false
         slot.openedAt = SystemClock.elapsedRealtime()
         slot.decoderSteppedDown = false
+        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+            context = activity,
+            channelId = stream.channelId,
+            channelLogin = login,
+            streamId = stream.id,
+            streamCreatedAt = stream.createdAt,
+        )
 
         val frame = slot.view ?: return
         frame.findViewById<TextView>(R.id.tvPipLabel)?.text = stream.channelName ?: login
@@ -386,9 +393,14 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                     override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                         if (slot.suspendedByMain || slot.experimentalVodActive) return
                         val playlist = (currentManifest as? HlsManifest)?.mediaPlaylist ?: return
-                        val ads = playlist.tags.any { it.contains("stitched-ad", true) || it.contains("X-TV-TWITCH-AD", true) }
+                        val ads = playlist.tags.any {
+                            it.contains("stitched-ad", true) ||
+                                it.contains("X-TV-TWITCH-AD", true) ||
+                                it.contains("twitch-stitched-ad", true) ||
+                                it.contains("COMMERCIAL-BREAK", true)
+                        }
                         val now = System.currentTimeMillis()
-                        if (ads && now - lastSwitch > 20_000L && TvExperimentalAdblock.isSwapAdblockEnabled(activity)) {
+                        if (ads && now - lastSwitch > 4_500L && TvExperimentalAdblock.isSwapAdblockEnabled(activity)) {
                             lastSwitch = now
                             slot.stream?.channelLogin?.let { load(slot, it) }
                         }

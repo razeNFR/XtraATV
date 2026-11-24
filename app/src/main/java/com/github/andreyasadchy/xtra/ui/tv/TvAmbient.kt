@@ -117,7 +117,9 @@ object TvAmbient {
     }
 
     fun background(context: Context, base: Int, overrideColor: Int? = null): Drawable {
-        val color = overrideColor ?: color(context) ?: return ColorDrawable(base)
+        val ambient = overrideColor ?: color(context)
+        TvWallpaper.createBackground(context, base, ambient)?.let { return it }
+        val color = ambient ?: return ColorDrawable(base)
         // a light shade glows less, the background stays dark
         val light = Color.luminance(color) > 0.45f
         fun alpha(value: Int) = if (light) value * 3 / 5 else value
@@ -153,6 +155,26 @@ object TvAmbient {
             }
             root.background = transition
             transition.startTransition(420)
+        } else {
+            root.background = next
+        }
+    }
+
+    /** Smoothly crossfades [root]'s background to the current ambient/wallpaper state (used by wallpaper auto-rotation). */
+    fun crossfadeToCurrentBackground(root: View, base: Int) {
+        val next = background(root.context, base)
+        val previous = root.background
+        if (previous != null) {
+            val currentLayer = if (previous is TransitionDrawable && previous.numberOfLayers > 1) {
+                previous.getDrawable(previous.numberOfLayers - 1)
+            } else {
+                previous
+            }
+            val transition = TransitionDrawable(arrayOf(currentLayer, next)).apply {
+                isCrossFadeEnabled = false
+            }
+            root.background = transition
+            transition.startTransition(520)
         } else {
             root.background = next
         }

@@ -922,7 +922,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             return
         }
         previewJob = viewLifecycleOwner.lifecycleScope.launch {
-            delay(com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.START_DELAY)
+            delay(com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.startDelayMs(context))
             val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(context, login) ?: return@launch
             if (com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended) {
                 return@launch

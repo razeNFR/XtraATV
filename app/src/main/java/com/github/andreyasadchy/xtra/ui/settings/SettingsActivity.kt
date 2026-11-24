@@ -265,6 +265,15 @@ class SettingsActivity : AppCompatActivity() {
         com.github.andreyasadchy.xtra.ui.tv.TvBackup.onRequestPermissionsResult(this, requestCode)
     }
 
+    private var tvBaseBackgroundColor: Int? = null
+
+    fun refreshTvBackground() {
+        if (!TvUi.isTv(this)) return
+        tvBaseBackgroundColor?.let { base ->
+            binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState?.getBoolean(KEY_CHANGED) == true) {
@@ -275,6 +284,7 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(binding.root)
         if (TvUi.isTv(this)) {
             (binding.root.background as? android.graphics.drawable.ColorDrawable)?.color?.let { base ->
+                tvBaseBackgroundColor = base
                 binding.root.background = com.github.andreyasadchy.xtra.ui.tv.TvAmbient.background(this, base)
             }
             TvUi.adapt(binding.root, hideToolbarActions = false)
@@ -2230,6 +2240,33 @@ class SettingsActivity : AppCompatActivity() {
                         .show()
                 }
                 true
+            }
+            findPreference<Preference>(C.TV_WALLPAPER)?.let { preference ->
+                val context = requireContext()
+                val updateSummary = {
+                    preference.summary = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.summary(context)
+                }
+                updateSummary()
+                preference.setOnPreferenceClickListener {
+                    val settingsAct = activity as? SettingsActivity
+                    val fragView = view
+                    com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.showPanel(
+                        context = context,
+                        onLiveRefresh = { settingsAct?.refreshTvBackground() },
+                        onPreviewOpen = {
+                            fragView?.animate()?.alpha(0f)?.setDuration(160L)?.start()
+                        },
+                        onPreviewClose = {
+                            fragView?.animate()?.alpha(1f)?.setDuration(150L)?.start()
+                            updateSummary()
+                            settingsAct?.setResult()
+                        },
+                    ) {
+                        updateSummary()
+                        settingsAct?.setResult()
+                    }
+                    true
+                }
             }
             findPreference<Preference>(C.TV_PLAYER_CLOCK)?.let { preference ->
                 val context = requireContext()

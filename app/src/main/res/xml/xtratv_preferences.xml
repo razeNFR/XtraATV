@@ -175,6 +175,17 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
+        <ListPreference
+            android:defaultValue="250"
+            android:dependency="ui_tv_preview"
+            android:entries="@array/tvPreviewDelayEntries"
+            android:entryValues="@array/tvPreviewDelayValues"
+            android:key="tv_preview_delay"
+            android:summary="@string/tv_preview_delay_summary"
+            android:title="@string/tv_preview_delay"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
         <SwitchPreferenceCompat
             android:defaultValue="false"
             android:dependency="ui_tv_preview"
@@ -301,6 +312,14 @@
             android:key="tv_ambient_color"
             android:summary="%s"
             android:title="@string/tv_ambient_color"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:key="tv_wallpaper"
+            android:persistent="false"
+            android:summary="@string/tv_wallpaper_summary"
+            android:title="@string/tv_wallpaper"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 

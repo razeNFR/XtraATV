@@ -43,7 +43,6 @@ object TvCards {
         if (card.findViewById<View>(R.id.delete) != null) {
             card.isFocusable = false
             (card as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-            card.foreground = null
             return
         }
         card.isFocusable = true

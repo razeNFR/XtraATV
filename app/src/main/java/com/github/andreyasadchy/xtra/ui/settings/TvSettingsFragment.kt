@@ -567,6 +567,8 @@ class TvSettingsFragment : Fragment() {
             runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
         }
 
+        val hasWallpaper = remember(stamp) { com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context) }
+
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -579,13 +581,24 @@ class TvSettingsFragment : Fragment() {
                         )
                 }
                 .padding(start = 12.dp, end = 12.dp, top = 22.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             // Left Column: Title, Search, 9 Categories
             Column(
                 modifier = Modifier
-                    .width(264.dp)
+                    .width(if (hasWallpaper) 280.dp else 264.dp)
                     .fillMaxHeight()
+                    .then(
+                        if (hasWallpaper) {
+                            Modifier
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(Color(0xD613121C))
+                                .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(24.dp))
+                                .padding(horizontal = 12.dp, vertical = 14.dp)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .onFocusChanged {
                         if (it.hasFocus) {
                             rightColumnFocusedState.value = false
@@ -773,9 +786,16 @@ class TvSettingsFragment : Fragment() {
                             updateBackCallback()
                         }
                     }
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0x12FFFFFF))
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(if (hasWallpaper) Color(0xD913121C) else Color(0x12FFFFFF))
+                    .then(
+                        if (hasWallpaper) {
+                            Modifier.border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(24.dp))
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .padding(start = 20.dp, end = 20.dp, top = 18.dp),
             ) {
                 when (activeSub) {
                     is SubScreen.CustomProxies -> CustomProxiesSubScreen(
@@ -848,12 +868,22 @@ class TvSettingsFragment : Fragment() {
     @Composable
     private fun SearchPill(query: String, modifier: Modifier, onClick: () -> Unit) {
         val context = LocalContext.current
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context)
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
         Row(
             modifier = modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+                .background(
+                    when {
+                        focused -> TvColors.focused
+                        hasWallpaper -> Color(0xCC1E1D2B)
+                        else -> Color(0x1AFFFFFF)
+                    }
+                )
+                .then(
+                    if (hasWallpaper && !focused) Modifier.border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(12.dp)) else Modifier
+                )
                 .clickable(interactionSource = interaction, indication = null, onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -882,13 +912,24 @@ class TvSettingsFragment : Fragment() {
 
     @Composable
     private fun SmallIconPill(iconRes: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
+        val context = LocalContext.current
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context)
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
         Box(
             modifier = modifier
                 .size(36.dp)
                 .clip(CircleShape)
-                .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+                .background(
+                    when {
+                        focused -> TvColors.focused
+                        hasWallpaper -> Color(0xCC1E1D2B)
+                        else -> Color(0x1AFFFFFF)
+                    }
+                )
+                .then(
+                    if (hasWallpaper && !focused) Modifier.border(1.dp, Color(0x22FFFFFF), CircleShape) else Modifier
+                )
                 .clickable(interactionSource = interaction, indication = null, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
@@ -1217,17 +1258,25 @@ class TvSettingsFragment : Fragment() {
             }
         }
 
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context)
+
         Row(
             modifier = modifier
                 .fillMaxWidth()
                 .alpha(if (item.enabled) 1f else 0.48f)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (focused) TvColors.focused else Color(0x14FFFFFF))
+                .background(
+                    when {
+                        focused -> TvColors.focused
+                        hasWallpaper -> Color(0xCC1E1D2B)
+                        else -> Color(0x14FFFFFF)
+                    }
+                )
                 .then(
-                    if (isEditingSlider) {
-                        Modifier.border(2.dp, TvColors.accent, RoundedCornerShape(12.dp))
-                    } else {
-                        Modifier
+                    when {
+                        isEditingSlider -> Modifier.border(2.dp, TvColors.accent, RoundedCornerShape(12.dp))
+                        hasWallpaper && !focused -> Modifier.border(1.dp, Color(0x1EFFFFFF), RoundedCornerShape(12.dp))
+                        else -> Modifier
                     }
                 )
                 .onPreviewKeyEvent { ev ->
@@ -1949,7 +1998,8 @@ class TvSettingsFragment : Fragment() {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0x14FFFFFF))
+                .background(Color(0xB81E1D2B))
+                .border(1.dp, Color(0x1CFFFFFF), RoundedCornerShape(12.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2059,6 +2109,7 @@ class TvSettingsFragment : Fragment() {
         val xtraTitle = context.getString(R.string.xtratv_settings)
         val sources: List<Triple<Int, String, SubScreen?>> = listOf(
             Triple(R.xml.tv_settings_xtratv, xtraTitle, null),
+            Triple(R.xml.tv_xtratv_customization, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_customization_title)}", SubScreen.Xml(R.xml.tv_xtratv_customization, context.getString(R.string.tv_xtratv_sub_customization_title))),
             Triple(R.xml.tv_xtratv_home, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_home_title)}", SubScreen.Xml(R.xml.tv_xtratv_home, context.getString(R.string.tv_xtratv_sub_home_title))),
             Triple(R.xml.tv_xtratv_remote, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_remote_title)}", SubScreen.Xml(R.xml.tv_xtratv_remote, context.getString(R.string.tv_xtratv_sub_remote_title))),
             Triple(R.xml.tv_xtratv_player, "$xtraTitle · ${context.getString(R.string.tv_xtratv_sub_player_title)}", SubScreen.Xml(R.xml.tv_xtratv_player, context.getString(R.string.tv_xtratv_sub_player_title))),
@@ -2300,6 +2351,7 @@ class TvSettingsFragment : Fragment() {
                         }
                     }
                     C.TV_PLAYER_CLOCK -> valueBadge = TvClockSettings.summary(context)
+                    C.TV_WALLPAPER -> valueBadge = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.summary(context)
                     C.TV_MULTISTREAM_QUALITY -> valueBadge = TvMultiStreamQuality.summary(context)
                     C.TV_SWITCHER_ROWS -> valueBadge = TvSwitcherRows.summary(context)
                     "tv_dpad_shortcuts" -> valueBadge = TvRemoteKeys.dpadSummary(context)
@@ -2587,6 +2639,7 @@ class TvSettingsFragment : Fragment() {
                 }
             }
             // Sub-screens
+            "tv_xtratv_sub_customization" -> pushXmlSubScreen(R.xml.tv_xtratv_customization, context.getString(R.string.tv_xtratv_sub_customization_title), item.key)
             "tv_xtratv_sub_home" -> pushXmlSubScreen(R.xml.tv_xtratv_home, context.getString(R.string.tv_xtratv_sub_home_title), item.key)
             "tv_xtratv_sub_remote" -> pushXmlSubScreen(R.xml.tv_xtratv_remote, context.getString(R.string.tv_xtratv_sub_remote_title), item.key)
             "tv_xtratv_sub_player" -> pushXmlSubScreen(R.xml.tv_xtratv_player, context.getString(R.string.tv_xtratv_sub_player_title), item.key)
@@ -2696,6 +2749,23 @@ class TvSettingsFragment : Fragment() {
             }
             C.TV_PLAYER_CLOCK -> {
                 TvClockSettings.showPanel(context) {
+                    refreshStamp.intValue++
+                }
+            }
+            C.TV_WALLPAPER -> {
+                val act = activity as? MainActivity
+                val settingsRoot = view
+                com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.showPanel(
+                    context = context,
+                    onLiveRefresh = { act?.refreshTvAmbientColor() },
+                    onPreviewOpen = {
+                        settingsRoot?.animate()?.alpha(0f)?.setDuration(160L)?.start()
+                    },
+                    onPreviewClose = {
+                        settingsRoot?.animate()?.alpha(1f)?.setDuration(150L)?.start()
+                        refreshStamp.intValue++
+                    },
+                ) {
                     refreshStamp.intValue++
                 }
             }
@@ -3297,11 +3367,11 @@ class TvSettingsFragment : Fragment() {
         )
 
         private val CHEVRON_KEYS = setOf(
-            "tv_xtratv_sub_home", "tv_xtratv_sub_remote", "tv_xtratv_sub_player", "tv_xtratv_sub_previews",
+            "tv_xtratv_sub_customization", "tv_xtratv_sub_home", "tv_xtratv_sub_remote", "tv_xtratv_sub_player", "tv_xtratv_sub_previews",
             "tv_xtratv_sub_languages", "player_settings", "playback_settings", "buffer_settings",
             "player_button_settings", "player_menu_settings", "ui_settings", "adblock_settings", "update_settings",
             "api_token_settings", "debug_settings", "video_swap_settings", "stream_proxy_settings",
-            "custom_proxy_settings", "tv_favorites", "tv_blacklist", C.TV_HOME_ROWS, C.TV_PLAYER_CLOCK,
+            "custom_proxy_settings", "tv_favorites", "tv_blacklist", C.TV_HOME_ROWS, C.TV_PLAYER_CLOCK, C.TV_WALLPAPER,
             C.TV_MULTISTREAM_QUALITY, C.TV_SWITCHER_ROWS, "tv_dpad_shortcuts", C.TV_CUSTOM_KEYS,
             "ui_navigation_tab_list_dialog", "ui_following_tabs_dialog", "ui_saved_tabs_dialog",
             "ui_game_tabs_dialog", "ui_search_tabs_dialog", "ui_channel_tabs_dialog",
@@ -3340,6 +3410,7 @@ class TvSettingsFragment : Fragment() {
 
         private val ALL_PREWARM_XMLS = listOf(
             R.xml.tv_settings_xtratv,
+            R.xml.tv_xtratv_customization,
             R.xml.tv_xtratv_home,
             R.xml.tv_xtratv_remote,
             R.xml.tv_xtratv_player,
