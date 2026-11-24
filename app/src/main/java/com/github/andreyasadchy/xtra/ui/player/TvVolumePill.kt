@@ -199,7 +199,7 @@ class TvVolumePill(
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         if (navCloseKeyCode != 0 && event.keyCode == navCloseKeyCode) {
-            if (event.action == KeyEvent.ACTION_UP || event.action == KeyEvent.ACTION_CANCEL) {
+            if (event.action != KeyEvent.ACTION_DOWN) {
                 navCloseKeyCode = 0
             }
             return true
