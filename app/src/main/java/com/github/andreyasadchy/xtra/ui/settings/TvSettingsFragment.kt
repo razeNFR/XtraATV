@@ -567,9 +567,12 @@ class TvSettingsFragment : Fragment() {
             runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
         }
 
+        val hasWallpaper = remember(stamp) { com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context) }
+
         Row(
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (hasWallpaper) Modifier.background(Color(0x6608080F)) else Modifier)
                 .onKeyEvent { ev ->
                     ev.type == KeyEventType.KeyDown && (
                         ev.key == Key.DirectionUp ||
@@ -579,13 +582,24 @@ class TvSettingsFragment : Fragment() {
                         )
                 }
                 .padding(start = 12.dp, end = 12.dp, top = 22.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             // Left Column: Title, Search, 9 Categories
             Column(
                 modifier = Modifier
-                    .width(264.dp)
+                    .width(if (hasWallpaper) 278.dp else 264.dp)
                     .fillMaxHeight()
+                    .then(
+                        if (hasWallpaper) {
+                            Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xDB13121C))
+                                .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(16.dp))
+                                .padding(horizontal = 10.dp, vertical = 12.dp)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .onFocusChanged {
                         if (it.hasFocus) {
                             rightColumnFocusedState.value = false
@@ -774,7 +788,14 @@ class TvSettingsFragment : Fragment() {
                         }
                     }
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0x12FFFFFF))
+                    .background(if (hasWallpaper) Color(0xE013121C) else Color(0x12FFFFFF))
+                    .then(
+                        if (hasWallpaper) {
+                            Modifier.border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(16.dp))
+                        } else {
+                            Modifier
+                        }
+                    )
                     .padding(horizontal = 20.dp, vertical = 16.dp),
             ) {
                 when (activeSub) {
@@ -848,12 +869,22 @@ class TvSettingsFragment : Fragment() {
     @Composable
     private fun SearchPill(query: String, modifier: Modifier, onClick: () -> Unit) {
         val context = LocalContext.current
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context)
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
         Row(
             modifier = modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+                .background(
+                    when {
+                        focused -> TvColors.focused
+                        hasWallpaper -> Color(0xCC1E1D2B)
+                        else -> Color(0x1AFFFFFF)
+                    }
+                )
+                .then(
+                    if (hasWallpaper && !focused) Modifier.border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(12.dp)) else Modifier
+                )
                 .clickable(interactionSource = interaction, indication = null, onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -882,13 +913,24 @@ class TvSettingsFragment : Fragment() {
 
     @Composable
     private fun SmallIconPill(iconRes: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
+        val context = LocalContext.current
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context)
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
         Box(
             modifier = modifier
                 .size(36.dp)
                 .clip(CircleShape)
-                .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+                .background(
+                    when {
+                        focused -> TvColors.focused
+                        hasWallpaper -> Color(0xCC1E1D2B)
+                        else -> Color(0x1AFFFFFF)
+                    }
+                )
+                .then(
+                    if (hasWallpaper && !focused) Modifier.border(1.dp, Color(0x22FFFFFF), CircleShape) else Modifier
+                )
                 .clickable(interactionSource = interaction, indication = null, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
@@ -1217,17 +1259,25 @@ class TvSettingsFragment : Fragment() {
             }
         }
 
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context)
+
         Row(
             modifier = modifier
                 .fillMaxWidth()
                 .alpha(if (item.enabled) 1f else 0.48f)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (focused) TvColors.focused else Color(0x14FFFFFF))
+                .background(
+                    when {
+                        focused -> TvColors.focused
+                        hasWallpaper -> Color(0xCC1E1D2B)
+                        else -> Color(0x14FFFFFF)
+                    }
+                )
                 .then(
-                    if (isEditingSlider) {
-                        Modifier.border(2.dp, TvColors.accent, RoundedCornerShape(12.dp))
-                    } else {
-                        Modifier
+                    when {
+                        isEditingSlider -> Modifier.border(2.dp, TvColors.accent, RoundedCornerShape(12.dp))
+                        hasWallpaper && !focused -> Modifier.border(1.dp, Color(0x1EFFFFFF), RoundedCornerShape(12.dp))
+                        else -> Modifier
                     }
                 )
                 .onPreviewKeyEvent { ev ->
@@ -1949,7 +1999,8 @@ class TvSettingsFragment : Fragment() {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0x14FFFFFF))
+                .background(Color(0xB81E1D2B))
+                .border(1.dp, Color(0x1CFFFFFF), RoundedCornerShape(12.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),

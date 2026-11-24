@@ -123,6 +123,12 @@ class MainViewModel(
         }
     }
 
+    fun deletePlaybackStates() {
+        viewModelScope.launch {
+            playerRepository.deletePlaybackStates()
+        }
+    }
+
     fun getPlaybackStates() {
         if (!loadingPlaybackStates) {
             loadingPlaybackStates = true

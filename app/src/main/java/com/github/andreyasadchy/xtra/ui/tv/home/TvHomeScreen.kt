@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.input.key.Key
@@ -82,6 +83,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -1116,6 +1118,25 @@ private fun HeroBanner(
             }
         }
 
+        // Soft, edge-free radial dark halo behind the spotlight text when a bright wallpaper is active
+        if (com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context)) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxWidth(0.70f)
+                    .fillMaxHeight()
+                    .drawBehind {
+                        drawRect(
+                            brush = Brush.radialGradient(
+                                colors = listOf(Color(0xBD090910), Color(0x78090910), Color.Transparent),
+                                center = Offset(size.width * 0.34f, size.height * 0.52f),
+                                radius = maxOf(size.width * 0.68f, size.height * 0.85f),
+                            )
+                        )
+                    }
+            )
+        }
+
         // Stream metadata and action pills on the left
         Column(
             Modifier
@@ -1145,12 +1166,13 @@ private fun HeroBanner(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
+                    style = HomeHeaderShadow,
                 )
                 stream.viewerCount?.let { count ->
                     Row(
                         Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0x33000000))
+                            .background(Color(0x8C0D0D16))
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1163,8 +1185,9 @@ private fun HeroBanner(
                     Text(
                         up,
                         fontSize = 12.sp,
-                        color = TvColors.secondaryText,
+                        color = Color(0xD9FFFFFF),
                         maxLines = 1,
+                        style = HomeHeaderShadow,
                     )
                 }
             }
@@ -1196,6 +1219,7 @@ private fun HeroBanner(
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    style = HomeHeaderShadow,
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 CoStreamCountPill(stream = stream, hero = true)
@@ -1205,9 +1229,10 @@ private fun HeroBanner(
                 Text(
                     stream.title?.trim().orEmpty(),
                     fontSize = 15.sp,
-                    color = Color(0xE6FFFFFF),
+                    color = Color(0xF0FFFFFF),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    style = HomeHeaderShadow,
                 )
             }
             if (!stream.gameName.isNullOrBlank()) {
@@ -1219,6 +1244,7 @@ private fun HeroBanner(
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    style = HomeHeaderShadow,
                 )
             }
             Spacer(Modifier.height(16.dp))
@@ -1273,16 +1299,24 @@ private fun HeroActionPill(
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     var longPressed by remember { mutableStateOf(false) }
+    val accent = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(24.dp)
     val bg = when {
         focused -> TvColors.focused
-        primary -> MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)
-        else -> Color(0x26FFFFFF)
+        primary -> androidx.compose.ui.graphics.lerp(Color(0xDE161522), accent, 0.36f)
+        else -> Color(0xD9161522)
+    }
+    val borderColor = when {
+        focused -> Color.White
+        primary -> accent.copy(alpha = 0.62f)
+        else -> Color(0x2EFFFFFF)
     }
     val fg = if (focused) TvColors.onFocused else Color.White
     Row(
         modifier
-            .clip(RoundedCornerShape(24.dp))
+            .clip(shape)
             .background(bg)
+            .border(1.dp, borderColor, shape)
             .onPreviewKeyEvent { event ->
                 val isSelect = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
                 if (!isSelect || onLongClick == null) return@onPreviewKeyEvent false
@@ -1353,7 +1387,15 @@ private fun Greeting(account: TvHomeAccount?, showGreeting: Boolean = true) {
             now = System.currentTimeMillis()
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val pillShape = RoundedCornerShape(20.dp)
+    Row(
+        modifier = Modifier
+            .clip(pillShape)
+            .background(Color(0xCC13121C))
+            .border(1.dp, Color(0x24FFFFFF), pillShape)
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         if (showGreeting) {
             val hour = java.util.Calendar.getInstance().apply { timeInMillis = now }.get(java.util.Calendar.HOUR_OF_DAY)
             val name = account?.name
@@ -1365,12 +1407,12 @@ private fun Greeting(account: TvHomeAccount?, showGreeting: Boolean = true) {
                 },
                 name ?: ""
             )
-            Text(greeting, fontSize = 15.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 320.dp))
-            Spacer(Modifier.width(14.dp))
+            Text(greeting, fontSize = 14.sp, color = Color(0xD9FFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 320.dp))
+            Spacer(Modifier.width(12.dp))
         }
         Text(
             android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(now)),
-            fontSize = 20.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,
             maxLines = 1
@@ -1455,10 +1497,12 @@ private fun StatsBadge(actions: TvHomeActions, modifier: Modifier = Modifier) {
         }
     }
     val item = items.takeIf { it.isNotEmpty() }?.let { it[index % it.size] } ?: return
+    val shape = RoundedCornerShape(20.dp)
     Row(
         modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
+            .clip(shape)
+            .background(if (focused) TvColors.focused else Color(0xD413121C))
+            .then(if (focused) Modifier else Modifier.border(1.dp, Color(0x26FFFFFF), shape))
             .clickable(interactionSource = interaction, indication = null, onClick = actions.openStats)
             .padding(horizontal = 14.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1473,11 +1517,13 @@ private fun StatsBadge(actions: TvHomeActions, modifier: Modifier = Modifier) {
 private fun RefreshPill(actions: TvHomeActions, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    val shape = RoundedCornerShape(24.dp)
     Row(
         modifier
             .leftEdge(0, actions.openMenu)
-            .clip(RoundedCornerShape(24.dp))
-            .background(if (focused) TvColors.focused else Color(0x26FFFFFF))
+            .clip(shape)
+            .background(if (focused) TvColors.focused else Color(0xD913121C))
+            .then(if (focused) Modifier else Modifier.border(1.dp, Color(0x28FFFFFF), shape))
             .clickable(interactionSource = interaction, indication = null, onClick = actions.refresh)
             .padding(horizontal = 18.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1540,6 +1586,10 @@ private fun Modifier.tvCardFocusGlow(
     }
 }
 
+private val HomeHeaderShadow = TextStyle(
+    shadow = Shadow(color = Color(0xCC000000), offset = Offset(0f, 2f), blurRadius = 6f)
+)
+
 @Composable
 private fun RowTitle(title: String, icon: Int? = null, startPadding: Dp = 12.dp) {
     Row(
@@ -1560,6 +1610,7 @@ private fun RowTitle(title: String, icon: Int? = null, startPadding: Dp = 12.dp)
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
+            style = HomeHeaderShadow,
         )
     }
 }
@@ -1642,7 +1693,8 @@ private fun StreamRow(
             if (row.seeAllId != 0 || row.onSeeAll != null) {
                 item(key = "seeAll") {
                     val seeAllIndex = row.items.size
-                    SeeAllCard(width = 124.dp, height = cardWidth * (9f / 16f), modifier = cardModifier(seeAllIndex, "seeAll")) {
+                    val metaExtra = if (cardWidth < 230.dp) 58.dp else 66.dp
+                    SeeAllCard(width = 124.dp, height = cardWidth * (9f / 16f) + metaExtra, modifier = cardModifier(seeAllIndex, "seeAll")) {
                         onCardSelected(seeAllIndex, "seeAll")
                         row.onSeeAll?.invoke() ?: actions.seeAll(row.seeAllId)
                     }
@@ -1742,185 +1794,188 @@ private fun MultiStreamCard(
             }
         },
     ) { focused ->
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF141318))
-                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
-        ) {
-            val tiles = item.liveStreams.take(6)
-            val gap = 1.5.dp
-            when (tiles.size) {
-                0 -> Box(Modifier.fillMaxSize().background(Color(0xFF26252C)))
-                1 -> MultiStreamTileThumb(tiles[0], Modifier.fillMaxSize())
-                2 -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
-                    MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
-                }
-                3 -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
-                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
-                        MultiStreamTileThumb(tiles[1], Modifier.fillMaxWidth().weight(1f))
-                        MultiStreamTileThumb(tiles[2], Modifier.fillMaxWidth().weight(1f))
-                    }
-                }
-                4 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
-                        MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
-                    }
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
-                        MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
-                    }
-                }
-                5 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
-                        MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
-                        MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
-                    }
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
-                        MultiStreamTileThumb(tiles[4], Modifier.weight(1f).fillMaxHeight())
-                    }
-                }
-                else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
-                        MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
-                        MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
-                    }
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
-                        MultiStreamTileThumb(tiles[4], Modifier.weight(1f).fillMaxHeight())
-                        MultiStreamTileThumb(tiles[5], Modifier.weight(1f).fillMaxHeight())
-                    }
-                }
-            }
-            Row(
+        HomeCardCapsule(focused = focused) {
+            Box(
                 Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(Color(0xFF141318))
             ) {
+                val tiles = item.liveStreams.take(6)
+                val gap = 1.5.dp
+                when (tiles.size) {
+                    0 -> Box(Modifier.fillMaxSize().background(Color(0xFF26252C)))
+                    1 -> MultiStreamTileThumb(tiles[0], Modifier.fillMaxSize())
+                    2 -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                        MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
+                    }
+                    3 -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                            MultiStreamTileThumb(tiles[1], Modifier.fillMaxWidth().weight(1f))
+                            MultiStreamTileThumb(tiles[2], Modifier.fillMaxWidth().weight(1f))
+                        }
+                    }
+                    4 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                            MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
+                        }
+                        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
+                            MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
+                        }
+                    }
+                    5 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                            MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
+                            MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
+                        }
+                        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
+                            MultiStreamTileThumb(tiles[4], Modifier.weight(1f).fillMaxHeight())
+                        }
+                    }
+                    else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            MultiStreamTileThumb(tiles[0], Modifier.weight(1f).fillMaxHeight())
+                            MultiStreamTileThumb(tiles[1], Modifier.weight(1f).fillMaxHeight())
+                            MultiStreamTileThumb(tiles[2], Modifier.weight(1f).fillMaxHeight())
+                        }
+                        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            MultiStreamTileThumb(tiles[3], Modifier.weight(1f).fillMaxHeight())
+                            MultiStreamTileThumb(tiles[4], Modifier.weight(1f).fillMaxHeight())
+                            MultiStreamTileThumb(tiles[5], Modifier.weight(1f).fillMaxHeight())
+                        }
+                    }
+                }
                 Row(
                     Modifier
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(Color(0xFFE91916))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(Modifier.size(6.dp).background(Color.White, CircleShape))
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        context.getString(R.string.tv_multistream_live_count, item.liveStreams.size, item.group.streams.size),
-                        fontSize = if (small) 10.sp else 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 1,
-                    )
-                }
-                if (item.totalViewers > 0) {
-                    Spacer(Modifier.width(5.dp))
                     Row(
                         Modifier
                             .clip(RoundedCornerShape(5.dp))
-                            .background(Color(0xB3000000))
+                            .background(Color(0xFFE91916))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(painterResource(R.drawable.tv_ic_eye), contentDescription = null, tint = Color.White, modifier = Modifier.size(if (small) 11.dp else 12.dp))
+                        Box(Modifier.size(6.dp).background(Color.White, CircleShape))
                         Spacer(Modifier.width(4.dp))
-                        Text(actions.formatCount(item.totalViewers), fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
-                    }
-                }
-            }
-            Box(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .height(32.dp)
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x80000000))))
-            )
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(Color(0xB3000000))
-                    .padding(horizontal = 6.dp, vertical = 3.dp)
-            ) {
-                Icon(
-                    painterResource(R.drawable.tv_ic_multistream),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(if (small) 12.dp else 14.dp),
-                )
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val avatars = item.liveStreams.take(4)
-            if (avatars.isNotEmpty()) {
-                val avatarSize = if (small) 24.dp else 28.dp
-                val step = if (small) 15.dp else 18.dp
-                Box(
-                    Modifier
-                        .width(avatarSize + step * (avatars.size - 1))
-                        .height(avatarSize)
-                ) {
-                    avatars.forEachIndexed { idx, s ->
-                        AsyncImage(
-                            model = s.channelImage,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .padding(start = step * idx)
-                                .size(avatarSize)
-                                .clip(CircleShape)
-                                .background(Color(0xFF141318))
-                                .padding(1.5.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF26252C)),
+                        Text(
+                            context.getString(R.string.tv_multistream_live_count, item.liveStreams.size, item.group.streams.size),
+                            fontSize = if (small) 10.sp else 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
                         )
                     }
+                    if (item.totalViewers > 0) {
+                        Spacer(Modifier.width(5.dp))
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(Color(0xB3000000))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(painterResource(R.drawable.tv_ic_eye), contentDescription = null, tint = Color.White, modifier = Modifier.size(if (small) 11.dp else 12.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(actions.formatCount(item.totalViewers), fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+                        }
+                    }
                 }
-                Spacer(Modifier.width(if (small) 8.dp else 10.dp))
-            }
-            Column {
-                Text(
-                    item.group.label,
-                    fontSize = if (small) 13.sp else 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x80000000))))
                 )
-                val liveNames = item.liveStreams.joinToString(" · ") { it.channelName ?: it.channelLogin.orEmpty() }
-                if (liveNames.isNotEmpty()) {
-                    Text(
-                        liveNames,
-                        fontSize = if (small) 11.sp else 13.sp,
-                        color = TvColors.secondaryText,
-                        maxLines = 1,
-                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(Color(0xB3000000))
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                ) {
+                    Icon(
+                        painterResource(R.drawable.tv_ic_multistream),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(if (small) 12.dp else 14.dp),
                     )
                 }
-                if (!item.sharedGame.isNullOrBlank()) {
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (small) 9.dp else 11.dp, vertical = if (small) 8.dp else 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val avatars = item.liveStreams.take(4)
+                if (avatars.isNotEmpty()) {
+                    val avatarSize = if (small) 24.dp else 28.dp
+                    val step = if (small) 15.dp else 18.dp
+                    Box(
+                        Modifier
+                            .width(avatarSize + step * (avatars.size - 1))
+                            .height(avatarSize)
+                    ) {
+                        avatars.forEachIndexed { idx, s ->
+                            AsyncImage(
+                                model = s.channelImage,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .padding(start = step * idx)
+                                    .size(avatarSize)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF141318))
+                                    .padding(1.5.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF26252C)),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(if (small) 8.dp else 10.dp))
+                }
+                Column(Modifier.weight(1f)) {
                     Text(
-                        item.sharedGame,
-                        fontSize = if (small) 11.sp else 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
+                        item.group.label,
+                        fontSize = if (small) 13.sp else 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
                         maxLines = 1,
                         overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
                         modifier = if (focused) Modifier.titleMarquee() else Modifier,
                     )
+                    val liveNames = item.liveStreams.joinToString(" · ") { it.channelName ?: it.channelLogin.orEmpty() }
+                    if (liveNames.isNotEmpty()) {
+                        Text(
+                            liveNames,
+                            fontSize = if (small) 11.sp else 13.sp,
+                            color = TvColors.secondaryText,
+                            maxLines = 1,
+                            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                        )
+                    }
+                    if (!item.sharedGame.isNullOrBlank()) {
+                        Text(
+                            item.sharedGame,
+                            fontSize = if (small) 11.sp else 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                        )
+                    }
                 }
             }
         }
@@ -1976,7 +2031,7 @@ private fun GameRow(
             if (row.seeAllId != 0 || row.onSeeAll != null) {
                 item(key = "seeAll") {
                     val seeAllIndex = row.items.size
-                    SeeAllCard(width = 112.dp, height = 160.dp, modifier = cardModifier(seeAllIndex, "seeAll")) {
+                    SeeAllCard(width = 116.dp, height = 222.dp, modifier = cardModifier(seeAllIndex, "seeAll")) {
                         onCardSelected(seeAllIndex, "seeAll")
                         row.onSeeAll?.invoke() ?: actions.seeAll(row.seeAllId)
                     }
@@ -2074,68 +2129,71 @@ private fun OfflineChannelCard(
         }
     }
     FocusCard(
-        width = 136.dp,
+        width = 140.dp,
         modifier = modifier,
         onClick = onClick,
         onLongClick = onLongClick,
         onFocus = { if (it) actions.onPictureFocused(user) },
     ) { focused ->
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                Modifier
-                    .size(92.dp)
-                    .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary, cornerRadius = 46.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF26252C))
-                    .then(if (focused) Modifier.border(3.dp, Color.White, CircleShape) else Modifier)
+        HomeCardCapsule(focused = focused, cornerRadius = 16.dp) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                AsyncImage(
-                    model = user.profileImage,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (isFavorite) {
-                Icon(
-                    painterResource(R.drawable.tv_ic_star),
-                    contentDescription = null,
-                    tint = Color(0xFFFACC15),
-                    modifier = Modifier.size(13.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-            }
-            Text(
-                user.name ?: user.login ?: "",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                modifier = if (focused) Modifier.titleMarquee() else Modifier,
-            )
-        }
-        if (!lastText.isNullOrBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(
-                    lastText,
-                    fontSize = 12.sp,
-                    color = TvColors.secondaryText,
-                    maxLines = 1,
-                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
-                )
+                Box(
+                    Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF26252C))
+                        .border(1.dp, Color(0x28FFFFFF), CircleShape)
+                ) {
+                    AsyncImage(
+                        model = user.profileImage,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isFavorite) {
+                        Icon(
+                            painterResource(R.drawable.tv_ic_star),
+                            contentDescription = null,
+                            tint = Color(0xFFFACC15),
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(
+                        user.name ?: user.login ?: "",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                    )
+                }
+                if (!lastText.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text(
+                            lastText,
+                            fontSize = 11.5.sp,
+                            color = TvColors.secondaryText,
+                            maxLines = 1,
+                            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                        )
+                    }
+                }
             }
         }
     }
@@ -2216,149 +2274,155 @@ private fun RecentChannelCard(
             ).toString().replaceFirstChar { c -> c.uppercase() }
         }
     }
-    val glowColor = if (live != null) Color(0xFFFF3B30) else MaterialTheme.colorScheme.primary
     val liveRingBrush = Brush.linearGradient(
         listOf(Color(0xFFFF3B30), MaterialTheme.colorScheme.primary),
     )
 
     FocusCard(
-        width = 136.dp,
+        width = 140.dp,
         modifier = modifier,
         onClick = onClick,
         onLongClick = onLongClick,
         onFocus = { if (it) actions.onPictureFocused(item) },
     ) { focused ->
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(100.dp),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            Box(
-                Modifier
-                    .size(92.dp)
-                    .tvCardFocusGlow(focused, glowColor, cornerRadius = 46.dp)
-                    .then(
-                        when {
-                            focused -> Modifier.border(3.dp, Color.White, CircleShape)
-                            live != null -> Modifier.border(2.5.dp, liveRingBrush, CircleShape)
-                            else -> Modifier.border(1.dp, Color(0x24FFFFFF), CircleShape)
-                        }
-                    )
-                    .padding(if (live != null || focused) 3.dp else 0.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF26252C))
+        HomeCardCapsule(focused = focused, cornerRadius = 16.dp) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                AsyncImage(
-                    model = item.avatarUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            if (playbackBadge != null) {
-                PlaybackBadgePill(
-                    badge = playbackBadge,
-                    small = true,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            } else if (live != null) {
-                val badgeShape = RoundedCornerShape(999.dp)
-                Row(
+                Box(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .clip(badgeShape)
-                        .background(Color(0xFFE91916))
-                        .border(1.5.dp, Color(0xFF12111A), badgeShape)
-                        .padding(horizontal = 7.dp, vertical = 1.5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .fillMaxWidth()
+                        .height(90.dp),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    Box(Modifier.size(5.dp).background(Color.White, CircleShape))
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        "LIVE",
-                        fontSize = 9.5.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
-                        maxLines = 1,
-                    )
+                    Box(
+                        Modifier
+                            .size(82.dp)
+                            .then(
+                                if (live != null) {
+                                    Modifier.border(2.5.dp, liveRingBrush, CircleShape).padding(3.dp)
+                                } else {
+                                    Modifier.border(1.dp, Color(0x28FFFFFF), CircleShape)
+                                }
+                            )
+                            .clip(CircleShape)
+                            .background(Color(0xFF26252C))
+                    ) {
+                        AsyncImage(
+                            model = item.avatarUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    if (playbackBadge != null) {
+                        PlaybackBadgePill(
+                            badge = playbackBadge,
+                            small = true,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        )
+                    } else if (live != null) {
+                        val badgeShape = RoundedCornerShape(999.dp)
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .clip(badgeShape)
+                                .background(Color(0xFFE91916))
+                                .border(1.5.dp, Color(0xFF12111A), badgeShape)
+                                .padding(horizontal = 7.dp, vertical = 1.5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.size(5.dp).background(Color.White, CircleShape))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "LIVE",
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (isFavorite) {
-                Icon(
-                    painterResource(R.drawable.tv_ic_star),
-                    contentDescription = null,
-                    tint = Color(0xFFFACC15),
-                    modifier = Modifier.size(13.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-            }
-            Text(
-                item.displayName,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (live != null || focused) Color.White else Color(0xE6FFFFFF),
-                maxLines = 1,
-                overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                modifier = if (focused) Modifier.titleMarquee() else Modifier,
-            )
-        }
-        if (live != null) {
-            val gameLabel = live.gameName?.takeIf { it.isNotBlank() }
-            if (gameLabel != null) {
-                Spacer(Modifier.height(2.dp))
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(
-                        gameLabel,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
-                    )
-                }
-            }
-            live.viewerCount?.takeIf { it > 0 }?.let { viewers ->
-                Spacer(Modifier.height(1.dp))
+                Spacer(Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        painterResource(R.drawable.tv_ic_eye),
-                        contentDescription = null,
-                        tint = TvColors.secondaryText,
-                        modifier = Modifier.size(11.dp),
-                    )
-                    Spacer(Modifier.width(3.dp))
+                    if (isFavorite) {
+                        Icon(
+                            painterResource(R.drawable.tv_ic_star),
+                            contentDescription = null,
+                            tint = Color(0xFFFACC15),
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
                     Text(
-                        actions.formatCount(viewers),
-                        fontSize = 11.sp,
-                        color = TvColors.secondaryText,
+                        item.displayName,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (live != null || focused) Color.White else Color(0xE6FFFFFF),
                         maxLines = 1,
+                        overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        modifier = if (focused) Modifier.titleMarquee() else Modifier,
                     )
                 }
-            }
-        } else if (!watchedRelativeText.isNullOrBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(
-                    watchedRelativeText,
-                    fontSize = 12.sp,
-                    color = TvColors.secondaryText,
-                    maxLines = 1,
-                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
-                )
+                if (live != null) {
+                    val gameLabel = live.gameName?.takeIf { it.isNotBlank() }
+                    if (gameLabel != null) {
+                        Spacer(Modifier.height(2.dp))
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Text(
+                                gameLabel,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                                modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                            )
+                        }
+                    }
+                    live.viewerCount?.takeIf { it > 0 }?.let { viewers ->
+                        Spacer(Modifier.height(1.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                painterResource(R.drawable.tv_ic_eye),
+                                contentDescription = null,
+                                tint = TvColors.secondaryText,
+                                modifier = Modifier.size(11.dp),
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                actions.formatCount(viewers),
+                                fontSize = 11.sp,
+                                color = TvColors.secondaryText,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                } else if (!watchedRelativeText.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text(
+                            watchedRelativeText,
+                            fontSize = 11.5.sp,
+                            color = TvColors.secondaryText,
+                            maxLines = 1,
+                            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                        )
+                    }
+                }
             }
         }
     }
@@ -2469,6 +2533,32 @@ private fun FocusCard(
     }
 }
 
+/**
+ * Lightweight, zero-blur smoked-glass dark capsule enclosing both the media thumbnail and its text metadata below,
+ * ensuring crisp legibility over bright wallpapers with zero extra GPU offscreen layers.
+ */
+@Composable
+private fun HomeCardCapsule(
+    focused: Boolean,
+    cornerRadius: Dp = 12.dp,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    val shape = RoundedCornerShape(cornerRadius)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary, cornerRadius = cornerRadius)
+            .clip(shape)
+            .background(if (focused) Color(0xEB1A1927) else Color(0xE013121C))
+            .border(
+                width = if (focused) 2.6.dp else 1.dp,
+                color = if (focused) Color.White else Color(0x26FFFFFF),
+                shape = shape,
+            ),
+        content = content,
+    )
+}
+
 /** The title of the focused card scrolls slowly when it is too long, after a second (not while going through a row). */
 @OptIn(ExperimentalFoundationApi::class)
 private fun Modifier.titleMarquee(): Modifier = this.basicMarquee(
@@ -2508,158 +2598,161 @@ private fun StreamCard(
             else -> 2f
         },
     ) { focused ->
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF26252C))
-                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
-        ) {
-            AsyncImage(
-                // smaller thumbnails than the 1280x720 of the lists, the cards are small
-                // the minute is in the address (TvThumbnails): the newest thumbnail of Twitch, loaded again each minute
-                model = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail?.replace("1280x720", "640x360")),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            val player = previewPlayer()
-            if (previewing && player != null && focused) {
-                AndroidView(
-                    factory = { context -> TextureView(context) },
-                    update = { player.setVideoTextureView(it) },
-                    onRelease = {
-                        // the last picture of the preview, shown while the stream opens
-                        com.github.andreyasadchy.xtra.ui.tv.TvPreviewFrames.capture(stream.channelLogin, it)
-                        runCatching { player.clearVideoTextureView(it) }
-                    },
+        HomeCardCapsule(focused = focused) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(Color(0xFF222129))
+            ) {
+                AsyncImage(
+                    // smaller thumbnails than the 1280x720 of the lists, the cards are small
+                    // the minute is in the address (TvThumbnails): the newest thumbnail of Twitch, loaded again each minute
+                    model = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail?.replace("1280x720", "640x360")),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-            }
-            // badges like the player: red "LIVE", then the viewers with the eye
-            Row(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+                val player = previewPlayer()
+                if (previewing && player != null && focused) {
+                    AndroidView(
+                        factory = { context -> TextureView(context) },
+                        update = { player.setVideoTextureView(it) },
+                        onRelease = {
+                            // the last picture of the preview, shown while the stream opens
+                            com.github.andreyasadchy.xtra.ui.tv.TvPreviewFrames.capture(stream.channelLogin, it)
+                            runCatching { player.clearVideoTextureView(it) }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                // badges like the player: red "LIVE", then the viewers with the eye
                 Row(
                     Modifier
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(Color(0xFFE91916))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(Modifier.size(6.dp).background(Color.White, CircleShape))
-                    Spacer(Modifier.width(4.dp))
-                    Text("LIVE", fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-                }
-                stream.viewerCount?.let { count ->
-                    Spacer(Modifier.width(5.dp))
                     Row(
                         Modifier
                             .clip(RoundedCornerShape(5.dp))
-                            .background(Color(0xB3000000))
+                            .background(Color(0xFFE91916))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(painterResource(R.drawable.tv_ic_eye), contentDescription = null, tint = Color.White, modifier = Modifier.size(if (small) 11.dp else 12.dp))
+                        Box(Modifier.size(6.dp).background(Color.White, CircleShape))
                         Spacer(Modifier.width(4.dp))
-                        Text(actions.formatCount(count), fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+                        Text("LIVE", fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                    }
+                    stream.viewerCount?.let { count ->
+                        Spacer(Modifier.width(5.dp))
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(Color(0xB3000000))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(painterResource(R.drawable.tv_ic_eye), contentDescription = null, tint = Color.White, modifier = Modifier.size(if (small) 11.dp else 12.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(actions.formatCount(count), fontSize = if (small) 10.sp else 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+                        }
                     }
                 }
-            }
-            // dark gradient at the bottom of the picture
-            Box(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .height(36.dp)
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0x80000000))))
-            )
-            // discreet Playing / PiP pill at bottom-start of the thumbnail
-            val playbackContext = LocalContext.current
-            signals.playbackBadge(playbackContext, stream.channelLogin)?.let { badge ->
-                PlaybackBadgePill(
-                    badge = badge,
-                    small = small,
-                    modifier = Modifier
+                // dark gradient at the bottom of the picture
+                Box(
+                    Modifier
                         .align(Alignment.BottomStart)
-                        .padding(8.dp),
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0x80000000))))
                 )
-            }
-            // how long the stream is live, at the bottom right
-            actions.uptime(stream)?.let { uptime ->
-                Text(
-                    uptime,
-                    fontSize = if (small) 10.sp else 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(Color(0xB3000000))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = stream.channelImage,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(if (small) 26.dp else 32.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF26252C))
-            )
-            Spacer(Modifier.width(if (small) 8.dp else 10.dp))
-            Column {
-                // a star before the name of a favorite channel
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (signals.isFavorite(stream.channelLogin)) {
-                        Icon(
-                            painterResource(R.drawable.tv_ic_star),
-                            contentDescription = null,
-                            tint = Color(0xFFFACC15),
-                            modifier = Modifier.size(if (small) 13.dp else 16.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                    }
+                // discreet Playing / PiP pill at bottom-start of the thumbnail
+                val playbackContext = LocalContext.current
+                signals.playbackBadge(playbackContext, stream.channelLogin)?.let { badge ->
+                    PlaybackBadgePill(
+                        badge = badge,
+                        small = small,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp),
+                    )
+                }
+                // how long the stream is live, at the bottom right
+                actions.uptime(stream)?.let { uptime ->
                     Text(
-                        stream.channelName ?: stream.channelLogin ?: "",
-                        fontSize = if (small) 13.sp else 15.sp,
+                        uptime,
+                        fontSize = if (small) 10.sp else 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(Color(0xB3000000))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
-                    CoStreamCountPill(stream = stream, small = small)
                 }
-                // the whole title scrolls on the focused card when it is longer than the card
-                Text(
-                    stream.title?.trim() ?: "",
-                    fontSize = if (small) 11.sp else 13.sp,
-                    color = TvColors.secondaryText,
-                    maxLines = 1,
-                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (small) 9.dp else 11.dp, vertical = if (small) 8.dp else 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AsyncImage(
+                    model = stream.channelImage,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(if (small) 26.dp else 32.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF26252C))
                 )
-                if (!stream.gameName.isNullOrBlank()) {
+                Spacer(Modifier.width(if (small) 8.dp else 10.dp))
+                Column(Modifier.weight(1f)) {
+                    // a star before the name of a favorite channel
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (signals.isFavorite(stream.channelLogin)) {
+                            Icon(
+                                painterResource(R.drawable.tv_ic_star),
+                                contentDescription = null,
+                                tint = Color(0xFFFACC15),
+                                modifier = Modifier.size(if (small) 13.dp else 16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(
+                            stream.channelName ?: stream.channelLogin ?: "",
+                            fontSize = if (small) 13.sp else 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        CoStreamCountPill(stream = stream, small = small)
+                    }
+                    // the whole title scrolls on the focused card when it is longer than the card
                     Text(
-                        stream.gameName ?: "",
-                        fontSize = if (small) 11.sp else 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
+                        stream.title?.trim() ?: "",
+                        fontSize = if (small) 11.sp else 13.sp,
+                        color = TvColors.secondaryText,
                         maxLines = 1,
                         overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
                         modifier = if (focused) Modifier.titleMarquee() else Modifier,
                     )
+                    if (!stream.gameName.isNullOrBlank()) {
+                        Text(
+                            stream.gameName ?: "",
+                            fontSize = if (small) 11.sp else 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                        )
+                    }
                 }
             }
         }
@@ -2892,53 +2985,58 @@ private fun FollowedVideoCard(
             actions.showFollowedVideoActions(video)
         },
     ) { focused ->
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF26252C))
-                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
-        ) {
-            VideoThumbnail(video.thumbnail, video.channelImage)
-            val seconds = video.durationSeconds ?: 0
-            if (seconds > 0) {
-                Text(
-                    actions.formatVideoDuration(seconds),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xCC000000))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-                val durationMs = seconds * 1000L
-                if (positionMs != null && positionMs > 0L) {
-                    VideoProgressBar(positionMs.toFloat() / durationMs)
+        HomeCardCapsule(focused = focused) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(Color(0xFF222129))
+            ) {
+                VideoThumbnail(video.thumbnail, video.channelImage)
+                val seconds = video.durationSeconds ?: 0
+                if (seconds > 0) {
+                    Text(
+                        actions.formatVideoDuration(seconds),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xCC000000))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                    val durationMs = seconds * 1000L
+                    if (positionMs != null && positionMs > 0L) {
+                        VideoProgressBar(positionMs.toFloat() / durationMs)
+                    }
                 }
             }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (small) 9.dp else 11.dp, vertical = if (small) 8.dp else 9.dp)
+            ) {
+                Text(
+                    video.title.orEmpty(),
+                    fontSize = if (small) 13.sp else 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    listOfNotNull(video.channelName, video.gameName?.takeIf { it.isNotBlank() }).joinToString(" · "),
+                    fontSize = if (small) 11.5.sp else 13.sp,
+                    color = Color.White.copy(alpha = 0.74f),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            }
         }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            video.title.orEmpty(),
-            fontSize = if (small) 13.sp else 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-            maxLines = 1,
-            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-            modifier = if (focused) Modifier.titleMarquee() else Modifier,
-        )
-        Text(
-            listOfNotNull(video.channelName, video.gameName?.takeIf { it.isNotBlank() }).joinToString(" · "),
-            fontSize = if (small) 12.sp else 13.sp,
-            color = Color.White.copy(alpha = 0.7f),
-            maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -2963,66 +3061,69 @@ private fun ResumeCard(
             actions.showVideoActions(item)
         },
     ) { focused ->
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF26252C))
-                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
-        ) {
-            VideoThumbnail(item.thumbnail, item.channelImage)
-            // time left, like the cards of Google TV
-            val durationMs = (item.durationSeconds ?: 0) * 1000L
-            if (durationMs > 0) {
-                Text(
-                    actions.formatDuration((durationMs - item.positionMs).coerceAtLeast(0)),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xB3000000))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-                VideoProgressBar(item.positionMs.toFloat() / durationMs)
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = item.channelImage,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(if (small) 26.dp else 32.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF26252C))
-            )
-            Spacer(Modifier.width(if (small) 8.dp else 10.dp))
-            Column {
-                Text(
-                    item.title?.trim() ?: "",
-                    fontSize = if (small) 13.sp else 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
-                )
-                Text(item.channelName ?: item.channelLogin ?: "", fontSize = if (small) 11.sp else 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (!item.gameName.isNullOrBlank()) {
+        HomeCardCapsule(focused = focused) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(Color(0xFF222129))
+            ) {
+                VideoThumbnail(item.thumbnail, item.channelImage)
+                // time left, like the cards of Google TV
+                val durationMs = (item.durationSeconds ?: 0) * 1000L
+                if (durationMs > 0) {
                     Text(
-                        item.gameName,
-                        fontSize = if (small) 11.sp else 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
+                        actions.formatDuration((durationMs - item.positionMs).coerceAtLeast(0)),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xB3000000))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                    VideoProgressBar(item.positionMs.toFloat() / durationMs)
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (small) 9.dp else 11.dp, vertical = if (small) 8.dp else 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AsyncImage(
+                    model = item.channelImage,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(if (small) 26.dp else 32.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF26252C))
+                )
+                Spacer(Modifier.width(if (small) 8.dp else 10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        item.title?.trim() ?: "",
+                        fontSize = if (small) 13.sp else 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
                         maxLines = 1,
                         overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
                         modifier = if (focused) Modifier.titleMarquee() else Modifier,
                     )
+                    Text(item.channelName ?: item.channelLogin ?: "", fontSize = if (small) 11.sp else 13.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (!item.gameName.isNullOrBlank()) {
+                        Text(
+                            item.gameName,
+                            fontSize = if (small) 11.sp else 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                        )
+                    }
                 }
             }
         }
@@ -3063,6 +3164,8 @@ private fun StatsCard(
     DisposableEffect(focusToken) {
         onDispose { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken) }
     }
+    val cardShape = RoundedCornerShape(16.dp)
+    val accent = MaterialTheme.colorScheme.primary
     Column(Modifier.padding(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp)) {
         RowTitle(stats.title, R.drawable.tv_ic_bar_chart)
         Spacer(Modifier.height(4.dp))
@@ -3082,27 +3185,37 @@ private fun StatsCard(
                     }
                 )
                 .leftEdge(0, actions.openMenu)
-                .clip(RoundedCornerShape(16.dp))
+                .tvCardFocusGlow(focused, accent, cornerRadius = 16.dp)
+                .clip(cardShape)
                 .background(
                     androidx.compose.ui.graphics.Brush.linearGradient(
-                        listOf(MaterialTheme.colorScheme.primary.copy(alpha = if (focused) 0.38f else 0.24f), Color(0x14FFFFFF))
+                        listOf(
+                            androidx.compose.ui.graphics.lerp(Color(0xE613121C), accent, if (focused) 0.30f else 0.18f),
+                            Color(0xE313121C),
+                        )
                     )
                 )
-                .then(if (focused) Modifier.border(2.dp, Color.White, RoundedCornerShape(16.dp)) else Modifier)
+                .border(
+                    width = if (focused) 2.4.dp else 1.dp,
+                    color = if (focused) Color.White else Color(0x26FFFFFF),
+                    shape = cardShape,
+                )
                 // OK: the page of the statistics in detail
                 .clickable(interactionSource = interaction, indication = null) { actions.openStats() }
                 .padding(horizontal = 20.dp, vertical = 18.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 stats.items.forEach { stat ->
+                    val tileShape = RoundedCornerShape(12.dp)
                     Column(
                         Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0x26000000))
+                            .clip(tileShape)
+                            .background(Color(0x47000000))
+                            .border(1.dp, Color(0x1CFFFFFF), tileShape)
                             .padding(horizontal = 14.dp, vertical = 12.dp)
                     ) {
-                        Icon(painterResource(stat.icon), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Icon(painterResource(stat.icon), contentDescription = null, tint = accent, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.height(8.dp))
                         Text(stat.value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(stat.label, fontSize = 12.sp, color = TvColors.secondaryText, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -3197,96 +3310,99 @@ private fun ClipCard(
             actions.showClipActions(clip, queue)
         },
     ) { focused ->
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF26252C))
-                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
-        ) {
-            VideoThumbnail(clip.thumbnail, clip.channelImage)
-            clip.viewCount?.takeIf { it > 0 }?.let { count ->
-                Row(
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(Color(0xB3000000))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        painterResource(R.drawable.tv_ic_eye),
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(if (small) 11.dp else 12.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
+        HomeCardCapsule(focused = focused) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(Color(0xFF222129))
+            ) {
+                VideoThumbnail(clip.thumbnail, clip.channelImage)
+                clip.viewCount?.takeIf { it > 0 }?.let { count ->
+                    Row(
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(Color(0xB3000000))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.tv_ic_eye),
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(if (small) 11.dp else 12.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            actions.formatCount(count),
+                            fontSize = if (small) 10.sp else 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                val seconds = clip.durationSeconds ?: 0
+                if (seconds > 0) {
                     Text(
-                        actions.formatCount(count),
-                        fontSize = if (small) 10.sp else 11.sp,
+                        actions.formatVideoDuration(seconds),
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
-                        maxLines = 1,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xCC000000))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
-            val seconds = clip.durationSeconds ?: 0
-            if (seconds > 0) {
-                Text(
-                    actions.formatVideoDuration(seconds),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xCC000000))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = clip.channelImage,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+            Row(
                 modifier = Modifier
-                    .size(if (small) 26.dp else 32.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF26252C)),
-            )
-            Spacer(Modifier.width(if (small) 8.dp else 10.dp))
-            Column {
-                Text(
-                    clip.title?.trim() ?: "",
-                    fontSize = if (small) 13.sp else 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                    .fillMaxWidth()
+                    .padding(horizontal = if (small) 9.dp else 11.dp, vertical = if (small) 8.dp else 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AsyncImage(
+                    model = clip.channelImage,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(if (small) 26.dp else 32.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF26252C)),
                 )
-                Text(
-                    clip.channelName ?: clip.channelLogin ?: "",
-                    fontSize = if (small) 11.sp else 13.sp,
-                    color = TvColors.secondaryText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (!clip.gameName.isNullOrBlank()) {
+                Spacer(Modifier.width(if (small) 8.dp else 10.dp))
+                Column(Modifier.weight(1f)) {
                     Text(
-                        clip.gameName ?: "",
-                        fontSize = if (small) 11.sp else 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
+                        clip.title?.trim() ?: "",
+                        fontSize = if (small) 13.sp else 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
                         maxLines = 1,
                         overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
                         modifier = if (focused) Modifier.titleMarquee() else Modifier,
                     )
+                    Text(
+                        clip.channelName ?: clip.channelLogin ?: "",
+                        fontSize = if (small) 11.sp else 13.sp,
+                        color = TvColors.secondaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (!clip.gameName.isNullOrBlank()) {
+                        Text(
+                            clip.gameName ?: "",
+                            fontSize = if (small) 11.sp else 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                        )
+                    }
                 }
             }
         }
@@ -3301,36 +3417,40 @@ private fun GameCard(
     onClick: () -> Unit = { actions.openGame(game) },
     onLongClick: () -> Unit = { actions.showGameActions(game) },
 ) {
-    FocusCard(width = 120.dp, modifier = modifier, onClick = onClick, onLongClick = onLongClick) { focused ->
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(3f / 4f)
-                .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF26252C))
-                .then(if (focused) Modifier.border(3.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
-        ) {
-            AsyncImage(
-                model = game.boxArt,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        Spacer(Modifier.height(9.dp))
-        // the whole category name scrolls on the focused card when it is longer than the card
-        Text(
-            game.name ?: "",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-            maxLines = 1,
-            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
-            modifier = if (focused) Modifier.titleMarquee() else Modifier,
-        )
-        game.viewerCount?.let {
-            Text(actions.formatViewers(it), fontSize = 12.sp, color = TvColors.secondaryText, maxLines = 1)
+    FocusCard(width = 128.dp, modifier = modifier, onClick = onClick, onLongClick = onLongClick) { focused ->
+        HomeCardCapsule(focused = focused, cornerRadius = 12.dp) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(3f / 4f)
+                    .background(Color(0xFF222129))
+            ) {
+                AsyncImage(
+                    model = game.boxArt,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
+            ) {
+                // the whole category name scrolls on the focused card when it is longer than the card
+                Text(
+                    game.name ?: "",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (focused) Modifier.titleMarquee() else Modifier,
+                )
+                game.viewerCount?.let {
+                    Text(actions.formatViewers(it), fontSize = 11.5.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }

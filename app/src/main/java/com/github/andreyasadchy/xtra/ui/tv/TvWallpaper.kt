@@ -2588,8 +2588,8 @@ object TvWallpaper {
             modifier = Modifier
                 .fillMaxSize()
                 .tvTopFade { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 },
-            contentPadding = PaddingValues(bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 7.dp, top = 5.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(listRows.size) { idx ->
                 when (val row = listRows[idx]) {
@@ -3241,32 +3241,50 @@ object TvWallpaper {
             val sessionAddedCount = mutableIntStateOf(0)
 
             val dialog = TvDialogs.show(context) { dismiss ->
-                SidePanel(title = context.getString(R.string.tv_wallpaper_qr_title)) {
-                    val closeRequester = remember { FocusRequester() }
-                    val added = sessionAddedCount.intValue
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                val closeRequester = remember { FocusRequester() }
+                val added = sessionAddedCount.intValue
+                SidePanel(
+                    title = context.getString(R.string.tv_wallpaper_qr_title),
+                    scrollable = true,
+                    compactHeader = true,
+                    footer = {
+                        ButtonRow(
+                            label = context.getString(R.string.close_player),
+                            modifier = Modifier.focusRequester(closeRequester),
+                            compact = true,
+                            onClick = dismiss,
+                        )
+                    },
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
                         Text(
                             context.getString(R.string.tv_wallpaper_qr_help),
-                            fontSize = 14.5.sp,
+                            fontSize = 14.sp,
+                            lineHeight = 19.sp,
                             color = TvColors.secondaryText,
                         )
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(14.dp))
                         Box(
                             Modifier
-                                .size(216.dp)
+                                .size(184.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(ComposeColor.White)
-                                .padding(10.dp),
+                                .padding(9.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Image(
                                 bitmap = qrBitmap.asImageBitmap(),
                                 contentDescription = url,
-                                modifier = Modifier.size(196.dp),
+                                modifier = Modifier.size(166.dp),
                             )
                         }
-                        Spacer(Modifier.height(12.dp))
-                        Text(url, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ComposeColor.White)
+                        Spacer(Modifier.height(10.dp))
+                        Text(url, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, color = ComposeColor.White)
                         if (added > 0) {
                             Spacer(Modifier.height(10.dp))
                             Row(
@@ -3274,7 +3292,7 @@ object TvWallpaper {
                                     .clip(RoundedCornerShape(999.dp))
                                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.24f))
                                     .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(999.dp))
-                                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                                    .padding(horizontal = 14.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
@@ -3286,18 +3304,12 @@ object TvWallpaper {
                                 Spacer(Modifier.width(6.dp))
                                 Text(
                                     context.getString(R.string.tv_wallpaper_qr_added_count, added),
-                                    fontSize = 13.5.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = ComposeColor.White,
                                 )
                             }
                         }
-                        Spacer(Modifier.height(18.dp))
-                        ButtonRow(
-                            label = context.getString(R.string.close_player),
-                            modifier = Modifier.focusRequester(closeRequester),
-                            onClick = dismiss,
-                        )
                     }
                     LaunchedEffect(Unit) {
                         runCatching { closeRequester.requestFocus() }

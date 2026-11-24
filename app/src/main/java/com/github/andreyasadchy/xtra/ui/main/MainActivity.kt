@@ -446,6 +446,7 @@ class MainActivity : AppCompatActivity() {
             val prevAdblock = adblockPrefsBeforeSettings
             adblockPrefsBeforeSettings = null
             if (result.resultCode == RESULT_OK) {
+                recreatingActivity = true
                 recreate()
             } else if (isTv && prevAdblock != null && prevAdblock != snapshotAdblockPrefs() && currentPlayingStream() != null) {
                 val wasMaximized = isPlayerMaximized()
@@ -964,6 +965,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        leaveHandler.removeCallbacks(leaveApp)
         if (isTv) {
             com.github.andreyasadchy.xtra.ui.tv.TvAmbient.removeDynamicListener(tvAmbientListener)
         }
@@ -972,8 +974,12 @@ class MainActivity : AppCompatActivity() {
             connectivityManager.unregisterNetworkCallback(it)
         }
         pipActionReceiver?.let { unregisterReceiver(it) }
-        if (isFinishing) {
+        if (isFinishing && !keepPlayerInBackground) {
             (playerFragment as? PlayerFragment)?.close()
+            if (isTv) {
+                com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.update(null, emptyList())
+                viewModel.deletePlaybackStates()
+            }
         }
         super.onDestroy()
     }
@@ -1862,6 +1868,17 @@ class MainActivity : AppCompatActivity() {
         if (player?.keepsPlayingWhenAppLeft() == true) {
             moveTaskToBack(true)
         } else {
+            leaveHandler.removeCallbacks(leaveApp)
+            keepPlayerInBackground = false
+            setLeaveMuted(false, main = true)
+            closeTvPip()
+            player?.let {
+                it.close()
+                closePlayer(focusHome = false)
+            }
+            closeMultiStream()
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.update(null, emptyList())
+            viewModel.deletePlaybackStates()
             finish()
         }
     }
@@ -2590,14 +2607,16 @@ class MainActivity : AppCompatActivity() {
         super.startActivityForResult(intent, requestCode, options)
     }
 
+    private var recreatingActivity = false
+
     override fun onStart() {
         super.onStart()
-        // back before the app counted as left: the streams go on, with their sound
         leaveHandler.removeCallbacks(leaveApp)
         if (isTv) {
             setLeaveMuted(false, main = true)
         }
         openingOwnScreen = false
+        recreatingActivity = false
         keepPlayerInBackground = false
         if (isTv && ::binding.isInitialized) {
             tvLiveAlerts.start()
@@ -2614,13 +2633,27 @@ class MainActivity : AppCompatActivity() {
         }
         leaveHandler.removeCallbacks(leaveApp)
         keepPlayerInBackground = false
-        if (isTv && !openingOwnScreen && !isChangingConfigurations) {
-            // TV: a screen shown over the app for a moment (the screensaver of a launcher, given up at once as a playback
-            // goes on) must not cut the stream: the player is kept a few seconds, the app really left then closes it
-            keepPlayerInBackground = true
-            // no sound left behind meanwhile: silent at once, unless the stream keeps its sound when the app is left
-            setLeaveMuted(true, main = (playerFragment as? PlayerFragment)?.keepsPlayingWhenAppLeft() != true)
-            leaveHandler.postDelayed(leaveApp, LEAVE_DELAY_MS)
+        if (isTv && !openingOwnScreen && !isChangingConfigurations && !recreatingActivity) {
+            val player = playerFragment as? PlayerFragment
+            if (player?.keepsPlayingWhenAppLeft() == true) {
+                keepPlayerInBackground = true
+                closeTvPip()
+                closeMultiStream()
+                setLeaveMuted(false, main = true)
+            } else {
+                // Close playback immediately when leaving the app without background sound so Android TV process freeze
+                // or task removal never leaves a paused stream, expired playlist spinner, or stale "Playing" badge behind.
+                keepPlayerInBackground = false
+                setLeaveMuted(false, main = true)
+                closeTvPip()
+                player?.let {
+                    it.close()
+                    closePlayer(focusHome = false)
+                }
+                closeMultiStream()
+                com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.update(null, emptyList())
+                viewModel.deletePlaybackStates()
+            }
         }
         super.onStop()
     }
@@ -2643,12 +2676,11 @@ class MainActivity : AppCompatActivity() {
 
     private val leaveHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
-    /** TV: the app is still left a few seconds after it was: the streams stop, no sound left behind (unless kept). */
+    /** TV: fallback cleanup runnable if scheduled while app is stopped. */
     private val leaveApp = Runnable {
-        if (isDestroyed || lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+        if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
             return@Runnable
         }
-        // leaving the app: the small window closes, only the main stream may keep its sound
         closeTvPip()
         val player = playerFragment as? PlayerFragment
         if (player?.keepsPlayingWhenAppLeft() == true) {
@@ -2657,11 +2689,16 @@ class MainActivity : AppCompatActivity() {
             keepPlayerInBackground = false
             player?.let {
                 it.close()
-                closePlayer()
+                if (!isDestroyed) {
+                    closePlayer(focusHome = false)
+                }
             }
+            com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.update(null, emptyList())
+            viewModel.deletePlaybackStates()
         }
-        closeMultiStream()
-        // what is kept plays with its sound (the stream kept when the app is left), the next start too
+        if (!isDestroyed) {
+            closeMultiStream()
+        }
         setLeaveMuted(false, main = true)
     }
 
@@ -4109,10 +4146,14 @@ class MainActivity : AppCompatActivity() {
             currentTvHome()?.focusLastCard()
         }
         if (fragmentToRemove != null) {
-            supportFragmentManager.beginTransaction()
+            val tx = supportFragmentManager.beginTransaction()
                 .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
                 .remove(fragmentToRemove)
-                .commit()
+            if (supportFragmentManager.isStateSaved) {
+                tx.commitAllowingStateLoss()
+            } else {
+                tx.commit()
+            }
         }
         updateTvNowPlaying()
         viewModel.isPlayerOpened = false
@@ -4130,7 +4171,16 @@ class MainActivity : AppCompatActivity() {
         if (playerFragment == null) {
             playerFragment = supportFragmentManager.findFragmentById(R.id.playerContainer) as? PlayerFragment
             if (playerFragment == null) {
-                if (prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
+                if (isTv) {
+                    if (intent?.action == INTENT_OPEN_PLAYER && prefs.getString(C.TV_KEEP_SOUND_ON_LEAVE, "never") != "never") {
+                        if (prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
+                            viewModel.getPlaybackStates()
+                        }
+                    } else {
+                        com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.update(null, emptyList())
+                        viewModel.deletePlaybackStates()
+                    }
+                } else if (prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
                     viewModel.getPlaybackStates()
                 }
             }

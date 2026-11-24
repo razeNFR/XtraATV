@@ -48,6 +48,67 @@ object TvCards {
         }
         card.isFocusable = true
         (card as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        if (card is com.google.android.material.card.MaterialCardView) {
+            if (card.strokeWidth != 0) {
+                card.strokeWidth = 0
+            }
+            if (card.foreground !is TvCardBorderDrawable) {
+                card.foreground = TvCardBorderDrawable(card)
+            } else {
+                card.foreground?.invalidateSelf()
+            }
+        }
+    }
+
+    /**
+     * Zero-relayout, zero-allocation foreground border for TV MaterialCardViews:
+     * draws a subtle 1dp smoked-glass rim at rest and a crisp 3dp white border when focused,
+     * automatically matching each card's own corner radius (12dp media, 14dp games, 18dp channels).
+     */
+    private class TvCardBorderDrawable(
+        private val card: com.google.android.material.card.MaterialCardView,
+    ) : android.graphics.drawable.Drawable() {
+        private val density = card.resources.displayMetrics.density
+        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+        }
+        private val rect = android.graphics.RectF()
+        private var focused = false
+
+        override fun isStateful(): Boolean = true
+
+        override fun onStateChange(state: IntArray): Boolean {
+            val nowFocused = state.any { it == android.R.attr.state_focused }
+            if (nowFocused != focused) {
+                focused = nowFocused
+                invalidateSelf()
+                return true
+            }
+            return false
+        }
+
+        override fun draw(canvas: android.graphics.Canvas) {
+            val b = bounds
+            if (b.isEmpty) return
+            val strokePx = if (focused) 2.8f * density else 1f * density
+            paint.strokeWidth = strokePx
+            paint.color = if (focused) android.graphics.Color.WHITE else 0x26FFFFFF
+            val half = strokePx * 0.5f
+            rect.set(b.left + half, b.top + half, b.right - half, b.bottom - half)
+            val r = (card.radius - half).coerceAtLeast(0f)
+            canvas.drawRoundRect(rect, r, r, paint)
+        }
+
+        override fun setAlpha(alpha: Int) {
+            paint.alpha = alpha
+        }
+
+        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {
+            paint.colorFilter = colorFilter
+        }
+
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
     }
 
     fun showMenu(card: View) {

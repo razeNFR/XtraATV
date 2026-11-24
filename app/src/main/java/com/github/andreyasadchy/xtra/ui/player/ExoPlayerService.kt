@@ -139,6 +139,7 @@ class ExoPlayerService : BasePlaybackService() {
     private var videoSwapList: List<VideoSwap>? = null
     var secondaryPlayer: ExoPlayer? = null
     private var secondaryPlayerTimerJob: Job? = null
+    private var videoSwapRetryJob: Job? = null
     private var adDelayJob: Job? = null
     private var playingAds = false
     private var proxyMediaPlaylist = false
@@ -805,20 +806,7 @@ class ExoPlayerService : BasePlaybackService() {
                                                 startVideoSwap()
                                             }
                                         }
-                                        else -> {
-                                            if (!hidden) {
-                                                hidden = true
-                                                serviceListener?.toast(R.string.waiting_ads, Toast.LENGTH_LONG)
-                                                player?.let { player ->
-                                                    if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
-                                                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                                            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
-                                                        }.build()
-                                                    }
-                                                    player.volume = 0f
-                                                }
-                                            }
-                                        }
+                                        else -> hideAdFallback()
                                     }
                                 }
                             } else if (proxyMediaPlaylist || videoSwapActive || hidden) {
@@ -1377,12 +1365,25 @@ class ExoPlayerService : BasePlaybackService() {
                     // the ad blocker also backs up the proxies: if an ad still comes through them, the playlist of another player type is used
                     useVideoSwap = (!useCustomProxy && !useStreamProxy && prefs().getBoolean(C.PLAYER_USE_VIDEO_SWAP, true)) || adblock || adsOnlyProxies.isNotEmpty()
                     if (useVideoSwap) {
-                        videoSwapList = adsOnlyProxies + xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
+                        val savedSwaps = xtraModule.playerRepository.getVideoSwapItems(this@ExoPlayerService).filter {
                             it.enabled && !it.platform.isNullOrBlank() && !it.playerType.isNullOrBlank()
-                        }.sortedBy { it.position }.ifEmpty {
-                            // ad blocker: like the VAFT userscript, switch to the playlist of another player type while ads play
-                            if (adblock) ADBLOCK_PLAYER_TYPES.mapIndexed { index, (platform, playerType) -> VideoSwap(platform, playerType, index) } else emptyList()
+                        }.sortedBy { it.position }
+                        val effectiveSwaps = if (adblock) {
+                            val extra = ADBLOCK_PLAYER_TYPES
+                                .filter { (plat, pType) -> savedSwaps.none { it.platform == plat && it.playerType == pType } }
+                                .mapIndexed { index, (plat, pType) -> VideoSwap(plat, pType, savedSwaps.size + index) }
+                            val combined = savedSwaps + extra
+                            val autoplayIdx = combined.indexOfFirst { it.platform == "android" && it.playerType == "autoplay" }
+                            val pbpIdx = combined.indexOfFirst { it.platform == "web" && it.playerType == "picture-by-picture" }
+                            if (autoplayIdx == 0 && pbpIdx > 1) {
+                                listOf(combined[0], combined[pbpIdx]) + combined.filterIndexed { i, _ -> i != 0 && i != pbpIdx }
+                            } else {
+                                combined
+                            }
+                        } else {
+                            savedSwaps
                         }
+                        videoSwapList = adsOnlyProxies + effectiveSwaps
                     }
                     // the custom proxies are checked meanwhile: the offline ones are not tried (from the next stream for the one
                     // of the stream in the mode "always", the stream does not wait for it)
@@ -1574,6 +1575,8 @@ class ExoPlayerService : BasePlaybackService() {
                     adMainWatchJob = null
                     secondaryLoadJob?.cancel()
                     secondaryLoadJob = null
+                    videoSwapRetryJob?.cancel()
+                    videoSwapRetryJob = null
                     adDelayJob?.cancel()
                     adDelayJob = null
                     if (secondaryPlayer != null || videoSwapActive || proxyMediaPlaylist) {
@@ -1585,6 +1588,7 @@ class ExoPlayerService : BasePlaybackService() {
                     resetAdPod()
                     if (hidden) {
                         hidden = false
+                        serviceListener?.setPlayerSurface(false)
                     }
                     if (streamId.isNullOrBlank()) streamId = outcome.streamId
                     if (createdAt.isNullOrBlank()) createdAt = outcome.createdAtIso
@@ -2641,6 +2645,8 @@ class ExoPlayerService : BasePlaybackService() {
                 prefs().edit().putLong(AD_RETURN_DELAY, (previous + measured) / 2).apply()
             }
         }
+        videoSwapRetryJob?.cancel()
+        videoSwapRetryJob = null
         backLiveFrom = 0L
         backLiveProgress = 0f
         stopVideoSwap = false
@@ -2719,7 +2725,7 @@ class ExoPlayerService : BasePlaybackService() {
     /** Proxies that returned HTTP 403 (geo-blocked / forbidden) on the current channel, skipped for this channel only. */
     private val geoBlockedProxiesForChannel = HashSet<String>()
 
-    private fun startSecondaryPlayer(proxy: Boolean) {
+    private fun startSecondaryPlayer(proxy: Boolean, silentRetry: Boolean = false) {
         val generation = streamGeneration
         val login = channelLogin
         secondaryLoadJob?.cancel()
@@ -2751,7 +2757,7 @@ class ExoPlayerService : BasePlaybackService() {
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    if (isPlaying) {
+                    if (isPlaying && !hidden) {
                         pendingSecondaryProxyStat?.let {
                             pendingSecondaryProxyStat = null
                             com.github.andreyasadchy.xtra.ui.tv.TvStats.addProxy(this@ExoPlayerService, it)
@@ -2767,7 +2773,7 @@ class ExoPlayerService : BasePlaybackService() {
 
                 override fun onRenderedFirstFrame() {
                     // the stream without the ad is on the screen: the loading picture can go
-                    if (generation == streamGeneration && !streamPictureShown) {
+                    if (generation == streamGeneration && !hidden && !streamPictureShown) {
                         streamPictureShown = true
                         serviceListener?.streamPictureShown()
                     }
@@ -2783,7 +2789,7 @@ class ExoPlayerService : BasePlaybackService() {
                         } else {
                             adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
                         }
-                        nextVideoSwap()
+                        nextVideoSwap(silentRetry = silentRetry)
                     }
                 }
 
@@ -2811,16 +2817,26 @@ class ExoPlayerService : BasePlaybackService() {
                                     startSecondaryPlayer(true)
                                 } else {
                                     stopProxy = true
+                                    val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || TvExperimentalAdblock.isSwapAdblockEnabled(this@ExoPlayerService)
+                                    val nextSwap = useVideoSwap && !stopVideoSwap
                                     serviceListener?.toast(R.string.stopping_proxy, Toast.LENGTH_SHORT)
-                                    stopSecondaryPlayer()
-                                    if (useVideoSwap && !stopVideoSwap) {
+                                    stopSecondaryPlayer(restoreMainPlayer = !(playingAds && (nextSwap || hideAds)))
+                                    if (nextSwap) {
                                         startVideoSwap()
                                     } else {
                                         hideAdFallback()
                                     }
                                 }
                             }
-                            videoSwapActive -> nextVideoSwap()
+                            videoSwapActive -> nextVideoSwap(silentRetry = silentRetry)
+                        }
+                    } else {
+                        videoSwapRetryJob?.cancel()
+                        videoSwapRetryJob = null
+                        if (hidden) {
+                            hidden = false
+                            secondaryPlayer?.volume = userVolume()
+                            serviceListener?.setPlayerSurface(true)
                         }
                     }
                 }
@@ -2850,13 +2866,18 @@ class ExoPlayerService : BasePlaybackService() {
                 quality?.url
             } else {
                 if (videoSwap != null) {
-                    // a custom proxy while the ad plays: its playlist, else the playlist of another player type
+                    // a custom proxy while the ad plays: its playlist, else an anonymous VAFT backup token (without the account OAuth token,
+                    // which otherwise forces Twitch to stitch the exact same account-targeted ad pod onto autoplay/embed/popout)
                     val playlistUrl = if (videoSwap.platform == AD_PROXY_PLATFORM) videoSwap.playerType else channelLogin?.let { channelLogin ->
-                        try {
+                        suspend fun fetchSwapPlaylistUrl(includeAccountToken: Boolean): String? = try {
                             xtraModule.playerRepository.loadStreamPlaylistUrl(
                                 context = this@ExoPlayerService,
                                 networkLibrary = networkLibrary,
-                                gqlHeaders = getStreamTokenHeaders(this@ExoPlayerService, videoSwap.platform),
+                                gqlHeaders = getStreamTokenHeaders(
+                                    this@ExoPlayerService,
+                                    videoSwap.platform,
+                                    includeAccountToken = includeAccountToken,
+                                ),
                                 channelLogin = channelLogin,
                                 platform = videoSwap.platform,
                                 playerType = videoSwap.playerType,
@@ -2872,6 +2893,12 @@ class ExoPlayerService : BasePlaybackService() {
                         } catch (e: Exception) {
                             null
                         }
+                        fetchSwapPlaylistUrl(includeAccountToken = false)
+                            ?: if (prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)) {
+                                fetchSwapPlaylistUrl(includeAccountToken = true)
+                            } else {
+                                null
+                            }
                     }
                     val playlist = if (playlistUrl != null) {
                         withContext(Dispatchers.IO) {
@@ -3132,7 +3159,7 @@ class ExoPlayerService : BasePlaybackService() {
                         secondaryDynamicsProcessing = null
                     }
                 }
-                player.volume = userVolume()
+                player.volume = if (hidden) 0f else userVolume()
                 player.setPlaybackSpeed(1f)
                 player.prepare()
                 player.playWhenReady = true
@@ -3140,7 +3167,9 @@ class ExoPlayerService : BasePlaybackService() {
                 if (prefs().getBoolean(C.PLAYER_AUDIO_COMPRESSOR, false) && secondaryDynamicsProcessing == null) {
                     secondaryDynamicsProcessing = createDynamicsProcessing(player.audioSessionId)
                 }
-                serviceListener?.setPlayerSurface(true)
+                if (!hidden) {
+                    serviceListener?.setPlayerSurface(true)
+                }
                 // the backup player it replaces (next player type) no longer plays behind it
                 if (previous != null && previous !== player) {
                     previous.release()
@@ -3153,7 +3182,7 @@ class ExoPlayerService : BasePlaybackService() {
                 } else {
                     adProxyHost(videoSwap)?.let { TvProxyStatus.markFailed(it) }
                 }
-                nextVideoSwap()
+                nextVideoSwap(silentRetry = silentRetry)
             } else if (generation == streamGeneration) {
                 player.release()
                 stopSecondaryPlayer()
@@ -3198,17 +3227,22 @@ class ExoPlayerService : BasePlaybackService() {
         }
     }
 
-    private fun startVideoSwap() {
+    private fun startVideoSwap(silentRetry: Boolean = false) {
+        videoSwapRetryJob?.cancel()
+        videoSwapRetryJob = null
         skipFailedAdProxies()
         if (videoSwapList?.getOrNull(currentVideoSwapItem) == null) {
-            // every backup tried (custom proxies offline...): hide and mute the ad
+            // every backup tried (custom proxies offline...): hide and mute the ad, then retry periodically during the break
             stopVideoSwap = true
             hideAdFallback()
+            scheduleVideoSwapRetry()
             return
         }
         videoSwapActive = true
-        val adProxy = videoSwapList?.getOrNull(currentVideoSwapItem)?.platform == AD_PROXY_PLATFORM
-        serviceListener?.toast(if (adProxy) R.string.starting_proxy else R.string.starting_video_swap, Toast.LENGTH_SHORT)
+        if (!silentRetry && !hidden) {
+            val adProxy = videoSwapList?.getOrNull(currentVideoSwapItem)?.platform == AD_PROXY_PLATFORM
+            serviceListener?.toast(if (adProxy) R.string.starting_proxy else R.string.starting_video_swap, Toast.LENGTH_SHORT)
+        }
         player?.let { player ->
             if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
@@ -3225,11 +3259,11 @@ class ExoPlayerService : BasePlaybackService() {
             stopSecondaryPlayer2()
             secondaryPlayerTimerJob = null
         }
-        startSecondaryPlayer(false)
+        startSecondaryPlayer(false, silentRetry = silentRetry)
     }
 
-    /** The backup of the ad blocker failed or let the ad through: the next one (custom proxies known offline skipped), else none. */
-    private fun nextVideoSwap() {
+    /** The backup of the ad blocker failed or let the ad through: the next one (custom proxies known offline skipped), else fallback + periodic retry. */
+    private fun nextVideoSwap(silentRetry: Boolean = false) {
         currentVideoSwapItem += 1
         skipFailedAdProxies()
         if (videoSwapList?.getOrNull(currentVideoSwapItem) != null) {
@@ -3241,21 +3275,49 @@ class ExoPlayerService : BasePlaybackService() {
                 stopSecondaryPlayer2()
                 secondaryPlayerTimerJob = null
             }
-            startSecondaryPlayer(false)
+            startSecondaryPlayer(false, silentRetry = silentRetry)
         } else {
             stopVideoSwap = true
-            serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
-            stopSecondaryPlayer()
+            val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || TvExperimentalAdblock.isSwapAdblockEnabled(this)
+            if (!silentRetry && !hidden) {
+                serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
+            }
+            stopSecondaryPlayer(restoreMainPlayer = !(playingAds && hideAds))
             hideAdFallback()
+            scheduleVideoSwapRetry()
+        }
+    }
+
+    /** Periodically re-probes anonymous Video Swap backups every ~4 s while an ad pod is still playing on hold. */
+    private fun scheduleVideoSwapRetry() {
+        if (!playingAds || !useVideoSwap || type != STREAM || intentionalStopOrPause || streamEnded) {
+            return
+        }
+        val generation = streamGeneration
+        val login = channelLogin
+        videoSwapRetryJob?.cancel()
+        videoSwapRetryJob = lifecycleScope.launch {
+            delay(4_000L)
+            if (playingAds && useVideoSwap && !videoSwapActive && !proxyMediaPlaylist &&
+                generation == streamGeneration && channelLogin == login &&
+                !intentionalStopOrPause && !streamEnded
+            ) {
+                stopVideoSwap = false
+                currentVideoSwapItem = 0
+                startVideoSwap(silentRetry = true)
+            }
         }
     }
 
     /** Hides and silences the main player when no ad-free backup stream is available while an ad break plays. */
     private fun hideAdFallback() {
         val hideAds = prefs().getBoolean(C.PLAYER_HIDE_ADS, false) || TvExperimentalAdblock.isSwapAdblockEnabled(this)
-        if (playingAds && !hidden && hideAds) {
+        if (playingAds && hideAds) {
+            val firstHide = !hidden
             hidden = true
-            serviceListener?.toast(R.string.waiting_ads, Toast.LENGTH_LONG)
+            if (firstHide) {
+                serviceListener?.toast(R.string.waiting_ads, Toast.LENGTH_LONG)
+            }
             player?.let { player ->
                 if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
@@ -3294,7 +3356,7 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** True while the backup player of the ad blocker shows the picture. */
     val isSwapping: Boolean
-        get() = secondaryPlayer != null && (videoSwapActive || proxyMediaPlaylist)
+        get() = secondaryPlayer != null && !hidden && (videoSwapActive || proxyMediaPlaylist)
 
     /** True while ads are hidden with a black veil without any backup player. */
     val isHidingAds: Boolean
@@ -3354,7 +3416,7 @@ class ExoPlayerService : BasePlaybackService() {
 
     /** Player whose picture is on screen: the backup player while ads are blocked, else the main one. */
     val visiblePlayer: ExoPlayer?
-        get() = secondaryPlayer?.takeIf { videoSwapActive || proxyMediaPlaylist } ?: player
+        get() = secondaryPlayer?.takeIf { !hidden && (videoSwapActive || proxyMediaPlaylist) } ?: player
 
     /**
      * Badge of the ad blocker, like the proxyivshook userscript: "Mid-roll ad 2/3 · 12 s" over the source of the stream
@@ -3364,7 +3426,7 @@ class ExoPlayerService : BasePlaybackService() {
     fun getAdblockInfo(): AdblockInfo? {
         if (type != STREAM) return null
         val source = when {
-            videoSwapActive -> videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
+            videoSwapActive && !hidden -> videoSwapList?.getOrNull(currentVideoSwapItem)?.let { swap ->
                 val host = adProxyHost(swap)?.let { TvProxyStatus.displayName(it) }
                 if (host != null) {
                     host
@@ -3725,6 +3787,8 @@ class ExoPlayerService : BasePlaybackService() {
         adMainWatchJob = null
         secondaryLoadJob?.cancel()
         secondaryLoadJob = null
+        videoSwapRetryJob?.cancel()
+        videoSwapRetryJob = null
         adDelayJob?.cancel()
         adDelayJob = null
         // nothing of the stream that ends counts for the next one: no picture of it shown yet, its first playlist not
@@ -3775,6 +3839,8 @@ class ExoPlayerService : BasePlaybackService() {
         liveRecoveryJob = null
         experimentalVodUpgradeJob?.cancel()
         experimentalVodUpgradeJob = null
+        videoSwapRetryJob?.cancel()
+        videoSwapRetryJob = null
         experimentalVodActive = false
         experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
@@ -3823,17 +3889,17 @@ class ExoPlayerService : BasePlaybackService() {
         start(restorePauseState = false)
     }
 
-    private fun stopSecondaryPlayer() {
+    private fun stopSecondaryPlayer(restoreMainPlayer: Boolean = true) {
         proxyMediaPlaylist = false
         videoSwapActive = false
         secondaryLoadJob?.cancel()
         secondaryLoadJob = null
         secondaryPlayerTimerJob?.cancel()
         secondaryPlayerTimerJob = null
-        stopSecondaryPlayer2()
+        stopSecondaryPlayer2(restoreMainPlayer = restoreMainPlayer)
     }
 
-    private fun stopSecondaryPlayer2() {
+    private fun stopSecondaryPlayer2(restoreMainPlayer: Boolean = true) {
         adMainWatchJob?.cancel()
         adMainWatchJob = null
         secondaryDynamicsProcessing?.let {
@@ -3844,14 +3910,18 @@ class ExoPlayerService : BasePlaybackService() {
         serviceListener?.setPlayerSurface(false)
         secondaryPlayer?.release()
         secondaryPlayer = null
-        player?.let { player ->
-            player.setPlaybackSpeed(1f)
-            restoreMainPlayerQualityAfterAd(player)
-            player.volume = userVolume()
+        if (restoreMainPlayer) {
+            player?.let { player ->
+                player.setPlaybackSpeed(1f)
+                restoreMainPlayerQualityAfterAd(player)
+                player.volume = userVolume()
+            }
+            // the main player plays again: the state the system sees is its own
+            updatePlaybackState()
+            startFreezeWatch()
+        } else {
+            updatePlaybackState()
         }
-        // the main player plays again: the state the system sees is its own
-        updatePlaybackState()
-        startFreezeWatch()
     }
 
     private fun startReturnToLiveIfNeeded() {
@@ -3860,6 +3930,8 @@ class ExoPlayerService : BasePlaybackService() {
         }
         adMainWatchJob?.cancel()
         adMainWatchJob = null
+        videoSwapRetryJob?.cancel()
+        videoSwapRetryJob = null
         if (backLiveFrom == 0L) {
             backLiveFrom = System.currentTimeMillis()
         }
@@ -3877,10 +3949,12 @@ class ExoPlayerService : BasePlaybackService() {
                         proxyMediaPlaylist -> {
                             serviceListener?.toast(R.string.stopping_proxy, Toast.LENGTH_SHORT)
                             stopSecondaryPlayer()
+                            checkStreamPictureShown()
                         }
                         videoSwapActive -> {
                             serviceListener?.toast(R.string.stopping_video_swap, Toast.LENGTH_SHORT)
                             stopSecondaryPlayer()
+                            checkStreamPictureShown()
                         }
                         hidden -> {
                             hidden = false
@@ -3890,6 +3964,7 @@ class ExoPlayerService : BasePlaybackService() {
                                 restoreMainPlayerQualityAfterAd(player)
                                 player.volume = userVolume()
                             }
+                            checkStreamPictureShown()
                             startFreezeWatch()
                         }
                     }
@@ -3970,8 +4045,8 @@ class ExoPlayerService : BasePlaybackService() {
     private var freezeWatchJob: Job? = null
 
     /**
-     * Back to the stream after an ad: if its picture does not move (stuck on the last picture of the ad) or it keeps
-     * loading, the stream starts again at the live edge instead of staying stuck.
+     * Back to the stream after an ad: if its picture does not move (stuck on the last picture of the ad, or audio advances
+     * while the re-enabled hardware video decoder renders no frames) or it keeps loading, the stream starts again at the live edge.
      */
     private fun startFreezeWatch() {
         if (type != STREAM) {
@@ -3980,7 +4055,9 @@ class ExoPlayerService : BasePlaybackService() {
         freezeWatchJob?.cancel()
         freezeWatchJob = lifecycleScope.launch {
             var lastPosition = -1L
+            var lastRenderedFrames = -1
             var frozen = 0
+            var noVideoFrames = 0
             var loading = 0
             repeat(15) {
                 delay(1000)
@@ -3989,19 +4066,35 @@ class ExoPlayerService : BasePlaybackService() {
                     return@launch
                 }
                 val position = player.currentPosition
+                val renderedFrames = player.videoDecoderCounters?.renderedOutputBufferCount ?: 0
                 when (player.playbackState) {
                     Player.STATE_READY -> {
                         loading = 0
                         frozen = if (position == lastPosition) frozen + 1 else 0
+                        if (!shouldHidePlayerSurface()) {
+                            if (lastRenderedFrames >= 0 && renderedFrames > lastRenderedFrames) {
+                                noVideoFrames = 0
+                                if (!mainFrameRendered) {
+                                    mainFrameRendered = true
+                                    checkStreamPictureShown()
+                                }
+                            } else if (lastRenderedFrames >= 0) {
+                                noVideoFrames++
+                            }
+                        } else {
+                            noVideoFrames = 0
+                        }
                     }
                     Player.STATE_BUFFERING -> {
                         frozen = 0
+                        noVideoFrames = 0
                         loading++
                     }
                     else -> return@launch
                 }
                 lastPosition = position
-                if (frozen >= 3 || loading >= 8) {
+                lastRenderedFrames = renderedFrames
+                if (frozen >= 3 || noVideoFrames >= 3 || loading >= 8) {
                     player.seekToDefaultPosition()
                     player.prepare()
                     player.play()
@@ -4169,6 +4262,8 @@ class ExoPlayerService : BasePlaybackService() {
         intentionalStopOrPause = true
         liveRecoveryJob?.cancel()
         liveRecoveryJob = null
+        videoSwapRetryJob?.cancel()
+        videoSwapRetryJob = null
         if (type == VIDEO && prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
             player?.takeIf { !it.currentTracks.isEmpty }?.let { player ->
                 videoId?.toLongOrNull()?.let { saveTvResume(it, player.currentPosition) }
@@ -4333,6 +4428,8 @@ class ExoPlayerService : BasePlaybackService() {
             adMainWatchJob = null
             secondaryLoadJob?.cancel()
             secondaryLoadJob = null
+            videoSwapRetryJob?.cancel()
+            videoSwapRetryJob = null
             adDelayJob?.cancel()
             adDelayJob = null
             playingAds = false
@@ -5168,6 +5265,7 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                     }
                 }
+                cancelPendingStateSave()
                 xtraModule.dbWriteScope.launch {
                     xtraModule.playerRepository.deletePlaybackStates()
                 }
@@ -5233,7 +5331,9 @@ class ExoPlayerService : BasePlaybackService() {
                             }
                         }
                     }
-                    enqueuePlaybackStateSave(currentPosition, isPaused)
+                    if (!(isTvDevice && type == STREAM && prefs().getString(C.TV_KEEP_SOUND_ON_LEAVE, "never") == "never")) {
+                        enqueuePlaybackStateSave(currentPosition, isPaused)
+                    }
                 }
             }
         }
@@ -5275,6 +5375,7 @@ class ExoPlayerService : BasePlaybackService() {
     /** Synchronously releases all hardware decoders and resets service state when closing before a new playback session. */
     fun releaseNow() {
         streamGeneration++
+        cancelPendingStateSave()
         clearLivePauseState()
         activeDvrResume = null
         dvrInitialSeekPending = false
@@ -5299,6 +5400,8 @@ class ExoPlayerService : BasePlaybackService() {
         adMainWatchJob = null
         secondaryLoadJob?.cancel()
         secondaryLoadJob = null
+        videoSwapRetryJob?.cancel()
+        videoSwapRetryJob = null
         adDelayJob?.cancel()
         adDelayJob = null
         secondaryPlayerTimerJob?.cancel()
@@ -5353,12 +5456,21 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     companion object {
-        private fun getStreamTokenHeaders(context: android.content.Context, platform: String?): Map<String, String> {
-            val includeToken = context.prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)
-            return if (platform.isNullOrBlank() || platform == "web") {
+        private fun getStreamTokenHeaders(
+            context: android.content.Context,
+            platform: String?,
+            includeAccountToken: Boolean = true,
+        ): Map<String, String> {
+            val includeToken = includeAccountToken && context.prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_STREAM, true)
+            val raw = if (platform.isNullOrBlank() || platform == "web") {
                 TwitchApiHelper.getGQLWebHeaders(context, includeToken)
             } else {
                 TwitchApiHelper.getGQLHeaders(context, includeToken)
+            }
+            return if (includeToken) {
+                raw
+            } else {
+                raw.filterKeys { !it.equals(C.HEADER_TOKEN, ignoreCase = true) }
             }
         }
 
@@ -5436,7 +5548,9 @@ class ExoPlayerService : BasePlaybackService() {
 
         private val ADBLOCK_PLAYER_TYPES = listOf(
             "android" to "autoplay",
+            "web" to "picture-by-picture",
             "web" to "embed",
+            "web" to "thunderdome",
             "web" to "popout",
         )
         const val MULTIVARIANT_PLAYLIST_REGEX = "^usher\\.ttvnw\\.net$"

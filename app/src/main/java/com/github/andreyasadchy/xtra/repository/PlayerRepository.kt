@@ -2184,7 +2184,9 @@ class PlayerRepository(
         // autoplay first: with it last, the ads played while embed and popout were tried
         val DEFAULT_VIDEO_SWAP = listOf(
             "android" to "autoplay",
+            "web" to "picture-by-picture",
             "web" to "embed",
+            "web" to "thunderdome",
             "web" to "popout",
         )
     }

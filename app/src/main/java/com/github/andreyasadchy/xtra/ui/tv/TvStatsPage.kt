@@ -2,6 +2,7 @@ package com.github.andreyasadchy.xtra.ui.tv
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -35,8 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -45,6 +48,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,6 +66,10 @@ import kotlinx.coroutines.launch
  * blocked and the proxies. Up / down scroll it, the period and "Reset" are at the top.
  */
 object TvStatsPage {
+
+    private val HeaderShadowStyle = TextStyle(
+        shadow = Shadow(color = Color(0xBF000000), offset = Offset(0f, 2f), blurRadius = 6f)
+    )
 
     fun show(context: Context, onReset: () -> Unit) {
         TvDialogs.show(context) { _ ->
@@ -91,11 +99,14 @@ object TvStatsPage {
         val detail = remember(period, version, refreshStamp) {
             TvStats.detail(context, when (period) { 0 -> 7; 1 -> 30; else -> null })
         }
+        val hasWallpaper = remember(refreshStamp) { TvWallpaper.isActive(context) }
         val first = remember { FocusRequester() }
         val scroll = rememberScrollState()
         val scope = rememberCoroutineScope()
         val rootModifier = if (isEmbeddedPage) {
-            Modifier.fillMaxSize()
+            Modifier
+                .fillMaxSize()
+                .then(if (hasWallpaper) Modifier.background(Color(0x5208080F)) else Modifier)
         } else {
             Modifier
                 .fillMaxSize()
@@ -109,31 +120,45 @@ object TvStatsPage {
                     Icon(painterResource(R.drawable.tv_ic_bar_chart), contentDescription = null, tint = TvColors.accent, modifier = Modifier.size(28.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(context.getString(R.string.tv_stats), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(
+                            context.getString(R.string.tv_stats),
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            style = HeaderShadowStyle,
+                        )
                         if (detail.since > 0) {
                             Text(
                                 context.getString(R.string.tv_stats_since, java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG).format(java.util.Date(detail.since))),
-                                fontSize = 12.sp, color = TvColors.secondaryText
+                                fontSize = 12.sp,
+                                color = Color(0xD9FFFFFF),
+                                style = HeaderShadowStyle,
                             )
                         }
                     }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                         // the focus stays on these buttons: up / down scroll the page
-                        modifier = Modifier.onPreviewKeyEvent { event ->
-                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                            when (event.key) {
-                                Key.DirectionDown -> {
-                                    scope.launch { scroll.animateScrollBy(160f * context.resources.displayMetrics.density) }
-                                    true
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(Color(0xD913121C))
+                            .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(24.dp))
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when (event.key) {
+                                    Key.DirectionDown -> {
+                                        scope.launch { scroll.animateScrollBy(160f * context.resources.displayMetrics.density) }
+                                        true
+                                    }
+                                    Key.DirectionUp -> {
+                                        scope.launch { scroll.animateScrollBy(-160f * context.resources.displayMetrics.density) }
+                                        true
+                                    }
+                                    else -> false
                                 }
-                                Key.DirectionUp -> {
-                                    scope.launch { scroll.animateScrollBy(-160f * context.resources.displayMetrics.density) }
-                                    true
-                                }
-                                else -> false
                             }
-                        }
                     ) {
                         listOf(R.string.tv_stats_period_7, R.string.tv_stats_period_30, R.string.tv_stats_period_all).forEachIndexed { index, label ->
                             var chipMod: Modifier = Modifier
@@ -150,7 +175,7 @@ object TvStatsPage {
                             }
                             Chip(context.getString(label), index == period, chipMod) { period = index }
                         }
-                        Spacer(Modifier.width(14.dp))
+                        Spacer(Modifier.width(8.dp))
                         Chip(context.getString(R.string.tv_stats_reset), false, Modifier) {
                             context.getAlertDialogBuilder()
                                 .setTitle(context.getString(R.string.tv_stats_reset))
@@ -214,7 +239,7 @@ object TvStatsPage {
                 .background(
                     when {
                         focused -> TvColors.focused
-                        selected -> Color(0x26FFFFFF)
+                        selected -> Color(0x2BFFFFFF)
                         else -> Color.Transparent
                     }
                 )
@@ -228,7 +253,7 @@ object TvStatsPage {
                 color = when {
                     focused -> TvColors.onFocused
                     selected -> TvColors.accent
-                    else -> Color(0xBFFFFFFF)
+                    else -> Color(0xD9FFFFFF)
                 }
             )
         }
@@ -236,10 +261,12 @@ object TvStatsPage {
 
     @Composable
     private fun Panel(modifier: Modifier, content: @Composable () -> Unit) {
+        val shape = RoundedCornerShape(14.dp)
         Column(
             modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0x14FFFFFF))
+                .clip(shape)
+                .background(Color(0xE013121C))
+                .border(1.dp, Color(0x24FFFFFF), shape)
                 .padding(horizontal = 18.dp, vertical = 15.dp)
         ) { content() }
     }
@@ -269,11 +296,13 @@ object TvStatsPage {
 
     @Composable
     private fun RowScope.Tile(icon: Int, value: String, label: String) {
+        val shape = RoundedCornerShape(12.dp)
         Column(
             Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0x14FFFFFF))
+                .clip(shape)
+                .background(Color(0xE013121C))
+                .border(1.dp, Color(0x24FFFFFF), shape)
                 .padding(horizontal = 15.dp, vertical = 13.dp)
         ) {
             Icon(painterResource(icon), contentDescription = null, tint = TvColors.accent, modifier = Modifier.size(21.dp))
@@ -451,7 +480,13 @@ object TvStatsPage {
         val context = LocalContext.current
         val date = { ms: Long -> java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG).format(java.util.Date(ms)) }
         Column(modifier) {
-            Text(context.getString(R.string.tv_stats_records), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(
+                context.getString(R.string.tv_stats_records),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                style = HeaderShadowStyle,
+            )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Record(
@@ -475,11 +510,13 @@ object TvStatsPage {
 
     @Composable
     private fun RowScope.Record(label: String, value: String, detail: String?) {
+        val shape = RoundedCornerShape(12.dp)
         Column(
             Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0x14FFFFFF))
+                .clip(shape)
+                .background(Color(0xE013121C))
+                .border(1.dp, Color(0x24FFFFFF), shape)
                 .padding(horizontal = 15.dp, vertical = 13.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

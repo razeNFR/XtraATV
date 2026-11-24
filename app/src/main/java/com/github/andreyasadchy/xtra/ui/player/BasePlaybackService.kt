@@ -61,9 +61,17 @@ abstract class BasePlaybackService : LifecycleService() {
     var started = false
     var loaded = false
 
+    private var saveStateJob: kotlinx.coroutines.Job? = null
+
+    protected fun cancelPendingStateSave() {
+        saveStateJob?.cancel()
+        saveStateJob = null
+    }
+
     protected suspend fun restorePlaybackState() {
         val immediateState = pendingImmediatePlaybackState
         pendingImmediatePlaybackState = null
+        cancelPendingStateSave()
         val savedState = immediateState ?: xtraModule.playerRepository.getPlaybackStates().firstOrNull()
         xtraModule.playerRepository.deletePlaybackStates()
         if (savedState != null) {
@@ -155,13 +163,16 @@ abstract class BasePlaybackService : LifecycleService() {
 
     protected fun enqueuePlaybackStateSave(position: Long?, paused: Boolean) {
         val snapshot = buildPlaybackStateSnapshot(position, paused)
-        xtraModule.dbWriteScope.launch {
+        saveStateJob?.cancel()
+        saveStateJob = xtraModule.dbWriteScope.launch {
             xtraModule.playerRepository.savePlaybackStates(listOf(snapshot))
         }
     }
 
     protected suspend fun savePlaybackState(position: Long?, paused: Boolean) {
         val item = buildPlaybackStateSnapshot(position, paused)
+        saveStateJob?.cancel()
+        saveStateJob = null
         xtraModule.playerRepository.savePlaybackStates(listOf(item))
     }
 
