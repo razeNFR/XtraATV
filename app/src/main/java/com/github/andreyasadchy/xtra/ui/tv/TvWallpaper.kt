@@ -2217,9 +2217,7 @@ object TvWallpaper {
                     event.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
                     event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
                 if (dropHeldSelect && isSelect) {
-                    if (event.action == android.view.KeyEvent.KEYCODE_ACTION_DOWN_COMPAT ||
-                        (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0)
-                    ) {
+                    if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                         dropHeldSelect = false
                     } else {
                         return true
@@ -2260,8 +2258,6 @@ object TvWallpaper {
         )
         dialog.show()
     }
-
-    private const val KEYCODE_ACTION_DOWN_COMPAT = android.view.KeyEvent.ACTION_DOWN
 
     private sealed interface GalleryGridEntry {
         val id: String
