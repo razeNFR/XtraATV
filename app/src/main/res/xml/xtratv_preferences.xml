@@ -304,6 +304,14 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
+        <Preference
+            android:key="tv_wallpaper"
+            android:persistent="false"
+            android:summary="@string/tv_wallpaper_summary"
+            android:title="@string/tv_wallpaper"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
         <ListPreference
             android:defaultValue="3"
             android:entries="@array/tvCardSizeEntries"

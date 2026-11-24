@@ -1412,4 +1412,22 @@
     <string name="tv_changelog_loading">Caricamento delle versioni precedenti…</string>
     <string name="tv_changelog_empty">Nessuna nota di rilascio disponibile al momento</string>
     <string name="tv_changelog_back">Torna alle versioni</string>
+    <string name="tv_wallpaper">Sfondo</string>
+    <string name="tv_wallpaper_summary">Motivi vettoriali col colore d\'ambiente o immagine personalizzata inviata dal telefono</string>
+    <string name="tv_wallpaper_default">Predefinito</string>
+    <string name="tv_wallpaper_topographic">AMOLED Topografico</string>
+    <string name="tv_wallpaper_prisms">Prismi Gaming</string>
+    <string name="tv_wallpaper_ribbons">Nastri</string>
+    <string name="tv_wallpaper_aurora">Aurora</string>
+    <string name="tv_wallpaper_custom">Immagine personalizzata</string>
+    <string name="tv_wallpaper_qr_button">Invia immagine / URL (QR telefono)</string>
+    <string name="tv_wallpaper_qr_title">Invia sfondo dal telefono</string>
+    <string name="tv_wallpaper_qr_help">Scansiona col telefono sotto lo stesso Wi-Fi per scegliere un\'immagine o incollare un URL.</string>
+    <string name="tv_wallpaper_visibility">Visibilità</string>
+    <string name="tv_wallpaper_blur">Sfocatura</string>
+    <string name="tv_wallpaper_applied">Sfondo applicato</string>
+    <string name="tv_wallpaper_invalid_image">Immagine non valida o irraggiungibile</string>
+    <string name="tv_wallpaper_web_pick_file">Scegli un\'immagine dal telefono</string>
+    <string name="tv_wallpaper_web_paste_url">Oppure incolla l\'URL di un\'immagine</string>
+    <string name="tv_wallpaper_web_send">Applica sulla TV</string>
 </resources>

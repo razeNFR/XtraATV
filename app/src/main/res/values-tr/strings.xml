@@ -1413,4 +1413,22 @@
     <string name="tv_changelog_loading">Önceki sürümler yükleniyor…</string>
     <string name="tv_changelog_empty">Şu anda kullanılabilir sürüm notu yok</string>
     <string name="tv_changelog_back">Sürümlere dön</string>
+    <string name="tv_wallpaper">Duvar kağıdı</string>
+    <string name="tv_wallpaper_summary">Ortam renginize uyumlu vektörel desenler veya telefondan gönderilen özel görsel</string>
+    <string name="tv_wallpaper_default">Varsayılan</string>
+    <string name="tv_wallpaper_topographic">AMOLED Topoğrafik</string>
+    <string name="tv_wallpaper_prisms">Oyuncu Prizmaları</string>
+    <string name="tv_wallpaper_ribbons">Şeritler</string>
+    <string name="tv_wallpaper_aurora">Kuzey Işıkları</string>
+    <string name="tv_wallpaper_custom">Özel görsel</string>
+    <string name="tv_wallpaper_qr_button">Görsel / URL gönder (Telefon QR)</string>
+    <string name="tv_wallpaper_qr_title">Telefondan duvar kağıdı gönder</string>
+    <string name="tv_wallpaper_qr_help">Bir görsel seçmek veya görsel bağlantısı yapıştırmak için aynı Wi-Fi ağındaki telefonla tarayın.</string>
+    <string name="tv_wallpaper_visibility">Görünürlük</string>
+    <string name="tv_wallpaper_blur">Bulanıklık</string>
+    <string name="tv_wallpaper_applied">Duvar kağıdı uygulandı</string>
+    <string name="tv_wallpaper_invalid_image">Geçersiz veya erişilemeyen görsel</string>
+    <string name="tv_wallpaper_web_pick_file">Telefondan bir görsel seçin</string>
+    <string name="tv_wallpaper_web_paste_url">Veya bir görsel URL\'si yapıştırın</string>
+    <string name="tv_wallpaper_web_send">TV\'de uygula</string>
 </resources>

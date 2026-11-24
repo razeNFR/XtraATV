@@ -156,6 +156,13 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         slot.suspendedByMain = false
         slot.openedAt = SystemClock.elapsedRealtime()
         slot.decoderSteppedDown = false
+        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+            context = activity,
+            channelId = stream.channelId,
+            channelLogin = login,
+            streamId = stream.id,
+            streamCreatedAt = stream.createdAt,
+        )
 
         val frame = slot.view ?: return
         frame.findViewById<TextView>(R.id.tvPipLabel)?.text = stream.channelName ?: login

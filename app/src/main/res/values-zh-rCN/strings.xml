@@ -1412,4 +1412,22 @@
     <string name="tv_changelog_loading">正在加载历史版本…</string>
     <string name="tv_changelog_empty">暂无可用的版本更新说明</string>
     <string name="tv_changelog_back">返回版本列表</string>
+    <string name="tv_wallpaper">壁纸</string>
+    <string name="tv_wallpaper_summary">跟随氛围色的矢量图案，或通过手机发送自定义图片</string>
+    <string name="tv_wallpaper_default">默认</string>
+    <string name="tv_wallpaper_topographic">AMOLED 等高线</string>
+    <string name="tv_wallpaper_prisms">电竞棱镜</string>
+    <string name="tv_wallpaper_ribbons">丝带</string>
+    <string name="tv_wallpaper_aurora">极光</string>
+    <string name="tv_wallpaper_custom">自定义图片</string>
+    <string name="tv_wallpaper_qr_button">发送图片 / 链接 (手机扫码)</string>
+    <string name="tv_wallpaper_qr_title">从手机发送壁纸</string>
+    <string name="tv_wallpaper_qr_help">使用连接同一 Wi-Fi 的手机扫码，选择相册图片或粘贴图片链接。</string>
+    <string name="tv_wallpaper_visibility">显示强度</string>
+    <string name="tv_wallpaper_blur">模糊度</string>
+    <string name="tv_wallpaper_applied">壁纸已应用</string>
+    <string name="tv_wallpaper_invalid_image">图片无效或无法访问</string>
+    <string name="tv_wallpaper_web_pick_file">从手机选择图片</string>
+    <string name="tv_wallpaper_web_paste_url">或粘贴图片链接</string>
+    <string name="tv_wallpaper_web_send">应用到电视</string>
 </resources>

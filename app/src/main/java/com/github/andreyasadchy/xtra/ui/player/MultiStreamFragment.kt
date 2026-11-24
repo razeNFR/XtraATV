@@ -284,6 +284,14 @@ class MultiStreamFragment : Fragment() {
                     currentLogins.add(key)
                     val nextMs = (playMsByLogin[key] ?: 0L) + 5_000L
                     playMsByLogin[key] = nextMs
+                    com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+                        context = ctx,
+                        channelId = s.channelId,
+                        channelLogin = s.channelLogin,
+                        streamId = s.id,
+                        streamCreatedAt = s.createdAt,
+                        forcePersist = false,
+                    )
                     if (nextMs >= 30_000L && recordedLogins.add(key)) {
                         com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.recordWatched(
                             ctx,
@@ -300,6 +308,13 @@ class MultiStreamFragment : Fragment() {
     }
 
     private fun addTile(stream: Stream): Tile {
+        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+            context = requireContext(),
+            channelId = stream.channelId,
+            channelLogin = stream.channelLogin,
+            streamId = stream.id,
+            streamCreatedAt = stream.createdAt,
+        )
         val density = resources.displayMetrics.density
         val texture = TextureView(requireContext())
         val label = TextView(requireContext()).apply {

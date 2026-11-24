@@ -1175,6 +1175,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
                 if (requireContext().prefs().getBoolean(C.PLAYER_VOLUME_BUTTON, true)) {
                     volume.visibility = View.VISIBLE
+                    updateTvVolumeButtonIcon()
                     volume.setOnClickListener {
                         showController(force = true)
                         showVolumeDialog()
@@ -1336,6 +1337,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                                         playbackService?.createdAt,
                                                     )
                                                 }
+                                            }
+                                            activity.dvrChatVideoId?.takeIf { it.isNotBlank() }?.let { archiveVid ->
+                                                com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+                                                    context = activity,
+                                                    channelId = playbackService?.channelId,
+                                                    channelLogin = playbackService?.channelLogin,
+                                                    streamCreatedAt = playbackService?.createdAt,
+                                                    archiveVideoId = archiveVid,
+                                                )
                                             }
                                             activity.startVideo(video, offset, qualities = qualities)
                                         } else {
@@ -1963,7 +1973,101 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var tvVolumePill: TvVolumePill? = null
+
+    private fun currentVolumePercent(): Int {
+        val ctx = context ?: return 100
+        val vol = (getCurrentVolume() ?: (ctx.prefs().getInt(C.PLAYER_VOLUME, 100) / 100f)).coerceIn(0f, 1f)
+        return (vol * 100f + 0.5f).toInt().coerceIn(0, 100)
+    }
+
+    private fun updateTvVolumeButtonIcon(percentOverride: Int? = null) {
+        if (!isTv || _binding == null) return
+        val pct = percentOverride ?: currentVolumePercent()
+        binding.playerControls.volume.setImageResource(
+            if (pct <= 0) R.drawable.baseline_volume_off_black_24 else R.drawable.tv_ic_volume
+        )
+    }
+
+    private fun ensureTvVolumePill(): TvVolumePill {
+        tvVolumePill?.let { return it }
+        val created = TvVolumePill(
+            hostRoot = binding.playerControls.root as android.widget.RelativeLayout,
+            onVolumeChanged = { next ->
+                val ctx = context ?: return@TvVolumePill
+                if (next > 0) unmutedVolume = next
+                ctx.prefs().edit { putInt(C.PLAYER_VOLUME, next) }
+                changeVolume(next / 100f)
+                updateTvVolumeButtonIcon(next)
+            },
+            onToggleMute = {
+                val ctx = context ?: return@TvVolumePill 0
+                val cur = currentVolumePercent()
+                val next = if (cur > 0) {
+                    unmutedVolume = cur
+                    0
+                } else {
+                    unmutedVolume.takeIf { it > 0 } ?: 100
+                }
+                ctx.prefs().edit { putInt(C.PLAYER_VOLUME, next) }
+                changeVolume(next / 100f)
+                updateTvVolumeButtonIcon(next)
+                next
+            },
+            onKeepHudAlive = {
+                if (_binding != null && areControlsShown()) {
+                    binding.playerControls.root.removeCallbacks(controllerHideAction)
+                    if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
+                        binding.playerControls.root.postDelayed(controllerHideAction, maxOf(controllerHideDelay, 4_500L))
+                    }
+                }
+            },
+            onClosed = { restoreAnchorFocus ->
+                if (_binding != null && isAdded && !isRemoving) {
+                    if (restoreAnchorFocus && areControlsShown()) {
+                        val target = binding.playerControls.volume.takeIf { it.isVisible && it.isFocusable }
+                            ?: binding.playerControls.menu.takeIf { it.isVisible && it.isFocusable }
+                        target?.requestFocus()
+                    }
+                    if (areControlsShown() && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
+                        binding.playerControls.root.removeCallbacks(controllerHideAction)
+                        binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                    }
+                }
+            },
+        )
+        tvVolumePill = created
+        return created
+    }
+
+    fun onTvVolumePillKey(event: KeyEvent): Boolean {
+        return tvVolumePill?.onKeyEvent(event) == true
+    }
+
     fun showVolumeDialog() {
+        if (isTv && _binding != null && binding.playerControls.root is android.widget.RelativeLayout) {
+            if (tvVolumePill?.isShowing == true) {
+                tvVolumePill?.dismiss(restoreAnchorFocus = true)
+                return
+            }
+            hideTooltip()
+            showController(force = true)
+            val anchor = binding.playerControls.volume.takeIf { it.isVisible }
+                ?: binding.playerControls.menu.takeIf { it.isVisible }
+                ?: binding.playerControls.playPause
+            if (anchor.isFocusable && !anchor.hasFocus()) {
+                anchor.requestFocus()
+            }
+            val pct = currentVolumePercent()
+            if (pct > 0) unmutedVolume = pct
+            updateTvVolumeButtonIcon(pct)
+            ensureTvVolumePill().show(
+                anchor = anchor,
+                timeline = binding.playerControls.progressBar,
+                initialPercent = pct,
+            )
+            return
+        }
         PlayerVolumeDialog.newInstance(getCurrentVolume()).show(childFragmentManager, "closeOnPip")
     }
 
@@ -2809,6 +2913,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             if (!found.isNullOrBlank()) {
                 main.dvrChatVideoId = found
+                com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+                    context = main,
+                    channelId = service.channelId,
+                    channelLogin = login,
+                    streamCreatedAt = service.createdAt,
+                    archiveVideoId = found,
+                )
                 if (view != null && isExperimentalVodActive()) {
                     val exo = playbackService as? ExoPlayerService
                     val edge = exo?.getExperimentalLiveEdgeMs()?.takeIf { it > 0L }
@@ -3095,6 +3206,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             seekPreview?.setStartEpochMs(it)
         }
         (activity as? MainActivity)?.dvrChatVideoId = video.id
+        context?.let { ctx ->
+            com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+                context = ctx,
+                channelId = playbackService?.channelId,
+                channelLogin = playbackService?.channelLogin,
+                streamCreatedAt = streamCreatedAt,
+                archiveVideoId = video.id,
+            )
+        }
         val url = getStoryboardUrl(video.id, video.animatedPreviewURL)
         if (BuildConfig.DEBUG) {
             android.util.Log.d("XtraTv", "seekPreview live storyboard=$url")
@@ -5088,11 +5208,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             unmutedVolume = current
             prefs.edit { putInt(C.PLAYER_VOLUME, 0) }
             changeVolume(0f)
+            updateTvVolumeButtonIcon(0)
+            tvVolumePill?.setVolumePercent(0)
             showTvPlayerOsd(getString(R.string.tv_muted), R.drawable.tv_ic_volume)
         } else {
             val restored = unmutedVolume.takeIf { it > 0 } ?: 100
             prefs.edit { putInt(C.PLAYER_VOLUME, restored) }
             changeVolume(restored / 100f)
+            updateTvVolumeButtonIcon(restored)
+            tvVolumePill?.setVolumePercent(restored)
             showTvPlayerOsd(getString(R.string.tv_unmuted, restored), R.drawable.tv_ic_volume)
         }
     }
@@ -6321,6 +6445,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun showTooltipNow() {
+        if (tvVolumePill?.isShowing == true) return
         val tooltip = _binding?.playerControls?.tvTooltip ?: return
         val anchor = tooltipAnchor ?: return
         if (!anchor.hasFocus() || activity?.hasWindowFocus() == false || anchor.contentDescription.isNullOrBlank()) {
@@ -7660,6 +7785,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun hideController(force: Boolean = false) {
+        tvVolumePill?.dismiss(restoreAnchorFocus = false, immediate = true)
         hudOpenedByUser = false
         endHudPeek()
         onTvControllerVisibility(false)
@@ -8950,6 +9076,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        tvVolumePill?.destroy()
+        tvVolumePill = null
         tvLiveEventsLookupJob?.cancel()
         tvLiveEventsLookupJob = null
         tvLiveEventsTickerJob?.cancel()

@@ -1412,4 +1412,22 @@
     <string name="tv_changelog_loading">Carregando versões anteriores…</string>
     <string name="tv_changelog_empty">Nenhuma nota de versão disponível no momento</string>
     <string name="tv_changelog_back">Voltar às versões</string>
+    <string name="tv_wallpaper">Papel de parede</string>
+    <string name="tv_wallpaper_summary">Padrões vetoriais na cor de ambiente ou imagem personalizada enviada pelo celular</string>
+    <string name="tv_wallpaper_default">Padrão</string>
+    <string name="tv_wallpaper_topographic">AMOLED Topográfico</string>
+    <string name="tv_wallpaper_prisms">Prismas Gaming</string>
+    <string name="tv_wallpaper_ribbons">Fitas</string>
+    <string name="tv_wallpaper_aurora">Aurora</string>
+    <string name="tv_wallpaper_custom">Imagem personalizada</string>
+    <string name="tv_wallpaper_qr_button">Enviar imagem / URL (QR celular)</string>
+    <string name="tv_wallpaper_qr_title">Enviar papel de parede pelo celular</string>
+    <string name="tv_wallpaper_qr_help">Escaneie com seu celular no mesmo Wi-Fi para escolher uma imagem ou colar uma URL.</string>
+    <string name="tv_wallpaper_visibility">Visibilidade</string>
+    <string name="tv_wallpaper_blur">Desfoque</string>
+    <string name="tv_wallpaper_applied">Papel de parede aplicado</string>
+    <string name="tv_wallpaper_invalid_image">Imagem inválida ou inacessível</string>
+    <string name="tv_wallpaper_web_pick_file">Escolher uma imagem do celular</string>
+    <string name="tv_wallpaper_web_paste_url">Ou colar a URL de uma imagem</string>
+    <string name="tv_wallpaper_web_send">Aplicar na TV</string>
 </resources>

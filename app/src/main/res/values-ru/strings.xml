@@ -1412,4 +1412,22 @@
     <string name="tv_changelog_loading">Загрузка предыдущих версий…</string>
     <string name="tv_changelog_empty">Примечания к выпуску сейчас недоступны</string>
     <string name="tv_changelog_back">Назад к версиям</string>
+    <string name="tv_wallpaper">Обои</string>
+    <string name="tv_wallpaper_summary">Векторные узоры в цвете подсветки или своё изображение с телефона</string>
+    <string name="tv_wallpaper_default">По умолчанию</string>
+    <string name="tv_wallpaper_topographic">AMOLED Топография</string>
+    <string name="tv_wallpaper_prisms">Игровые призмы</string>
+    <string name="tv_wallpaper_ribbons">Ленты</string>
+    <string name="tv_wallpaper_aurora">Северное сияние</string>
+    <string name="tv_wallpaper_custom">Своё изображение</string>
+    <string name="tv_wallpaper_qr_button">Отправить фото / URL (QR с телефона)</string>
+    <string name="tv_wallpaper_qr_title">Отправить обои с телефона</string>
+    <string name="tv_wallpaper_qr_help">Отсканируйте телефоном в той же сети Wi-Fi, чтобы выбрать картинку или вставить ссылку.</string>
+    <string name="tv_wallpaper_visibility">Видимость</string>
+    <string name="tv_wallpaper_blur">Размытие</string>
+    <string name="tv_wallpaper_applied">Обои применены</string>
+    <string name="tv_wallpaper_invalid_image">Некорректное или недоступное изображение</string>
+    <string name="tv_wallpaper_web_pick_file">Выбрать изображение с телефона</string>
+    <string name="tv_wallpaper_web_paste_url">Или вставить ссылку на изображение</string>
+    <string name="tv_wallpaper_web_send">Применить на ТВ</string>
 </resources>

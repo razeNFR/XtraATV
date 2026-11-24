@@ -2300,6 +2300,7 @@ class TvSettingsFragment : Fragment() {
                         }
                     }
                     C.TV_PLAYER_CLOCK -> valueBadge = TvClockSettings.summary(context)
+                    C.TV_WALLPAPER -> valueBadge = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.summary(context)
                     C.TV_MULTISTREAM_QUALITY -> valueBadge = TvMultiStreamQuality.summary(context)
                     C.TV_SWITCHER_ROWS -> valueBadge = TvSwitcherRows.summary(context)
                     "tv_dpad_shortcuts" -> valueBadge = TvRemoteKeys.dpadSummary(context)
@@ -2696,6 +2697,23 @@ class TvSettingsFragment : Fragment() {
             }
             C.TV_PLAYER_CLOCK -> {
                 TvClockSettings.showPanel(context) {
+                    refreshStamp.intValue++
+                }
+            }
+            C.TV_WALLPAPER -> {
+                val act = activity as? MainActivity
+                val settingsRoot = view
+                com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.showPanel(
+                    context = context,
+                    onLiveRefresh = { act?.refreshTvAmbientColor() },
+                    onPreviewOpen = {
+                        settingsRoot?.animate()?.alpha(0f)?.setDuration(160L)?.start()
+                    },
+                    onPreviewClose = {
+                        settingsRoot?.animate()?.alpha(1f)?.setDuration(150L)?.start()
+                        refreshStamp.intValue++
+                    },
+                ) {
                     refreshStamp.intValue++
                 }
             }
@@ -3301,7 +3319,7 @@ class TvSettingsFragment : Fragment() {
             "tv_xtratv_sub_languages", "player_settings", "playback_settings", "buffer_settings",
             "player_button_settings", "player_menu_settings", "ui_settings", "adblock_settings", "update_settings",
             "api_token_settings", "debug_settings", "video_swap_settings", "stream_proxy_settings",
-            "custom_proxy_settings", "tv_favorites", "tv_blacklist", C.TV_HOME_ROWS, C.TV_PLAYER_CLOCK,
+            "custom_proxy_settings", "tv_favorites", "tv_blacklist", C.TV_HOME_ROWS, C.TV_PLAYER_CLOCK, C.TV_WALLPAPER,
             C.TV_MULTISTREAM_QUALITY, C.TV_SWITCHER_ROWS, "tv_dpad_shortcuts", C.TV_CUSTOM_KEYS,
             "ui_navigation_tab_list_dialog", "ui_following_tabs_dialog", "ui_saved_tabs_dialog",
             "ui_game_tabs_dialog", "ui_search_tabs_dialog", "ui_channel_tabs_dialog",

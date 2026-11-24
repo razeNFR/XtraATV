@@ -117,7 +117,9 @@ object TvAmbient {
     }
 
     fun background(context: Context, base: Int, overrideColor: Int? = null): Drawable {
-        val color = overrideColor ?: color(context) ?: return ColorDrawable(base)
+        val ambient = overrideColor ?: color(context)
+        TvWallpaper.createBackground(context, base, ambient)?.let { return it }
+        val color = ambient ?: return ColorDrawable(base)
         // a light shade glows less, the background stays dark
         val light = Color.luminance(color) > 0.45f
         fun alpha(value: Int) = if (light) value * 3 / 5 else value

@@ -1463,6 +1463,9 @@ class MainActivity : AppCompatActivity() {
         if (isTv && !dispatchingPlayerKey && (playerFragment as? PlayerFragment)?.onTvChatFreeMoveKey(event) == true) {
             return true
         }
+        if (isTv && !dispatchingPlayerKey && (playerFragment as? PlayerFragment)?.onTvVolumePillKey(event) == true) {
+            return true
+        }
         if (isTv && !dispatchingPlayerKey && dispatchTvBackLongKey(event)) {
             return true
         }
@@ -3490,6 +3493,13 @@ class MainActivity : AppCompatActivity() {
         currentStream = stream
         currentStreamLogin = stream.channelLogin
         if (isTv) {
+            com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+                context = this,
+                channelId = stream.channelId,
+                channelLogin = stream.channelLogin,
+                streamId = stream.id,
+                streamCreatedAt = stream.createdAt,
+            )
             syncTvPlaybackState()
         }
         dvrStream = null
@@ -3615,6 +3625,9 @@ class MainActivity : AppCompatActivity() {
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false, qualities: String? = null) {
         currentClipId = null
         if (video.id != null) {
+            if (isTv) {
+                com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.onExplicitVodOpened(this, video.id)
+            }
             com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.pendingDvrResume = null
             currentStream = null
             dvrStream = null

@@ -1412,4 +1412,22 @@
     <string name="tv_changelog_loading">過去のリリースを読み込み中…</string>
     <string name="tv_changelog_empty">現在表示できるリリースノートはありません</string>
     <string name="tv_changelog_back">バージョン一覧に戻る</string>
+    <string name="tv_wallpaper">壁紙</string>
+    <string name="tv_wallpaper_summary">アンビエントカラーに連動するベクター柄、またはスマホから送信したカスタム画像</string>
+    <string name="tv_wallpaper_default">デフォルト</string>
+    <string name="tv_wallpaper_topographic">AMOLED トポグラフィック</string>
+    <string name="tv_wallpaper_prisms">ゲーミングプリズム</string>
+    <string name="tv_wallpaper_ribbons">リボン</string>
+    <string name="tv_wallpaper_aurora">オーロラ</string>
+    <string name="tv_wallpaper_custom">カスタム画像</string>
+    <string name="tv_wallpaper_qr_button">画像 / URL を送信 (スマホ QR)</string>
+    <string name="tv_wallpaper_qr_title">スマホから壁紙を送信</string>
+    <string name="tv_wallpaper_qr_help">同じ Wi-Fi に接続したスマホで読み取り、画像を選択するか画像 URL を貼り付けてください。</string>
+    <string name="tv_wallpaper_visibility">表示強度</string>
+    <string name="tv_wallpaper_blur">ぼかし</string>
+    <string name="tv_wallpaper_applied">壁紙を適用しました</string>
+    <string name="tv_wallpaper_invalid_image">無効または取得できない画像です</string>
+    <string name="tv_wallpaper_web_pick_file">スマホから画像を選択</string>
+    <string name="tv_wallpaper_web_paste_url">または画像の URL を貼り付け</string>
+    <string name="tv_wallpaper_web_send">テレビに適用</string>
 </resources>

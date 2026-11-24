@@ -365,8 +365,23 @@ class ExoPlayerService : BasePlaybackService() {
                         trackedLogin = login
                         accumulatedPlayMs = 5_000L
                         recorded = false
+                        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+                            context = this@ExoPlayerService,
+                            channelId = channelId,
+                            channelLogin = login,
+                            streamId = streamId,
+                            streamCreatedAt = createdAt,
+                        )
                     } else {
                         accumulatedPlayMs += 5_000L
+                        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+                            context = this@ExoPlayerService,
+                            channelId = channelId,
+                            channelLogin = login,
+                            streamId = streamId,
+                            streamCreatedAt = createdAt,
+                            forcePersist = false,
+                        )
                     }
                     if (!recorded && accumulatedPlayMs >= 30_000L) {
                         recorded = true

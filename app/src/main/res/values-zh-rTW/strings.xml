@@ -1412,4 +1412,22 @@
     <string name="tv_changelog_loading">正在載入過往版本…</string>
     <string name="tv_changelog_empty">目前沒有可用的版本更新說明</string>
     <string name="tv_changelog_back">返回版本列表</string>
+    <string name="tv_wallpaper">桌布</string>
+    <string name="tv_wallpaper_summary">跟隨氛圍色的向量圖案，或透過手機傳送自訂圖片</string>
+    <string name="tv_wallpaper_default">預設</string>
+    <string name="tv_wallpaper_topographic">AMOLED 等高線</string>
+    <string name="tv_wallpaper_prisms">電競稜鏡</string>
+    <string name="tv_wallpaper_ribbons">絲帶</string>
+    <string name="tv_wallpaper_aurora">極光</string>
+    <string name="tv_wallpaper_custom">自訂圖片</string>
+    <string name="tv_wallpaper_qr_button">傳送圖片 / 連結 (手機掃碼)</string>
+    <string name="tv_wallpaper_qr_title">從手機傳送桌布</string>
+    <string name="tv_wallpaper_qr_help">使用連線至相同 Wi-Fi 的手機掃描，選擇圖片或貼上圖片網址。</string>
+    <string name="tv_wallpaper_visibility">顯示強度</string>
+    <string name="tv_wallpaper_blur">模糊度</string>
+    <string name="tv_wallpaper_applied">已套用桌布</string>
+    <string name="tv_wallpaper_invalid_image">圖片無效或無法存取</string>
+    <string name="tv_wallpaper_web_pick_file">從手機選擇圖片</string>
+    <string name="tv_wallpaper_web_paste_url">或貼上圖片網址</string>
+    <string name="tv_wallpaper_web_send">套用至電視</string>
 </resources>

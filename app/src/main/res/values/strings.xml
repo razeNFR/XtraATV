@@ -1432,4 +1432,22 @@
     <string name="tv_changelog_loading">Loading previous releases…</string>
     <string name="tv_changelog_empty">No release notes available right now</string>
     <string name="tv_changelog_back">Back to releases</string>
+    <string name="tv_wallpaper">Wallpaper</string>
+    <string name="tv_wallpaper_summary">Vector patterns tinted by your ambient color or a custom image sent from your phone</string>
+    <string name="tv_wallpaper_default">Default</string>
+    <string name="tv_wallpaper_topographic">AMOLED Topographic</string>
+    <string name="tv_wallpaper_prisms">Gaming Prisms</string>
+    <string name="tv_wallpaper_ribbons">Ribbons</string>
+    <string name="tv_wallpaper_aurora">Aurora</string>
+    <string name="tv_wallpaper_custom">Custom image</string>
+    <string name="tv_wallpaper_qr_button">Send image / URL (Phone QR)</string>
+    <string name="tv_wallpaper_qr_title">Send wallpaper from phone</string>
+    <string name="tv_wallpaper_qr_help">Scan with your phone on the same Wi-Fi to pick an image or paste an image URL.</string>
+    <string name="tv_wallpaper_visibility">Visibility</string>
+    <string name="tv_wallpaper_blur">Blur</string>
+    <string name="tv_wallpaper_applied">Wallpaper applied</string>
+    <string name="tv_wallpaper_invalid_image">Invalid or unreachable image</string>
+    <string name="tv_wallpaper_web_pick_file">Choose an image from phone</string>
+    <string name="tv_wallpaper_web_paste_url">Or paste an image URL</string>
+    <string name="tv_wallpaper_web_send">Apply on TV</string>
 </resources>

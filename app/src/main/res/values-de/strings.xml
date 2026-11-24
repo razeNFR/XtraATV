@@ -1412,4 +1412,22 @@
     <string name="tv_changelog_loading">Frühere Versionen werden geladen…</string>
     <string name="tv_changelog_empty">Derzeit sind keine Versionshinweise verfügbar</string>
     <string name="tv_changelog_back">Zurück zur Übersicht</string>
+    <string name="tv_wallpaper">Hintergrundbild</string>
+    <string name="tv_wallpaper_summary">Vektormuster in deiner Ambientefarbe oder ein eigenes Bild per Smartphone senden</string>
+    <string name="tv_wallpaper_default">Standard</string>
+    <string name="tv_wallpaper_topographic">AMOLED Topografisch</string>
+    <string name="tv_wallpaper_prisms">Gaming-Prismen</string>
+    <string name="tv_wallpaper_ribbons">Bänder</string>
+    <string name="tv_wallpaper_aurora">Polarlicht</string>
+    <string name="tv_wallpaper_custom">Eigenes Bild</string>
+    <string name="tv_wallpaper_qr_button">Bild / URL senden (Handy-QR)</string>
+    <string name="tv_wallpaper_qr_title">Hintergrund vom Smartphone senden</string>
+    <string name="tv_wallpaper_qr_help">Im selben WLAN mit dem Smartphone scannen, um ein Bild zu wählen oder eine Bild-URL einzufügen.</string>
+    <string name="tv_wallpaper_visibility">Sichtbarkeit</string>
+    <string name="tv_wallpaper_blur">Unschärfe</string>
+    <string name="tv_wallpaper_applied">Hintergrundbild angewendet</string>
+    <string name="tv_wallpaper_invalid_image">Ungültiges oder nicht erreichbares Bild</string>
+    <string name="tv_wallpaper_web_pick_file">Bild vom Smartphone auswählen</string>
+    <string name="tv_wallpaper_web_paste_url">Oder eine Bild-URL einfügen</string>
+    <string name="tv_wallpaper_web_send">Auf dem TV anwenden</string>
 </resources>

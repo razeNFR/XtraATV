@@ -1413,4 +1413,22 @@
     <string name="tv_changelog_loading">Memuat versi sebelumnya…</string>
     <string name="tv_changelog_empty">Belum ada catatan rilis yang tersedia saat ini</string>
     <string name="tv_changelog_back">Kembali ke daftar versi</string>
+    <string name="tv_wallpaper">Wallpaper</string>
+    <string name="tv_wallpaper_summary">Pola vektor sesuai warna suasana atau gambar kustom yang dikirim dari ponsel</string>
+    <string name="tv_wallpaper_default">Bawaan</string>
+    <string name="tv_wallpaper_topographic">AMOLED Topografi</string>
+    <string name="tv_wallpaper_prisms">Prisma Gaming</string>
+    <string name="tv_wallpaper_ribbons">Pita</string>
+    <string name="tv_wallpaper_aurora">Aurora</string>
+    <string name="tv_wallpaper_custom">Gambar kustom</string>
+    <string name="tv_wallpaper_qr_button">Kirim gambar / URL (QR Ponsel)</string>
+    <string name="tv_wallpaper_qr_title">Kirim wallpaper dari ponsel</string>
+    <string name="tv_wallpaper_qr_help">Pindai dengan ponsel di Wi-Fi yang sama untuk memilih gambar atau menempelkan URL gambar.</string>
+    <string name="tv_wallpaper_visibility">Visibilitas</string>
+    <string name="tv_wallpaper_blur">Buram</string>
+    <string name="tv_wallpaper_applied">Wallpaper diterapkan</string>
+    <string name="tv_wallpaper_invalid_image">Gambar tidak valid atau tidak dapat diakses</string>
+    <string name="tv_wallpaper_web_pick_file">Pilih gambar dari ponsel</string>
+    <string name="tv_wallpaper_web_paste_url">Atau tempel URL gambar</string>
+    <string name="tv_wallpaper_web_send">Terapkan di TV</string>
 </resources>

@@ -1412,4 +1412,22 @@
     <string name="tv_changelog_loading">جارٍ تحميل الإصدارات السابقة…</string>
     <string name="tv_changelog_empty">لا توجد ملاحظات إصدار متاحة حاليًا</string>
     <string name="tv_changelog_back">العودة إلى الإصدارات</string>
+    <string name="tv_wallpaper">خلفية الشاشة</string>
+    <string name="tv_wallpaper_summary">أنماط متجهة بلون الإضاءة المحيطة أو صورة مخصصة مرسلة من هاتفك</string>
+    <string name="tv_wallpaper_default">افتراضي</string>
+    <string name="tv_wallpaper_topographic">طبوغرافي AMOLED</string>
+    <string name="tv_wallpaper_prisms">مناشير الألعاب</string>
+    <string name="tv_wallpaper_ribbons">أشرطة</string>
+    <string name="tv_wallpaper_aurora">شفق قطبي</string>
+    <string name="tv_wallpaper_custom">صورة مخصصة</string>
+    <string name="tv_wallpaper_qr_button">إرسال صورة / رابط (QR الهاتف)</string>
+    <string name="tv_wallpaper_qr_title">إرسال خلفية من الهاتف</string>
+    <string name="tv_wallpaper_qr_help">امسح الرمز بهاتفك المتصل بنفس شبكة Wi-Fi لاختيار صورة أو لصق رابط صورة.</string>
+    <string name="tv_wallpaper_visibility">الوضوح</string>
+    <string name="tv_wallpaper_blur">التمويه</string>
+    <string name="tv_wallpaper_applied">تم تطبيق الخلفية</string>
+    <string name="tv_wallpaper_invalid_image">صورة غير صالحة أو تعذر الوصول إليها</string>
+    <string name="tv_wallpaper_web_pick_file">اختر صورة من الهاتف</string>
+    <string name="tv_wallpaper_web_paste_url">أو الصق رابط صورة</string>
+    <string name="tv_wallpaper_web_send">تطبيق على التلفاز</string>
 </resources>

@@ -93,6 +93,7 @@ object TvSettingIcons {
         "tv_favorites" to R.drawable.tv_ic_star,
         "tv_blacklist" to R.drawable.tv_ic_block,
         "tv_ambient_color" to R.drawable.tv_ic_palette,
+        "tv_wallpaper" to R.drawable.tv_ic_image,
         "tv_home_cards" to R.drawable.tv_ic_view_quilt,
         "tv_stream_columns" to R.drawable.tv_ic_view_quilt,
         "tv_live_alerts" to R.drawable.tv_ic_bell,
