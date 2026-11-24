@@ -2588,7 +2588,7 @@ object TvWallpaper {
             modifier = Modifier
                 .fillMaxSize()
                 .tvTopFade { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 },
-            contentPadding = PaddingValues(horizontal = 7.dp, top = 5.dp, bottom = 12.dp),
+            contentPadding = PaddingValues(start = 7.dp, end = 7.dp, top = 5.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(listRows.size) { idx ->
