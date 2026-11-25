@@ -1462,4 +1462,19 @@
     <string name="tv_wallpaper_rotation_select_all">Tümünü seç</string>
     <string name="tv_wallpaper_rotation_clear_all">Seçimi temizle</string>
     <string name="tv_wallpaper_rotation_badge">Döngü (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Ortam rengi tonlaması</string>
+    <string name="tv_wallpaper_tint_off">Kapalı</string>
+    <string name="tv_wallpaper_tint_subtle">Hafif</string>
+    <string name="tv_wallpaper_tint_full">Tam</string>
+    <string name="tv_wallpaper_web_connected">Wi-Fi ile bağlandı</string>
+    <string name="tv_wallpaper_web_tab_photos">Fotoğraflar</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">TV\'de</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · 1080p olarak ölçeklenir</string>
+    <string name="tv_wallpaper_web_ready">gönderime hazır</string>
+    <string name="tv_wallpaper_web_clear">Temizle</string>
+    <string name="tv_wallpaper_web_url_preview">Canlı 16:9 önizleme</string>
+    <string name="tv_wallpaper_web_active">Aktif</string>
+    <string name="tv_wallpaper_web_empty_tv">TV\'de henüz özel duvar kağıdı yok</string>
+    <string name="tv_wallpaper_web_deleted">Duvar kağıdı silindi</string>
 </resources>

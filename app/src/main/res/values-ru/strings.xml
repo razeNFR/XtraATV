@@ -1461,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">Выбрать все</string>
     <string name="tv_wallpaper_rotation_clear_all">Снять выделение</string>
     <string name="tv_wallpaper_rotation_badge">Автосмена (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Оттенок цвета окружения</string>
+    <string name="tv_wallpaper_tint_off">Выкл.</string>
+    <string name="tv_wallpaper_tint_subtle">Мягкий</string>
+    <string name="tv_wallpaper_tint_full">Полный</string>
+    <string name="tv_wallpaper_web_connected">Подключено по Wi-Fi</string>
+    <string name="tv_wallpaper_web_tab_photos">Фото</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">На ТВ</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · Сжатие до 1080p</string>
+    <string name="tv_wallpaper_web_ready">готово к отправке</string>
+    <string name="tv_wallpaper_web_clear">Очистить</string>
+    <string name="tv_wallpaper_web_url_preview">Предпросмотр 16:9</string>
+    <string name="tv_wallpaper_web_active">Активно</string>
+    <string name="tv_wallpaper_web_empty_tv">На ТВ пока нет своих обоев</string>
+    <string name="tv_wallpaper_web_deleted">Обои удалены</string>
 </resources>

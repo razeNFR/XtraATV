@@ -7,6 +7,8 @@ import android.graphics.BitmapFactory
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -156,6 +158,10 @@ object TvWallpaper {
     const val DEFAULT_CARD_OPACITY = 65
     const val MIN_CARD_OPACITY = 30
     const val MAX_CARD_OPACITY = 95
+
+    const val TINT_OFF = 0
+    const val TINT_SUBTLE = 1
+    const val TINT_FULL = 2
 
     const val CUSTOM_FILE_NAME = "tv_wallpaper_custom.jpg"
     private const val WALLPAPERS_DIR_NAME = "tv_wallpapers"
@@ -368,6 +374,15 @@ object TvWallpaper {
 
     fun cardOpacity(context: Context): Int =
         context.prefs().getInt(C.TV_WALLPAPER_CARD_OPACITY, DEFAULT_CARD_OPACITY).coerceIn(MIN_CARD_OPACITY, MAX_CARD_OPACITY)
+
+    fun customTint(context: Context): Int =
+        context.prefs().getInt(C.TV_WALLPAPER_CUSTOM_TINT, TINT_OFF).coerceIn(TINT_OFF, TINT_FULL)
+
+    fun customTintLabel(context: Context, mode: Int): String = when (mode) {
+        TINT_SUBTLE -> context.getString(R.string.tv_wallpaper_tint_subtle)
+        TINT_FULL -> context.getString(R.string.tv_wallpaper_tint_full)
+        else -> context.getString(R.string.tv_wallpaper_tint_off)
+    }
 
     /**
      * Smoked-glass surface color for TV cards when a wallpaper is active.
@@ -689,18 +704,20 @@ object TvWallpaper {
 
         val vis = visibility(context)
         val blurPct = blur(context)
+        val isCustom = isCustomStyleKey(activeStyle)
+        val tintMode = if (isCustom) customTint(context) else TINT_OFF
         val effectiveAccent = ambientColor ?: 0xFFCBD5E1.toInt()
-        val cacheKey = "$activeStyle|$baseColor|$effectiveAccent|${ambientColor != null}|$vis|$blurPct|$cacheGeneration"
+        val cacheKey = "$activeStyle|$baseColor|$effectiveAccent|${ambientColor != null}|$vis|$blurPct|$tintMode|$cacheGeneration"
 
         val bitmap = renderedCache.get(cacheKey) ?: run {
             val built = when {
-                isCustomStyleKey(activeStyle) -> buildCustomWallpaperBitmap(
+                isCustom -> buildCustomWallpaperBitmap(
                     context = context,
                     styleKey = activeStyle,
-                    baseColor = baseColor,
                     ambientColor = ambientColor,
                     visibilityPct = vis,
                     blurPct = blurPct,
+                    tintMode = tintMode,
                 )
                 activeStyle in STUDIO_STYLES -> buildStudioShaderBitmap(
                     styleKey = activeStyle,
@@ -724,7 +741,7 @@ object TvWallpaper {
             renderedCache.put(cacheKey, built)
             built
         }
-        return CenterCropBitmapDrawable(bitmap, baseColor)
+        return CenterCropBitmapDrawable(bitmap, if (isCustom) Color.BLACK else baseColor)
     }
 
     /** Returns a crisp `320x180` (`16:9`) preview thumbnail bitmap for the visual gallery cards. */
@@ -732,8 +749,10 @@ object TvWallpaper {
         context: Context,
         styleKey: String,
         accentColor: Int,
+        tintMode: Int = TINT_OFF,
+        visibilityPct: Int = 100,
     ): Bitmap? {
-        val key = "thumb|$styleKey|$accentColor|$cacheGeneration"
+        val key = "thumb|$styleKey|$accentColor|$tintMode|$visibilityPct|$cacheGeneration"
         previewThumbCache.get(key)?.takeIf { !it.isRecycled }?.let { return it }
 
         val baseColor = 0xFF0E0E14.toInt()
@@ -741,12 +760,25 @@ object TvWallpaper {
             isCustomStyleKey(styleKey) -> {
                 val item = listCustomImages(context).firstOrNull { it.styleKey == styleKey } ?: return null
                 ensureThumbForFile(item.file, item.thumbFile)
-                runCatching {
+                val decoded = runCatching {
                     BitmapFactory.decodeFile(
                         if (item.thumbFile.isFile) item.thumbFile.absolutePath else item.file.absolutePath,
                         BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 },
                     )
-                }.getOrNull()
+                }.getOrNull() ?: return null
+                if (tintMode == TINT_OFF && visibilityPct >= 100) {
+                    decoded
+                } else {
+                    val out = Bitmap.createBitmap(decoded.width, decoded.height, Bitmap.Config.ARGB_8888)
+                    val c = Canvas(out)
+                    c.drawColor(Color.BLACK)
+                    val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                        colorFilter = ColorMatrixColorFilter(buildCustomColorMatrix(visibilityPct, accentColor, tintMode))
+                    }
+                    c.drawBitmap(decoded, 0f, 0f, p)
+                    decoded.recycle()
+                    out
+                }
             }
             styleKey == STYLE_DEFAULT -> {
                 val bmp = Bitmap.createBitmap(THUMB_W, THUMB_H, Bitmap.Config.ARGB_8888)
@@ -813,13 +845,67 @@ object TvWallpaper {
         return decoded
     }
 
+    /**
+     * Single-pass RGB ColorMatrix combining true-black luminance darkening (zero gray wash)
+     * with optional 3-level ambient color recoloring (supports fixed and live Dynamic colors).
+     */
+    private fun buildCustomColorMatrix(
+        visibilityPct: Int,
+        ambientColor: Int?,
+        tintMode: Int,
+    ): ColorMatrix {
+        val visFrac = (visibilityPct / 100f).coerceIn(0.10f, 1f)
+        if (tintMode == TINT_OFF || ambientColor == null) {
+            return ColorMatrix(
+                floatArrayOf(
+                    visFrac, 0f, 0f, 0f, 0f,
+                    0f, visFrac, 0f, 0f, 0f,
+                    0f, 0f, visFrac, 0f, 0f,
+                    0f, 0f, 0f, 1f, 0f,
+                )
+            )
+        }
+        val hsv = FloatArray(3)
+        Color.colorToHSV(ambientColor, hsv)
+        val normColor = if (hsv[1] > 0.08f) {
+            hsv[2] = 1f
+            hsv[1] = hsv[1].coerceIn(0.35f, 1f)
+            Color.HSVToColor(hsv)
+        } else {
+            Color.WHITE
+        }
+        val r0 = Color.red(normColor) / 255f
+        val g0 = Color.green(normColor) / 255f
+        val b0 = Color.blue(normColor) / 255f
+        val tintLum = (0.2126f * r0 + 0.7152f * g0 + 0.0722f * b0).coerceAtLeast(0.32f)
+        val gain = (0.72f / tintLum).coerceIn(0.95f, 1.32f)
+        val tr = r0 * gain
+        val tg = g0 * gain
+        val tb = b0 * gain
+
+        val mix = if (tintMode == TINT_FULL) 0.92f else 0.45f
+        val keep = 1f - mix
+        val lr = 0.2126f
+        val lg = 0.7152f
+        val lb = 0.0722f
+
+        return ColorMatrix(
+            floatArrayOf(
+                visFrac * (keep + mix * tr * lr), visFrac * (mix * tr * lg), visFrac * (mix * tr * lb), 0f, 0f,
+                visFrac * (mix * tg * lr), visFrac * (keep + mix * tg * lg), visFrac * (mix * tg * lb), 0f, 0f,
+                visFrac * (mix * tb * lr), visFrac * (mix * tb * lg), visFrac * (keep + mix * tb * lb), 0f, 0f,
+                0f, 0f, 0f, 1f, 0f,
+            )
+        )
+    }
+
     private fun buildCustomWallpaperBitmap(
         context: Context,
         styleKey: String,
-        baseColor: Int,
         ambientColor: Int?,
         visibilityPct: Int,
         blurPct: Int,
+        tintMode: Int,
     ): Bitmap? {
         val raw = loadCustomRawBitmap(context, styleKey) ?: return null
         val outW = if (blurPct > 0) VECTOR_RENDER_W else min(raw.width.coerceAtLeast(640), MAX_CUSTOM_W)
@@ -827,7 +913,7 @@ object TvWallpaper {
 
         val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
-        canvas.drawColor(baseColor)
+        canvas.drawColor(Color.BLACK)
 
         val scale = max(outW.toFloat() / raw.width.toFloat(), outH.toFloat() / raw.height.toFloat())
         val dx = (outW - raw.width * scale) * 0.5f
@@ -836,7 +922,9 @@ object TvWallpaper {
             postScale(scale, scale)
             postTranslate(dx, dy)
         }
-        val imgPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        val imgPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            colorFilter = ColorMatrixColorFilter(buildCustomColorMatrix(visibilityPct, ambientColor, tintMode))
+        }
         canvas.drawBitmap(raw, matrix, imgPaint)
 
         if (blurPct > 0) {
@@ -845,13 +933,10 @@ object TvWallpaper {
         }
 
         val visFrac = (visibilityPct / 100f).coerceIn(0.10f, 1f)
-        val scrimAlpha = ((1f - visFrac * 0.84f) * 255f).roundToInt().coerceIn(36, 232)
-        canvas.drawColor(Color.argb(scrimAlpha, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor)))
-
         val vignettePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(
-                0f, 0f, outW * 0.42f, 0f,
-                Color.argb((95 * (1.15f - visFrac * 0.45f)).roundToInt().coerceIn(28, 120), 0, 0, 0),
+                0f, 0f, outW * 0.36f, 0f,
+                Color.argb((84 * (1.10f - visFrac * 0.65f)).roundToInt().coerceIn(24, 96), 0, 0, 0),
                 Color.TRANSPARENT,
                 Shader.TileMode.CLAMP,
             )
@@ -860,7 +945,8 @@ object TvWallpaper {
 
         if (ambientColor != null) {
             val light = Color.luminance(ambientColor) > 0.45f
-            val glowAlpha = ((if (light) 0x26 else 0x3C) * (0.55f + 0.45f * visFrac)).roundToInt().coerceIn(0, 110)
+            val tintFactor = if (tintMode == TINT_FULL) 0.45f else 1f
+            val glowAlpha = ((if (light) 0x22 else 0x34) * (0.45f + 0.55f * visFrac) * tintFactor).roundToInt().coerceIn(0, 96)
             val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 shader = RadialGradient(
                     outW * 0.05f,
@@ -2421,6 +2507,7 @@ object TvWallpaper {
         var currentVis by remember(refreshCounter) { mutableIntStateOf(visibility(context)) }
         var currentBlur by remember(refreshCounter) { mutableIntStateOf(blur(context)) }
         var currentCardOpacity by remember(refreshCounter) { mutableIntStateOf(cardOpacity(context)) }
+        var currentTint by remember(refreshCounter) { mutableIntStateOf(customTint(context)) }
         var rotInterval by remember(refreshCounter) { mutableIntStateOf(rotationInterval(context)) }
         var rotShuffle by remember(refreshCounter) { mutableStateOf(rotationShuffle(context)) }
         var rotPool by remember(refreshCounter) {
@@ -2442,6 +2529,7 @@ object TvWallpaper {
             currentVis = visibility(context)
             currentBlur = blur(context)
             currentCardOpacity = cardOpacity(context)
+            currentTint = customTint(context)
             rotInterval = rotationInterval(context)
             rotShuffle = rotationShuffle(context)
             rotPool = prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null)?.toSet().orEmpty()
@@ -2468,15 +2556,23 @@ object TvWallpaper {
         }
 
         fun openQrUploader() {
-            showQrUploadModal(context, scope) { newStyleKey ->
-                if (rotInterval != 0) {
-                    val nextPool = LinkedHashSet(prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null).orEmpty())
-                    nextPool.add(newStyleKey)
-                    prefs.edit { putStringSet(C.TV_WALLPAPER_ROTATION_POOL, nextPool) }
-                }
-                syncState()
-                onNotifyAndRefresh()
-            }
+            showQrUploadModal(
+                context = context,
+                scope = scope,
+                onImageAdded = { newStyleKey ->
+                    if (rotInterval != 0) {
+                        val nextPool = LinkedHashSet(prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null).orEmpty())
+                        nextPool.add(newStyleKey)
+                        prefs.edit { putStringSet(C.TV_WALLPAPER_ROTATION_POOL, nextPool) }
+                    }
+                    syncState()
+                    onNotifyAndRefresh()
+                },
+                onGalleryChanged = {
+                    syncState()
+                    onNotifyAndRefresh()
+                },
+            )
         }
 
         fun openCardOptions(styleKey: String, customItem: CustomWallpaperItem?) {
@@ -2565,6 +2661,7 @@ object TvWallpaper {
                                 putInt(C.TV_WALLPAPER_VISIBILITY, DEFAULT_VISIBILITY)
                                 putInt(C.TV_WALLPAPER_BLUR, DEFAULT_BLUR)
                                 putInt(C.TV_WALLPAPER_CARD_OPACITY, DEFAULT_CARD_OPACITY)
+                                putInt(C.TV_WALLPAPER_CUSTOM_TINT, TINT_OFF)
                                 putInt(C.TV_WALLPAPER_ROTATION_INTERVAL, 0)
                             }
                             syncState()
@@ -2643,6 +2740,7 @@ object TvWallpaper {
                     currentVis = currentVis,
                     currentBlur = currentBlur,
                     currentCardOpacity = currentCardOpacity,
+                    currentTint = currentTint,
                     customCount = customItems.size,
                     tabRequester = tabRequesters[2],
                     firstContentRequester = firstContentRequester,
@@ -2661,6 +2759,11 @@ object TvWallpaper {
                     onCardOpacityChanged = { o ->
                         currentCardOpacity = o
                         prefs.edit { putInt(C.TV_WALLPAPER_CARD_OPACITY, o) }
+                        onNotifyAndRefresh()
+                    },
+                    onTintChanged = { t ->
+                        currentTint = t
+                        prefs.edit { putInt(C.TV_WALLPAPER_CUSTOM_TINT, t) }
                         onNotifyAndRefresh()
                     },
                     onOpenQr = ::openQrUploader,
@@ -3299,6 +3402,7 @@ object TvWallpaper {
         currentVis: Int,
         currentBlur: Int,
         currentCardOpacity: Int,
+        currentTint: Int,
         customCount: Int,
         tabRequester: FocusRequester,
         firstContentRequester: FocusRequester,
@@ -3307,176 +3411,230 @@ object TvWallpaper {
         onVisChanged: (Int) -> Unit,
         onBlurChanged: (Int) -> Unit,
         onCardOpacityChanged: (Int) -> Unit,
+        onTintChanged: (Int) -> Unit,
         onOpenQr: () -> Unit,
         onDeleteAllCustom: () -> Unit,
     ) {
+        val listState = rememberLazyListState()
         val lastItemRequester = remember { FocusRequester() }
         val hasWallpaper = currentStyle != STYLE_DEFAULT
-        var previewBmp by remember(currentStyle, ambientInt) { mutableStateOf<Bitmap?>(null) }
-        LaunchedEffect(currentStyle, ambientInt) {
+        val isCustom = isCustomStyleKey(currentStyle)
+        val tintOptions = remember(context) {
+            listOf(
+                customTintLabel(context, TINT_OFF),
+                customTintLabel(context, TINT_SUBTLE),
+                customTintLabel(context, TINT_FULL),
+            )
+        }
+        var previewBmp by remember(currentStyle, ambientInt, currentVis, currentTint) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(currentStyle, ambientInt, currentVis, currentTint) {
             previewBmp = if (hasWallpaper) {
                 withContext(Dispatchers.Default) {
-                    getGalleryPreviewBitmap(context, currentStyle, ambientInt)
+                    getGalleryPreviewBitmap(
+                        context = context,
+                        styleKey = currentStyle,
+                        accentColor = ambientInt,
+                        tintMode = if (isCustom) currentTint else TINT_OFF,
+                        visibilityPct = if (isCustom) currentVis else 100,
+                    )
                 }
             } else {
                 null
             }
         }
-        Column(modifier = Modifier.fillMaxSize()) {
-            SliderRow(
-                label = context.getString(R.string.tv_wallpaper_visibility),
-                value = currentVis,
-                range = 10..100,
-                step = 5,
-                icon = R.drawable.tv_ic_oled,
-                compact = true,
-                valueText = { "$it%" },
-                modifier = Modifier
-                    .tvPanelFirstRow(firstContentRequester) { tabRequester }
-                    .onFocusChanged { if (it.isFocused) onTrackBodyRequester(firstContentRequester) },
-                onChange = onVisChanged,
-            )
-            SliderRow(
-                label = context.getString(R.string.tv_wallpaper_blur),
-                value = currentBlur,
-                range = 0..100,
-                step = 5,
-                icon = R.drawable.tv_ic_tune,
-                compact = true,
-                valueText = { "$it%" },
-                onChange = onBlurChanged,
-            )
-            if (hasWallpaper) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .tvTopFade { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 },
+            contentPadding = PaddingValues(bottom = 6.dp),
+        ) {
+            item {
                 SliderRow(
-                    label = context.getString(R.string.tv_wallpaper_card_opacity),
-                    value = currentCardOpacity,
-                    range = MIN_CARD_OPACITY..MAX_CARD_OPACITY,
+                    label = context.getString(R.string.tv_wallpaper_visibility),
+                    value = currentVis,
+                    range = 10..100,
                     step = 5,
-                    icon = R.drawable.tv_ic_opacity,
+                    icon = R.drawable.tv_ic_oled,
                     compact = true,
                     valueText = { "$it%" },
-                    onChange = onCardOpacityChanged,
-                )
-                // Compact live preview of smoked-glass card & pill translucency over the active wallpaper
-                val previewShape = RoundedCornerShape(12.dp)
-                val cardAlpha = currentCardOpacity / 100f
-                val pillAlpha = (currentCardOpacity * 0.56f).roundToInt().coerceIn(24, 54) / 100f
-                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 6.dp)
-                        .height(66.dp)
-                        .clip(previewShape)
-                        .background(ComposeColor(0xFF0E0E14))
-                        .border(1.dp, ComposeColor(0x26FFFFFF), previewShape),
-                ) {
-                    previewBmp?.takeIf { !it.isRecycled }?.let { bmp ->
-                        Image(
-                            bitmap = bmp.asImageBitmap(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        .tvPanelFirstRow(firstContentRequester) { tabRequester }
+                        .onFocusChanged { if (it.isFocused) onTrackBodyRequester(firstContentRequester) },
+                    onChange = onVisChanged,
+                )
+            }
+            item {
+                SliderRow(
+                    label = context.getString(R.string.tv_wallpaper_blur),
+                    value = currentBlur,
+                    range = 0..100,
+                    step = 5,
+                    icon = R.drawable.tv_ic_tune,
+                    compact = true,
+                    valueText = { "$it%" },
+                    onChange = onBlurChanged,
+                )
+            }
+            if (isCustom) {
+                item {
+                    SelectorRow(
+                        label = context.getString(R.string.tv_wallpaper_custom_tint),
+                        options = tintOptions,
+                        selected = currentTint.coerceIn(TINT_OFF, TINT_FULL),
+                        icon = R.drawable.tv_ic_palette,
+                        compact = true,
+                    ) { idx ->
+                        onTintChanged(idx.coerceIn(TINT_OFF, TINT_FULL))
                     }
-                    Row(
+                }
+            }
+            if (hasWallpaper) {
+                item {
+                    SliderRow(
+                        label = context.getString(R.string.tv_wallpaper_card_opacity),
+                        value = currentCardOpacity,
+                        range = MIN_CARD_OPACITY..MAX_CARD_OPACITY,
+                        step = 5,
+                        icon = R.drawable.tv_ic_opacity,
+                        compact = true,
+                        valueText = { "$it%" },
+                        onChange = onCardOpacityChanged,
+                    )
+                }
+                item {
+                    // Compact live preview of smoked-glass card & pill translucency over the active wallpaper
+                    val previewShape = RoundedCornerShape(12.dp)
+                    val cardAlpha = currentCardOpacity / 100f
+                    val pillAlpha = (currentCardOpacity * 0.56f).roundToInt().coerceIn(24, 54) / 100f
+                    Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .fillMaxWidth()
+                            .padding(top = 4.dp, bottom = 6.dp)
+                            .height(66.dp)
+                            .clip(previewShape)
+                            .background(ComposeColor(0xFF000000))
+                            .border(1.dp, ComposeColor(0x26FFFFFF), previewShape),
                     ) {
-                        val miniCardShape = RoundedCornerShape(10.dp)
+                        previewBmp?.takeIf { !it.isRecycled }?.let { bmp ->
+                            Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         Row(
                             modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                                .clip(miniCardShape)
-                                .background(ComposeColor(0xFF0B0C10).copy(alpha = cardAlpha))
-                                .background(cardGlassSheenBrush)
-                                .border(1.dp, cardGlassRimBrush, miniCardShape)
-                                .padding(horizontal = 10.dp),
+                                .fillMaxSize()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            val miniCardShape = RoundedCornerShape(10.dp)
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .clip(miniCardShape)
+                                    .background(ComposeColor(0xFF0B0C10).copy(alpha = cardAlpha))
+                                    .background(cardGlassSheenBrush)
+                                    .border(1.dp, cardGlassRimBrush, miniCardShape)
+                                    .padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .clip(CircleShape)
+                                        .background(ComposeColor(ambientInt).copy(alpha = 0.85f)),
+                                )
+                                Spacer(Modifier.width(9.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = context.getString(R.string.tv_wallpaper_card_opacity),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = ComposeColor.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = "$currentCardOpacity%",
+                                        fontSize = 10.sp,
+                                        color = TvColors.secondaryText,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                            val miniPillShape = RoundedCornerShape(18.dp)
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(CircleShape)
-                                    .background(ComposeColor(ambientInt).copy(alpha = 0.85f)),
-                            )
-                            Spacer(Modifier.width(9.dp))
-                            Column(Modifier.weight(1f)) {
+                                    .clip(miniPillShape)
+                                    .background(ComposeColor(0xFF0B0C10).copy(alpha = pillAlpha))
+                                    .border(1.dp, ComposeColor(0x33FFFFFF), miniPillShape)
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
                                 Text(
-                                    text = context.getString(R.string.tv_wallpaper_card_opacity),
+                                    text = context.getString(R.string.refresh),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = ComposeColor.White,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = "$currentCardOpacity%",
-                                    fontSize = 10.sp,
-                                    color = TvColors.secondaryText,
-                                    maxLines = 1,
                                 )
                             }
-                        }
-                        val miniPillShape = RoundedCornerShape(18.dp)
-                        Box(
-                            modifier = Modifier
-                                .clip(miniPillShape)
-                                .background(ComposeColor(0xFF0B0C10).copy(alpha = pillAlpha))
-                                .border(1.dp, ComposeColor(0x33FFFFFF), miniPillShape)
-                                .padding(horizontal = 12.dp, vertical = 7.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = context.getString(R.string.refresh),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = ComposeColor.White,
-                                maxLines = 1,
-                            )
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(6.dp))
-            ButtonRow(
-                label = context.getString(R.string.tv_wallpaper_qr_button),
-                icon = R.drawable.tv_ic_wifi,
-                compact = true,
-                modifier = if (customCount == 0) {
-                    Modifier
-                        .tvPanelLastRow(lastItemRequester, footerRequester)
-                        .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) }
-                } else {
-                    Modifier
-                },
-                onClick = onOpenQr,
-            )
-            if (customCount > 0) {
+            item {
+                Spacer(Modifier.height(4.dp))
                 ButtonRow(
-                    label = context.getString(R.string.tv_wallpaper_delete_all_custom, customCount),
-                    icon = R.drawable.tv_ic_delete,
+                    label = context.getString(R.string.tv_wallpaper_qr_button),
+                    icon = R.drawable.tv_ic_wifi,
                     compact = true,
-                    modifier = Modifier
-                        .tvPanelLastRow(lastItemRequester, footerRequester)
-                        .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) },
-                    onClick = onDeleteAllCustom,
+                    modifier = if (customCount == 0) {
+                        Modifier
+                            .tvPanelLastRow(lastItemRequester, footerRequester)
+                            .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) }
+                    } else {
+                        Modifier
+                    },
+                    onClick = onOpenQr,
                 )
+            }
+            if (customCount > 0) {
+                item {
+                    ButtonRow(
+                        label = context.getString(R.string.tv_wallpaper_delete_all_custom, customCount),
+                        icon = R.drawable.tv_ic_delete,
+                        compact = true,
+                        modifier = Modifier
+                            .tvPanelLastRow(lastItemRequester, footerRequester)
+                            .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) },
+                        onClick = onDeleteAllCustom,
+                    )
+                }
             }
         }
     }
 
     // =========================================================================
-    // PERSISTENT MULTI-IMAGE PHONE QR UPLOAD SERVER & MODAL
+    // PERSISTENT MULTI-IMAGE PHONE QR UPLOAD SERVER & MODAL (STUDIO GLASS)
     // =========================================================================
+
+    private sealed interface WebAction {
+        data class Added(val styleKey: String) : WebAction
+        data class Applied(val styleKey: String) : WebAction
+        data object Deleted : WebAction
+    }
 
     fun showQrUploadModal(
         context: Context,
         scope: CoroutineScope,
         onImageAdded: (newStyleKey: String) -> Unit,
+        onGalleryChanged: () -> Unit = {},
     ) {
         val appContext = context.applicationContext
         scope.launch {
@@ -3577,17 +3735,35 @@ object TvWallpaper {
                 while (!server.isClosed) {
                     val client = runCatching { server.accept() }.getOrNull() ?: break
                     launch(Dispatchers.IO) {
-                        val savedKey = handleWallpaperClient(client, appContext)
-                        if (savedKey != null) {
-                            appContext.prefs().edit {
-                                putString(C.TV_WALLPAPER, savedKey)
-                                putLong(PREF_ROTATION_LAST_MS, System.currentTimeMillis())
+                        when (val action = handleWallpaperClient(client, appContext)) {
+                            is WebAction.Added -> {
+                                appContext.prefs().edit {
+                                    putString(C.TV_WALLPAPER, action.styleKey)
+                                    putLong(PREF_ROTATION_LAST_MS, System.currentTimeMillis())
+                                }
+                                withContext(Dispatchers.Main) {
+                                    sessionAddedCount.intValue++
+                                    onImageAdded(action.styleKey)
+                                    TvToast.makeText(appContext, R.string.tv_wallpaper_applied, Toast.LENGTH_SHORT).show()
+                                }
                             }
-                            withContext(Dispatchers.Main) {
-                                sessionAddedCount.intValue++
-                                onImageAdded(savedKey)
-                                TvToast.makeText(appContext, R.string.tv_wallpaper_applied, Toast.LENGTH_SHORT).show()
+                            is WebAction.Applied -> {
+                                appContext.prefs().edit {
+                                    putString(C.TV_WALLPAPER, action.styleKey)
+                                    putLong(PREF_ROTATION_LAST_MS, System.currentTimeMillis())
+                                }
+                                withContext(Dispatchers.Main) {
+                                    onGalleryChanged()
+                                    TvToast.makeText(appContext, R.string.tv_wallpaper_applied, Toast.LENGTH_SHORT).show()
+                                }
                             }
+                            WebAction.Deleted -> {
+                                withContext(Dispatchers.Main) {
+                                    onGalleryChanged()
+                                    TvToast.makeText(appContext, R.string.tv_wallpaper_web_deleted, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            null -> Unit
                         }
                     }
                 }
@@ -3599,7 +3775,7 @@ object TvWallpaper {
         }
     }
 
-    private fun handleWallpaperClient(socket: Socket, context: Context): String? {
+    private fun handleWallpaperClient(socket: Socket, context: Context): WebAction? {
         socket.use { s ->
             s.soTimeout = 30_000
             val input = s.getInputStream()
@@ -3613,8 +3789,89 @@ object TvWallpaper {
                 }
             }
             val out = s.getOutputStream()
+            val parts = requestLine.split(' ')
+            val method = parts.getOrNull(0).orEmpty()
+            val rawPath = parts.getOrNull(1).orEmpty().substringBefore('?')
 
-            if (requestLine.startsWith("POST /upload") && contentLength in 1..MAX_UPLOAD_BYTES) {
+            if (method == "GET" && rawPath == "/list") {
+                val items = listCustomImages(context)
+                val activeKey = style(context)
+                val activeFile = if (activeKey.startsWith(CUSTOM_PREFIX)) activeKey.removePrefix(CUSTOM_PREFIX) else ""
+                val json = buildString {
+                    append("{\"active\":\"")
+                    append(activeFile.replace("\"", ""))
+                    append("\",\"items\":[")
+                    items.forEachIndexed { idx, item ->
+                        if (idx > 0) append(',')
+                        append("{\"file\":\"")
+                        append(item.fileName.replace("\"", ""))
+                        append("\",\"index\":")
+                        append(item.displayIndex)
+                        append('}')
+                    }
+                    append("]}")
+                }
+                writeJsonResponse(out, 200, json)
+                return null
+            }
+
+            if (method == "GET" && rawPath.startsWith("/thumb/")) {
+                val fileName = rawPath.removePrefix("/thumb/")
+                val valid = fileName.startsWith("wp_") &&
+                    fileName.endsWith(".jpg") &&
+                    !fileName.contains('/') &&
+                    !fileName.contains('\\') &&
+                    !fileName.contains("..")
+                val item = if (valid) listCustomImages(context).firstOrNull { it.fileName == fileName } else null
+                if (item == null) {
+                    writePlainResponse(out, 404, "Not Found")
+                    return null
+                }
+                ensureThumbForFile(item.file, item.thumbFile)
+                val bytes = runCatching {
+                    val src = if (item.thumbFile.isFile && item.thumbFile.length() > 128L) item.thumbFile else item.file
+                    src.readBytes()
+                }.getOrNull()
+                if (bytes != null && bytes.isNotEmpty()) {
+                    writeBytesResponse(out, 200, "image/jpeg", bytes, cacheHeader = "public, max-age=3600")
+                } else {
+                    writePlainResponse(out, 404, "Not Found")
+                }
+                return null
+            }
+
+            if (method == "POST" && rawPath == "/apply" && contentLength in 1..512) {
+                val rawBytes = readExactBytes(input, contentLength) ?: run {
+                    writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
+                    return null
+                }
+                val fileName = String(rawBytes, Charsets.UTF_8).trim()
+                val item = listCustomImages(context).firstOrNull { it.fileName == fileName }
+                if (item != null) {
+                    writePlainResponse(out, 200, context.getString(R.string.tv_wallpaper_applied))
+                    return WebAction.Applied(item.styleKey)
+                }
+                writePlainResponse(out, 404, "Not Found")
+                return null
+            }
+
+            if (method == "POST" && rawPath == "/delete" && contentLength in 1..512) {
+                val rawBytes = readExactBytes(input, contentLength) ?: run {
+                    writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
+                    return null
+                }
+                val fileName = String(rawBytes, Charsets.UTF_8).trim()
+                val item = listCustomImages(context).firstOrNull { it.fileName == fileName }
+                if (item != null) {
+                    deleteCustomImage(context, item.fileName)
+                    writePlainResponse(out, 200, context.getString(R.string.tv_wallpaper_web_deleted))
+                    return WebAction.Deleted
+                }
+                writePlainResponse(out, 404, "Not Found")
+                return null
+            }
+
+            if (method == "POST" && rawPath == "/upload" && contentLength in 1..MAX_UPLOAD_BYTES) {
                 val body = readExactBytes(input, contentLength) ?: run {
                     writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
                     return null
@@ -3622,13 +3879,13 @@ object TvWallpaper {
                 val savedKey = decodeAndSaveNewCustomImage(context, body)
                 if (savedKey != null) {
                     writePlainResponse(out, 200, context.getString(R.string.tv_wallpaper_applied))
-                } else {
-                    writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
+                    return WebAction.Added(savedKey)
                 }
-                return savedKey
+                writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
+                return null
             }
 
-            if (requestLine.startsWith("POST /url") && contentLength in 1..8192) {
+            if (method == "POST" && rawPath == "/url" && contentLength in 1..8192) {
                 val rawBytes = readExactBytes(input, contentLength) ?: run {
                     writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
                     return null
@@ -3654,55 +3911,200 @@ object TvWallpaper {
                 val savedKey = if (fetched != null) decodeAndSaveNewCustomImage(context, fetched) else null
                 if (savedKey != null) {
                     writePlainResponse(out, 200, context.getString(R.string.tv_wallpaper_applied))
-                } else {
-                    writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
+                    return WebAction.Added(savedKey)
                 }
-                return savedKey
+                writePlainResponse(out, 400, context.getString(R.string.tv_wallpaper_invalid_image))
+                return null
             }
 
+            val accentInt = TvAmbient.color(context) ?: TvAccent.onDark
+            val accentHex = String.format(java.util.Locale.US, "#%06X", accentInt and 0xFFFFFF)
+            val accentR = Color.red(accentInt)
+            val accentG = Color.green(accentInt)
+            val accentB = Color.blue(accentInt)
+
             val pageTitle = escapeHtml(context.getString(R.string.tv_wallpaper_qr_title))
+            val connectedLabel = escapeHtml(context.getString(R.string.tv_wallpaper_web_connected))
+            val tabPhotos = escapeHtml(context.getString(R.string.tv_wallpaper_web_tab_photos))
+            val tabUrl = escapeHtml(context.getString(R.string.tv_wallpaper_web_tab_url))
+            val tabTv = escapeHtml(context.getString(R.string.tv_wallpaper_web_tab_tv))
             val pickLabel = escapeHtml(context.getString(R.string.tv_wallpaper_web_pick_file))
+            val pickHint = escapeHtml(context.getString(R.string.tv_wallpaper_web_pick_hint))
+            val readyLabel = escapeJs(context.getString(R.string.tv_wallpaper_web_ready))
+            val clearLabel = escapeHtml(context.getString(R.string.tv_wallpaper_web_clear))
             val urlLabel = escapeHtml(context.getString(R.string.tv_wallpaper_web_paste_url))
+            val urlPreviewLabel = escapeHtml(context.getString(R.string.tv_wallpaper_web_url_preview))
             val sendLabel = escapeHtml(context.getString(R.string.tv_wallpaper_web_send))
+            val activeLabel = escapeJs(context.getString(R.string.tv_wallpaper_web_active))
+            val emptyTvLabel = escapeJs(context.getString(R.string.tv_wallpaper_web_empty_tv))
+            val customLabel = escapeJs(context.getString(R.string.tv_wallpaper_custom))
             val doneMsg = escapeJs(context.getString(R.string.tv_wallpaper_applied))
+            val deletedMsg = escapeJs(context.getString(R.string.tv_wallpaper_web_deleted))
             val errMsg = escapeJs(context.getString(R.string.tv_wallpaper_invalid_image))
 
             val html = """
                 <!DOCTYPE html><html><head><meta charset="utf-8">
-                <meta name="viewport" content="width=device-width,initial-scale=1">
+                <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+                <meta name="theme-color" content="#0b0b12">
                 <title>Xtra TV</title>
                 <style>
-                *{box-sizing:border-box}
-                body{background:#0e0e13;color:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:26px 16px;text-align:center}
-                .card{max-width:440px;margin:0 auto 16px;background:#1a1924;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:20px}
-                h2{margin:0 0 6px;font-size:22px}
-                p.sub{margin:0 0 20px;color:#b8b8c7;font-size:14px}
-                label.lbl{display:block;font-weight:600;margin-bottom:12px;font-size:15px}
-                input[type=file]{display:block;width:100%;margin:0 auto 14px;color:#ddd;font-size:14px}
-                input[type=url]{width:100%;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:#101017;color:#fff;font-size:15px;margin-bottom:12px}
-                button{width:100%;padding:13px 20px;background:#9147ff;color:#fff;border:0;border-radius:10px;font-weight:700;font-size:16px;cursor:pointer}
-                button:disabled{opacity:.55}
-                #st{margin-top:12px;font-size:14px;font-weight:600;min-height:20px;color:#c4b5fd}
-                #cnt{margin-top:6px;font-size:13px;color:#a1a1b5}
+                :root{--ac:$accentHex;--ar:$accentR;--ag:$accentG;--ab:$accentB;--bg:#0b0b12;--card:rgba(22,22,33,.78);--bd:rgba(255,255,255,.10);--t1:#f5f6fa;--t2:#9ea3b8}
+                *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+                body{margin:0;min-height:100vh;background:radial-gradient(ellipse 95% 42% at 12% 0%,rgba(var(--ar),var(--ag),var(--ab),.26),transparent 72%),radial-gradient(ellipse 75% 40% at 92% 100%,rgba(var(--ar),var(--ag),var(--ab),.12),transparent 70%),var(--bg);color:var(--t1);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:max(20px,env(safe-area-inset-top)) 16px max(28px,env(safe-area-inset-bottom))}
+                .wrap{max-width:460px;margin:0 auto}
+                .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:0 2px}
+                .brand{display:flex;align-items:center;gap:11px}
+                .logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,rgba(var(--ar),var(--ag),var(--ab),.95),rgba(var(--ar),var(--ag),var(--ab),.55));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:#fff;box-shadow:0 6px 20px rgba(var(--ar),var(--ag),var(--ab),.35)}
+                .title{font-size:18px;font-weight:700;letter-spacing:-.2px;line-height:1.15}
+                .sub{font-size:12.5px;color:var(--t2);margin-top:2px}
+                .wifi{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.28);color:#6ee7b7;font-size:11.5px;font-weight:600;white-space:nowrap}
+                .dot{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399}
+                .tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid var(--bd);margin-bottom:14px}
+                .tab{border:0;background:transparent;color:var(--t2);padding:10px 6px;border-radius:10px;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .18s ease}
+                .tab.on{background:rgba(var(--ar),var(--ag),var(--ab),.24);color:#fff;box-shadow:inset 0 0 0 1px rgba(var(--ar),var(--ag),var(--ab),.55)}
+                .cnt-pill{padding:1px 6px;border-radius:999px;background:rgba(255,255,255,.14);font-size:11px;font-weight:700;color:#fff}
+                .card{background:var(--card);border:1px solid var(--bd);border-radius:20px;padding:18px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 16px 40px rgba(0,0,0,.35)}
+                .pane{display:none}.pane.on{display:block}
+                .drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:28px 16px;border-radius:16px;border:1.5px dashed rgba(var(--ar),var(--ag),var(--ab),.50);background:linear-gradient(180deg,rgba(var(--ar),var(--ag),var(--ab),.12),rgba(255,255,255,.02));cursor:pointer;text-align:center;transition:transform .15s,border-color .15s}
+                .drop:active{transform:scale(.985)}
+                .drop-ic{width:46px;height:46px;border-radius:14px;background:rgba(var(--ar),var(--ag),var(--ab),.22);border:1px solid rgba(var(--ar),var(--ag),var(--ab),.45);display:flex;align-items:center;justify-content:center;color:#fff}
+                .drop-t{font-size:15px;font-weight:700;color:#fff}
+                .drop-h{font-size:12px;color:var(--t2)}
+                #f{display:none}
+                .qhdr{display:none;align-items:center;justify-content:space-between;margin:14px 0 8px}
+                .qhdr.on{display:flex}
+                .qcnt{font-size:12.5px;font-weight:600;color:#d6d9e8}
+                .qclr{border:0;background:rgba(255,255,255,.08);color:var(--t2);font-size:12px;font-weight:600;padding:5px 10px;border-radius:8px;cursor:pointer}
+                .qgrid{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+                .qgrid::-webkit-scrollbar{display:none}
+                .qitem{position:relative;flex:0 0 116px;aspect-ratio:16/9;border-radius:11px;overflow:hidden;border:1px solid rgba(255,255,255,.16);background:#000}
+                .qitem img{width:100%;height:100%;object-fit:cover;display:block}
+                .qrm{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.72);color:#fff;font-size:14px;line-height:22px;padding:0;cursor:pointer}
+                .prog{display:none;height:5px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden;margin:12px 0 2px}
+                .prog.on{display:block}
+                .pbar{height:100%;width:0;background:linear-gradient(90deg,var(--ac),#fff);border-radius:999px;transition:width .22s ease}
+                .btn{width:100%;margin-top:14px;padding:14px 18px;border:0;border-radius:13px;background:linear-gradient(135deg,var(--ac),rgba(var(--ar),var(--ag),var(--ab),.78));color:#fff;font-size:15.5px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(var(--ar),var(--ag),var(--ab),.30);transition:opacity .15s,transform .15s}
+                .btn:active{transform:scale(.985)}
+                .btn:disabled{opacity:.42;box-shadow:none;cursor:not-allowed}
+                .lbl{display:block;font-size:13.5px;font-weight:600;color:#d6d9e8;margin-bottom:8px}
+                .uwrap{position:relative;margin-bottom:12px}
+                .uin{width:100%;padding:13px 38px 13px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(8,9,14,.85);color:#fff;font-size:14.5px;outline:none}
+                .uin:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(var(--ar),var(--ag),var(--ab),.22)}
+                .uclr{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:15px;display:none;align-items:center;justify-content:center;cursor:pointer}
+                .uclr.on{display:flex}
+                .uprev{position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;border:1px solid var(--bd);background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:13px}
+                .uprev img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+                .uprev.ok img{display:block}
+                .uprev.ok span{display:none}
+                .tvgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+                .tvitem{position:relative;aspect-ratio:16/9;border-radius:13px;overflow:hidden;border:1.5px solid rgba(255,255,255,.12);background:#000;cursor:pointer;transition:transform .14s,border-color .14s}
+                .tvitem:active{transform:scale(.97)}
+                .tvitem.act{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac),0 8px 20px rgba(var(--ar),var(--ag),var(--ab),.25)}
+                .tvitem img{width:100%;height:100%;object-fit:cover;display:block}
+                .tvgrad{position:absolute;inset:auto 0 0 0;height:46%;background:linear-gradient(transparent,rgba(0,0,0,.85));display:flex;align-items:flex-end;justify-content:space-between;padding:7px 9px}
+                .tvnm{font-size:12px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+                .tvbadge{position:absolute;top:6px;left:6px;padding:3px 8px;border-radius:999px;background:var(--ac);color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.2px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+                .tvdel{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(12,12,18,.78);color:#fda4af;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+                .tvdel:active{background:rgba(244,63,94,.85);color:#fff}
+                .empty{padding:34px 14px;text-align:center;color:var(--t2);font-size:13.5px}
+                .toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;pointer-events:none;background:rgba(18,19,28,.95);border:1px solid rgba(255,255,255,.16);color:#fff;padding:11px 18px;border-radius:999px;font-size:13.5px;font-weight:600;box-shadow:0 12px 30px rgba(0,0,0,.5);transition:all .22s ease;z-index:50;max-width:90vw;text-align:center}
+                .toast.on{opacity:1;transform:translate(-50%,0)}
+                .toast.ok{border-color:rgba(52,211,153,.5);color:#a7f3d0}
+                .toast.err{border-color:rgba(251,113,133,.5);color:#fecdd3}
                 </style></head><body>
-                <h2>Xtra TV</h2>
-                <p class="sub">$pageTitle</p>
-                <div class="card">
-                  <label class="lbl">$pickLabel</label>
-                  <input type="file" id="f" accept="image/*" multiple>
-                  <button id="bf" onclick="sendFiles()">$sendLabel</button>
+                <div class="wrap">
+                  <div class="hdr">
+                    <div class="brand">
+                      <div class="logo">X</div>
+                      <div><div class="title">Xtra TV</div><div class="sub">$pageTitle</div></div>
+                    </div>
+                    <div class="wifi"><span class="dot"></span>$connectedLabel</div>
+                  </div>
+                  <div class="tabs">
+                    <button class="tab on" id="t0" onclick="goTab(0)">$tabPhotos</button>
+                    <button class="tab" id="t1" onclick="goTab(1)">$tabUrl</button>
+                    <button class="tab" id="t2" onclick="goTab(2)">$tabTv <span class="cnt-pill" id="tvcnt">0</span></button>
+                  </div>
+                  <div class="card">
+                    <div class="pane on" id="p0">
+                      <label class="drop" for="f">
+                        <div class="drop-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
+                        <div class="drop-t">$pickLabel</div>
+                        <div class="drop-h">$pickHint</div>
+                      </label>
+                      <input type="file" id="f" accept="image/*" multiple onchange="onPick(this)">
+                      <div class="qhdr" id="qhdr"><span class="qcnt" id="qcnt"></span><button class="qclr" onclick="clearQ()">$clearLabel</button></div>
+                      <div class="qgrid" id="qgrid"></div>
+                      <div class="prog" id="prog"><div class="pbar" id="pbar"></div></div>
+                      <button class="btn" id="bf" onclick="sendFiles()" disabled>$sendLabel</button>
+                    </div>
+                    <div class="pane" id="p1">
+                      <label class="lbl" for="u">$urlLabel</label>
+                      <div class="uwrap">
+                        <input class="uin" type="url" id="u" placeholder="https://..." oninput="onUrlInput()">
+                        <button class="uclr" id="uclr" onclick="clearUrl()">&times;</button>
+                      </div>
+                      <div class="uprev" id="uprev"><span>$urlPreviewLabel</span><img id="uimg" alt=""></div>
+                      <button class="btn" id="bu" onclick="sendUrl()" disabled>$sendLabel</button>
+                    </div>
+                    <div class="pane" id="p2">
+                      <div id="tvbox"></div>
+                    </div>
+                  </div>
                 </div>
-                <div class="card">
-                  <label class="lbl">$urlLabel</label>
-                  <input type="url" id="u" placeholder="https://...">
-                  <button id="bu" onclick="sendUrl()">$sendLabel</button>
-                </div>
-                <div id="st"></div>
-                <div id="cnt"></div>
+                <div class="toast" id="toast"></div>
                 <script>
-                var sentTotal=0;
-                function setStatus(m,ok){var e=document.getElementById('st');e.style.color=ok?'#6ee7b7':'#fb7185';e.innerText=m;}
-                function setBusy(b){document.getElementById('bf').disabled=b;document.getElementById('bu').disabled=b;}
+                var MSG_DONE='$doneMsg',MSG_DEL='$deletedMsg',MSG_ERR='$errMsg',LBL_READY='$readyLabel',LBL_ACT='$activeLabel',LBL_EMPTY='$emptyTvLabel',LBL_CUSTOM='$customLabel';
+                var queue=[],toastT=null,busy=false;
+                function goTab(i){
+                  for(var k=0;k<3;k++){
+                    document.getElementById('t'+k).className='tab'+(k===i?' on':'');
+                    document.getElementById('p'+k).className='pane'+(k===i?' on':'');
+                  }
+                  if(i===2)loadTv();
+                }
+                function showToast(m,ok){
+                  var e=document.getElementById('toast');
+                  e.innerText=m;
+                  e.className='toast on '+(ok?'ok':'err');
+                  clearTimeout(toastT);
+                  toastT=setTimeout(function(){e.className='toast';},2600);
+                }
+                function onPick(inp){
+                  var list=Array.prototype.slice.call(inp.files||[]);
+                  for(var i=0;i<list.length;i++){
+                    queue.push({file:list[i],url:URL.createObjectURL(list[i])});
+                  }
+                  inp.value='';
+                  renderQ();
+                }
+                function removeQ(idx){
+                  var it=queue.splice(idx,1)[0];
+                  if(it&&it.url)URL.revokeObjectURL(it.url);
+                  renderQ();
+                }
+                function clearQ(){
+                  for(var i=0;i<queue.length;i++){if(queue[i].url)URL.revokeObjectURL(queue[i].url);}
+                  queue=[];
+                  renderQ();
+                }
+                function renderQ(){
+                  var g=document.getElementById('qgrid'),h=document.getElementById('qhdr'),c=document.getElementById('qcnt'),b=document.getElementById('bf');
+                  g.innerHTML='';
+                  if(!queue.length){h.className='qhdr';b.disabled=true;return;}
+                  h.className='qhdr on';
+                  c.innerText=queue.length+' '+LBL_READY;
+                  b.disabled=busy;
+                  for(var i=0;i<queue.length;i++){
+                    var d=document.createElement('div');d.className='qitem';
+                    var im=document.createElement('img');im.src=queue[i].url;d.appendChild(im);
+                    var rm=document.createElement('button');rm.className='qrm';rm.innerHTML='&times;';
+                    rm.setAttribute('data-i',i);
+                    rm.onclick=function(){removeQ(parseInt(this.getAttribute('data-i'),10));};
+                    d.appendChild(rm);
+                    g.appendChild(d);
+                  }
+                }
                 function resizeOne(file){
                   return new Promise(function(resolve){
                     if(typeof createImageBitmap!=='function'){resolve(file);return;}
@@ -3717,40 +4119,104 @@ object TvWallpaper {
                   });
                 }
                 async function sendFiles(){
-                  var input=document.getElementById('f');
-                  var files=Array.prototype.slice.call(input.files||[]);
-                  if(!files.length)return;
-                  setBusy(true);
-                  var okCount=0;
-                  for(var i=0;i<files.length;i++){
-                    setStatus((i+1)+' / '+files.length+' ...',true);
+                  if(!queue.length||busy)return;
+                  busy=true;
+                  document.getElementById('bf').disabled=true;
+                  var pr=document.getElementById('prog'),pb=document.getElementById('pbar');
+                  pr.className='prog on';pb.style.width='6%';
+                  var items=queue.slice(),ok=0;
+                  for(var i=0;i<items.length;i++){
                     try{
-                      var blob=await resizeOne(files[i]);
+                      var blob=await resizeOne(items[i].file);
                       var r=await fetch('/upload',{method:'POST',body:blob});
-                      if(r.ok){okCount++;sentTotal++;}
+                      if(r.ok)ok++;
                     }catch(e){}
+                    pb.style.width=Math.round(((i+1)/items.length)*100)+'%';
                   }
-                  setBusy(false);
-                  input.value='';
-                  if(okCount>0){
-                    setStatus('$doneMsg ('+okCount+'/'+files.length+')',true);
-                    document.getElementById('cnt').innerText='✓ '+sentTotal+' image(s)';
+                  busy=false;
+                  setTimeout(function(){pr.className='prog';pb.style.width='0%';},450);
+                  clearQ();
+                  if(ok>0){
+                    showToast(MSG_DONE+(items.length>1?' ('+ok+'/'+items.length+')':''),true);
+                    loadTv();
                   }else{
-                    setStatus('$errMsg',false);
+                    showToast(MSG_ERR,false);
                   }
+                }
+                function onUrlInput(){
+                  var u=document.getElementById('u').value.trim();
+                  document.getElementById('uclr').className='uclr'+(u?' on':'');
+                  var valid=/^https?:\/\/.+/i.test(u);
+                  document.getElementById('bu').disabled=!valid||busy;
+                  var box=document.getElementById('uprev'),im=document.getElementById('uimg');
+                  if(!valid){box.className='uprev';im.removeAttribute('src');return;}
+                  im.onload=function(){box.className='uprev ok';};
+                  im.onerror=function(){box.className='uprev';};
+                  im.src=u;
+                }
+                function clearUrl(){
+                  document.getElementById('u').value='';
+                  onUrlInput();
                 }
                 function sendUrl(){
-                  var inp=document.getElementById('u');
-                  var u=inp.value.trim();if(!u)return;
-                  setBusy(true);setStatus('...',true);
+                  var u=document.getElementById('u').value.trim();
+                  if(!u||busy)return;
+                  busy=true;document.getElementById('bu').disabled=true;
                   fetch('/url',{method:'POST',body:u}).then(function(r){
-                    setBusy(false);
+                    busy=false;
                     return r.text().then(function(t){
-                      if(r.ok){sentTotal++;inp.value='';document.getElementById('cnt').innerText='✓ '+sentTotal+' image(s)';}
-                      setStatus(t||'$doneMsg',r.ok);
+                      if(r.ok){clearUrl();loadTv();showToast(t||MSG_DONE,true);}
+                      else{onUrlInput();showToast(t||MSG_ERR,false);}
                     });
-                  }).catch(function(){setBusy(false);setStatus('$errMsg',false);});
+                  }).catch(function(){busy=false;onUrlInput();showToast(MSG_ERR,false);});
                 }
+                function applyTv(fn){
+                  fetch('/apply',{method:'POST',body:fn}).then(function(r){
+                    if(r.ok){showToast(MSG_DONE,true);loadTv();}else{showToast(MSG_ERR,false);}
+                  }).catch(function(){showToast(MSG_ERR,false);});
+                }
+                function delTv(ev,fn){
+                  ev.stopPropagation();
+                  fetch('/delete',{method:'POST',body:fn}).then(function(r){
+                    if(r.ok){showToast(MSG_DEL,true);loadTv();}else{showToast(MSG_ERR,false);}
+                  }).catch(function(){showToast(MSG_ERR,false);});
+                }
+                function loadTv(){
+                  fetch('/list').then(function(r){return r.json();}).then(function(d){
+                    var items=(d&&d.items)||[],act=(d&&d.active)||'';
+                    document.getElementById('tvcnt').innerText=items.length;
+                    var box=document.getElementById('tvbox');
+                    if(!items.length){box.innerHTML='<div class="empty">'+LBL_EMPTY+'</div>';return;}
+                    var g=document.createElement('div');g.className='tvgrid';
+                    for(var i=items.length-1;i>=0;i--){
+                      (function(it){
+                        var isA=it.file===act;
+                        var el=document.createElement('div');
+                        el.className='tvitem'+(isA?' act':'');
+                        el.onclick=function(){applyTv(it.file);};
+                        var im=document.createElement('img');
+                        im.src='/thumb/'+encodeURIComponent(it.file);
+                        im.loading='lazy';
+                        el.appendChild(im);
+                        if(isA){
+                          var bd=document.createElement('div');bd.className='tvbadge';bd.innerText=LBL_ACT;el.appendChild(bd);
+                        }
+                        var dl=document.createElement('button');dl.className='tvdel';
+                        dl.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
+                        dl.onclick=function(ev){delTv(ev,it.file);};
+                        el.appendChild(dl);
+                        var gr=document.createElement('div');gr.className='tvgrad';
+                        var nm=document.createElement('span');nm.className='tvnm';
+                        nm.innerText=LBL_CUSTOM+' #'+it.index;
+                        gr.appendChild(nm);
+                        el.appendChild(gr);
+                        g.appendChild(el);
+                      })(items[i]);
+                    }
+                    box.innerHTML='';box.appendChild(g);
+                  }).catch(function(){});
+                }
+                loadTv();
                 </script></body></html>
             """.trimIndent().toByteArray(Charsets.UTF_8)
             val header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${html.size}\r\nConnection: close\r\n\r\n"
@@ -3918,11 +4384,36 @@ object TvWallpaper {
         return 0
     }
 
+    private fun httpStatusText(status: Int): String = when (status) {
+        200 -> "200 OK"
+        404 -> "404 Not Found"
+        else -> "400 Bad Request"
+    }
+
     private fun writePlainResponse(out: java.io.OutputStream, status: Int, text: String) {
-        val statusText = if (status == 200) "200 OK" else "400 Bad Request"
-        val bytes = text.toByteArray(Charsets.UTF_8)
-        val header = "HTTP/1.1 $statusText\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
-        out.write(header.toByteArray(Charsets.UTF_8))
+        writeBytesResponse(out, status, "text/plain; charset=utf-8", text.toByteArray(Charsets.UTF_8))
+    }
+
+    private fun writeJsonResponse(out: java.io.OutputStream, status: Int, json: String) {
+        writeBytesResponse(out, status, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8), cacheHeader = "no-store")
+    }
+
+    private fun writeBytesResponse(
+        out: java.io.OutputStream,
+        status: Int,
+        contentType: String,
+        bytes: ByteArray,
+        cacheHeader: String? = null,
+    ) {
+        val sb = StringBuilder()
+        sb.append("HTTP/1.1 ").append(httpStatusText(status)).append("\r\n")
+        sb.append("Content-Type: ").append(contentType).append("\r\n")
+        if (cacheHeader != null) {
+            sb.append("Cache-Control: ").append(cacheHeader).append("\r\n")
+        }
+        sb.append("Content-Length: ").append(bytes.size).append("\r\n")
+        sb.append("Connection: close\r\n\r\n")
+        out.write(sb.toString().toByteArray(Charsets.UTF_8))
         out.write(bytes)
         out.flush()
     }

@@ -1461,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">Tout cocher</string>
     <string name="tv_wallpaper_rotation_clear_all">Tout décocher</string>
     <string name="tv_wallpaper_rotation_badge">Rotation (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Teinte couleur d\'ambiance</string>
+    <string name="tv_wallpaper_tint_off">Désactivée</string>
+    <string name="tv_wallpaper_tint_subtle">Subtile</string>
+    <string name="tv_wallpaper_tint_full">Intégrale</string>
+    <string name="tv_wallpaper_web_connected">Connecté en Wi-Fi</string>
+    <string name="tv_wallpaper_web_tab_photos">Photos</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">Sur la TV</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · Redimensionné en 1080p</string>
+    <string name="tv_wallpaper_web_ready">prête(s) à envoyer</string>
+    <string name="tv_wallpaper_web_clear">Effacer</string>
+    <string name="tv_wallpaper_web_url_preview">Aperçu 16:9 en direct</string>
+    <string name="tv_wallpaper_web_active">Actif</string>
+    <string name="tv_wallpaper_web_empty_tv">Aucun fond d\'écran perso sur la TV</string>
+    <string name="tv_wallpaper_web_deleted">Fond d\'écran supprimé</string>
 </resources>

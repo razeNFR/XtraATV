@@ -1461,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">全選</string>
     <string name="tv_wallpaper_rotation_clear_all">全部取消</string>
     <string name="tv_wallpaper_rotation_badge">輪播 (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">氛圍色著色</string>
+    <string name="tv_wallpaper_tint_off">關閉</string>
+    <string name="tv_wallpaper_tint_subtle">柔和</string>
+    <string name="tv_wallpaper_tint_full">完整</string>
+    <string name="tv_wallpaper_web_connected">已透過 Wi-Fi 連線</string>
+    <string name="tv_wallpaper_web_tab_photos">相簿</string>
+    <string name="tv_wallpaper_web_tab_url">網址</string>
+    <string name="tv_wallpaper_web_tab_tv">電視上</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG、PNG、WebP · 自動調整至 1080p</string>
+    <string name="tv_wallpaper_web_ready">張待傳送</string>
+    <string name="tv_wallpaper_web_clear">清除</string>
+    <string name="tv_wallpaper_web_url_preview">16:9 即時預覽</string>
+    <string name="tv_wallpaper_web_active">使用中</string>
+    <string name="tv_wallpaper_web_empty_tv">電視上尚無自訂桌布</string>
+    <string name="tv_wallpaper_web_deleted">已刪除桌布</string>
 </resources>

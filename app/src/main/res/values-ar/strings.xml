@@ -1461,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">تحديد الكل</string>
     <string name="tv_wallpaper_rotation_clear_all">إلغاء تحديد الكل</string>
     <string name="tv_wallpaper_rotation_badge">تبديل (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">تلوين بلون الأجواء</string>
+    <string name="tv_wallpaper_tint_off">إيقاف</string>
+    <string name="tv_wallpaper_tint_subtle">خفيف</string>
+    <string name="tv_wallpaper_tint_full">كامل</string>
+    <string name="tv_wallpaper_web_connected">متصل عبر Wi-Fi</string>
+    <string name="tv_wallpaper_web_tab_photos">الصور</string>
+    <string name="tv_wallpaper_web_tab_url">رابط</string>
+    <string name="tv_wallpaper_web_tab_tv">على التلفاز</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG وPNG وWebP · تغيير الحجم إلى 1080p</string>
+    <string name="tv_wallpaper_web_ready">جاهز للإرسال</string>
+    <string name="tv_wallpaper_web_clear">مسح</string>
+    <string name="tv_wallpaper_web_url_preview">معاينة مباشرة 16:9</string>
+    <string name="tv_wallpaper_web_active">نشط</string>
+    <string name="tv_wallpaper_web_empty_tv">لا توجد خلفيات مخصصة على التلفاز بعد</string>
+    <string name="tv_wallpaper_web_deleted">تم حذف الخلفية</string>
 </resources>

@@ -1481,4 +1481,19 @@
     <string name="tv_wallpaper_rotation_select_all">Select all</string>
     <string name="tv_wallpaper_rotation_clear_all">Unselect all</string>
     <string name="tv_wallpaper_rotation_badge">Rotation (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Ambient color tint</string>
+    <string name="tv_wallpaper_tint_off">Off</string>
+    <string name="tv_wallpaper_tint_subtle">Subtle</string>
+    <string name="tv_wallpaper_tint_full">Full</string>
+    <string name="tv_wallpaper_web_connected">Connected via Wi-Fi</string>
+    <string name="tv_wallpaper_web_tab_photos">Photos</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">On TV</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · Resized to 1080p</string>
+    <string name="tv_wallpaper_web_ready">ready to send</string>
+    <string name="tv_wallpaper_web_clear">Clear</string>
+    <string name="tv_wallpaper_web_url_preview">Live 16:9 preview</string>
+    <string name="tv_wallpaper_web_active">Active</string>
+    <string name="tv_wallpaper_web_empty_tv">No custom wallpapers on TV yet</string>
+    <string name="tv_wallpaper_web_deleted">Wallpaper deleted</string>
 </resources>
