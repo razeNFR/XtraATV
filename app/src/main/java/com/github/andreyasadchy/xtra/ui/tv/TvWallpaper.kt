@@ -2766,7 +2766,6 @@ object TvWallpaper {
                         prefs.edit { putInt(C.TV_WALLPAPER_CUSTOM_TINT, t) }
                         onNotifyAndRefresh()
                     },
-                    onOpenQr = ::openQrUploader,
                     onDeleteAllCustom = {
                         deleteAllCustomImages(context)
                         syncState()
@@ -3227,7 +3226,7 @@ object TvWallpaper {
             modifier = Modifier
                 .fillMaxSize()
                 .tvTopFade { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 },
-            contentPadding = PaddingValues(bottom = 8.dp),
+            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
         ) {
             item {
                 SelectorRow(
@@ -3412,7 +3411,6 @@ object TvWallpaper {
         onBlurChanged: (Int) -> Unit,
         onCardOpacityChanged: (Int) -> Unit,
         onTintChanged: (Int) -> Unit,
-        onOpenQr: () -> Unit,
         onDeleteAllCustom: () -> Unit,
     ) {
         val listState = rememberLazyListState()
@@ -3447,7 +3445,7 @@ object TvWallpaper {
             modifier = Modifier
                 .fillMaxSize()
                 .tvTopFade { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 },
-            contentPadding = PaddingValues(bottom = 6.dp),
+            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 6.dp),
         ) {
             item {
                 SliderRow(
@@ -3473,6 +3471,13 @@ object TvWallpaper {
                     icon = R.drawable.tv_ic_tune,
                     compact = true,
                     valueText = { "$it%" },
+                    modifier = if (!hasWallpaper && customCount == 0) {
+                        Modifier
+                            .tvPanelLastRow(lastItemRequester, footerRequester)
+                            .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) }
+                    } else {
+                        Modifier
+                    },
                     onChange = onBlurChanged,
                 )
             }
@@ -3499,6 +3504,13 @@ object TvWallpaper {
                         icon = R.drawable.tv_ic_opacity,
                         compact = true,
                         valueText = { "$it%" },
+                        modifier = if (customCount == 0) {
+                            Modifier
+                                .tvPanelLastRow(lastItemRequester, footerRequester)
+                                .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) }
+                        } else {
+                            Modifier
+                        },
                         onChange = onCardOpacityChanged,
                     )
                 }
@@ -3587,22 +3599,6 @@ object TvWallpaper {
                         }
                     }
                 }
-            }
-            item {
-                Spacer(Modifier.height(4.dp))
-                ButtonRow(
-                    label = context.getString(R.string.tv_wallpaper_qr_button),
-                    icon = R.drawable.tv_ic_wifi,
-                    compact = true,
-                    modifier = if (customCount == 0) {
-                        Modifier
-                            .tvPanelLastRow(lastItemRequester, footerRequester)
-                            .onFocusChanged { if (it.isFocused) onTrackBodyRequester(lastItemRequester) }
-                    } else {
-                        Modifier
-                    },
-                    onClick = onOpenQr,
-                )
             }
             if (customCount > 0) {
                 item {
