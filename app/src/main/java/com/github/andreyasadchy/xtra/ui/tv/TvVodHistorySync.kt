@@ -101,7 +101,7 @@ object TvVodHistorySync {
         headersList: List<Map<String, String>>,
     ): String? {
         resolveUserId(context)?.let { return it }
-        val accountKey = TvAccounts.activeAccountKey(context)
+        val accountKey = TvAccounts.activeAccountKey(context) ?: "_default"
         cachedUserIdByAccount[accountKey]?.let { return it }
         for (hdrs in headersList) {
             val fetched = xtraModule.graphQLRepository.fetchCurrentUserId(networkLibrary, hdrs)

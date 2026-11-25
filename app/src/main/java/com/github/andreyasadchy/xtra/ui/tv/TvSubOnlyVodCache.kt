@@ -12,7 +12,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -103,44 +102,17 @@ object TvSubOnlyVodCache {
             ?: "kimne78kx3ncx6brgo4mv6wki5h1ko"
         val headers = mapOf(C.HEADER_CLIENT_ID to clientId)
 
-        val aliases = buildString {
-            append("query { ")
-            ids.forEachIndexed { idx, id ->
-                append("v")
-                append(idx)
-                append(": videoPlaybackAccessToken(id: \"")
-                append(id)
-                append("\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value } ")
-            }
-            append("}")
-        }
-        val body = JSONObject().put("query", aliases).toString()
+        val result = app.xtraModule.graphQLRepository.fetchSubOnlyVodStatusBatch(
+            networkLibrary = networkLibrary,
+            headers = headers,
+            videoIds = ids,
+        ) ?: return
 
-        val raw = runCatching {
-            app.xtraModule.graphQLRepository.sendPersistedQuery(networkLibrary, headers, body)
-        }.getOrNull() ?: return
-
-        val data = runCatching { JSONObject(raw).optJSONObject("data") }.getOrNull() ?: return
         if (cache.size > MAX_CACHE_ENTRIES) {
             cache.clear()
         }
         var anyNewSubOnly = false
-        ids.forEachIndexed { idx, id ->
-            if (!data.has("v$idx")) return@forEachIndexed
-            val tokenObj = data.optJSONObject("v$idx")
-            if (tokenObj == null) {
-                cache[id] = false
-                return@forEachIndexed
-            }
-            val valueStr = tokenObj.optString("value", "").takeIf { it.isNotBlank() } ?: run {
-                cache[id] = false
-                return@forEachIndexed
-            }
-            val restricted = runCatching {
-                val parsed = JSONObject(valueStr)
-                val arr = parsed.optJSONObject("chansub")?.optJSONArray("restricted_bitrates")
-                arr != null && arr.length() > 0
-            }.getOrDefault(false)
+        for ((id, restricted) in result) {
             cache[id] = restricted
             if (restricted) {
                 anyNewSubOnly = true

@@ -3451,6 +3451,49 @@ class GraphQLRepository(
         }.getOrNull()
     }
 
+    suspend fun fetchSubOnlyVodStatusBatch(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        videoIds: List<String>,
+    ): Map<String, Boolean>? = withContext(Dispatchers.IO) {
+        if (videoIds.isEmpty()) return@withContext emptyMap()
+        val aliases = buildString {
+            append("query { ")
+            videoIds.forEachIndexed { idx, id ->
+                append("v")
+                append(idx)
+                append(": videoPlaybackAccessToken(id: \"")
+                append(id)
+                append("\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value } ")
+            }
+            append("}")
+        }
+        val body = buildJsonObject {
+            put("query", aliases)
+        }.toString()
+        runCatching {
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val data = org.json.JSONObject(raw).optJSONObject("data") ?: return@runCatching null
+            val out = LinkedHashMap<String, Boolean>(videoIds.size)
+            videoIds.forEachIndexed { idx, id ->
+                if (!data.has("v$idx")) return@forEachIndexed
+                val tokenObj = data.optJSONObject("v$idx")
+                val valueStr = tokenObj?.optString("value", "")?.takeIf { it.isNotBlank() }
+                if (valueStr == null) {
+                    out[id] = false
+                    return@forEachIndexed
+                }
+                val restricted = runCatching {
+                    val parsed = org.json.JSONObject(valueStr)
+                    val arr = parsed.optJSONObject("chansub")?.optJSONArray("restricted_bitrates")
+                    arr != null && arr.length() > 0
+                }.getOrDefault(false)
+                out[id] = restricted
+            }
+            out
+        }.getOrNull()
+    }
+
     suspend fun fetchFollowedLoginsSubset(
         networkLibrary: String?,
         headers: Map<String, String>,
