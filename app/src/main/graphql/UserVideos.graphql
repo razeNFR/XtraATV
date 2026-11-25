@@ -18,6 +18,9 @@ query UserVideos($id: ID, $login: String, $sort: VideoSort, $types: [BroadcastTy
                     id
                     lengthSeconds
                     previewThumbnailURL
+                    resourceRestriction {
+                        type
+                    }
                     title
                     viewCount
                 }

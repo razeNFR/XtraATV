@@ -202,6 +202,7 @@ class VideosAdapter(
                     } else {
                         type.visibility = View.GONE
                     }
+                    subOnlyBadge?.visibility = if (item.subOnly) View.VISIBLE else View.GONE
                     if (position != null && item.durationSeconds != null && item.durationSeconds > 0L) {
                         progressBar.progress = (position / (item.durationSeconds * 10)).toInt()
                         progressBar.visibility = View.VISIBLE

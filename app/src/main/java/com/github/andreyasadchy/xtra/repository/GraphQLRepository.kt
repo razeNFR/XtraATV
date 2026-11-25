@@ -3212,6 +3212,7 @@ class GraphQLRepository(
         val ownerLiveStreamId: String? = null,
         val ownerLiveStreamCreatedAt: String? = null,
         val ownerLiveArchiveVideoId: String? = null,
+        val subOnly: Boolean = false,
     )
 
     data class SingleVideoViewingHistory(
@@ -3237,7 +3238,7 @@ class GraphQLRepository(
         val rawBodyFull = buildJsonObject {
             put(
                 "query",
-                "query(\$limit: Int!) { currentUser { viewedVideos(first: \$limit) { edges { history { position updatedAt } node { id title status broadcastType createdAt publishedAt lengthSeconds previewThumbnailURL(width: 640, height: 360) owner { id login displayName profileImageURL(width: 300) stream { id createdAt archiveVideo { id } } } game { id displayName name } } } } } }",
+                "query(\$limit: Int!) { currentUser { viewedVideos(first: \$limit) { edges { history { position updatedAt } node { id title status broadcastType createdAt publishedAt lengthSeconds previewThumbnailURL(width: 640, height: 360) resourceRestriction { type } owner { id login displayName profileImageURL(width: 300) stream { id createdAt archiveVideo { id } } } game { id displayName name } } } } } }",
             )
             putJsonObject("variables") {
                 put("limit", limit)
@@ -3307,6 +3308,7 @@ class GraphQLRepository(
                 val owner = node["owner"].obj()
                 val ownerStream = owner?.get("stream").obj()
                 val game = node["game"].obj()
+                val restrictionType = node["resourceRestriction"].obj()?.get("type").str()
                 RemoteViewedVideo(
                     id = id,
                     title = node["title"].str()?.takeIf { it.isNotBlank() },
@@ -3326,6 +3328,7 @@ class GraphQLRepository(
                     ownerLiveStreamId = ownerStream?.get("id").str()?.takeIf { it.isNotBlank() },
                     ownerLiveStreamCreatedAt = ownerStream?.get("createdAt").str()?.takeIf { it.isNotBlank() },
                     ownerLiveArchiveVideoId = ownerStream?.get("archiveVideo").obj()?.get("id").str()?.takeIf { it.isNotBlank() },
+                    subOnly = restrictionType?.contains("SUB", ignoreCase = true) == true,
                 )
             }
         }.getOrNull()

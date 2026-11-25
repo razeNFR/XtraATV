@@ -42,6 +42,26 @@
             app:layout_constraintTop_toTopOf="parent"
             tools:text="type" />
 
+        <TextView
+            android:id="@+id/subOnlyBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/tv_sub_only_badge_background"
+            android:paddingStart="6dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="2dp"
+            android:text="★ SUB"
+            android:textColor="#FFE9DCFF"
+            android:textSize="10.5sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="@id/thumbnail"
+            app:layout_constraintTop_toTopOf="@id/thumbnail"
+            tools:visibility="visible" />
+
         <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
             android:id="@+id/views"
             style="@style/TvThumbnailBadge"

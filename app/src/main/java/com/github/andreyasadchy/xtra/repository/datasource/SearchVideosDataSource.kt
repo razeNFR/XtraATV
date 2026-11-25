@@ -77,6 +77,7 @@ class SearchVideosDataSource(
                 durationSeconds = it.lengthSeconds,
                 type = it.broadcastType?.toString(),
                 animatedPreviewURL = it.animatedPreviewURL,
+                subOnly = it.resourceRestriction?.type?.contains("SUB", ignoreCase = true) == true,
             )
         }
         offset = data.cursor

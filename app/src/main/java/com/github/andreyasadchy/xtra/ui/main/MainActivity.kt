@@ -3678,6 +3678,9 @@ class MainActivity : AppCompatActivity() {
         currentClipId = null
         if (video.id != null) {
             if (isTv) {
+                if (video.subOnly) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.markSubOnly(video.id)
+                }
                 com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.onExplicitVodOpened(this, video.id)
             }
             com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.pendingDvrResume = null

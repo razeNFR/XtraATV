@@ -24,12 +24,14 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -71,6 +73,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.Placeholder
@@ -85,6 +88,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -96,6 +100,7 @@ import com.github.andreyasadchy.xtra.model.chat.Emote
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.awaitCancellation
+import kotlin.math.roundToInt
 
 object TvPermissions {
 
@@ -853,6 +858,8 @@ fun ChatComposer(
     emoteGroups: List<Pair<String, List<Emote>>> = emptyList(),
     initialText: String = "",
     pillStyle: Boolean = false,
+    anchorCenterXPx: Float? = null,
+    anchorBottomMarginPx: Float? = null,
     onSend: (String) -> Unit,
 ) {
     var text by remember { mutableStateOf(initialText) }
@@ -913,22 +920,42 @@ fun ChatComposer(
         val channelBadge = remember(title) {
             if (title.contains("·")) title.substringAfter("·").trim().takeIf { it.isNotEmpty() } else null
         }
-        Box(
+        val density = LocalDensity.current
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .then(closeEmotesKeyModifier)
-                .padding(bottom = 78.dp, start = 24.dp, end = 24.dp),
-            contentAlignment = Alignment.BottomCenter,
+                .then(closeEmotesKeyModifier),
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val screenWidthPx = constraints.maxWidth.toFloat()
+            val edgeMarginPx = with(density) { 24.dp.toPx() }
+            val pillWidth = if (channelBadge != null) 560.dp else 520.dp
+            val drawerWidth = 660.dp
+            val pillWidthPx = with(density) { pillWidth.toPx() }.coerceAtMost((screenWidthPx - edgeMarginPx * 2f).coerceAtLeast(300f))
+            val drawerWidthPx = with(density) { drawerWidth.toPx() }.coerceAtMost((screenWidthPx - edgeMarginPx * 2f).coerceAtLeast(pillWidthPx))
+            val targetCenterX = anchorCenterXPx ?: (screenWidthPx / 2f)
+            val pillLeftPx = (targetCenterX - pillWidthPx / 2f)
+                .coerceIn(edgeMarginPx, (screenWidthPx - pillWidthPx - edgeMarginPx).coerceAtLeast(edgeMarginPx))
+            val drawerLeftPx = (targetCenterX - drawerWidthPx / 2f)
+                .coerceIn(edgeMarginPx, (screenWidthPx - drawerWidthPx - edgeMarginPx).coerceAtLeast(edgeMarginPx))
+            val cornerInsetPx = with(density) { 28.dp.toPx() }
+            val beakCenterInPillPx = (targetCenterX - pillLeftPx)
+                .coerceIn(cornerInsetPx, (pillWidthPx - cornerInsetPx).coerceAtLeast(cornerInsetPx))
+            val bottomPaddingDp = anchorBottomMarginPx?.let { with(density) { it.toDp() } } ?: 110.dp
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(bottom = bottomPaddingDp),
+            ) {
                 if (showEmotes && emoteGroups.isNotEmpty()) {
                     Column(
                         modifier = Modifier
-                            .width(780.dp)
+                            .offset { IntOffset(drawerLeftPx.roundToInt(), 0) }
+                            .width(with(density) { drawerWidthPx.toDp() })
                             .clip(RoundedCornerShape(22.dp))
                             .background(Color(0xF0171620))
                             .border(1.25.dp, Color(0x3AFFFFFF), RoundedCornerShape(22.dp))
-                            .padding(horizontal = 18.dp, vertical = 14.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                     ) {
                         TvEmoteDrawer(
                             emoteGroups = emoteGroups,
@@ -949,109 +976,117 @@ fun ChatComposer(
                     }
                     Spacer(Modifier.height(10.dp))
                 }
-                Row(
+                Column(
                     modifier = Modifier
-                        .width(780.dp)
-                        .clip(RoundedCornerShape(34.dp))
-                        .background(Color(0xF21B1A24))
-                        .border(1.5.dp, Color(0x46FFFFFF), RoundedCornerShape(34.dp))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .offset { IntOffset(pillLeftPx.roundToInt(), 0) }
+                        .width(with(density) { pillWidthPx.toDp() }),
                 ) {
-                    if (channelBadge != null) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.24f))
-                                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                        ) {
-                            Text(
-                                text = channelBadge,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Spacer(Modifier.width(10.dp))
-                    }
-                    TvTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        hint = hint,
-                        height = 46.dp,
-                        voice = voice,
-                        imeAction = ImeAction.Send,
-                        leadingIcon = null,
-                        emotes = emoteMap,
-                        focusRequester = requester,
-                        modifier = Modifier.weight(1f),
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(30.dp))
+                            .background(Color(0xF21B1A24))
+                            .border(1.5.dp, Color(0x46FFFFFF), RoundedCornerShape(30.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        onSend(text)
-                    }
-                    if (text.isNotEmpty()) {
-                        Spacer(Modifier.width(8.dp))
-                        TvIconButton(
-                            icon = R.drawable.tv_ic_close,
-                            contentDescription = context.getString(R.string.delete),
-                            size = 46.dp,
+                        if (channelBadge != null) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.24f))
+                                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                            ) {
+                                Text(
+                                    text = channelBadge,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        TvTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            hint = hint,
+                            height = 42.dp,
+                            voice = voice,
+                            imeAction = ImeAction.Send,
+                            leadingIcon = null,
+                            emotes = emoteMap,
+                            focusRequester = requester,
+                            modifier = Modifier.weight(1f),
                         ) {
-                            text = ""
-                            runCatching { requester.requestFocus() }
+                            onSend(text)
+                        }
+                        if (text.isNotEmpty()) {
+                            Spacer(Modifier.width(6.dp))
+                            TvIconButton(
+                                icon = R.drawable.tv_ic_close,
+                                contentDescription = context.getString(R.string.delete),
+                                size = 42.dp,
+                            ) {
+                                text = ""
+                                runCatching { requester.requestFocus() }
+                            }
+                        }
+                        if (emoteGroups.isNotEmpty()) {
+                            Spacer(Modifier.width(6.dp))
+                            TvIconButton(
+                                icon = R.drawable.tv_ic_mood,
+                                contentDescription = context.getString(R.string.room_emote),
+                                modifier = Modifier.focusRequester(emoteBtnRequester),
+                                size = 42.dp,
+                                active = showEmotes,
+                            ) {
+                                showEmotes = !showEmotes
+                                if (!showEmotes) hoveredEmote = null
+                            }
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        VoiceButton(voice, input, size = 42.dp, onStart = { text = "" })
+                        Spacer(Modifier.width(6.dp))
+                        TvSendPillButton(
+                            contentDescription = sendLabel,
+                            ready = text.isNotBlank(),
+                            size = 42.dp,
+                        ) {
+                            onSend(text)
                         }
                     }
-                    if (emoteGroups.isNotEmpty()) {
-                        Spacer(Modifier.width(8.dp))
-                        TvIconButton(
-                            icon = R.drawable.tv_ic_mood,
-                            contentDescription = context.getString(R.string.room_emote),
-                            modifier = Modifier.focusRequester(emoteBtnRequester),
-                            size = 46.dp,
-                            active = showEmotes,
-                        ) {
-                            showEmotes = !showEmotes
-                            if (!showEmotes) hoveredEmote = null
-                        }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    VoiceButton(voice, input, size = 46.dp, onStart = { text = "" })
-                    Spacer(Modifier.width(8.dp))
-                    TvSendPillButton(
-                        contentDescription = sendLabel,
-                        ready = text.isNotBlank(),
-                        size = 46.dp,
+                    // Smoked-glass pointer beak aligned precisely to the anchor Chat button (matching TvVolumePill)
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
                     ) {
-                        onSend(text)
+                        val halfW = 7.dp.toPx()
+                        val cx = beakCenterInPillPx.coerceIn(halfW + 12.dp.toPx(), (size.width - halfW - 12.dp.toPx()).coerceAtLeast(halfW + 12.dp.toPx()))
+                        val path = Path().apply {
+                            moveTo(cx - halfW, 0f)
+                            lineTo(cx + halfW, 0f)
+                            lineTo(cx, size.height)
+                            close()
+                        }
+                        drawPath(path, color = Color(0xF21B1A24))
+                        val stroke = 1.5.dp.toPx()
+                        drawLine(
+                            color = Color(0x46FFFFFF),
+                            start = Offset(cx - halfW, 0f),
+                            end = Offset(cx, size.height),
+                            strokeWidth = stroke,
+                        )
+                        drawLine(
+                            color = Color(0x46FFFFFF),
+                            start = Offset(cx + halfW, 0f),
+                            end = Offset(cx, size.height),
+                            strokeWidth = stroke,
+                        )
                     }
-                }
-                // Subtle smoked-glass pointer beak beneath the pill, matching TvVolumePill
-                Canvas(
-                    modifier = Modifier
-                        .width(18.dp)
-                        .height(8.dp)
-                ) {
-                    val path = Path().apply {
-                        moveTo(0f, 0f)
-                        lineTo(size.width, 0f)
-                        lineTo(size.width / 2f, size.height)
-                        close()
-                    }
-                    drawPath(path, color = Color(0xF21B1A24))
-                    val stroke = 1.5.dp.toPx()
-                    drawLine(
-                        color = Color(0x46FFFFFF),
-                        start = Offset(0f, 0f),
-                        end = Offset(size.width / 2f, size.height),
-                        strokeWidth = stroke,
-                    )
-                    drawLine(
-                        color = Color(0x46FFFFFF),
-                        start = Offset(size.width, 0f),
-                        end = Offset(size.width / 2f, size.height),
-                        strokeWidth = stroke,
-                    )
                 }
             }
         }

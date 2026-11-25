@@ -16,6 +16,9 @@ query GameVideos($id: ID, $slug: String, $name: String, $languages: [String!], $
                         profileImageURL(width: 300)
                     }
                     previewThumbnailURL
+                    resourceRestriction {
+                        type
+                    }
                     title
                     viewCount
                 }

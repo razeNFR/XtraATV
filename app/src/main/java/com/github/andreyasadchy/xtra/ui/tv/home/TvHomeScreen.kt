@@ -3100,6 +3100,21 @@ private fun FollowedVideoCard(
                     .background(Color(0xFF222129))
             ) {
                 VideoThumbnail(video.thumbnail, video.channelImage)
+                if (video.subOnly) {
+                    Text(
+                        "★ SUB",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE9DCFF),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xD9241838))
+                            .border(1.dp, Color(0x88A970FF), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 val seconds = video.durationSeconds ?: 0
                 if (seconds > 0) {
                     Text(
@@ -3176,6 +3191,21 @@ private fun ResumeCard(
                     .background(Color(0xFF222129))
             ) {
                 VideoThumbnail(item.thumbnail, item.channelImage)
+                if (item.subOnly) {
+                    Text(
+                        "★ SUB",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE9DCFF),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xD9241838))
+                            .border(1.dp, Color(0x88A970FF), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 // time left, like the cards of Google TV
                 val durationMs = (item.durationSeconds ?: 0) * 1000L
                 if (durationMs > 0) {

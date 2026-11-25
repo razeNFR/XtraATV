@@ -91,6 +91,7 @@ class ChannelVideosDataSource(
                     durationSeconds = it.lengthSeconds,
                     type = it.broadcastType?.toString(),
                     animatedPreviewURL = it.animatedPreviewURL,
+                    subOnly = it.resourceRestriction?.type?.contains("SUB", ignoreCase = true) == true,
                 )
             }
         }
@@ -129,6 +130,7 @@ class ChannelVideosDataSource(
                     viewCount = it.viewCount,
                     durationSeconds = it.lengthSeconds,
                     animatedPreviewURL = it.animatedPreviewURL,
+                    subOnly = it.resourceRestriction?.type?.contains("SUB", ignoreCase = true) == true,
                 )
             }
         }

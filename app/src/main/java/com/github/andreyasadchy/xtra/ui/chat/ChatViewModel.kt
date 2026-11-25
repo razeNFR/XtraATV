@@ -140,6 +140,10 @@ class ChatViewModel(
     val raid = MutableStateFlow<Raid?>(null)
     val raidClicked = MutableStateFlow<Raid?>(null)
     var raidClosed = false
+    @Volatile
+    var pendingRaid: Raid? = null
+    @Volatile
+    var pendingRaidAtMs: Long = 0L
     val poll = MutableStateFlow<Poll?>(null)
     var pollClosed = false
     val pollSecondsLeft = MutableStateFlow<Int?>(null)
@@ -1776,7 +1780,8 @@ class ChatViewModel(
             val gqlWebToken = applicationContext.tokenPrefs().getString(C.GQL_TOKEN_WEB, null)
             val notifyPoints = applicationContext.prefs().getBoolean(C.CHAT_POINTS_NOTIFY, false)
             val isTvDevice = applicationContext.resources.getBoolean(R.bool.isTv)
-            val showRaids = applicationContext.prefs().getBoolean(C.CHAT_RAIDS_SHOW, true)
+            val showRaids = applicationContext.prefs().getBoolean(C.CHAT_RAIDS_SHOW, true) ||
+                applicationContext.prefs().getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true)
             val showPolls = applicationContext.prefs().getBoolean(C.CHAT_POLLS_SHOW, true) || isTvDevice
             val showPredictions = applicationContext.prefs().getBoolean(C.CHAT_PREDICTIONS_SHOW, true) ||
                 C.getTvPredictionsPopupMode(applicationContext.prefs()) != 0 || isTvDevice
@@ -1993,6 +1998,8 @@ class ChatViewModel(
                 } else {
                     onChatMessage(chatMessage, networkLibrary, isLoggedIn, accountId, channelId)
                     if (chatMessage.msgId == "unraid") {
+                        pendingRaid = null
+                        pendingRaidAtMs = 0L
                         if (!hideRaid.value) {
                             hideRaid.value = true
                         }
@@ -2463,8 +2470,23 @@ class ChatViewModel(
                             }
                         }
                     }
+                    if (!openStream) {
+                        pendingRaid = it
+                        pendingRaidAtMs = System.currentTimeMillis()
+                    } else {
+                        pendingRaid = null
+                        pendingRaidAtMs = 0L
+                    }
                     raid.value = it
                 }
+            }
+        }
+
+        override suspend fun onRaidCancel() {
+            pendingRaid = null
+            pendingRaidAtMs = 0L
+            if (!hideRaid.value) {
+                hideRaid.value = true
             }
         }
 

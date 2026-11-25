@@ -4901,9 +4901,65 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    /** TV: write a chat message in a smoked-glass pill anchored above the HUD (matching TvVolumePill) with Most Used emotes. */
+    private fun applyTvChatButtonPillState(pillOpen: Boolean) {
+        if (!isTv || _binding == null) return
+        val btn = binding.playerControls.chatMessage ?: return
+        if (pillOpen) {
+            val density = btn.resources.displayMetrics.density
+            btn.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(0x59181822)
+                setStroke((1.8f * density + 0.5f).toInt(), com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark)
+            }
+            btn.setColorFilter(Color.WHITE)
+        } else {
+            btn.setBackgroundResource(R.drawable.tv_player_button_background)
+            btn.refreshDrawableState()
+            btn.jumpDrawablesToCurrentState()
+            btn.setColorFilter(
+                when {
+                    btn.hasFocus() -> com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight
+                    btn.isEnabled -> Color.WHITE
+                    else -> Color.GRAY
+                }
+            )
+        }
+    }
+
+    /** TV: write a chat message in a compact smoked-glass pill anchored directly above the Chat button (matching TvVolumePill). */
     private fun showChatComposer() {
         val emoteGroupsState = androidx.compose.runtime.mutableStateOf(chatFragment?.getTvEmoteGroups().orEmpty())
+        val density = resources.displayMetrics.density
+        var anchorCenterX: Float? = null
+        var anchorBottomMargin: Float? = null
+        if (_binding != null && areControlsShown()) {
+            val hostRoot = binding.playerControls.root
+            val anchor = binding.playerControls.chatMessage
+            val timeline = binding.playerControls.progressBar
+            val rootLoc = IntArray(2)
+            hostRoot.getLocationInWindow(rootLoc)
+            val windowBottom = rootLoc[1] + hostRoot.height
+            if (anchor != null && anchor.visibility == View.VISIBLE && anchor.width > 0) {
+                val anchorLoc = IntArray(2)
+                anchor.getLocationInWindow(anchorLoc)
+                anchorCenterX = anchorLoc[0] + anchor.width / 2f
+                val anchorTop = anchorLoc[1].toFloat()
+                val bottomTipY = if (timeline.visibility == View.VISIBLE && timeline.height > 0) {
+                    val tlLoc = IntArray(2)
+                    timeline.getLocationInWindow(tlLoc)
+                    val tlTop = tlLoc[1].toFloat()
+                    minOf(tlTop + 4f * density, anchorTop - 12f * density)
+                } else {
+                    anchorTop - 12f * density
+                }
+                if (windowBottom > 0) {
+                    anchorBottomMargin = (windowBottom - bottomTipY).coerceAtLeast(106f * density)
+                }
+                applyTvChatButtonPillState(true)
+            }
+            // Keep the bottom HUD visible behind the anchored pill until the composer closes
+            binding.playerControls.root.removeCallbacks(controllerHideAction)
+        }
         val dialog = com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 emoteGroupsState.value = chatFragment?.getTvEmoteGroups().orEmpty()
@@ -4917,6 +4973,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 sendLabel = getString(R.string.tv_send),
                 emoteGroups = emoteGroupsState.value,
                 pillStyle = true,
+                anchorCenterXPx = anchorCenterX,
+                anchorBottomMarginPx = anchorBottomMargin,
             ) { text ->
                 if (text.isNotBlank()) {
                     chatFragment?.sendExternalMessage(text)
@@ -4927,6 +4985,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         dialog.window?.apply {
             clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0f)
+        }
+        dialog.setOnDismissListener {
+            if (_binding != null) {
+                applyTvChatButtonPillState(false)
+                if (areControlsShown()) {
+                    binding.playerControls.chatMessage?.requestFocus()
+                    if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
+                        binding.playerControls.root.removeCallbacks(controllerHideAction)
+                        binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                    }
+                }
+            }
         }
     }
 
@@ -8731,13 +8801,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         streamEndJob = viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(6000L)
-            // a raid announced in the chat: its stream comes, the player waits for it (30 s at most)
+            // A raid announced in chat: wait for raid_go (up to 20s), then fall back directly to the raid target if the broadcaster cut the stream early.
             var waited = 0
-            while (chatFragment?.isRaidPending() == true && waited++ < 30) {
+            while (chatFragment?.isRaidPending() == true && waited++ < 20) {
                 kotlinx.coroutines.delay(1000L)
+                if (view == null || activity.currentPlayingStream()?.channelLogin != login || isPlayingNow()) {
+                    if (isPlayingNow()) hideTvOfflineOverlay()
+                    return@launch
+                }
             }
             if (view == null || activity.currentPlayingStream()?.channelLogin != login || isPlayingNow()) {
                 if (isPlayingNow()) hideTvOfflineOverlay()
+                return@launch
+            }
+            chatFragment?.consumePendingRaidStream()?.let { raidTarget ->
+                hideTvOfflineOverlay(immediate = true)
+                activity.dropTvPipForEndedStream(login)
+                activity.startStream(raidTarget, peekHud = true)
                 return@launch
             }
             restoreTvOledProtection()

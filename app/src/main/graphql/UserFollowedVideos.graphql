@@ -21,6 +21,9 @@ query UserFollowedVideos($languages: [String!], $sort: VideoSort, $type: [Broadc
                         profileImageURL(width: 300)
                     }
                     previewThumbnailURL
+                    resourceRestriction {
+                        type
+                    }
                     title
                     viewCount
                 }

@@ -668,7 +668,21 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
 
     override fun onResume() {
         super.onResume()
-        context?.let { syncHomePrefs(it) }
+        context?.let { ctx ->
+            syncHomePrefs(ctx)
+            if (com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.isEnabled(ctx)) {
+                val app = ctx.applicationContext as? XtraApp
+                if (app != null) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pullFromTwitch(
+                            context = ctx,
+                            xtraModule = app.xtraModule,
+                            force = false,
+                        )
+                    }
+                }
+            }
+        }
         loadLocalRows()
         val hasWarmData = viewModel.followed.value != null || viewModel.popular.value != null || viewModel.games.value != null
         if (hasWarmData) {
@@ -892,6 +906,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         createdAt = createdAt,
         durationSeconds = durationSeconds,
         type = type,
+        subOnly = subOnly,
     )
 
     private fun com.github.andreyasadchy.xtra.model.ui.Video.toResumeItem(positionMs: Long) = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item(
@@ -908,6 +923,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         durationSeconds = durationSeconds,
         positionMs = positionMs,
         type = type,
+        subOnly = subOnly,
     )
 
     /** OK held down on a video of "Continue watching" or "Followed videos": resume, watch from the start, remove from the history, open channel. */

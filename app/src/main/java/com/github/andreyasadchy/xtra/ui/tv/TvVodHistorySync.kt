@@ -76,16 +76,16 @@ object TvVodHistorySync {
     }
 
     private fun candidateHeaders(context: Context): List<Map<String, String>> {
-        val primary = TwitchApiHelper.getGQLHeaders(context, true)
         val web = TwitchApiHelper.getGQLWebHeaders(context, true)
+        val primary = TwitchApiHelper.getGQLHeaders(context, true)
         val result = ArrayList<Map<String, String>>(2)
-        val primaryToken = primary[C.HEADER_TOKEN]?.takeIf { it.isNotBlank() }
-        if (primaryToken != null) {
-            result.add(primary)
-        }
         val webToken = web[C.HEADER_TOKEN]?.takeIf { it.isNotBlank() }
-        if (webToken != null && (primaryToken == null || web[C.HEADER_CLIENT_ID] != primary[C.HEADER_CLIENT_ID] || webToken != primaryToken)) {
+        if (webToken != null) {
             result.add(web)
+        }
+        val primaryToken = primary[C.HEADER_TOKEN]?.takeIf { it.isNotBlank() }
+        if (primaryToken != null && (webToken == null || primary[C.HEADER_CLIENT_ID] != web[C.HEADER_CLIENT_ID] || primaryToken != webToken)) {
+            result.add(primary)
         }
         return result
     }
@@ -281,6 +281,7 @@ object TvVodHistorySync {
         streamCreatedAt: String? = null,
         archiveVideoId: String? = null,
         forcePersist: Boolean = true,
+        touchTimestamp: Boolean = true,
     ) {
         val appCtx = context.applicationContext
         val cleanCid = channelId?.trim()?.takeIf { it.isNotEmpty() }
@@ -325,8 +326,8 @@ object TvVodHistorySync {
                 channelLogin = mergedLogin,
                 streamId = mergedSid,
                 streamStartMs = mergedStart,
-                openedAtMs = minOf(prev.openedAtMs, now),
-                lastSeenAtMs = maxOf(prev.lastSeenAtMs, now),
+                openedAtMs = if (touchTimestamp) minOf(prev.openedAtMs, now) else prev.openedAtMs,
+                lastSeenAtMs = if (touchTimestamp) maxOf(prev.lastSeenAtMs, now) else prev.lastSeenAtMs,
                 archiveVideoId = mergedVid,
             )
             sessions.removeAt(idx)
@@ -361,6 +362,8 @@ object TvVodHistorySync {
 
     /**
      * Filter 1: True when Twitch reports the video is still recording/processing or is the streamer's currently active live broadcast.
+     * Note: a finished RECORDED VOD (including restricted/sub-only VODs) whose previewThumbnailURL is null/empty is NOT treated as live;
+     * only Twitch's explicit `404_processing` placeholder or non-RECORDED status / active stream match marks it as an ongoing live recording.
      */
     private fun isOngoingLiveRecording(
         videoId: String,
@@ -370,7 +373,7 @@ object TvVodHistorySync {
         ownerLiveStreamCreatedAt: String?,
         ownerLiveArchiveVideoId: String?,
     ): Boolean {
-        if (thumbnailUrl != null && TvVideoThumbnail.isMissing(thumbnailUrl)) return true
+        if (!thumbnailUrl.isNullOrBlank() && thumbnailUrl.contains("404_processing")) return true
         if (!status.isNullOrBlank() && !status.equals("RECORDED", ignoreCase = true)) return true
         if (!ownerLiveArchiveVideoId.isNullOrBlank() && ownerLiveArchiveVideoId == videoId) return true
         val videoStartMs = parseIsoMs(createdAt)
@@ -449,7 +452,7 @@ object TvVodHistorySync {
                 val fetched = xtraModule.graphQLRepository.fetchViewedVideos(networkLibrary, hdrs, limit = 25)
                 if (fetched != null) {
                     remoteList = fetched
-                    break
+                    if (fetched.isNotEmpty()) break
                 }
             }
             val remote = remoteList ?: return
@@ -473,7 +476,7 @@ object TvVodHistorySync {
             localList.forEachIndexed { idx, item ->
                 if (!TvBlacklist.isChannelBlocked(item.channelId, item.channelLogin) &&
                     !TvBlacklist.isCategoryBlocked(item.gameId, null, item.gameName) &&
-                    !TvVideoThumbnail.isMissing(item.thumbnail)
+                    (item.thumbnail.isNullOrBlank() || !item.thumbnail.contains("404_processing"))
                 ) {
                     val isExplicit = explicitOpened.containsKey(item.id)
                     val matchedLive = if (!isExplicit) {
@@ -487,7 +490,9 @@ object TvVodHistorySync {
                             broadcastType = item.type,
                         )
                     } else null
-                    if (matchedLive == null) {
+                    val watchedLaterAsVod = matchedLive != null &&
+                        item.updatedAtMs > matchedLive.lastSeenAtMs + 10 * 60_000L
+                    if (matchedLive == null || watchedLaterAsVod) {
                         val score = if (item.updatedAtMs > 0L) item.updatedAtMs else (baseLegacyTime - idx)
                         mergedById[item.id] = Candidate(item, score)
                     } else {
@@ -506,7 +511,7 @@ object TvVodHistorySync {
                 if (isOngoingLiveRecording(
                         videoId = r.id,
                         status = r.status,
-                        thumbnailUrl = r.thumbnailUrl ?: "",
+                        thumbnailUrl = r.thumbnailUrl,
                         createdAt = r.createdAt,
                         ownerLiveStreamCreatedAt = r.ownerLiveStreamCreatedAt,
                         ownerLiveArchiveVideoId = r.ownerLiveArchiveVideoId,
@@ -522,7 +527,8 @@ object TvVodHistorySync {
                     return@forEachIndexed
                 }
 
-                // Filter 2: Live broadcast watched in Xtra TV — never auto-import its archive VOD until explicitly opened as a VOD
+                // Filter 2: Live broadcast watched on this device — ignore its auto-recorded archive UNLESS
+                // it was explicitly watched later as a finished VOD on another device (updatedAtMs > live end + 10 min).
                 if (!explicitOpened.containsKey(r.id)) {
                     val matchedLive = findMatchingLiveSession(
                         sessions = liveSessions,
@@ -534,23 +540,27 @@ object TvVodHistorySync {
                         broadcastType = r.broadcastType,
                     )
                     if (matchedLive != null) {
-                        // Also cache the resolved archiveVideoId on the live session for O(1) future matching
-                        if (matchedLive.archiveVideoId != r.id) {
-                            recordLiveStreamSession(
-                                context = appCtx,
-                                channelId = r.channelId ?: matchedLive.channelId,
-                                channelLogin = r.channelLogin ?: matchedLive.channelLogin,
-                                streamId = matchedLive.streamId,
-                                streamCreatedAt = r.createdAt,
-                                archiveVideoId = r.id,
-                            )
-                        }
-                        if (mergedById.remove(r.id) != null) {
-                            r.id.toLongOrNull()?.let { idNum ->
-                                runCatching { xtraModule.playerRepository.saveVideoPosition(VideoPosition(idNum, 0L)) }
+                        val watchedLaterOnOtherDevice = r.updatedAtMs > matchedLive.lastSeenAtMs + 10 * 60_000L
+                        if (!watchedLaterOnOtherDevice) {
+                            // Cache archiveVideoId without overwriting lastSeenAtMs
+                            if (matchedLive.archiveVideoId != r.id) {
+                                recordLiveStreamSession(
+                                    context = appCtx,
+                                    channelId = r.channelId ?: matchedLive.channelId,
+                                    channelLogin = r.channelLogin ?: matchedLive.channelLogin,
+                                    streamId = matchedLive.streamId,
+                                    streamCreatedAt = r.createdAt,
+                                    archiveVideoId = r.id,
+                                    touchTimestamp = false,
+                                )
                             }
+                            if (mergedById.remove(r.id) != null) {
+                                r.id.toLongOrNull()?.let { idNum ->
+                                    runCatching { xtraModule.playerRepository.saveVideoPosition(VideoPosition(idNum, 0L)) }
+                                }
+                            }
+                            return@forEachIndexed
                         }
-                        return@forEachIndexed
                     }
                 }
 
@@ -616,11 +626,17 @@ object TvVodHistorySync {
                         positionMs = chosenPosMs,
                         type = r.broadcastType ?: local?.type ?: "ARCHIVE",
                         updatedAtMs = if (chosenUpdatedAt > baseLegacyTime) chosenUpdatedAt else 0L,
+                        subOnly = r.subOnly || local?.subOnly == true,
                     )
                     mergedById[r.id] = Candidate(mergedItem, chosenUpdatedAt)
                 } else if (remoteIsNewer && (finished || chosenPosMs < 30_000L)) {
-                    // Finished or reset on another device: remove from Continue Watching
+                    // Finished or reset/removed on another device: remove from Continue Watching & clear local Room position
                     mergedById.remove(r.id)
+                    if (chosenPosMs < 30_000L) {
+                        r.id.toLongOrNull()?.let { idNum ->
+                            runCatching { xtraModule.playerRepository.saveVideoPosition(VideoPosition(idNum, 0L)) }
+                        }
+                    }
                 }
             }
 

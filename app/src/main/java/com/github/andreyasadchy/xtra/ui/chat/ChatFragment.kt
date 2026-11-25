@@ -82,8 +82,29 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     /** A raid was announced and its stream will be opened (switch to raids on): the player waits for it. */
     fun isRaidPending(): Boolean {
-        return context?.prefs()?.getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) == true &&
-            ((viewModel.raid.value != null && !viewModel.raidClosed) || raidAutoSwitchJob?.isActive == true)
+        if (context?.prefs()?.getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) != true) return false
+        if (raidAutoSwitchJob?.isActive == true) return true
+        val pending = viewModel.pendingRaid ?: return false
+        if (viewModel.raidClosed) return false
+        return !pending.targetLogin.isNullOrBlank() &&
+            (System.currentTimeMillis() - viewModel.pendingRaidAtMs) < 105_000L
+    }
+
+    /** Consumes the announced raid target if the current stream stopped before raid_go arrived. */
+    fun consumePendingRaidStream(): Stream? {
+        if (!isRaidPending()) return null
+        val pending = viewModel.pendingRaid ?: return null
+        val login = pending.targetLogin?.takeIf { it.isNotBlank() } ?: return null
+        viewModel.pendingRaid = null
+        viewModel.pendingRaidAtMs = 0L
+        viewModel.raidClosed = true
+        _binding?.raidLayout?.visibility = View.GONE
+        return Stream(
+            channelId = pending.targetId,
+            channelLogin = login,
+            channelName = pending.targetName,
+            channelImageURL = pending.targetImageURL,
+        )
     }
     private var adapter: ChatAdapter? = null
 
@@ -491,6 +512,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                     if (raidAutoSwitchJob?.isActive != true) {
                                         raidLayout.visibility = View.GONE
                                         viewModel.raidClosed = true
+                                        viewModel.pendingRaid = null
+                                        viewModel.pendingRaidAtMs = 0L
                                     }
                                     viewModel.hideRaid.value = false
                                 }
@@ -503,6 +526,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 if (raid != null) {
                                     if (!viewModel.raidClosed) {
                                         if (raid.openStream) {
+                                            viewModel.pendingRaid = null
+                                            viewModel.pendingRaidAtMs = 0L
                                             val parentPlayer = parentFragment as? PlayerFragment
                                             if (parentPlayer?.isExperimentalVodActive() == true) {
                                                 raidAutoSwitchJob?.cancel()
@@ -517,7 +542,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                     _binding?.raidLayout?.visibility = View.GONE
                                                     viewModel.raidClosed = true
                                                     if (isAdded && requireContext().prefs().getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) && parentFragment is PlayerFragment) {
-                                                        (activity as? MainActivity)?.startStream(targetStream)
+                                                        (activity as? MainActivity)?.startStream(targetStream, peekHud = true)
                                                     }
                                                 }
                                             } else {
@@ -528,7 +553,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                             channelLogin = raid.targetLogin,
                                                             channelName = raid.targetName,
                                                             channelImageURL = raid.targetImageURL,
-                                                        )
+                                                        ),
+                                                        peekHud = true,
                                                     )
                                                 }
                                                 raidLayout.visibility = View.GONE
@@ -537,7 +563,9 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                         } else {
                                             raidAutoSwitchJob?.cancel()
                                             raidAutoSwitchJob = null
-                                            raidLayout.visibility = View.VISIBLE
+                                            if (requireContext().prefs().getBoolean(C.CHAT_RAIDS_SHOW, true)) {
+                                                raidLayout.visibility = View.VISIBLE
+                                            }
                                             raidLayout.setOnClickListener { viewModel.raidClicked.value = raid }
                                             requireContext().imageLoader.enqueue(
                                                 ImageRequest.Builder(requireContext()).apply {
@@ -554,6 +582,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                 raidAutoSwitchJob = null
                                                 raidLayout.visibility = View.GONE
                                                 viewModel.raidClosed = true
+                                                viewModel.pendingRaid = null
+                                                viewModel.pendingRaidAtMs = 0L
                                             }
                                             raidText.text = getString(
                                                 R.string.raid_text,

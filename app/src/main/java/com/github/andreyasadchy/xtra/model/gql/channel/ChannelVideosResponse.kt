@@ -42,6 +42,12 @@ class ChannelVideosResponse(
         val viewCount: Int? = null,
         val lengthSeconds: Int? = null,
         val animatedPreviewURL: String? = null,
+        val resourceRestriction: ResourceRestriction? = null,
+    )
+
+    @Serializable
+    class ResourceRestriction(
+        val type: String? = null,
     )
 
     @Serializable
