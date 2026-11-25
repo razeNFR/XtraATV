@@ -138,7 +138,7 @@ class MainActivity : AppCompatActivity() {
         /** Opening the other streams or switching loads it again when it is older than this. */
         private const val QUEUE_FRESH_MS = 30_000L
         /** Settle delay before auto-switching sections when stepping through the TV side menu without OK. */
-        private const val TV_MENU_HOVER_SETTLE_MS = 280L
+        private const val TV_MENU_HOVER_SETTLE_MS = 130L
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -2149,17 +2149,22 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             if (navController.currentDestination?.id == id && navController.previousBackStackEntry == null) {
-                binding.root.postDelayed({ refreshVisibleScreensIfStale(20_000L) }, 160L)
+                if (!tvMenuAutoHovering) {
+                    binding.root.postDelayed({ refreshVisibleScreensIfStale(20_000L) }, 160L)
+                }
                 return true
             }
+            val hoverSwitch = tvMenuAutoHovering
             navController.navigate(id, null, androidx.navigation.navOptions {
                 launchSingleTop = true
                 popUpTo(navController.graph.id) { inclusive = false }
-                anim {
-                    enter = R.anim.tv_section_fade_in
-                    exit = R.anim.tv_section_fade_out
-                    popEnter = R.anim.tv_section_fade_in
-                    popExit = R.anim.tv_section_fade_out
+                if (!hoverSwitch) {
+                    anim {
+                        enter = R.anim.tv_section_fade_in
+                        exit = R.anim.tv_section_fade_out
+                        popEnter = R.anim.tv_section_fade_in
+                        popExit = R.anim.tv_section_fade_out
+                    }
                 }
             })
             true

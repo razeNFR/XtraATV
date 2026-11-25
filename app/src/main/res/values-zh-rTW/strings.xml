@@ -1476,4 +1476,8 @@
     <string name="tv_wallpaper_web_active">使用中</string>
     <string name="tv_wallpaper_web_empty_tv">電視上尚無自訂桌布</string>
     <string name="tv_wallpaper_web_deleted">已刪除桌布</string>
+    <string name="tv_broadcasters_global">全球</string>
+    <string name="tv_emotes_most_used">最常用</string>
+    <string name="tv_emotes_most_used_empty">在聊天中傳送表情即可建立最常用清單</string>
+    <string name="tv_emotes_uses_count">%1$s 次使用</string>
 </resources>

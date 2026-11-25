@@ -20,8 +20,10 @@ import kotlin.time.Instant
 object TvThumbnails {
 
     /** A stream younger than this may still have no thumbnail: its address is checked before being loaded. */
-    private const val CHECK_MS = 30 * 60_000L
-    private const val PLACEHOLDER_KEEP_MS = 60_000L
+    private const val CHECK_MS = 12 * 60_000L
+    private const val PLACEHOLDER_KEEP_MS = 120_000L
+    /** Thumbnail URL cache bucket (3 minutes) so returning to lists hits Coil cache cleanly. */
+    private const val STAMP_BUCKET_MS = 3 * 60_000L
 
     private class Channel(val image: String?, val createdAt: Long?)
     private class Check(val placeholder: Boolean, val at: Long)
@@ -40,8 +42,8 @@ object TvThumbnails {
     }
 
     /**
-     * Picture of the card: the thumbnail. Twitch keeps the same address for a new thumbnail: the minute is added to it, the
-     * cards load the new one each minute instead of keeping an old copy.
+     * Picture of the card: the thumbnail. Twitch keeps the same address for a new thumbnail: a 3-minute stamp
+     * refreshes previews periodically while preserving instant Coil memory/disk cache hits between screens.
      */
     fun picture(stream: Stream, thumbnail: String?): String? {
         remember(stream)
@@ -56,18 +58,18 @@ object TvThumbnails {
 
     /**
      * Twitch sends a stream without a thumbnail yet to its grey picture ("404_preview"): asked without following the
-     * redirection. Kept a minute. Only for a stream started less than 30 minutes ago (or of unknown start).
+     * redirection. Kept two minutes. Only for a stream known to have started less than 12 minutes ago.
      */
     private suspend fun isPlaceholder(client: OkHttpClient, url: String, login: String): Boolean {
-        val createdAt = synchronized(channels) { channels[login]?.createdAt }
-        if (createdAt != null && System.currentTimeMillis() - createdAt > CHECK_MS) return false
+        val createdAt = synchronized(channels) { channels[login]?.createdAt } ?: return false
+        if (System.currentTimeMillis() - createdAt > CHECK_MS) return false
         val key = url.substringBefore('?')
         synchronized(checks) {
             checks[key]?.takeIf { System.currentTimeMillis() - it.at < PLACEHOLDER_KEEP_MS }?.let { return it.placeholder }
         }
         val placeholder = withContext(Dispatchers.IO) {
             try {
-                client.newBuilder().followRedirects(false).followSslRedirects(false).callTimeout(3, TimeUnit.SECONDS).build()
+                client.newBuilder().followRedirects(false).followSslRedirects(false).callTimeout(2, TimeUnit.SECONDS).build()
                     .newCall(Request.Builder().url(url).head().build()).executeAsync().use { response ->
                         response.isRedirect && response.header("Location")?.contains("404_preview") == true
                     }
@@ -96,17 +98,17 @@ object TvThumbnails {
         }
     }
 
-    fun minute() = System.currentTimeMillis() / 60_000L
+    fun minute() = System.currentTimeMillis() / STAMP_BUCKET_MS
 
     fun withStamp(url: String?, stamp: Long): String? {
         if (url.isNullOrBlank() || url.contains("404_preview")) return url
         return url + (if (url.contains('?')) "&" else "?") + "t=" + stamp
     }
 
-    /** Addresses the cards may have loaded for this thumbnail, the newest first (the last 20 minutes, both sizes). */
+    /** Addresses the cards may have loaded for this thumbnail, the newest first (the last 8 buckets, both sizes). */
     fun cachedCandidates(thumbnail: String): List<String> {
         val variants = listOf(thumbnail, thumbnail.replace("1280x720", "640x360")).distinct()
         val now = minute()
-        return (0L..20L).flatMap { back -> variants.mapNotNull { withStamp(it, now - back) } } + variants
+        return (0L..8L).flatMap { back -> variants.mapNotNull { withStamp(it, now - back) } } + variants
     }
 }

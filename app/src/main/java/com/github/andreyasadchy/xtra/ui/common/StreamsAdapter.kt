@@ -160,15 +160,17 @@ class StreamsAdapter(
                     root.setOnClickListener {
                         (fragment.activity as MainActivity).startStream(item, snapshot().items, queueSource)
                     }
+                    val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
                     if (item.channelImage != null) {
                         userImage.visibility = View.VISIBLE
                         fragment.requireContext().imageLoader.enqueue(
                             ImageRequest.Builder(fragment.requireContext()).apply {
                                 data(item.channelImage)
+                                if (isTv) size(72, 72)
                                 if (context.prefs().getBoolean(C.UI_ROUND_USER_IMAGE, true)) {
                                     transformations(CircleCropTransformation())
                                 }
-                                crossfade(true)
+                                crossfade(!isTv)
                                 target(userImage)
                             }.build()
                         )
@@ -180,7 +182,7 @@ class StreamsAdapter(
                     if (item.channelName != null) {
                         username.setOnClickListener(channelListener)
                     }
-                    if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                    if (isTv) {
                         root.setOnFocusChangeListener { _, hasFocus ->
                             com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(title, hasFocus)
                             com.github.andreyasadchy.xtra.ui.view.TvMarquee.update(gameName, hasFocus)
@@ -229,9 +231,10 @@ class StreamsAdapter(
                             ImageRequest.Builder(fragment.requireContext()).apply {
                                 // a stream that just started has no thumbnail yet on Twitch: the picture of the channel
                                 data(com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(item, item.thumbnail))
+                                if (isTv) size(480, 270)
                                 memoryCacheKeyExtra("minutes", key.toString())
-                                diskCachePolicy(CachePolicy.DISABLED)
-                                crossfade(true)
+                                if (!isTv) diskCachePolicy(CachePolicy.DISABLED)
+                                crossfade(!isTv)
                                 target(thumbnail)
                             }.build()
                         )

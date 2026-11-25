@@ -1530,12 +1530,18 @@ class MultiStreamFragment : Fragment() {
         if (chat == null) {
             loadFallbackTileEmotes(tile, emoteGroupsState)
         }
-        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(ctx) { dismiss ->
+        val dialog = com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(ctx) { dismiss ->
             if (chat != null) {
                 androidx.compose.runtime.LaunchedEffect(chat) {
                     emoteGroupsState.value = chat.getTvEmoteGroups()
                     chat.observeEmoteUpdates()?.collect {
                         emoteGroupsState.value = chat.getTvEmoteGroups()
+                    }
+                }
+            } else {
+                androidx.compose.runtime.LaunchedEffect(tile.effectiveChannelId) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.revision.collect {
+                        emoteGroupsState.value = buildFallbackTileEmoteGroups(tile.effectiveChannelId)
                     }
                 }
             }
@@ -1544,6 +1550,7 @@ class MultiStreamFragment : Fragment() {
                 hint = getString(R.string.tv_message_hint),
                 sendLabel = getString(R.string.tv_send),
                 emoteGroups = emoteGroupsState.value,
+                pillStyle = true,
             ) { text ->
                 if (text.isNotBlank()) {
                     val activeChat = findChatFragment(login)
@@ -1555,6 +1562,10 @@ class MultiStreamFragment : Fragment() {
                 }
                 dismiss()
             }
+        }
+        dialog.window?.apply {
+            clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(0f)
         }
     }
 
@@ -1581,7 +1592,10 @@ class MultiStreamFragment : Fragment() {
             twitch.filter { it.source == com.github.andreyasadchy.xtra.model.chat.Emote.CHANNEL_TWITCH } +
                 channelThirdParty
             ).distinctBy { it.name }
+        val combined = (fallbackTwitch + thirdParty).distinctBy { it.name }
+        val mostUsed = com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.sortMostUsed(ctx, combined)
         return buildList {
+            add(ctx.getString(R.string.tv_emotes_most_used) to mostUsed)
             if (channelEmotes.isNotEmpty()) add(ctx.getString(R.string.tv_emotes_channel) to channelEmotes)
             if (fallbackTwitch.isNotEmpty()) add("Twitch" to fallbackTwitch.distinctBy { it.name })
             if (thirdParty.isNotEmpty()) add("7TV/BTTV/FFZ" to thirdParty)
@@ -1703,6 +1717,11 @@ class MultiStreamFragment : Fragment() {
         val gqlHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(appCtx, true)
         val helixHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getHelixHeaders(appCtx)
         val accountId = appCtx.tokenPrefs().getString(C.USER_ID, null)
+        val knownEmoteNamesSnapshot = buildSet {
+            buildFallbackTileEmoteGroups(initialChannelId).forEach { (_, list) ->
+                list.forEach { emote -> emote.name?.takeIf { it.isNotBlank() }?.let(::add) }
+            }
+        }
         if (!trimmed.startsWith("/")) {
             com.github.andreyasadchy.xtra.ui.tv.TvStats.addMessage(appCtx)
         }
@@ -1724,6 +1743,7 @@ class MultiStreamFragment : Fragment() {
                 }
                 if (channelId.isNullOrBlank()) return@launch
                 val followersMin = roomStateCache[loginKey]?.followers?.toIntOrNull()?.takeIf { it > 0 }
+                var sentSuccess = false
                 val toastMsg: String? = if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
                     val response = app.xtraModule.graphQLRepository.sendMessage(networkLibrary, gqlHeaders, channelId, trimmed, null)
                     val dropReason = response.data?.sendChatMessage?.dropReason
@@ -1742,7 +1762,10 @@ class MultiStreamFragment : Fragment() {
                                 .ifBlank { appCtx.getString(R.string.tv_chat_restricted_generic) }
                             com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, null, errMsg)
                         }
-                        else -> null
+                        else -> {
+                            sentSuccess = true
+                            null
+                        }
                     }
                 } else if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
                     val raw = app.xtraModule.helixRepository.sendMessage(networkLibrary, helixHeaders, accountId, channelId, trimmed, null)
@@ -1757,9 +1780,20 @@ class MultiStreamFragment : Fragment() {
                             com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, code, msg, followersMin)
                         }
                         !raw.isNullOrBlank() -> com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, null, raw)
-                        else -> null
+                        else -> {
+                            sentSuccess = true
+                            null
+                        }
                     }
                 } else null
+                if (sentSuccess) {
+                    val knownNames = buildSet {
+                        addAll(knownEmoteNamesSnapshot)
+                        twitchEmotesCache[channelId]?.forEach { e -> e.name?.takeIf { it.isNotBlank() }?.let(::add) }
+                        thirdPartyEmotesCache[channelId]?.forEach { e -> e.name?.takeIf { it.isNotBlank() }?.let(::add) }
+                    }
+                    com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.recordSentMessage(appCtx, trimmed, knownNames)
+                }
                 if (!toastMsg.isNullOrBlank()) {
                     com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(appCtx, toastMsg, android.widget.Toast.LENGTH_LONG).show()
                 }

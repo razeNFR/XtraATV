@@ -1477,4 +1477,8 @@
     <string name="tv_wallpaper_web_active">Aktif</string>
     <string name="tv_wallpaper_web_empty_tv">Belum ada wallpaper kustom di TV</string>
     <string name="tv_wallpaper_web_deleted">Wallpaper dihapus</string>
+    <string name="tv_broadcasters_global">global</string>
+    <string name="tv_emotes_most_used">Paling Sering</string>
+    <string name="tv_emotes_most_used_empty">Kirim emote di obrolan untuk mengisi daftar paling sering dipakai</string>
+    <string name="tv_emotes_uses_count">%1$s kali</string>
 </resources>

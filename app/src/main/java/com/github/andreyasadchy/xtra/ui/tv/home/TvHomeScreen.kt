@@ -1062,6 +1062,7 @@ private fun HeroBanner(
             .height(256.dp)
             .onFocusChanged { heroHasFocus = it.hasFocus }
     ) {
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
         // High-res backdrop on the right, alpha-feathered on all four edges so it melts into any ambient background
         Box(
             Modifier
@@ -1072,26 +1073,49 @@ private fun HeroBanner(
                 .drawWithContent {
                     drawContent()
                     drawRect(
-                        brush = Brush.horizontalGradient(
-                            0.00f to Color.Transparent,
-                            0.16f to Color(0x38FFFFFF),
-                            0.42f to Color(0xD0FFFFFF),
-                            0.68f to Color.White,
-                            0.88f to Color(0xCCFFFFFF),
-                            1.00f to Color.Transparent,
-                        ),
+                        brush = if (hasWallpaper) {
+                            Brush.horizontalGradient(
+                                0.00f to Color.Transparent,
+                                0.14f to Color(0x4DFFFFFF),
+                                0.32f to Color(0xEEFFFFFF),
+                                0.78f to Color.White,
+                                0.91f to Color(0xDEFFFFFF),
+                                1.00f to Color.Transparent,
+                            )
+                        } else {
+                            Brush.horizontalGradient(
+                                0.00f to Color.Transparent,
+                                0.16f to Color(0x38FFFFFF),
+                                0.42f to Color(0xD0FFFFFF),
+                                0.68f to Color.White,
+                                0.88f to Color(0xCCFFFFFF),
+                                1.00f to Color.Transparent,
+                            )
+                        },
                         blendMode = BlendMode.DstIn,
                     )
                     drawRect(
-                        brush = Brush.verticalGradient(
-                            0.00f to Color.Transparent,
-                            0.09f to Color(0x52FFFFFF),
-                            0.24f to Color(0xD9FFFFFF),
-                            0.44f to Color.White,
-                            0.66f to Color(0xD9FFFFFF),
-                            0.88f to Color(0x40FFFFFF),
-                            1.00f to Color.Transparent,
-                        ),
+                        brush = if (hasWallpaper) {
+                            Brush.verticalGradient(
+                                0.00f to Color.Transparent,
+                                0.08f to Color(0x66FFFFFF),
+                                0.20f to Color(0xEBFFFFFF),
+                                0.44f to Color.White,
+                                0.74f to Color(0xEBFFFFFF),
+                                0.90f to Color(0x52FFFFFF),
+                                1.00f to Color.Transparent,
+                            )
+                        } else {
+                            Brush.verticalGradient(
+                                0.00f to Color.Transparent,
+                                0.09f to Color(0x52FFFFFF),
+                                0.24f to Color(0xD9FFFFFF),
+                                0.44f to Color.White,
+                                0.66f to Color(0xD9FFFFFF),
+                                0.88f to Color(0x40FFFFFF),
+                                1.00f to Color.Transparent,
+                            )
+                        },
                         blendMode = BlendMode.DstIn,
                     )
                 }
@@ -1100,7 +1124,7 @@ private fun HeroBanner(
                 model = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.90f }
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (hasWallpaper) 0.96f else 0.90f }
             )
             // the stream itself over its picture while the banner has the focus (no sound), cropped like the picture
             val player = previewPlayer()
@@ -1114,13 +1138,11 @@ private fun HeroBanner(
                             .wrapContentHeight(unbounded = true)
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f)
-                            .graphicsLayer { alpha = 0.90f }
+                            .graphicsLayer { alpha = if (hasWallpaper) 1f else 0.90f }
                     )
                 }
             }
         }
-
-        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
         val heroAccentColor = if (hasWallpaper) {
             androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primary, Color.White, 0.28f)
         } else {

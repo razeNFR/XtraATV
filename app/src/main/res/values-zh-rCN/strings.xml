@@ -1476,4 +1476,8 @@
     <string name="tv_wallpaper_web_active">当前使用</string>
     <string name="tv_wallpaper_web_empty_tv">电视上尚无自定义壁纸</string>
     <string name="tv_wallpaper_web_deleted">已删除壁纸</string>
+    <string name="tv_broadcasters_global">全球</string>
+    <string name="tv_emotes_most_used">最常用</string>
+    <string name="tv_emotes_most_used_empty">在聊天中发送表情即可生成最常用列表</string>
+    <string name="tv_emotes_uses_count">%1$s 次使用</string>
 </resources>

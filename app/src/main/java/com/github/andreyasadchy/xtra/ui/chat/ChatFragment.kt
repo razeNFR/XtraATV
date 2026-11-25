@@ -1250,10 +1250,13 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             kotlinx.coroutines.flow.flow {
                 viewModel.recentEmotes.collect { emit(Unit) }
             },
+            kotlinx.coroutines.flow.flow {
+                com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.revision.collect { emit(Unit) }
+            },
         )
     }
 
-    /** Returns grouped emotes (Recent, Channel, Twitch, 7TV/BTTV/FFZ) for the TV ChatComposer emote picker. */
+    /** Returns grouped emotes (Most Used, Recent, Channel, Twitch, 7TV/BTTV/FFZ) for the TV ChatComposer emote picker. */
     fun getTvEmoteGroups(): List<Pair<String, List<Emote>>> {
         val ctx = context ?: return emptyList()
         val personal = viewModel.userSTVEmoteSetId?.let { setId ->
@@ -1273,10 +1276,12 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 rawThirdParty.filter { it.isChannelEmote }
             ).distinctBy { it.name }
         val combined = (twitch + thirdParty).distinctBy { it.name }
+        val mostUsed = com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.sortMostUsed(ctx, combined)
         val recent = latestRecentEmoteNames.mapNotNull { name ->
             combined.find { it.name == name }
         }
         return buildList {
+            add(ctx.getString(R.string.tv_emotes_most_used) to mostUsed)
             if (recent.isNotEmpty()) add(ctx.getString(R.string.recent_emotes) to recent)
             if (channelEmotes.isNotEmpty()) add(ctx.getString(R.string.tv_emotes_channel) to channelEmotes)
             if (twitch.isNotEmpty()) add("Twitch" to twitch.distinctBy { it.name })

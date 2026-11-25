@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import coil3.imageLoader
 import coil3.request.ImageRequest
+import coil3.request.allowHardware
 import coil3.request.crossfade
 import coil3.request.target
 import coil3.request.transformations
@@ -96,15 +97,18 @@ class GamesAdapter(
                         fragment.requireContext().imageLoader.enqueue(
                             ImageRequest.Builder(fragment.requireContext()).apply {
                                 data(item.boxArt)
+                                if (isTv) size(160, 214)
                                 crossfade(!isTv)
                                 target(gameImage)
                             }.build()
                         )
-                        // TV: the box art blurred behind the texts of the wide card (cached in Coil to avoid live GPU RenderEffect lag)
+                        // TV: the box art blurred behind the texts of the wide card (decoded tiny in software, 20x faster on Formuler)
                         gameBackground?.let { background ->
                             fragment.requireContext().imageLoader.enqueue(
                                 ImageRequest.Builder(fragment.requireContext()).apply {
                                     data(item.boxArt)
+                                    size(48, 64)
+                                    allowHardware(false)
                                     crossfade(false)
                                     transformations(com.github.andreyasadchy.xtra.ui.view.TvCards.BlurTransformation)
                                     target(background)
@@ -144,11 +148,17 @@ class GamesAdapter(
                     if (item.broadcasterCount != null && context.prefs().getBoolean(C.UI_BROADCASTERS_COUNT, true)) {
                         broadcastersCount.visibility = View.VISIBLE
                         val count = item.broadcasterCount ?: 0
-                        broadcastersCount.text = context.resources.getQuantityString(
+                        val baseText = context.resources.getQuantityString(
                             R.plurals.broadcasters,
                             count,
                             TwitchApiHelper.formatCount(count, context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
                         )
+                        val hasLangFilter = isTv && context.prefs().getStringSet(C.TV_DEFAULT_LANGUAGES, null)?.any { it.isNotBlank() } == true
+                        broadcastersCount.text = if (hasLangFilter) {
+                            "$baseText (${context.getString(R.string.tv_broadcasters_global)})"
+                        } else {
+                            baseText
+                        }
                     } else {
                         broadcastersCount.visibility = View.GONE
                     }

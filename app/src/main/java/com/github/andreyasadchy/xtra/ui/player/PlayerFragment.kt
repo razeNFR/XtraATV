@@ -310,6 +310,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    /** True once the current live stream has rendered its first video frame (starts HUD/overlay auto-hide countdown). */
+    protected var streamFirstFrameRendered = false
+
+    private fun isWaitingForStreamStart(): Boolean =
+        isTv && isStreamScreen() && !streamFirstFrameRendered && !tvOfflineScreenActive && loadingPicture != null
+
     private fun peekHud(immediate: Boolean = false) {
         if (binding.playerControls.root.hasFocus()) {
             return
@@ -331,7 +337,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             showController()
         }
         binding.root.removeCallbacks(hudPeekHideAction)
-        binding.root.postDelayed(hudPeekHideAction, 2500L)
+        if (isWaitingForStreamStart()) {
+            binding.playerControls.root.removeCallbacks(controllerHideAction)
+            // Keep HUD & left/right overlays visible until first frame renders (12 s safety fallback)
+            binding.root.postDelayed(hudPeekHideAction, 12_000L)
+        } else {
+            binding.root.postDelayed(hudPeekHideAction, 2500L)
+            TvSwitchOverlay.startAutoHideTimer(activity, 2500L)
+        }
     }
 
     /** TV: the buttons and the timeline of the HUD hidden (the info of the stream after a switch) or shown again. */
@@ -4888,10 +4901,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    /** TV: write a chat message, with voice input and visual emote picker in the field (no system popup). */
+    /** TV: write a chat message in a smoked-glass pill anchored above the HUD (matching TvVolumePill) with Most Used emotes. */
     private fun showChatComposer() {
         val emoteGroupsState = androidx.compose.runtime.mutableStateOf(chatFragment?.getTvEmoteGroups().orEmpty())
-        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
+        val dialog = com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 emoteGroupsState.value = chatFragment?.getTvEmoteGroups().orEmpty()
                 chatFragment?.observeEmoteUpdates()?.collect {
@@ -4903,12 +4916,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 hint = getString(R.string.tv_message_hint),
                 sendLabel = getString(R.string.tv_send),
                 emoteGroups = emoteGroupsState.value,
+                pillStyle = true,
             ) { text ->
                 if (text.isNotBlank()) {
                     chatFragment?.sendExternalMessage(text)
                 }
                 dismiss()
             }
+        }
+        dialog.window?.apply {
+            clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(0f)
         }
     }
 
@@ -7451,6 +7469,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private fun showLoadingPicture() {
         val picture = pendingLoadingPicture ?: return
         pendingLoadingPicture = null
+        streamFirstFrameRendered = false
         val context = requireContext()
         val image = android.widget.ImageView(context).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
@@ -7472,15 +7491,31 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         image.postDelayed({ hideLoadingPicture() }, 20_000L)
     }
 
-    /** The first picture of the video is on screen: the picture of the stream fades away. */
+    /** The first picture of the video is on screen: the picture of the stream fades away and HUD auto-hide timers start. */
     protected fun hideLoadingPicture() {
+        val wasFirst = !streamFirstFrameRendered
+        streamFirstFrameRendered = true
         switchFrameListener = null
         if (tvOfflineScreenActive) {
             hideTvOfflineOverlay()
         }
-        val image = loadingPicture ?: return
-        loadingPicture = null
-        image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
+        loadingPicture?.let { image ->
+            loadingPicture = null
+            image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
+        }
+        if (wasFirst && isTv && _binding != null) {
+            if (hudPeek) {
+                binding.root.removeCallbacks(hudPeekHideAction)
+                binding.root.postDelayed(hudPeekHideAction, 2500L)
+                TvSwitchOverlay.startAutoHideTimer(activity, 2500L)
+            } else {
+                TvSwitchOverlay.startAutoHideTimer(activity, 2500L)
+                if (binding.playerControls.root.isVisible && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
+                    binding.playerControls.root.removeCallbacks(controllerHideAction)
+                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                }
+            }
+        }
     }
 
     /** The button of the controls focused last, in this player or a previous one; null when this one has none like it. */
@@ -7810,7 +7845,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         binding.playerControls.root.alpha = 1f
                                     }
                                     if (view != null && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                                        binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                                        val delayMs = if (isWaitingForStreamStart()) 12_000L else controllerHideDelay
+                                        binding.playerControls.root.postDelayed(controllerHideAction, delayMs)
                                     }
                                 }
                             }
@@ -7827,7 +7863,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     updateProgress()
                 }
                 if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                    val delayMs = if (isWaitingForStreamStart()) 12_000L else controllerHideDelay
+                    binding.playerControls.root.postDelayed(controllerHideAction, delayMs)
                 }
             }
         }

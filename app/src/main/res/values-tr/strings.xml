@@ -1477,4 +1477,8 @@
     <string name="tv_wallpaper_web_active">Aktif</string>
     <string name="tv_wallpaper_web_empty_tv">TV\'de henüz özel duvar kağıdı yok</string>
     <string name="tv_wallpaper_web_deleted">Duvar kağıdı silindi</string>
+    <string name="tv_broadcasters_global">genel</string>
+    <string name="tv_emotes_most_used">En Çok Kullanılan</string>
+    <string name="tv_emotes_most_used_empty">En çok kullanılanları oluşturmak için sohbette ifade gönderin</string>
+    <string name="tv_emotes_uses_count">%1$s kullanım</string>
 </resources>

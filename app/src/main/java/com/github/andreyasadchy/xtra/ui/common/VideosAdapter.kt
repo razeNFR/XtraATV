@@ -152,11 +152,13 @@ class VideosAdapter(
                             )
                         }
                     }
+                    val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
                     fragment.requireContext().imageLoader.enqueue(
                         ImageRequest.Builder(fragment.requireContext()).apply {
                             data(if (missing) item.channelImage else item.thumbnail)
-                            diskCachePolicy(CachePolicy.DISABLED)
-                            crossfade(true)
+                            if (isTv) size(480, 270)
+                            if (!isTv) diskCachePolicy(CachePolicy.DISABLED)
+                            crossfade(!isTv)
                             target(thumbnail)
                         }.build()
                     )
@@ -223,10 +225,11 @@ class VideosAdapter(
                             fragment.requireContext().imageLoader.enqueue(
                                 ImageRequest.Builder(fragment.requireContext()).apply {
                                     data(item.channelImage)
+                                    if (isTv) size(72, 72)
                                     if (context.prefs().getBoolean(C.UI_ROUND_USER_IMAGE, true)) {
                                         transformations(CircleCropTransformation())
                                     }
-                                    crossfade(true)
+                                    crossfade(!isTv)
                                     target(userImage)
                                 }.build()
                             )

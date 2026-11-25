@@ -1,23 +1,21 @@
-# Xtra TV 1.4.7
+# Xtra TV 1.4.7.1
 
-### New & Polish
-- **Adjustable Smoked-Glass Card Opacity & Unified Wallpaper Polish (Zero-Blur for Android TV Boxes)**:
-  - Added a **Card opacity** slider (`30–95%`, default `65%`) with a compact live card & pill preview in **Settings > Xtra TV > Customization > Wallpaper > Adjustments**, active **only when a wallpaper is enabled** (leaving the app's default background untouched) and included in Xtra TV backups.
-  - **Unified smoked-glass look across every TV screen** when a wallpaper is active:
-    - **Home**: stream, video, clip, category, stats, and **See All** cards adopt a dark smoked-glass surface with a zero-blur specular rim and subtle top sheen; the **Hero** banner gets a soft elliptical backdrop halo, brightened accent text, and a matching smoked-glass viewer badge; **Greeting & Clock** becomes frameless with subtle text shadow.
-    - **All Grids & Pages**: unified smoked-glass cards across **Followed channels**, **Categories**, **Popular**, **Saved**, **Search**, **Statistics**, **Settings**, and **Channel** pages (**About** & **Schedule**), with consistent smoked-glass header pills (**Refresh**, **Sort**, **Manage**, etc.) on every screen.
-  - **Zero per-frame GPU overhead**: subtle top and left readability scrims are pre-baked into cached wallpaper bitmaps with zero real-time blur passes on scrolling lists.
-- **Custom Wallpapers — True-Black Dimming, 3-Level Ambient Color Tint & Redesigned "Studio Glass" Phone QR Portal**:
-  - **True-black Visibility dimming**: lowering **Visibility** on custom wallpapers now dims luminance cleanly toward pure black instead of adding a gray veil — at `100%`, custom photos keep their full original brightness and OLED contrast.
-  - **3-level Ambient Color Tint (`Off` / `Subtle` / `Full`)**: new option in **Wallpaper > Adjustments** for custom images to recolor your photo with the active **Ambient color** — works with both fixed colors and live **Dynamic** ambiance crossfades, and is preserved in Xtra TV backups.
-  - **Redesigned "Studio Glass" Phone QR Web Portal**: modern dark mobile interface dynamically tinted with your TV's ambient color, featuring 3 tabs (**Photos**, **URL**, **On TV**), multi-photo picker with client-side 16:9 preview queue and progress bar, live 16:9 URL preview, and an **On TV** gallery to **Apply** or **Delete** custom wallpapers directly from your phone with instant sync on the TV.
-  - **Wallpaper Panel Polish**: fixed focus-zoom clipping on the side edges of the **Adjustments** and **Rotation** tabs, and removed the duplicate QR upload button from **Adjustments**.
-- **Home — "See All" on Recommended Channels**:
-  - Added a **See All** button to the **Recommended channels** row on Home, opening the full live streams grid directly in **Recommended** sort mode without overwriting your saved **Popular** sort or language preferences.
-- **Twitch Channel Offline Screen & Auto-Reconnect in Player, Multi-Stream & PiP**:
-  - **Main TV Player**: when a live stream goes offline, the buffering spinner disappears immediately and the player displays the streamer's Twitch offline screen (or a dark ambient fallback when unset) with their profile picture, display name, and **Offline** badge.
-  - **Automatic live reconnection**: detects when the streamer comes back live (instantly via live events, plus a lightweight fallback when chat is disabled) and automatically reconnects the stream.
-  - **Full "When live stream ends" support in Main Player, Multi-Stream & PiP**: works seamlessly with **Return to Home**, **Switch to another live channel** (offline screen shown behind the 10 s countdown; press **Back** to stay and wait for reconnect), **Stay on player**, and automatic raids — Multi-Stream tiles and PiP windows now also show a compact offline screen in **Stay** mode or cleanly close/remove ended streams instead of freezing.
+### New & Improvements
+- **Redesigned Smoked-Glass Chat Composer & "Most Used" Emotes Tab**:
+  - **Compact Smoked-Glass Chat Pill**: writing a chat message in the live player or Multi-Stream now opens a sleek smoked-glass pill anchored right above the bottom player controls (matching the Volume pill, without darkening the stream), with an upward-opening Emotes drawer.
+  - **Dedicated "Most Used" Emotes Tab**: tracks lifetime usage for Twitch, 7TV, BTTV, and FFZ emotes — **counted only when a message is actually sent successfully** (never on preview or selection), automatically sorted from most to least used with lifetime usage badges, provider color indicators, live hover details, full TV remote navigation, persistent storage across restarts, and automatic backup/restore support.
+- **Smoother Navigation & Faster Stream Startup on Android TV Boxes**:
+  - **Fluid Scrolling on Lists & Categories**: optimized thumbnail, box-art, blur backdrop, and avatar decoding sizes for TV with dedicated in-memory caching and disk caching, removing heavy cold-load stutter while preserving smoked-glass transparency and live refreshes.
+  - **Faster Stream Startup**: lowered initial TV playback buffer startup threshold and deferred third-party emote loading slightly so streams render their first frame faster without touching ad-blocker behavior.
+  - **Fluid Left Menu Hover ("Navigate without OK")**: faster hover settle (`130 ms`) with instant section transitions and no redundant fade animations or stale network reloads while moving through the left navigation bar.
+- **Player, Visuals & UI Polish**:
+  - **HUD & Switch Overlay Auto-Hide Timing**: when opening or switching a stream, the player HUD peek and left/right stream-switch overlays now wait for the first video frame to render before starting their 2.5 s auto-hide countdown (with a 12 s safety fallback).
+  - **Refined Night Shift**: replaced the harsh yellow tint with a calibrated cinema-amber warmth curve and subtle black-contrast compensation for comfortable night viewing with zero GPU overhead.
+  - **Modernized Left Navigation Bar**: kept the familiar collapsible rail and gliding focus pill while adding a subtle top ambient wash, hairline group dividers, an avatar ring with online dot, a left accent bar on the active section, and subtle hierarchy guide lines on sub-items.
+  - **Categories Language-Aware Broadcaster Count**: category cards now clarify `(global)` when a TV stream language filter is active, and opened category pages display the live language-filtered broadcaster count (e.g., `18 broadcasters (FR)` / `30+ broadcasters (FR)`).
+  - **Hero Live Preview Clarity**: slightly reduced edge transparency on the Home Hero live preview video over custom wallpapers so streams remain crisp while blending smoothly.
+  - **Statistics Period Tabs ("Navigate without OK")**: the **7 days**, **30 days**, and **All time** tabs now switch automatically on focus when "Navigate without OK" is enabled (while **Reset** remains click-only for safety).
+  - **Unified Refresh Button**: on the app's default background, the **Refresh** header button now matches Home's sleek dark pill style across every screen.
 
 ### Install
-Download `XtraTV-1.4.7-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.4.7.1-tv.apk` below and install it over the previous version, your settings and account are kept.

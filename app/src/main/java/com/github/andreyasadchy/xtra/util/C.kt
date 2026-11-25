@@ -381,6 +381,7 @@ object C {
     const val TV_WALLPAPER_ROTATION_INTERVAL = "tv_wallpaper_rotation_interval"
     const val TV_WALLPAPER_ROTATION_SHUFFLE = "tv_wallpaper_rotation_shuffle"
     const val TV_WALLPAPER_ROTATION_POOL = "tv_wallpaper_rotation_pool"
+    const val TV_EMOTE_USAGE_COUNTS = "tv_emote_usage_counts"
     const val TV_PREVIEW_DELAY = "tv_preview_delay"
     const val TV_HIDE_MENU_STATS = "tv_hide_menu_stats"
     const val TV_BACK_CLOSES_MENU = "tv_back_closes_menu"

@@ -388,15 +388,27 @@ class ChatViewModel(
             coStreamers.value = emptyList()
             startLiveChat(initialChannelId, channelLogin)
             addChatter(channelName)
-            loadEmotes(initialChannelId, channelLogin)
+            if (applicationContext.resources.getBoolean(R.bool.isTv)) {
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(350L)
+                    if (activeChannelLogin == channelLogin) {
+                        loadEmotes(resolvedChannelId ?: initialChannelId, channelLogin)
+                        if (isUserLoggedIn()) {
+                            loadUserEmotes(resolvedChannelId ?: initialChannelId)
+                        }
+                    }
+                }
+            } else {
+                loadEmotes(initialChannelId, channelLogin)
+                if (isUserLoggedIn()) {
+                    loadUserEmotes(initialChannelId)
+                }
+            }
             if (initialChannelId != null) {
                 loadInitialPinnedAndCoStreamers(networkLibrary, initialChannelId, channelLogin)
             }
             if (applicationContext.prefs().getBoolean(C.CHAT_RECENT, true)) {
                 loadRecentMessages(networkLibrary, recentMessagesUrl, channelLogin)
-            }
-            if (isUserLoggedIn()) {
-                loadUserEmotes(initialChannelId)
             }
             if (initialChannelId == null) {
                 viewModelScope.launch {
@@ -2981,6 +2993,7 @@ class ChatViewModel(
     }
 
     private suspend fun sendMessage(message: CharSequence, networkLibrary: String?, gqlHeaders: Map<String, String>, helixHeaders: Map<String, String>, accountId: String?, channelId: String?, useApiChatMessages: Boolean, enableIntegrity: Boolean, replyId: String? = null) {
+        var sentSuccess = false
         if (useApiChatMessages) {
             if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
                 val response = graphQLRepository.sendMessage(networkLibrary, gqlHeaders, channelId, message.toString(), replyId)
@@ -2992,7 +3005,7 @@ class ChatViewModel(
                 }
                 val dropReason = response.data?.sendChatMessage?.dropReason
                 val dropMessage = response.data?.sendChatMessage?.dropReasonMessage
-                when {
+                val errorMsg = when {
                     !dropReason.isNullOrBlank() -> {
                         if (dropReason == "SUBSCRIBERS_ONLY" && userRoomBadges.value == null) {
                             userRoomBadges.value = emptySet()
@@ -3010,43 +3023,62 @@ class ChatViewModel(
                         chatRestrictionToast.emit(TvChatNotices.restrictionMessage(applicationContext, null, errMsg))
                         errMsg
                     }
-                    else -> null
-                }
-            } else {
-                if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
-                    val raw = helixRepository.sendMessage(networkLibrary, helixHeaders, accountId, channelId, message.toString(), replyId)
-                    when {
-                        raw != null && raw.startsWith("DROP:") -> {
-                            val payload = raw.removePrefix("DROP:")
-                            val code = payload.substringBefore('|')
-                            val msg = payload.substringAfter('|', "")
-                            if (code == "msg_subsonly" && userRoomBadges.value == null) {
-                                userRoomBadges.value = emptySet()
-                            }
-                            val followersMin = effectiveRoomState.value.followers?.toIntOrNull()?.takeIf { it > 0 }
-                            val toastMsg = TvChatNotices.restrictionMessage(applicationContext, code, msg, followersMin)
-                            chatRestrictionToast.emit(toastMsg)
-                            msg.ifBlank { toastMsg }
-                        }
-                        !raw.isNullOrBlank() -> {
-                            chatRestrictionToast.emit(TvChatNotices.restrictionMessage(applicationContext, null, raw))
-                            raw
-                        }
-                        else -> null
+                    else -> {
+                        sentSuccess = true
+                        null
                     }
-                } else null
-            }?.let {
-                onMessage(ChatMessage(systemMsg = it))
+                }
+                errorMsg?.let { onMessage(ChatMessage(systemMsg = it)) }
+            } else if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
+                val raw = helixRepository.sendMessage(networkLibrary, helixHeaders, accountId, channelId, message.toString(), replyId)
+                val errorMsg = when {
+                    raw != null && raw.startsWith("DROP:") -> {
+                        val payload = raw.removePrefix("DROP:")
+                        val code = payload.substringBefore('|')
+                        val msg = payload.substringAfter('|', "")
+                        if (code == "msg_subsonly" && userRoomBadges.value == null) {
+                            userRoomBadges.value = emptySet()
+                        }
+                        val followersMin = effectiveRoomState.value.followers?.toIntOrNull()?.takeIf { it > 0 }
+                        val toastMsg = TvChatNotices.restrictionMessage(applicationContext, code, msg, followersMin)
+                        chatRestrictionToast.emit(toastMsg)
+                        msg.ifBlank { toastMsg }
+                    }
+                    !raw.isNullOrBlank() -> {
+                        chatRestrictionToast.emit(TvChatNotices.restrictionMessage(applicationContext, null, raw))
+                        raw
+                    }
+                    else -> {
+                        sentSuccess = true
+                        null
+                    }
+                }
+                errorMsg?.let { onMessage(ChatMessage(systemMsg = it)) }
             }
         } else {
-            chatWriteIRCSocket?.send(message, replyId) ?: chatWriteWebSocket?.send(message, replyId)
+            val irc = chatWriteIRCSocket
+            val ws = chatWriteWebSocket
+            if (irc != null) {
+                irc.send(message, replyId)
+                sentSuccess = true
+            } else if (ws != null) {
+                ws.send(message, replyId)
+                sentSuccess = true
+            }
         }
         val usedEmotes = hashSetOf<RecentEmote>()
+        val knownEmotes: Set<String>
         val currentTime = System.currentTimeMillis()
         synchronized(allEmotes) {
+            knownEmotes = allEmotes.toSet()
             message.split(' ').forEach { word ->
-                allEmotes.find { it == word }?.let { usedEmotes.add(RecentEmote(word, currentTime)) }
+                if (word in knownEmotes) {
+                    usedEmotes.add(RecentEmote(word, currentTime))
+                }
             }
+        }
+        if (sentSuccess) {
+            com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.recordSentMessage(applicationContext, message, knownEmotes)
         }
         if (usedEmotes.isNotEmpty()) {
             playerRepository.insertRecentEmotes(usedEmotes)

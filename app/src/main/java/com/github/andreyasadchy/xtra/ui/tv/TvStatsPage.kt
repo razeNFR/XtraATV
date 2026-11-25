@@ -158,6 +158,7 @@ object TvStatsPage {
                                 }
                             }
                     ) {
+                        val focusSwitch = remember { context.prefs().getBoolean(com.github.andreyasadchy.xtra.util.C.TV_FOCUS_SWITCH, false) }
                         listOf(R.string.tv_stats_period_7, R.string.tv_stats_period_30, R.string.tv_stats_period_all).forEachIndexed { index, label ->
                             var chipMod: Modifier = Modifier
                             if (index == period) {
@@ -171,7 +172,12 @@ object TvStatsPage {
                                     } else false
                                 }
                             }
-                            Chip(context.getString(label), index == period, chipMod) { period = index }
+                            Chip(
+                                label = context.getString(label),
+                                selected = index == period,
+                                modifier = chipMod,
+                                autoFocusSwitch = focusSwitch && index != period,
+                            ) { period = index }
                         }
                         Spacer(Modifier.width(8.dp))
                         Chip(context.getString(R.string.tv_stats_reset), false, Modifier) {
@@ -228,9 +234,23 @@ object TvStatsPage {
     }
 
     @Composable
-    private fun Chip(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    private fun Chip(
+        label: String,
+        selected: Boolean,
+        modifier: Modifier,
+        autoFocusSwitch: Boolean = false,
+        onClick: () -> Unit,
+    ) {
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
+        if (autoFocusSwitch) {
+            LaunchedEffect(focused) {
+                if (focused) {
+                    kotlinx.coroutines.delay(180L)
+                    onClick()
+                }
+            }
+        }
         Box(
             modifier
                 .clip(RoundedCornerShape(20.dp))

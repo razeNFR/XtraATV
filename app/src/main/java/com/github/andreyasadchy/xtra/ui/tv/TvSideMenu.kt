@@ -459,10 +459,21 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                     )
                 )
                 if (p > 0.001f) {
-                    val bgAlpha = 0.92f * p
+                    val bgAlpha = 0.90f * p
                     drawPath(
                         path = clipPath,
                         brush = Brush.verticalGradient(listOf(top.copy(alpha = bgAlpha), bottom.copy(alpha = bgAlpha)))
+                    )
+                    // Subtle top ambient sheen for smoked-glass depth (0% extra GPU blur cost)
+                    drawPath(
+                        path = clipPath,
+                        brush = Brush.radialGradient(
+                            0.0f to ambient.copy(alpha = 0.20f * p),
+                            0.55f to ambient.copy(alpha = 0.06f * p),
+                            1.0f to Color.Transparent,
+                            center = Offset(visibleW * 0.25f, 0f),
+                            radius = visibleW * 1.35f,
+                        )
                     )
                 }
                 clipPath(clipPath) {
@@ -471,7 +482,13 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                 if (p > 0.001f) {
                     drawPath(
                         path = clipPath,
-                        color = Color.White.copy(alpha = 0.07f * p),
+                        brush = Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.16f * p),
+                                Color.White.copy(alpha = 0.07f * p),
+                                Color.White.copy(alpha = 0.10f * p),
+                            )
+                        ),
                         style = Stroke(width = 1.dp.toPx())
                     )
                 }
@@ -612,11 +629,21 @@ fun TvSideMenu(state: TvMenuState, onClick: (Int) -> Unit) {
                     }
                     Spacer(Modifier.height(8.dp))
                 }
-                // air between the groups (account, search, sections, settings), no line
                 if (index > 0 && !item.sub && !hasNowPlayingHere) {
                     val previous = items[index - 1]
                     val newGroup = previous === account || previous.group != item.group
-                    Spacer(Modifier.height(if (newGroup) 12.dp else 4.dp))
+                    if (newGroup) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 7.dp)
+                                .height(1.dp)
+                                .graphicsLayer { alpha = 0.25f + 0.75f * openProvider() }
+                                .background(Color(0x1CFFFFFF))
+                        )
+                    } else {
+                        Spacer(Modifier.height(4.dp))
+                    }
                 }
                 val requester = state.requesters.getOrPut(item.id) { FocusRequester() }
                 val isAccount = item === account
@@ -712,6 +739,7 @@ private fun AccountEntry(
     val name = state.accountName
     val image = state.accountImage
     val content = if (focused) TvColors.onFocused else Color.White
+    val ringColor = if (focused) Color(0x40000000) else Color(0x42FFFFFF)
     Row(
         modifier
             .fillMaxWidth()
@@ -723,21 +751,47 @@ private fun AccountEntry(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(ENTRY_HEIGHT), contentAlignment = Alignment.Center) {
-            if (name != null && image != null) {
-                coil3.compose.AsyncImage(
-                    model = image,
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                )
-            } else {
-                Box(
-                    Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (focused) Color(0x1F000000) else Color(0x26FFFFFF)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (item.icon != null) {
-                        Icon(painterResource(item.icon), contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
+            Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
+                if (name != null && image != null) {
+                    coil3.compose.AsyncImage(
+                        model = image,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .drawWithContent {
+                                drawContent()
+                                drawCircle(color = ringColor, style = Stroke(width = 1.2.dp.toPx()))
+                            }
+                    )
+                } else {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(if (focused) Color(0x1F000000) else Color(0x26FFFFFF))
+                            .drawBehind {
+                                drawCircle(color = ringColor, style = Stroke(width = 1.dp.toPx()))
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (item.icon != null) {
+                            Icon(painterResource(item.icon), contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
+                        }
                     }
+                }
+                if (name != null) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(10.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(if (focused) TvColors.focused else Color(0xFF14141C))
+                            .padding(1.8.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(Color(0xFF22C55E))
+                    )
                 }
             }
         }
@@ -923,6 +977,20 @@ private fun MenuEntry(
     val height = if (item.sub) 38.dp else ENTRY_HEIGHT
     Row(
         modifier
+            .drawBehind {
+                if (item.sub) {
+                    val p = openProvider().coerceIn(0f, 1f)
+                    if (p > 0.05f) {
+                        val guideX = 16.dp.toPx()
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.16f * p),
+                            start = Offset(guideX, 2.dp.toPx()),
+                            end = Offset(guideX, size.height - 2.dp.toPx()),
+                            strokeWidth = 1.5.dp.toPx(),
+                        )
+                    }
+                }
+            }
             .padding(start = indent)
             .fillMaxWidth()
             .height(height)
@@ -949,6 +1017,22 @@ private fun MenuEntry(
                             color = selectedPillColor,
                             size = Size(pillW, size.height),
                             cornerRadius = CornerRadius(r, r),
+                        )
+                        val inset = 0.5.dp.toPx()
+                        drawRoundRect(
+                            color = accent.copy(alpha = 0.44f),
+                            topLeft = Offset(inset, inset),
+                            size = Size((pillW - inset * 2f).coerceAtLeast(0f), (size.height - inset * 2f).coerceAtLeast(0f)),
+                            cornerRadius = CornerRadius(r, r),
+                            style = Stroke(width = 1.dp.toPx()),
+                        )
+                        val barW = 3.dp.toPx()
+                        val barPadY = 9.dp.toPx()
+                        drawRoundRect(
+                            color = accent,
+                            topLeft = Offset(0f, barPadY),
+                            size = Size(barW, (size.height - barPadY * 2f).coerceAtLeast(4.dp.toPx())),
+                            cornerRadius = CornerRadius(barW, barW),
                         )
                     }
                 }

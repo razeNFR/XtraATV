@@ -1476,4 +1476,8 @@
     <string name="tv_wallpaper_web_active">نشط</string>
     <string name="tv_wallpaper_web_empty_tv">لا توجد خلفيات مخصصة على التلفاز بعد</string>
     <string name="tv_wallpaper_web_deleted">تم حذف الخلفية</string>
+    <string name="tv_broadcasters_global">عالمي</string>
+    <string name="tv_emotes_most_used">الأكثر استخدامًا</string>
+    <string name="tv_emotes_most_used_empty">أرسل الرموز في الدردشة لبناء قائمة الأكثر استخدامًا</string>
+    <string name="tv_emotes_uses_count">%1$s استخدام</string>
 </resources>

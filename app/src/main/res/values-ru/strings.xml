@@ -1476,4 +1476,8 @@
     <string name="tv_wallpaper_web_active">Активно</string>
     <string name="tv_wallpaper_web_empty_tv">На ТВ пока нет своих обоев</string>
     <string name="tv_wallpaper_web_deleted">Обои удалены</string>
+    <string name="tv_broadcasters_global">всего</string>
+    <string name="tv_emotes_most_used">Частые</string>
+    <string name="tv_emotes_most_used_empty">Отправляйте смайлы в чат, чтобы заполнить список частых</string>
+    <string name="tv_emotes_uses_count">%1$s исп.</string>
 </resources>

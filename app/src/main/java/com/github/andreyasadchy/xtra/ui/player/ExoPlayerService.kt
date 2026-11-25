@@ -205,10 +205,10 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     private fun createLoadControl(): DefaultLoadControl {
-        // TV: 1 s of video to start instead of 2 when the setting was not changed (after a stall it
-        // still waits for its own setting, 2 s)
+        // TV: 600 ms of video to start instead of 2000 ms when the setting was not changed (after a stall it
+        // still waits for its own setting, 2000 ms) — speeds up startup on modest Android TV boxes
         val playbackMs = (prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull()
-            ?.let { if (it == 2000 && resources.getBoolean(R.bool.isTv)) 1000 else it } ?: 2000)
+            ?.let { if (it == 2000 && resources.getBoolean(R.bool.isTv)) 600 else it } ?: 2000)
             .coerceAtLeast(0)
         val rebufferMs = (prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000)
             .coerceAtLeast(0)

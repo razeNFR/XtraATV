@@ -818,8 +818,8 @@ object TvHeader {
         val background = when {
             focused -> TvColors.focused
             quiet -> Color.Transparent
-            hasWallpaper -> com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.pillSurfaceColor(context, Color(0x26FFFFFF))
-            else -> Color(0x26FFFFFF)
+            hasWallpaper -> com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.pillSurfaceColor(context, Color(0xD913121C))
+            else -> Color(0xD913121C)
         }
         val content = when {
             focused -> TvColors.onFocused
@@ -832,8 +832,8 @@ object TvHeader {
                 .clip(pillShape)
                 .background(background)
                 .then(
-                    if (hasWallpaper && !quiet && !focused) {
-                        Modifier.border(1.dp, Color(0x38FFFFFF), pillShape)
+                    if (!quiet && !focused) {
+                        Modifier.border(1.dp, if (hasWallpaper) Color(0x38FFFFFF) else Color(0x28FFFFFF), pillShape)
                     } else {
                         Modifier
                     }

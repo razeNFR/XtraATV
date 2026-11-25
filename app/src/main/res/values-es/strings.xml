@@ -1481,4 +1481,8 @@
     <string name="tv_wallpaper_web_active">Activo</string>
     <string name="tv_wallpaper_web_empty_tv">Aún no hay fondos personalizados en la TV</string>
     <string name="tv_wallpaper_web_deleted">Fondo eliminado</string>
+    <string name="tv_broadcasters_global">global</string>
+    <string name="tv_emotes_most_used">Más usadas</string>
+    <string name="tv_emotes_most_used_empty">Envía emotes en el chat para llenar tu lista de más usadas</string>
+    <string name="tv_emotes_uses_count">%1$s usos</string>
 </resources>

@@ -134,17 +134,29 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
             }
         }
         initializeAdapter(binding, pagingAdapter, enableScrollTopButton = args.gameId != null || args.gameName != null || !args.tags.isNullOrEmpty())
-        if (resources.getBoolean(R.bool.isTv) && !viewModel.initialFocusDone) {
-            // TV: opening a category puts the focus on its first streamer, once (not when coming back from a stream)
+        if (resources.getBoolean(R.bool.isTv)) {
             viewLifecycleOwner.lifecycleScope.launch {
-                pagingAdapter.loadStateFlow.first { it.refresh is androidx.paging.LoadState.NotLoading && pagingAdapter.itemCount > 0 }
-                viewModel.initialFocusDone = true
-                binding.recyclerView.postDelayed({
-                    val grid = _binding?.recyclerView ?: return@postDelayed
-                    if (grid.isShown && grid.focusedChild == null) {
-                        com.github.andreyasadchy.xtra.ui.view.TvUi.focusFirstItem(grid)
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    pagingAdapter.loadStateFlow.collectLatest { state ->
+                        if (state.refresh is androidx.paging.LoadState.NotLoading) {
+                            val count = pagingAdapter.itemCount
+                            val hasMore = !state.append.endOfPaginationReached && count > 0
+                            (parentFragment as? com.github.andreyasadchy.xtra.ui.game.GamePagerFragment)
+                                ?.updateFilteredBroadcasterCount(viewModel.languages, count, hasMore)
+                            (parentFragment as? com.github.andreyasadchy.xtra.ui.game.GameMediaFragment)
+                                ?.updateFilteredBroadcasterCount(viewModel.languages, count, hasMore)
+                            if (!viewModel.initialFocusDone && count > 0) {
+                                viewModel.initialFocusDone = true
+                                binding.recyclerView.postDelayed({
+                                    val grid = _binding?.recyclerView ?: return@postDelayed
+                                    if (grid.isShown && grid.focusedChild == null) {
+                                        com.github.andreyasadchy.xtra.ui.view.TvUi.focusFirstItem(grid)
+                                    }
+                                }, 150L)
+                            }
+                        }
                     }
-                }, 150L)
+                }
             }
         }
     }

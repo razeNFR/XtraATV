@@ -74,6 +74,13 @@ class XtraApp : Application(), SingletonImageLoader.Factory {
             if (BuildConfig.DEBUG) {
                 logger(DebugLogger())
             }
+            if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(this@XtraApp)) {
+                memoryCache {
+                    coil3.memory.MemoryCache.Builder()
+                        .maxSizePercent(context, 0.22)
+                        .build()
+                }
+            }
             components {
                 // a stream thumbnail Twitch has not made yet (grey picture): the picture of the channel instead
                 add(com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.PreviewInterceptor { xtraModule.okHttpClient.value })

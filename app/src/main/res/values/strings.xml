@@ -1496,4 +1496,8 @@
     <string name="tv_wallpaper_web_active">Active</string>
     <string name="tv_wallpaper_web_empty_tv">No custom wallpapers on TV yet</string>
     <string name="tv_wallpaper_web_deleted">Wallpaper deleted</string>
+    <string name="tv_broadcasters_global">global</string>
+    <string name="tv_emotes_most_used">Most Used</string>
+    <string name="tv_emotes_most_used_empty">Send emotes in chat to build your Most Used list</string>
+    <string name="tv_emotes_uses_count">%1$s uses</string>
 </resources>
