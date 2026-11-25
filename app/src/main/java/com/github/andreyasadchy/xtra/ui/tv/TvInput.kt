@@ -28,9 +28,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -80,6 +82,7 @@ import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -97,6 +100,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -211,14 +216,16 @@ fun TvTextField(
     }
     val editRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val view = LocalView.current
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     var editFocused by remember { mutableStateOf(false) }
     val highlighted = focused || editFocused
     val textColor = if (highlighted) TvColors.onFocused else Color.White
-    BackHandler(enabled = editing && disableSoftKeyboard) {
+    BackHandler(enabled = editing) {
+        keyboard?.hide()
         editing = false
-        focusRequester.requestFocus()
+        runCatching { focusRequester.requestFocus() }
     }
     Box(
         modifier
@@ -418,6 +425,22 @@ fun TvTextField(
                 keyboard?.hide()
             } else {
                 keyboard?.show()
+                // Detect soft keyboard dismissal (e.g. Back on floating Gboard TV) so editing
+                // exits immediately and the chat pill drops back down on the first Back press.
+                var imeWasVisible = false
+                while (editing) {
+                    kotlinx.coroutines.delay(90L)
+                    val rootInsets = ViewCompat.getRootWindowInsets(view)
+                    val visibleNow = rootInsets?.isVisible(WindowInsetsCompat.Type.ime()) == true ||
+                        (rootInsets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0) > 0
+                    if (visibleNow) {
+                        imeWasVisible = true
+                    } else if (imeWasVisible) {
+                        editing = false
+                        runCatching { focusRequester.requestFocus() }
+                        break
+                    }
+                }
             }
         }
     }
@@ -966,9 +989,11 @@ fun ChatComposer(
             if (currentHeightPx > fullHeightPx) {
                 fullHeightPx = currentHeightPx
             }
+            val imeInsetBottomPx = WindowInsets.ime.getBottom(density).toFloat()
             val imeOpen = fullHeightPx > 0f && currentHeightPx < fullHeightPx - with(density) { 100.dp.toPx() }
             val disableSoftKeyboard = remember(context) { context.prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false) }
-            val showBeak = anchorCenterXPx != null && !imeOpen && !(isTextEditing && !disableSoftKeyboard)
+            val keyboardElevated = imeOpen || (isTextEditing && !disableSoftKeyboard) || imeInsetBottomPx > with(density) { 100.dp.toPx() }
+            val showBeak = anchorCenterXPx != null && !keyboardElevated
             val screenWidthPx = constraints.maxWidth.toFloat()
             val edgeMarginPx = with(density) { 24.dp.toPx() }
             val extraQrWidth = if (onOpenQr != null) 46.dp else 0.dp
@@ -984,11 +1009,20 @@ fun ChatComposer(
             val cornerInsetPx = with(density) { 28.dp.toPx() }
             val beakCenterInPillPx = (targetCenterX - pillLeftPx)
                 .coerceIn(cornerInsetPx, (pillWidthPx - cornerInsetPx).coerceAtLeast(cornerInsetPx))
+            val baseHeightPx = if (fullHeightPx > 0f) fullHeightPx else currentHeightPx
+            // Gboard TV floating panel + top suggestion pill spans ~44.3% (~239 dp on 540 dp); keep a clean ~12 dp gap above it.
+            val minKeyboardClearancePx = maxOf(baseHeightPx * 0.465f, with(density) { 248.dp.toPx() })
+            val gapAboveKeyboardPx = with(density) { 14.dp.toPx() }
             val bottomPaddingDp = when {
-                // Gboard TV includes an extra top mic/suggestion bar (~44 dp) above the reported IME inset
-                imeOpen -> 62.dp
-                // Fallback when a TV box floating keyboard opens without resizing the fullscreen dialog
-                isTextEditing && !disableSoftKeyboard -> with(density) { (currentHeightPx * 0.56f).toDp() }.coerceAtLeast(280.dp)
+                imeOpen -> {
+                    val resizedByPx = (fullHeightPx - currentHeightPx).coerceAtLeast(0f)
+                    val extraPx = (minKeyboardClearancePx - resizedByPx).coerceAtLeast(gapAboveKeyboardPx)
+                    with(density) { extraPx.toDp() }
+                }
+                keyboardElevated -> {
+                    val clearancePx = maxOf(imeInsetBottomPx + gapAboveKeyboardPx, minKeyboardClearancePx)
+                    with(density) { clearancePx.toDp() }
+                }
                 else -> anchorBottomMarginPx?.let { with(density) { it.toDp() } } ?: 110.dp
             }
 

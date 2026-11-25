@@ -114,6 +114,10 @@ class TvHomeActions(
     val onStreamFocused: (Stream?) -> Unit,
     /** The card of a stream lost the focus: its preview stops (the focus may go to a card without preview). */
     val onStreamUnfocused: (Stream) -> Unit = {},
+    /** Owner-scoped stream card focus callback so duplicate cards in other rows cannot stop the active preview. */
+    val onStreamCardFocus: ((Any, Stream, Boolean) -> Unit)? = null,
+    /** Increments on fragment resume so an already-focused card restarts its preview after onPause(). */
+    val resumeTick: () -> Int = { 0 },
     val openChannel: (Stream) -> Unit = {},
     val onHeroFocused: (Stream) -> Unit = {},
     val onHeroUnfocused: (Stream) -> Unit = {},
@@ -2606,14 +2610,29 @@ private fun FocusCard(
             }
         }
     }
+    var wasFocused by remember { mutableStateOf(false) }
+    val currentOnFocus by androidx.compose.runtime.rememberUpdatedState(onFocus)
     LaunchedEffect(focused) {
-        if (!focused) {
+        if (focused) {
+            wasFocused = true
+            currentOnFocus(true)
+        } else {
             coordsRef[0] = null
             com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
+            if (wasFocused) {
+                wasFocused = false
+                currentOnFocus(false)
+            }
         }
     }
     DisposableEffect(focusToken) {
-        onDispose { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken) }
+        onDispose {
+            com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
+            if (wasFocused) {
+                wasFocused = false
+                currentOnFocus(false)
+            }
+        }
     }
     Column(
         modifier
@@ -2630,7 +2649,6 @@ private fun FocusCard(
                     Modifier
                 }
             )
-            .onFocusChanged { onFocus(it.isFocused) }
             .onPreviewKeyEvent { event ->
                 // OK held down: actions of the card
                 val isSelect = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
@@ -2724,6 +2742,7 @@ private fun StreamCard(
     // many cards a row: smaller texts, the count alone in the badge
     val small = width < 230.dp
     val signals = LocalHomeCardSignals.current
+    val cardOwner = remember { Any() }
     // only the card that shows the preview recomposes when the preview changes
     val previewing by remember(stream.channelLogin) { derivedStateOf { stream.channelLogin != null && previewLogin() == stream.channelLogin } }
     FocusCard(
@@ -2731,7 +2750,10 @@ private fun StreamCard(
         modifier = modifier,
         onClick = onClick,
         onLongClick = onLongClick,
-        onFocus = { if (it) actions.onStreamFocused(stream) else actions.onStreamUnfocused(stream) },
+        onFocus = { isFocused ->
+            actions.onStreamCardFocus?.invoke(cardOwner, stream, isFocused)
+                ?: if (isFocused) actions.onStreamFocused(stream) else actions.onStreamUnfocused(stream)
+        },
         grown = { previewing && previewPlayer() != null },
         // 2 cards a row: already big, they do not grow; 3: half bigger, 4 and more: twice as big
         growth = when (actions.cardsPerRow.coerceIn(2, 6)) {
@@ -2740,6 +2762,12 @@ private fun StreamCard(
             else -> 2f
         },
     ) { focused ->
+        val resumeTick = actions.resumeTick()
+        LaunchedEffect(focused, stream.channelLogin, resumeTick) {
+            if (focused && previewLogin() != stream.channelLogin) {
+                actions.onStreamCardFocus?.invoke(cardOwner, stream, true) ?: actions.onStreamFocused(stream)
+            }
+        }
         HomeCardCapsule(focused = focused) {
             Box(
                 Modifier
