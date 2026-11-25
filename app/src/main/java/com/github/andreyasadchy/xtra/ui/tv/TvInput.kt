@@ -956,11 +956,17 @@ fun ChatComposer(
             if (title.contains("·")) title.substringAfter("·").trim().takeIf { it.isNotEmpty() } else null
         }
         val density = LocalDensity.current
+        var fullHeightPx by remember { mutableFloatStateOf(0f) }
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .then(closeEmotesKeyModifier),
         ) {
+            val currentHeightPx = constraints.maxHeight.toFloat()
+            if (currentHeightPx > fullHeightPx) {
+                fullHeightPx = currentHeightPx
+            }
+            val imeOpen = fullHeightPx > 0f && currentHeightPx < fullHeightPx - with(density) { 100.dp.toPx() }
             val screenWidthPx = constraints.maxWidth.toFloat()
             val edgeMarginPx = with(density) { 24.dp.toPx() }
             val extraQrWidth = if (onOpenQr != null) 46.dp else 0.dp
@@ -976,7 +982,11 @@ fun ChatComposer(
             val cornerInsetPx = with(density) { 28.dp.toPx() }
             val beakCenterInPillPx = (targetCenterX - pillLeftPx)
                 .coerceIn(cornerInsetPx, (pillWidthPx - cornerInsetPx).coerceAtLeast(cornerInsetPx))
-            val bottomPaddingDp = anchorBottomMarginPx?.let { with(density) { it.toDp() } } ?: 110.dp
+            val bottomPaddingDp = if (imeOpen) {
+                12.dp
+            } else {
+                anchorBottomMarginPx?.let { with(density) { it.toDp() } } ?: 110.dp
+            }
 
             Column(
                 modifier = Modifier
@@ -1035,7 +1045,7 @@ fun ChatComposer(
                         }
                         .drawBehind {
                             val w = size.width
-                            val beakH = 7.dp.toPx()
+                            val beakH = if (imeOpen) 0f else 7.dp.toPx()
                             val beakHalfW = 6.5.dp.toPx()
                             val inset = 2.dp.toPx()
                             val left = inset
@@ -1053,9 +1063,11 @@ fun ChatComposer(
                                 moveTo(left + r, top)
                                 lineTo(right - r, top)
                                 arcTo(Rect(right - 2f * r, top, right, bottom), -90f, 180f, false)
-                                lineTo(bx + beakHalfW, bottom)
-                                lineTo(bx, tipY)
-                                lineTo(bx - beakHalfW, bottom)
+                                if (beakH > 0f) {
+                                    lineTo(bx + beakHalfW, bottom)
+                                    lineTo(bx, tipY)
+                                    lineTo(bx - beakHalfW, bottom)
+                                }
                                 lineTo(left + r, bottom)
                                 arcTo(Rect(left, top, left + 2f * r, bottom), 90f, 180f, false)
                                 close()
@@ -1064,7 +1076,7 @@ fun ChatComposer(
                             drawPath(path, color = Color(0xF21B1A24))
                             drawPath(path, color = Color(0xF0FFFFFF), style = Stroke(width = 1.85.dp.toPx(), join = StrokeJoin.Round))
                         }
-                        .padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = 14.dp),
+                        .padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = if (imeOpen) 9.dp else 14.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),

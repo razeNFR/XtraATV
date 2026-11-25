@@ -4979,6 +4979,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             // Keep the bottom HUD visible behind the anchored pill until the composer closes
             binding.playerControls.root.removeCallbacks(controllerHideAction)
         }
+        val hostWindow = activity?.window
+        val prevHostSoftInputMode = hostWindow?.attributes?.softInputMode
+        hostWindow?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         val dialog = com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 emoteGroupsState.value = chatFragment?.getTvEmoteGroups().orEmpty()
@@ -5014,8 +5017,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         dialog.window?.apply {
             clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0f)
+            setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
         dialog.setOnDismissListener {
+            if (prevHostSoftInputMode != null) {
+                hostWindow?.setSoftInputMode(prevHostSoftInputMode)
+            }
             if (_binding != null) {
                 applyTvChatButtonPillState(false)
                 if (areControlsShown()) {

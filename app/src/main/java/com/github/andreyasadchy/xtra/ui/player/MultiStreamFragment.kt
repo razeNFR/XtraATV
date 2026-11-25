@@ -463,6 +463,7 @@ class MultiStreamFragment : Fragment() {
         root.addView(tileView)
         updateVideoSizes()
         updateTileInfo(tile)
+        syncQrCompanionChannels(tile.stream.channelLogin)
         tileView.setOnFocusChangeListener { v, hasFocus ->
             ((v as FrameLayout).foreground as? GradientDrawable)?.setStroke((4 * density).toInt(), if (hasFocus) Color.WHITE else Color.TRANSPARENT)
             label.visibility = if (hasFocus) View.GONE else View.VISIBLE
@@ -1299,7 +1300,54 @@ class MultiStreamFragment : Fragment() {
                 (childFragmentManager.findFragmentById(id) as? ChatFragment)?.takeIf { it.isAdded && it.view != null }?.let { return it }
             }
         }
+        if (qrCompanionChatLogin != null && qrCompanionChatLogin.equals(login, ignoreCase = true)) {
+            qrCompanionChatContainer?.id?.let { id ->
+                (childFragmentManager.findFragmentById(id) as? ChatFragment)?.takeIf { it.isAdded && it.view != null }?.let { return it }
+            }
+        }
         return null
+    }
+
+    private var qrCompanionChatContainer: FrameLayout? = null
+    private var qrCompanionChatLogin: String? = null
+
+    private fun getOrAttachQrChat(login: String): ChatFragment? {
+        if (!isAdded || view == null || login.isBlank()) return null
+        findChatFragment(login)?.let { return it }
+        val tile = tiles.find { it.stream.channelLogin.equals(login, ignoreCase = true) } ?: return null
+        val stream = tile.stream
+        val container = qrCompanionChatContainer ?: FrameLayout(requireContext()).apply {
+            id = View.generateViewId()
+            visibility = View.GONE
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            root.addView(this, FrameLayout.LayoutParams(1, 1))
+            qrCompanionChatContainer = this
+        }
+        val resolvedId = tile.effectiveChannelId ?: stream.channelId
+        val frag = ChatFragment.newInstance(resolvedId, stream.channelLogin, stream.channelName, stream.id)
+        qrCompanionChatLogin = stream.channelLogin
+        runCatching {
+            childFragmentManager.beginTransaction()
+                .replace(container.id, frag)
+                .commitNowAllowingStateLoss()
+        }
+        return (childFragmentManager.findFragmentById(container.id) as? ChatFragment)?.takeIf { it.isAdded }
+    }
+
+    private fun syncQrCompanionChannels(preferredLogin: String? = null) {
+        val ctx = context ?: return
+        val tabs = tiles.mapNotNull { t ->
+            val l = t.stream.channelLogin?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val n = t.stream.channelName?.takeIf { it.isNotBlank() } ?: l
+            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.ChannelTab(l, n)
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.updateMultiStreamChannels(
+            context = ctx,
+            channels = tabs,
+            preferredLogin = preferredLogin ?: selectedTile?.stream?.channelLogin,
+        ) { login ->
+            getOrAttachQrChat(login)
+        }
     }
 
     private fun computeTileChatLockMessage(tile: Tile): String? {
@@ -1532,6 +1580,9 @@ class MultiStreamFragment : Fragment() {
         if (chat == null) {
             loadFallbackTileEmotes(tile, emoteGroupsState)
         }
+        val hostWindow = activity?.window
+        val prevHostSoftInputMode = hostWindow?.attributes?.softInputMode
+        hostWindow?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         val dialog = com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(ctx) { dismiss ->
             if (chat != null) {
                 androidx.compose.runtime.LaunchedEffect(chat) {
@@ -1555,18 +1606,18 @@ class MultiStreamFragment : Fragment() {
                 emoteGroups = emoteGroupsState.value,
                 pillStyle = true,
                 onDismiss = dismiss,
-                onOpenQr = if (chat != null) {
-                    {
-                        dismiss()
-                        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.openQrPanel(
-                            context = ctx,
-                            uiScope = viewLifecycleOwner.lifecycleScope,
-                            chatFragment = chat,
-                            channelName = name,
-                            channelLogin = login,
-                        )
-                    }
-                } else null,
+                onOpenQr = {
+                    dismiss()
+                    val qrChat = getOrAttachQrChat(login)
+                    syncQrCompanionChannels(login)
+                    com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.openQrPanel(
+                        context = ctx,
+                        uiScope = viewLifecycleOwner.lifecycleScope,
+                        chatFragment = qrChat,
+                        channelName = name,
+                        channelLogin = login,
+                    )
+                },
                 qrConnectedCount = qrConnected,
             ) { text ->
                 if (text.isNotBlank()) {
@@ -1583,6 +1634,12 @@ class MultiStreamFragment : Fragment() {
         dialog.window?.apply {
             clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0f)
+            setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+        dialog.setOnDismissListener {
+            if (prevHostSoftInputMode != null) {
+                hostWindow?.setSoftInputMode(prevHostSoftInputMode)
+            }
         }
     }
 
@@ -1905,6 +1962,7 @@ class MultiStreamFragment : Fragment() {
         }
         updateChats()
         updateCellChat()
+        syncQrCompanionChannels()
         tiles.firstOrNull()?.view?.requestFocus()
     }
 
@@ -3118,6 +3176,9 @@ class MultiStreamFragment : Fragment() {
     private val dimListener: () -> Unit = { com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(root) }
 
     override fun onDestroyView() {
+        qrCompanionChatContainer?.let { runCatching { removeChat(it) } }
+        qrCompanionChatContainer = null
+        qrCompanionChatLogin = null
         com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.scheduleDetach(null)
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(dimListener)
         root.removeCallbacks(followFocus)

@@ -114,6 +114,8 @@ object TvChatQrCompanion {
 
     private val sseClients = CopyOnWriteArrayList<SseClient>()
 
+    data class ChannelTab(val login: String, val name: String)
+
     @Volatile
     private var appContext: Context? = null
     @Volatile
@@ -128,6 +130,10 @@ object TvChatQrCompanion {
     private var activeChannelLogin: String = ""
     @Volatile
     private var currentChatRef: WeakReference<ChatFragment>? = null
+    @Volatile
+    private var multiStreamChannels: List<ChannelTab> = emptyList()
+    @Volatile
+    private var multiStreamChatProvider: ((String) -> ChatFragment?)? = null
 
     private var acceptJob: Job? = null
     private var heartbeatJob: Job? = null
@@ -308,6 +314,8 @@ object TvChatQrCompanion {
     ) {
         detachGraceJob?.cancel()
         detachGraceJob = null
+        multiStreamChannels = emptyList()
+        multiStreamChatProvider = null
         if (!isRunning()) return
         val appCtx = context.applicationContext
         appContext = appCtx
@@ -336,6 +344,45 @@ object TvChatQrCompanion {
                 delay(250L)
                 broadcast("channel", buildStateJson(appCtx).toString())
             }
+        }
+    }
+
+    /**
+     * Keeps the active QR phone session synchronized with all streams in Multi-Stream, exposing channel tabs
+     * on the phone so the user can switch chats in 1 tap without re-scanning the QR code.
+     */
+    fun updateMultiStreamChannels(
+        context: Context,
+        channels: List<ChannelTab>,
+        preferredLogin: String? = null,
+        chatProvider: (String) -> ChatFragment?,
+    ) {
+        val clean = channels.filter { it.login.isNotBlank() }.distinctBy { it.login.lowercase() }
+        multiStreamChannels = clean
+        multiStreamChatProvider = if (clean.isNotEmpty()) chatProvider else null
+        if (!isRunning() || clean.isEmpty()) return
+        detachGraceJob?.cancel()
+        detachGraceJob = null
+        val appCtx = context.applicationContext
+        appContext = appCtx
+
+        val prevLogin = activeChannelLogin
+        val target = clean.firstOrNull { it.login.equals(prevLogin, ignoreCase = true) }
+            ?: preferredLogin?.let { p -> clean.firstOrNull { it.login.equals(p, ignoreCase = true) } }
+            ?: clean.first()
+        activeChannelLogin = target.login
+        activeChannelName = target.name.ifBlank { target.login }
+        pairedChannelLogin = target.login
+
+        scope.launch {
+            val chat = withContext(Dispatchers.Main) {
+                runCatching { chatProvider(target.login) }.getOrNull()
+            }
+            if (chat != null) {
+                attachChatCollectors(chat)
+                delay(250L)
+            }
+            broadcast("channel", buildStateJson(appCtx).toString())
         }
     }
 
@@ -378,6 +425,8 @@ object TvChatQrCompanion {
         sessionToken = ""
         pairedChannelLogin = null
         currentChatRef = null
+        multiStreamChannels = emptyList()
+        multiStreamChatProvider = null
         _sessionUrl.value = null
     }
 
@@ -580,6 +629,35 @@ object TvChatQrCompanion {
                     }
                     writeResponse(socket, 200, "application/json; charset=utf-8", JSONObject().put("ok", sent).toString().toByteArray())
                 }
+                method == "POST" && subPath == "/api/channel" -> {
+                    val bodyBytes = readFixedBytes(input, contentLength)
+                    val reqJson = runCatching { JSONObject(String(bodyBytes, Charsets.UTF_8)) }.getOrNull()
+                    val login = reqJson?.optString("login", "")?.trim().orEmpty()
+                    val target = multiStreamChannels.firstOrNull { it.login.equals(login, ignoreCase = true) }
+                    val provider = multiStreamChatProvider
+                    if (target == null || provider == null) {
+                        writeResponse(socket, 404, "application/json; charset=utf-8", JSONObject().put("ok", false).toString().toByteArray())
+                        return
+                    }
+                    val prevChat = currentChatRef?.get()
+                    val nextChat = withContext(Dispatchers.Main) {
+                        runCatching { provider(target.login) }.getOrNull()
+                    }
+                    if (nextChat == null) {
+                        writeResponse(socket, 409, "application/json; charset=utf-8", JSONObject().put("ok", false).toString().toByteArray())
+                        return
+                    }
+                    activeChannelLogin = target.login
+                    activeChannelName = target.name.ifBlank { target.login }
+                    pairedChannelLogin = target.login
+                    attachChatCollectors(nextChat)
+                    if (prevChat !== nextChat) {
+                        delay(250L)
+                    }
+                    val stateJson = buildStateJson(appCtx)
+                    broadcast("channel", stateJson.toString())
+                    writeResponse(socket, 200, "application/json; charset=utf-8", JSONObject().put("ok", true).toString().toByteArray())
+                }
                 else -> {
                     writeResponse(socket, 404, "text/plain; charset=utf-8", "Not found".toByteArray())
                 }
@@ -598,6 +676,11 @@ object TvChatQrCompanion {
         obj.put("channelName", activeChannelName.ifBlank { activeChannelLogin })
         obj.put("channelLogin", activeChannelLogin)
         obj.put("canSend", chat?.isUserLoggedInForQr() == true)
+        val chArr = JSONArray()
+        multiStreamChannels.forEach { ch ->
+            chArr.put(JSONObject().put("login", ch.login).put("name", ch.name.ifBlank { ch.login }))
+        }
+        obj.put("channels", chArr)
         val msgsArr = JSONArray()
         if (chat != null && chat.isAdded) {
             chat.getRecentMessagesForQr(80).forEach { msg ->
@@ -833,6 +916,11 @@ html,body{margin:0;padding:0;height:100%;background:#0E0E13;color:#F3F2F8;font-f
 .sbtn:disabled{opacity:.45}
 .ro{padding:11px 14px calc(11px + env(safe-area-inset-bottom,0px));background:#161520;border-top:1px solid rgba(255,255,255,.10);text-align:center;font-size:12.5px;color:rgba(255,255,255,.65);display:none;flex-shrink:0}
 .ro.show{display:block}
+.ch-tabs{display:none;gap:6px;padding:7px 12px;background:#12111A;border-bottom:1px solid rgba(255,255,255,.08);overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+.ch-tabs::-webkit-scrollbar{display:none}
+.ch-tabs.show{display:flex}
+.ch-tab{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.10);color:rgba(255,255,255,.82);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer;flex-shrink:0}
+.ch-tab.on{background:#9147FF;border-color:#BF94FF;color:#fff}
 </style>
 </head>
 <body>
@@ -850,6 +938,7 @@ html,body{margin:0;padding:0;height:100%;background:#0E0E13;color:#F3F2F8;font-f
       <button class="chip on" id="btnBdg" type="button">Badges</button>
     </div>
   </div>
+  <div class="ch-tabs" id="chTabs"></div>
 
   <div class="feed-wrap">
     <div class="feed" id="feed"></div>
@@ -901,6 +990,7 @@ const roEl = document.getElementById("ro");
 const dotEl = document.getElementById("dot");
 const chNameEl = document.getElementById("chName");
 const avEl = document.getElementById("av");
+const chTabsEl = document.getElementById("chTabs");
 
 inpEl.placeholder = T.hint;
 srchEl.placeholder = T.searchEmotes;
@@ -912,6 +1002,8 @@ let paused = false;
 let missed = 0;
 let canSend = false;
 let emoteGroups = [];
+let channels = [];
+let activeChannelLogin = "";
 let activeTab = 0;
 let reply = null;
 let es = null;
@@ -920,6 +1012,33 @@ const msgById = new Map();
 
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function fmt(tpl,val){return tpl.replace("%s",val);}
+
+function renderChannelTabs(){
+  chTabsEl.innerHTML = "";
+  if(!channels || channels.length <= 1){
+    chTabsEl.classList.remove("show");
+    return;
+  }
+  chTabsEl.classList.add("show");
+  channels.forEach(ch=>{
+    const b = document.createElement("button");
+    b.type = "button";
+    const isAct = (ch.login||"").toLowerCase() === (activeChannelLogin||"").toLowerCase();
+    b.className = "ch-tab" + (isAct ? " on" : "");
+    b.textContent = ch.name || ch.login;
+    b.addEventListener("click", async ()=>{
+      if(isAct || ended) return;
+      try{
+        await fetch(BASE + "/api/channel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login: ch.login })
+        });
+      }catch(_){}
+    });
+    chTabsEl.appendChild(b);
+  });
+}
 
 function updateSendMode(){
   formEl.style.display = canSend ? "flex" : "none";
@@ -1114,9 +1233,13 @@ formEl.addEventListener("submit", async (e)=>{
 });
 
 function applyState(st, isSwitch){
+  const prevLogin = activeChannelLogin;
   const name = st.channelName || st.channelLogin || "Xtra TV";
+  activeChannelLogin = st.channelLogin || "";
+  channels = st.channels || [];
   chNameEl.textContent = name;
   avEl.textContent = name.charAt(0).toUpperCase();
+  renderChannelTabs();
   canSend = !!st.canSend;
   updateSendMode();
   emoteGroups = st.emoteGroups || [];
@@ -1124,12 +1247,15 @@ function applyState(st, isSwitch){
   if(activeTab >= emoteGroups.length || (!emoteGroups[activeTab]?.emotes?.length && firstNonEmpty >= 0)){
     activeTab = Math.max(0, firstNonEmpty);
   }
-  feed.innerHTML = "";
-  msgById.clear();
-  if(isSwitch) addNotice(fmt(T.switched, name));
-  (st.messages||[]).forEach(m=>addMsg(m, true));
-  paused = false; missed = 0; pauseBtn.classList.remove("show");
-  feed.scrollTop = feed.scrollHeight;
+  const sameChannel = prevLogin && activeChannelLogin && prevLogin.toLowerCase() === activeChannelLogin.toLowerCase();
+  if(!sameChannel || !isSwitch){
+    feed.innerHTML = "";
+    msgById.clear();
+    if(isSwitch && !sameChannel) addNotice(fmt(T.switched, name));
+    (st.messages||[]).forEach(m=>addMsg(m, true));
+    paused = false; missed = 0; pauseBtn.classList.remove("show");
+    feed.scrollTop = feed.scrollHeight;
+  }
   if(drawer.classList.contains("show")){ renderTabs(); renderGrid(); }
 }
 
