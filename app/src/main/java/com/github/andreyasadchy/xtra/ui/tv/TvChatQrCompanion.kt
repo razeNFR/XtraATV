@@ -626,7 +626,7 @@ object TvChatQrCompanion {
                 eObj.put("code", code)
                 eObj.put("url", url)
                 eObj.put("provider", TvEmoteUsage.providerLabel(e))
-                eObj.put("color", String.format("#%06X", 0xFFFFFF and TvEmoteUsage.providerColorArgb(e)))
+                eObj.put("color", String.format("#%06X", (TvEmoteUsage.providerColorArgb(e) and 0xFFFFFFL).toInt()))
                 if (isMost) {
                     eObj.put("count", TvEmoteUsage.countOf(appCtx, code))
                 }
