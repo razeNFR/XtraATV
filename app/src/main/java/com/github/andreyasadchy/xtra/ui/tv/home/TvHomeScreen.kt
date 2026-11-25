@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.input.key.Key
@@ -1139,7 +1140,7 @@ private fun HeroBanner(
                             val cx = size.width * 0.48f
                             val cy = size.height * 0.50f
                             val sx = rx / ry
-                            androidx.compose.ui.graphics.drawscope.withTransform({
+                            withTransform({
                                 translate(left = cx, top = cy)
                                 scale(scaleX = sx, scaleY = 1f, pivot = Offset.Zero)
                             }) {
