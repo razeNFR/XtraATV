@@ -398,6 +398,8 @@ object C {
     const val FOLLOW_REJECTED_PREFIX = "FOLLOW_REJECTED:"
     /** TV: pinned chat message banner mode: 0 = hidden, 1 = temporary (20 s, default), 2 = always visible. */
     const val TV_CHAT_PINNED_MODE = "tv_chat_pinned_mode"
+    /** TV: keep the QR phone chat companion synchronized when switching live channels on TV (default true). */
+    const val TV_CHAT_QR_FOLLOW_CHANNEL = "tv_chat_qr_follow_channel"
 
     fun getTvPredictionsPopupMode(prefs: android.content.SharedPreferences): Int {
         if (prefs.contains(TV_CHAT_PREDICTIONS_MODE)) {

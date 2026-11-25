@@ -1480,4 +1480,17 @@
     <string name="tv_emotes_most_used">最常用</string>
     <string name="tv_emotes_most_used_empty">在聊天中傳送表情即可建立最常用清單</string>
     <string name="tv_emotes_uses_count">%1$s 次使用</string>
+    <string name="tv_chat_qr_title">手機掃碼聊天 (QR)</string>
+    <string name="tv_chat_qr_help">用手機掃描即可透過 Wi-Fi 即時瀏覽並傳送聊天訊息。關閉此面板後，手機端聊天仍保持連線。</string>
+    <string name="tv_chat_qr_connected">已連線 %d 台</string>
+    <string name="tv_chat_qr_waiting">掃碼連線</string>
+    <string name="tv_chat_qr_follow_channel">跟隨頻道切換</string>
+    <string name="tv_chat_qr_disconnect">中斷連線</string>
+    <string name="tv_chat_qr_disconnected">手機聊天已中斷</string>
+    <string name="tv_chat_qr_readonly">唯讀模式（在 Xtra TV 登入後即可傳送訊息）</string>
+    <string name="tv_chat_qr_paused">聊天已暫停</string>
+    <string name="tv_chat_qr_replying_to">回覆 %s</string>
+    <string name="tv_chat_qr_search_emotes">搜尋表情…</string>
+    <string name="tv_chat_qr_switched">已切換至 %s</string>
+    <string name="tv_chat_qr_session_ended">Xtra TV 工作階段已結束</string>
 </resources>

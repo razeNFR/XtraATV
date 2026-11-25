@@ -1480,4 +1480,17 @@
     <string name="tv_emotes_most_used">الأكثر استخدامًا</string>
     <string name="tv_emotes_most_used_empty">أرسل الرموز في الدردشة لبناء قائمة الأكثر استخدامًا</string>
     <string name="tv_emotes_uses_count">%1$s استخدام</string>
+    <string name="tv_chat_qr_title">الدردشة على الهاتف (QR)</string>
+    <string name="tv_chat_qr_help">امسح الرمز بهاتفك لقراءة الدردشة المباشرة والكتابة فيها عبر Wi-Fi. يمكنك إغلاق هذه اللوحة وستبقى الدردشة نشطة على هاتفك.</string>
+    <string name="tv_chat_qr_connected">متصل: %d</string>
+    <string name="tv_chat_qr_waiting">امسح للاتصال</string>
+    <string name="tv_chat_qr_follow_channel">متابعة تبديل القناة</string>
+    <string name="tv_chat_qr_disconnect">قطع الاتصال</string>
+    <string name="tv_chat_qr_disconnected">تم قطع دردشة الهاتف</string>
+    <string name="tv_chat_qr_readonly">وضع القراءة فقط (سجّل الدخول في Xtra TV لإرسال الرسائل)</string>
+    <string name="tv_chat_qr_paused">الدردشة متوقفة مؤقتاً</string>
+    <string name="tv_chat_qr_replying_to">الرد على %s</string>
+    <string name="tv_chat_qr_search_emotes">ابحث عن الرموز…</string>
+    <string name="tv_chat_qr_switched">تم التبديل إلى %s</string>
+    <string name="tv_chat_qr_session_ended">انتهت جلسة Xtra TV</string>
 </resources>

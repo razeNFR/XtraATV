@@ -48,6 +48,7 @@ import androidx.core.content.edit
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.key
@@ -4074,6 +4075,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
 
                     else -> {
+                        val showQrChatRow = playbackService?.type == BasePlaybackService.STREAM
+                        val qrConnected by com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.connectedClients.collectAsState()
+                        if (showQrChatRow) {
+                            val qrLabel = if (qrConnected > 0) {
+                                "${getString(R.string.tv_chat_qr_title)} · ${getString(R.string.tv_chat_qr_connected, qrConnected)}"
+                            } else {
+                                getString(R.string.tv_chat_qr_title)
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.ButtonRow(
+                                label = qrLabel,
+                                icon = R.drawable.tv_ic_qr,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] },
+                            ) {
+                                dismiss()
+                                openTvChatQrPanel(alignEnd = alignEnd)
+                            }
+                        }
                         val activePin = chatFragment?.getPinnedMessage()
                         if (activePin != null) {
                             val pinSender = activePin.senderName ?: activePin.senderLogin
@@ -4082,7 +4101,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 label = "${getString(R.string.tv_chat_pinned_active)} — ${pinPreview.take(32)}",
                                 icon = R.drawable.tv_ic_pin,
                                 compact = true,
-                                modifier = androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] },
+                                modifier = if (!showQrChatRow) androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] } else androidx.compose.ui.Modifier,
                             ) {
                                 showPinnedMessageDetailPanel(activePin, alignEnd = alignEnd)
                             }
@@ -4098,7 +4117,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             selected = delayMode.intValue,
                             icon = R.drawable.tv_ic_timer,
                             compact = true,
-                            modifier = if (activePin == null) androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] } else androidx.compose.ui.Modifier,
+                            modifier = if (!showQrChatRow && activePin == null) androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] } else androidx.compose.ui.Modifier,
                         ) {
                             if (isExperimentalVodActive()) {
                                 delayMode.intValue = 1
@@ -4967,6 +4986,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     emoteGroupsState.value = chatFragment?.getTvEmoteGroups().orEmpty()
                 }
             }
+            val qrConnected by com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.connectedClients.collectAsState()
+            val canShowQr = playbackService?.type == BasePlaybackService.STREAM
             com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
                 title = getString(R.string.tv_write_message),
                 hint = getString(R.string.tv_message_hint),
@@ -4975,6 +4996,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 pillStyle = true,
                 anchorCenterXPx = anchorCenterX,
                 anchorBottomMarginPx = anchorBottomMargin,
+                onDismiss = dismiss,
+                onOpenQr = if (canShowQr) {
+                    {
+                        dismiss()
+                        openTvChatQrPanel()
+                    }
+                } else null,
+                qrConnectedCount = qrConnected,
             ) { text ->
                 if (text.isNotBlank()) {
                     chatFragment?.sendExternalMessage(text)
@@ -4998,6 +5027,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
         }
+    }
+
+    private fun openTvChatQrPanel(alignEnd: Boolean = true) {
+        val ctx = context ?: return
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.openQrPanel(
+            context = ctx,
+            uiScope = viewLifecycleOwner.lifecycleScope,
+            chatFragment = chatFragment,
+            channelName = playbackService?.channelName,
+            channelLogin = playbackService?.channelLogin,
+            alignEnd = alignEnd,
+        )
     }
 
     private var tooltipAnchor: View? = null
@@ -6091,6 +6132,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun onChatFragmentReady(fragment: ChatFragment) {
         if (!isTv || playbackService?.type != BasePlaybackService.STREAM) return
         chatFragment = fragment
+        context?.let { ctx ->
+            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.onLiveChatAttached(
+                context = ctx,
+                chatFragment = fragment,
+                channelName = playbackService?.channelName,
+                channelLogin = playbackService?.channelLogin,
+            )
+        }
         if (chatLockObservedFragment === fragment || fragment.view == null) {
             updateTvChatLockUi()
             return
@@ -9414,6 +9463,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.scheduleDetach(chatFragment)
         tvVolumePill?.destroy()
         tvVolumePill = null
         tvLiveEventsLookupJob?.cancel()

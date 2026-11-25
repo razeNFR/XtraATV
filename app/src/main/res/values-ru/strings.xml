@@ -1480,4 +1480,17 @@
     <string name="tv_emotes_most_used">Частые</string>
     <string name="tv_emotes_most_used_empty">Отправляйте смайлы в чат, чтобы заполнить список частых</string>
     <string name="tv_emotes_uses_count">%1$s исп.</string>
+    <string name="tv_chat_qr_title">Чат на телефоне (QR)</string>
+    <string name="tv_chat_qr_help">Отсканируйте телефоном, чтобы читать и писать в чате по Wi-Fi. Это окно можно закрыть — чат останется активным на телефоне.</string>
+    <string name="tv_chat_qr_connected">Подключено: %d</string>
+    <string name="tv_chat_qr_waiting">Отсканируйте для подключения</string>
+    <string name="tv_chat_qr_follow_channel">Следовать за сменой канала</string>
+    <string name="tv_chat_qr_disconnect">Отключить</string>
+    <string name="tv_chat_qr_disconnected">Чат на телефоне отключён</string>
+    <string name="tv_chat_qr_readonly">Только чтение (войдите в Xtra TV, чтобы отправлять сообщения)</string>
+    <string name="tv_chat_qr_paused">Чат на паузе</string>
+    <string name="tv_chat_qr_replying_to">Ответ для %s</string>
+    <string name="tv_chat_qr_search_emotes">Поиск эмоций…</string>
+    <string name="tv_chat_qr_switched">Переключено на %s</string>
+    <string name="tv_chat_qr_session_ended">Сеанс Xtra TV завершён</string>
 </resources>

@@ -28,6 +28,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.andreyasadchy.xtra.R
@@ -1545,12 +1547,27 @@ class MultiStreamFragment : Fragment() {
                     }
                 }
             }
+            val qrConnected by com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.connectedClients.collectAsState()
             com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
                 title = "${getString(R.string.tv_write_message)} · $name",
                 hint = getString(R.string.tv_message_hint),
                 sendLabel = getString(R.string.tv_send),
                 emoteGroups = emoteGroupsState.value,
                 pillStyle = true,
+                onDismiss = dismiss,
+                onOpenQr = if (chat != null) {
+                    {
+                        dismiss()
+                        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.openQrPanel(
+                            context = ctx,
+                            uiScope = viewLifecycleOwner.lifecycleScope,
+                            chatFragment = chat,
+                            channelName = name,
+                            channelLogin = login,
+                        )
+                    }
+                } else null,
+                qrConnectedCount = qrConnected,
             ) { text ->
                 if (text.isNotBlank()) {
                     val activeChat = findChatFragment(login)
@@ -3101,6 +3118,7 @@ class MultiStreamFragment : Fragment() {
     private val dimListener: () -> Unit = { com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(root) }
 
     override fun onDestroyView() {
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.scheduleDetach(null)
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(dimListener)
         root.removeCallbacks(followFocus)
         root.removeCallbacks(hideChrome)

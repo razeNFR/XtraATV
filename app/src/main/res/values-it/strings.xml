@@ -1480,4 +1480,17 @@
     <string name="tv_emotes_most_used">Più usate</string>
     <string name="tv_emotes_most_used_empty">Invia emote in chat per creare la tua lista delle più usate</string>
     <string name="tv_emotes_uses_count">%1$s utilizzi</string>
+    <string name="tv_chat_qr_title">Chat sul telefono (QR)</string>
+    <string name="tv_chat_qr_help">Scansiona con il telefono per leggere e scrivere nella chat dal vivo tramite Wi-Fi. Puoi chiudere questo pannello — la chat resta attiva sul telefono.</string>
+    <string name="tv_chat_qr_connected">%d connesso</string>
+    <string name="tv_chat_qr_waiting">Scansiona per connettere</string>
+    <string name="tv_chat_qr_follow_channel">Segui cambio canale</string>
+    <string name="tv_chat_qr_disconnect">Disconnetti</string>
+    <string name="tv_chat_qr_disconnected">Chat del telefono disconnessa</string>
+    <string name="tv_chat_qr_readonly">Solo lettura (accedi su Xtra TV per inviare messaggi)</string>
+    <string name="tv_chat_qr_paused">Chat in pausa</string>
+    <string name="tv_chat_qr_replying_to">Risposta a %s</string>
+    <string name="tv_chat_qr_search_emotes">Cerca emote…</string>
+    <string name="tv_chat_qr_switched">Passato a %s</string>
+    <string name="tv_chat_qr_session_ended">Sessione Xtra TV terminata</string>
 </resources>

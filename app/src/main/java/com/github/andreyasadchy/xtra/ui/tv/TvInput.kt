@@ -54,6 +54,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -183,6 +184,7 @@ fun TvTextField(
     emotes: Map<String, String> = emptyMap(),
     focusRequester: FocusRequester = remember { FocusRequester() },
     onLeft: (() -> Unit)? = null,
+    onEditingChange: ((Boolean) -> Unit)? = null,
     onSubmit: () -> Unit,
 ) {
     val appContext = LocalContext.current
@@ -200,6 +202,9 @@ fun TvTextField(
         onDispose { sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     var editing by remember { mutableStateOf(false) }
+    LaunchedEffect(editing) {
+        onEditingChange?.invoke(editing)
+    }
     var textFieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
     if (textFieldValue.text != value) {
         textFieldValue = TextFieldValue(value, TextRange(value.length))
@@ -622,6 +627,7 @@ private fun TvEmoteDrawer(
     onHoverEmote: (Emote?) -> Unit,
     onPickEmote: (String) -> Unit,
     pillStyle: Boolean,
+    tabRequesters: List<FocusRequester> = emptyList(),
 ) {
     val context = LocalContext.current
     val mostUsedLabel = remember(context) { context.getString(R.string.tv_emotes_most_used) }
@@ -650,6 +656,7 @@ private fun TvEmoteDrawer(
                 val tabFocused by tabInteraction.collectIsFocusedAsState()
                 val isSelected = idx == safeTab
                 val isMost = tabLabel == mostUsedLabel
+                val tabReq = tabRequesters.getOrNull(idx)
                 LaunchedEffect(tabFocused, focusSwitch) {
                     if (tabFocused && focusSwitch && selectedTab != idx) {
                         kotlinx.coroutines.delay(150L)
@@ -658,6 +665,7 @@ private fun TvEmoteDrawer(
                 }
                 Box(
                     modifier = Modifier
+                        .then(if (tabReq != null) Modifier.focusRequester(tabReq) else Modifier)
                         .clip(RoundedCornerShape(16.dp))
                         .background(
                             when {
@@ -864,20 +872,27 @@ fun ChatComposer(
     pillStyle: Boolean = false,
     anchorCenterXPx: Float? = null,
     anchorBottomMarginPx: Float? = null,
+    onDismiss: (() -> Unit)? = null,
+    onOpenQr: (() -> Unit)? = null,
+    qrConnectedCount: Int = 0,
     onSend: (String) -> Unit,
 ) {
     var text by remember { mutableStateOf(initialText) }
     var showEmotes by remember { mutableStateOf(false) }
+    var prevShowEmotes by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
     var hasUserPickedTab by remember { mutableStateOf(false) }
     var hoveredEmote by remember { mutableStateOf<Emote?>(null) }
     var backConsumedForEmotes by remember { mutableStateOf(false) }
+    var isTextEditing by remember { mutableStateOf(false) }
+    var drawerHasFocus by remember { mutableStateOf(false) }
     val voice = remember { VoiceState() }
     val input = rememberVoiceInput(voice) {
         text = it
     }
     val requester = remember { FocusRequester() }
     val emoteBtnRequester = remember { FocusRequester() }
+    val tabRequesters = remember(emoteGroups.size) { List(emoteGroups.size) { FocusRequester() } }
     val context = LocalContext.current
     val emoteMap = remember(emoteGroups) {
         buildMap {
@@ -894,12 +909,28 @@ fun ChatComposer(
     }
 
     // Default to Most Used when populated, otherwise first non-empty tab so the user immediately sees emotes.
+    // On false -> true transition of showEmotes, safely move focus to the active tab after composition attaches.
     LaunchedEffect(showEmotes, emoteGroups) {
-        if (showEmotes && !hasUserPickedTab && emoteGroups.isNotEmpty()) {
-            val firstNonEmpty = emoteGroups.indexOfFirst { it.second.isNotEmpty() }
-            if (firstNonEmpty >= 0) {
-                selectedTab = firstNonEmpty
+        if (showEmotes && emoteGroups.isNotEmpty()) {
+            val targetTab = if (!hasUserPickedTab) {
+                emoteGroups.indexOfFirst { it.second.isNotEmpty() }.coerceAtLeast(0)
+            } else {
+                selectedTab.coerceIn(0, emoteGroups.lastIndex)
             }
+            if (selectedTab != targetTab) {
+                selectedTab = targetTab
+            }
+            if (!prevShowEmotes) {
+                prevShowEmotes = true
+                withFrameNanos { }
+                withFrameNanos { }
+                runCatching {
+                    tabRequesters.getOrNull(targetTab)?.requestFocus()
+                }
+            }
+        } else if (!showEmotes) {
+            prevShowEmotes = false
+            drawerHasFocus = false
         }
     }
 
@@ -932,7 +963,8 @@ fun ChatComposer(
         ) {
             val screenWidthPx = constraints.maxWidth.toFloat()
             val edgeMarginPx = with(density) { 24.dp.toPx() }
-            val pillWidth = if (channelBadge != null) 560.dp else 520.dp
+            val extraQrWidth = if (onOpenQr != null) 46.dp else 0.dp
+            val pillWidth = (if (channelBadge != null) 560.dp else 520.dp) + extraQrWidth
             val drawerWidth = 660.dp
             val pillWidthPx = with(density) { pillWidth.toPx() }.coerceAtMost((screenWidthPx - edgeMarginPx * 2f).coerceAtLeast(300f))
             val drawerWidthPx = with(density) { drawerWidth.toPx() }.coerceAtMost((screenWidthPx - edgeMarginPx * 2f).coerceAtLeast(pillWidthPx))
@@ -956,6 +988,7 @@ fun ChatComposer(
                         modifier = Modifier
                             .offset { IntOffset(drawerLeftPx.roundToInt(), 0) }
                             .width(with(density) { drawerWidthPx.toDp() })
+                            .onFocusChanged { drawerHasFocus = it.hasFocus }
                             .clip(RoundedCornerShape(22.dp))
                             .background(Color(0xF0171620))
                             .border(1.25.dp, Color(0x3AFFFFFF), RoundedCornerShape(22.dp))
@@ -976,6 +1009,7 @@ fun ChatComposer(
                                 text = "$text$prefix$code "
                             },
                             pillStyle = true,
+                            tabRequesters = tabRequesters,
                         )
                     }
                     Spacer(Modifier.height(10.dp))
@@ -985,6 +1019,20 @@ fun ChatComposer(
                     modifier = Modifier
                         .offset { IntOffset(pillLeftPx.roundToInt(), 0) }
                         .width(with(density) { pillWidthPx.toDp() })
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown &&
+                                event.key == Key.DirectionDown &&
+                                onDismiss != null &&
+                                !isTextEditing &&
+                                !voice.listening &&
+                                !drawerHasFocus
+                            ) {
+                                onDismiss()
+                                true
+                            } else {
+                                false
+                            }
+                        }
                         .drawBehind {
                             val w = size.width
                             val beakH = 7.dp.toPx()
@@ -1051,6 +1099,7 @@ fun ChatComposer(
                             leadingIcon = null,
                             emotes = emoteMap,
                             focusRequester = requester,
+                            onEditingChange = { isTextEditing = it },
                             modifier = Modifier.weight(1f),
                         ) {
                             onSend(text)
@@ -1077,6 +1126,30 @@ fun ChatComposer(
                             ) {
                                 showEmotes = !showEmotes
                                 if (!showEmotes) hoveredEmote = null
+                            }
+                        }
+                        if (onOpenQr != null) {
+                            Spacer(Modifier.width(6.dp))
+                            Box {
+                                TvIconButton(
+                                    icon = R.drawable.tv_ic_qr,
+                                    contentDescription = context.getString(R.string.tv_chat_qr_title),
+                                    size = 42.dp,
+                                    active = qrConnectedCount > 0,
+                                ) {
+                                    onOpenQr()
+                                }
+                                if (qrConnectedCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(top = 2.dp, end = 2.dp)
+                                            .size(9.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF34D399))
+                                            .border(1.5.dp, Color(0xFF1B1A24), CircleShape)
+                                    )
+                                }
                             }
                         }
                         Spacer(Modifier.width(6.dp))
@@ -1120,6 +1193,7 @@ fun ChatComposer(
                         leadingIcon = null,
                         emotes = emoteMap,
                         focusRequester = requester,
+                        onEditingChange = { isTextEditing = it },
                         modifier = Modifier.weight(1f),
                     ) {
                         onSend(text)
@@ -1167,10 +1241,11 @@ fun ChatComposer(
                             text = "$text$prefix$code "
                         },
                         pillStyle = false,
+                        tabRequesters = tabRequesters,
                     )
                 }
             }
         }
     }
-    LaunchedEffect(Unit) { requester.requestFocus() }
+    LaunchedEffect(Unit) { runCatching { requester.requestFocus() } }
 }

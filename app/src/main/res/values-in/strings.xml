@@ -1481,4 +1481,17 @@
     <string name="tv_emotes_most_used">Paling Sering</string>
     <string name="tv_emotes_most_used_empty">Kirim emote di obrolan untuk mengisi daftar paling sering dipakai</string>
     <string name="tv_emotes_uses_count">%1$s kali</string>
+    <string name="tv_chat_qr_title">Obrolan di ponsel (QR)</string>
+    <string name="tv_chat_qr_help">Pindai dengan ponsel untuk membaca dan menulis di obrolan langsung lewat Wi-Fi. Panel ini bisa ditutup — obrolan tetap aktif di ponsel.</string>
+    <string name="tv_chat_qr_connected">%d terhubung</string>
+    <string name="tv_chat_qr_waiting">Pindai untuk menghubungkan</string>
+    <string name="tv_chat_qr_follow_channel">Ikuti perpindahan saluran</string>
+    <string name="tv_chat_qr_disconnect">Putuskan</string>
+    <string name="tv_chat_qr_disconnected">Obrolan ponsel terputus</string>
+    <string name="tv_chat_qr_readonly">Mode baca saja (masuk di Xtra TV untuk mengirim pesan)</string>
+    <string name="tv_chat_qr_paused">Obrolan dijeda</string>
+    <string name="tv_chat_qr_replying_to">Membalas %s</string>
+    <string name="tv_chat_qr_search_emotes">Cari emote…</string>
+    <string name="tv_chat_qr_switched">Beralih ke %s</string>
+    <string name="tv_chat_qr_session_ended">Sesi Xtra TV berakhir</string>
 </resources>
