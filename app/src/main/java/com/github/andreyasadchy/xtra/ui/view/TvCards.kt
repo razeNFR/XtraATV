@@ -43,10 +43,83 @@ object TvCards {
         if (card.findViewById<View>(R.id.delete) != null) {
             card.isFocusable = false
             (card as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            applyWallpaperSurface(card)
             return
         }
         card.isFocusable = true
         (card as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        applyWallpaperSurface(card)
+    }
+
+    /**
+     * Adapts XML TV cards (followed channels, categories, streams, videos, saved, recent searches) to the
+     * user's configurable smoked-glass opacity ONLY when a non-default TV wallpaper is active.
+     * Restores exact default XML colors when [com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.STYLE_DEFAULT] is active.
+     */
+    fun applyWallpaperSurface(card: View) {
+        val context = card.context
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context)
+        val opacity = if (hasWallpaper) com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardOpacity(context) else -1
+
+        // Recent search pill rows (text + delete icon button)
+        val deleteBtn = card.findViewById<View>(R.id.delete)
+        if (deleteBtn != null) {
+            val key = "pill|$opacity"
+            if (card.getTag(R.id.tvCardSurfaceKey) == key) return
+            card.setTag(R.id.tvCardSurfaceKey, key)
+            val textView = card.findViewById<View>(R.id.text)
+            if (hasWallpaper) {
+                val pillPct = (opacity * 0.56f).toInt().coerceIn(24, 54)
+                val bgColor = android.graphics.Color.argb((pillPct * 255 / 100).coerceIn(0, 255), 0x0B, 0x0C, 0x10)
+                val density = context.resources.displayMetrics.density
+                fun makePillBg(): android.graphics.drawable.StateListDrawable = android.graphics.drawable.StateListDrawable().apply {
+                    addState(
+                        intArrayOf(android.R.attr.state_focused),
+                        android.graphics.drawable.GradientDrawable().apply {
+                            setColor(0xFFF2F2F7.toInt())
+                            cornerRadius = 24f * density
+                        },
+                    )
+                    addState(
+                        intArrayOf(),
+                        android.graphics.drawable.GradientDrawable().apply {
+                            setColor(bgColor)
+                            setStroke(maxOf(1, density.toInt()), 0x38FFFFFF)
+                            cornerRadius = 24f * density
+                        },
+                    )
+                }
+                textView?.background = makePillBg()
+                deleteBtn.background = makePillBg()
+            } else {
+                textView?.setBackgroundResource(R.drawable.tv_pill_background)
+                deleteBtn.setBackgroundResource(R.drawable.tv_pill_background)
+            }
+            return
+        }
+
+        val materialCard = card as? com.google.android.material.card.MaterialCardView ?: return
+        val isChannelCard = card.findViewById<View>(R.id.userRing) != null
+        val isOfflineChannel = isChannelCard && card.findViewById<View>(R.id.liveBadge)?.visibility != View.VISIBLE
+        val key = "card|$opacity|$isOfflineChannel"
+        if (card.getTag(R.id.tvCardSurfaceKey) == key) return
+        card.setTag(R.id.tvCardSurfaceKey, key)
+
+        if (card.getTag(R.id.tvCardDefaultBg) == null) {
+            card.setTag(R.id.tvCardDefaultBg, materialCard.cardBackgroundColor)
+        }
+        val shadeView = card.findViewById<View>(R.id.gameCardShade)
+        if (hasWallpaper) {
+            materialCard.setCardBackgroundColor(
+                com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.xmlCardColorStateList(context, offlineChannel = isOfflineChannel)
+            )
+            shadeView?.alpha = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.categoryShadeAlpha(context)
+        } else {
+            (card.getTag(R.id.tvCardDefaultBg) as? android.content.res.ColorStateList)?.let {
+                materialCard.setCardBackgroundColor(it)
+            }
+            shadeView?.alpha = 1f
+        }
     }
 
     fun showMenu(card: View) {

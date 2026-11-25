@@ -63,6 +63,9 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         var expUpgradeJob: Job? = null
         var experimentalVodActive = false
         var decoderSteppedDown = false
+        var offlineOverlay: FrameLayout? = null
+        var offlineJob: Job? = null
+        var isOffline = false
     }
 
     private val slots = arrayOfNulls<PipSlot>(MAX_SLOTS)
@@ -216,6 +219,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 slot.expUpgradeJob?.cancel()
                 slot.expUpgradeJob = null
                 slot.experimentalVodActive = false
+                clearSlotOffline(slot, immediate = true)
                 slot.player?.apply {
                     volume = 0f
                     playWhenReady = false
@@ -371,13 +375,29 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
 
                     override fun onRenderedFirstFrame() {
                         if (slot.suspendedByMain) return
+                        if (slot.isOffline) {
+                            clearSlotOffline(slot)
+                        }
                         slot.view?.findViewById<TextureView>(R.id.tvPipTexture)
                             ?.takeIf { it.alpha < 1f }
                             ?.animate()?.alpha(1f)?.setDuration(250L)?.start()
                     }
 
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (slot.suspendedByMain) return
+                        if (playbackState == Player.STATE_READY && slot.isOffline) {
+                            clearSlotOffline(slot)
+                        } else if (playbackState == Player.STATE_ENDED) {
+                            slot.stream?.channelLogin?.let { handleSlotEnded(slot, it) }
+                        }
+                    }
+
                     override fun onPlayerError(error: PlaybackException) {
                         if (slot.suspendedByMain) return
+                        if ((error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode == 404) {
+                            slot.stream?.channelLogin?.let { handleSlotEnded(slot, it) }
+                            return
+                        }
                         if (!slot.decoderSteppedDown && (
                                 error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
                                     error.errorCode == PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED ||
@@ -410,6 +430,100 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         return slot
     }
 
+    private fun clearSlotOffline(slot: PipSlot, immediate: Boolean = false) {
+        slot.offlineJob?.cancel()
+        slot.offlineJob = null
+        slot.isOffline = false
+        val overlay = slot.offlineOverlay ?: return
+        slot.offlineOverlay = null
+        overlay.animate().cancel()
+        if (immediate) {
+            (overlay.parent as? ViewGroup)?.removeView(overlay)
+        } else {
+            overlay.animate()
+                .alpha(0f)
+                .setDuration(200L)
+                .withEndAction { (overlay.parent as? ViewGroup)?.removeView(overlay) }
+                .start()
+        }
+    }
+
+    private fun handleSlotEnded(slot: PipSlot, login: String) {
+        if (slot.suspendedByMain || slot.isOffline || slot.offlineJob?.isActive == true) return
+        slot.offlineJob = activity.lifecycleScope.launch {
+            val info = TvOfflineOverlay.fetchInfo(activity, login)
+            if (slot.suspendedByMain || slot.stream?.channelLogin != login || slots.getOrNull(slot.slotIndex) !== slot) {
+                return@launch
+            }
+            if (info?.isLive == true) {
+                delay(3_000L)
+                if (!slot.suspendedByMain && slot.stream?.channelLogin == login && slot.player?.isPlaying != true) {
+                    load(slot, login)
+                }
+                return@launch
+            }
+            slot.isOffline = true
+            val frame = slot.view
+            if (frame != null) {
+                val overlay = TvOfflineOverlay.createView(
+                    context = activity,
+                    displayName = info?.displayName ?: slot.stream?.channelName?.takeIf { it.isNotBlank() } ?: login,
+                    profileImageUrl = info?.profileImageUrl ?: slot.stream?.channelImage,
+                    offlineImageUrl = info?.offlineImageUrl,
+                    bannerImageUrl = info?.bannerImageUrl,
+                    compact = true,
+                    showWaitingHint = false,
+                ).apply {
+                    id = R.id.tvPipOfflineOverlay
+                    alpha = 0f
+                }
+                slot.offlineOverlay?.let { prev -> (prev.parent as? ViewGroup)?.removeView(prev) }
+                val texIdx = frame.findViewById<View>(R.id.tvPipTexture)?.let { frame.indexOfChild(it) + 1 } ?: frame.childCount
+                frame.addView(
+                    overlay,
+                    texIdx,
+                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+                )
+                slot.offlineOverlay = overlay
+                overlay.animate().alpha(1f).setDuration(220L).start()
+            }
+
+            delay(6_000L)
+            if (slot.suspendedByMain || slot.stream?.channelLogin != login || slots.getOrNull(slot.slotIndex) !== slot) {
+                return@launch
+            }
+            if (slot.player?.isPlaying == true) {
+                clearSlotOffline(slot)
+                return@launch
+            }
+            val endAction = activity.prefs().getString(C.TV_STREAM_END_ACTION, "home") ?: "home"
+            if (endAction != "stay") {
+                val label = slot.stream?.channelName?.takeIf { it.isNotBlank() } ?: login
+                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                    activity,
+                    activity.getString(R.string.tv_multistream_stream_ended, label),
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                closeSlot(slot.slotIndex)
+                return@launch
+            }
+
+            // Stay mode: keep the offline screen in the PiP window and auto-reconnect if the streamer comes back live
+            while (slot.isOffline && !slot.suspendedByMain && slot.stream?.channelLogin == login && slots.getOrNull(slot.slotIndex) === slot) {
+                delay(18_000L)
+                if (!slot.isOffline || slot.suspendedByMain || slot.stream?.channelLogin != login || slots.getOrNull(slot.slotIndex) !== slot) {
+                    return@launch
+                }
+                val liveCheck = TvOfflineOverlay.fetchInfo(activity, login)
+                if (liveCheck?.isLive == true && slot.isOffline && !slot.suspendedByMain && slot.stream?.channelLogin == login) {
+                    clearSlotOffline(slot)
+                    load(slot, login)
+                    return@launch
+                }
+            }
+        }
+    }
+
     private fun updateVideoSizeCaps() {
         val twoOpen = activeCount >= 2
         slots.forEach { slot ->
@@ -432,6 +546,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         slot.expUpgradeJob?.cancel()
         slot.expUpgradeJob = null
         slot.experimentalVodActive = false
+        clearSlotOffline(slot, immediate = true)
         slot.loadJob = activity.lifecycleScope.launch {
             val app = activity.applicationContext as XtraApp
             if (TvExperimentalAdblock.isExperimentalEnabled(activity)) {
@@ -475,6 +590,8 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
                 activePlayer.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
                 activePlayer.prepare()
                 activePlayer.playWhenReady = true
+            } else if (url == null && !slot.suspendedByMain && slot.stream?.channelLogin == login) {
+                handleSlotEnded(slot, login)
             }
         }
     }
@@ -1183,6 +1300,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
         slot.expUpgradeJob = null
         slot.experimentalVodActive = false
         slot.decoderSteppedDown = false
+        clearSlotOffline(slot, immediate = true)
         slot.player?.release()
         slot.player = null
         slot.view?.let { container.removeView(it) }
@@ -1243,6 +1361,7 @@ class TvPip(private val activity: MainActivity, private val container: ViewGroup
             slot.suspendedByMain = false
             slot.loadJob?.cancel()
             slot.expUpgradeJob?.cancel()
+            clearSlotOffline(slot, immediate = true)
             slot.player?.release()
             slot.view?.let { container.removeView(it) }
             slots[i] = null

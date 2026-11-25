@@ -1426,6 +1426,8 @@
     <string name="tv_wallpaper_qr_help">Pindai dengan ponsel di Wi-Fi yang sama untuk mengirim satu atau beberapa foto maupun URL tanpa menutup layar ini.</string>
     <string name="tv_wallpaper_visibility">Visibilitas</string>
     <string name="tv_wallpaper_blur">Buram</string>
+    <string name="tv_wallpaper_card_opacity">Opasitas kartu</string>
+    <string name="tv_player_offline_waiting">Saluran sedang offline · Menyambung ulang otomatis saat siaran langsung</string>
     <string name="tv_wallpaper_applied">Wallpaper diterapkan</string>
     <string name="tv_wallpaper_invalid_image">Gambar tidak valid atau tidak dapat diakses</string>
     <string name="tv_wallpaper_web_pick_file">Pilih satu atau beberapa gambar dari ponsel</string>
@@ -1460,4 +1462,19 @@
     <string name="tv_wallpaper_rotation_select_all">Pilih semua</string>
     <string name="tv_wallpaper_rotation_clear_all">Batalkan pilihan</string>
     <string name="tv_wallpaper_rotation_badge">Rotasi (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Nuansa warna ambien</string>
+    <string name="tv_wallpaper_tint_off">Mati</string>
+    <string name="tv_wallpaper_tint_subtle">Halus</string>
+    <string name="tv_wallpaper_tint_full">Penuh</string>
+    <string name="tv_wallpaper_web_connected">Terhubung melalui Wi-Fi</string>
+    <string name="tv_wallpaper_web_tab_photos">Foto</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">Di TV</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · Diubah ke 1080p</string>
+    <string name="tv_wallpaper_web_ready">siap dikirim</string>
+    <string name="tv_wallpaper_web_clear">Hapus</string>
+    <string name="tv_wallpaper_web_url_preview">Pratinjau 16:9 langsung</string>
+    <string name="tv_wallpaper_web_active">Aktif</string>
+    <string name="tv_wallpaper_web_empty_tv">Belum ada wallpaper kustom di TV</string>
+    <string name="tv_wallpaper_web_deleted">Wallpaper dihapus</string>
 </resources>

@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">Escaneie com o celular no mesmo Wi-Fi para enviar uma ou várias fotos ou URLs sem fechar esta tela.</string>
     <string name="tv_wallpaper_visibility">Visibilidade</string>
     <string name="tv_wallpaper_blur">Desfoque</string>
+    <string name="tv_wallpaper_card_opacity">Opacidade dos cartões</string>
+    <string name="tv_player_offline_waiting">Canal offline · Reconexão automática quando voltar ao vivo</string>
     <string name="tv_wallpaper_applied">Papel de parede aplicado</string>
     <string name="tv_wallpaper_invalid_image">Imagem inválida ou inacessível</string>
     <string name="tv_wallpaper_web_pick_file">Escolher uma ou mais imagens do celular</string>
@@ -1459,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">Selecionar tudo</string>
     <string name="tv_wallpaper_rotation_clear_all">Desmarcar tudo</string>
     <string name="tv_wallpaper_rotation_badge">Rotação (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Tonalidade da cor ambiente</string>
+    <string name="tv_wallpaper_tint_off">Desativada</string>
+    <string name="tv_wallpaper_tint_subtle">Sutil</string>
+    <string name="tv_wallpaper_tint_full">Completa</string>
+    <string name="tv_wallpaper_web_connected">Conectado via Wi-Fi</string>
+    <string name="tv_wallpaper_web_tab_photos">Fotos</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">Na TV</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · Redimensionado para 1080p</string>
+    <string name="tv_wallpaper_web_ready">pronta(s) para enviar</string>
+    <string name="tv_wallpaper_web_clear">Limpar</string>
+    <string name="tv_wallpaper_web_url_preview">Prévia 16:9 ao vivo</string>
+    <string name="tv_wallpaper_web_active">Ativo</string>
+    <string name="tv_wallpaper_web_empty_tv">Nenhum papel de parede personalizado na TV</string>
+    <string name="tv_wallpaper_web_deleted">Papel de parede excluído</string>
 </resources>

@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">Scansiona con il telefono sullo stesso Wi-Fi per inviare una o più foto o URL senza chiudere questa schermata.</string>
     <string name="tv_wallpaper_visibility">Visibilità</string>
     <string name="tv_wallpaper_blur">Sfocatura</string>
+    <string name="tv_wallpaper_card_opacity">Opacità delle schede</string>
+    <string name="tv_player_offline_waiting">Il canale è offline · Riconnessione automatica quando torna in diretta</string>
     <string name="tv_wallpaper_applied">Sfondo applicato</string>
     <string name="tv_wallpaper_invalid_image">Immagine non valida o irraggiungibile</string>
     <string name="tv_wallpaper_web_pick_file">Scegli una o più immagini dal telefono</string>
@@ -1459,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">Seleziona tutto</string>
     <string name="tv_wallpaper_rotation_clear_all">Deseleziona tutto</string>
     <string name="tv_wallpaper_rotation_badge">Rotazione (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Tinta colore ambiente</string>
+    <string name="tv_wallpaper_tint_off">Disattiva</string>
+    <string name="tv_wallpaper_tint_subtle">Leggera</string>
+    <string name="tv_wallpaper_tint_full">Completa</string>
+    <string name="tv_wallpaper_web_connected">Connesso tramite Wi-Fi</string>
+    <string name="tv_wallpaper_web_tab_photos">Foto</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">Sulla TV</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · Ridimensionato a 1080p</string>
+    <string name="tv_wallpaper_web_ready">pronta/e per l\'invio</string>
+    <string name="tv_wallpaper_web_clear">Cancella</string>
+    <string name="tv_wallpaper_web_url_preview">Anteprima 16:9 dal vivo</string>
+    <string name="tv_wallpaper_web_active">Attivo</string>
+    <string name="tv_wallpaper_web_empty_tv">Nessuno sfondo personalizzato sulla TV</string>
+    <string name="tv_wallpaper_web_deleted">Sfondo eliminato</string>
 </resources>

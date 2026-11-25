@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">Scannez avec votre téléphone sur le même Wi-Fi pour envoyer une ou plusieurs photos ou URLs à la suite sans refermer cet écran.</string>
     <string name="tv_wallpaper_visibility">Visibilité</string>
     <string name="tv_wallpaper_blur">Flou</string>
+    <string name="tv_wallpaper_card_opacity">Opacité des cartes</string>
+    <string name="tv_player_offline_waiting">Chaîne hors ligne · Reconnexion automatique au retour en direct</string>
     <string name="tv_wallpaper_applied">Fond d\'écran appliqué</string>
     <string name="tv_wallpaper_invalid_image">Image invalide ou inaccessible</string>
     <string name="tv_wallpaper_web_pick_file">Choisir une ou plusieurs images du téléphone</string>
@@ -1459,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">Tout cocher</string>
     <string name="tv_wallpaper_rotation_clear_all">Tout décocher</string>
     <string name="tv_wallpaper_rotation_badge">Rotation (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Teinte couleur d\'ambiance</string>
+    <string name="tv_wallpaper_tint_off">Désactivée</string>
+    <string name="tv_wallpaper_tint_subtle">Subtile</string>
+    <string name="tv_wallpaper_tint_full">Intégrale</string>
+    <string name="tv_wallpaper_web_connected">Connecté en Wi-Fi</string>
+    <string name="tv_wallpaper_web_tab_photos">Photos</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">Sur la TV</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · Redimensionné en 1080p</string>
+    <string name="tv_wallpaper_web_ready">prête(s) à envoyer</string>
+    <string name="tv_wallpaper_web_clear">Effacer</string>
+    <string name="tv_wallpaper_web_url_preview">Aperçu 16:9 en direct</string>
+    <string name="tv_wallpaper_web_active">Actif</string>
+    <string name="tv_wallpaper_web_empty_tv">Aucun fond d\'écran perso sur la TV</string>
+    <string name="tv_wallpaper_web_deleted">Fond d\'écran supprimé</string>
 </resources>

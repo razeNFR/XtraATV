@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.input.key.Key
@@ -1119,6 +1120,48 @@ private fun HeroBanner(
             }
         }
 
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
+        val heroAccentColor = if (hasWallpaper) {
+            androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primary, Color.White, 0.28f)
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+        if (hasWallpaper) {
+            // True elliptical soft halo that fades to 0% strictly inside all 4 edges (zero straight/clipped borders)
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxWidth(0.70f)
+                    .fillMaxHeight()
+                    .drawBehind {
+                        val rx = size.width * 0.48f
+                        val ry = size.height * 0.48f
+                        if (rx > 0f && ry > 0f) {
+                            val cx = size.width * 0.48f
+                            val cy = size.height * 0.50f
+                            val sx = rx / ry
+                            withTransform({
+                                translate(left = cx, top = cy)
+                                scale(scaleX = sx, scaleY = 1f, pivot = Offset.Zero)
+                            }) {
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        0.00f to Color(0x5E06070B),
+                                        0.45f to Color(0x3B06070B),
+                                        0.76f to Color(0x1606070B),
+                                        1.00f to Color.Transparent,
+                                        center = Offset.Zero,
+                                        radius = ry,
+                                    ),
+                                    radius = ry,
+                                    center = Offset.Zero,
+                                )
+                            }
+                        }
+                    }
+            )
+        }
+
         // Stream metadata and action pills on the left
         Column(
             Modifier
@@ -1146,15 +1189,23 @@ private fun HeroBanner(
                     context.getString(R.string.tv_featured_live),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = heroAccentColor,
                     maxLines = 1,
                     style = HomeHeaderShadow,
                 )
                 stream.viewerCount?.let { count ->
+                    val viewerShape = RoundedCornerShape(if (hasWallpaper) 10.dp else 6.dp)
                     Row(
                         Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0x8C0D0D16))
+                            .clip(viewerShape)
+                            .background(
+                                if (hasWallpaper) {
+                                    com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.pillSurfaceColor(context, Color(0x8C0D0D16))
+                                } else {
+                                    Color(0x8C0D0D16)
+                                }
+                            )
+                            .then(if (hasWallpaper) Modifier.border(1.dp, Color(0x36FFFFFF), viewerShape) else Modifier)
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1223,7 +1274,7 @@ private fun HeroBanner(
                     stream.gameName.orEmpty(),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = heroAccentColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = HomeHeaderShadow,
@@ -1278,19 +1329,29 @@ private fun HeroActionPill(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
+    val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     var longPressed by remember { mutableStateOf(false) }
     val accent = MaterialTheme.colorScheme.primary
     val shape = RoundedCornerShape(24.dp)
+    val glassBase = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.pillSurfaceColor(context, Color(0xD9161522))
     val bg = when {
         focused -> TvColors.focused
+        primary && hasWallpaper -> androidx.compose.ui.graphics.lerp(
+            glassBase.copy(alpha = (glassBase.alpha + 0.14f).coerceAtMost(0.62f)),
+            accent.copy(alpha = 0.58f),
+            0.46f,
+        )
         primary -> androidx.compose.ui.graphics.lerp(Color(0xDE161522), accent, 0.36f)
+        hasWallpaper -> glassBase
         else -> Color(0xD9161522)
     }
     val borderColor = when {
         focused -> Color.White
-        primary -> accent.copy(alpha = 0.62f)
+        primary -> accent.copy(alpha = if (hasWallpaper) 0.72f else 0.62f)
+        hasWallpaper -> Color(0x38FFFFFF)
         else -> Color(0x2EFFFFFF)
     }
     val fg = if (focused) TvColors.onFocused else Color.White
@@ -1361,6 +1422,7 @@ class TvHomeAccount(val name: String?, val image: String?)
 @Composable
 private fun Greeting(account: TvHomeAccount?, showGreeting: Boolean = true) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
     // the time, again at each new minute
     var now by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -1370,12 +1432,18 @@ private fun Greeting(account: TvHomeAccount?, showGreeting: Boolean = true) {
         }
     }
     val pillShape = RoundedCornerShape(20.dp)
-    Row(
-        modifier = Modifier
+    val rowMod = if (hasWallpaper) {
+        // Frameless clean greeting + clock over wallpapers (matches the clock on all other TV screens)
+        Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
+    } else {
+        Modifier
             .clip(pillShape)
             .background(Color(0xCC13121C))
             .border(1.dp, Color(0x24FFFFFF), pillShape)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    }
+    Row(
+        modifier = rowMod,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showGreeting) {
@@ -1389,7 +1457,15 @@ private fun Greeting(account: TvHomeAccount?, showGreeting: Boolean = true) {
                 },
                 name ?: ""
             )
-            Text(greeting, fontSize = 14.sp, color = Color(0xD9FFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 320.dp))
+            Text(
+                greeting,
+                fontSize = 14.sp,
+                color = if (hasWallpaper) Color(0xEBFFFFFF) else Color(0xD9FFFFFF),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = if (hasWallpaper) HomeHeaderShadow else TextStyle.Default,
+                modifier = Modifier.widthIn(max = 320.dp),
+            )
             Spacer(Modifier.width(12.dp))
         }
         Text(
@@ -1397,7 +1473,8 @@ private fun Greeting(account: TvHomeAccount?, showGreeting: Boolean = true) {
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,
-            maxLines = 1
+            style = if (hasWallpaper) HomeHeaderShadow else TextStyle.Default,
+            maxLines = 1,
         )
     }
 }
@@ -1467,6 +1544,8 @@ private fun SkeletonRow(actions: TvHomeActions, startInset: Dp = 0.dp, firstCard
 /** A statistic of the TV (time today, streak of days, top streamer of the week...), the next one each minute. */
 @Composable
 private fun StatsBadge(actions: TvHomeActions, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     var items by remember { mutableStateOf(actions.statsBadges()) }
@@ -1480,11 +1559,12 @@ private fun StatsBadge(actions: TvHomeActions, modifier: Modifier = Modifier) {
     }
     val item = items.takeIf { it.isNotEmpty() }?.let { it[index % it.size] } ?: return
     val shape = RoundedCornerShape(20.dp)
+    val bg = if (focused) TvColors.focused else com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.pillSurfaceColor(context, Color(0xD413121C))
     Row(
         modifier
             .clip(shape)
-            .background(if (focused) TvColors.focused else Color(0xD413121C))
-            .then(if (focused) Modifier else Modifier.border(1.dp, Color(0x26FFFFFF), shape))
+            .background(bg)
+            .then(if (focused) Modifier else Modifier.border(1.dp, if (hasWallpaper) Color(0x36FFFFFF) else Color(0x26FFFFFF), shape))
             .clickable(interactionSource = interaction, indication = null, onClick = actions.openStats)
             .padding(horizontal = 14.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1497,15 +1577,18 @@ private fun StatsBadge(actions: TvHomeActions, modifier: Modifier = Modifier) {
 
 @Composable
 private fun RefreshPill(actions: TvHomeActions, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val shape = RoundedCornerShape(24.dp)
+    val bg = if (focused) TvColors.focused else com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.pillSurfaceColor(context, Color(0xD913121C))
     Row(
         modifier
             .leftEdge(0, actions.openMenu)
             .clip(shape)
-            .background(if (focused) TvColors.focused else Color(0xD913121C))
-            .then(if (focused) Modifier else Modifier.border(1.dp, Color(0x28FFFFFF), shape))
+            .background(bg)
+            .then(if (focused) Modifier else Modifier.border(1.dp, if (hasWallpaper) Color(0x38FFFFFF) else Color(0x28FFFFFF), shape))
             .clickable(interactionSource = interaction, indication = null, onClick = actions.refresh)
             .padding(horizontal = 18.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1527,7 +1610,7 @@ private fun RefreshPill(actions: TvHomeActions, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.width(10.dp))
         Text(
-            androidx.compose.ui.platform.LocalContext.current.getString(R.string.refresh),
+            context.getString(R.string.refresh),
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
             color = if (focused) TvColors.onFocused else Color.White
@@ -2525,18 +2608,38 @@ private fun HomeCardCapsule(
     cornerRadius: Dp = 12.dp,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
+    val context = LocalContext.current
+    val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
+    val surfaceColor = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardSurfaceColor(
+        context = context,
+        focused = focused,
+        defaultColor = Color(0xE013121C),
+        defaultFocusedColor = Color(0xEB1A1927),
+    )
     val shape = RoundedCornerShape(cornerRadius)
+    val borderMod = when {
+        focused -> Modifier.border(width = 2.6.dp, color = Color.White, shape = shape)
+        hasWallpaper -> Modifier.border(
+            width = 1.dp,
+            brush = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardGlassRimBrush,
+            shape = shape,
+        )
+        else -> Modifier.border(width = 1.dp, color = Color(0x26FFFFFF), shape = shape)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .tvCardFocusGlow(focused, MaterialTheme.colorScheme.primary, cornerRadius = cornerRadius)
             .clip(shape)
-            .background(if (focused) Color(0xEB1A1927) else Color(0xE013121C))
-            .border(
-                width = if (focused) 2.6.dp else 1.dp,
-                color = if (focused) Color.White else Color(0x26FFFFFF),
-                shape = shape,
-            ),
+            .background(surfaceColor)
+            .then(
+                if (hasWallpaper && !focused) {
+                    Modifier.background(com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardGlassSheenBrush)
+                } else {
+                    Modifier
+                }
+            )
+            .then(borderMod),
         content = content,
     )
 }
@@ -3146,8 +3249,31 @@ private fun StatsCard(
     DisposableEffect(focusToken) {
         onDispose { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken) }
     }
+    val context = LocalContext.current
+    val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
     val cardShape = RoundedCornerShape(16.dp)
     val accent = MaterialTheme.colorScheme.primary
+    val statsBgBrush = if (hasWallpaper) {
+        val baseSurface = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardSurfaceColor(
+            context = context,
+            focused = focused,
+            defaultColor = Color(0xE313121C),
+            defaultFocusedColor = Color(0xE613121C),
+        )
+        androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(
+                androidx.compose.ui.graphics.lerp(baseSurface, accent.copy(alpha = baseSurface.alpha), if (focused) 0.30f else 0.18f),
+                baseSurface,
+            )
+        )
+    } else {
+        androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(
+                androidx.compose.ui.graphics.lerp(Color(0xE613121C), accent, if (focused) 0.30f else 0.18f),
+                Color(0xE313121C),
+            )
+        )
+    }
     Column(Modifier.padding(start = startInset + 12.dp, end = endInset + 12.dp, top = 8.dp, bottom = 8.dp)) {
         RowTitle(stats.title, R.drawable.tv_ic_bar_chart)
         Spacer(Modifier.height(4.dp))
@@ -3169,18 +3295,13 @@ private fun StatsCard(
                 .leftEdge(0, actions.openMenu)
                 .tvCardFocusGlow(focused, accent, cornerRadius = 16.dp)
                 .clip(cardShape)
-                .background(
-                    androidx.compose.ui.graphics.Brush.linearGradient(
-                        listOf(
-                            androidx.compose.ui.graphics.lerp(Color(0xE613121C), accent, if (focused) 0.30f else 0.18f),
-                            Color(0xE313121C),
-                        )
-                    )
-                )
-                .border(
-                    width = if (focused) 2.4.dp else 1.dp,
-                    color = if (focused) Color.White else Color(0x26FFFFFF),
-                    shape = cardShape,
+                .background(statsBgBrush)
+                .then(
+                    when {
+                        focused -> Modifier.border(2.4.dp, Color.White, cardShape)
+                        hasWallpaper -> Modifier.border(1.dp, com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardGlassRimBrush, cardShape)
+                        else -> Modifier.border(1.dp, Color(0x26FFFFFF), cardShape)
+                    }
                 )
                 // OK: the page of the statistics in detail
                 .clickable(interactionSource = interaction, indication = null) { actions.openStats() }
@@ -3439,6 +3560,8 @@ private fun GameCard(
 
 @Composable
 private fun SeeAllCard(width: Dp, height: Dp, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val context = LocalContext.current
+    val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
     val accent = MaterialTheme.colorScheme.primary
     val onAccent = MaterialTheme.colorScheme.onPrimary
     val shape = RoundedCornerShape(14.dp)
@@ -3446,6 +3569,18 @@ private fun SeeAllCard(width: Dp, height: Dp, modifier: Modifier = Modifier, onC
         val cardBrush = if (focused) {
             androidx.compose.ui.graphics.Brush.verticalGradient(
                 listOf(TvColors.focused, Color(0xFFE6E5EE)),
+            )
+        } else if (hasWallpaper) {
+            val baseSurface = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardSurfaceColor(
+                context = context,
+                focused = false,
+                defaultColor = Color(0xE613121B),
+            )
+            androidx.compose.ui.graphics.Brush.verticalGradient(
+                listOf(
+                    androidx.compose.ui.graphics.lerp(baseSurface, accent.copy(alpha = baseSurface.alpha), 0.16f),
+                    baseSurface,
+                ),
             )
         } else {
             androidx.compose.ui.graphics.Brush.verticalGradient(
@@ -3472,7 +3607,17 @@ private fun SeeAllCard(width: Dp, height: Dp, modifier: Modifier = Modifier, onC
                         .size(42.dp)
                         .clip(CircleShape)
                         .background(
-                            if (focused) accent else androidx.compose.ui.graphics.lerp(Color(0xE6262536), accent, 0.28f),
+                            if (focused) {
+                                accent
+                            } else if (hasWallpaper) {
+                                androidx.compose.ui.graphics.lerp(
+                                    com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.pillSurfaceColor(context, Color(0xE6262536)),
+                                    accent.copy(alpha = 0.55f),
+                                    0.32f,
+                                )
+                            } else {
+                                androidx.compose.ui.graphics.lerp(Color(0xE6262536), accent, 0.28f)
+                            },
                         )
                         .border(
                             1.dp,

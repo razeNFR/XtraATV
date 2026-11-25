@@ -99,14 +99,12 @@ object TvStatsPage {
         val detail = remember(period, version, refreshStamp) {
             TvStats.detail(context, when (period) { 0 -> 7; 1 -> 30; else -> null })
         }
-        val hasWallpaper = remember(refreshStamp) { TvWallpaper.isActive(context) }
+        val hasWallpaper = TvWallpaper.isActiveReactive(context)
         val first = remember { FocusRequester() }
         val scroll = rememberScrollState()
         val scope = rememberCoroutineScope()
         val rootModifier = if (isEmbeddedPage) {
-            Modifier
-                .fillMaxSize()
-                .then(if (hasWallpaper) Modifier.background(Color(0x5208080F)) else Modifier)
+            Modifier.fillMaxSize()
         } else {
             Modifier
                 .fillMaxSize()
@@ -142,8 +140,8 @@ object TvStatsPage {
                         // the focus stays on these buttons: up / down scroll the page
                         modifier = Modifier
                             .clip(RoundedCornerShape(24.dp))
-                            .background(Color(0xD913121C))
-                            .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(24.dp))
+                            .background(TvWallpaper.pillSurfaceColor(context, Color(0xD913121C)))
+                            .border(1.dp, if (hasWallpaper) Color(0x36FFFFFF) else Color(0x26FFFFFF), RoundedCornerShape(24.dp))
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                             .onPreviewKeyEvent { event ->
                                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -261,12 +259,21 @@ object TvStatsPage {
 
     @Composable
     private fun Panel(modifier: Modifier, content: @Composable () -> Unit) {
+        val context = LocalContext.current
+        val hasWallpaper = TvWallpaper.isActiveReactive(context)
         val shape = RoundedCornerShape(14.dp)
         Column(
             modifier
                 .clip(shape)
-                .background(Color(0xE013121C))
-                .border(1.dp, Color(0x24FFFFFF), shape)
+                .background(TvWallpaper.cardSurfaceColor(context, focused = false, defaultColor = Color(0xE013121C)))
+                .then(if (hasWallpaper) Modifier.background(TvWallpaper.cardGlassSheenBrush) else Modifier)
+                .then(
+                    if (hasWallpaper) {
+                        Modifier.border(1.dp, TvWallpaper.cardGlassRimBrush, shape)
+                    } else {
+                        Modifier.border(1.dp, Color(0x24FFFFFF), shape)
+                    }
+                )
                 .padding(horizontal = 18.dp, vertical = 15.dp)
         ) { content() }
     }
@@ -296,13 +303,22 @@ object TvStatsPage {
 
     @Composable
     private fun RowScope.Tile(icon: Int, value: String, label: String) {
+        val context = LocalContext.current
+        val hasWallpaper = TvWallpaper.isActiveReactive(context)
         val shape = RoundedCornerShape(12.dp)
         Column(
             Modifier
                 .weight(1f)
                 .clip(shape)
-                .background(Color(0xE013121C))
-                .border(1.dp, Color(0x24FFFFFF), shape)
+                .background(TvWallpaper.cardSurfaceColor(context, focused = false, defaultColor = Color(0xE013121C)))
+                .then(if (hasWallpaper) Modifier.background(TvWallpaper.cardGlassSheenBrush) else Modifier)
+                .then(
+                    if (hasWallpaper) {
+                        Modifier.border(1.dp, TvWallpaper.cardGlassRimBrush, shape)
+                    } else {
+                        Modifier.border(1.dp, Color(0x24FFFFFF), shape)
+                    }
+                )
                 .padding(horizontal = 15.dp, vertical = 13.dp)
         ) {
             Icon(painterResource(icon), contentDescription = null, tint = TvColors.accent, modifier = Modifier.size(21.dp))
@@ -510,13 +526,22 @@ object TvStatsPage {
 
     @Composable
     private fun RowScope.Record(label: String, value: String, detail: String?) {
+        val context = LocalContext.current
+        val hasWallpaper = TvWallpaper.isActiveReactive(context)
         val shape = RoundedCornerShape(12.dp)
         Column(
             Modifier
                 .weight(1f)
                 .clip(shape)
-                .background(Color(0xE013121C))
-                .border(1.dp, Color(0x24FFFFFF), shape)
+                .background(TvWallpaper.cardSurfaceColor(context, focused = false, defaultColor = Color(0xE013121C)))
+                .then(if (hasWallpaper) Modifier.background(TvWallpaper.cardGlassSheenBrush) else Modifier)
+                .then(
+                    if (hasWallpaper) {
+                        Modifier.border(1.dp, TvWallpaper.cardGlassRimBrush, shape)
+                    } else {
+                        Modifier.border(1.dp, Color(0x24FFFFFF), shape)
+                    }
+                )
                 .padding(horizontal = 15.dp, vertical = 13.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

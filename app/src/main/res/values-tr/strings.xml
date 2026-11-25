@@ -1426,6 +1426,8 @@
     <string name="tv_wallpaper_qr_help">Bu pencereyi kapatmadan art arda bir veya birden fazla fotoğraf ya da URL göndermek için aynı Wi-Fi\'daki telefonunuzla tarayın.</string>
     <string name="tv_wallpaper_visibility">Görünürlük</string>
     <string name="tv_wallpaper_blur">Bulanıklık</string>
+    <string name="tv_wallpaper_card_opacity">Kart opaklığı</string>
+    <string name="tv_player_offline_waiting">Kanal çevrimdışı · Yayın başladığında otomatik yeniden bağlanacak</string>
     <string name="tv_wallpaper_applied">Duvar kağıdı uygulandı</string>
     <string name="tv_wallpaper_invalid_image">Geçersiz veya erişilemeyen görsel</string>
     <string name="tv_wallpaper_web_pick_file">Telefondan bir veya daha fazla görsel seçin</string>
@@ -1460,4 +1462,19 @@
     <string name="tv_wallpaper_rotation_select_all">Tümünü seç</string>
     <string name="tv_wallpaper_rotation_clear_all">Seçimi temizle</string>
     <string name="tv_wallpaper_rotation_badge">Döngü (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Ortam rengi tonlaması</string>
+    <string name="tv_wallpaper_tint_off">Kapalı</string>
+    <string name="tv_wallpaper_tint_subtle">Hafif</string>
+    <string name="tv_wallpaper_tint_full">Tam</string>
+    <string name="tv_wallpaper_web_connected">Wi-Fi ile bağlandı</string>
+    <string name="tv_wallpaper_web_tab_photos">Fotoğraflar</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">TV\'de</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · 1080p olarak ölçeklenir</string>
+    <string name="tv_wallpaper_web_ready">gönderime hazır</string>
+    <string name="tv_wallpaper_web_clear">Temizle</string>
+    <string name="tv_wallpaper_web_url_preview">Canlı 16:9 önizleme</string>
+    <string name="tv_wallpaper_web_active">Aktif</string>
+    <string name="tv_wallpaper_web_empty_tv">TV\'de henüz özel duvar kağıdı yok</string>
+    <string name="tv_wallpaper_web_deleted">Duvar kağıdı silindi</string>
 </resources>

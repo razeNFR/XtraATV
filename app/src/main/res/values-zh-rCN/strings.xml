@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">使用同一 Wi-Fi 下的手机扫描，即可连续发送一张或多张照片与图片链接，无需关闭此窗口。</string>
     <string name="tv_wallpaper_visibility">显示强度</string>
     <string name="tv_wallpaper_blur">模糊度</string>
+    <string name="tv_wallpaper_card_opacity">卡片不透明度</string>
+    <string name="tv_player_offline_waiting">频道当前离线 · 开播后将自动重新连接</string>
     <string name="tv_wallpaper_applied">壁纸已应用</string>
     <string name="tv_wallpaper_invalid_image">图片无效或无法访问</string>
     <string name="tv_wallpaper_web_pick_file">从手机选择一张或多张图片</string>
@@ -1459,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">全选</string>
     <string name="tv_wallpaper_rotation_clear_all">全部取消</string>
     <string name="tv_wallpaper_rotation_badge">轮播 (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">氛围色着色</string>
+    <string name="tv_wallpaper_tint_off">关闭</string>
+    <string name="tv_wallpaper_tint_subtle">柔和</string>
+    <string name="tv_wallpaper_tint_full">完整</string>
+    <string name="tv_wallpaper_web_connected">已通过 Wi-Fi 连接</string>
+    <string name="tv_wallpaper_web_tab_photos">相册</string>
+    <string name="tv_wallpaper_web_tab_url">网址</string>
+    <string name="tv_wallpaper_web_tab_tv">电视上</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG、PNG、WebP · 自动调整至 1080p</string>
+    <string name="tv_wallpaper_web_ready">张待发送</string>
+    <string name="tv_wallpaper_web_clear">清空</string>
+    <string name="tv_wallpaper_web_url_preview">16:9 实时预览</string>
+    <string name="tv_wallpaper_web_active">当前使用</string>
+    <string name="tv_wallpaper_web_empty_tv">电视上尚无自定义壁纸</string>
+    <string name="tv_wallpaper_web_deleted">已删除壁纸</string>
 </resources>

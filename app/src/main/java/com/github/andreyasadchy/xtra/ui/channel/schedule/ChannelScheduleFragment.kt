@@ -355,21 +355,41 @@ private fun ScheduleCardShell(
     onClick: () -> Unit,
     content: @Composable (focused: Boolean) -> Unit,
 ) {
+    val context = LocalContext.current
+    val hasWallpaper = isTv && com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (focused && isTv) 1.015f else 1f, label = "schedScale")
     val shape = RoundedCornerShape(14.dp)
+    val bg = when {
+        focused && isTv -> TvColors.focused
+        hasWallpaper -> com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardSurfaceColor(
+            context = context,
+            focused = false,
+            defaultColor = Color(0x1AFFFFFF),
+        )
+        else -> Color(0x1AFFFFFF)
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (isFirst && isTv) Modifier.focusRequester(firstRequester) else Modifier)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
-            .background(if (focused && isTv) TvColors.focused else Color(0x1AFFFFFF))
-            .border(
-                width = if (focused && isTv) 2.dp else 1.dp,
-                color = if (focused && isTv) TvColors.accent else Color(0x1FFFFFFF),
-                shape = shape,
+            .background(bg)
+            .then(
+                if (hasWallpaper && !(focused && isTv)) {
+                    Modifier.background(com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardGlassSheenBrush)
+                } else {
+                    Modifier
+                }
+            )
+            .then(
+                when {
+                    focused && isTv -> Modifier.border(2.dp, TvColors.accent, shape)
+                    hasWallpaper -> Modifier.border(1.dp, com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardGlassRimBrush, shape)
+                    else -> Modifier.border(1.dp, Color(0x1FFFFFFF), shape)
+                }
             )
             .then(
                 if (isTv) {

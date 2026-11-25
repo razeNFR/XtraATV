@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">同じWi-Fiのスマートフォンで読み取ると、この画面を閉じずに複数の写真や画像URLを続けて送信できます。</string>
     <string name="tv_wallpaper_visibility">表示強度</string>
     <string name="tv_wallpaper_blur">ぼかし</string>
+    <string name="tv_wallpaper_card_opacity">カードの不透明度</string>
+    <string name="tv_player_offline_waiting">チャンネルはオフラインです · 配信開始時に自動再接続します</string>
     <string name="tv_wallpaper_applied">壁紙を適用しました</string>
     <string name="tv_wallpaper_invalid_image">無効または取得できない画像です</string>
     <string name="tv_wallpaper_web_pick_file">スマホから1枚または複数の画像を選択</string>
@@ -1459,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">すべて選択</string>
     <string name="tv_wallpaper_rotation_clear_all">すべて解除</string>
     <string name="tv_wallpaper_rotation_badge">ローテーション (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">アンビエントカラー色調</string>
+    <string name="tv_wallpaper_tint_off">オフ</string>
+    <string name="tv_wallpaper_tint_subtle">控えめ</string>
+    <string name="tv_wallpaper_tint_full">フル</string>
+    <string name="tv_wallpaper_web_connected">Wi-Fi接続済み</string>
+    <string name="tv_wallpaper_web_tab_photos">写真</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">テレビ内</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG、PNG、WebP · 1080pに自動調整</string>
+    <string name="tv_wallpaper_web_ready">件を送信可能</string>
+    <string name="tv_wallpaper_web_clear">クリア</string>
+    <string name="tv_wallpaper_web_url_preview">16:9 ライブプレビュー</string>
+    <string name="tv_wallpaper_web_active">使用中</string>
+    <string name="tv_wallpaper_web_empty_tv">テレビにカスタム壁紙はまだありません</string>
+    <string name="tv_wallpaper_web_deleted">壁紙を削除しました</string>
 </resources>

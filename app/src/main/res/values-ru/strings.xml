@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">Отсканируйте телефоном в той же сети Wi-Fi, чтобы отправить одно или несколько фото или URL подряд, не закрывая это окно.</string>
     <string name="tv_wallpaper_visibility">Видимость</string>
     <string name="tv_wallpaper_blur">Размытие</string>
+    <string name="tv_wallpaper_card_opacity">Непрозрачность карточек</string>
+    <string name="tv_player_offline_waiting">Канал не в сети · Автопереподключение при начале эфира</string>
     <string name="tv_wallpaper_applied">Обои применены</string>
     <string name="tv_wallpaper_invalid_image">Некорректное или недоступное изображение</string>
     <string name="tv_wallpaper_web_pick_file">Выбрать одно или несколько фото с телефона</string>
@@ -1459,4 +1461,19 @@
     <string name="tv_wallpaper_rotation_select_all">Выбрать все</string>
     <string name="tv_wallpaper_rotation_clear_all">Снять выделение</string>
     <string name="tv_wallpaper_rotation_badge">Автосмена (%1$d)</string>
+    <string name="tv_wallpaper_custom_tint">Оттенок цвета окружения</string>
+    <string name="tv_wallpaper_tint_off">Выкл.</string>
+    <string name="tv_wallpaper_tint_subtle">Мягкий</string>
+    <string name="tv_wallpaper_tint_full">Полный</string>
+    <string name="tv_wallpaper_web_connected">Подключено по Wi-Fi</string>
+    <string name="tv_wallpaper_web_tab_photos">Фото</string>
+    <string name="tv_wallpaper_web_tab_url">URL</string>
+    <string name="tv_wallpaper_web_tab_tv">На ТВ</string>
+    <string name="tv_wallpaper_web_pick_hint">JPG, PNG, WebP · Сжатие до 1080p</string>
+    <string name="tv_wallpaper_web_ready">готово к отправке</string>
+    <string name="tv_wallpaper_web_clear">Очистить</string>
+    <string name="tv_wallpaper_web_url_preview">Предпросмотр 16:9</string>
+    <string name="tv_wallpaper_web_active">Активно</string>
+    <string name="tv_wallpaper_web_empty_tv">На ТВ пока нет своих обоев</string>
+    <string name="tv_wallpaper_web_deleted">Обои удалены</string>
 </resources>

@@ -3470,4 +3470,48 @@ class GraphQLRepository(
             followed
         }.getOrNull()
     }
+
+    data class ChannelOfflineInfo(
+        val login: String,
+        val displayName: String?,
+        val profileImageUrl: String?,
+        val offlineImageUrl: String?,
+        val bannerImageUrl: String?,
+        val isLive: Boolean,
+    )
+
+    suspend fun fetchChannelOfflineInfo(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+        channelLogin: String,
+    ): ChannelOfflineInfo? = withContext(Dispatchers.IO) {
+        if (channelLogin.isBlank()) return@withContext null
+        val body = buildJsonObject {
+            put(
+                "query",
+                "query(\$login: String!) { user(login: \$login) { login displayName profileImageURL(width: 300) offlineImageURL bannerImageURL stream { id } } }",
+            )
+            putJsonObject("variables") {
+                put("login", channelLogin)
+            }
+        }.toString()
+        runCatching {
+            fun JsonElement?.obj(): JsonObject? = this as? JsonObject
+            fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val parsed = json.parseToJsonElement(raw)
+            val root = (parsed as? JsonArray)?.firstOrNull().obj() ?: parsed.obj() ?: return@runCatching null
+            val user = root["data"].obj()?.get("user").obj() ?: return@runCatching null
+            val streamId = user["stream"].obj()?.get("id").str()
+            ChannelOfflineInfo(
+                login = user["login"].str()?.takeIf { it.isNotBlank() } ?: channelLogin,
+                displayName = user["displayName"].str()?.takeIf { it.isNotBlank() },
+                profileImageUrl = user["profileImageURL"].str()?.takeIf { it.isNotBlank() },
+                offlineImageUrl = user["offlineImageURL"].str()?.takeIf { it.isNotBlank() },
+                bannerImageUrl = user["bannerImageURL"].str()?.takeIf { it.isNotBlank() },
+                isLive = !streamId.isNullOrBlank(),
+            )
+        }.getOrNull()
+    }
 }

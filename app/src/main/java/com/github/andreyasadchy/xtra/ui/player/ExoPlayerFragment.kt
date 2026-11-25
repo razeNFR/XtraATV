@@ -171,6 +171,9 @@ class ExoPlayerFragment : PlayerFragment() {
         keptAcrossStop = false
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
+                if (tvOfflineScreenActive) {
+                    hideTvOfflineOverlay()
+                }
                 // a live stream: the service says when the picture is the stream itself and not an ad
                 if (playbackService?.type != BasePlaybackService.STREAM) {
                     hideLoadingPicture()
@@ -190,7 +193,10 @@ class ExoPlayerFragment : PlayerFragment() {
                         return
                     }
                 }
-                binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING
+                if (playbackState == Player.STATE_READY && tvOfflineScreenActive && playbackService?.player?.isPlaying == true) {
+                    hideTvOfflineOverlay()
+                }
+                binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING && !tvOfflineScreenActive
                 val showPlayButton = Util.shouldShowPlayButton(playbackService?.visiblePlayer ?: playbackService?.player)
                 syncPlayPauseButtonVisibility()
                 setPipActions(!showPlayButton)
@@ -202,7 +208,7 @@ class ExoPlayerFragment : PlayerFragment() {
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                binding.bufferingIndicator.isVisible = playbackService?.player?.playbackState == Player.STATE_BUFFERING
+                binding.bufferingIndicator.isVisible = playbackService?.player?.playbackState == Player.STATE_BUFFERING && !tvOfflineScreenActive
                 val showPlayButton = Util.shouldShowPlayButton(playbackService?.visiblePlayer ?: playbackService?.player)
                 syncPlayPauseButtonVisibility()
                 setPipActions(!showPlayButton)

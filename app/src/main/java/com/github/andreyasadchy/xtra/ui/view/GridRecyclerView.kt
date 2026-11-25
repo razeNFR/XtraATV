@@ -317,7 +317,13 @@ class GridRecyclerView : RecyclerView {
      * when the card shows no category (the lists of a category). Called again when the dynamic ambiance changes color.
      */
     fun tintCards() {
-        if (!isTv || com.github.andreyasadchy.xtra.ui.tv.TvAccent.current == null) {
+        if (!isTv) {
+            return
+        }
+        for (i in 0 until childCount) {
+            TvCards.applyWallpaperSurface(getChildAt(i))
+        }
+        if (com.github.andreyasadchy.xtra.ui.tv.TvAccent.current == null) {
             return
         }
         val accent = com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark

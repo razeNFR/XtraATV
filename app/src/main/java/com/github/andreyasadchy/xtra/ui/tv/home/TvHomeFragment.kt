@@ -398,7 +398,26 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                                 if (list == null) {
                                     add(TvHomeSection.Skeleton(entry.id))
                                 } else if (list.isNotEmpty()) {
-                                    add(TvHomeSection.Streams(entry.id, TvHomeRow(getString(R.string.tv_home_row_recommended), list, 0, R.drawable.tv_ic_streamers)))
+                                    add(
+                                        TvHomeSection.Streams(
+                                            entry.id,
+                                            TvHomeRow(
+                                                title = getString(R.string.tv_home_row_recommended),
+                                                items = list,
+                                                seeAllId = 0,
+                                                icon = R.drawable.tv_ic_streamers,
+                                                onSeeAll = {
+                                                    stopPreview()
+                                                    findNavController().navigate(
+                                                        com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections.actionGlobalTopFragment(
+                                                            sort = com.github.andreyasadchy.xtra.ui.common.StreamsSortDialog.SORT_RELEVANCE,
+                                                            title = getString(R.string.tv_home_row_recommended),
+                                                        )
+                                                    )
+                                                },
+                                            ),
+                                        )
+                                    )
                                 }
                             }
                             TvHomeRows.ROW_RESUME -> {
