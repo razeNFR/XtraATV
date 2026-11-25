@@ -1477,4 +1477,21 @@
     <string name="tv_wallpaper_web_active">Aktif</string>
     <string name="tv_wallpaper_web_empty_tv">TV\'de henüz özel duvar kağıdı yok</string>
     <string name="tv_wallpaper_web_deleted">Duvar kağıdı silindi</string>
+    <string name="tv_broadcasters_global">genel</string>
+    <string name="tv_emotes_most_used">En Çok Kullanılan</string>
+    <string name="tv_emotes_most_used_empty">En çok kullanılanları oluşturmak için sohbette ifade gönderin</string>
+    <string name="tv_emotes_uses_count">%1$s kullanım</string>
+    <string name="tv_chat_qr_title">Telefonda sohbet (QR)</string>
+    <string name="tv_chat_qr_help">Wi-Fi üzerinden canlı sohbeti okumak ve yazmak için telefonunuzla tarayın. Bu paneli kapatabilirsiniz — sohbet telefonunuzda aktif kalır.</string>
+    <string name="tv_chat_qr_connected">%d bağlı</string>
+    <string name="tv_chat_qr_waiting">Bağlanmak için tarayın</string>
+    <string name="tv_chat_qr_follow_channel">Kanal değişimini takip et</string>
+    <string name="tv_chat_qr_disconnect">Bağlantıyı kes</string>
+    <string name="tv_chat_qr_disconnected">Telefon sohbeti kesildi</string>
+    <string name="tv_chat_qr_readonly">Salt okunur mod (mesaj göndermek için Xtra TV üzerinden giriş yapın)</string>
+    <string name="tv_chat_qr_paused">Sohbet duraklatıldı</string>
+    <string name="tv_chat_qr_replying_to">%s kullanıcısına yanıt</string>
+    <string name="tv_chat_qr_search_emotes">İfade ara…</string>
+    <string name="tv_chat_qr_switched">%s kanalına geçildi</string>
+    <string name="tv_chat_qr_session_ended">Xtra TV oturumu sona erdi</string>
 </resources>

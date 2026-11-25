@@ -48,6 +48,15 @@ class TvKeepStateFragmentNavigator(
         }
     }
 
+    private fun setFragmentFocusable(frag: androidx.fragment.app.Fragment, focusable: Boolean) {
+        val vg = frag.view as? android.view.ViewGroup ?: return
+        vg.descendantFocusability = if (focusable) {
+            android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS
+        } else {
+            android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        }
+    }
+
     private fun navigateSingle(entry: NavBackStackEntry, navOptions: NavOptions?) {
         val destination = entry.destination as FragmentNavigator.Destination
         val isRoot = destination.id in rootDestinationIds
@@ -84,6 +93,7 @@ class TvKeepStateFragmentNavigator(
                 !existing.isDetached &&
                 existing !in pendingRemoved
             ) {
+                setFragmentFocusable(existing, false)
                 ft.hide(existing)
                 ft.setMaxLifecycle(existing, Lifecycle.State.STARTED)
             }
@@ -100,10 +110,13 @@ class TvKeepStateFragmentNavigator(
             if (!isRoot && isSingleTop) {
                 targetFrag.arguments = entry.arguments ?: Bundle()
             }
+            setFragmentFocusable(targetFrag, true)
             ft.show(targetFrag)
         }
-        ft.setMaxLifecycle(targetFrag, Lifecycle.State.RESUMED)
-        ft.setPrimaryNavigationFragment(targetFrag)
+        val shownFrag = targetFrag
+        ft.setMaxLifecycle(shownFrag, Lifecycle.State.RESUMED)
+        ft.setPrimaryNavigationFragment(shownFrag)
+        ft.runOnCommit { setFragmentFocusable(shownFrag, true) }
         ft.commit()
 
         if (isSingleTop) {
@@ -150,6 +163,7 @@ class TvKeepStateFragmentNavigator(
                     }
                 ft.add(containerId, topFrag, nextTag)
             } else {
+                setFragmentFocusable(topFrag, true)
                 ft.show(topFrag)
             }
             for (existing in fragmentManager.fragments) {
@@ -160,12 +174,15 @@ class TvKeepStateFragmentNavigator(
                     !existing.isDetached &&
                     existing !in pendingRemoved
                 ) {
+                    setFragmentFocusable(existing, false)
                     ft.hide(existing)
                     ft.setMaxLifecycle(existing, Lifecycle.State.STARTED)
                 }
             }
-            ft.setMaxLifecycle(topFrag, Lifecycle.State.RESUMED)
-            ft.setPrimaryNavigationFragment(topFrag)
+            val shownTop = topFrag
+            ft.setMaxLifecycle(shownTop, Lifecycle.State.RESUMED)
+            ft.setPrimaryNavigationFragment(shownTop)
+            ft.runOnCommit { setFragmentFocusable(shownTop, true) }
             hasOps = true
         }
 
@@ -199,6 +216,7 @@ class TvKeepStateFragmentNavigator(
             .add(containerId, frag, tag)
             .hide(frag)
             .setMaxLifecycle(frag, Lifecycle.State.STARTED)
+            .runOnCommit { setFragmentFocusable(frag, false) }
             .commit()
         return true
     }

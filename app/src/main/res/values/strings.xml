@@ -1496,4 +1496,21 @@
     <string name="tv_wallpaper_web_active">Active</string>
     <string name="tv_wallpaper_web_empty_tv">No custom wallpapers on TV yet</string>
     <string name="tv_wallpaper_web_deleted">Wallpaper deleted</string>
+    <string name="tv_broadcasters_global">global</string>
+    <string name="tv_emotes_most_used">Most Used</string>
+    <string name="tv_emotes_most_used_empty">Send emotes in chat to build your Most Used list</string>
+    <string name="tv_emotes_uses_count">%1$s uses</string>
+    <string name="tv_chat_qr_title">Chat on phone (QR)</string>
+    <string name="tv_chat_qr_help">Scan with your phone to read and write in live chat over Wi-Fi. You can close this panel — chat stays active on your phone.</string>
+    <string name="tv_chat_qr_connected">%d connected</string>
+    <string name="tv_chat_qr_waiting">Scan to connect</string>
+    <string name="tv_chat_qr_follow_channel">Follow channel switch</string>
+    <string name="tv_chat_qr_disconnect">Disconnect</string>
+    <string name="tv_chat_qr_disconnected">Phone chat disconnected</string>
+    <string name="tv_chat_qr_readonly">Read-only mode (sign in on Xtra TV to send messages)</string>
+    <string name="tv_chat_qr_paused">Chat paused</string>
+    <string name="tv_chat_qr_replying_to">Replying to %s</string>
+    <string name="tv_chat_qr_search_emotes">Search emotes…</string>
+    <string name="tv_chat_qr_switched">Switched to %s</string>
+    <string name="tv_chat_qr_session_ended">Xtra TV session ended</string>
 </resources>

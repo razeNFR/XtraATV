@@ -47,6 +47,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     /** Time "refresh" was pressed (0: the rows load by themselves), for its animation and its message. */
     private var refreshClickedAt = 0L
     private val homeSweep = androidx.compose.runtime.mutableIntStateOf(0)
+    private val homeResumeTick = androidx.compose.runtime.mutableIntStateOf(0)
     private val resumeItems = mutableStateOf<List<com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item>>(emptyList())
     private val videoPositions = mutableStateOf<Map<String, Long>>(emptyMap())
     private val statsState = mutableStateOf<TvHomeStats?>(null)
@@ -132,7 +133,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             },
             onStreamUnfocused = { stream ->
                 // only the preview of this card: the focus may already be on the next stream card
-                if (scheduledLogin == stream.channelLogin) {
+                if (!scheduledMuted && scheduledLogin == stream.channelLogin) {
                     stopPreview()
                 }
             },
@@ -144,6 +145,17 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     }
                 }
             },
+            onStreamCardFocus = { owner, stream, focused ->
+                if (focused) {
+                    schedulePreview(stream, muted = false, owner = owner)
+                    context?.let { ctx ->
+                        com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromItem(ctx, stream, viewLifecycleOwner.lifecycleScope)
+                    }
+                } else if (scheduledOwner === owner && !scheduledMuted) {
+                    stopPreview()
+                }
+            },
+            resumeTick = { homeResumeTick.intValue },
             openChannel = { stream ->
                 stopPreview()
                 (activity as? MainActivity)?.openTvChannel(stream, null)
@@ -154,13 +166,13 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             },
             onHeroUnfocused = {
                 // only the video of the banner: the focus may already be on a card, with its own preview
-                if (scheduledMuted) {
+                if (scheduledOwner === heroPreviewOwner) {
                     stopPreview()
                 }
             },
             onHeroFocused = { stream ->
                 // the stream plays in the banner while it has the focus, always without sound
-                schedulePreview(stream, muted = true)
+                schedulePreview(stream, muted = true, owner = heroPreviewOwner)
                 context?.let { ctx ->
                     com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromItem(ctx, stream, viewLifecycleOwner.lifecycleScope)
                 }
@@ -668,7 +680,22 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
 
     override fun onResume() {
         super.onResume()
-        context?.let { syncHomePrefs(it) }
+        homeResumeTick.intValue++
+        context?.let { ctx ->
+            syncHomePrefs(ctx)
+            if (com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.isEnabled(ctx)) {
+                val app = ctx.applicationContext as? XtraApp
+                if (app != null) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pullFromTwitch(
+                            context = ctx,
+                            xtraModule = app.xtraModule,
+                            force = false,
+                        )
+                    }
+                }
+            }
+        }
         loadLocalRows()
         val hasWarmData = viewModel.followed.value != null || viewModel.popular.value != null || viewModel.games.value != null
         if (hasWarmData) {
@@ -892,6 +919,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         createdAt = createdAt,
         durationSeconds = durationSeconds,
         type = type,
+        subOnly = subOnly,
     )
 
     private fun com.github.andreyasadchy.xtra.model.ui.Video.toResumeItem(positionMs: Long) = com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.Item(
@@ -908,6 +936,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         durationSeconds = durationSeconds,
         positionMs = positionMs,
         type = type,
+        subOnly = subOnly,
     )
 
     /** OK held down on a video of "Continue watching" or "Followed videos": resume, watch from the start, remove from the history, open channel. */
@@ -924,22 +953,25 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     }
 
     /** Live preview in the focused card after a short delay, like on the other lists. */
-    private fun schedulePreview(stream: Stream?, muted: Boolean = false) {
+    private fun schedulePreview(stream: Stream?, muted: Boolean = false, owner: Any? = null) {
         val login = stream?.channelLogin
         if (login == previewLogin.value && login != null && muted == previewMuted) {
+            scheduledOwner = owner
             return
         }
-        if (login != null && login == scheduledLogin && muted == scheduledMuted) {
+        if (login != null && login == scheduledLogin && muted == scheduledMuted && previewJob?.isActive == true) {
             // already loading
+            scheduledOwner = owner
             return
         }
         stopPreview()
-        scheduledLogin = login
-        scheduledMuted = muted
         val context = context ?: return
         if (login.isNullOrBlank() || !context.prefs().getBoolean(C.UI_TV_PREVIEW, true) || com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended) {
             return
         }
+        scheduledLogin = login
+        scheduledMuted = muted
+        scheduledOwner = owner
         previewJob = viewLifecycleOwner.lifecycleScope.launch {
             delay(com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.startDelayMs(context))
             val url = com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.getPlaylistUrl(context, login) ?: return@launch
@@ -972,10 +1004,13 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     /** The preview playing is the one of the banner of the home: no sound, the stream kept behind is not lowered. */
     private var previewMuted = false
     private var scheduledMuted = false
+    private var scheduledOwner: Any? = null
+    private val heroPreviewOwner = Any()
 
     override fun stopPreview() {
         scheduledLogin = null
         scheduledMuted = false
+        scheduledOwner = null
         previewJob?.cancel()
         previewJob = null
         val wasPlaying = previewLogin.value != null

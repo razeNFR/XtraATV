@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sleek translucent smoked-glass DIRECT pill for TV DVR / catch-up VODs: subtle red tint & rim at rest, crisp white when focused -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape>
+            <solid android:color="#FFF2F2F7" />
+            <corners android:radius="19dp" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <solid android:color="#4D1A1218" />
+            <stroke android:width="1.2dp" android:color="#88FF453A" />
+            <corners android:radius="19dp" />
+        </shape>
+    </item>
+</selector>

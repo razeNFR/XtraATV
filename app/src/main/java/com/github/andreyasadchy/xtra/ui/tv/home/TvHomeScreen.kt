@@ -114,6 +114,10 @@ class TvHomeActions(
     val onStreamFocused: (Stream?) -> Unit,
     /** The card of a stream lost the focus: its preview stops (the focus may go to a card without preview). */
     val onStreamUnfocused: (Stream) -> Unit = {},
+    /** Owner-scoped stream card focus callback so duplicate cards in other rows cannot stop the active preview. */
+    val onStreamCardFocus: ((Any, Stream, Boolean) -> Unit)? = null,
+    /** Increments on fragment resume so an already-focused card restarts its preview after onPause(). */
+    val resumeTick: () -> Int = { 0 },
     val openChannel: (Stream) -> Unit = {},
     val onHeroFocused: (Stream) -> Unit = {},
     val onHeroUnfocused: (Stream) -> Unit = {},
@@ -490,7 +494,35 @@ fun TvHomeScreen(
     LaunchedEffect(showStatsBadge) {
         if (!showStatsBadge) badgeFocused = false
     }
-    Column(Modifier.fillMaxSize()) {
+    var homeHasFocus by remember { mutableStateOf(false) }
+    var homeEverFocused by remember { mutableStateOf(false) }
+    val homeActivity = remember(homeContext) {
+        var ctx: android.content.Context? = homeContext
+        while (ctx is android.content.ContextWrapper && ctx !is com.github.andreyasadchy.xtra.ui.main.MainActivity) {
+            ctx = ctx.baseContext
+        }
+        ctx as? com.github.andreyasadchy.xtra.ui.main.MainActivity
+    }
+    // Safety net: if Home loses focus (e.g. initial network reload reorders the first row or a hidden view flickers)
+    // while no side menu, player, or dialog is over it, gently restore focus to the remembered/first card.
+    LaunchedEffect(homeHasFocus, hasCards, firstIsGhost, allRows.size) {
+        if (homeHasFocus || !homeEverFocused || !hasCards || firstIsGhost) return@LaunchedEffect
+        kotlinx.coroutines.delay(150L)
+        if (homeHasFocus || isPlayerCovering()) return@LaunchedEffect
+        val act = homeActivity
+        if (act != null && (act.isTvMenuOpen() || !act.hasWindowFocus())) return@LaunchedEffect
+        if (focus.request == null) {
+            focus.focusLast()
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .onFocusChanged {
+                homeHasFocus = it.hasFocus
+                if (it.hasFocus) homeEverFocused = true
+            }
+    ) {
         // always on screen above the rows: refresh, then the optional stats pill, greeting, and time
         Row(
             Modifier.fillMaxWidth().padding(start = startInset + 12.dp, end = endInset + 12.dp, top = 4.dp, bottom = 4.dp),
@@ -1062,6 +1094,7 @@ private fun HeroBanner(
             .height(256.dp)
             .onFocusChanged { heroHasFocus = it.hasFocus }
     ) {
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
         // High-res backdrop on the right, alpha-feathered on all four edges so it melts into any ambient background
         Box(
             Modifier
@@ -1072,26 +1105,49 @@ private fun HeroBanner(
                 .drawWithContent {
                     drawContent()
                     drawRect(
-                        brush = Brush.horizontalGradient(
-                            0.00f to Color.Transparent,
-                            0.16f to Color(0x38FFFFFF),
-                            0.42f to Color(0xD0FFFFFF),
-                            0.68f to Color.White,
-                            0.88f to Color(0xCCFFFFFF),
-                            1.00f to Color.Transparent,
-                        ),
+                        brush = if (hasWallpaper) {
+                            Brush.horizontalGradient(
+                                0.00f to Color.Transparent,
+                                0.14f to Color(0x4DFFFFFF),
+                                0.32f to Color(0xEEFFFFFF),
+                                0.78f to Color.White,
+                                0.91f to Color(0xDEFFFFFF),
+                                1.00f to Color.Transparent,
+                            )
+                        } else {
+                            Brush.horizontalGradient(
+                                0.00f to Color.Transparent,
+                                0.16f to Color(0x38FFFFFF),
+                                0.42f to Color(0xD0FFFFFF),
+                                0.68f to Color.White,
+                                0.88f to Color(0xCCFFFFFF),
+                                1.00f to Color.Transparent,
+                            )
+                        },
                         blendMode = BlendMode.DstIn,
                     )
                     drawRect(
-                        brush = Brush.verticalGradient(
-                            0.00f to Color.Transparent,
-                            0.09f to Color(0x52FFFFFF),
-                            0.24f to Color(0xD9FFFFFF),
-                            0.44f to Color.White,
-                            0.66f to Color(0xD9FFFFFF),
-                            0.88f to Color(0x40FFFFFF),
-                            1.00f to Color.Transparent,
-                        ),
+                        brush = if (hasWallpaper) {
+                            Brush.verticalGradient(
+                                0.00f to Color.Transparent,
+                                0.08f to Color(0x66FFFFFF),
+                                0.20f to Color(0xEBFFFFFF),
+                                0.44f to Color.White,
+                                0.74f to Color(0xEBFFFFFF),
+                                0.90f to Color(0x52FFFFFF),
+                                1.00f to Color.Transparent,
+                            )
+                        } else {
+                            Brush.verticalGradient(
+                                0.00f to Color.Transparent,
+                                0.09f to Color(0x52FFFFFF),
+                                0.24f to Color(0xD9FFFFFF),
+                                0.44f to Color.White,
+                                0.66f to Color(0xD9FFFFFF),
+                                0.88f to Color(0x40FFFFFF),
+                                1.00f to Color.Transparent,
+                            )
+                        },
                         blendMode = BlendMode.DstIn,
                     )
                 }
@@ -1100,27 +1156,32 @@ private fun HeroBanner(
                 model = com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.picture(stream, stream.thumbnail),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.90f }
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (hasWallpaper) 0.96f else 0.90f }
             )
             // the stream itself over its picture while the banner has the focus (no sound), cropped like the picture
             val player = previewPlayer()
             if (heroFocused && player != null && previewLogin() != null && previewLogin() == stream.channelLogin) {
                 Box(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
                     AndroidView(
-                        factory = { context -> TextureView(context) },
+                        factory = { context ->
+                            TextureView(context).apply {
+                                isFocusable = false
+                                isFocusableInTouchMode = false
+                                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                            }
+                        },
                         update = { player.setVideoTextureView(it) },
                         onRelease = { runCatching { player.clearVideoTextureView(it) } },
                         modifier = Modifier
+                            .focusProperties { canFocus = false }
                             .wrapContentHeight(unbounded = true)
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f)
-                            .graphicsLayer { alpha = 0.90f }
+                            .graphicsLayer { alpha = if (hasWallpaper) 1f else 0.90f }
                     )
                 }
             }
         }
-
-        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
         val heroAccentColor = if (hasWallpaper) {
             androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primary, Color.White, 0.28f)
         } else {
@@ -2549,14 +2610,29 @@ private fun FocusCard(
             }
         }
     }
+    var wasFocused by remember { mutableStateOf(false) }
+    val currentOnFocus by androidx.compose.runtime.rememberUpdatedState(onFocus)
     LaunchedEffect(focused) {
-        if (!focused) {
+        if (focused) {
+            wasFocused = true
+            currentOnFocus(true)
+        } else {
             coordsRef[0] = null
             com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
+            if (wasFocused) {
+                wasFocused = false
+                currentOnFocus(false)
+            }
         }
     }
     DisposableEffect(focusToken) {
-        onDispose { com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken) }
+        onDispose {
+            com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.clearCard(focusToken)
+            if (wasFocused) {
+                wasFocused = false
+                currentOnFocus(false)
+            }
+        }
     }
     Column(
         modifier
@@ -2573,7 +2649,6 @@ private fun FocusCard(
                     Modifier
                 }
             )
-            .onFocusChanged { onFocus(it.isFocused) }
             .onPreviewKeyEvent { event ->
                 // OK held down: actions of the card
                 val isSelect = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
@@ -2667,6 +2742,7 @@ private fun StreamCard(
     // many cards a row: smaller texts, the count alone in the badge
     val small = width < 230.dp
     val signals = LocalHomeCardSignals.current
+    val cardOwner = remember { Any() }
     // only the card that shows the preview recomposes when the preview changes
     val previewing by remember(stream.channelLogin) { derivedStateOf { stream.channelLogin != null && previewLogin() == stream.channelLogin } }
     FocusCard(
@@ -2674,7 +2750,10 @@ private fun StreamCard(
         modifier = modifier,
         onClick = onClick,
         onLongClick = onLongClick,
-        onFocus = { if (it) actions.onStreamFocused(stream) else actions.onStreamUnfocused(stream) },
+        onFocus = { isFocused ->
+            actions.onStreamCardFocus?.invoke(cardOwner, stream, isFocused)
+                ?: if (isFocused) actions.onStreamFocused(stream) else actions.onStreamUnfocused(stream)
+        },
         grown = { previewing && previewPlayer() != null },
         // 2 cards a row: already big, they do not grow; 3: half bigger, 4 and more: twice as big
         growth = when (actions.cardsPerRow.coerceIn(2, 6)) {
@@ -2683,6 +2762,12 @@ private fun StreamCard(
             else -> 2f
         },
     ) { focused ->
+        val resumeTick = actions.resumeTick()
+        LaunchedEffect(focused, stream.channelLogin, resumeTick) {
+            if (focused && previewLogin() != stream.channelLogin) {
+                actions.onStreamCardFocus?.invoke(cardOwner, stream, true) ?: actions.onStreamFocused(stream)
+            }
+        }
         HomeCardCapsule(focused = focused) {
             Box(
                 Modifier
@@ -2701,14 +2786,22 @@ private fun StreamCard(
                 val player = previewPlayer()
                 if (previewing && player != null && focused) {
                     AndroidView(
-                        factory = { context -> TextureView(context) },
+                        factory = { context ->
+                            TextureView(context).apply {
+                                isFocusable = false
+                                isFocusableInTouchMode = false
+                                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                            }
+                        },
                         update = { player.setVideoTextureView(it) },
                         onRelease = {
                             // the last picture of the preview, shown while the stream opens
                             com.github.andreyasadchy.xtra.ui.tv.TvPreviewFrames.capture(stream.channelLogin, it)
                             runCatching { player.clearVideoTextureView(it) }
                         },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .focusProperties { canFocus = false }
+                            .fillMaxSize()
                     )
                 }
                 // badges like the player: red "LIVE", then the viewers with the eye
@@ -3058,6 +3151,16 @@ private fun FollowedVideoCard(
 ) {
     val small = width < 230.dp
     val positionMs = actions.videoPosition(video)
+    val context = LocalContext.current
+    val subOnlyRev by com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.revision.collectAsState()
+    LaunchedEffect(video.id) {
+        if (!video.subOnly && !com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isKnown(video.id)) {
+            com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.enqueue(context, video.id)
+        }
+    }
+    val isSubOnly = remember(video.id, video.subOnly, subOnlyRev) {
+        video.subOnly || com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isSubOnly(video.id)
+    }
     FocusCard(
         width = width,
         modifier = modifier,
@@ -3078,6 +3181,21 @@ private fun FollowedVideoCard(
                     .background(Color(0xFF222129))
             ) {
                 VideoThumbnail(video.thumbnail, video.channelImage)
+                if (isSubOnly) {
+                    Text(
+                        "★ SUB",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE9DCFF),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xD9241838))
+                            .border(1.dp, Color(0x88A970FF), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 val seconds = video.durationSeconds ?: 0
                 if (seconds > 0) {
                     Text(
@@ -3134,6 +3252,16 @@ private fun ResumeCard(
     onSelected: () -> Unit = {},
 ) {
     val small = width < 230.dp
+    val context = LocalContext.current
+    val subOnlyRev by com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.revision.collectAsState()
+    LaunchedEffect(item.id) {
+        if (!item.subOnly && !com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isKnown(item.id)) {
+            com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.enqueue(context, item.id)
+        }
+    }
+    val isSubOnly = remember(item.id, item.subOnly, subOnlyRev) {
+        item.subOnly || com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isSubOnly(item.id)
+    }
     FocusCard(
         width = width,
         modifier = modifier,
@@ -3154,6 +3282,21 @@ private fun ResumeCard(
                     .background(Color(0xFF222129))
             ) {
                 VideoThumbnail(item.thumbnail, item.channelImage)
+                if (isSubOnly) {
+                    Text(
+                        "★ SUB",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE9DCFF),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xD9241838))
+                            .border(1.dp, Color(0x88A970FF), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 // time left, like the cards of Google TV
                 val durationMs = (item.durationSeconds ?: 0) * 1000L
                 if (durationMs > 0) {

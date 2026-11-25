@@ -644,6 +644,7 @@ object TvBackup {
             if (parsed != null) {
                 restoredAny = true
                 restoredLanguage = parsed[C.UI_LANGUAGE] as? String
+                runCatching { TvEmoteUsage.reload(appContext) }
                 runCatching { onPostPrefsCommit?.invoke(parsed) }
             }
         }

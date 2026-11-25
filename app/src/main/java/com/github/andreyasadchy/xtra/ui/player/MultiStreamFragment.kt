@@ -28,6 +28,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.andreyasadchy.xtra.R
@@ -146,7 +148,13 @@ class MultiStreamFragment : Fragment() {
     /** 2 streams: width of the first stream, in percent of the screen. */
     private var split = 50
 
-    private val followFocus = Runnable { updateCellChat() }
+    private val followFocus = Runnable {
+        updateCellChat()
+        context?.let { ctx ->
+            val focusedLogin = (tiles.find { it.view.hasFocus() } ?: selectedTile)?.stream?.channelLogin
+            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.onMultiStreamFocusChanged(ctx, focusedLogin)
+        }
+    }
 
     private val backCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
@@ -461,6 +469,7 @@ class MultiStreamFragment : Fragment() {
         root.addView(tileView)
         updateVideoSizes()
         updateTileInfo(tile)
+        syncQrCompanionChannels(tile.stream.channelLogin)
         tileView.setOnFocusChangeListener { v, hasFocus ->
             ((v as FrameLayout).foreground as? GradientDrawable)?.setStroke((4 * density).toInt(), if (hasFocus) Color.WHITE else Color.TRANSPARENT)
             label.visibility = if (hasFocus) View.GONE else View.VISIBLE
@@ -818,7 +827,8 @@ class MultiStreamFragment : Fragment() {
                 (if (hasSizeSlider) 1 else 0) +
                 (if (hasChatToggle) 1 else 0) +
                 (if (hasChatSecondary) 1 else 0) +
-                (if (loggedIn) 1 else 0)
+                (if (loggedIn) 1 else 0) +
+                1
             val tab1Count = if (mixState.value) 1 + shownAudioTiles.size + 1 else 1
             val hasCustomCapsBtn = profileState.value == TvMultiStreamQuality.PROFILE_CUSTOM
             val hasAddStream = streamCount < MAX
@@ -1071,6 +1081,32 @@ class MultiStreamFragment : Fragment() {
                                 openTileChatComposer(tile)
                             }
                         }
+
+                        val qrConnected by com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.connectedClients.collectAsState()
+                        val qrLabel = if (qrConnected > 0) {
+                            "${getString(R.string.tv_chat_qr_title)} · ${getString(R.string.tv_chat_qr_connected, qrConnected)}"
+                        } else {
+                            getString(R.string.tv_chat_qr_title)
+                        }
+                        ButtonRow(
+                            label = qrLabel,
+                            icon = R.drawable.tv_ic_qr,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                        ) {
+                            dismiss()
+                            val qrChat = getOrAttachQrChat(login)
+                            syncQrCompanionChannels(login)
+                            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.openQrPanel(
+                                context = context,
+                                uiScope = viewLifecycleOwner.lifecycleScope,
+                                chatFragment = qrChat,
+                                channelName = name,
+                                channelLogin = login,
+                                alignEnd = alignEnd,
+                                owner = this@MultiStreamFragment,
+                            )
+                        }
                     }
 
                     1 -> {
@@ -1297,7 +1333,55 @@ class MultiStreamFragment : Fragment() {
                 (childFragmentManager.findFragmentById(id) as? ChatFragment)?.takeIf { it.isAdded && it.view != null }?.let { return it }
             }
         }
+        if (qrCompanionChatLogin != null && qrCompanionChatLogin.equals(login, ignoreCase = true)) {
+            qrCompanionChatContainer?.id?.let { id ->
+                (childFragmentManager.findFragmentById(id) as? ChatFragment)?.takeIf { it.isAdded && it.view != null }?.let { return it }
+            }
+        }
         return null
+    }
+
+    private var qrCompanionChatContainer: FrameLayout? = null
+    private var qrCompanionChatLogin: String? = null
+
+    private fun getOrAttachQrChat(login: String): ChatFragment? {
+        if (!isAdded || view == null || login.isBlank()) return null
+        findChatFragment(login)?.let { return it }
+        val tile = tiles.find { it.stream.channelLogin.equals(login, ignoreCase = true) } ?: return null
+        val stream = tile.stream
+        val container = qrCompanionChatContainer ?: FrameLayout(requireContext()).apply {
+            id = View.generateViewId()
+            visibility = View.GONE
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            root.addView(this, FrameLayout.LayoutParams(1, 1))
+            qrCompanionChatContainer = this
+        }
+        val resolvedId = tile.effectiveChannelId ?: stream.channelId
+        val frag = ChatFragment.newInstance(resolvedId, stream.channelLogin, stream.channelName, stream.id)
+        qrCompanionChatLogin = stream.channelLogin
+        runCatching {
+            childFragmentManager.beginTransaction()
+                .replace(container.id, frag)
+                .commitNowAllowingStateLoss()
+        }
+        return (childFragmentManager.findFragmentById(container.id) as? ChatFragment)?.takeIf { it.isAdded }
+    }
+
+    private fun syncQrCompanionChannels(preferredLogin: String? = null) {
+        val ctx = context ?: return
+        val tabs = tiles.mapNotNull { t ->
+            val l = t.stream.channelLogin?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val n = t.stream.channelName?.takeIf { it.isNotBlank() } ?: l
+            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.ChannelTab(l, n)
+        }
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.updateMultiStreamChannels(
+            context = ctx,
+            channels = tabs,
+            preferredLogin = preferredLogin ?: selectedTile?.stream?.channelLogin,
+            owner = this,
+        ) { login ->
+            getOrAttachQrChat(login)
+        }
     }
 
     private fun computeTileChatLockMessage(tile: Tile): String? {
@@ -1530,7 +1614,10 @@ class MultiStreamFragment : Fragment() {
         if (chat == null) {
             loadFallbackTileEmotes(tile, emoteGroupsState)
         }
-        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(ctx) { dismiss ->
+        val hostWindow = activity?.window
+        val prevHostSoftInputMode = hostWindow?.attributes?.softInputMode
+        hostWindow?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        val dialog = com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(ctx) { dismiss ->
             if (chat != null) {
                 androidx.compose.runtime.LaunchedEffect(chat) {
                     emoteGroupsState.value = chat.getTvEmoteGroups()
@@ -1538,12 +1625,35 @@ class MultiStreamFragment : Fragment() {
                         emoteGroupsState.value = chat.getTvEmoteGroups()
                     }
                 }
+            } else {
+                androidx.compose.runtime.LaunchedEffect(tile.effectiveChannelId) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.revision.collect {
+                        emoteGroupsState.value = buildFallbackTileEmoteGroups(tile.effectiveChannelId)
+                    }
+                }
             }
+            val qrConnected by com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.connectedClients.collectAsState()
             com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
                 title = "${getString(R.string.tv_write_message)} · $name",
                 hint = getString(R.string.tv_message_hint),
                 sendLabel = getString(R.string.tv_send),
                 emoteGroups = emoteGroupsState.value,
+                pillStyle = true,
+                onDismiss = dismiss,
+                onOpenQr = {
+                    dismiss()
+                    val qrChat = getOrAttachQrChat(login)
+                    syncQrCompanionChannels(login)
+                    com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.openQrPanel(
+                        context = ctx,
+                        uiScope = viewLifecycleOwner.lifecycleScope,
+                        chatFragment = qrChat,
+                        channelName = name,
+                        channelLogin = login,
+                        owner = this@MultiStreamFragment,
+                    )
+                },
+                qrConnectedCount = qrConnected,
             ) { text ->
                 if (text.isNotBlank()) {
                     val activeChat = findChatFragment(login)
@@ -1554,6 +1664,16 @@ class MultiStreamFragment : Fragment() {
                     }
                 }
                 dismiss()
+            }
+        }
+        dialog.window?.apply {
+            clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(0f)
+            setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+        dialog.setOnDismissListener {
+            if (prevHostSoftInputMode != null) {
+                hostWindow?.setSoftInputMode(prevHostSoftInputMode)
             }
         }
     }
@@ -1581,7 +1701,10 @@ class MultiStreamFragment : Fragment() {
             twitch.filter { it.source == com.github.andreyasadchy.xtra.model.chat.Emote.CHANNEL_TWITCH } +
                 channelThirdParty
             ).distinctBy { it.name }
+        val combined = (fallbackTwitch + thirdParty).distinctBy { it.name }
+        val mostUsed = com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.sortMostUsed(ctx, combined)
         return buildList {
+            add(ctx.getString(R.string.tv_emotes_most_used) to mostUsed)
             if (channelEmotes.isNotEmpty()) add(ctx.getString(R.string.tv_emotes_channel) to channelEmotes)
             if (fallbackTwitch.isNotEmpty()) add("Twitch" to fallbackTwitch.distinctBy { it.name })
             if (thirdParty.isNotEmpty()) add("7TV/BTTV/FFZ" to thirdParty)
@@ -1703,6 +1826,11 @@ class MultiStreamFragment : Fragment() {
         val gqlHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(appCtx, true)
         val helixHeaders = com.github.andreyasadchy.xtra.util.TwitchApiHelper.getHelixHeaders(appCtx)
         val accountId = appCtx.tokenPrefs().getString(C.USER_ID, null)
+        val knownEmoteNamesSnapshot = buildSet {
+            buildFallbackTileEmoteGroups(initialChannelId).forEach { (_, list) ->
+                list.forEach { emote -> emote.name?.takeIf { it.isNotBlank() }?.let(::add) }
+            }
+        }
         if (!trimmed.startsWith("/")) {
             com.github.andreyasadchy.xtra.ui.tv.TvStats.addMessage(appCtx)
         }
@@ -1724,6 +1852,7 @@ class MultiStreamFragment : Fragment() {
                 }
                 if (channelId.isNullOrBlank()) return@launch
                 val followersMin = roomStateCache[loginKey]?.followers?.toIntOrNull()?.takeIf { it > 0 }
+                var sentSuccess = false
                 val toastMsg: String? = if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
                     val response = app.xtraModule.graphQLRepository.sendMessage(networkLibrary, gqlHeaders, channelId, trimmed, null)
                     val dropReason = response.data?.sendChatMessage?.dropReason
@@ -1742,7 +1871,10 @@ class MultiStreamFragment : Fragment() {
                                 .ifBlank { appCtx.getString(R.string.tv_chat_restricted_generic) }
                             com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, null, errMsg)
                         }
-                        else -> null
+                        else -> {
+                            sentSuccess = true
+                            null
+                        }
                     }
                 } else if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
                     val raw = app.xtraModule.helixRepository.sendMessage(networkLibrary, helixHeaders, accountId, channelId, trimmed, null)
@@ -1757,9 +1889,20 @@ class MultiStreamFragment : Fragment() {
                             com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, code, msg, followersMin)
                         }
                         !raw.isNullOrBlank() -> com.github.andreyasadchy.xtra.util.chat.TvChatNotices.restrictionMessage(appCtx, null, raw)
-                        else -> null
+                        else -> {
+                            sentSuccess = true
+                            null
+                        }
                     }
                 } else null
+                if (sentSuccess) {
+                    val knownNames = buildSet {
+                        addAll(knownEmoteNamesSnapshot)
+                        twitchEmotesCache[channelId]?.forEach { e -> e.name?.takeIf { it.isNotBlank() }?.let(::add) }
+                        thirdPartyEmotesCache[channelId]?.forEach { e -> e.name?.takeIf { it.isNotBlank() }?.let(::add) }
+                    }
+                    com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.recordSentMessage(appCtx, trimmed, knownNames)
+                }
                 if (!toastMsg.isNullOrBlank()) {
                     com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(appCtx, toastMsg, android.widget.Toast.LENGTH_LONG).show()
                 }
@@ -1854,6 +1997,7 @@ class MultiStreamFragment : Fragment() {
         }
         updateChats()
         updateCellChat()
+        syncQrCompanionChannels()
         tiles.firstOrNull()?.view?.requestFocus()
     }
 
@@ -3067,6 +3211,10 @@ class MultiStreamFragment : Fragment() {
     private val dimListener: () -> Unit = { com.github.andreyasadchy.xtra.ui.tv.TvDim.apply(root) }
 
     override fun onDestroyView() {
+        qrCompanionChatContainer?.let { runCatching { removeChat(it) } }
+        qrCompanionChatContainer = null
+        qrCompanionChatLogin = null
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.scheduleDetach(this)
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(dimListener)
         root.removeCallbacks(followFocus)
         root.removeCallbacks(hideChrome)

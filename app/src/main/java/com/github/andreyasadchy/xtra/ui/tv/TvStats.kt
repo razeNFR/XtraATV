@@ -343,6 +343,12 @@ object TvResumeHistory {
     private const val ITEMS = "items"
     private const val MAX = 20
 
+    private val knownSubOnlyIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    fun markSubOnly(videoId: String?) {
+        if (!videoId.isNullOrBlank()) knownSubOnlyIds.add(videoId)
+    }
+
     /** Changes each time the list is written: the home shows it again even when it never left the screen (mini player). */
     val changes = kotlinx.coroutines.flow.MutableStateFlow(0L)
 
@@ -361,6 +367,7 @@ object TvResumeHistory {
         val positionMs: Long,
         val type: String?,
         val updatedAtMs: Long = 0L,
+        val subOnly: Boolean = false,
     )
 
     private fun prefs(context: Context) =
@@ -390,6 +397,7 @@ object TvResumeHistory {
                     positionMs = item.optLong("position", 0),
                     type = item.optString("type").ifBlank { null },
                     updatedAtMs = item.optLong("updatedAt", 0L),
+                    subOnly = item.optBoolean("subOnly", false),
                 )
             }
         }
@@ -399,10 +407,13 @@ object TvResumeHistory {
     @Synchronized
     fun save(context: Context, item: Item) {
         val durationMs = (item.durationSeconds ?: 0) * 1000L
-        val others = list(context).filter { it.id != item.id }
+        val existingList = list(context)
+        val existingSubOnly = existingList.firstOrNull { it.id == item.id }?.subOnly == true
+        val resolvedSubOnly = item.subOnly || existingSubOnly || knownSubOnlyIds.contains(item.id)
+        val others = existingList.filter { it.id != item.id }
         val finished = durationMs > 0 && item.positionMs > durationMs - 60_000L
         val started = item.positionMs >= 30_000L
-        val stamped = if (item.updatedAtMs > 0L) item else Item(
+        val stamped = if (item.updatedAtMs > 0L && item.subOnly == resolvedSubOnly) item else Item(
             id = item.id,
             title = item.title,
             channelId = item.channelId,
@@ -416,7 +427,8 @@ object TvResumeHistory {
             durationSeconds = item.durationSeconds,
             positionMs = item.positionMs,
             type = item.type,
-            updatedAtMs = System.currentTimeMillis(),
+            updatedAtMs = if (item.updatedAtMs > 0L) item.updatedAtMs else System.currentTimeMillis(),
+            subOnly = resolvedSubOnly,
         )
         val items = if (!finished && started) listOf(stamped) + others else others
         write(context, items.take(MAX))
@@ -433,7 +445,8 @@ object TvResumeHistory {
                 a.positionMs == b.positionMs &&
                 a.title == b.title &&
                 a.thumbnail == b.thumbnail &&
-                a.channelImage == b.channelImage
+                a.channelImage == b.channelImage &&
+                a.subOnly == b.subOnly
         }
         if (!same) {
             write(context, capped)
@@ -463,6 +476,7 @@ object TvResumeHistory {
                 put("position", item.positionMs)
                 put("type", item.type ?: "")
                 put("updatedAt", item.updatedAtMs)
+                if (item.subOnly) put("subOnly", true)
             })
         }
         prefs(context).edit { putString(ITEMS, array.toString()) }

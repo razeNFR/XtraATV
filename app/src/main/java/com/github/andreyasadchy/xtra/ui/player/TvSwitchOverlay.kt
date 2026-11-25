@@ -31,8 +31,10 @@ import com.github.andreyasadchy.xtra.ui.tv.TvAccent
  */
 object TvSwitchOverlay {
 
-    /** Auto-hide fallback in case HUD peek does not dismiss it earlier. */
+    /** Auto-hide delay once the stream has finished loading and rendered its first frame. */
     private const val DURATION = 2600L
+    /** Safety fallback timeout while waiting for stream first frame (error / audio-only). */
+    private const val LOADING_FALLBACK_DURATION = 12_000L
     private var shownAt = 0L
     private var pendingHide: Runnable? = null
     private val slideInterpolator = FastOutSlowInInterpolator()
@@ -47,6 +49,19 @@ object TvSwitchOverlay {
         val isLeft: Boolean,
         var login: String? = null,
     )
+
+    /** Starts (or resets) the short auto-hide countdown once the stream picture is live on screen. */
+    fun startAutoHideTimer(activity: Activity?, delayMs: Long = DURATION) {
+        val decor = activity?.window?.decorView as? FrameLayout ?: return
+        val root = decor.findViewById<FrameLayout>(R.id.tvSwitchOverlay) ?: return
+        pendingHide?.let { root.removeCallbacks(it) }
+        val hideTask = Runnable {
+            pendingHide = null
+            animateOutAndRemove(root)
+        }
+        pendingHide = hideTask
+        root.postDelayed(hideTask, delayMs)
+    }
 
     /** The info of the stream goes (after its 2.5 s, back, or the whole HUD): the edge tabs slide away with it. */
     fun hide(activity: Activity?, force: Boolean = false) {
@@ -77,7 +92,7 @@ object TvSwitchOverlay {
         }.start()
     }
 
-    fun show(activity: Activity, previous: Stream?, next: Stream?) {
+    fun show(activity: Activity, previous: Stream?, next: Stream?, waitForPlayback: Boolean = true) {
         shownAt = android.os.SystemClock.elapsedRealtime()
         val decor = activity.window?.decorView as? FrameLayout ?: return
         val existing = decor.findViewById<FrameLayout>(R.id.tvSwitchOverlay)
@@ -150,7 +165,7 @@ object TvSwitchOverlay {
             animateOutAndRemove(root)
         }
         pendingHide = hideTask
-        root.postDelayed(hideTask, DURATION)
+        root.postDelayed(hideTask, if (waitForPlayback) LOADING_FALLBACK_DURATION else DURATION)
     }
 
     private fun bindTab(activity: Activity, refs: PillRefs, stream: Stream?, accent: Int) {

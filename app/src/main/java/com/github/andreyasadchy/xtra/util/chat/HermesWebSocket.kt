@@ -131,6 +131,7 @@ class HermesWebSocket(
         suspend fun onDropClaimAvailable(dropInstanceId: String) {}
         suspend fun onMinuteWatched() {}
         suspend fun onRaidUpdate(message: JSONObject, openStream: Boolean) {}
+        suspend fun onRaidCancel() {}
         suspend fun onPollUpdate(message: JSONObject) {}
         suspend fun onPredictionUpdate(message: JSONObject) {}
         suspend fun onPinnedChatUpdate(message: JSONObject) {}
@@ -205,6 +206,7 @@ class HermesWebSocket(
                                     when {
                                         messageType.startsWith("raid_update") -> listener.onRaidUpdate(message, false)
                                         messageType.startsWith("raid_go") -> listener.onRaidUpdate(message, true)
+                                        messageType.startsWith("raid_cancel") -> listener.onRaidCancel()
                                     }
                                 }
                                 topic.startsWith("polls") -> listener.onPollUpdate(message)

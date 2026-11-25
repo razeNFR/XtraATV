@@ -82,8 +82,29 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     /** A raid was announced and its stream will be opened (switch to raids on): the player waits for it. */
     fun isRaidPending(): Boolean {
-        return context?.prefs()?.getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) == true &&
-            ((viewModel.raid.value != null && !viewModel.raidClosed) || raidAutoSwitchJob?.isActive == true)
+        if (context?.prefs()?.getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) != true) return false
+        if (raidAutoSwitchJob?.isActive == true) return true
+        val pending = viewModel.pendingRaid ?: return false
+        if (viewModel.raidClosed) return false
+        return !pending.targetLogin.isNullOrBlank() &&
+            (System.currentTimeMillis() - viewModel.pendingRaidAtMs) < 105_000L
+    }
+
+    /** Consumes the announced raid target if the current stream stopped before raid_go arrived. */
+    fun consumePendingRaidStream(): Stream? {
+        if (!isRaidPending()) return null
+        val pending = viewModel.pendingRaid ?: return null
+        val login = pending.targetLogin?.takeIf { it.isNotBlank() } ?: return null
+        viewModel.pendingRaid = null
+        viewModel.pendingRaidAtMs = 0L
+        viewModel.raidClosed = true
+        _binding?.raidLayout?.visibility = View.GONE
+        return Stream(
+            channelId = pending.targetId,
+            channelLogin = login,
+            channelName = pending.targetName,
+            channelImageURL = pending.targetImageURL,
+        )
     }
     private var adapter: ChatAdapter? = null
 
@@ -491,6 +512,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                     if (raidAutoSwitchJob?.isActive != true) {
                                         raidLayout.visibility = View.GONE
                                         viewModel.raidClosed = true
+                                        viewModel.pendingRaid = null
+                                        viewModel.pendingRaidAtMs = 0L
                                     }
                                     viewModel.hideRaid.value = false
                                 }
@@ -503,6 +526,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 if (raid != null) {
                                     if (!viewModel.raidClosed) {
                                         if (raid.openStream) {
+                                            viewModel.pendingRaid = null
+                                            viewModel.pendingRaidAtMs = 0L
                                             val parentPlayer = parentFragment as? PlayerFragment
                                             if (parentPlayer?.isExperimentalVodActive() == true) {
                                                 raidAutoSwitchJob?.cancel()
@@ -517,7 +542,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                     _binding?.raidLayout?.visibility = View.GONE
                                                     viewModel.raidClosed = true
                                                     if (isAdded && requireContext().prefs().getBoolean(C.CHAT_RAIDS_AUTO_SWITCH, true) && parentFragment is PlayerFragment) {
-                                                        (activity as? MainActivity)?.startStream(targetStream)
+                                                        (activity as? MainActivity)?.startStream(targetStream, peekHud = true)
                                                     }
                                                 }
                                             } else {
@@ -528,7 +553,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                             channelLogin = raid.targetLogin,
                                                             channelName = raid.targetName,
                                                             channelImageURL = raid.targetImageURL,
-                                                        )
+                                                        ),
+                                                        peekHud = true,
                                                     )
                                                 }
                                                 raidLayout.visibility = View.GONE
@@ -537,7 +563,9 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                         } else {
                                             raidAutoSwitchJob?.cancel()
                                             raidAutoSwitchJob = null
-                                            raidLayout.visibility = View.VISIBLE
+                                            if (requireContext().prefs().getBoolean(C.CHAT_RAIDS_SHOW, true)) {
+                                                raidLayout.visibility = View.VISIBLE
+                                            }
                                             raidLayout.setOnClickListener { viewModel.raidClicked.value = raid }
                                             requireContext().imageLoader.enqueue(
                                                 ImageRequest.Builder(requireContext()).apply {
@@ -554,6 +582,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                                 raidAutoSwitchJob = null
                                                 raidLayout.visibility = View.GONE
                                                 viewModel.raidClosed = true
+                                                viewModel.pendingRaid = null
+                                                viewModel.pendingRaidAtMs = 0L
                                             }
                                             raidText.text = getString(
                                                 R.string.raid_text,
@@ -1226,13 +1256,86 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         binding.editText.text.append(emote.name).append(' ')
     }
 
-    /** Sends a message written outside of the chat input (TV message dialog). */
-    fun sendExternalMessage(text: String): Boolean {
+    /** Sends a message written outside of the chat input (TV message dialog or QR phone companion). */
+    fun sendExternalMessage(text: String, replyId: String? = null): Boolean {
         if (_binding == null || text.isBlank()) {
             return false
         }
         binding.editText.setText(text)
-        return sendMessage()
+        return sendMessage(replyId = replyId?.takeIf { it.isNotBlank() })
+    }
+
+    fun getQrChannelInfo(): Triple<String?, String?, String?> {
+        val args = arguments
+        val id = args?.getString(KEY_CHANNEL_ID) ?: if (isAdded) viewModel.resolvedChannelId else null
+        val login = args?.getString(KEY_CHANNEL_LOGIN)
+        val name = args?.getString(KEY_CHANNEL_NAME)?.takeIf { it.isNotBlank() } ?: login
+        return Triple(id, login, name)
+    }
+
+    fun isUserLoggedInForQr(): Boolean {
+        val ctx = context ?: return false
+        if (com.github.andreyasadchy.xtra.ui.tv.TvAccounts.isGuestMode(ctx)) return false
+        val hasUser = !ctx.tokenPrefs().getString(C.USERNAME, null).isNullOrBlank()
+        val hasToken = !TwitchApiHelper.getGQLHeaders(ctx, true)[C.HEADER_TOKEN].isNullOrBlank() ||
+            !TwitchApiHelper.getHelixHeaders(ctx)[C.HEADER_TOKEN].isNullOrBlank()
+        return hasUser && hasToken
+    }
+
+    fun getRecentMessagesForQr(limit: Int = 80): List<ChatMessage> {
+        if (!isAdded) return emptyList()
+        return synchronized(viewModel.chatMessages) {
+            val size = viewModel.chatMessages.size
+            if (size <= limit) viewModel.chatMessages.toList()
+            else viewModel.chatMessages.subList(size - limit, size).toList()
+        }
+    }
+
+    fun observeNewMessagesForQr(): kotlinx.coroutines.flow.Flow<ChatMessage>? {
+        if (!isAdded) return null
+        return kotlinx.coroutines.flow.flow {
+            viewModel.newMessage.collect { (msg, _, _) -> emit(msg) }
+        }
+    }
+
+    fun observeUpdatedMessagesForQr(): kotlinx.coroutines.flow.Flow<List<ChatMessage>>? =
+        if (isAdded) viewModel.updateMessages else null
+
+    fun resolveBadgeForQr(badge: com.github.andreyasadchy.xtra.model.chat.Badge): Pair<String, String?>? {
+        if (!isAdded) return null
+        val found = synchronized(viewModel.channelBadges) {
+            viewModel.channelBadges.firstOrNull { it.setId == badge.setId && it.version == badge.version }
+        } ?: synchronized(viewModel.globalBadges) {
+            viewModel.globalBadges.firstOrNull { it.setId == badge.setId && it.version == badge.version }
+        } ?: return null
+        val url = found.url2x ?: found.url1x ?: found.url3x ?: found.url4x ?: return null
+        return url to found.title
+    }
+
+    fun getThirdPartyEmoteUrlMapForQr(): Map<String, String> {
+        if (!isAdded) return emptyMap()
+        val out = HashMap<String, String>()
+        synchronized(viewModel.thirdPartyEmotes) {
+            viewModel.thirdPartyEmotes.forEach { e ->
+                val name = e.name
+                val url = e.url2x ?: e.url1x ?: e.url3x ?: e.url4x
+                if (!name.isNullOrBlank() && !url.isNullOrBlank()) {
+                    out[name] = url
+                }
+            }
+        }
+        viewModel.userSTVEmoteSetId?.let { setId ->
+            synchronized(viewModel.personalEmoteSets) {
+                viewModel.personalEmoteSets[setId]?.forEach { e ->
+                    val name = e.name
+                    val url = e.url2x ?: e.url1x ?: e.url3x ?: e.url4x
+                    if (!name.isNullOrBlank() && !url.isNullOrBlank() && !out.containsKey(name)) {
+                        out[name] = url
+                    }
+                }
+            }
+        }
+        return out
     }
 
     fun getEffectiveRoomState(): kotlinx.coroutines.flow.StateFlow<com.github.andreyasadchy.xtra.model.chat.RoomState>? =
@@ -1250,10 +1353,13 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             kotlinx.coroutines.flow.flow {
                 viewModel.recentEmotes.collect { emit(Unit) }
             },
+            kotlinx.coroutines.flow.flow {
+                com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.revision.collect { emit(Unit) }
+            },
         )
     }
 
-    /** Returns grouped emotes (Recent, Channel, Twitch, 7TV/BTTV/FFZ) for the TV ChatComposer emote picker. */
+    /** Returns grouped emotes (Most Used, Recent, Channel, Twitch, 7TV/BTTV/FFZ) for the TV ChatComposer emote picker. */
     fun getTvEmoteGroups(): List<Pair<String, List<Emote>>> {
         val ctx = context ?: return emptyList()
         val personal = viewModel.userSTVEmoteSetId?.let { setId ->
@@ -1273,10 +1379,12 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 rawThirdParty.filter { it.isChannelEmote }
             ).distinctBy { it.name }
         val combined = (twitch + thirdParty).distinctBy { it.name }
+        val mostUsed = com.github.andreyasadchy.xtra.ui.tv.TvEmoteUsage.sortMostUsed(ctx, combined)
         val recent = latestRecentEmoteNames.mapNotNull { name ->
             combined.find { it.name == name }
         }
         return buildList {
+            add(ctx.getString(R.string.tv_emotes_most_used) to mostUsed)
             if (recent.isNotEmpty()) add(ctx.getString(R.string.recent_emotes) to recent)
             if (channelEmotes.isNotEmpty()) add(ctx.getString(R.string.tv_emotes_channel) to channelEmotes)
             if (twitch.isNotEmpty()) add("Twitch" to twitch.distinctBy { it.name })

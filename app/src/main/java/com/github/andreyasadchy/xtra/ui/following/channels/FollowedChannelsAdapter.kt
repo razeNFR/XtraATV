@@ -124,13 +124,15 @@ class FollowedChannelsAdapter(
                     }
                     if (item.profileImage != null) {
                         userImage.visibility = View.VISIBLE
+                        val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
                         fragment.requireContext().imageLoader.enqueue(
                             ImageRequest.Builder(fragment.requireContext()).apply {
                                 data(item.profileImage)
+                                if (isTv) size(96, 96)
                                 if (context.prefs().getBoolean(C.UI_ROUND_USER_IMAGE, true)) {
                                     transformations(CircleCropTransformation())
                                 }
-                                crossfade(true)
+                                crossfade(!isTv)
                                 target(userImage)
                             }.build()
                         )

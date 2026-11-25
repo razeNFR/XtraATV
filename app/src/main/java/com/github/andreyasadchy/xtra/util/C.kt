@@ -381,6 +381,7 @@ object C {
     const val TV_WALLPAPER_ROTATION_INTERVAL = "tv_wallpaper_rotation_interval"
     const val TV_WALLPAPER_ROTATION_SHUFFLE = "tv_wallpaper_rotation_shuffle"
     const val TV_WALLPAPER_ROTATION_POOL = "tv_wallpaper_rotation_pool"
+    const val TV_EMOTE_USAGE_COUNTS = "tv_emote_usage_counts"
     const val TV_PREVIEW_DELAY = "tv_preview_delay"
     const val TV_HIDE_MENU_STATS = "tv_hide_menu_stats"
     const val TV_BACK_CLOSES_MENU = "tv_back_closes_menu"
@@ -397,6 +398,8 @@ object C {
     const val FOLLOW_REJECTED_PREFIX = "FOLLOW_REJECTED:"
     /** TV: pinned chat message banner mode: 0 = hidden, 1 = temporary (20 s, default), 2 = always visible. */
     const val TV_CHAT_PINNED_MODE = "tv_chat_pinned_mode"
+    /** TV: keep the QR phone chat companion synchronized when switching live channels on TV (default true). */
+    const val TV_CHAT_QR_FOLLOW_CHANNEL = "tv_chat_qr_follow_channel"
 
     fun getTvPredictionsPopupMode(prefs: android.content.SharedPreferences): Int {
         if (prefs.contains(TV_CHAT_PREDICTIONS_MODE)) {

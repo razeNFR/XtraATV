@@ -71,6 +71,27 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
     private val viewModel: GamePagerViewModel by viewModels { GamePagerViewModelFactory }
 
     private var previousItem = -1
+    private var hasFilteredBroadcasterCount = false
+
+    fun updateFilteredBroadcasterCount(languages: Array<String>, loadedCount: Int, hasMorePages: Boolean) {
+        val b = _binding ?: return
+        val ctx = context ?: return
+        if (!ctx.prefs().getBoolean(C.UI_BROADCASTERS_COUNT, true)) return
+        val activeLangs = languages.filter { it.isNotBlank() }
+        if (activeLangs.isEmpty()) {
+            hasFilteredBroadcasterCount = false
+            updateGameLayout(viewModel.game.value)
+            com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(b.root)
+            return
+        }
+        hasFilteredBroadcasterCount = true
+        val truncate = ctx.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true)
+        val formatted = TwitchApiHelper.formatCount(loadedCount, truncate) + if (hasMorePages) "+" else ""
+        val langTag = activeLangs.joinToString("/") { it.uppercase() }
+        b.broadcastersCount.visibility = View.VISIBLE
+        b.broadcastersCount.text = "${resources.getQuantityString(R.plurals.broadcasters, loadedCount, formatted)} ($langTag)"
+        com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(b.root)
+    }
 
     override val currentFragment: Fragment?
         get() = childFragmentManager.findFragmentById(R.id.fragmentContainer)
@@ -384,13 +405,15 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
             }
             if (game?.broadcasterCount != null && requireContext().prefs().getBoolean(C.UI_BROADCASTERS_COUNT, true)) {
                 broadcastersCount.visibility = View.VISIBLE
-                val count = game.broadcasterCount ?: 0
-                broadcastersCount.text = resources.getQuantityString(
-                    R.plurals.broadcasters,
-                    count,
-                    TwitchApiHelper.formatCount(count, requireContext().prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
-                )
-            } else {
+                if (!hasFilteredBroadcasterCount) {
+                    val count = game.broadcasterCount ?: 0
+                    broadcastersCount.text = resources.getQuantityString(
+                        R.plurals.broadcasters,
+                        count,
+                        TwitchApiHelper.formatCount(count, requireContext().prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
+                    )
+                }
+            } else if (!hasFilteredBroadcasterCount) {
                 broadcastersCount.visibility = View.GONE
             }
             if (game?.followerCount != null) {

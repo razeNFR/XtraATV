@@ -1476,4 +1476,21 @@
     <string name="tv_wallpaper_web_active">Activo</string>
     <string name="tv_wallpaper_web_empty_tv">Aínda non hai fondos personalizados na TV</string>
     <string name="tv_wallpaper_web_deleted">Fondo eliminado</string>
+    <string name="tv_broadcasters_global">global</string>
+    <string name="tv_emotes_most_used">Máis usadas</string>
+    <string name="tv_emotes_most_used_empty">Envía emotes no chat para encher a túa lista de máis usadas</string>
+    <string name="tv_emotes_uses_count">%1$s usos</string>
+    <string name="tv_chat_qr_title">Chat no teléfono (QR)</string>
+    <string name="tv_chat_qr_help">Escanea co teu teléfono para ler e escribir no chat en directo por Wi-Fi. Podes pechar este panel — o chat segue activo no teléfono.</string>
+    <string name="tv_chat_qr_connected">%d conectado</string>
+    <string name="tv_chat_qr_waiting">Escanea para conectar</string>
+    <string name="tv_chat_qr_follow_channel">Seguir o cambio de canle</string>
+    <string name="tv_chat_qr_disconnect">Desconectar</string>
+    <string name="tv_chat_qr_disconnected">Chat do teléfono desconectado</string>
+    <string name="tv_chat_qr_readonly">Modo só lectura (inicia sesión en Xtra TV para enviar mensaxes)</string>
+    <string name="tv_chat_qr_paused">Chat en pausa</string>
+    <string name="tv_chat_qr_replying_to">Respondendo a %s</string>
+    <string name="tv_chat_qr_search_emotes">Buscar emotes…</string>
+    <string name="tv_chat_qr_switched">Cambiado a %s</string>
+    <string name="tv_chat_qr_session_ended">Sesión de Xtra TV rematada</string>
 </resources>

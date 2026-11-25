@@ -227,7 +227,7 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                     else -> false
                 }
             }
-            if (!isTv) {
+            if (!isTv && !isHidden && isResumed) {
                 searchView.requestFocus()
                 WindowCompat.getInsetsController(requireActivity().window, searchView).show(WindowInsetsCompat.Type.ime())
             }

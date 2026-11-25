@@ -62,15 +62,19 @@ object TvDim {
         notifyChanged()
     }
 
-    /** Applies the warm Night Shift tint first, then black dimming over it so deep blacks stay dark at night. */
+    /** Applies a calibrated cinema-warm Night Shift tint with black-contrast compensation so blacks stay rich at night. */
     fun apply(view: View) {
         val context = view.context
-        val dAlpha = if (active) level(context) * 255 / 100 else 0
-        val wAlpha = if (active) warmLevel(context) * 135 / 100 else 0
+        val warmPct = if (active) warmLevel(context) else 0
+        val dimPct = if (active) level(context) else 0
+        val wAlpha = (warmPct * 86 / 100).coerceIn(0, 72)
+        // Subtle dark compensation keeps blacks deep instead of muddy yellow/brown on SurfaceView
+        val warmContrastDim = (warmPct * 34 / 100).coerceIn(0, 28)
+        val dAlpha = (dimPct * 255 / 100 + warmContrastDim).coerceIn(0, 238)
         val visible = dAlpha > 0 || wAlpha > 0
         when (val current = view.foreground) {
-            is FilterDrawable -> current.update(dAlpha, wAlpha)
-            null -> if (visible) view.foreground = FilterDrawable(dAlpha, wAlpha)
+            is FilterDrawable -> current.update(dAlpha, wAlpha, warmPct)
+            null -> if (visible) view.foreground = FilterDrawable(dAlpha, wAlpha, warmPct)
         }
     }
 
@@ -89,13 +93,15 @@ object TvDim {
     private class FilterDrawable(
         private var dimAlpha: Int,
         private var warmAlpha: Int,
+        private var warmPct: Int,
     ) : Drawable() {
         private val paint = Paint()
 
-        fun update(newDimAlpha: Int, newWarmAlpha: Int) {
-            if (dimAlpha != newDimAlpha || warmAlpha != newWarmAlpha) {
+        fun update(newDimAlpha: Int, newWarmAlpha: Int, newWarmPct: Int) {
+            if (dimAlpha != newDimAlpha || warmAlpha != newWarmAlpha || warmPct != newWarmPct) {
                 dimAlpha = newDimAlpha
                 warmAlpha = newWarmAlpha
+                warmPct = newWarmPct
                 invalidateSelf()
             }
         }
@@ -104,7 +110,12 @@ object TvDim {
             val b = bounds
             if (b.isEmpty) return
             if (warmAlpha > 0) {
-                paint.color = Color.argb(warmAlpha, 255, 138, 20)
+                // Shifts smoothly from soft candlelit amber (255, 118, 42) to deep tungsten (242, 86, 18)
+                val t = (warmPct / 80f).coerceIn(0f, 1f)
+                val r = (255f - 13f * t).toInt()
+                val g = (118f - 32f * t).toInt()
+                val bl = (42f - 24f * t).toInt()
+                paint.color = Color.argb(warmAlpha, r, g, bl)
                 canvas.drawRect(b, paint)
             }
             if (dimAlpha > 0) {

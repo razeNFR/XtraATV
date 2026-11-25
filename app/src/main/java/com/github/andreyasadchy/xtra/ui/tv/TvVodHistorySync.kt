@@ -62,6 +62,7 @@ object TvVodHistorySync {
 
     private val lastPushTimeByVideo = ConcurrentHashMap<String, Long>()
     private val lastPushedSecByVideo = ConcurrentHashMap<String, Int>()
+    private val cachedUserIdByAccount = ConcurrentHashMap<String, String>()
 
     private var cachedLiveSessionsAccountKey: String? = null
     private var cachedLiveSessions: MutableList<LiveSessionEntry>? = null
@@ -76,22 +77,41 @@ object TvVodHistorySync {
     }
 
     private fun candidateHeaders(context: Context): List<Map<String, String>> {
-        val primary = TwitchApiHelper.getGQLHeaders(context, true)
         val web = TwitchApiHelper.getGQLWebHeaders(context, true)
+        val primary = TwitchApiHelper.getGQLHeaders(context, true)
         val result = ArrayList<Map<String, String>>(2)
-        val primaryToken = primary[C.HEADER_TOKEN]?.takeIf { it.isNotBlank() }
-        if (primaryToken != null) {
-            result.add(primary)
-        }
         val webToken = web[C.HEADER_TOKEN]?.takeIf { it.isNotBlank() }
-        if (webToken != null && (primaryToken == null || web[C.HEADER_CLIENT_ID] != primary[C.HEADER_CLIENT_ID] || webToken != primaryToken)) {
+        if (webToken != null) {
             result.add(web)
+        }
+        val primaryToken = primary[C.HEADER_TOKEN]?.takeIf { it.isNotBlank() }
+        if (primaryToken != null && (webToken == null || primary[C.HEADER_CLIENT_ID] != web[C.HEADER_CLIENT_ID] || primaryToken != webToken)) {
+            result.add(primary)
         }
         return result
     }
 
     private fun resolveUserId(context: Context): String? =
         context.tokenPrefs().getString(C.USER_ID, null)?.takeIf { it.isNotBlank() }
+
+    private suspend fun resolveOrFetchUserId(
+        context: Context,
+        xtraModule: XtraModule,
+        networkLibrary: String?,
+        headersList: List<Map<String, String>>,
+    ): String? {
+        resolveUserId(context)?.let { return it }
+        val accountKey = TvAccounts.activeAccountKey(context) ?: "_default"
+        cachedUserIdByAccount[accountKey]?.let { return it }
+        for (hdrs in headersList) {
+            val fetched = xtraModule.graphQLRepository.fetchCurrentUserId(networkLibrary, hdrs)
+            if (!fetched.isNullOrBlank()) {
+                cachedUserIdByAccount[accountKey] = fetched
+                return fetched
+            }
+        }
+        return null
+    }
 
     private fun dismissedKey(context: Context): String =
         C.TV_DISMISSED_VOD_HISTORY + TvAccounts.storageSuffix(context)
@@ -281,6 +301,7 @@ object TvVodHistorySync {
         streamCreatedAt: String? = null,
         archiveVideoId: String? = null,
         forcePersist: Boolean = true,
+        touchTimestamp: Boolean = true,
     ) {
         val appCtx = context.applicationContext
         val cleanCid = channelId?.trim()?.takeIf { it.isNotEmpty() }
@@ -325,8 +346,8 @@ object TvVodHistorySync {
                 channelLogin = mergedLogin,
                 streamId = mergedSid,
                 streamStartMs = mergedStart,
-                openedAtMs = minOf(prev.openedAtMs, now),
-                lastSeenAtMs = maxOf(prev.lastSeenAtMs, now),
+                openedAtMs = if (touchTimestamp) minOf(prev.openedAtMs, now) else prev.openedAtMs,
+                lastSeenAtMs = if (touchTimestamp) maxOf(prev.lastSeenAtMs, now) else prev.lastSeenAtMs,
                 archiveVideoId = mergedVid,
             )
             sessions.removeAt(idx)
@@ -361,6 +382,8 @@ object TvVodHistorySync {
 
     /**
      * Filter 1: True when Twitch reports the video is still recording/processing or is the streamer's currently active live broadcast.
+     * Note: a finished RECORDED VOD (including restricted/sub-only VODs) whose previewThumbnailURL is null/empty is NOT treated as live;
+     * only Twitch's explicit `404_processing` placeholder or non-RECORDED status / active stream match marks it as an ongoing live recording.
      */
     private fun isOngoingLiveRecording(
         videoId: String,
@@ -370,7 +393,7 @@ object TvVodHistorySync {
         ownerLiveStreamCreatedAt: String?,
         ownerLiveArchiveVideoId: String?,
     ): Boolean {
-        if (thumbnailUrl != null && TvVideoThumbnail.isMissing(thumbnailUrl)) return true
+        if (!thumbnailUrl.isNullOrBlank() && thumbnailUrl.contains("404_processing")) return true
         if (!status.isNullOrBlank() && !status.equals("RECORDED", ignoreCase = true)) return true
         if (!ownerLiveArchiveVideoId.isNullOrBlank() && ownerLiveArchiveVideoId == videoId) return true
         val videoStartMs = parseIsoMs(createdAt)
@@ -449,7 +472,7 @@ object TvVodHistorySync {
                 val fetched = xtraModule.graphQLRepository.fetchViewedVideos(networkLibrary, hdrs, limit = 25)
                 if (fetched != null) {
                     remoteList = fetched
-                    break
+                    if (fetched.isNotEmpty()) break
                 }
             }
             val remote = remoteList ?: return
@@ -473,7 +496,7 @@ object TvVodHistorySync {
             localList.forEachIndexed { idx, item ->
                 if (!TvBlacklist.isChannelBlocked(item.channelId, item.channelLogin) &&
                     !TvBlacklist.isCategoryBlocked(item.gameId, null, item.gameName) &&
-                    !TvVideoThumbnail.isMissing(item.thumbnail)
+                    (item.thumbnail.isNullOrBlank() || !item.thumbnail.contains("404_processing"))
                 ) {
                     val isExplicit = explicitOpened.containsKey(item.id)
                     val matchedLive = if (!isExplicit) {
@@ -487,7 +510,9 @@ object TvVodHistorySync {
                             broadcastType = item.type,
                         )
                     } else null
-                    if (matchedLive == null) {
+                    val watchedLaterAsVod = matchedLive != null &&
+                        item.updatedAtMs > matchedLive.lastSeenAtMs + 10 * 60_000L
+                    if (matchedLive == null || watchedLaterAsVod) {
                         val score = if (item.updatedAtMs > 0L) item.updatedAtMs else (baseLegacyTime - idx)
                         mergedById[item.id] = Candidate(item, score)
                     } else {
@@ -506,7 +531,7 @@ object TvVodHistorySync {
                 if (isOngoingLiveRecording(
                         videoId = r.id,
                         status = r.status,
-                        thumbnailUrl = r.thumbnailUrl ?: "",
+                        thumbnailUrl = r.thumbnailUrl,
                         createdAt = r.createdAt,
                         ownerLiveStreamCreatedAt = r.ownerLiveStreamCreatedAt,
                         ownerLiveArchiveVideoId = r.ownerLiveArchiveVideoId,
@@ -522,7 +547,8 @@ object TvVodHistorySync {
                     return@forEachIndexed
                 }
 
-                // Filter 2: Live broadcast watched in Xtra TV — never auto-import its archive VOD until explicitly opened as a VOD
+                // Filter 2: Live broadcast watched on this device — ignore its auto-recorded archive UNLESS
+                // it was explicitly watched later as a finished VOD on another device (updatedAtMs > live end + 10 min).
                 if (!explicitOpened.containsKey(r.id)) {
                     val matchedLive = findMatchingLiveSession(
                         sessions = liveSessions,
@@ -534,23 +560,27 @@ object TvVodHistorySync {
                         broadcastType = r.broadcastType,
                     )
                     if (matchedLive != null) {
-                        // Also cache the resolved archiveVideoId on the live session for O(1) future matching
-                        if (matchedLive.archiveVideoId != r.id) {
-                            recordLiveStreamSession(
-                                context = appCtx,
-                                channelId = r.channelId ?: matchedLive.channelId,
-                                channelLogin = r.channelLogin ?: matchedLive.channelLogin,
-                                streamId = matchedLive.streamId,
-                                streamCreatedAt = r.createdAt,
-                                archiveVideoId = r.id,
-                            )
-                        }
-                        if (mergedById.remove(r.id) != null) {
-                            r.id.toLongOrNull()?.let { idNum ->
-                                runCatching { xtraModule.playerRepository.saveVideoPosition(VideoPosition(idNum, 0L)) }
+                        val watchedLaterOnOtherDevice = r.updatedAtMs > matchedLive.lastSeenAtMs + 10 * 60_000L
+                        if (!watchedLaterOnOtherDevice) {
+                            // Cache archiveVideoId without overwriting lastSeenAtMs
+                            if (matchedLive.archiveVideoId != r.id) {
+                                recordLiveStreamSession(
+                                    context = appCtx,
+                                    channelId = r.channelId ?: matchedLive.channelId,
+                                    channelLogin = r.channelLogin ?: matchedLive.channelLogin,
+                                    streamId = matchedLive.streamId,
+                                    streamCreatedAt = r.createdAt,
+                                    archiveVideoId = r.id,
+                                    touchTimestamp = false,
+                                )
                             }
+                            if (mergedById.remove(r.id) != null) {
+                                r.id.toLongOrNull()?.let { idNum ->
+                                    runCatching { xtraModule.playerRepository.saveVideoPosition(VideoPosition(idNum, 0L)) }
+                                }
+                            }
+                            return@forEachIndexed
                         }
-                        return@forEachIndexed
                     }
                 }
 
@@ -565,15 +595,44 @@ object TvVodHistorySync {
                     }
                 }
 
+                val nowMs = System.currentTimeMillis()
                 val remotePosMs = r.positionSeconds * 1000L
                 val local = localById[r.id]
                 val durationSec = r.durationSeconds ?: local?.durationSeconds
                 val durationMs = (durationSec ?: 0) * 1000L
 
+                // Protect freshly watched local VODs (< 2 min old) from being wiped by a stale remote 0/<30s entry
+                // (e.g. due to box-vs-Twitch clock skew or an in-flight push). Keep local progress and re-push it instead.
+                val localRecentlyWatched = local != null &&
+                    local.positionMs >= 30_000L &&
+                    local.updatedAtMs > 0L &&
+                    (nowMs - local.updatedAtMs) in 0L..120_000L
+                if (localRecentlyWatched && remotePosMs < 30_000L && (r.updatedAtMs <= 0L || r.updatedAtMs <= local!!.updatedAtMs + 60_000L)) {
+                    pushPositionAsync(
+                        context = appCtx,
+                        xtraModule = xtraModule,
+                        videoId = r.id,
+                        positionMs = local!!.positionMs,
+                        force = true,
+                    )
+                    return@forEachIndexed
+                }
+
                 val remoteIsNewer = when {
                     local == null -> true
-                    r.updatedAtMs > 0L && local.updatedAtMs > 0L -> r.updatedAtMs > local.updatedAtMs + 2_000L
+                    r.updatedAtMs > 0L && local.updatedAtMs > 0L -> r.updatedAtMs > local.updatedAtMs + 15_000L
                     else -> remotePosMs > local.positionMs
+                }
+
+                // If local progress is fresher and differs significantly from Twitch, self-heal by pushing local progress
+                if (!remoteIsNewer && local != null && local.positionMs >= 30_000L && abs(local.positionMs - remotePosMs) >= 15_000L) {
+                    pushPositionAsync(
+                        context = appCtx,
+                        xtraModule = xtraModule,
+                        videoId = r.id,
+                        positionMs = local.positionMs,
+                        force = false,
+                    )
                 }
 
                 val chosenPosMs = if (remoteIsNewer) remotePosMs else local!!.positionMs
@@ -616,12 +675,39 @@ object TvVodHistorySync {
                         positionMs = chosenPosMs,
                         type = r.broadcastType ?: local?.type ?: "ARCHIVE",
                         updatedAtMs = if (chosenUpdatedAt > baseLegacyTime) chosenUpdatedAt else 0L,
+                        subOnly = TvSubOnlyVodCache.isSubOnly(r.id) || local?.subOnly == true,
                     )
                     mergedById[r.id] = Candidate(mergedItem, chosenUpdatedAt)
                 } else if (remoteIsNewer && (finished || chosenPosMs < 30_000L)) {
-                    // Finished or reset on another device: remove from Continue Watching
+                    // Finished or reset/removed on another device: remove from Continue Watching & clear local Room position
                     mergedById.remove(r.id)
+                    if (chosenPosMs < 30_000L) {
+                        r.id.toLongOrNull()?.let { idNum ->
+                            runCatching { xtraModule.playerRepository.saveVideoPosition(VideoPosition(idNum, 0L)) }
+                        }
+                    }
                 }
+            }
+
+            // Self-heal recent local VODs that Twitch hasn't recorded yet (e.g. brief network drop on exit)
+            val remoteIds = remote.map { it.id }.toHashSet()
+            val healNowMs = System.currentTimeMillis()
+            var healedCount = 0
+            for (item in localList) {
+                if (healedCount >= 3) break
+                if (item.id in remoteIds) continue
+                if (!mergedById.containsKey(item.id)) continue
+                if (!explicitOpened.containsKey(item.id)) continue
+                if (item.positionMs < 30_000L) continue
+                if (item.updatedAtMs <= 0L || healNowMs - item.updatedAtMs > 24 * 3600_000L) continue
+                pushPositionAsync(
+                    context = appCtx,
+                    xtraModule = xtraModule,
+                    videoId = item.id,
+                    positionMs = item.positionMs,
+                    force = false,
+                )
+                healedCount++
             }
 
             if (dismissedChanged) {
@@ -713,7 +799,7 @@ object TvVodHistorySync {
         val useRemote = when {
             localDbPositionMs == null || localDbPositionMs <= 0L -> true
             localItem != null && localItem.updatedAtMs > 0L && remote.updatedAtMs > 0L ->
-                remote.updatedAtMs > localItem.updatedAtMs + 2_000L
+                remote.updatedAtMs > localItem.updatedAtMs + 15_000L
             else -> remotePosMs > localDbPositionMs + 5_000L
         }
         if (useRemote) {
@@ -743,7 +829,6 @@ object TvVodHistorySync {
             clearDismissed(appCtx, cleanId)
         }
         if (!isEnabled(appCtx)) return
-        val userId = resolveUserId(appCtx) ?: return
         val headersList = candidateHeaders(appCtx)
         if (headersList.isEmpty()) return
 
@@ -755,14 +840,19 @@ object TvVodHistorySync {
         if (!force && now - lastAt < PERIODIC_PUSH_INTERVAL_MS) {
             return
         }
-        if (lastPushedSecByVideo[cleanId] == posSec && (!force || now - lastAt < 10_000L)) {
+        if (lastPushedSecByVideo[cleanId] == posSec && (!force || now - lastAt < 5_000L)) {
             return
         }
         lastPushTimeByVideo[cleanId] = now
-        lastPushedSecByVideo[cleanId] = posSec
 
         val networkLibrary = appCtx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
         syncScope.launch {
+            val userId = resolveOrFetchUserId(appCtx, xtraModule, networkLibrary, headersList)
+            if (userId.isNullOrBlank()) {
+                lastPushTimeByVideo.remove(cleanId)
+                return@launch
+            }
+            var anyOk = false
             for (hdrs in headersList) {
                 val ok = xtraModule.graphQLRepository.updateViewedVideoPosition(
                     networkLibrary = networkLibrary,
@@ -771,7 +861,15 @@ object TvVodHistorySync {
                     videoId = cleanId,
                     positionSeconds = posSec,
                 )
-                if (ok) break
+                if (ok) {
+                    anyOk = true
+                    break
+                }
+            }
+            if (anyOk) {
+                lastPushedSecByVideo[cleanId] = posSec
+            } else {
+                lastPushTimeByVideo.remove(cleanId)
             }
         }
     }
@@ -799,9 +897,10 @@ object TvVodHistorySync {
                 kotlinx.coroutines.withContext(Dispatchers.Main) { cb() }
             }
             if (!isEnabled(appCtx)) return@launch
-            val userId = resolveUserId(appCtx) ?: return@launch
             val headersList = candidateHeaders(appCtx)
+            if (headersList.isEmpty()) return@launch
             val networkLibrary = appCtx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+            val userId = resolveOrFetchUserId(appCtx, xtraModule, networkLibrary, headersList) ?: return@launch
             for (hdrs in headersList) {
                 val ok = xtraModule.graphQLRepository.updateViewedVideoPosition(
                     networkLibrary = networkLibrary,

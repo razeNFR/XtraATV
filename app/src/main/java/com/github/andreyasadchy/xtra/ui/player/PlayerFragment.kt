@@ -48,6 +48,7 @@ import androidx.core.content.edit
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.key
@@ -310,6 +311,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    /** True once the current live stream has rendered its first video frame (starts HUD/overlay auto-hide countdown). */
+    protected var streamFirstFrameRendered = false
+
+    private fun isWaitingForStreamStart(): Boolean =
+        isTv && isStreamScreen() && !streamFirstFrameRendered && !tvOfflineScreenActive && loadingPicture != null
+
     private fun peekHud(immediate: Boolean = false) {
         if (binding.playerControls.root.hasFocus()) {
             return
@@ -331,7 +338,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             showController()
         }
         binding.root.removeCallbacks(hudPeekHideAction)
-        binding.root.postDelayed(hudPeekHideAction, 2500L)
+        if (isWaitingForStreamStart()) {
+            binding.playerControls.root.removeCallbacks(controllerHideAction)
+            // Keep HUD & left/right overlays visible until first frame renders (12 s safety fallback)
+            binding.root.postDelayed(hudPeekHideAction, 12_000L)
+        } else {
+            binding.root.postDelayed(hudPeekHideAction, 2500L)
+            TvSwitchOverlay.startAutoHideTimer(activity, 2500L)
+        }
     }
 
     /** TV: the buttons and the timeline of the HUD hidden (the info of the stream after a switch) or shown again. */
@@ -4061,6 +4075,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
 
                     else -> {
+                        val showQrChatRow = playbackService?.type == BasePlaybackService.STREAM
+                        val qrConnected by com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.connectedClients.collectAsState()
+                        if (showQrChatRow) {
+                            val qrLabel = if (qrConnected > 0) {
+                                "${getString(R.string.tv_chat_qr_title)} · ${getString(R.string.tv_chat_qr_connected, qrConnected)}"
+                            } else {
+                                getString(R.string.tv_chat_qr_title)
+                            }
+                            com.github.andreyasadchy.xtra.ui.tv.ButtonRow(
+                                label = qrLabel,
+                                icon = R.drawable.tv_ic_qr,
+                                compact = true,
+                                modifier = androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] },
+                            ) {
+                                dismiss()
+                                openTvChatQrPanel(alignEnd = alignEnd)
+                            }
+                        }
                         val activePin = chatFragment?.getPinnedMessage()
                         if (activePin != null) {
                             val pinSender = activePin.senderName ?: activePin.senderLogin
@@ -4069,7 +4101,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 label = "${getString(R.string.tv_chat_pinned_active)} — ${pinPreview.take(32)}",
                                 icon = R.drawable.tv_ic_pin,
                                 compact = true,
-                                modifier = androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] },
+                                modifier = if (!showQrChatRow) androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] } else androidx.compose.ui.Modifier,
                             ) {
                                 showPinnedMessageDetailPanel(activePin, alignEnd = alignEnd)
                             }
@@ -4085,7 +4117,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             selected = delayMode.intValue,
                             icon = R.drawable.tv_ic_timer,
                             compact = true,
-                            modifier = if (activePin == null) androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] } else androidx.compose.ui.Modifier,
+                            modifier = if (!showQrChatRow && activePin == null) androidx.compose.ui.Modifier.panelFirstRow(firstRowReq) { tabRequesters[selectedTab.intValue] } else androidx.compose.ui.Modifier,
                         ) {
                             if (isExperimentalVodActive()) {
                                 delayMode.intValue = 1
@@ -4888,21 +4920,93 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    /** TV: write a chat message, with voice input and visual emote picker in the field (no system popup). */
+    private fun applyTvChatButtonPillState(pillOpen: Boolean) {
+        if (!isTv || _binding == null) return
+        val btn = binding.playerControls.chatMessage ?: return
+        if (pillOpen) {
+            val density = btn.resources.displayMetrics.density
+            btn.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(0x59181822)
+                setStroke((1.8f * density + 0.5f).toInt(), com.github.andreyasadchy.xtra.ui.tv.TvAccent.onDark)
+            }
+            btn.setColorFilter(Color.WHITE)
+        } else {
+            btn.setBackgroundResource(R.drawable.tv_player_button_background)
+            btn.refreshDrawableState()
+            btn.jumpDrawablesToCurrentState()
+            btn.setColorFilter(
+                when {
+                    btn.hasFocus() -> com.github.andreyasadchy.xtra.ui.tv.TvAccent.onLight
+                    btn.isEnabled -> Color.WHITE
+                    else -> Color.GRAY
+                }
+            )
+        }
+    }
+
+    /** TV: write a chat message in a compact smoked-glass pill anchored directly above the Chat button (matching TvVolumePill). */
     private fun showChatComposer() {
         val emoteGroupsState = androidx.compose.runtime.mutableStateOf(chatFragment?.getTvEmoteGroups().orEmpty())
-        com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
+        val density = resources.displayMetrics.density
+        var anchorCenterX: Float? = null
+        var anchorBottomMargin: Float? = null
+        if (_binding != null && areControlsShown()) {
+            val hostRoot = binding.playerControls.root
+            val anchor = binding.playerControls.chatMessage
+            val timeline = binding.playerControls.progressBar
+            val rootLoc = IntArray(2)
+            hostRoot.getLocationInWindow(rootLoc)
+            val windowBottom = rootLoc[1] + hostRoot.height
+            if (anchor != null && anchor.visibility == View.VISIBLE && anchor.width > 0) {
+                val anchorLoc = IntArray(2)
+                anchor.getLocationInWindow(anchorLoc)
+                anchorCenterX = anchorLoc[0] + anchor.width / 2f
+                val anchorTop = anchorLoc[1].toFloat()
+                val bottomTipY = if (timeline.visibility == View.VISIBLE && timeline.height > 0) {
+                    val tlLoc = IntArray(2)
+                    timeline.getLocationInWindow(tlLoc)
+                    val tlTop = tlLoc[1].toFloat()
+                    minOf(tlTop + 8f * density, anchorTop - 6f * density)
+                } else {
+                    anchorTop - 8f * density
+                }
+                if (windowBottom > 0) {
+                    anchorBottomMargin = (windowBottom - bottomTipY).coerceAtLeast(88f * density)
+                }
+                applyTvChatButtonPillState(true)
+            }
+            // Keep the bottom HUD visible behind the anchored pill until the composer closes
+            binding.playerControls.root.removeCallbacks(controllerHideAction)
+        }
+        val hostWindow = activity?.window
+        val prevHostSoftInputMode = hostWindow?.attributes?.softInputMode
+        hostWindow?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        val dialog = com.github.andreyasadchy.xtra.ui.tv.TvDialogs.show(requireContext()) { dismiss ->
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 emoteGroupsState.value = chatFragment?.getTvEmoteGroups().orEmpty()
                 chatFragment?.observeEmoteUpdates()?.collect {
                     emoteGroupsState.value = chatFragment?.getTvEmoteGroups().orEmpty()
                 }
             }
+            val qrConnected by com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.connectedClients.collectAsState()
+            val canShowQr = playbackService?.type == BasePlaybackService.STREAM
             com.github.andreyasadchy.xtra.ui.tv.ChatComposer(
                 title = getString(R.string.tv_write_message),
                 hint = getString(R.string.tv_message_hint),
                 sendLabel = getString(R.string.tv_send),
                 emoteGroups = emoteGroupsState.value,
+                pillStyle = true,
+                anchorCenterXPx = anchorCenterX,
+                anchorBottomMarginPx = anchorBottomMargin,
+                onDismiss = dismiss,
+                onOpenQr = if (canShowQr) {
+                    {
+                        dismiss()
+                        openTvChatQrPanel()
+                    }
+                } else null,
+                qrConnectedCount = qrConnected,
             ) { text ->
                 if (text.isNotBlank()) {
                     chatFragment?.sendExternalMessage(text)
@@ -4910,6 +5014,39 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 dismiss()
             }
         }
+        dialog.window?.apply {
+            clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(0f)
+            setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+        dialog.setOnDismissListener {
+            if (prevHostSoftInputMode != null) {
+                hostWindow?.setSoftInputMode(prevHostSoftInputMode)
+            }
+            if (_binding != null) {
+                applyTvChatButtonPillState(false)
+                if (areControlsShown()) {
+                    binding.playerControls.chatMessage?.requestFocus()
+                    if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
+                        binding.playerControls.root.removeCallbacks(controllerHideAction)
+                        binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun openTvChatQrPanel(alignEnd: Boolean = true) {
+        val ctx = context ?: return
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.openQrPanel(
+            context = ctx,
+            uiScope = viewLifecycleOwner.lifecycleScope,
+            chatFragment = chatFragment,
+            channelName = playbackService?.channelName,
+            channelLogin = playbackService?.channelLogin,
+            alignEnd = alignEnd,
+            owner = this,
+        )
     }
 
     private var tooltipAnchor: View? = null
@@ -6003,6 +6140,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun onChatFragmentReady(fragment: ChatFragment) {
         if (!isTv || playbackService?.type != BasePlaybackService.STREAM) return
         chatFragment = fragment
+        context?.let { ctx ->
+            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.onLiveChatAttached(
+                context = ctx,
+                chatFragment = fragment,
+                channelName = playbackService?.channelName,
+                channelLogin = playbackService?.channelLogin,
+                owner = this,
+            )
+        }
         if (chatLockObservedFragment === fragment || fragment.view == null) {
             updateTvChatLockUi()
             return
@@ -7451,6 +7597,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private fun showLoadingPicture() {
         val picture = pendingLoadingPicture ?: return
         pendingLoadingPicture = null
+        streamFirstFrameRendered = false
         val context = requireContext()
         val image = android.widget.ImageView(context).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
@@ -7472,15 +7619,31 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         image.postDelayed({ hideLoadingPicture() }, 20_000L)
     }
 
-    /** The first picture of the video is on screen: the picture of the stream fades away. */
+    /** The first picture of the video is on screen: the picture of the stream fades away and HUD auto-hide timers start. */
     protected fun hideLoadingPicture() {
+        val wasFirst = !streamFirstFrameRendered
+        streamFirstFrameRendered = true
         switchFrameListener = null
         if (tvOfflineScreenActive) {
             hideTvOfflineOverlay()
         }
-        val image = loadingPicture ?: return
-        loadingPicture = null
-        image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
+        loadingPicture?.let { image ->
+            loadingPicture = null
+            image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
+        }
+        if (wasFirst && isTv && _binding != null) {
+            if (hudPeek) {
+                binding.root.removeCallbacks(hudPeekHideAction)
+                binding.root.postDelayed(hudPeekHideAction, 2500L)
+                TvSwitchOverlay.startAutoHideTimer(activity, 2500L)
+            } else {
+                TvSwitchOverlay.startAutoHideTimer(activity, 2500L)
+                if (binding.playerControls.root.isVisible && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
+                    binding.playerControls.root.removeCallbacks(controllerHideAction)
+                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                }
+            }
+        }
     }
 
     /** The button of the controls focused last, in this player or a previous one; null when this one has none like it. */
@@ -7810,7 +7973,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         binding.playerControls.root.alpha = 1f
                                     }
                                     if (view != null && controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                                        binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                                        val delayMs = if (isWaitingForStreamStart()) 12_000L else controllerHideDelay
+                                        binding.playerControls.root.postDelayed(controllerHideAction, delayMs)
                                     }
                                 }
                             }
@@ -7827,7 +7991,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     updateProgress()
                 }
                 if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
-                    binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
+                    val delayMs = if (isWaitingForStreamStart()) 12_000L else controllerHideDelay
+                    binding.playerControls.root.postDelayed(controllerHideAction, delayMs)
                 }
             }
         }
@@ -8694,13 +8859,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         streamEndJob = viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(6000L)
-            // a raid announced in the chat: its stream comes, the player waits for it (30 s at most)
+            // A raid announced in chat: wait for raid_go (up to 20s), then fall back directly to the raid target if the broadcaster cut the stream early.
             var waited = 0
-            while (chatFragment?.isRaidPending() == true && waited++ < 30) {
+            while (chatFragment?.isRaidPending() == true && waited++ < 20) {
                 kotlinx.coroutines.delay(1000L)
+                if (view == null || activity.currentPlayingStream()?.channelLogin != login || isPlayingNow()) {
+                    if (isPlayingNow()) hideTvOfflineOverlay()
+                    return@launch
+                }
             }
             if (view == null || activity.currentPlayingStream()?.channelLogin != login || isPlayingNow()) {
                 if (isPlayingNow()) hideTvOfflineOverlay()
+                return@launch
+            }
+            chatFragment?.consumePendingRaidStream()?.let { raidTarget ->
+                hideTvOfflineOverlay(immediate = true)
+                activity.dropTvPipForEndedStream(login)
+                activity.startStream(raidTarget, peekHud = true)
                 return@launch
             }
             restoreTvOledProtection()
@@ -9297,6 +9472,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.scheduleDetach(this)
         tvVolumePill?.destroy()
         tvVolumePill = null
         tvLiveEventsLookupJob?.cancel()

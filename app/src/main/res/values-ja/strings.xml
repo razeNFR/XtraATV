@@ -1476,4 +1476,21 @@
     <string name="tv_wallpaper_web_active">使用中</string>
     <string name="tv_wallpaper_web_empty_tv">テレビにカスタム壁紙はまだありません</string>
     <string name="tv_wallpaper_web_deleted">壁紙を削除しました</string>
+    <string name="tv_broadcasters_global">全体</string>
+    <string name="tv_emotes_most_used">よく使う</string>
+    <string name="tv_emotes_most_used_empty">チャットでスタンプを送信するとよく使う一覧に追加されます</string>
+    <string name="tv_emotes_uses_count">%1$s回</string>
+    <string name="tv_chat_qr_title">スマホでチャット (QR)</string>
+    <string name="tv_chat_qr_help">スマホでスキャンしてWi-Fi経由でライブチャットを閲覧・投稿できます。このパネルを閉じてもスマホ側で継続できます。</string>
+    <string name="tv_chat_qr_connected">%d 台接続中</string>
+    <string name="tv_chat_qr_waiting">スキャンして接続</string>
+    <string name="tv_chat_qr_follow_channel">チャンネル切替に追従</string>
+    <string name="tv_chat_qr_disconnect">切断</string>
+    <string name="tv_chat_qr_disconnected">スマホチャットを切断しました</string>
+    <string name="tv_chat_qr_readonly">閲覧専用（送信するにはXtra TVでログイン）</string>
+    <string name="tv_chat_qr_paused">チャット一時停止中</string>
+    <string name="tv_chat_qr_replying_to">%s への返信</string>
+    <string name="tv_chat_qr_search_emotes">エモートを検索…</string>
+    <string name="tv_chat_qr_switched">%s に切り替えました</string>
+    <string name="tv_chat_qr_session_ended">Xtra TVセッションが終了しました</string>
 </resources>

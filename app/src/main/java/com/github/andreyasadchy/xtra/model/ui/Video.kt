@@ -21,6 +21,7 @@ class Video(
     val durationSeconds: Int? = null,
     val type: String? = null,
     val animatedPreviewURL: String? = null,
+    val subOnly: Boolean = false,
 ) : Parcelable {
 
     val channelImage: String?
