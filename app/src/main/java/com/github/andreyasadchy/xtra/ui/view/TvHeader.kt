@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -817,6 +818,7 @@ object TvHeader {
         val background = when {
             focused -> TvColors.focused
             quiet -> Color.Transparent
+            hasWallpaper -> com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.pillSurfaceColor(context, Color(0x26FFFFFF))
             else -> Color(0x26FFFFFF)
         }
         val content = when {
@@ -824,10 +826,18 @@ object TvHeader {
             quiet -> if (hasWallpaper) Color(0xEBFFFFFF) else Color(0xD9FFFFFF)
             else -> Color.White
         }
+        val pillShape = RoundedCornerShape(if (quiet) 10.dp else 24.dp)
         Row(
             modifier
-                .clip(RoundedCornerShape(if (quiet) 10.dp else 24.dp))
+                .clip(pillShape)
                 .background(background)
+                .then(
+                    if (hasWallpaper && !quiet && !focused) {
+                        Modifier.border(1.dp, Color(0x38FFFFFF), pillShape)
+                    } else {
+                        Modifier
+                    }
+                )
                 .clickable(interactionSource = interaction, indication = null) { action.run() }
                 .padding(horizontal = if (quiet) 12.dp else 18.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically

@@ -1120,23 +1120,43 @@ private fun HeroBanner(
         }
 
         val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
+        val heroAccentColor = if (hasWallpaper) {
+            androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primary, Color.White, 0.28f)
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
         if (hasWallpaper) {
-            // Soft feathered backdrop behind left Hero text & translucent buttons when a wallpaper is active
+            // True elliptical soft halo that fades to 0% strictly inside all 4 edges (zero straight/clipped borders)
             Box(
                 Modifier
                     .align(Alignment.CenterStart)
-                    .fillMaxWidth(0.64f)
+                    .fillMaxWidth(0.70f)
                     .fillMaxHeight()
                     .drawBehind {
-                        drawRect(
-                            brush = Brush.radialGradient(
-                                0.0f to Color(0x6606070B),
-                                0.60f to Color(0x3606070B),
-                                1.0f to Color.Transparent,
-                                center = Offset(size.width * 0.36f, size.height * 0.52f),
-                                radius = size.width * 0.68f,
-                            )
-                        )
+                        val rx = size.width * 0.48f
+                        val ry = size.height * 0.48f
+                        if (rx > 0f && ry > 0f) {
+                            val cx = size.width * 0.48f
+                            val cy = size.height * 0.50f
+                            val sx = rx / ry
+                            androidx.compose.ui.graphics.drawscope.withTransform({
+                                translate(left = cx, top = cy)
+                                scale(scaleX = sx, scaleY = 1f, pivot = Offset.Zero)
+                            }) {
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        0.00f to Color(0x5E06070B),
+                                        0.45f to Color(0x3B06070B),
+                                        0.76f to Color(0x1606070B),
+                                        1.00f to Color.Transparent,
+                                        center = Offset.Zero,
+                                        radius = ry,
+                                    ),
+                                    radius = ry,
+                                    center = Offset.Zero,
+                                )
+                            }
+                        }
                     }
             )
         }
@@ -1168,15 +1188,23 @@ private fun HeroBanner(
                     context.getString(R.string.tv_featured_live),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = heroAccentColor,
                     maxLines = 1,
                     style = HomeHeaderShadow,
                 )
                 stream.viewerCount?.let { count ->
+                    val viewerShape = RoundedCornerShape(if (hasWallpaper) 10.dp else 6.dp)
                     Row(
                         Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0x8C0D0D16))
+                            .clip(viewerShape)
+                            .background(
+                                if (hasWallpaper) {
+                                    com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.pillSurfaceColor(context, Color(0x8C0D0D16))
+                                } else {
+                                    Color(0x8C0D0D16)
+                                }
+                            )
+                            .then(if (hasWallpaper) Modifier.border(1.dp, Color(0x36FFFFFF), viewerShape) else Modifier)
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1245,7 +1273,7 @@ private fun HeroBanner(
                     stream.gameName.orEmpty(),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = heroAccentColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = HomeHeaderShadow,
