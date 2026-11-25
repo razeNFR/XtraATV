@@ -131,6 +131,8 @@ object TvChatQrCompanion {
     @Volatile
     private var currentChatRef: WeakReference<ChatFragment>? = null
     @Volatile
+    private var activeOwnerRef: WeakReference<Any>? = null
+    @Volatile
     private var multiStreamChannels: List<ChannelTab> = emptyList()
     @Volatile
     private var multiStreamChatProvider: ((String) -> ChatFragment?)? = null
@@ -153,9 +155,15 @@ object TvChatQrCompanion {
         channelName: String?,
         channelLogin: String?,
         alignEnd: Boolean = true,
+        owner: Any? = null,
     ) {
         val appCtx = context.applicationContext
         appContext = appCtx
+        if (owner != null) {
+            activeOwnerRef = WeakReference(owner)
+        }
+        detachGraceJob?.cancel()
+        detachGraceJob = null
         uiScope.launch {
             val url = withContext(Dispatchers.IO) {
                 ensureStarted(appCtx, chatFragment, channelName, channelLogin)
@@ -311,9 +319,13 @@ object TvChatQrCompanion {
         chatFragment: ChatFragment,
         channelName: String?,
         channelLogin: String?,
+        owner: Any? = null,
     ) {
         detachGraceJob?.cancel()
         detachGraceJob = null
+        if (owner != null) {
+            activeOwnerRef = WeakReference(owner)
+        }
         multiStreamChannels = emptyList()
         multiStreamChatProvider = null
         if (!isRunning()) return
@@ -355,9 +367,13 @@ object TvChatQrCompanion {
         context: Context,
         channels: List<ChannelTab>,
         preferredLogin: String? = null,
+        owner: Any? = null,
         chatProvider: (String) -> ChatFragment?,
     ) {
         val clean = channels.filter { it.login.isNotBlank() }.distinctBy { it.login.lowercase() }
+        if (owner != null && clean.isNotEmpty()) {
+            activeOwnerRef = WeakReference(owner)
+        }
         multiStreamChannels = clean
         multiStreamChatProvider = if (clean.isNotEmpty()) chatProvider else null
         if (!isRunning() || clean.isEmpty()) return
@@ -387,17 +403,47 @@ object TvChatQrCompanion {
     }
 
     /**
-     * Schedules a short grace shutdown when the player view is destroyed so channel zapping keeps the same QR
-     * session seamlessly while exiting back to Home cleans up the server automatically.
+     * Automatically switches the phone's active Multi-Stream chat tab when TV focus settles on another streamer
+     * (while still allowing the user to tap any other tab manually on their phone at any time).
      */
-    fun scheduleDetach(chatFragment: ChatFragment?) {
+    fun onMultiStreamFocusChanged(context: Context, focusedLogin: String?) {
+        if (!isRunning() || focusedLogin.isNullOrBlank()) return
+        val appCtx = context.applicationContext
+        if (!appCtx.prefs().getBoolean(C.TV_CHAT_QR_FOLLOW_CHANNEL, true)) return
+        if (focusedLogin.equals(activeChannelLogin, ignoreCase = true)) return
+        val target = multiStreamChannels.firstOrNull { it.login.equals(focusedLogin, ignoreCase = true) } ?: return
+        val provider = multiStreamChatProvider ?: return
+        activeChannelLogin = target.login
+        activeChannelName = target.name.ifBlank { target.login }
+        pairedChannelLogin = target.login
+        scope.launch {
+            val prevChat = currentChatRef?.get()
+            val nextChat = withContext(Dispatchers.Main) {
+                runCatching { provider(target.login) }.getOrNull()
+            } ?: return@launch
+            attachChatCollectors(nextChat)
+            if (prevChat !== nextChat) {
+                delay(250L)
+            }
+            broadcast("channel", buildStateJson(appCtx).toString())
+        }
+    }
+
+    /**
+     * Schedules a short grace shutdown when the owning player view is destroyed so transitions between
+     * Single Stream and Multi-Stream (or channel zapping) never kill the session prematurely.
+     */
+    fun scheduleDetach(owner: Any?) {
         if (!isRunning()) return
-        val current = currentChatRef?.get()
-        if (chatFragment != null && current != null && current !== chatFragment) return
+        val currentOwner = activeOwnerRef?.get()
+        if (owner != null && currentOwner != null && currentOwner !== owner) return
         detachGraceJob?.cancel()
         detachGraceJob = scope.launch {
             delay(3_500L)
-            stop()
+            val recheckOwner = activeOwnerRef?.get()
+            if (owner == null || recheckOwner == null || recheckOwner === owner) {
+                stop()
+            }
         }
     }
 
@@ -425,6 +471,7 @@ object TvChatQrCompanion {
         sessionToken = ""
         pairedChannelLogin = null
         currentChatRef = null
+        activeOwnerRef = null
         multiStreamChannels = emptyList()
         multiStreamChatProvider = null
         _sessionUrl.value = null

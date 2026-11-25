@@ -148,7 +148,13 @@ class MultiStreamFragment : Fragment() {
     /** 2 streams: width of the first stream, in percent of the screen. */
     private var split = 50
 
-    private val followFocus = Runnable { updateCellChat() }
+    private val followFocus = Runnable {
+        updateCellChat()
+        context?.let { ctx ->
+            val focusedLogin = (tiles.find { it.view.hasFocus() } ?: selectedTile)?.stream?.channelLogin
+            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.onMultiStreamFocusChanged(ctx, focusedLogin)
+        }
+    }
 
     private val backCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
@@ -821,7 +827,8 @@ class MultiStreamFragment : Fragment() {
                 (if (hasSizeSlider) 1 else 0) +
                 (if (hasChatToggle) 1 else 0) +
                 (if (hasChatSecondary) 1 else 0) +
-                (if (loggedIn) 1 else 0)
+                (if (loggedIn) 1 else 0) +
+                1
             val tab1Count = if (mixState.value) 1 + shownAudioTiles.size + 1 else 1
             val hasCustomCapsBtn = profileState.value == TvMultiStreamQuality.PROFILE_CUSTOM
             val hasAddStream = streamCount < MAX
@@ -1073,6 +1080,32 @@ class MultiStreamFragment : Fragment() {
                                 dismiss()
                                 openTileChatComposer(tile)
                             }
+                        }
+
+                        val qrConnected by com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.connectedClients.collectAsState()
+                        val qrLabel = if (qrConnected > 0) {
+                            "${getString(R.string.tv_chat_qr_title)} · ${getString(R.string.tv_chat_qr_connected, qrConnected)}"
+                        } else {
+                            getString(R.string.tv_chat_qr_title)
+                        }
+                        ButtonRow(
+                            label = qrLabel,
+                            icon = R.drawable.tv_ic_qr,
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.rowFocus(r++, tab0Count),
+                        ) {
+                            dismiss()
+                            val qrChat = getOrAttachQrChat(login)
+                            syncQrCompanionChannels(login)
+                            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.openQrPanel(
+                                context = context,
+                                uiScope = viewLifecycleOwner.lifecycleScope,
+                                chatFragment = qrChat,
+                                channelName = name,
+                                channelLogin = login,
+                                alignEnd = alignEnd,
+                                owner = this@MultiStreamFragment,
+                            )
                         }
                     }
 
@@ -1345,6 +1378,7 @@ class MultiStreamFragment : Fragment() {
             context = ctx,
             channels = tabs,
             preferredLogin = preferredLogin ?: selectedTile?.stream?.channelLogin,
+            owner = this,
         ) { login ->
             getOrAttachQrChat(login)
         }
@@ -1616,6 +1650,7 @@ class MultiStreamFragment : Fragment() {
                         chatFragment = qrChat,
                         channelName = name,
                         channelLogin = login,
+                        owner = this@MultiStreamFragment,
                     )
                 },
                 qrConnectedCount = qrConnected,
@@ -3179,7 +3214,7 @@ class MultiStreamFragment : Fragment() {
         qrCompanionChatContainer?.let { runCatching { removeChat(it) } }
         qrCompanionChatContainer = null
         qrCompanionChatLogin = null
-        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.scheduleDetach(null)
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.scheduleDetach(this)
         com.github.andreyasadchy.xtra.ui.tv.TvDim.removeListener(dimListener)
         root.removeCallbacks(followFocus)
         root.removeCallbacks(hideChrome)

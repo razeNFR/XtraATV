@@ -490,7 +490,35 @@ fun TvHomeScreen(
     LaunchedEffect(showStatsBadge) {
         if (!showStatsBadge) badgeFocused = false
     }
-    Column(Modifier.fillMaxSize()) {
+    var homeHasFocus by remember { mutableStateOf(false) }
+    var homeEverFocused by remember { mutableStateOf(false) }
+    val homeActivity = remember(homeContext) {
+        var ctx: android.content.Context? = homeContext
+        while (ctx is android.content.ContextWrapper && ctx !is com.github.andreyasadchy.xtra.ui.main.MainActivity) {
+            ctx = ctx.baseContext
+        }
+        ctx as? com.github.andreyasadchy.xtra.ui.main.MainActivity
+    }
+    // Safety net: if Home loses focus (e.g. initial network reload reorders the first row or a hidden view flickers)
+    // while no side menu, player, or dialog is over it, gently restore focus to the remembered/first card.
+    LaunchedEffect(homeHasFocus, hasCards, firstIsGhost, allRows.size) {
+        if (homeHasFocus || !homeEverFocused || !hasCards || firstIsGhost) return@LaunchedEffect
+        kotlinx.coroutines.delay(150L)
+        if (homeHasFocus || isPlayerCovering()) return@LaunchedEffect
+        val act = homeActivity
+        if (act != null && (act.isTvMenuOpen() || !act.hasWindowFocus())) return@LaunchedEffect
+        if (focus.request == null) {
+            focus.focusLast()
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .onFocusChanged {
+                homeHasFocus = it.hasFocus
+                if (it.hasFocus) homeEverFocused = true
+            }
+    ) {
         // always on screen above the rows: refresh, then the optional stats pill, greeting, and time
         Row(
             Modifier.fillMaxWidth().padding(start = startInset + 12.dp, end = endInset + 12.dp, top = 4.dp, bottom = 4.dp),
@@ -1131,10 +1159,17 @@ private fun HeroBanner(
             if (heroFocused && player != null && previewLogin() != null && previewLogin() == stream.channelLogin) {
                 Box(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
                     AndroidView(
-                        factory = { context -> TextureView(context) },
+                        factory = { context ->
+                            TextureView(context).apply {
+                                isFocusable = false
+                                isFocusableInTouchMode = false
+                                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                            }
+                        },
                         update = { player.setVideoTextureView(it) },
                         onRelease = { runCatching { player.clearVideoTextureView(it) } },
                         modifier = Modifier
+                            .focusProperties { canFocus = false }
                             .wrapContentHeight(unbounded = true)
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f)
@@ -2723,14 +2758,22 @@ private fun StreamCard(
                 val player = previewPlayer()
                 if (previewing && player != null && focused) {
                     AndroidView(
-                        factory = { context -> TextureView(context) },
+                        factory = { context ->
+                            TextureView(context).apply {
+                                isFocusable = false
+                                isFocusableInTouchMode = false
+                                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                            }
+                        },
                         update = { player.setVideoTextureView(it) },
                         onRelease = {
                             // the last picture of the preview, shown while the stream opens
                             com.github.andreyasadchy.xtra.ui.tv.TvPreviewFrames.capture(stream.channelLogin, it)
                             runCatching { player.clearVideoTextureView(it) }
                         },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .focusProperties { canFocus = false }
+                            .fillMaxSize()
                     )
                 }
                 // badges like the player: red "LIVE", then the viewers with the eye

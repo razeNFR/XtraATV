@@ -5045,6 +5045,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             channelName = playbackService?.channelName,
             channelLogin = playbackService?.channelLogin,
             alignEnd = alignEnd,
+            owner = this,
         )
     }
 
@@ -6145,6 +6146,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatFragment = fragment,
                 channelName = playbackService?.channelName,
                 channelLogin = playbackService?.channelLogin,
+                owner = this,
             )
         }
         if (chatLockObservedFragment === fragment || fragment.view == null) {
@@ -9470,7 +9472,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
-        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.scheduleDetach(chatFragment)
+        com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.scheduleDetach(this)
         tvVolumePill?.destroy()
         tvVolumePill = null
         tvLiveEventsLookupJob?.cancel()

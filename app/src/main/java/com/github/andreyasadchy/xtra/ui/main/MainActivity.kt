@@ -351,6 +351,9 @@ class MainActivity : AppCompatActivity() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
                     if (f.parentFragment is NavHostFragment && f !is androidx.fragment.app.DialogFragment) {
                         applyTvFragmentPadding(f, v)
+                        if (f.isHidden) {
+                            (v as? ViewGroup)?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                        }
                     }
                     TvUi.adapt(v, hideToolbarActions = true)
                     if (f is androidx.fragment.app.DialogFragment) {

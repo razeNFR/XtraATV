@@ -967,6 +967,8 @@ fun ChatComposer(
                 fullHeightPx = currentHeightPx
             }
             val imeOpen = fullHeightPx > 0f && currentHeightPx < fullHeightPx - with(density) { 100.dp.toPx() }
+            val disableSoftKeyboard = remember(context) { context.prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false) }
+            val showBeak = anchorCenterXPx != null && !imeOpen && !(isTextEditing && !disableSoftKeyboard)
             val screenWidthPx = constraints.maxWidth.toFloat()
             val edgeMarginPx = with(density) { 24.dp.toPx() }
             val extraQrWidth = if (onOpenQr != null) 46.dp else 0.dp
@@ -982,10 +984,12 @@ fun ChatComposer(
             val cornerInsetPx = with(density) { 28.dp.toPx() }
             val beakCenterInPillPx = (targetCenterX - pillLeftPx)
                 .coerceIn(cornerInsetPx, (pillWidthPx - cornerInsetPx).coerceAtLeast(cornerInsetPx))
-            val bottomPaddingDp = if (imeOpen) {
-                12.dp
-            } else {
-                anchorBottomMarginPx?.let { with(density) { it.toDp() } } ?: 110.dp
+            val bottomPaddingDp = when {
+                // Gboard TV includes an extra top mic/suggestion bar (~44 dp) above the reported IME inset
+                imeOpen -> 62.dp
+                // Fallback when a TV box floating keyboard opens without resizing the fullscreen dialog
+                isTextEditing && !disableSoftKeyboard -> with(density) { (currentHeightPx * 0.56f).toDp() }.coerceAtLeast(280.dp)
+                else -> anchorBottomMarginPx?.let { with(density) { it.toDp() } } ?: 110.dp
             }
 
             Column(
@@ -1045,7 +1049,7 @@ fun ChatComposer(
                         }
                         .drawBehind {
                             val w = size.width
-                            val beakH = if (imeOpen) 0f else 7.dp.toPx()
+                            val beakH = if (showBeak) 7.dp.toPx() else 0f
                             val beakHalfW = 6.5.dp.toPx()
                             val inset = 2.dp.toPx()
                             val left = inset
@@ -1076,7 +1080,7 @@ fun ChatComposer(
                             drawPath(path, color = Color(0xF21B1A24))
                             drawPath(path, color = Color(0xF0FFFFFF), style = Stroke(width = 1.85.dp.toPx(), join = StrokeJoin.Round))
                         }
-                        .padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = if (imeOpen) 9.dp else 14.dp),
+                        .padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = if (showBeak) 14.dp else 9.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
