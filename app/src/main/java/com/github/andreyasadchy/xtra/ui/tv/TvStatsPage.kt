@@ -58,6 +58,7 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
+import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.launch
 
 /**

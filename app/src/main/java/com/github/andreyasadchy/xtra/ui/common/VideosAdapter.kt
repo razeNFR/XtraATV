@@ -152,7 +152,6 @@ class VideosAdapter(
                             )
                         }
                     }
-                    val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
                     fragment.requireContext().imageLoader.enqueue(
                         ImageRequest.Builder(fragment.requireContext()).apply {
                             data(if (missing) item.channelImage else item.thumbnail)
