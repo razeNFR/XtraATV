@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">使用同一 Wi-Fi 下的手機掃描，即可連續傳送一張或多張照片與圖片網址，無需關閉此視窗。</string>
     <string name="tv_wallpaper_visibility">顯示強度</string>
     <string name="tv_wallpaper_blur">模糊度</string>
+    <string name="tv_wallpaper_card_opacity">卡片不透明度</string>
+    <string name="tv_player_offline_waiting">頻道目前離線 · 開播後將自動重新連線</string>
     <string name="tv_wallpaper_applied">已套用桌布</string>
     <string name="tv_wallpaper_invalid_image">圖片無效或無法存取</string>
     <string name="tv_wallpaper_web_pick_file">從手機選擇一張或多張圖片</string>

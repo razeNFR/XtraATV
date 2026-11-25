@@ -567,7 +567,8 @@ class TvSettingsFragment : Fragment() {
             runCatching { leftCategoryRequesters.getOrNull(catIdx)?.requestFocus() }
         }
 
-        val hasWallpaper = remember(stamp) { com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActive(context) }
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
+        val settingsPanelBg = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.settingsPanelColor(context, Color(0xD913121C))
 
         Row(
             modifier = Modifier
@@ -590,10 +591,12 @@ class TvSettingsFragment : Fragment() {
                     .fillMaxHeight()
                     .then(
                         if (hasWallpaper) {
+                            val leftShape = RoundedCornerShape(24.dp)
                             Modifier
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(Color(0xD613121C))
-                                .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(24.dp))
+                                .clip(leftShape)
+                                .background(settingsPanelBg)
+                                .background(com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardGlassSheenBrush)
+                                .border(1.dp, com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardGlassRimBrush, leftShape)
                                 .padding(horizontal = 12.dp, vertical = 14.dp)
                         } else {
                             Modifier
@@ -776,6 +779,7 @@ class TvSettingsFragment : Fragment() {
                 }.joinToString("  ›  ")
             } else null
 
+            val rightShape = RoundedCornerShape(24.dp)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -786,11 +790,13 @@ class TvSettingsFragment : Fragment() {
                             updateBackCallback()
                         }
                     }
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(if (hasWallpaper) Color(0xD913121C) else Color(0x12FFFFFF))
+                    .clip(rightShape)
+                    .background(if (hasWallpaper) settingsPanelBg else Color(0x12FFFFFF))
                     .then(
                         if (hasWallpaper) {
-                            Modifier.border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(24.dp))
+                            Modifier
+                                .background(com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardGlassSheenBrush)
+                                .border(1.dp, com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.cardGlassRimBrush, rightShape)
                         } else {
                             Modifier
                         }

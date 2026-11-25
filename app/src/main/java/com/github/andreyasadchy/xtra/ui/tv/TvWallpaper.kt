@@ -153,6 +153,9 @@ object TvWallpaper {
 
     const val DEFAULT_VISIBILITY = 55
     const val DEFAULT_BLUR = 0
+    const val DEFAULT_CARD_OPACITY = 65
+    const val MIN_CARD_OPACITY = 30
+    const val MAX_CARD_OPACITY = 95
 
     const val CUSTOM_FILE_NAME = "tv_wallpaper_custom.jpg"
     private const val WALLPAPERS_DIR_NAME = "tv_wallpapers"
@@ -343,13 +346,100 @@ object TvWallpaper {
         return STYLE_DEFAULT
     }
 
+    val surfaceRevision = mutableIntStateOf(0)
+
+    fun notifySurfaceChanged() {
+        surfaceRevision.intValue++
+    }
+
     fun isActive(context: Context): Boolean = style(context) != STYLE_DEFAULT
+
+    /** Reactive Compose check: recomposes automatically when wallpaper style or card opacity changes. */
+    fun isActiveReactive(context: Context): Boolean {
+        surfaceRevision.intValue
+        return isActive(context)
+    }
 
     fun visibility(context: Context): Int =
         context.prefs().getInt(C.TV_WALLPAPER_VISIBILITY, DEFAULT_VISIBILITY).coerceIn(10, 100)
 
     fun blur(context: Context): Int =
         context.prefs().getInt(C.TV_WALLPAPER_BLUR, DEFAULT_BLUR).coerceIn(0, 100)
+
+    fun cardOpacity(context: Context): Int =
+        context.prefs().getInt(C.TV_WALLPAPER_CARD_OPACITY, DEFAULT_CARD_OPACITY).coerceIn(MIN_CARD_OPACITY, MAX_CARD_OPACITY)
+
+    /**
+     * Smoked-glass surface color for TV cards when a wallpaper is active.
+     * Leaves the default dark appearance strictly untouched when [STYLE_DEFAULT] is selected.
+     */
+    fun cardSurfaceColor(
+        context: Context,
+        focused: Boolean = false,
+        defaultColor: ComposeColor = ComposeColor(0xE013121C),
+        defaultFocusedColor: ComposeColor = ComposeColor(0xEB1A1927),
+        opacityOffset: Int = 0,
+    ): ComposeColor {
+        surfaceRevision.intValue
+        if (!isActive(context)) {
+            return if (focused) defaultFocusedColor else defaultColor
+        }
+        val basePct = (cardOpacity(context) + opacityOffset).coerceIn(22, 95)
+        val pct = if (focused) (basePct + 14).coerceAtMost(94) else basePct
+        val base = if (focused) ComposeColor(0xFF14161F) else ComposeColor(0xFF0B0C10)
+        return base.copy(alpha = pct / 100f)
+    }
+
+    /** Light translucent glass pill surface for top header/hero buttons when a wallpaper is active. */
+    fun pillSurfaceColor(
+        context: Context,
+        defaultColor: ComposeColor = ComposeColor(0xD913121C),
+    ): ComposeColor {
+        surfaceRevision.intValue
+        if (!isActive(context)) return defaultColor
+        val pct = (cardOpacity(context) * 0.56f).roundToInt().coerceIn(24, 54)
+        return ComposeColor(0xFF0B0C10).copy(alpha = pct / 100f)
+    }
+
+    /** Settings column surface when a wallpaper is active (slightly higher floor for dense text legibility). */
+    fun settingsPanelColor(
+        context: Context,
+        defaultColor: ComposeColor,
+    ): ComposeColor {
+        surfaceRevision.intValue
+        if (!isActive(context)) return defaultColor
+        val pct = (cardOpacity(context) + 10).coerceIn(48, 92)
+        return ComposeColor(0xFF0B0C10).copy(alpha = pct / 100f)
+    }
+
+    /** Zero-blur specular rim brush for unfocused cards over a wallpaper (subtle highlight on top edge). */
+    val cardGlassRimBrush: Brush = Brush.verticalGradient(
+        listOf(ComposeColor(0x3DFFFFFF), ComposeColor(0x12FFFFFF)),
+    )
+
+    /** Zero-blur subtle top sheen inside cards over a wallpaper. */
+    val cardGlassSheenBrush: Brush = Brush.verticalGradient(
+        0.0f to ComposeColor(0x12FFFFFF),
+        0.38f to ComposeColor.Transparent,
+    )
+
+    /** Focus-aware ColorStateList for XML MaterialCardView cards when a wallpaper is active. */
+    fun xmlCardColorStateList(context: Context, offlineChannel: Boolean = false): android.content.res.ColorStateList {
+        val basePct = if (offlineChannel) (cardOpacity(context) - 8).coerceAtLeast(24) else cardOpacity(context)
+        val focusedPct = (basePct + 14).coerceAtMost(94)
+        val normalColor = Color.argb((basePct * 255f / 100f).roundToInt().coerceIn(0, 255), 0x0B, 0x0C, 0x10)
+        val focusedColor = Color.argb((focusedPct * 255f / 100f).roundToInt().coerceIn(0, 255), 0x14, 0x16, 0x1F)
+        return android.content.res.ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()),
+            intArrayOf(focusedColor, normalColor),
+        )
+    }
+
+    /** Fractional alpha multiplier (0.28..1.0) for the category card shade overlay when a wallpaper is active. */
+    fun categoryShadeAlpha(context: Context): Float {
+        if (!isActive(context)) return 1f
+        return (cardOpacity(context) / 100f * 0.72f).coerceIn(0.24f, 0.78f)
+    }
 
     fun rotationInterval(context: Context): Int {
         val v = context.prefs().getInt(C.TV_WALLPAPER_ROTATION_INTERVAL, 0)
@@ -450,6 +540,7 @@ object TvWallpaper {
             putString(C.TV_WALLPAPER, next)
             putLong(PREF_ROTATION_LAST_MS, nowMs)
         }
+        notifySurfaceChanged()
         return next
     }
 
@@ -783,7 +874,45 @@ object TvWallpaper {
             canvas.drawRect(0f, 0f, outW.toFloat(), outH.toFloat(), glowPaint)
         }
 
+        drawReadabilityScrims(canvas, outW, outH, visibilityPct, includeLeft = false)
         return out
+    }
+
+    /**
+     * Pre-bakes subtle top (header/clock/pills) and left (icon rail) dark gradients directly into the cached
+     * full-screen wallpaper bitmap — 0% per-frame GPU/CPU cost on Android TV boxes.
+     */
+    private fun drawReadabilityScrims(
+        canvas: Canvas,
+        w: Int,
+        h: Int,
+        visibilityPct: Int,
+        includeLeft: Boolean,
+    ) {
+        if (w < 640) return
+        val visFrac = (visibilityPct / 100f).coerceIn(0.10f, 1f)
+        val topAlpha = (78 * (0.72f + 0.35f * visFrac)).roundToInt().coerceIn(48, 92)
+        val topPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f, 0f, 0f, h * 0.21f,
+                intArrayOf(Color.argb(topAlpha, 0, 0, 0), Color.argb(topAlpha / 3, 0, 0, 0), Color.TRANSPARENT),
+                floatArrayOf(0f, 0.55f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+        }
+        canvas.drawRect(0f, 0f, w.toFloat(), h * 0.21f, topPaint)
+        if (includeLeft) {
+            val leftAlpha = (74 * (0.72f + 0.35f * visFrac)).roundToInt().coerceIn(44, 88)
+            val leftPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = LinearGradient(
+                    0f, 0f, w * 0.16f, 0f,
+                    intArrayOf(Color.argb(leftAlpha, 0, 0, 0), Color.TRANSPARENT),
+                    floatArrayOf(0f, 1f),
+                    Shader.TileMode.CLAMP,
+                )
+            }
+            canvas.drawRect(0f, 0f, w * 0.16f, h.toFloat(), leftPaint)
+        }
     }
 
     // =========================================================================
@@ -823,6 +952,7 @@ object TvWallpaper {
             val radius = ((blurPct / 100f) * 30f).roundToInt().coerceIn(1, 32)
             stackBlurInPlace(out, radius)
         }
+        drawReadabilityScrims(Canvas(out), w, h, visibilityPct, includeLeft = true)
         return out
     }
 
@@ -1723,6 +1853,7 @@ object TvWallpaper {
             val radius = ((blurPct / 100f) * 30f).roundToInt().coerceIn(1, 32)
             stackBlurInPlace(out, radius)
         }
+        drawReadabilityScrims(canvas, w, h, visibilityPct, includeLeft = true)
         return out
     }
 
@@ -2193,6 +2324,7 @@ object TvWallpaper {
     ) {
         val prefs = context.prefs()
         fun notifyAndRefresh() {
+            notifySurfaceChanged()
             onLiveRefresh()
             onChanged()
         }
@@ -2288,6 +2420,7 @@ object TvWallpaper {
         var customItems by remember(refreshCounter) { mutableStateOf(listCustomImages(context)) }
         var currentVis by remember(refreshCounter) { mutableIntStateOf(visibility(context)) }
         var currentBlur by remember(refreshCounter) { mutableIntStateOf(blur(context)) }
+        var currentCardOpacity by remember(refreshCounter) { mutableIntStateOf(cardOpacity(context)) }
         var rotInterval by remember(refreshCounter) { mutableIntStateOf(rotationInterval(context)) }
         var rotShuffle by remember(refreshCounter) { mutableStateOf(rotationShuffle(context)) }
         var rotPool by remember(refreshCounter) {
@@ -2308,6 +2441,7 @@ object TvWallpaper {
             customItems = listCustomImages(context)
             currentVis = visibility(context)
             currentBlur = blur(context)
+            currentCardOpacity = cardOpacity(context)
             rotInterval = rotationInterval(context)
             rotShuffle = rotationShuffle(context)
             rotPool = prefs.getStringSet(C.TV_WALLPAPER_ROTATION_POOL, null)?.toSet().orEmpty()
@@ -2430,6 +2564,7 @@ object TvWallpaper {
                                 putString(C.TV_WALLPAPER, STYLE_DEFAULT)
                                 putInt(C.TV_WALLPAPER_VISIBILITY, DEFAULT_VISIBILITY)
                                 putInt(C.TV_WALLPAPER_BLUR, DEFAULT_BLUR)
+                                putInt(C.TV_WALLPAPER_CARD_OPACITY, DEFAULT_CARD_OPACITY)
                                 putInt(C.TV_WALLPAPER_ROTATION_INTERVAL, 0)
                             }
                             syncState()
@@ -2503,9 +2638,11 @@ object TvWallpaper {
                 )
                 2 -> AdjustmentsTabBody(
                     context = context,
-                    prefs = prefs,
+                    currentStyle = currentStyle,
+                    ambientInt = ambientInt,
                     currentVis = currentVis,
                     currentBlur = currentBlur,
+                    currentCardOpacity = currentCardOpacity,
                     customCount = customItems.size,
                     tabRequester = tabRequesters[2],
                     firstContentRequester = firstContentRequester,
@@ -2519,6 +2656,11 @@ object TvWallpaper {
                     onBlurChanged = { b ->
                         currentBlur = b
                         prefs.edit { putInt(C.TV_WALLPAPER_BLUR, b) }
+                        onNotifyAndRefresh()
+                    },
+                    onCardOpacityChanged = { o ->
+                        currentCardOpacity = o
+                        prefs.edit { putInt(C.TV_WALLPAPER_CARD_OPACITY, o) }
                         onNotifyAndRefresh()
                     },
                     onOpenQr = ::openQrUploader,
@@ -3152,9 +3294,11 @@ object TvWallpaper {
     @Composable
     private fun AdjustmentsTabBody(
         context: Context,
-        prefs: SharedPreferences,
+        currentStyle: String,
+        ambientInt: Int,
         currentVis: Int,
         currentBlur: Int,
+        currentCardOpacity: Int,
         customCount: Int,
         tabRequester: FocusRequester,
         firstContentRequester: FocusRequester,
@@ -3162,10 +3306,22 @@ object TvWallpaper {
         onTrackBodyRequester: (FocusRequester) -> Unit,
         onVisChanged: (Int) -> Unit,
         onBlurChanged: (Int) -> Unit,
+        onCardOpacityChanged: (Int) -> Unit,
         onOpenQr: () -> Unit,
         onDeleteAllCustom: () -> Unit,
     ) {
         val lastItemRequester = remember { FocusRequester() }
+        val hasWallpaper = currentStyle != STYLE_DEFAULT
+        var previewBmp by remember(currentStyle, ambientInt) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(currentStyle, ambientInt) {
+            previewBmp = if (hasWallpaper) {
+                withContext(Dispatchers.Default) {
+                    getGalleryPreviewBitmap(context, currentStyle, ambientInt)
+                }
+            } else {
+                null
+            }
+        }
         Column(modifier = Modifier.fillMaxSize()) {
             SliderRow(
                 label = context.getString(R.string.tv_wallpaper_visibility),
@@ -3190,6 +3346,101 @@ object TvWallpaper {
                 valueText = { "$it%" },
                 onChange = onBlurChanged,
             )
+            if (hasWallpaper) {
+                SliderRow(
+                    label = context.getString(R.string.tv_wallpaper_card_opacity),
+                    value = currentCardOpacity,
+                    range = MIN_CARD_OPACITY..MAX_CARD_OPACITY,
+                    step = 5,
+                    icon = R.drawable.tv_ic_opacity,
+                    compact = true,
+                    valueText = { "$it%" },
+                    onChange = onCardOpacityChanged,
+                )
+                // Compact live preview of smoked-glass card & pill translucency over the active wallpaper
+                val previewShape = RoundedCornerShape(12.dp)
+                val cardAlpha = currentCardOpacity / 100f
+                val pillAlpha = (currentCardOpacity * 0.56f).roundToInt().coerceIn(24, 54) / 100f
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 6.dp)
+                        .height(66.dp)
+                        .clip(previewShape)
+                        .background(ComposeColor(0xFF0E0E14))
+                        .border(1.dp, ComposeColor(0x26FFFFFF), previewShape),
+                ) {
+                    previewBmp?.takeIf { !it.isRecycled }?.let { bmp ->
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val miniCardShape = RoundedCornerShape(10.dp)
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .clip(miniCardShape)
+                                .background(ComposeColor(0xFF0B0C10).copy(alpha = cardAlpha))
+                                .background(cardGlassSheenBrush)
+                                .border(1.dp, cardGlassRimBrush, miniCardShape)
+                                .padding(horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(ComposeColor(ambientInt).copy(alpha = 0.85f)),
+                            )
+                            Spacer(Modifier.width(9.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = context.getString(R.string.tv_wallpaper_card_opacity),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ComposeColor.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = "$currentCardOpacity%",
+                                    fontSize = 10.sp,
+                                    color = TvColors.secondaryText,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                        val miniPillShape = RoundedCornerShape(18.dp)
+                        Box(
+                            modifier = Modifier
+                                .clip(miniPillShape)
+                                .background(ComposeColor(0xFF0B0C10).copy(alpha = pillAlpha))
+                                .border(1.dp, ComposeColor(0x33FFFFFF), miniPillShape)
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = context.getString(R.string.refresh),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = ComposeColor.White,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(6.dp))
             ButtonRow(
                 label = context.getString(R.string.tv_wallpaper_qr_button),

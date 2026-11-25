@@ -104,6 +104,9 @@ class MultiStreamFragment : Fragment() {
         var infoJob: kotlinx.coroutines.Job? = null
         var chatProbeJob: kotlinx.coroutines.Job? = null
         var dynamicsProcessing: android.media.audiofx.DynamicsProcessing? = null
+        var offlineOverlay: FrameLayout? = null
+        var offlinePollJob: kotlinx.coroutines.Job? = null
+        var isOffline = false
         var resolvedChannelId: String? = null
         val effectiveChannelId: String?
             get() = stream.channelId?.takeIf { it.isNotBlank() } ?: resolvedChannelId?.takeIf { it.isNotBlank() }
@@ -1821,6 +1824,11 @@ class MultiStreamFragment : Fragment() {
         tile.raiseJob?.cancel()
         tile.infoJob?.cancel()
         tile.chatProbeJob?.cancel()
+        tile.offlinePollJob?.cancel()
+        tile.offlinePollJob = null
+        tile.isOffline = false
+        tile.offlineOverlay?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        tile.offlineOverlay = null
         tile.dynamicsProcessing?.let {
             runCatching { it.release() }
             tile.dynamicsProcessing = null
@@ -2290,6 +2298,7 @@ class MultiStreamFragment : Fragment() {
         tile.raiseJob?.cancel()
         tile.infoJob?.cancel()
         tile.chatProbeJob?.cancel()
+        clearTileOfflineOverlay(tile, immediate = true)
         tile.expUpgradeJob?.cancel()
         tile.expUpgradeJob = null
         tile.experimentalVodActive = false
@@ -2360,6 +2369,9 @@ class MultiStreamFragment : Fragment() {
                 }
                 if (playbackState == Player.STATE_READY) {
                     tile.recoveryAttempt = 0
+                    if (tile.isOffline) {
+                        clearTileOfflineOverlay(tile)
+                    }
                 } else if (playbackState == Player.STATE_ENDED) {
                     onStreamEnded(tile, login)
                 }
@@ -2407,14 +2419,102 @@ class MultiStreamFragment : Fragment() {
 
     private val endingLogins = mutableSetOf<String>()
 
+    private fun clearTileOfflineOverlay(tile: Tile, immediate: Boolean = false) {
+        tile.offlinePollJob?.cancel()
+        tile.offlinePollJob = null
+        tile.isOffline = false
+        val overlay = tile.offlineOverlay ?: return
+        tile.offlineOverlay = null
+        overlay.animate().cancel()
+        if (immediate) {
+            (overlay.parent as? ViewGroup)?.removeView(overlay)
+        } else {
+            overlay.animate()
+                .alpha(0f)
+                .setDuration(200L)
+                .withEndAction { (overlay.parent as? ViewGroup)?.removeView(overlay) }
+                .start()
+        }
+    }
+
+    private fun attachTileOfflineOverlay(
+        tile: Tile,
+        info: com.github.andreyasadchy.xtra.repository.GraphQLRepository.ChannelOfflineInfo?,
+        login: String,
+    ) {
+        val ctx = context ?: return
+        if (tile.offlineOverlay != null && tile.isOffline) return
+        tile.isOffline = true
+        val overlay = TvOfflineOverlay.createView(
+            context = ctx,
+            displayName = info?.displayName ?: tile.stream.channelName?.takeIf { it.isNotBlank() } ?: login,
+            profileImageUrl = info?.profileImageUrl ?: tile.stream.channelImage,
+            offlineImageUrl = info?.offlineImageUrl,
+            bannerImageUrl = info?.bannerImageUrl,
+            compact = true,
+            showWaitingHint = false,
+        ).apply {
+            alpha = 0f
+        }
+        tile.offlineOverlay?.let { prev -> (prev.parent as? ViewGroup)?.removeView(prev) }
+        val insertIndex = tile.texture?.let { tex -> tile.view.indexOfChild(tex) + 1 }?.takeIf { it > 0 } ?: tile.view.childCount
+        tile.view.addView(
+            overlay,
+            insertIndex,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
+        tile.offlineOverlay = overlay
+        overlay.animate().alpha(1f).setDuration(220L).start()
+    }
+
+    private fun startTileOfflineLiveMonitor(tile: Tile, login: String) {
+        tile.offlinePollJob?.cancel()
+        tile.offlinePollJob = viewLifecycleOwner.lifecycleScope.launch {
+            while (tile.isOffline && view != null && tile in tiles && tile.stream.channelLogin == login) {
+                kotlinx.coroutines.delay(18_000L)
+                if (!tile.isOffline || view == null || tile !in tiles || tile.stream.channelLogin != login) {
+                    return@launch
+                }
+                val ctx = context ?: return@launch
+                val info = TvOfflineOverlay.fetchInfo(ctx, login)
+                if (info?.isLive == true && tile.isOffline && view != null && tile in tiles && tile.stream.channelLogin == login) {
+                    clearTileOfflineOverlay(tile)
+                    loadStream(tile)
+                    return@launch
+                }
+            }
+        }
+    }
+
     private fun onStreamEnded(tile: Tile, login: String) {
-        if (!endingLogins.add(login)) {
+        if (tile.isOffline || !endingLogins.add(login)) {
             return
         }
         viewLifecycleOwner.lifecycleScope.launch {
+            val ctx = context
+            val info = if (ctx != null) TvOfflineOverlay.fetchInfo(ctx, login) else null
+            if (view == null || tile !in tiles || tile.stream.channelLogin != login) {
+                endingLogins.remove(login)
+                return@launch
+            }
+            if (info?.isLive == true) {
+                endingLogins.remove(login)
+                if (!tile.player.isPlaying) {
+                    scheduleTileRecovery(tile, login)
+                }
+                return@launch
+            }
+            attachTileOfflineOverlay(tile, info, login)
             kotlinx.coroutines.delay(6000L)
             endingLogins.remove(login)
             if (view == null || tile !in tiles || tile.stream.channelLogin != login || tile.player.isPlaying) {
+                if (tile.player.isPlaying) clearTileOfflineOverlay(tile)
+                return@launch
+            }
+            val endAction = requireContext().prefs().getString(C.TV_STREAM_END_ACTION, "home") ?: "home"
+            if (endAction == "stay") {
+                // Respect "Stay on player": keep the offline screen visible in the tile and auto-reconnect if live again
+                startTileOfflineLiveMonitor(tile, login)
                 return@launch
             }
             com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), getString(R.string.tv_multistream_stream_ended, tile.stream.channelName ?: login), android.widget.Toast.LENGTH_LONG).show()

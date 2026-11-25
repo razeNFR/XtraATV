@@ -1426,6 +1426,8 @@
     <string name="tv_wallpaper_qr_help">Bu pencereyi kapatmadan art arda bir veya birden fazla fotoğraf ya da URL göndermek için aynı Wi-Fi\'daki telefonunuzla tarayın.</string>
     <string name="tv_wallpaper_visibility">Görünürlük</string>
     <string name="tv_wallpaper_blur">Bulanıklık</string>
+    <string name="tv_wallpaper_card_opacity">Kart opaklığı</string>
+    <string name="tv_player_offline_waiting">Kanal çevrimdışı · Yayın başladığında otomatik yeniden bağlanacak</string>
     <string name="tv_wallpaper_applied">Duvar kağıdı uygulandı</string>
     <string name="tv_wallpaper_invalid_image">Geçersiz veya erişilemeyen görsel</string>
     <string name="tv_wallpaper_web_pick_file">Telefondan bir veya daha fazla görsel seçin</string>

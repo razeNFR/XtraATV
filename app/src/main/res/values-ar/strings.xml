@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">امسح الرمز بهاتفك على نفس شبكة Wi-Fi لإرسال صورة أو عدة صور أو روابط متتالية دون إغلاق هذه النافذة.</string>
     <string name="tv_wallpaper_visibility">الوضوح</string>
     <string name="tv_wallpaper_blur">التمويه</string>
+    <string name="tv_wallpaper_card_opacity">شفافية البطاقات</string>
+    <string name="tv_player_offline_waiting">القناة غير متصلة · سيتم إعادة الاتصال تلقائياً عند بدء البث</string>
     <string name="tv_wallpaper_applied">تم تطبيق الخلفية</string>
     <string name="tv_wallpaper_invalid_image">صورة غير صالحة أو تعذر الوصول إليها</string>
     <string name="tv_wallpaper_web_pick_file">اختر صورة أو عدة صور من الهاتف</string>

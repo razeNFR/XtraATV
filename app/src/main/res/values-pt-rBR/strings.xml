@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">Escaneie com o celular no mesmo Wi-Fi para enviar uma ou várias fotos ou URLs sem fechar esta tela.</string>
     <string name="tv_wallpaper_visibility">Visibilidade</string>
     <string name="tv_wallpaper_blur">Desfoque</string>
+    <string name="tv_wallpaper_card_opacity">Opacidade dos cartões</string>
+    <string name="tv_player_offline_waiting">Canal offline · Reconexão automática quando voltar ao vivo</string>
     <string name="tv_wallpaper_applied">Papel de parede aplicado</string>
     <string name="tv_wallpaper_invalid_image">Imagem inválida ou inacessível</string>
     <string name="tv_wallpaper_web_pick_file">Escolher uma ou mais imagens do celular</string>

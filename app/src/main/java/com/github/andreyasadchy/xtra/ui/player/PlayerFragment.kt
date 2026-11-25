@@ -2282,7 +2282,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (channelLogin == playbackService?.channelLogin) {
             streamOfflineReceived = !live
             if (live) {
+                streamEndJob?.cancel()
+                streamEndJob = null
+                hideTvStreamEndBanner()
+                hideTvOfflineOverlay()
                 restartPlayer()
+            } else if (isTv && playbackService?.type == BasePlaybackService.STREAM && !isPlayingNow()) {
+                val stream = (activity as? MainActivity)?.currentPlayingStream() ?: getPlayingStream()
+                val login = channelLogin ?: stream?.channelLogin
+                if (!login.isNullOrBlank()) {
+                    showTvOfflineOverlay(
+                        login = login,
+                        fallbackName = stream?.channelName ?: playbackService?.channelName ?: login,
+                        fallbackAvatar = stream?.channelImage ?: playbackService?.channelImage,
+                        showWaitingHint = (requireContext().prefs().getString(C.TV_STREAM_END_ACTION, "home") ?: "home") == "stay",
+                    )
+                }
             }
             updateUptime(serverTime?.times(1000))
         }
@@ -7460,6 +7475,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /** The first picture of the video is on screen: the picture of the stream fades away. */
     protected fun hideLoadingPicture() {
         switchFrameListener = null
+        if (tvOfflineScreenActive) {
+            hideTvOfflineOverlay()
+        }
         val image = loadingPicture ?: return
         loadingPicture = null
         image.animate().alpha(0f).setDuration(250L).withEndAction { (image.parent as? ViewGroup)?.removeView(image) }.start()
@@ -8392,6 +8410,135 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var streamEndJob: kotlinx.coroutines.Job? = null
     private var tvStreamEndNextTarget: Stream? = null
     private var tvStreamEndBannerView: TextView? = null
+    protected var tvOfflineScreenActive = false
+    private var tvOfflineOverlayView: FrameLayout? = null
+    private var tvOfflineChannelLogin: String? = null
+    private var tvOfflineFetchJob: kotlinx.coroutines.Job? = null
+    private var tvOfflinePollJob: kotlinx.coroutines.Job? = null
+
+    protected fun hideTvOfflineOverlay(immediate: Boolean = false) {
+        tvOfflineFetchJob?.cancel()
+        tvOfflineFetchJob = null
+        tvOfflinePollJob?.cancel()
+        tvOfflinePollJob = null
+        tvOfflineScreenActive = false
+        tvOfflineChannelLogin = null
+        val overlay = tvOfflineOverlayView ?: return
+        tvOfflineOverlayView = null
+        overlay.animate().cancel()
+        if (immediate) {
+            (overlay.parent as? ViewGroup)?.removeView(overlay)
+        } else {
+            overlay.animate()
+                .alpha(0f)
+                .setDuration(200L)
+                .withEndAction { (overlay.parent as? ViewGroup)?.removeView(overlay) }
+                .start()
+        }
+    }
+
+    protected fun showTvOfflineOverlay(
+        login: String,
+        fallbackName: String?,
+        fallbackAvatar: String?,
+        showWaitingHint: Boolean = true,
+    ) {
+        if (!isTv || _binding == null || !isAdded || playbackService?.type != BasePlaybackService.STREAM) {
+            return
+        }
+        val act = activity as? MainActivity ?: return
+        if (!act.currentPlayingStream()?.channelLogin.equals(login, ignoreCase = true) &&
+            !playbackService?.channelLogin.equals(login, ignoreCase = true)
+        ) {
+            return
+        }
+        if (tvOfflineScreenActive && tvOfflineChannelLogin.equals(login, ignoreCase = true)) {
+            _binding?.bufferingIndicator?.isVisible = false
+            return
+        }
+        tvOfflineFetchJob?.cancel()
+        tvOfflineFetchJob = viewLifecycleOwner.lifecycleScope.launch {
+            val ctx = context ?: return@launch
+            val info = TvOfflineOverlay.fetchInfo(ctx, login)
+            if (_binding == null || !isAdded) return@launch
+            val currentLogin = act.currentPlayingStream()?.channelLogin ?: playbackService?.channelLogin
+            if (!currentLogin.equals(login, ignoreCase = true)) return@launch
+            // If Twitch confirms the streamer is actually live, don't show the offline screen
+            if (info?.isLive == true) {
+                if (!isPlayingNow()) {
+                    streamOfflineReceived = false
+                    restartPlayer()
+                }
+                return@launch
+            }
+            // Confirmed offline: remove loading spinner and display the channel's Twitch offline screen
+            tvOfflineScreenActive = true
+            tvOfflineChannelLogin = login
+            streamOfflineReceived = true
+            _binding?.bufferingIndicator?.isVisible = false
+            loadingPicture?.let { img ->
+                loadingPicture = null
+                switchFrameListener = null
+                (img.parent as? ViewGroup)?.removeView(img)
+            }
+            val displayName = info?.displayName ?: fallbackName?.takeIf { it.isNotBlank() } ?: login
+            val avatar = info?.profileImageUrl ?: fallbackAvatar
+            val overlay = TvOfflineOverlay.createView(
+                context = ctx,
+                displayName = displayName,
+                profileImageUrl = avatar,
+                offlineImageUrl = info?.offlineImageUrl,
+                bannerImageUrl = info?.bannerImageUrl,
+                compact = false,
+                showWaitingHint = showWaitingHint,
+            ).apply {
+                alpha = 0f
+            }
+            tvOfflineOverlayView?.let { prev -> (prev.parent as? ViewGroup)?.removeView(prev) }
+            val index = binding.playerLayout.indexOfChild(binding.aspectRatioFrameLayout) + 1
+            binding.playerLayout.addView(
+                overlay,
+                index,
+                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+            )
+            tvOfflineOverlayView = overlay
+            overlay.animate().alpha(1f).setDuration(240L).start()
+            startTvOfflineLiveMonitor(login)
+        }
+    }
+
+    private fun startTvOfflineLiveMonitor(login: String) {
+        tvOfflinePollJob?.cancel()
+        tvOfflinePollJob = viewLifecycleOwner.lifecycleScope.launch {
+            while (tvOfflineScreenActive && tvOfflineChannelLogin.equals(login, ignoreCase = true) && view != null && isAdded) {
+                kotlinx.coroutines.delay(15_000L)
+                if (!tvOfflineScreenActive || !tvOfflineChannelLogin.equals(login, ignoreCase = true) || view == null || !isAdded) {
+                    return@launch
+                }
+                val ctx = context ?: return@launch
+                val act = activity as? MainActivity ?: return@launch
+                val currentLogin = act.currentPlayingStream()?.channelLogin ?: playbackService?.channelLogin
+                if (!currentLogin.equals(login, ignoreCase = true)) {
+                    hideTvOfflineOverlay(immediate = true)
+                    return@launch
+                }
+                if (isPlayingNow()) {
+                    hideTvOfflineOverlay()
+                    return@launch
+                }
+                val info = TvOfflineOverlay.fetchInfo(ctx, login)
+                if (info?.isLive == true && tvOfflineScreenActive && tvOfflineChannelLogin.equals(login, ignoreCase = true)) {
+                    streamEndJob?.cancel()
+                    streamEndJob = null
+                    hideTvStreamEndBanner()
+                    hideTvOfflineOverlay()
+                    streamOfflineReceived = false
+                    restartPlayer()
+                    return@launch
+                }
+            }
+        }
+    }
 
     private fun hideTvStreamEndBanner() {
         tvStreamEndNextTarget = null
@@ -8403,6 +8550,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         streamEndJob?.cancel()
         streamEndJob = null
         hideTvStreamEndBanner()
+        val act = activity as? MainActivity
+        val stream = act?.currentPlayingStream() ?: getPlayingStream()
+        val login = stream?.channelLogin ?: playbackService?.channelLogin
+        if (!login.isNullOrBlank() && !isPlayingNow()) {
+            // User chose to stay: keep/show the channel offline screen and auto-reconnect when back live
+            tvOfflineOverlayView?.let { prev -> (prev.parent as? ViewGroup)?.removeView(prev) }
+            tvOfflineOverlayView = null
+            tvOfflineScreenActive = false
+            showTvOfflineOverlay(
+                login = login,
+                fallbackName = stream?.channelName ?: playbackService?.channelName ?: login,
+                fallbackAvatar = stream?.channelImage ?: playbackService?.channelImage,
+                showWaitingHint = true,
+            )
+        }
         return true
     }
 
@@ -8411,6 +8573,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         streamEndJob?.cancel()
         streamEndJob = null
         hideTvStreamEndBanner()
+        hideTvOfflineOverlay(immediate = true)
         (activity as? MainActivity)?.startStream(target, peekHud = true)
     }
 
@@ -8501,21 +8664,33 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     /**
-     * TV: the stream stopped (Twitch ended it). After waiting for a potential raid, performs the configured
-     * end-of-stream behavior ("home": close player, "next": 10s countdown to switch to another live followed channel
-     * or same-category stream, "stay": remain on the player).
+     * TV: the stream stopped (Twitch ended it). Immediately displays the channel's Twitch offline screen
+     * once confirmed offline, then after waiting for a potential raid performs the configured end-of-stream
+     * behavior ("home": close player, "next": 10s countdown to switch to another live followed channel or
+     * same-category stream, "stay": keep the offline screen visible and auto-reconnect when live again).
      */
     protected fun onTvStreamEnded() {
         if (view == null || !isAdded || !isTv || streamEndJob?.isActive == true) {
             return
         }
         val activity = activity as? MainActivity ?: return
-        val login = activity.currentPlayingStream()?.channelLogin
+        val currentStream = activity.currentPlayingStream() ?: getPlayingStream()
+        val login = currentStream?.channelLogin ?: playbackService?.channelLogin
         // just back from a multi-stream: the next stream of it instead of closing
         activity.takeMultiStreamFallback(login)?.let { next ->
+            hideTvOfflineOverlay(immediate = true)
             activity.dropTvPipForEndedStream(login)
             activity.startStream(next, peekHud = true)
             return
+        }
+        val action = requireContext().prefs().getString(C.TV_STREAM_END_ACTION, "home") ?: "home"
+        if (!login.isNullOrBlank()) {
+            showTvOfflineOverlay(
+                login = login,
+                fallbackName = currentStream?.channelName ?: playbackService?.channelName ?: login,
+                fallbackAvatar = currentStream?.channelImage ?: playbackService?.channelImage,
+                showWaitingHint = action == "stay",
+            )
         }
         streamEndJob = viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(6000L)
@@ -8525,14 +8700,26 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 kotlinx.coroutines.delay(1000L)
             }
             if (view == null || activity.currentPlayingStream()?.channelLogin != login || isPlayingNow()) {
+                if (isPlayingNow()) hideTvOfflineOverlay()
                 return@launch
             }
             restoreTvOledProtection()
             when (requireContext().prefs().getString(C.TV_STREAM_END_ACTION, "home") ?: "home") {
-                "stay" -> return@launch
+                "stay" -> {
+                    if (!login.isNullOrBlank() && !tvOfflineScreenActive) {
+                        showTvOfflineOverlay(
+                            login = login,
+                            fallbackName = currentStream?.channelName ?: playbackService?.channelName ?: login,
+                            fallbackAvatar = currentStream?.channelImage ?: playbackService?.channelImage,
+                            showWaitingHint = true,
+                        )
+                    }
+                    return@launch
+                }
                 "next" -> {
                     val next = pickNextLiveFollowedStream(activity, login)
                     if (next == null) {
+                        hideTvOfflineOverlay(immediate = true)
                         close()
                         activity.closePlayer()
                         return@launch
@@ -8542,6 +8729,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     for (sec in 10 downTo 1) {
                         if (view == null || activity.currentPlayingStream()?.channelLogin != login || isPlayingNow()) {
                             hideTvStreamEndBanner()
+                            if (isPlayingNow()) hideTvOfflineOverlay()
                             return@launch
                         }
                         showTvStreamEndBanner(nextName, sec)
@@ -8550,11 +8738,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     val target = tvStreamEndNextTarget
                     hideTvStreamEndBanner()
                     if (target != null && view != null && activity.currentPlayingStream()?.channelLogin == login && !isPlayingNow()) {
+                        hideTvOfflineOverlay(immediate = true)
                         activity.dropTvPipForEndedStream(login)
                         activity.startStream(target, peekHud = true)
                     }
                 }
                 else -> {
+                    hideTvOfflineOverlay(immediate = true)
                     close()
                     activity.closePlayer()
                 }
@@ -9176,6 +9366,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         tvPollView = null
         tvStreamEndNextTarget = null
         tvStreamEndBannerView = null
+        hideTvOfflineOverlay(immediate = true)
         tvOledProtectionActive = false
         tvStatsView = null
         tvTopRightStack = null

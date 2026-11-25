@@ -29,4 +29,7 @@
     <item name="tvStatsRoot" type="id" />
     <item name="tvSettingsRoot" type="id" />
     <item name="tvPlayingBadge" type="id" />
+    <item name="tvCardDefaultBg" type="id" />
+    <item name="tvCardSurfaceKey" type="id" />
+    <item name="tvPipOfflineOverlay" type="id" />
 </resources>

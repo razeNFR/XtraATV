@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">Escanea co teu móbil no mesmo Wi-Fi para enviar unha ou varias fotos ou URLs seguidas sen pechar esta xanela.</string>
     <string name="tv_wallpaper_visibility">Visibilidade</string>
     <string name="tv_wallpaper_blur">Desenfoque</string>
+    <string name="tv_wallpaper_card_opacity">Opacidade das tarxetas</string>
+    <string name="tv_player_offline_waiting">A canle está fóra de liña · Reconexión automática ao volver en directo</string>
     <string name="tv_wallpaper_applied">Fondo de pantalla aplicado</string>
     <string name="tv_wallpaper_invalid_image">Imaxe non válida ou inaccesible</string>
     <string name="tv_wallpaper_web_pick_file">Escoller unha ou varias imaxes do móbil</string>

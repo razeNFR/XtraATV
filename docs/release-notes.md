@@ -1,30 +1,19 @@
-# Xtra TV 1.4.6.9
+# Xtra TV 1.4.7
 
 ### New & Polish
-- **New "Customization" Category in Settings > Xtra TV**:
-  - Dedicated **Customization** section grouping **Ambient color**, **Wallpaper**, **Card sizes** (Home & grids), **Featured banner**, **Home greeting**, **Stats badge**, **Compact side rail**, and **Side menu stats**, keeping **Home & Side menu** focused on rows, favorites, hidden content, and recent channels.
-- **TV Wallpapers — Studio & OLED Shaders, Visual Gallery, Multi-Photo Phone QR & Auto-Rotation**:
-  - **10 ambient-reactive procedural wallpapers**: 6 ACES-tonemapped **Studio & OLED shaders** (*Velvet Drape*, *Dichroic Glass*, *Glass Rings*, *Starry Night OLED*, *Twilight Dunes*, and *Northern Lights*) + 4 geometric vector styles (*AMOLED Topographic*, *Gaming Prisms*, *Ribbons*, and *Aurora*), all dynamically tinted by your active **Ambient color** (including live **Dynamic** crossfades).
-  - **Unlimited custom images & persistent multi-upload QR portal**: scan the local Wi-Fi QR code once from your phone to select multiple gallery photos at once (`multiple`) or send several photos and image URLs in a row without closing the QR window; all custom wallpapers are preserved in Xtra TV backups.
-  - **Visual 16:9 Gallery & Auto-Rotation playlist**: tabbed smoked-glass side panel (*Gallery*, *Rotation*, *Adjustments*) with live unobstructed background preview, **Auto-rotation** timer (*Every launch*, *5 min*, *10 min*, *30 min*, *1 h*, *3 h*) + **Shuffle** across any checked mix of built-in styles and custom photos, per-image **Long-press OK** options/delete, **Visibility** (`10–100%`), and **Blur** (`0–100%`).
-- **Configurable Live Preview & Card Zoom Delay**:
-  - Added **Preview & zoom delay** in **Settings > Xtra TV > Previews & Live alerts** (`0.25 s` default, `0.5 s`, `1 s`, `1.5 s`, `2 s`, `3 s`, `5 s`) to control how long focus stays on a card before starting the live video preview and card expansion.
-- **Compact Smoked-Glass Volume Pill & Direct Long-Press Mute in the TV Player**:
-  - Pressing **OK** on **Volume** opens a compact smoked-glass pill directly above the Volume icon with a bright active focus border, circular slider thumb (`●`), and `‹` `›` D-pad arrows (**Left / Right** adjusts volume in **5%** steps; **OK**, **Down**, **Back**, or **3 s** closes it).
-  - **Hold OK directly on the Volume button** (even when the pill is closed, as well as when open) to toggle **Mute / Unmute** instantly.
-- **Unified Smoked-Glass Cards & High-Contrast Readability Over Wallpapers**:
-  - Lightweight zero-blur smoked-glass dark capsules (`1dp` rim at rest, crisp white border on focus) unify thumbnails and metadata across **Home** cards (streams, multi-streams, continue watching, videos, clips, categories, and channel tiles), **Popular / Categories / Following** grids, and **Statistics** panels.
-  - Added rounded smoked-glass column panels in **Settings**, frameless soft-feathered **Home** spotlight banner, pinned footer in the **Phone QR** upload modal, and focus-scale edge padding in the **Wallpaper** gallery.
-
-### Fixes
-- **Restored Video Swap Adblock Across Player, Multi-Stream, PiP & Previews + Fixed Post-Ad Black Screen**:
-  - Video Swap backup streams (`android/autoplay`, `web/picture-by-picture`, `web/embed`, `web/thunderdome`, `web/popout`) now request playback tokens **anonymously** across the **main player**, **Multi-Stream**, **PiP**, and **live card previews** (stripping the account OAuth token that caused Twitch to stitch account-targeted ads onto backups) while keeping the main stream authenticated in the background for Channel Points, Drops, and Sub status.
-  - Added immediate pre-roll bypass & periodic silent backup re-probing during active ad pods, prevented main hardware decoder thrashing when falling back to ad-hiding, and added rendered-frame stall recovery when returning to live.
-- **Fixed Random Stream Reopening or "Playing" Badge After Exiting & Restarting the App**:
-  - When **Keep sound when leaving the app** is disabled, leaving or closing Xtra TV now stops playback, clears `TvPlaybackState`, and purges saved playback state immediately in `onStop()` / exit instead of waiting for a delayed callback that Android TV's process freezer could interrupt; cold starts always open cleanly on Home.
-- **Fixed Watched Live Streams Appearing as Viewed VODs in "Continue Watching"**:
-  - **Ongoing recording filter**: `TvVodHistorySync` queries Twitch GraphQL `Video.status` and active `owner.stream` metadata to ignore broadcasts still being recorded (`status != RECORDED`, `404_processing` thumbnails, or currently airing `archiveVideo`s).
-  - **Local live-session guard**: remembers live broadcasts opened in Xtra TV (single player, stream switcher, PiP, and Multi-Stream) so Twitch's auto-recorded `currentUser.viewedVideos` entry never surfaces on its own in **Continue watching** even after the stream ends, unless you explicitly open that VOD yourself.
+- **Adjustable Smoked-Glass Card Opacity & Unified Wallpaper Polish (Zero-Blur for Android TV Boxes)**:
+  - Added a **Card opacity** slider (`30–95%`, default `65%`) with a compact live card & pill preview in **Settings > Xtra TV > Customization > Wallpaper > Adjustments**, applied **only when a wallpaper is active** (leaving the app's default background appearance strictly untouched) and saved in Xtra TV backups.
+  - **Unified translucent smoked-glass surfaces across all TV screens** when a wallpaper is enabled:
+    - **Home**: `HomeCardCapsule` cards, **Stats** card, and **See All** cards adopt a neutral dark smoked-glass base with a zero-blur vertical specular rim and subtle top sheen; **Refresh**, **Stats badge**, and **Hero** buttons switch to airy translucent pills, **Greeting & Clock** becomes frameless with soft text shadow, and a gentle radial readability scrim sits behind the left Hero text block.
+    - **XML Grids**: **Followed channels** (subtle opacity hierarchy between live and offline channels), **Categories & Followed categories** (lightened card shade overlay so blurred box art and wallpaper peek through), **Popular**, **Saved**, and **Search** (channels + recent search pills).
+    - **Statistics & Settings**: removed the extra full-screen dark wash on **Statistics** and linked **Statistics** tiles/panels and **Settings** columns to the card opacity slider.
+    - **Channel page**: **About** and **Schedule** cards switch to smoked glass for crisp legibility over bright wallpapers, and `TvHeader` titles/clock/sort receive a subtle text shadow.
+  - **Zero per-frame GPU overhead**: subtle top and left readability scrims are pre-baked once into cached wallpaper bitmaps with zero real-time blur passes on scrolling cards.
+- **Twitch Channel Offline Screen & Auto-Reconnect in Player, Multi-Stream & PiP**:
+  - **Main TV Player**: when a live stream goes offline, the buffering spinner disappears immediately and the player displays the streamer's actual **Twitch offline screen** (`offlineImageURL`, or a dark banner/ambient fallback when unset) with their **profile picture**, **username**, and **Offline** status badge.
+  - **Automatic live reconnection**: detects when the streamer comes back live (instantly via Hermes `stream-up`, plus a lightweight background check when chat is disabled) and automatically reconnects the stream while keeping the offline screen visible until the streamer returns or you leave the player.
+  - **Seamless integration with "When live stream ends"**: works cleanly alongside **Return to Home**, **Switch to another live channel** (offline screen shown behind the 10 s countdown; pressing **Back** to stay keeps the offline screen and auto-reconnect active), **Stay on player**, and automatic raids.
+  - **Multi-Stream & PiP support**: both Multi-Stream tiles and PiP windows now honor **When live stream ends** — in **Stay on player** mode they show a compact Twitch offline screen and auto-reconnect if the streamer returns; in **Return to Home** / **Switch** modes they cleanly remove the ended tile or close the ended PiP window after the grace period instead of staying frozen on a still frame.
 
 ### Install
-Download `XtraTV-1.4.6.9-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.4.7-tv.apk` below and install it over the previous version, your settings and account are kept.

@@ -416,9 +416,18 @@ object TvHeader {
         return text
     }
 
+    private val WallpaperTextShadow = androidx.compose.ui.text.TextStyle(
+        shadow = androidx.compose.ui.graphics.Shadow(
+            color = Color(0xBF000000),
+            offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+            blurRadius = 6f,
+        )
+    )
+
     @Composable
     private fun Clock() {
         val context = LocalContext.current
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
         var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
         LaunchedEffect(Unit) {
             while (true) {
@@ -431,6 +440,7 @@ object TvHeader {
             fontSize = 20.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,
+            style = if (hasWallpaper) WallpaperTextShadow else androidx.compose.ui.text.TextStyle.Default,
             maxLines = 1
         )
     }
@@ -438,6 +448,8 @@ object TvHeader {
     @Composable
     private fun Header(snapshot: Snapshot, firstRequester: FocusRequester, tabRequester: FocusRequester, searchRequester: FocusRequester, appBar: AppBarLayout) {
         val context = LocalContext.current
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
+        val headerTextStyle = if (hasWallpaper) WallpaperTextShadow else androidx.compose.ui.text.TextStyle.Default
         val scope = rememberCoroutineScope()
         val all = snapshot.left + snapshot.tabs + snapshot.afterTabs + snapshot.right
         if (snapshot.isSearch && (context as? MainActivity)?.isTvMenuOpen() != true) {
@@ -548,15 +560,15 @@ object TvHeader {
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.Bottom) {
                                 if (snapshot.title != null) {
-                                    Text(snapshot.title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                    Text(snapshot.title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White, style = headerTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                 }
                                 if (snapshot.stats != null) {
                                     Spacer(Modifier.width(16.dp))
-                                    Text(snapshot.stats, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, modifier = Modifier.padding(bottom = 4.dp))
+                                    Text(snapshot.stats, fontSize = 14.sp, color = TvColors.secondaryText, style = headerTextStyle, maxLines = 1, modifier = Modifier.padding(bottom = 4.dp))
                                 }
                             }
                             if (snapshot.subtitle != null) {
-                                Text(snapshot.subtitle, fontSize = 14.sp, color = TvColors.secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(snapshot.subtitle, fontSize = 14.sp, color = TvColors.secondaryText, style = headerTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -799,6 +811,8 @@ object TvHeader {
             return
         }
         // the sort: what the list is sorted by, read as a text of the header; a button only with the focus
+        val context = LocalContext.current
+        val hasWallpaper = com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.isActiveReactive(context)
         val quiet = action.key == "sort"
         val background = when {
             focused -> TvColors.focused
@@ -807,7 +821,7 @@ object TvHeader {
         }
         val content = when {
             focused -> TvColors.onFocused
-            quiet -> Color(0xD9FFFFFF)
+            quiet -> if (hasWallpaper) Color(0xEBFFFFFF) else Color(0xD9FFFFFF)
             else -> Color.White
         }
         Row(
@@ -834,6 +848,7 @@ object TvHeader {
                 fontSize = 15.sp,
                 fontWeight = if (quiet && !focused) FontWeight.Medium else FontWeight.SemiBold,
                 color = content,
+                style = if (hasWallpaper && quiet && !focused) WallpaperTextShadow else androidx.compose.ui.text.TextStyle.Default,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 360.dp)

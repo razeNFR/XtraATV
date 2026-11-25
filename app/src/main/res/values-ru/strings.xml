@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">Отсканируйте телефоном в той же сети Wi-Fi, чтобы отправить одно или несколько фото или URL подряд, не закрывая это окно.</string>
     <string name="tv_wallpaper_visibility">Видимость</string>
     <string name="tv_wallpaper_blur">Размытие</string>
+    <string name="tv_wallpaper_card_opacity">Непрозрачность карточек</string>
+    <string name="tv_player_offline_waiting">Канал не в сети · Автопереподключение при начале эфира</string>
     <string name="tv_wallpaper_applied">Обои применены</string>
     <string name="tv_wallpaper_invalid_image">Некорректное или недоступное изображение</string>
     <string name="tv_wallpaper_web_pick_file">Выбрать одно или несколько фото с телефона</string>

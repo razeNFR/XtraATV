@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">Scansiona con il telefono sullo stesso Wi-Fi per inviare una o più foto o URL senza chiudere questa schermata.</string>
     <string name="tv_wallpaper_visibility">Visibilità</string>
     <string name="tv_wallpaper_blur">Sfocatura</string>
+    <string name="tv_wallpaper_card_opacity">Opacità delle schede</string>
+    <string name="tv_player_offline_waiting">Il canale è offline · Riconnessione automatica quando torna in diretta</string>
     <string name="tv_wallpaper_applied">Sfondo applicato</string>
     <string name="tv_wallpaper_invalid_image">Immagine non valida o irraggiungibile</string>
     <string name="tv_wallpaper_web_pick_file">Scegli una o più immagini dal telefono</string>

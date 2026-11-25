@@ -1425,6 +1425,8 @@
     <string name="tv_wallpaper_qr_help">同じWi-Fiのスマートフォンで読み取ると、この画面を閉じずに複数の写真や画像URLを続けて送信できます。</string>
     <string name="tv_wallpaper_visibility">表示強度</string>
     <string name="tv_wallpaper_blur">ぼかし</string>
+    <string name="tv_wallpaper_card_opacity">カードの不透明度</string>
+    <string name="tv_player_offline_waiting">チャンネルはオフラインです · 配信開始時に自動再接続します</string>
     <string name="tv_wallpaper_applied">壁紙を適用しました</string>
     <string name="tv_wallpaper_invalid_image">無効または取得できない画像です</string>
     <string name="tv_wallpaper_web_pick_file">スマホから1枚または複数の画像を選択</string>

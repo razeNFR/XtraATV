@@ -1426,6 +1426,8 @@
     <string name="tv_wallpaper_qr_help">Pindai dengan ponsel di Wi-Fi yang sama untuk mengirim satu atau beberapa foto maupun URL tanpa menutup layar ini.</string>
     <string name="tv_wallpaper_visibility">Visibilitas</string>
     <string name="tv_wallpaper_blur">Buram</string>
+    <string name="tv_wallpaper_card_opacity">Opasitas kartu</string>
+    <string name="tv_player_offline_waiting">Saluran sedang offline · Menyambung ulang otomatis saat siaran langsung</string>
     <string name="tv_wallpaper_applied">Wallpaper diterapkan</string>
     <string name="tv_wallpaper_invalid_image">Gambar tidak valid atau tidak dapat diakses</string>
     <string name="tv_wallpaper_web_pick_file">Pilih satu atau beberapa gambar dari ponsel</string>

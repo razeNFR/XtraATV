@@ -376,6 +376,7 @@ object C {
     const val TV_WALLPAPER = "tv_wallpaper"
     const val TV_WALLPAPER_VISIBILITY = "tv_wallpaper_visibility"
     const val TV_WALLPAPER_BLUR = "tv_wallpaper_blur"
+    const val TV_WALLPAPER_CARD_OPACITY = "tv_wallpaper_card_opacity"
     const val TV_WALLPAPER_ROTATION_INTERVAL = "tv_wallpaper_rotation_interval"
     const val TV_WALLPAPER_ROTATION_SHUFFLE = "tv_wallpaper_rotation_shuffle"
     const val TV_WALLPAPER_ROTATION_POOL = "tv_wallpaper_rotation_pool"
