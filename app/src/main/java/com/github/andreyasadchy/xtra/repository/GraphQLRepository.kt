@@ -3212,7 +3212,6 @@ class GraphQLRepository(
         val ownerLiveStreamId: String? = null,
         val ownerLiveStreamCreatedAt: String? = null,
         val ownerLiveArchiveVideoId: String? = null,
-        val subOnly: Boolean = false,
     )
 
     data class SingleVideoViewingHistory(
@@ -3238,7 +3237,7 @@ class GraphQLRepository(
         val rawBodyFull = buildJsonObject {
             put(
                 "query",
-                "query(\$limit: Int!) { currentUser { viewedVideos(first: \$limit) { edges { history { position updatedAt } node { id title status broadcastType createdAt publishedAt lengthSeconds previewThumbnailURL(width: 640, height: 360) resourceRestriction { type } owner { id login displayName profileImageURL(width: 300) stream { id createdAt archiveVideo { id } } } game { id displayName name } } } } } }",
+                "query(\$limit: Int!) { currentUser { viewedVideos(first: \$limit) { edges { history { position updatedAt } node { id title status broadcastType createdAt publishedAt lengthSeconds previewThumbnailURL(width: 640, height: 360) owner { id login displayName profileImageURL(width: 300) stream { id createdAt archiveVideo { id } } } game { id displayName name } } } } } }",
             )
             putJsonObject("variables") {
                 put("limit", limit)
@@ -3308,7 +3307,6 @@ class GraphQLRepository(
                 val owner = node["owner"].obj()
                 val ownerStream = owner?.get("stream").obj()
                 val game = node["game"].obj()
-                val restrictionType = node["resourceRestriction"].obj()?.get("type").str()
                 RemoteViewedVideo(
                     id = id,
                     title = node["title"].str()?.takeIf { it.isNotBlank() },
@@ -3328,7 +3326,6 @@ class GraphQLRepository(
                     ownerLiveStreamId = ownerStream?.get("id").str()?.takeIf { it.isNotBlank() },
                     ownerLiveStreamCreatedAt = ownerStream?.get("createdAt").str()?.takeIf { it.isNotBlank() },
                     ownerLiveArchiveVideoId = ownerStream?.get("archiveVideo").obj()?.get("id").str()?.takeIf { it.isNotBlank() },
-                    subOnly = restrictionType?.contains("SUB", ignoreCase = true) == true,
                 )
             }
         }.getOrNull()
@@ -3433,6 +3430,25 @@ class GraphQLRepository(
             if (root["errors"].arr()?.isNotEmpty() == true) return@runCatching false
             root["data"].obj()?.get("updateUserViewedVideo") != null
         }.getOrDefault(false)
+    }
+
+    suspend fun fetchCurrentUserId(
+        networkLibrary: String?,
+        headers: Map<String, String>,
+    ): String? = withContext(Dispatchers.IO) {
+        if (headers[C.HEADER_TOKEN].isNullOrBlank()) return@withContext null
+        val body = buildJsonObject {
+            put("query", "query { currentUser { id } }")
+        }.toString()
+        runCatching {
+            val raw = sendPersistedQuery(networkLibrary, headers, body)
+            val parsed = json.parseToJsonElement(raw)
+            val root = (parsed as? JsonArray)?.firstOrNull() as? JsonObject ?: parsed as? JsonObject
+            (root?.get("data") as? JsonObject)
+                ?.let { it["currentUser"] as? JsonObject }
+                ?.let { (it["id"] as? JsonPrimitive)?.contentOrNull }
+                ?.takeIf { it.isNotBlank() }
+        }.getOrNull()
     }
 
     suspend fun fetchFollowedLoginsSubset(

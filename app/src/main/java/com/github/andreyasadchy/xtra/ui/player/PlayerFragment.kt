@@ -4948,12 +4948,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     val tlLoc = IntArray(2)
                     timeline.getLocationInWindow(tlLoc)
                     val tlTop = tlLoc[1].toFloat()
-                    minOf(tlTop + 4f * density, anchorTop - 12f * density)
+                    minOf(tlTop + 8f * density, anchorTop - 6f * density)
                 } else {
-                    anchorTop - 12f * density
+                    anchorTop - 8f * density
                 }
                 if (windowBottom > 0) {
-                    anchorBottomMargin = (windowBottom - bottomTipY).coerceAtLeast(106f * density)
+                    anchorBottomMargin = (windowBottom - bottomTipY).coerceAtLeast(88f * density)
                 }
                 applyTvChatButtonPillState(true)
             }

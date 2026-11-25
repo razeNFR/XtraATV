@@ -3080,6 +3080,16 @@ private fun FollowedVideoCard(
 ) {
     val small = width < 230.dp
     val positionMs = actions.videoPosition(video)
+    val context = LocalContext.current
+    val subOnlyRev by com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.revision.collectAsState()
+    LaunchedEffect(video.id) {
+        if (!video.subOnly && !com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isKnown(video.id)) {
+            com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.enqueue(context, video.id)
+        }
+    }
+    val isSubOnly = remember(video.id, video.subOnly, subOnlyRev) {
+        video.subOnly || com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isSubOnly(video.id)
+    }
     FocusCard(
         width = width,
         modifier = modifier,
@@ -3100,7 +3110,7 @@ private fun FollowedVideoCard(
                     .background(Color(0xFF222129))
             ) {
                 VideoThumbnail(video.thumbnail, video.channelImage)
-                if (video.subOnly) {
+                if (isSubOnly) {
                     Text(
                         "★ SUB",
                         fontSize = 10.5.sp,
@@ -3171,6 +3181,16 @@ private fun ResumeCard(
     onSelected: () -> Unit = {},
 ) {
     val small = width < 230.dp
+    val context = LocalContext.current
+    val subOnlyRev by com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.revision.collectAsState()
+    LaunchedEffect(item.id) {
+        if (!item.subOnly && !com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isKnown(item.id)) {
+            com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.enqueue(context, item.id)
+        }
+    }
+    val isSubOnly = remember(item.id, item.subOnly, subOnlyRev) {
+        item.subOnly || com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isSubOnly(item.id)
+    }
     FocusCard(
         width = width,
         modifier = modifier,
@@ -3191,7 +3211,7 @@ private fun ResumeCard(
                     .background(Color(0xFF222129))
             ) {
                 VideoThumbnail(item.thumbnail, item.channelImage)
-                if (item.subOnly) {
+                if (isSubOnly) {
                     Text(
                         "★ SUB",
                         fontSize = 10.5.sp,

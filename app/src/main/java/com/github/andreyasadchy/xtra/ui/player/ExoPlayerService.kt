@@ -133,6 +133,8 @@ class ExoPlayerService : BasePlaybackService() {
     private var lastSavedPosition: Long? = null
     private var savePositionTimer: Timer? = null
     private var stopServiceTimer: Timer? = null
+    private val vodSeekSaveHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val vodSeekSaveRunnable = Runnable { updateSavedPosition(forceSync = true) }
 
     private var customProxyList: List<CustomProxy>? = null
     private var streamProxyList: List<StreamProxy>? = null
@@ -1099,7 +1101,7 @@ class ExoPlayerService : BasePlaybackService() {
                     } else {
                         savePositionTimer?.cancel()
                         savePositionTimer = null
-                        updateSavedPosition()
+                        updateSavedPosition(forceSync = true)
                         if (stopServiceTimer == null && serviceListener == null) {
                             stopServiceTimer = Timer().apply {
                                 schedule(600000) {
@@ -1117,6 +1119,10 @@ class ExoPlayerService : BasePlaybackService() {
                         lastUserSeekAt = android.os.SystemClock.elapsedRealtime()
                         if (!dvrInitialSeekPending && player?.playbackState == Player.STATE_READY) {
                             videoStartPosition = null
+                        }
+                        if (type == VIDEO && videoId?.toLongOrNull() != null) {
+                            vodSeekSaveHandler.removeCallbacks(vodSeekSaveRunnable)
+                            vodSeekSaveHandler.postDelayed(vodSeekSaveRunnable, 1_500L)
                         }
                     }
                     updatePlaybackState()
@@ -4264,9 +4270,27 @@ class ExoPlayerService : BasePlaybackService() {
         liveRecoveryJob = null
         videoSwapRetryJob?.cancel()
         videoSwapRetryJob = null
+        vodSeekSaveHandler.removeCallbacks(vodSeekSaveRunnable)
         if (type == VIDEO && prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
             player?.takeIf { !it.currentTracks.isEmpty }?.let { player ->
-                videoId?.toLongOrNull()?.let { saveTvResume(it, player.currentPosition) }
+                val currentPosition = player.currentPosition
+                lastSavedPosition = currentPosition
+                videoId?.toLongOrNull()?.let { id ->
+                    xtraModule.dbWriteScope.launch {
+                        xtraModule.playerRepository.saveVideoPosition(VideoPosition(id, currentPosition))
+                    }
+                    saveTvResume(id, currentPosition)
+                    if (isTvDevice) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.onExplicitVodOpened(this, id.toString())
+                        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pushPositionAsync(
+                            context = this,
+                            xtraModule = xtraModule,
+                            videoId = videoId,
+                            positionMs = currentPosition,
+                            force = true,
+                        )
+                    }
+                }
             }
         }
         if (secondaryPlayer != null) {
@@ -5295,13 +5319,13 @@ class ExoPlayerService : BasePlaybackService() {
         )
     }
 
-    private fun updateSavedPosition() {
+    private fun updateSavedPosition(forceSync: Boolean = false) {
         player?.let { player ->
             if (!player.currentTracks.isEmpty) {
                 val currentPosition = player.currentPosition
                 val isPaused = !player.playWhenReady
                 val savedPosition = lastSavedPosition
-                if (savedPosition == null || currentPosition - savedPosition !in 0..2000) {
+                if (forceSync || savedPosition == null || currentPosition - savedPosition !in 0..2000) {
                     lastSavedPosition = currentPosition
                     if (prefs().getBoolean(C.PLAYER_USE_VIDEO_POSITIONS, true)) {
                         when (type) {
@@ -5312,12 +5336,13 @@ class ExoPlayerService : BasePlaybackService() {
                                     }
                                     saveTvResume(id, currentPosition)
                                     if (isTvDevice) {
+                                        com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.onExplicitVodOpened(this, id.toString())
                                         com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.pushPositionAsync(
                                             context = this,
                                             xtraModule = xtraModule,
                                             videoId = videoId,
                                             positionMs = currentPosition,
-                                            force = isPaused,
+                                            force = forceSync || isPaused,
                                         )
                                     }
                                 }
@@ -5416,6 +5441,7 @@ class ExoPlayerService : BasePlaybackService() {
         lastNotificationKey = null
         savePositionTimer?.cancel()
         savePositionTimer = null
+        vodSeekSaveHandler.removeCallbacks(vodSeekSaveRunnable)
         stopServiceTimer?.cancel()
         stopServiceTimer = null
         com.github.andreyasadchy.xtra.ui.tv.TvPlaybackSignals.release(this, this)

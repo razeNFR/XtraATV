@@ -20,9 +20,6 @@ query SearchVideos($query: String!, $first: Int, $after: String) {
                     profileImageURL(width: 300)
                 }
                 previewThumbnailURL
-                resourceRestriction {
-                    type
-                }
                 title
                 viewCount
             }

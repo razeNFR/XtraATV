@@ -3678,7 +3678,7 @@ class MainActivity : AppCompatActivity() {
         currentClipId = null
         if (video.id != null) {
             if (isTv) {
-                if (video.subOnly) {
+                if (video.subOnly || com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isSubOnly(video.id)) {
                     com.github.andreyasadchy.xtra.ui.tv.TvResumeHistory.markSubOnly(video.id)
                 }
                 com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.onExplicitVodOpened(this, video.id)

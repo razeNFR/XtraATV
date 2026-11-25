@@ -437,10 +437,6 @@ type UserSelfConnection {
     follower: FollowerEdge
 }
 
-type ResourceRestriction {
-    type: String
-}
-
 type Video {
     animatedPreviewURL: String
     broadcastType: BroadcastType
@@ -453,7 +449,6 @@ type Video {
     moments(first: Int, after: Cursor, sort: SortOrder, types: [VideoMomentType], momentRequestType: VideoMomentRequestType): VideoMomentConnection
     owner: User
     previewThumbnailURL: String
-    resourceRestriction: ResourceRestriction
     seekPreviewsURL: String
     title: String
     viewCount: Int

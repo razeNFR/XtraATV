@@ -57,13 +57,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -976,18 +980,46 @@ fun ChatComposer(
                     }
                     Spacer(Modifier.height(10.dp))
                 }
-                Column(
+                val accentHalo = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
+                Box(
                     modifier = Modifier
                         .offset { IntOffset(pillLeftPx.roundToInt(), 0) }
-                        .width(with(density) { pillWidthPx.toDp() }),
+                        .width(with(density) { pillWidthPx.toDp() })
+                        .drawBehind {
+                            val w = size.width
+                            val beakH = 7.dp.toPx()
+                            val beakHalfW = 6.5.dp.toPx()
+                            val inset = 2.dp.toPx()
+                            val left = inset
+                            val top = inset
+                            val right = w - inset
+                            val bottom = (size.height - beakH).coerceAtLeast(top + 20f)
+                            val r = (bottom - top) / 2f
+                            val minBx = left + r + beakHalfW
+                            val maxBx = (right - r - beakHalfW).coerceAtLeast(minBx)
+                            val bx = beakCenterInPillPx.coerceIn(minBx, maxBx)
+                            val tipY = size.height - 1.2.dp.toPx()
+
+                            // Seamless stadium capsule + integrated downward pointer beak (identical to TvVolumePill)
+                            val path = Path().apply {
+                                moveTo(left + r, top)
+                                lineTo(right - r, top)
+                                arcTo(Rect(right - 2f * r, top, right, bottom), -90f, 180f, false)
+                                lineTo(bx + beakHalfW, bottom)
+                                lineTo(bx, tipY)
+                                lineTo(bx - beakHalfW, bottom)
+                                lineTo(left + r, bottom)
+                                arcTo(Rect(left, top, left + 2f * r, bottom), 90f, 180f, false)
+                                close()
+                            }
+                            drawPath(path, color = accentHalo, style = Stroke(width = 3.6.dp.toPx(), join = StrokeJoin.Round))
+                            drawPath(path, color = Color(0xF21B1A24))
+                            drawPath(path, color = Color(0xF0FFFFFF), style = Stroke(width = 1.85.dp.toPx(), join = StrokeJoin.Round))
+                        }
+                        .padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = 14.dp),
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(30.dp))
-                            .background(Color(0xF21B1A24))
-                            .border(1.5.dp, Color(0x46FFFFFF), RoundedCornerShape(30.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (channelBadge != null) {
@@ -1057,35 +1089,6 @@ fun ChatComposer(
                         ) {
                             onSend(text)
                         }
-                    }
-                    // Smoked-glass pointer beak aligned precisely to the anchor Chat button (matching TvVolumePill)
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                    ) {
-                        val halfW = 7.dp.toPx()
-                        val cx = beakCenterInPillPx.coerceIn(halfW + 12.dp.toPx(), (size.width - halfW - 12.dp.toPx()).coerceAtLeast(halfW + 12.dp.toPx()))
-                        val path = Path().apply {
-                            moveTo(cx - halfW, 0f)
-                            lineTo(cx + halfW, 0f)
-                            lineTo(cx, size.height)
-                            close()
-                        }
-                        drawPath(path, color = Color(0xF21B1A24))
-                        val stroke = 1.5.dp.toPx()
-                        drawLine(
-                            color = Color(0x46FFFFFF),
-                            start = Offset(cx - halfW, 0f),
-                            end = Offset(cx, size.height),
-                            strokeWidth = stroke,
-                        )
-                        drawLine(
-                            color = Color(0x46FFFFFF),
-                            start = Offset(cx + halfW, 0f),
-                            end = Offset(cx, size.height),
-                            strokeWidth = stroke,
-                        )
                     }
                 }
             }

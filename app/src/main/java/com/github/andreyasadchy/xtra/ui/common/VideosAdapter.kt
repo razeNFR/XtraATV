@@ -30,6 +30,10 @@ import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import kotlin.time.Instant
 
 class VideosAdapter(
@@ -50,6 +54,36 @@ class VideosAdapter(
                     oldItem.durationSeconds == newItem.durationSeconds
     }) {
 
+    companion object {
+        private const val PAYLOAD_SUB_BADGE = "sub_badge"
+    }
+
+    private var subOnlyObserverJob: Job? = null
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(recyclerView.context)) {
+            subOnlyObserverJob?.cancel()
+            subOnlyObserverJob = runCatching {
+                fragment.viewLifecycleOwner.lifecycleScope.launch {
+                    com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.revision
+                        .drop(1)
+                        .collect {
+                            if (itemCount > 0) {
+                                notifyItemRangeChanged(0, itemCount, PAYLOAD_SUB_BADGE)
+                            }
+                        }
+                }
+            }.getOrNull()
+        }
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        subOnlyObserverJob?.cancel()
+        subOnlyObserverJob = null
+        super.onDetachedFromRecyclerView(recyclerView)
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PagingViewHolder {
         val binding = FragmentVideosListItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return PagingViewHolder(binding, fragment, showGame, showChannel)
@@ -57,6 +91,14 @@ class VideosAdapter(
 
     override fun onBindViewHolder(holder: PagingViewHolder, position: Int) {
         holder.bind(getItem(position))
+    }
+
+    override fun onBindViewHolder(holder: PagingViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isNotEmpty() && payloads.all { it == PAYLOAD_SUB_BADGE }) {
+            holder.bindSubOnlyBadge(getItem(position))
+        } else {
+            super.onBindViewHolder(holder, position, payloads)
+        }
     }
 
     private var positions: List<VideoPosition>? = null
@@ -80,6 +122,11 @@ class VideosAdapter(
         private val showGame: Boolean,
         private val showChannel: Boolean,
     ) : RecyclerView.ViewHolder(binding.root) {
+        fun bindSubOnlyBadge(item: Video?) {
+            val isSub = item != null && (item.subOnly || com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isSubOnly(item.id))
+            binding.subOnlyBadge?.visibility = if (isSub) View.VISIBLE else View.GONE
+        }
+
         fun bind(item: Video?) {
             with(binding) {
                 if (item != null) {
@@ -202,7 +249,10 @@ class VideosAdapter(
                     } else {
                         type.visibility = View.GONE
                     }
-                    subOnlyBadge?.visibility = if (item.subOnly) View.VISIBLE else View.GONE
+                    bindSubOnlyBadge(item)
+                    if (isTv && !item.subOnly && !com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isKnown(item.id)) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.enqueue(context, item.id)
+                    }
                     if (position != null && item.durationSeconds != null && item.durationSeconds > 0L) {
                         progressBar.progress = (position / (item.durationSeconds * 10)).toInt()
                         progressBar.visibility = View.VISIBLE
