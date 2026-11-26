@@ -1500,8 +1500,8 @@
     <string name="tv_chat_qr_reconnect">重新连接</string>
     <string name="tv_adblock_swap_desc">广告期间切换至备用流（广告期间画质可能暂时下降）。</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">实验性 — 主播放器保留1440p（画中画/多流使用经典Swap拦截）。</string>
-    <string name="tv_adblock_swap_plus_summary">实验性 — 维护匿名影子HLS以在主播放器上无缝跳过广告并保留1440p / HEVC（多流与画中画仍使用Swap）。必要时自动回退至Swap。</string>
+    <string name="tv_adblock_swap_plus_desc">实验性 — 无中断拦截广告，画质下降更少且保持正常延迟（PiP/多画面使用 Swap）。</string>
+    <string name="tv_adblock_swap_plus_summary">实验性 — 连续无中断拦截广告，画质下降更少且保持正常直播延迟（不同于 Adblock (VOD)）。不用于多画面和 PiP（仍使用 Swap）。必要时自动回退到 Swap。可能无法在所有直播中 100% 生效。</string>
     <string name="tv_adblock_vod_desc">实验性 — 通过实时VOD播放（约30秒延迟），支持全模式（含画中画/多流）。</string>
     <string name="tv_vod_audio_recovery">恢复 VOD 静音音频</string>
     <string name="tv_vod_audio_recovery_summary">当原始音频仍在 Twitch 可用时，尝试恢复 VOD、直播 DVR 回看及 Adblock (VOD) 中被 DMCA 静音的片段（视具体 VOD 而定，不保证 100% 成功）。进度条显示绿色（已恢复）和红色（静音）。</string>

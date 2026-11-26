@@ -1501,8 +1501,8 @@
     <string name="tv_chat_qr_reconnect">Yeniden bağlan</string>
     <string name="tv_adblock_swap_desc">Reklam sırasında yedek akışa geçer (reklam boyunca kalite düşebilir).</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Deneysel — ana oynatıcıda 1440p korur (PiP/Çoklu Yayın için klasik Swap kullanılır).</string>
-    <string name="tv_adblock_swap_plus_summary">Deneysel — ana oynatıcıda 1440p / HEVC koruyarak reklamları kesintisiz atlamak için anonim shadow HLS kullanır (Çoklu Yayın ve PiP modlarında Swap kullanılır). Gerekirse Swap moduna düşer.</string>
+    <string name="tv_adblock_swap_plus_desc">Deneysel — kesintisiz, daha az kalite düşüşü ve normal gecikmeyle reklam engeller (PiP/Multi-Stream\'de Swap kullanılır).</string>
+    <string name="tv_adblock_swap_plus_summary">Deneysel — Adblock (VOD)\'un aksine normal canlı gecikmeyle, kesintisiz ve daha az kalite düşüşüyle reklamları engeller (Multi-Stream ve PiP\'te Swap kullanılır). Gerekirse otomatik olarak Swap\'a geçer. Her yayında %100 çalışmayabilir.</string>
     <string name="tv_adblock_vod_desc">Deneysel — canlı VOD üzerinden (~30 sn), her yerde çalışır (PiP/Çoklu Yayın).</string>
     <string name="tv_vod_audio_recovery">Sessize alınan VOD sesini kurtar</string>
     <string name="tv_vod_audio_recovery_summary">Orijinal ses Twitch\'te hâlâ mevcutsa VOD, canlı DVR geri sarma ve Adblock (VOD) içindeki DMCA sessiz bölümlerini kurtarmayı dener (VOD\'a bağlı olarak %100 garanti değildir). Çubukta yeşil (kurtarıldı) ve kırmızı (sessiz) alanları gösterir.</string>

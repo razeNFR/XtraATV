@@ -2,7 +2,7 @@
 
 ### What's New
 - **New `Adblock (Swap+)` Continuous Shadow HLS Engine *(Experimental)***:
-  - Maintains a lightweight anonymous shadow HLS playlist on the main fullscreen player and splices out pre-roll and mid-roll ad segments seamlessly — **preserving 1440p / HEVC / AV1** on the primary stream, showing a lightweight **`Ad`** badge during breaks, with automatic fallback to `Adblock (Swap)` (`Swap fallback (Swap+ failed)`) if needed.
+  - Maintains a lightweight anonymous shadow HLS playlist on the main fullscreen player to splice out pre-roll and mid-roll ads **without cuts**, with **less quality drop** and **normal live latency** (unlike `Adblock (VOD)`), showing a lightweight **`Ad`** badge during breaks and falling back automatically to `Adblock (Swap)` (`Swap fallback (Swap+ failed)`) if needed.
   - Multi-Stream and PiP stay on classic `Adblock (Swap)` (or `Adblock (VOD)` when enabled) for maximum stability and low resource usage.
   - Renamed Experimental Adblock to **`Adblock (VOD)`** *(Experimental)* everywhere, clarifying that it works everywhere (main player, Multi-Stream, and PiP) with automatic fallback to `Swap+` / `Swap`.
   - **Clearer Adblock & Proxies Panel & Settings**: added concise descriptions under `Adblock (Swap)`, `Adblock (Swap+)`, and `Adblock (VOD)`, replaced confusing duplicate toggles with a clear **`Active fallback`** badge on fallback blockers, and automatically hides Custom Proxy and HTTP Stream Proxy lists in the player panel when toggled off.

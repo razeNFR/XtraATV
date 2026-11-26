@@ -1500,8 +1500,8 @@
     <string name="tv_chat_qr_reconnect">إعادة الاتصال</string>
     <string name="tv_adblock_swap_desc">ينتقل إلى بث احتياطي أثناء الإعلانات (قد تنخفض الجودة مؤقتًا).</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">تجريبي — يحافظ على 1440p بالمشغّل الرئيسي (يُستخدم Swap الكلاسيكي في PiP/البث المتعدد).</string>
-    <string name="tv_adblock_swap_plus_summary">تجريبي — يستخدم قائمة HLS خفية مجهولة لتجاوز الإعلانات بسلاسة مع الحفاظ على 1440p / HEVC في المشغّل الرئيسي (لا يُستخدم في البث المتعدد أو PiP حيث يعمل Swap). يعود إلى Swap عند الحاجة.</string>
+    <string name="tv_adblock_swap_plus_desc">تجريبي — يحجب الإعلانات دون انقطاع مع انخفاض أقل في الجودة وزمن تأخير طبيعي (يُستخدم Swap في PiP/Multi-Stream).</string>
+    <string name="tv_adblock_swap_plus_summary">تجريبي — يحجب الإعلانات بشكل مستمر دون انقطاع مع انخفاض أقل في الجودة وزمن تأخير طبيعي (بخلاف Adblock (VOD)). لا يُستخدم في Multi-Stream أو PiP (يبقيان على Swap). يتحول تلقائياً إلى Swap عند الحاجة. قد لا يعمل 100% على كل البثوث.</string>
     <string name="tv_adblock_vod_desc">تجريبي — عبر VOD المباشر (~30 ث)، يعمل في كل مكان (PiP/البث المتعدد).</string>
     <string name="tv_vod_audio_recovery">استعادة صوت VOD المكتوم</string>
     <string name="tv_vod_audio_recovery_summary">يحاول استعادة الصوت المكتوم بسبب DMCA في VOD والرجوع المباشر DVR وAdblock (VOD) إذا كان الصوت الأصلي لا يزال متوفراً على Twitch (غير مضمون بنسبة 100% حسب كل VOD). يعرض مقاطع خضراء (مستعادة) وحمراء (مكتومة) على الشريط.</string>

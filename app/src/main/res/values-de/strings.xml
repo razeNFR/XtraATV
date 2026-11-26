@@ -1500,8 +1500,8 @@
     <string name="tv_chat_qr_reconnect">Neu verbinden</string>
     <string name="tv_adblock_swap_desc">Wechselt bei Werbung auf einen Ersatzstream (Qualität kann kurz sinken).</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Experimentell — behält 1440p im Hauptplayer (klassisches Swap für PiP/Multi-Stream).</string>
-    <string name="tv_adblock_swap_plus_summary">Experimentell — nutzt eine anonyme Shadow-HLS-Playlist für nahtloses Ausblenden von Werbung mit 1440p / HEVC im Hauptplayer (nicht in Multi-Stream oder PiP, dort läuft Swap). Fällt bei Bedarf auf Swap zurück.</string>
+    <string name="tv_adblock_swap_plus_desc">Experimentell — nahtlose Werbeblockierung mit weniger Qualitätsverlust und normaler Latenz (Swap für PiP/Multi-Stream).</string>
+    <string name="tv_adblock_swap_plus_summary">Experimentell — blockiert Werbung durchgehend ohne Unterbrechung, mit weniger Qualitätsverlust und normaler Live-Latenz (im Gegensatz zu Adblock (VOD)). Nicht für Multi-Stream oder PiP (bleiben auf Swap). Automatischer Rückfall auf Swap bei Bedarf. Funktioniert möglicherweise nicht zu 100 %.</string>
     <string name="tv_adblock_vod_desc">Experimentell — über laufendes VOD (~30 s), überall aktiv (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Stummgeschalteten VOD-Ton wiederherstellen</string>
     <string name="tv_vod_audio_recovery_summary">Versucht, DMCA-stummgeschalteten Ton in VODs, Live-DVR und Adblock (VOD) wiederherzustellen, sofern der Originalton bei Twitch noch verfügbar ist (je nach VOD nicht zu 100 % garantiert). Zeigt grüne (wiederhergestellt) und rote (stumm) Bereiche.</string>

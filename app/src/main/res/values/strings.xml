@@ -1520,8 +1520,8 @@
     <string name="tv_chat_qr_reconnect">Reconnect</string>
     <string name="tv_adblock_swap_desc">Switches to a backup stream during ads (may drop quality during the ad).</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Experimental — keeps 1440p on main player (classic Swap used in PiP/Multi-Stream).</string>
-    <string name="tv_adblock_swap_plus_summary">Experimental — maintains an anonymous shadow HLS playlist to splice out ads seamlessly while keeping 1440p / HEVC on the main player (not used in Multi-Stream or PiP, which stay on Swap). Falls back to Swap if needed. May not work 100% on every stream.</string>
+    <string name="tv_adblock_swap_plus_desc">Experimental — seamless ad blocking with less quality drop and normal latency (Swap used in PiP/Multi-Stream).</string>
+    <string name="tv_adblock_swap_plus_summary">Experimental — blocks ads continuously without cuts, with less quality drop and normal live latency (unlike Adblock (VOD)). Not used in Multi-Stream or PiP, which stay on Swap. Falls back to Swap if needed. May not work 100% on every stream.</string>
     <string name="tv_adblock_vod_desc">Experimental — via ongoing VOD (~30s delay), works everywhere (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Recover muted VOD audio</string>
     <string name="tv_vod_audio_recovery_summary">Attempts to restore DMCA-muted audio in VODs, live DVR rewind, and Adblock (VOD) when the original audio is still available on Twitch (not 100% guaranteed depending on the VOD). Shows green (recovered) and red (muted) ranges on the seek bar.</string>

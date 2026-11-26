@@ -1500,8 +1500,8 @@
     <string name="tv_chat_qr_reconnect">Reconectar</string>
     <string name="tv_adblock_swap_desc">Cambia a un fluxo de reserva nos anuncios (a calidade pode baixar).</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Experimental — mantén 1440p no reprodutor principal (Swap clásico en PiP/Multi-Stream).</string>
-    <string name="tv_adblock_swap_plus_summary">Experimental — mantén unha lista HLS shadow anónima para evitar anuncios mantendo 1440p / HEVC no reprodutor principal (non se usa en Multi-Stream nin PiP, que usan Swap). Recorre a Swap se fai falta.</string>
+    <string name="tv_adblock_swap_plus_desc">Experimental — bloquea anuncios sen cortes, con menos perda de calidade e latencia normal (Swap en PiP/Multi-Stream).</string>
+    <string name="tv_adblock_swap_plus_summary">Experimental — bloquea anuncios de xeito continuo sen cortes, con menos perda de calidade e latencia normal en directo (a diferenza de Adblock (VOD)). Non se usa en Multi-Stream nin PiP (quedan con Swap). Respaldo automático con Swap se fai falta. Pode non funcionar ao 100 %.</string>
     <string name="tv_adblock_vod_desc">Experimental — mediante VOD en curso (~30 s), funciona en todo (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Recuperar audio silenciado en VOD</string>
     <string name="tv_vod_audio_recovery_summary">Tenta restaurar o audio silenciado por DMCA en VOD, rebobinado DVR e Adblock (VOD) se o audio orixinal segue dispoñible en Twitch (non garantido ao 100 % segundo o VOD). Mostra zonas verdes (recuperadas) e vermellas (silenciadas) na barra.</string>
