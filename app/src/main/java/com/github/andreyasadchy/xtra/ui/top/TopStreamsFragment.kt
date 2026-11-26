@@ -87,7 +87,7 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                     }
                 }
             } else {
-                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyBrandHeader(toolbar, args.title ?: getString(R.string.top))
+                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyBrandHeader(toolbar, args.title ?: getString(R.string.streams))
             }
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             toolbar.setOnMenuItemClickListener { menuItem ->
