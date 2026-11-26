@@ -780,7 +780,7 @@ object TvShadowAdblock {
                     allowPrefetches = true,
                 )
             }
-            primaryHasAd && !cleanShadowAvailable && onShadow -> {
+            primaryHasAd && !cleanShadowAvailable && (onShadow || (primaryParsed.verdict == PlaylistVerdict.FULL_AD && !window.isEmpty())) -> {
                 sourceUsed = "hold"
             }
             primaryHasAd && !cleanShadowAvailable && primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD -> {
