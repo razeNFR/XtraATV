@@ -111,31 +111,37 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
             viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
                     (currentFragment as? Searchable)?.search(binding.searchView.query.toString())
-                    viewPager.doOnLayout {
-                        childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
-                            if (!isTv && requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
-                                fragment.view?.findViewById<RecyclerView>(R.id.recyclerView)?.let {
-                                    appBar.setLiftOnScrollTargetView(it)
-                                    it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                                        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                            super.onScrolled(recyclerView, dx, dy)
-                                            appBar.isLifted = recyclerView.canScrollVertically(-1)
+                    viewPager.doOnLayout { vp ->
+                        val syncPage = {
+                            val b = _binding
+                            if (b != null && isAdded) {
+                                childFragmentManager.findFragmentByTag("f${b.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
+                                    if (!isTv && requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                                        fragment.view?.findViewById<RecyclerView>(R.id.recyclerView)?.let {
+                                            b.appBar.setLiftOnScrollTargetView(it)
+                                            it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                                                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                                                    super.onScrolled(recyclerView, dx, dy)
+                                                    b.appBar.isLifted = recyclerView.canScrollVertically(-1)
+                                                }
+                                            })
+                                            it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                                                b.appBar.isLifted = it.canScrollVertically(-1)
+                                            }
                                         }
-                                    })
-                                    it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                                        appBar.isLifted = it.canScrollVertically(-1)
+                                    } else {
+                                        b.appBar.setLiftable(false)
+                                        b.appBar.background = null
+                                    }
+                                    if (fragment is Sortable) {
+                                        fragment.setupSortBar(b.sortBar)
+                                    } else if (b.sortBar.root.visibility != View.GONE) {
+                                        b.sortBar.root.visibility = View.GONE
                                     }
                                 }
-                            } else {
-                                appBar.setLiftable(false)
-                                appBar.background = null
-                            }
-                            if (fragment is Sortable) {
-                                fragment.setupSortBar(sortBar)
-                            } else {
-                                sortBar.root.visibility = View.GONE
                             }
                         }
+                        if (vp.isInLayout) vp.post(syncPage) else syncPage()
                     }
                 }
             })

@@ -32,9 +32,10 @@ object TvPreviewSource {
         val adFree: Boolean,
     )
 
-    /** A list that plays previews: they are all stopped when a player opens. */
-    fun interface Previewer {
+    /** A list that plays previews: they are all released when a player opens or another screen previews. */
+    interface Previewer {
         fun stopPreview()
+        fun releasePreview() = stopPreview()
     }
 
     private val previewers = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Previewer, Boolean>())
@@ -43,12 +44,26 @@ object TvPreviewSource {
         previewers.add(previewer)
     }
 
+    /** Releases preview ExoPlayers held by other browsing screens so at most one preview player stays in RAM. */
+    fun releaseOthers(active: Previewer) {
+        previewers.toList().forEach {
+            if (it !== active) {
+                it.releasePreview()
+            }
+        }
+    }
+
+    /** Releases all preview ExoPlayers immediately (e.g. when entering a real player or backgrounding the app). */
+    fun releaseAll() {
+        previewers.toList().forEach { it.releasePreview() }
+    }
+
     /** True while a player or the multi-stream is on screen: the lists behind it play no preview. */
     var suspended = false
         set(value) {
             field = value
             if (value) {
-                previewers.toList().forEach { it.stopPreview() }
+                releaseAll()
             }
         }
 

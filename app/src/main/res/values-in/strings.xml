@@ -1494,4 +1494,9 @@
     <string name="tv_chat_qr_search_emotes">Cari emote…</string>
     <string name="tv_chat_qr_switched">Beralih ke %s</string>
     <string name="tv_chat_qr_session_ended">Sesi Xtra TV berakhir</string>
+    <string name="tv_chat_qr_auto_start">Mulai otomatis chat ponsel</string>
+    <string name="tv_chat_qr_auto_start_summary">Jalankan server Wi-Fi chat QR secara otomatis saat membuka siaran langsung agar pintasan di ponsel langsung tersambung kembali</string>
+    <string name="tv_chat_qr_regenerate">Buat ulang tautan QR</string>
+    <string name="tv_chat_qr_regenerated">Tautan QR baru dibuat — perangkat sebelumnya terputus</string>
+    <string name="tv_chat_qr_reconnect">Sambung ulang</string>
 </resources>

@@ -1103,6 +1103,7 @@ class MultiStreamFragment : Fragment() {
                                 chatFragment = qrChat,
                                 channelName = name,
                                 channelLogin = login,
+                                channelAvatar = tile.stream.channelImage,
                                 alignEnd = alignEnd,
                                 owner = this@MultiStreamFragment,
                             )
@@ -1312,7 +1313,8 @@ class MultiStreamFragment : Fragment() {
                     }
                 }
                 androidx.compose.runtime.LaunchedEffect(Unit) {
-                    runCatching { firstRowReq.requestFocus() }
+                    androidx.compose.runtime.withFrameNanos {}
+                    runCatching { tabRequesters.getOrNull(selectedTab.intValue)?.requestFocus() }
                 }
             }
         }
@@ -1372,7 +1374,7 @@ class MultiStreamFragment : Fragment() {
         val tabs = tiles.mapNotNull { t ->
             val l = t.stream.channelLogin?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val n = t.stream.channelName?.takeIf { it.isNotBlank() } ?: l
-            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.ChannelTab(l, n)
+            com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.ChannelTab(l, n, t.stream.channelImage)
         }
         com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.updateMultiStreamChannels(
             context = ctx,
@@ -1650,6 +1652,7 @@ class MultiStreamFragment : Fragment() {
                         chatFragment = qrChat,
                         channelName = name,
                         channelLogin = login,
+                        channelAvatar = tile.stream.channelImage,
                         owner = this@MultiStreamFragment,
                     )
                 },

@@ -1493,4 +1493,9 @@
     <string name="tv_chat_qr_search_emotes">エモートを検索…</string>
     <string name="tv_chat_qr_switched">%s に切り替えました</string>
     <string name="tv_chat_qr_session_ended">Xtra TVセッションが終了しました</string>
+    <string name="tv_chat_qr_auto_start">スマホチャットを自動起動</string>
+    <string name="tv_chat_qr_auto_start_summary">ライブ配信を開いたときにローカルWi-FiのQRチャットサーバーを自動起動し、保存したスマホのショートカットからすぐ再接続します</string>
+    <string name="tv_chat_qr_regenerate">QRリンクを再生成</string>
+    <string name="tv_chat_qr_regenerated">新しいQRリンクを生成しました — 以前の端末は切断されました</string>
+    <string name="tv_chat_qr_reconnect">再接続</string>
 </resources>

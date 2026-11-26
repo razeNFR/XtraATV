@@ -80,14 +80,19 @@ class GridRecyclerView : RecyclerView {
      * TV lists of streams: the card whose preview plays grows and the others move to make room
      * (turned off with the growth of the cards in the Xtra TV settings).
      */
-    private val featureLayoutManager: TvFeatureGridLayoutManager? = if (isTv && prefs.getBoolean(C.TV_CARD_ZOOM, false)) {
+    private fun createFeatureLayoutManager(): TvFeatureGridLayoutManager =
         TvFeatureGridLayoutManager { parent, child, immediate -> scrollToPivot(parent, child, immediate) }.apply {
             // the grown card went back to its size: the focused card moved with the others, it is brought to its place again
             onCollapsed = {
                 focusedChild?.let { scrollToPivot(this@GridRecyclerView, it, false) }
             }
         }
+
+    private var featureLayoutManager: TvFeatureGridLayoutManager? = if (isTv && prefs.getBoolean(C.TV_CARD_ZOOM, false)) {
+        createFeatureLayoutManager()
     } else null
+
+    private var activeDecoration: ItemDecoration? = null
 
     private val usesFeatureLayout get() = featureLayoutManager != null && layoutManager === featureLayoutManager
 
@@ -228,41 +233,81 @@ class GridRecyclerView : RecyclerView {
         dataLoadedAt = System.currentTimeMillis()
         if (isTv) {
             scheduleFocusCheck()
-            val columns = when (adapter) {
-                is GamesAdapter, is FollowedGamesAdapter -> TV_COLUMNS_GAMES
-                // followed and searched channels: big avatars, 6 a row
-                is FollowedChannelsAdapter, is ChannelSearchAdapter -> TV_COLUMNS_AVATARS
-                is StreamsCompactAdapter, is TeamMembersAdapter -> TV_COLUMNS_CHANNELS
-                is RecentSearchAdapter, is FiltersAdapter -> TV_COLUMNS_TEXT
-                // streams, videos and clips: from 2 big cards to 6 small ones a row, from the settings
-                else -> prefs.getString(C.TV_STREAM_COLUMNS, TV_COLUMNS_MEDIA.toString())?.toIntOrNull()?.coerceIn(2, 6) ?: TV_COLUMNS_MEDIA
-            }
-            cardTextScale = when {
-                adapter !is StreamsAdapter -> 1f
-                columns >= 6 -> 0.72f
-                columns == 5 -> 0.82f
-                columns == 2 -> 1.15f
-                else -> 1f
-            }
-            if (columns != tvColumns) {
-                tvColumns = columns
-                if (!material3) {
-                    removeItemDecorationAt(0)
-                }
-                gridLayoutManager.spanCount = columns
-                addItemDecoration(columns)
-            }
-            // streams: the grid where the card of the preview grows
-            val feature = featureLayoutManager
-            if (feature != null && adapter is StreamsAdapter) {
-                feature.spanCount = columns
-                if (layoutManager !== feature) {
-                    layoutManager = feature
-                }
-            } else if (layoutManager !== gridLayoutManager) {
-                layoutManager = gridLayoutManager
-            }
+            applyTvLayoutForAdapter(adapter, forceRelayout = false)
         }
+    }
+
+    /** Applies updated TV list column count, card zoom, and optional card display prefs live without restarting. */
+    fun refreshTvLayoutSettings(rebindCards: Boolean = false) {
+        if (!isTv) return
+        val currentAdapter = adapter
+        val changed = applyTvLayoutForAdapter(currentAdapter, forceRelayout = true)
+        if (changed) {
+            for (i in 0 until childCount) {
+                scaleCardTexts(getChildAt(i))
+            }
+            recycledViewPool.clear()
+            requestLayout()
+        }
+        if (rebindCards && currentAdapter != null) {
+            currentAdapter.notifyDataSetChanged()
+        }
+    }
+
+    private fun applyTvLayoutForAdapter(adapter: Adapter<*>?, forceRelayout: Boolean): Boolean {
+        val columns = when (adapter) {
+            is GamesAdapter, is FollowedGamesAdapter -> TV_COLUMNS_GAMES
+            // followed and searched channels: big avatars, 6 a row
+            is FollowedChannelsAdapter, is ChannelSearchAdapter -> TV_COLUMNS_AVATARS
+            is StreamsCompactAdapter, is TeamMembersAdapter -> TV_COLUMNS_CHANNELS
+            is RecentSearchAdapter, is FiltersAdapter -> TV_COLUMNS_TEXT
+            // streams, videos and clips: from 2 big cards to 6 small ones a row, from the settings
+            else -> prefs.getString(C.TV_STREAM_COLUMNS, TV_COLUMNS_MEDIA.toString())?.toIntOrNull()?.coerceIn(2, 6) ?: TV_COLUMNS_MEDIA
+        }
+        val newTextScale = when {
+            adapter !is StreamsAdapter -> 1f
+            columns >= 6 -> 0.72f
+            columns == 5 -> 0.82f
+            columns == 2 -> 1.15f
+            else -> 1f
+        }
+        var changed = false
+        if (newTextScale != cardTextScale) {
+            cardTextScale = newTextScale
+            changed = true
+        }
+        if (columns != tvColumns) {
+            if (forceRelayout) preview?.stop()
+            tvColumns = columns
+            gridLayoutManager.spanCount = columns
+            addItemDecoration(columns)
+            changed = true
+        }
+        val wantZoom = prefs.getBoolean(C.TV_CARD_ZOOM, false)
+        if (wantZoom && featureLayoutManager == null) {
+            featureLayoutManager = createFeatureLayoutManager()
+        } else if (!wantZoom && featureLayoutManager != null) {
+            if (forceRelayout) preview?.stop()
+            featureLayoutManager = null
+        }
+        // streams: the grid where the card of the preview grows
+        val feature = featureLayoutManager
+        if (feature != null && adapter is StreamsAdapter) {
+            if (feature.spanCount != columns) {
+                feature.spanCount = columns
+                changed = true
+            }
+            if (layoutManager !== feature) {
+                if (forceRelayout) preview?.stop()
+                layoutManager = feature
+                changed = true
+            }
+        } else if (layoutManager !== gridLayoutManager) {
+            if (forceRelayout) preview?.stop()
+            layoutManager = gridLayoutManager
+            changed = true
+        }
+        return changed
     }
 
     private var dataLoadedAt = 0L
@@ -695,9 +740,6 @@ class GridRecyclerView : RecyclerView {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        if (!material3) {
-            removeItemDecorationAt(0)
-        }
         val columns = getColumnsForConfiguration(newConfig)
         gridLayoutManager.spanCount = columns
         addItemDecoration(columns)
@@ -714,14 +756,18 @@ class GridRecyclerView : RecyclerView {
     }
 
     private fun addItemDecoration(columns: Int) {
+        activeDecoration?.let {
+            removeItemDecoration(it)
+            activeDecoration = null
+        }
         if (!material3) {
-            addItemDecoration(
-                if (columns <= 1) {
-                    DividerItemDecoration(context, GridLayoutManager.VERTICAL)
-                } else {
-                    MarginItemDecoration(context.resources.getDimension(R.dimen.divider_margin).toInt(), columns)
-                }
-            )
+            val dec = if (columns <= 1) {
+                DividerItemDecoration(context, GridLayoutManager.VERTICAL)
+            } else {
+                MarginItemDecoration(context.resources.getDimension(R.dimen.divider_margin).toInt(), columns)
+            }
+            activeDecoration = dec
+            addItemDecoration(dec)
         }
     }
 

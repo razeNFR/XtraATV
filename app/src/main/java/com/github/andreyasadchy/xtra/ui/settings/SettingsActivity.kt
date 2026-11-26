@@ -96,6 +96,15 @@ import kotlin.time.Duration.Companion.milliseconds
 
 class SettingsActivity : AppCompatActivity() {
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.github.andreyasadchy.xtra.ui.view.TvUi.wrapTvContext(newBase))
+    }
+
+    override fun applyOverrideConfiguration(overrideConfiguration: android.content.res.Configuration?) {
+        com.github.andreyasadchy.xtra.ui.view.TvUi.enforceTvUiMode(overrideConfiguration)
+        super.applyOverrideConfiguration(overrideConfiguration)
+    }
+
     private lateinit var binding: ActivitySettingsBinding
     private var changed = false
     var searchItem: String? = null

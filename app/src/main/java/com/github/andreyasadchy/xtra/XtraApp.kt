@@ -38,6 +38,10 @@ class XtraApp : Application(), SingletonImageLoader.Factory {
 
     lateinit var xtraModule: XtraModule
 
+    override fun attachBaseContext(base: android.content.Context) {
+        super.attachBaseContext(com.github.andreyasadchy.xtra.ui.view.TvUi.wrapTvContext(base))
+    }
+
     override fun onCreate() {
         super.onCreate()
         // TV: the color of accent of the app, the ambiance color of the Xtra TV settings

@@ -348,6 +348,15 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_chat_qr_auto_start"
+        android:summary="@string/tv_chat_qr_auto_start_summary"
+        android:title="@string/tv_chat_qr_auto_start"
+        app:iconSpaceReserved="false"
+        app:isPreferenceVisible="@bool/isTv"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="chat_show_paints"
         android:title="@string/show_name_paints"

@@ -129,6 +129,7 @@ object TvSettingIcons {
         "tv_chat_polls_popup" to R.drawable.tv_ic_bar_chart,
         "chat_predictions_show" to R.drawable.tv_ic_stats,
         "tv_chat_predictions_popup" to R.drawable.tv_ic_trending,
+        "tv_chat_qr_auto_start" to R.drawable.tv_ic_qr,
         "chat_system_message_emotes" to R.drawable.tv_ic_info,
         "chat_disable" to R.drawable.tv_ic_chat,
         "player_keep_chat_open" to R.drawable.tv_ic_chat,

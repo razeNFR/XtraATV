@@ -306,23 +306,33 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
             childFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
                 override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
                     val b = _binding ?: return
-                    if (f is Sortable) {
-                        f.setupSortBar(b.sortBar)
-                        b.sortBar.root.doOnLayout {
-                            val b2 = _binding ?: return@doOnLayout
-                            b2.toolbarContainer.layoutParams = (b2.toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = b2.toolbarContainer2.height }
-                            val toolbarHeight = b2.toolbarContainer.marginTop + b2.toolbarContainer.marginBottom
-                            b2.toolbar.layoutParams = b2.toolbar.layoutParams.apply { height = toolbarHeight }
+                    val updateToolbarHeight = {
+                        val b2 = _binding
+                        if (b2 != null && isAdded) {
+                            val newMargin = b2.toolbarContainer2.height
+                            val tcLp = b2.toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams
+                            if (tcLp.bottomMargin != newMargin) {
+                                tcLp.bottomMargin = newMargin
+                                b2.toolbarContainer.layoutParams = tcLp
+                            }
+                            val toolbarHeight = b2.toolbarContainer.marginTop + newMargin
+                            if (b2.toolbar.layoutParams.height != toolbarHeight) {
+                                b2.toolbar.layoutParams = b2.toolbar.layoutParams.apply { height = toolbarHeight }
+                            }
                             b2.collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
                         }
+                    }
+                    if (f is Sortable) {
+                        f.setupSortBar(b.sortBar)
+                        b.sortBar.root.doOnLayout { layoutView ->
+                            if (layoutView.isInLayout) layoutView.post(updateToolbarHeight) else updateToolbarHeight()
+                        }
                     } else {
-                        b.sortBar.root.visibility = View.GONE
-                        b.toolbarContainer2.doOnLayout {
-                            val b2 = _binding ?: return@doOnLayout
-                            b2.toolbarContainer.layoutParams = (b2.toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = b2.toolbarContainer2.height }
-                            val toolbarHeight = b2.toolbarContainer.marginTop + b2.toolbarContainer.marginBottom
-                            b2.toolbar.layoutParams = b2.toolbar.layoutParams.apply { height = toolbarHeight }
-                            b2.collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
+                        if (b.sortBar.root.visibility != View.GONE) {
+                            b.sortBar.root.visibility = View.GONE
+                        }
+                        b.toolbarContainer2.doOnLayout { layoutView ->
+                            if (layoutView.isInLayout) layoutView.post(updateToolbarHeight) else updateToolbarHeight()
                         }
                     }
                 }

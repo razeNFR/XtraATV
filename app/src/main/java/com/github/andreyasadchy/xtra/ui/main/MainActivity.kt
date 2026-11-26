@@ -157,6 +157,15 @@ class MainActivity : AppCompatActivity() {
 
     //Lifecycle methods
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(com.github.andreyasadchy.xtra.ui.view.TvUi.wrapTvContext(newBase))
+    }
+
+    override fun applyOverrideConfiguration(overrideConfiguration: Configuration?) {
+        com.github.andreyasadchy.xtra.ui.view.TvUi.enforceTvUiMode(overrideConfiguration)
+        super.applyOverrideConfiguration(overrideConfiguration)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = prefs()
@@ -2541,6 +2550,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var pendingTvRecreate = false
+
+    fun markTvRecreateOnLeaveSettings() {
+        if (isTv) {
+            pendingTvRecreate = true
+        }
+    }
+
+    fun consumePendingTvRecreate(): Boolean {
+        if (!pendingTvRecreate) return false
+        pendingTvRecreate = false
+        recreatingActivity = true
+        recreate()
+        return true
+    }
+
+    /** Applies updated TV card sizes, card zoom, rail inset, and card display options live across all kept-alive screens. */
+    fun refreshTvLayoutSettings(rebindCards: Boolean = false) {
+        if (!isTv) return
+        val navHost = supportFragmentManager.findFragmentById(R.id.navHostFragment)
+        navHost?.childFragmentManager?.fragments?.forEach { frag ->
+            if (frag is com.github.andreyasadchy.xtra.ui.tv.home.TvHomeFragment) {
+                frag.syncPreferencesNow()
+            }
+            frag.view?.let { refreshGridRecyclerViews(it, rebindCards) }
+        }
+        refreshGridRecyclerViews(binding.navHostFragment, rebindCards)
+    }
+
+    private fun refreshGridRecyclerViews(root: View, rebindCards: Boolean) {
+        if (root is com.github.andreyasadchy.xtra.ui.view.GridRecyclerView) {
+            root.refreshTvLayoutSettings(rebindCards)
+        } else if (root is ViewGroup) {
+            for (i in 0 until root.childCount) {
+                refreshGridRecyclerViews(root.getChildAt(i), rebindCards)
+            }
+        }
+    }
+
     fun onTvAdblockOrProxyChanged() {
         if (!isTv || currentPlayingStream() == null) return
         val wasMaximized = isPlayerMaximized()
@@ -2638,6 +2686,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         if (isTv && ::binding.isInitialized) {
             tvLiveAlerts.stop()
+            com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.releaseAll()
         }
         leaveHandler.removeCallbacks(leaveApp)
         keepPlayerInBackground = false

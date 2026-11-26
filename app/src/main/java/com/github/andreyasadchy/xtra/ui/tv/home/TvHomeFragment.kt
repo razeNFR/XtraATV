@@ -55,6 +55,11 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private val showGreetingState = mutableStateOf(true)
     private val showStatsBadgeState = mutableStateOf(true)
     private val showAllFollowedState = mutableStateOf(false)
+    private val cardsPerRowState = androidx.compose.runtime.mutableIntStateOf(3)
+    private val cardZoomState = mutableStateOf(false)
+    private val compactRailState = mutableStateOf(true)
+    private val truncateViewCountState = mutableStateOf(true)
+    private val showUptimeState = mutableStateOf(true)
     /** Kept while the app runs: the home is made again each time its section is opened from the side menu. */
     private val homeFocus get() = sharedFocus
 
@@ -84,7 +89,6 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             homeFocus.focusLast()
         }
         val accent = MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, 0xFF9147FF.toInt())
-        val truncate = context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true)
         val positionOf: (com.github.andreyasadchy.xtra.model.ui.Video) -> Long? = { video ->
             val id = video.id
             if (id.isNullOrBlank()) null
@@ -177,7 +181,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                     com.github.andreyasadchy.xtra.ui.tv.TvAmbient.updateFromItem(ctx, stream, viewLifecycleOwner.lifecycleScope)
                 }
             },
-            formatViewers = { count -> resources.getQuantityString(R.plurals.viewers, count, TwitchApiHelper.formatCount(count, truncate)) },
+            formatViewers = { count -> resources.getQuantityString(R.plurals.viewers, count, TwitchApiHelper.formatCount(count, truncateViewCountState.value)) },
             formatCount = { count -> TwitchApiHelper.formatCount(count, true) },
             refresh = {
                 stopPreview()
@@ -185,7 +189,9 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 homeRefreshing.value = true
                 viewModel.load(force = true)
             },
-            cardsPerRow = context.prefs().getString(C.TV_HOME_CARDS, "3")?.toIntOrNull() ?: 3,
+            cardsPerRowProvider = { cardsPerRowState.intValue },
+            cardZoomProvider = { cardZoomState.value },
+            compactRailProvider = { compactRailState.value },
             thumbnailStamp = { homeStamp.longValue },
             refreshing = { homeRefreshing.value },
             sweepCount = { homeSweep.intValue },
@@ -199,7 +205,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
                 }
             },
             uptime = { stream ->
-                context.takeIf { it.prefs().getBoolean(C.UI_UPTIME, true) }?.let { com.github.andreyasadchy.xtra.ui.tv.TvUptime.format(it, stream.createdAt) }
+                context.takeIf { showUptimeState.value }?.let { com.github.andreyasadchy.xtra.ui.tv.TvUptime.format(it, stream.createdAt) }
             },
             openVideo = { item ->
                 stopPreview()
@@ -670,12 +676,21 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         com.github.andreyasadchy.xtra.ui.tv.TvActionPanel.show(activity, clip.title ?: channelLabel, actions)
     }
 
+    fun syncPreferencesNow() {
+        context?.let { syncHomePrefs(it) }
+    }
+
     private fun syncHomePrefs(context: android.content.Context) {
         val p = context.prefs()
         showHeroState.value = p.getBoolean(C.TV_HOME_HERO, true)
         showGreetingState.value = p.getBoolean(C.TV_HOME_GREETING, true)
         showStatsBadgeState.value = p.getBoolean(C.TV_HOME_STATS_BADGE, true)
         showAllFollowedState.value = p.getBoolean(C.TV_HOME_FOLLOWED_SHOW_ALL, false)
+        cardsPerRowState.intValue = p.getString(C.TV_HOME_CARDS, "3")?.toIntOrNull()?.coerceIn(2, 6) ?: 3
+        cardZoomState.value = p.getBoolean(C.TV_CARD_ZOOM, false)
+        compactRailState.value = p.getBoolean(C.TV_COMPACT_RAIL, true)
+        truncateViewCountState.value = p.getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true)
+        showUptimeState.value = p.getBoolean(C.UI_UPTIME, true)
     }
 
     override fun onResume() {
@@ -978,6 +993,7 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             if (com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended) {
                 return@launch
             }
+            com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.releaseOthers(this@TvHomeFragment)
             val player = previewPlayer.value ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.createPlayer(context).also {
                 previewPlayer.value = it
             }
@@ -1030,10 +1046,14 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         }
     }
 
-    override fun onDestroyView() {
+    override fun releasePreview() {
         stopPreview()
         previewPlayer.value?.release()
         previewPlayer.value = null
+    }
+
+    override fun onDestroyView() {
+        releasePreview()
         super.onDestroyView()
     }
 }

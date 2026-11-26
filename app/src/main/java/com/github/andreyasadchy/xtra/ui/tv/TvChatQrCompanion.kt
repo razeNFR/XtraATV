@@ -1,6 +1,8 @@
 package com.github.andreyasadchy.xtra.ui.tv
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -21,7 +23,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.tv.material3.Text
 import com.github.andreyasadchy.xtra.R
@@ -56,6 +61,7 @@ import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.lang.ref.WeakReference
 import java.net.Inet4Address
+import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
@@ -114,7 +120,9 @@ object TvChatQrCompanion {
 
     private val sseClients = CopyOnWriteArrayList<SseClient>()
 
-    data class ChannelTab(val login: String, val name: String)
+    private const val DEFAULT_PORT = 8765
+
+    data class ChannelTab(val login: String, val name: String, val avatarUrl: String? = null)
 
     @Volatile
     private var appContext: Context? = null
@@ -128,6 +136,10 @@ object TvChatQrCompanion {
     private var activeChannelName: String = ""
     @Volatile
     private var activeChannelLogin: String = ""
+    @Volatile
+    private var activeChannelAvatar: String? = null
+    @Volatile
+    private var cachedIconPng: ByteArray? = null
     @Volatile
     private var currentChatRef: WeakReference<ChatFragment>? = null
     @Volatile
@@ -154,6 +166,7 @@ object TvChatQrCompanion {
         chatFragment: ChatFragment?,
         channelName: String?,
         channelLogin: String?,
+        channelAvatar: String? = null,
         alignEnd: Boolean = true,
         owner: Any? = null,
     ) {
@@ -166,7 +179,7 @@ object TvChatQrCompanion {
         detachGraceJob = null
         uiScope.launch {
             val url = withContext(Dispatchers.IO) {
-                ensureStarted(appCtx, chatFragment, channelName, channelLogin)
+                ensureStarted(appCtx, chatFragment, channelName, channelLogin, channelAvatar)
             }
             if (url == null) {
                 TvToast.makeText(appCtx, R.string.tv_backup_no_network, Toast.LENGTH_LONG).show()
@@ -176,10 +189,18 @@ object TvChatQrCompanion {
             TvDialogs.show(context) { dismiss ->
                 QrCompanionSidePanel(
                     context = context,
-                    url = url,
-                    qrBitmap = qrBitmap,
+                    initialUrl = url,
+                    initialQrBitmap = qrBitmap,
                     alignEnd = alignEnd,
                     onClose = dismiss,
+                    onRegenerate = {
+                        uiScope.launch {
+                            val newUrl = withContext(Dispatchers.IO) { regenerateLink(appCtx) }
+                            if (newUrl != null) {
+                                TvToast.makeText(appCtx, R.string.tv_chat_qr_regenerated, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
                     onDisconnect = {
                         stop()
                         TvToast.makeText(appCtx, R.string.tv_chat_qr_disconnected, Toast.LENGTH_SHORT).show()
@@ -193,16 +214,28 @@ object TvChatQrCompanion {
     @Composable
     private fun QrCompanionSidePanel(
         context: Context,
-        url: String,
-        qrBitmap: android.graphics.Bitmap,
+        initialUrl: String,
+        initialQrBitmap: Bitmap,
         alignEnd: Boolean,
         onClose: () -> Unit,
+        onRegenerate: () -> Unit,
         onDisconnect: () -> Unit,
     ) {
         val prefs = remember(context) { context.prefs() }
         val connected by connectedClients.collectAsState()
+        val liveUrl by sessionUrl.collectAsState()
+        val displayUrl = liveUrl ?: initialUrl
+        var qrBitmap by remember { mutableStateOf(initialQrBitmap) }
+        LaunchedEffect(displayUrl) {
+            if (displayUrl != initialUrl || qrBitmap !== initialQrBitmap) {
+                qrBitmap = withContext(Dispatchers.Default) { QrCode.encode(displayUrl, 520) }
+            }
+        }
         val followState = remember {
             mutableIntStateOf(if (prefs.getBoolean(C.TV_CHAT_QR_FOLLOW_CHANNEL, true)) 1 else 0)
+        }
+        val autoStartState = remember {
+            mutableIntStateOf(if (prefs.getBoolean(C.TV_CHAT_QR_AUTO_START, false)) 1 else 0)
         }
         val closeRequester = remember { FocusRequester() }
 
@@ -263,14 +296,14 @@ object TvChatQrCompanion {
                 ) {
                     Image(
                         bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = url,
+                        contentDescription = displayUrl,
                         modifier = Modifier.size(184.dp),
                     )
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = url,
-                    fontSize = 13.sp,
+                    text = displayUrl,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     textAlign = TextAlign.Center,
@@ -289,12 +322,33 @@ object TvChatQrCompanion {
                     followState.intValue = it
                     prefs.edit { putBoolean(C.TV_CHAT_QR_FOLLOW_CHANNEL, it == 1) }
                 }
+                Spacer(Modifier.height(6.dp))
+                SelectorRow(
+                    label = context.getString(R.string.tv_chat_qr_auto_start),
+                    options = listOf(
+                        context.getString(R.string.tv_chat_delay_off),
+                        context.getString(R.string.tv_option_on),
+                    ),
+                    selected = autoStartState.intValue,
+                    icon = R.drawable.tv_ic_qr,
+                    compact = true,
+                ) {
+                    autoStartState.intValue = it
+                    prefs.edit { putBoolean(C.TV_CHAT_QR_AUTO_START, it == 1) }
+                }
                 Spacer(Modifier.height(8.dp))
                 ButtonRow(
                     label = context.getString(R.string.close_player),
                     compact = true,
                     modifier = Modifier.focusRequester(closeRequester),
                     onClick = onClose,
+                )
+                Spacer(Modifier.height(6.dp))
+                ButtonRow(
+                    label = context.getString(R.string.tv_chat_qr_regenerate),
+                    icon = R.drawable.tv_ic_refresh,
+                    compact = true,
+                    onClick = onRegenerate,
                 )
                 Spacer(Modifier.height(6.dp))
                 ButtonRow(
@@ -312,13 +366,14 @@ object TvChatQrCompanion {
 
     /**
      * Called when a live [ChatFragment] attaches in the player (initial stream or channel zap).
-     * Zero-cost no-op when the QR server is not running.
+     * Zero-cost no-op when the QR server is not running and auto-start is disabled.
      */
     fun onLiveChatAttached(
         context: Context,
         chatFragment: ChatFragment,
         channelName: String?,
         channelLogin: String?,
+        channelAvatar: String? = null,
         owner: Any? = null,
     ) {
         detachGraceJob?.cancel()
@@ -328,8 +383,16 @@ object TvChatQrCompanion {
         }
         multiStreamChannels = emptyList()
         multiStreamChatProvider = null
-        if (!isRunning()) return
         val appCtx = context.applicationContext
+        if (!isRunning()) {
+            if (appCtx.prefs().getBoolean(C.TV_CHAT_QR_AUTO_START, false)) {
+                appContext = appCtx
+                scope.launch {
+                    ensureStarted(appCtx, chatFragment, channelName, channelLogin, channelAvatar)
+                }
+            }
+            return
+        }
         appContext = appCtx
 
         val prevChat = currentChatRef?.get()
@@ -346,6 +409,12 @@ object TvChatQrCompanion {
         val channelChanged = !login.equals(activeChannelLogin, ignoreCase = true) || prevChat !== chatFragment
         activeChannelLogin = login
         activeChannelName = name
+        val cleanAvatar = channelAvatar?.takeIf { it.isNotBlank() }
+        if (channelChanged) {
+            activeChannelAvatar = cleanAvatar
+        } else if (cleanAvatar != null) {
+            activeChannelAvatar = cleanAvatar
+        }
         if (followEnabled && login.isNotBlank()) {
             pairedChannelLogin = login
         }
@@ -356,6 +425,27 @@ object TvChatQrCompanion {
                 delay(250L)
                 broadcast("channel", buildStateJson(appCtx).toString())
             }
+        }
+    }
+
+    /** Updates the streamer profile picture on connected phones if it resolved asynchronously after attach. */
+    fun updateChannelAvatar(channelLogin: String?, avatarUrl: String?) {
+        if (!isRunning()) return
+        val url = avatarUrl?.takeIf { it.isNotBlank() } ?: return
+        val login = channelLogin?.takeIf { it.isNotBlank() }
+        if (login != null && activeChannelLogin.isNotBlank() && !login.equals(activeChannelLogin, ignoreCase = true)) {
+            return
+        }
+        if (url == activeChannelAvatar) return
+        activeChannelAvatar = url
+        scope.launch {
+            broadcast(
+                "avatar",
+                JSONObject()
+                    .put("login", activeChannelLogin)
+                    .put("avatarUrl", url)
+                    .toString(),
+            )
         }
     }
 
@@ -376,10 +466,23 @@ object TvChatQrCompanion {
         }
         multiStreamChannels = clean
         multiStreamChatProvider = if (clean.isNotEmpty()) chatProvider else null
-        if (!isRunning() || clean.isEmpty()) return
+        if (clean.isEmpty()) return
+        val appCtx = context.applicationContext
+        if (!isRunning()) {
+            if (!appCtx.prefs().getBoolean(C.TV_CHAT_QR_AUTO_START, false)) return
+            appContext = appCtx
+            val target = preferredLogin?.let { p -> clean.firstOrNull { it.login.equals(p, ignoreCase = true) } }
+                ?: clean.first()
+            scope.launch {
+                val chat = withContext(Dispatchers.Main) {
+                    runCatching { chatProvider(target.login) }.getOrNull()
+                }
+                ensureStarted(appCtx, chat, target.name.ifBlank { target.login }, target.login, target.avatarUrl)
+            }
+            return
+        }
         detachGraceJob?.cancel()
         detachGraceJob = null
-        val appCtx = context.applicationContext
         appContext = appCtx
 
         val prevLogin = activeChannelLogin
@@ -388,6 +491,7 @@ object TvChatQrCompanion {
             ?: clean.first()
         activeChannelLogin = target.login
         activeChannelName = target.name.ifBlank { target.login }
+        activeChannelAvatar = target.avatarUrl?.takeIf { it.isNotBlank() }
         pairedChannelLogin = target.login
 
         scope.launch {
@@ -415,6 +519,7 @@ object TvChatQrCompanion {
         val provider = multiStreamChatProvider ?: return
         activeChannelLogin = target.login
         activeChannelName = target.name.ifBlank { target.login }
+        activeChannelAvatar = target.avatarUrl?.takeIf { it.isNotBlank() }
         pairedChannelLogin = target.login
         scope.launch {
             val prevChat = currentChatRef?.get()
@@ -447,6 +552,34 @@ object TvChatQrCompanion {
         }
     }
 
+    /**
+     * Rotates the persistent QR secret token, immediately disconnecting any previously paired phones.
+     * Reuses the active listening port so the QR code updates instantaneously.
+     */
+    @Synchronized
+    fun regenerateLink(appCtx: Context): String? {
+        val newToken = generateToken()
+        appCtx.prefs().edit { putString(C.TV_CHAT_QR_TOKEN, newToken) }
+        val revokeJson = JSONObject().put("reason", "revoked").toString()
+        sseClients.forEach { client ->
+            runCatching { client.sendEvent("closed", revokeJson) }
+            client.close()
+        }
+        sseClients.clear()
+        _connectedClients.value = 0
+
+        val server = serverSocket
+        if (server == null || server.isClosed) {
+            sessionToken = newToken
+            return null
+        }
+        val ip = findLocalIpAddress() ?: return null
+        sessionToken = newToken
+        val url = "http://$ip:${server.localPort}/$newToken"
+        _sessionUrl.value = url
+        return url
+    }
+
     /** Immediately stops the local Wi-Fi server and closes all phone SSE connections. */
     fun stop() {
         detachGraceJob?.cancel()
@@ -470,6 +603,7 @@ object TvChatQrCompanion {
         serverSocket = null
         sessionToken = ""
         pairedChannelLogin = null
+        activeChannelAvatar = null
         currentChatRef = null
         activeOwnerRef = null
         multiStreamChannels = emptyList()
@@ -483,6 +617,7 @@ object TvChatQrCompanion {
         chatFragment: ChatFragment?,
         channelName: String?,
         channelLogin: String?,
+        channelAvatar: String? = null,
     ): String? {
         detachGraceJob?.cancel()
         detachGraceJob = null
@@ -492,6 +627,10 @@ object TvChatQrCompanion {
         val resolvedName = channelName?.takeIf { it.isNotBlank() } ?: info?.third ?: resolvedLogin
         activeChannelLogin = resolvedLogin
         activeChannelName = resolvedName
+        val cleanAvatar = channelAvatar?.takeIf { it.isNotBlank() }
+        if (cleanAvatar != null) {
+            activeChannelAvatar = cleanAvatar
+        }
         if (resolvedLogin.isNotBlank()) {
             pairedChannelLogin = resolvedLogin
         }
@@ -505,8 +644,15 @@ object TvChatQrCompanion {
         }
 
         val ip = findLocalIpAddress() ?: return null
-        val server = runCatching { ServerSocket(0) }.getOrNull() ?: return null
-        val token = generateToken()
+        val server = runCatching {
+            ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress(DEFAULT_PORT))
+            }
+        }.getOrElse {
+            runCatching { ServerSocket(0) }.getOrNull()
+        } ?: return null
+        val token = getOrCreateToken(appCtx)
         serverSocket = server
         sessionToken = token
         val url = "http://$ip:${server.localPort}/$token"
@@ -606,6 +752,16 @@ object TvChatQrCompanion {
                 }
             }
 
+            if (method == "GET" && (rawPath == "/icon.png" || rawPath == "/favicon.ico")) {
+                val icon = getAppIconPng(appCtx)
+                if (icon != null) {
+                    writeResponse(socket, 200, "image/png", icon, cacheControl = "public, max-age=86400")
+                } else {
+                    writeResponse(socket, 404, "text/plain; charset=utf-8", "Not found".toByteArray())
+                }
+                return
+            }
+
             val token = sessionToken
             val prefix = "/$token"
             if (token.isEmpty() || (rawPath != prefix && !rawPath.startsWith("$prefix/"))) {
@@ -618,6 +774,18 @@ object TvChatQrCompanion {
                 method == "GET" && subPath == "/" -> {
                     val html = buildMobileHtml(appCtx, token).toByteArray(Charsets.UTF_8)
                     writeResponse(socket, 200, "text/html; charset=utf-8", html)
+                }
+                method == "GET" && subPath == "/manifest.json" -> {
+                    val manifest = buildManifestJson(token).toString().toByteArray(Charsets.UTF_8)
+                    writeResponse(socket, 200, "application/manifest+json; charset=utf-8", manifest)
+                }
+                method == "GET" && subPath == "/icon.png" -> {
+                    val icon = getAppIconPng(appCtx)
+                    if (icon != null) {
+                        writeResponse(socket, 200, "image/png", icon, cacheControl = "public, max-age=86400")
+                    } else {
+                        writeResponse(socket, 404, "text/plain; charset=utf-8", "Not found".toByteArray())
+                    }
                 }
                 method == "GET" && subPath == "/api/state" -> {
                     val body = buildStateJson(appCtx).toString().toByteArray(Charsets.UTF_8)
@@ -696,6 +864,7 @@ object TvChatQrCompanion {
                     }
                     activeChannelLogin = target.login
                     activeChannelName = target.name.ifBlank { target.login }
+                    activeChannelAvatar = target.avatarUrl?.takeIf { it.isNotBlank() }
                     pairedChannelLogin = target.login
                     attachChatCollectors(nextChat)
                     if (prevChat !== nextChat) {
@@ -722,10 +891,16 @@ object TvChatQrCompanion {
         val obj = JSONObject()
         obj.put("channelName", activeChannelName.ifBlank { activeChannelLogin })
         obj.put("channelLogin", activeChannelLogin)
+        obj.put("avatarUrl", activeChannelAvatar.orEmpty())
         obj.put("canSend", chat?.isUserLoggedInForQr() == true)
         val chArr = JSONArray()
         multiStreamChannels.forEach { ch ->
-            chArr.put(JSONObject().put("login", ch.login).put("name", ch.name.ifBlank { ch.login }))
+            chArr.put(
+                JSONObject()
+                    .put("login", ch.login)
+                    .put("name", ch.name.ifBlank { ch.login })
+                    .put("avatarUrl", ch.avatarUrl.orEmpty()),
+            )
         }
         obj.put("channels", chArr)
         val msgsArr = JSONArray()
@@ -893,6 +1068,7 @@ object TvChatQrCompanion {
             .put("switched", appCtx.getString(R.string.tv_chat_qr_switched, "%s"))
             .put("ended", appCtx.getString(R.string.tv_chat_qr_session_ended))
             .put("mostUsedEmpty", appCtx.getString(R.string.tv_emotes_most_used_empty))
+            .put("reconnect", appCtx.getString(R.string.tv_chat_qr_reconnect))
             .toString()
 
         return """<!DOCTYPE html>
@@ -901,6 +1077,13 @@ object TvChatQrCompanion {
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
 <meta name="theme-color" content="#14131C"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Xtra Chat"/>
+<link rel="manifest" href="/$token/manifest.json"/>
+<link rel="icon" type="image/png" sizes="192x192" href="/$token/icon.png"/>
+<link rel="apple-touch-icon" sizes="192x192" href="/$token/icon.png"/>
 <title>Xtra TV Chat</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -908,16 +1091,19 @@ html,body{margin:0;padding:0;height:100%;background:#0E0E13;color:#F3F2F8;font-f
 .app{display:flex;flex-direction:column;height:100dvh;max-width:720px;margin:0 auto;background:#0E0E13}
 .hdr{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:#15141E;border-bottom:1px solid rgba(255,255,255,.09);flex-shrink:0}
 .hdr-left{display:flex;align-items:center;gap:10px;min-width:0}
-.av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#9147FF,#5C16C5);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0}
+.av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#9147FF,#5C16C5);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;overflow:hidden;position:relative}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
 .ch-wrap{min-width:0}
 .ch-row{display:flex;align-items:center;gap:6px}
 .ch-name{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dot{width:8px;height:8px;border-radius:50%;background:#34D399;flex-shrink:0}
 .dot.off{background:#F59E0B}
 .ch-sub{font-size:11px;color:rgba(255,255,255,.55)}
-.hdr-btns{display:flex;gap:6px;flex-shrink:0}
+.hdr-btns{display:flex;gap:6px;flex-shrink:0;align-items:center}
 .chip{background:rgba(255,255,255,.10);border:none;color:#EEE;border-radius:9px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer}
 .chip.on{background:#9147FF;color:#fff}
+.chip.rec{background:rgba(245,158,11,.22);color:#FCD34D;border:1px solid rgba(245,158,11,.42);display:none}
+.chip.rec.show{display:inline-flex}
 .feed-wrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
 .feed{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.42}
 .feed.lg{font-size:16px}
@@ -981,6 +1167,7 @@ html,body{margin:0;padding:0;height:100%;background:#0E0E13;color:#F3F2F8;font-f
       </div>
     </div>
     <div class="hdr-btns">
+      <button class="chip rec" id="btnReconn" type="button"></button>
       <button class="chip" id="btnAa" type="button">Aa</button>
       <button class="chip on" id="btnBdg" type="button">Badges</button>
     </div>
@@ -1038,11 +1225,13 @@ const dotEl = document.getElementById("dot");
 const chNameEl = document.getElementById("chName");
 const avEl = document.getElementById("av");
 const chTabsEl = document.getElementById("chTabs");
+const btnReconn = document.getElementById("btnReconn");
 
 inpEl.placeholder = T.hint;
 srchEl.placeholder = T.searchEmotes;
 pauseLbl.textContent = "↓ " + T.paused;
 roEl.textContent = T.readonly;
+btnReconn.textContent = T.reconnect;
 
 let showBadges = true;
 let paused = false;
@@ -1051,10 +1240,13 @@ let canSend = false;
 let emoteGroups = [];
 let channels = [];
 let activeChannelLogin = "";
+let activeChannelName = "Xtra TV";
 let activeTab = 0;
 let reply = null;
 let es = null;
 let ended = false;
+let revoked = false;
+let reconnTimer = null;
 const msgById = new Map();
 
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
@@ -1279,13 +1471,66 @@ formEl.addEventListener("submit", async (e)=>{
   }catch(_){}
 });
 
+function renderAvatar(name, url){
+  const initial = (name || "X").charAt(0).toUpperCase();
+  if(url){
+    avEl.innerHTML = "";
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = name || "";
+    img.onerror = ()=>{ avEl.textContent = initial; };
+    avEl.appendChild(img);
+  }else{
+    avEl.textContent = initial;
+  }
+}
+
+function scheduleReconnect(delayMs){
+  if(revoked) return;
+  if(reconnTimer){ clearTimeout(reconnTimer); reconnTimer = null; }
+  reconnTimer = setTimeout(()=>{
+    reconnTimer = null;
+    if(revoked) return;
+    if(document.visibilityState === "hidden"){
+      return;
+    }
+    tryReconnect();
+  }, delayMs);
+}
+
+async function tryReconnect(){
+  if(revoked) return;
+  const ok = await loadState(false);
+  if(ok){
+    ended = false;
+    btnReconn.classList.remove("show");
+    connectSse();
+  }else if(!revoked){
+    btnReconn.classList.add("show");
+    scheduleReconnect(5000);
+  }
+}
+
+btnReconn.addEventListener("click", ()=>{ tryReconnect(); });
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible" && (ended || dotEl.classList.contains("off")) && !revoked){
+    tryReconnect();
+  }
+});
+window.addEventListener("focus", ()=>{
+  if((ended || dotEl.classList.contains("off")) && !revoked){
+    tryReconnect();
+  }
+});
+
 function applyState(st, isSwitch){
   const prevLogin = activeChannelLogin;
   const name = st.channelName || st.channelLogin || "Xtra TV";
+  activeChannelName = name;
   activeChannelLogin = st.channelLogin || "";
   channels = st.channels || [];
   chNameEl.textContent = name;
-  avEl.textContent = name.charAt(0).toUpperCase();
+  renderAvatar(name, st.avatarUrl || "");
   renderChannelTabs();
   canSend = !!st.canSend;
   updateSendMode();
@@ -1309,17 +1554,33 @@ function applyState(st, isSwitch){
 async function loadState(isSwitch){
   try{
     const r = await fetch(BASE + "/api/state", { cache: "no-store" });
-    if(!r.ok) return;
+    if(r.status === 404){
+      revoked = true;
+      ended = true;
+      dotEl.classList.add("off");
+      btnReconn.classList.remove("show");
+      canSend = false;
+      updateSendMode();
+      return false;
+    }
+    if(!r.ok) return false;
     const st = await r.json();
     applyState(st, isSwitch);
-  }catch(_){}
+    return true;
+  }catch(_){
+    return false;
+  }
 }
 
 function connectSse(){
-  if(ended) return;
+  if(ended || revoked) return;
   if(es){ try{ es.close(); }catch(_){} }
   es = new EventSource(BASE + "/api/events");
-  es.onopen = ()=>{ dotEl.classList.remove("off"); };
+  es.onopen = ()=>{
+    ended = false;
+    dotEl.classList.remove("off");
+    btnReconn.classList.remove("show");
+  };
   es.addEventListener("msg", ev=>{
     try{ addMsg(JSON.parse(ev.data), false); }catch(_){}
   });
@@ -1341,32 +1602,102 @@ function connectSse(){
       }
     }catch(_){}
   });
+  es.addEventListener("avatar", ev=>{
+    try{
+      const d = JSON.parse(ev.data);
+      if(d.avatarUrl && (!d.login || d.login.toLowerCase() === (activeChannelLogin||"").toLowerCase())){
+        renderAvatar(activeChannelName, d.avatarUrl);
+      }
+    }catch(_){}
+  });
   es.addEventListener("channel", ev=>{
     try{ applyState(JSON.parse(ev.data), true); }catch(_){ loadState(true); }
   });
-  es.addEventListener("closed", ()=>{
+  es.addEventListener("closed", ev=>{
+    let reason = "closed";
+    try{ reason = (JSON.parse(ev.data)||{}).reason || "closed"; }catch(_){}
     ended = true;
     dotEl.classList.add("off");
     canSend = false;
     updateSendMode();
     addNotice(T.ended);
     try{ es.close(); }catch(_){}
+    if(reason === "revoked"){
+      revoked = true;
+      btnReconn.classList.remove("show");
+    }else{
+      btnReconn.classList.add("show");
+      scheduleReconnect(5000);
+    }
   });
   es.onerror = ()=>{
-    if(ended) return;
+    if(revoked) return;
     dotEl.classList.add("off");
+    btnReconn.classList.add("show");
     try{ es.close(); }catch(_){}
-    setTimeout(()=>{ loadState(false); connectSse(); }, 2500);
+    scheduleReconnect(3000);
   };
 }
 
-loadState(false).then(connectSse);
+tryReconnect();
 </script>
 </body>
 </html>"""
     }
 
-    private fun writeResponse(socket: Socket, status: Int, contentType: String, body: ByteArray) {
+    private fun buildManifestJson(token: String): JSONObject {
+        val iconPath = "/$token/icon.png"
+        val icons = JSONArray()
+            .put(
+                JSONObject()
+                    .put("src", iconPath)
+                    .put("sizes", "192x192")
+                    .put("type", "image/png")
+                    .put("purpose", "any"),
+            )
+            .put(
+                JSONObject()
+                    .put("src", iconPath)
+                    .put("sizes", "512x512")
+                    .put("type", "image/png")
+                    .put("purpose", "any"),
+            )
+        return JSONObject()
+            .put("name", "Xtra TV Chat")
+            .put("short_name", "Xtra Chat")
+            .put("start_url", "/$token/")
+            .put("scope", "/$token/")
+            .put("display", "standalone")
+            .put("background_color", "#0E0E13")
+            .put("theme_color", "#14131C")
+            .put("icons", icons)
+    }
+
+    private fun getAppIconPng(appCtx: Context): ByteArray? {
+        cachedIconPng?.let { return it }
+        return runCatching {
+            val drawable = ContextCompat.getDrawable(appCtx, R.mipmap.ic_launcher)
+                ?: ContextCompat.getDrawable(appCtx, R.drawable.ic_launcher_foreground)
+                ?: return@runCatching null
+            val size = 192
+            val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+            val baos = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, baos)
+            bmp.recycle()
+            baos.toByteArray().also { cachedIconPng = it }
+        }.getOrNull()
+    }
+
+    private fun writeResponse(
+        socket: Socket,
+        status: Int,
+        contentType: String,
+        body: ByteArray,
+        cacheControl: String = "no-store",
+    ) {
         val statusText = when (status) {
             200 -> "OK"
             400 -> "Bad Request"
@@ -1380,7 +1711,7 @@ loadState(false).then(connectSse);
             append("HTTP/1.1 $status $statusText\r\n")
             append("Content-Type: $contentType\r\n")
             append("Content-Length: ${body.size}\r\n")
-            append("Cache-Control: no-store\r\n")
+            append("Cache-Control: $cacheControl\r\n")
             append("Connection: close\r\n\r\n")
         }
         out.write(header.toByteArray(Charsets.UTF_8))
@@ -1414,8 +1745,19 @@ loadState(false).then(connectSse);
         return out.toByteArray()
     }
 
+    private fun getOrCreateToken(appCtx: Context): String {
+        val prefs = appCtx.prefs()
+        val existing = prefs.getString(C.TV_CHAT_QR_TOKEN, null)?.trim()
+        if (!existing.isNullOrEmpty() && existing.length >= 16 && existing.all { it in '0'..'9' || it in 'a'..'f' }) {
+            return existing
+        }
+        val fresh = generateToken()
+        prefs.edit { putString(C.TV_CHAT_QR_TOKEN, fresh) }
+        return fresh
+    }
+
     private fun generateToken(): String {
-        val bytes = ByteArray(4)
+        val bytes = ByteArray(8)
         SecureRandom().nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it) }
     }

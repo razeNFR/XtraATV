@@ -522,26 +522,44 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                         appBar.background = null
                         AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL
                     }
-                    viewPager.doOnLayout {
-                        childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}").let { fragment ->
-                            if (fragment is Sortable) {
-                                fragment.setupSortBar(sortBar)
-                                sortBar.root.doOnLayout {
-                                    toolbarContainer.layoutParams = (toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = toolbarContainer2.height }
-                                    val toolbarHeight = toolbarContainer.marginTop + toolbarContainer.marginBottom
-                                    toolbar.layoutParams = toolbar.layoutParams.apply { height = toolbarHeight }
-                                    collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
+                    viewPager.doOnLayout { vp ->
+                        val syncPage = {
+                            val b = _binding
+                            if (b != null && isAdded) {
+                                val updateToolbarHeight = {
+                                    val b2 = _binding
+                                    if (b2 != null && isAdded) {
+                                        val newMargin = b2.toolbarContainer2.height
+                                        val tcLp = b2.toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams
+                                        if (tcLp.bottomMargin != newMargin) {
+                                            tcLp.bottomMargin = newMargin
+                                            b2.toolbarContainer.layoutParams = tcLp
+                                        }
+                                        val toolbarHeight = b2.toolbarContainer.marginTop + newMargin
+                                        if (b2.toolbar.layoutParams.height != toolbarHeight) {
+                                            b2.toolbar.layoutParams = b2.toolbar.layoutParams.apply { height = toolbarHeight }
+                                        }
+                                        b2.collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
+                                    }
                                 }
-                            } else {
-                                sortBar.root.visibility = View.GONE
-                                toolbarContainer2.doOnLayout {
-                                    toolbarContainer.layoutParams = (toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = toolbarContainer2.height }
-                                    val toolbarHeight = toolbarContainer.marginTop + toolbarContainer.marginBottom
-                                    toolbar.layoutParams = toolbar.layoutParams.apply { height = toolbarHeight }
-                                    collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
+                                childFragmentManager.findFragmentByTag("f${b.viewPager.adapter?.getItemId(position) ?: position}").let { fragment ->
+                                    if (fragment is Sortable) {
+                                        fragment.setupSortBar(b.sortBar)
+                                        b.sortBar.root.doOnLayout { v ->
+                                            if (v.isInLayout) v.post(updateToolbarHeight) else updateToolbarHeight()
+                                        }
+                                    } else {
+                                        if (b.sortBar.root.visibility != View.GONE) {
+                                            b.sortBar.root.visibility = View.GONE
+                                        }
+                                        b.toolbarContainer2.doOnLayout { v ->
+                                            if (v.isInLayout) v.post(updateToolbarHeight) else updateToolbarHeight()
+                                        }
+                                    }
                                 }
                             }
                         }
+                        if (vp.isInLayout) vp.post(syncPage) else syncPage()
                     }
                 }
             })

@@ -2776,7 +2776,8 @@ object TvWallpaper {
         }
 
         LaunchedEffect(Unit) {
-            runCatching { firstContentRequester.requestFocus() }
+            androidx.compose.runtime.withFrameNanos {}
+            runCatching { tabRequesters.getOrNull(selectedTab)?.requestFocus() }
         }
     }
 

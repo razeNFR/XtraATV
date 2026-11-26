@@ -38,6 +38,8 @@ class TvStreamPreview(
 
     override fun stopPreview() = if (TvPreviewSource.suspended) release() else stop()
 
+    override fun releasePreview() = release()
+
     private var player: ExoPlayer? = null
     private var firstFrameListener: Player.Listener? = null
     private var textureView: TextureView? = null
@@ -97,6 +99,9 @@ class TvStreamPreview(
             }
             thumbnail.addOnLayoutChangeListener(resize)
             thumbnailResize = thumbnail to resize
+            if (!inPlayer) {
+                TvPreviewSource.releaseOthers(this@TvStreamPreview)
+            }
             val player = player ?: TvPreviewSource.createPlayer(context).also { player = it }
             firstFrameListener?.let { player.removeListener(it) }
             val wantSound = TvPreviewSource.hasSound(context)

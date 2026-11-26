@@ -1493,4 +1493,9 @@
     <string name="tv_chat_qr_search_emotes">搜索表情…</string>
     <string name="tv_chat_qr_switched">已切换到 %s</string>
     <string name="tv_chat_qr_session_ended">Xtra TV 会话已结束</string>
+    <string name="tv_chat_qr_auto_start">自动启动手机聊天</string>
+    <string name="tv_chat_qr_auto_start_summary">打开直播时自动启动本地 Wi-Fi 二维码聊天服务，让手机桌面快捷方式可直接重连</string>
+    <string name="tv_chat_qr_regenerate">重新生成二维码链接</string>
+    <string name="tv_chat_qr_regenerated">已生成新的二维码链接 — 先前设备已断开</string>
+    <string name="tv_chat_qr_reconnect">重新连接</string>
 </resources>
