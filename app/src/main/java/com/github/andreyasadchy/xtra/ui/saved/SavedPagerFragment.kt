@@ -171,35 +171,41 @@ class SavedPagerFragment : Fragment(), Scrollable, FragmentHost {
             viewPager.adapter = adapter
             viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
-                    viewPager.doOnLayout {
-                        childFragmentManager.findFragmentByTag("f${binding.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
-                            if (requireContext().resources.getBoolean(R.bool.isTv)) {
-                                // TV: the header stays still like on a category page, the lift state changed at each scroll of the list and made it flicker
-                            } else if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
-                                fragment.view?.findViewById<RecyclerView>(R.id.recyclerView)?.let {
-                                    appBar.setLiftOnScrollTargetView(it)
-                                    it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                                        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                            super.onScrolled(recyclerView, dx, dy)
-                                            appBar.isLifted = recyclerView.canScrollVertically(-1)
+                    viewPager.doOnLayout { vp ->
+                        val syncPage = {
+                            val b = _binding
+                            if (b != null && isAdded) {
+                                childFragmentManager.findFragmentByTag("f${b.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
+                                    if (requireContext().resources.getBoolean(R.bool.isTv)) {
+                                        // TV: the header stays still like on a category page, the lift state changed at each scroll of the list and made it flicker
+                                    } else if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                                        fragment.view?.findViewById<RecyclerView>(R.id.recyclerView)?.let {
+                                            b.appBar.setLiftOnScrollTargetView(it)
+                                            it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                                                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                                                    super.onScrolled(recyclerView, dx, dy)
+                                                    b.appBar.isLifted = recyclerView.canScrollVertically(-1)
+                                                }
+                                            })
+                                            it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                                                b.appBar.isLifted = it.canScrollVertically(-1)
+                                            }
                                         }
-                                    })
-                                    it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                                        appBar.isLifted = it.canScrollVertically(-1)
+                                    } else {
+                                        b.appBar.setLiftable(false)
+                                        b.appBar.background = null
                                     }
+                                    if (fragment is Sortable) {
+                                        fragment.setupSortBar(b.sortBar)
+                                    } else if (b.sortBar.root.visibility != View.GONE) {
+                                        b.sortBar.root.visibility = View.GONE
+                                    }
+                                    b.toolbar.menu.findItem(R.id.importFolders).isVisible = fragment is DownloadsFragment
+                                    b.toolbar.menu.findItem(R.id.importFiles).isVisible = fragment is DownloadsFragment
                                 }
-                            } else {
-                                appBar.setLiftable(false)
-                                appBar.background = null
                             }
-                            if (fragment is Sortable) {
-                                fragment.setupSortBar(sortBar)
-                            } else {
-                                sortBar.root.visibility = View.GONE
-                            }
-                            toolbar.menu.findItem(R.id.importFolders).isVisible = fragment is DownloadsFragment
-                            toolbar.menu.findItem(R.id.importFiles).isVisible = fragment is DownloadsFragment
                         }
+                        if (vp.isInLayout) vp.post(syncPage) else syncPage()
                     }
                 }
             })

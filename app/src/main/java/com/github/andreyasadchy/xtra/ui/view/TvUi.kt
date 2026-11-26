@@ -20,6 +20,35 @@ object TvUi {
     fun isTv(context: Context) = context.resources.getBoolean(R.bool.isTv)
 
     /**
+     * Forces UI_MODE_TYPE_TELEVISION on non-certified AOSP Android TV boxes (which report UI_MODE_TYPE_NORMAL)
+     * while preserving night mode and locale. Returns [base] untouched on certified Android TV devices.
+     */
+    fun wrapTvContext(base: Context): Context {
+        val current = base.resources.configuration
+        if ((current.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
+            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        ) {
+            return base
+        }
+        val config = android.content.res.Configuration(current).apply {
+            uiMode = (uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK.inv()) or
+                android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        }
+        return base.createConfigurationContext(config)
+    }
+
+    /** Ensures AppCompat override configurations keep UI_MODE_TYPE_TELEVISION intact without altering night mode. */
+    fun enforceTvUiMode(config: android.content.res.Configuration?) {
+        if (config == null) return
+        if ((config.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) !=
+            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        ) {
+            config.uiMode = (config.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK.inv()) or
+                android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        }
+    }
+
+    /**
      * Headers never scroll away (the D-pad could not bring them back), list rows get a clearly visible
      * focus highlight and, in the main screen, the toolbar actions moved to the navigation rail are hidden.
      */

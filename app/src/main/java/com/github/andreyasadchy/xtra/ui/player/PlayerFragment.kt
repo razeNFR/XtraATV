@@ -4279,7 +4279,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                 }
-                androidx.compose.runtime.LaunchedEffect(Unit) { firstRowReq.requestFocus() }
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    androidx.compose.runtime.withFrameNanos {}
+                    runCatching { tabRequesters.getOrNull(selectedTab.intValue)?.requestFocus() }
+                }
             }
         }
     }
@@ -4890,7 +4893,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
                 androidx.compose.runtime.LaunchedEffect(Unit) {
-                    if (twoOpen) windowSelectorReq.requestFocus() else firstRowReq.requestFocus()
+                    androidx.compose.runtime.withFrameNanos {}
+                    runCatching { tabRequesters.getOrNull(selectedTab.intValue)?.requestFocus() }
                 }
             }
         }
@@ -5036,6 +5040,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private fun currentTvChannelAvatarUrl(): String? {
+        val curStream = getTvDvrStream() ?: (activity as? MainActivity)?.currentPlayingStream()
+        return playbackService?.channelImage?.takeIf { it.isNotBlank() }
+            ?: curStream?.channelImage?.takeIf { it.isNotBlank() }
+    }
+
     private fun openTvChatQrPanel(alignEnd: Boolean = true) {
         val ctx = context ?: return
         com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.openQrPanel(
@@ -5044,6 +5054,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             chatFragment = chatFragment,
             channelName = playbackService?.channelName,
             channelLogin = playbackService?.channelLogin,
+            channelAvatar = currentTvChannelAvatarUrl(),
             alignEnd = alignEnd,
             owner = this,
         )
@@ -6146,6 +6157,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 chatFragment = fragment,
                 channelName = playbackService?.channelName,
                 channelLogin = playbackService?.channelLogin,
+                channelAvatar = currentTvChannelAvatarUrl(),
                 owner = this,
             )
         }
@@ -6570,6 +6582,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             tvChannelAvatar?.let { avatar ->
                 val image = playbackService?.channelImage?.takeIf { it.isNotBlank() }
                     ?: curStream?.channelImage?.takeIf { it.isNotBlank() }
+                if (!image.isNullOrBlank()) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvChatQrCompanion.updateChannelAvatar(
+                        channelLogin = playbackService?.channelLogin,
+                        avatarUrl = image,
+                    )
+                }
                 if (!image.isNullOrBlank() && channel.isVisible) {
                     avatar.visibility = View.VISIBLE
                     tvChannelAvatarFrame?.visibility = View.VISIBLE

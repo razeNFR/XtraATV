@@ -282,37 +282,42 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
 
     private fun syncSortBarForPosition(position: Int) {
         val b = _binding ?: return
-        b.viewPager.doOnLayout {
-            if (_binding == null || !isAdded) return@doOnLayout
-            childFragmentManager.findFragmentByTag("f${b.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
-                if (isTv()) {
-                    // TV: the header stays still like on a category page
-                } else if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
-                    fragment.view?.findViewById<RecyclerView>(R.id.recyclerView)?.let {
-                        b.appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                b.appBar.isLifted = recyclerView.canScrollVertically(-1)
+        b.viewPager.doOnLayout { vp ->
+            val apply = {
+                val cur = _binding
+                if (cur != null && isAdded) {
+                    childFragmentManager.findFragmentByTag("f${cur.viewPager.adapter?.getItemId(position) ?: position}")?.let { fragment ->
+                        if (isTv()) {
+                            // TV: the header stays still like on a category page
+                        } else if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
+                            fragment.view?.findViewById<RecyclerView>(R.id.recyclerView)?.let {
+                                cur.appBar.setLiftOnScrollTargetView(it)
+                                it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                                        super.onScrolled(recyclerView, dx, dy)
+                                        cur.appBar.isLifted = recyclerView.canScrollVertically(-1)
+                                    }
+                                })
+                                it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                                    cur.appBar.isLifted = it.canScrollVertically(-1)
+                                }
                             }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            b.appBar.isLifted = it.canScrollVertically(-1)
+                        } else {
+                            cur.appBar.setLiftable(false)
+                            cur.appBar.background = null
+                        }
+                        if (fragment is Sortable) {
+                            fragment.setupSortBar(cur.sortBar)
+                        } else if (cur.sortBar.root.visibility != View.GONE) {
+                            cur.sortBar.root.visibility = View.GONE
+                        }
+                        if (isTv()) {
+                            com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(cur.root)
                         }
                     }
-                } else {
-                    b.appBar.setLiftable(false)
-                    b.appBar.background = null
-                }
-                if (fragment is Sortable) {
-                    fragment.setupSortBar(b.sortBar)
-                } else {
-                    b.sortBar.root.visibility = View.GONE
-                }
-                if (isTv()) {
-                    com.github.andreyasadchy.xtra.ui.view.TvHeader.refresh(b.root)
                 }
             }
+            if (vp.isInLayout) vp.post(apply) else apply()
         }
     }
 

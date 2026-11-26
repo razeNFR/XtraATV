@@ -18,6 +18,10 @@ import kotlin.math.floor
 
 abstract class BasePlaybackService : LifecycleService() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(com.github.andreyasadchy.xtra.ui.view.TvUi.wrapTvContext(newBase))
+    }
+
     lateinit var xtraModule: XtraModule
 
     val integrity = MutableSharedFlow<String?>()

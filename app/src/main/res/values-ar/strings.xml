@@ -1493,4 +1493,9 @@
     <string name="tv_chat_qr_search_emotes">ابحث عن الرموز…</string>
     <string name="tv_chat_qr_switched">تم التبديل إلى %s</string>
     <string name="tv_chat_qr_session_ended">انتهت جلسة Xtra TV</string>
+    <string name="tv_chat_qr_auto_start">تشغيل دردشة الهاتف تلقائياً</string>
+    <string name="tv_chat_qr_auto_start_summary">تشغيل خادم دردشة QR المحلي عبر Wi-Fi تلقائياً عند فتح بث مباشر لإعادة اتصال اختصار الهاتف فوراً</string>
+    <string name="tv_chat_qr_regenerate">إعادة إنشاء رابط QR</string>
+    <string name="tv_chat_qr_regenerated">تم إنشاء رابط QR جديد — تم فصل الأجهزة السابقة</string>
+    <string name="tv_chat_qr_reconnect">إعادة الاتصال</string>
 </resources>

@@ -482,6 +482,9 @@ class TvSettingsFragment : Fragment() {
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
         updateBackCallback()
+        if (hidden) {
+            (activity as? MainActivity)?.consumePendingTvRecreate()
+        }
     }
 
     fun consumePendingSubScreen(context: Context) {
@@ -2526,6 +2529,15 @@ class TvSettingsFragment : Fragment() {
                         if (key == C.TV_MINI_PLAYER_AUTO_SLIDE || key == C.TV_COMPACT_RAIL) {
                             (activity as? MainActivity)?.refreshTvMiniPlayerPosition(immediate = true)
                         }
+                        if (key == C.TV_CARD_ZOOM || key == C.TV_COMPACT_RAIL) {
+                            (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = false)
+                        } else if (key == C.UI_TRUNCATE_VIEW_COUNT || key == C.UI_ROUND_USER_IMAGE ||
+                            key == C.UI_TAGS || key == C.UI_UPTIME
+                        ) {
+                            (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = true)
+                        } else if (key.startsWith("ui_theme_") || key == C.UI_FOLLOW_PAGER || key == C.UI_GAME_PAGER) {
+                            (activity as? MainActivity)?.markTvRecreateOnLeaveSettings()
+                        }
                         if (key == C.TV_SYNC_VOD_HISTORY && next) {
                             val app = context.applicationContext as? XtraApp
                             if (app != null) {
@@ -2563,8 +2575,17 @@ class TvSettingsFragment : Fragment() {
                     } else {
                         val previous = context.prefs().getString(key, null)
                         context.prefs().edit { putString(key, chosen) }
-                        if (key == C.TV_AMBIENT_COLOR && chosen != previous) {
-                            (activity as? MainActivity)?.refreshTvAmbientColor()
+                        if (chosen != previous) {
+                            when (key) {
+                                C.TV_AMBIENT_COLOR -> (activity as? MainActivity)?.refreshTvAmbientColor()
+                                C.TV_HOME_CARDS, C.TV_STREAM_COLUMNS ->
+                                    (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = false)
+                                C.UI_NAME_DISPLAY ->
+                                    (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = true)
+                                else -> if (key.startsWith("ui_theme_")) {
+                                    (activity as? MainActivity)?.markTvRecreateOnLeaveSettings()
+                                }
+                            }
                         }
                     }
                     refreshStamp.intValue++

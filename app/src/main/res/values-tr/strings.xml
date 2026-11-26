@@ -1494,4 +1494,9 @@
     <string name="tv_chat_qr_search_emotes">İfade ara…</string>
     <string name="tv_chat_qr_switched">%s kanalına geçildi</string>
     <string name="tv_chat_qr_session_ended">Xtra TV oturumu sona erdi</string>
+    <string name="tv_chat_qr_auto_start">Telefon sohbetini otomatik başlat</string>
+    <string name="tv_chat_qr_auto_start_summary">Canlı yayın açıldığında yerel Wi-Fi QR sohbet sunucusunu otomatik başlatır, böylece telefondaki kısayol hemen yeniden bağlanır</string>
+    <string name="tv_chat_qr_regenerate">QR bağlantısını yenile</string>
+    <string name="tv_chat_qr_regenerated">Yeni QR bağlantısı oluşturuldu — önceki cihazların bağlantısı kesildi</string>
+    <string name="tv_chat_qr_reconnect">Yeniden bağlan</string>
 </resources>

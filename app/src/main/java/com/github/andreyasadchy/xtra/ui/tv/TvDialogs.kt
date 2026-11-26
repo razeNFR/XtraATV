@@ -496,6 +496,7 @@ fun androidx.compose.foundation.layout.RowScope.FooterActionChip(
     leftTarget: FocusRequester? = null,
     rightTarget: FocusRequester? = null,
     upTarget: FocusRequester? = null,
+    downTarget: FocusRequester? = null,
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -505,6 +506,7 @@ fun androidx.compose.foundation.layout.RowScope.FooterActionChip(
     val latestLeft by androidx.compose.runtime.rememberUpdatedState(leftTarget)
     val latestRight by androidx.compose.runtime.rememberUpdatedState(rightTarget)
     val latestUp by androidx.compose.runtime.rememberUpdatedState(upTarget)
+    val latestDown by androidx.compose.runtime.rememberUpdatedState(downTarget)
     Row(
         modifier = Modifier
             .weight(1f)
@@ -530,7 +532,10 @@ fun androidx.compose.foundation.layout.RowScope.FooterActionChip(
                             false
                         }
                     }
-                    Key.DirectionDown -> true
+                    Key.DirectionDown -> {
+                        latestDown?.let { runCatching { it.requestFocus() } }
+                        true
+                    }
                     else -> false
                 }
             }

@@ -118,7 +118,11 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
         } else emptyList()
         logins.forEach { seen[it] = now }
         if (started.isNotEmpty()) {
-            queue.addLast(started)
+            if (started.size <= 3) {
+                started.forEach { queue.addLast(listOf(it)) }
+            } else {
+                queue.addLast(started)
+            }
             showNext()
         }
     }
@@ -501,10 +505,10 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
         val titleMax = (textMax - badgeView.measuredWidth - badgeGapEnd).coerceAtLeast((140 * density).toInt())
 
         val texts = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        texts.addView(LinearLayout(context).apply {
+        val titleRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(badgeView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            addView(badgeView, LinearLayout.LayoutParams(badgeView.measuredWidth, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 marginEnd = badgeGapEnd
             })
             addView(TextView(context).apply {
@@ -517,7 +521,8 @@ class TvLiveAlerts(private val activity: MainActivity, private val container: Vi
                 maxWidth = titleMax
                 ellipsize = TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        })
+        }
+        texts.addView(titleRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         if (subtitle != null) {
             texts.addView(TextView(context).apply {
                 text = subtitle

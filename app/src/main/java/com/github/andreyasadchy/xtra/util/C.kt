@@ -400,6 +400,10 @@ object C {
     const val TV_CHAT_PINNED_MODE = "tv_chat_pinned_mode"
     /** TV: keep the QR phone chat companion synchronized when switching live channels on TV (default true). */
     const val TV_CHAT_QR_FOLLOW_CHANNEL = "tv_chat_qr_follow_channel"
+    /** TV: persistent secret token for the local Wi-Fi QR phone chat URL (user can regenerate anytime). */
+    const val TV_CHAT_QR_TOKEN = "tv_chat_qr_token"
+    /** TV: automatically start the local Wi-Fi QR phone chat server when opening a live stream (default false). */
+    const val TV_CHAT_QR_AUTO_START = "tv_chat_qr_auto_start"
 
     fun getTvPredictionsPopupMode(prefs: android.content.SharedPreferences): Int {
         if (prefs.contains(TV_CHAT_PREDICTIONS_MODE)) {

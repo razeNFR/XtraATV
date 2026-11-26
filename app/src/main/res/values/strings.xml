@@ -1513,4 +1513,9 @@
     <string name="tv_chat_qr_search_emotes">Search emotes…</string>
     <string name="tv_chat_qr_switched">Switched to %s</string>
     <string name="tv_chat_qr_session_ended">Xtra TV session ended</string>
+    <string name="tv_chat_qr_auto_start">Auto-start phone chat</string>
+    <string name="tv_chat_qr_auto_start_summary">Start the local Wi-Fi QR chat server automatically when opening a live stream so your saved phone shortcut reconnects right away</string>
+    <string name="tv_chat_qr_regenerate">Regenerate QR link</string>
+    <string name="tv_chat_qr_regenerated">New QR link generated — previous devices disconnected</string>
+    <string name="tv_chat_qr_reconnect">Reconnect</string>
 </resources>

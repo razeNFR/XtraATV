@@ -49,6 +49,15 @@ import kotlin.math.roundToInt
 
 class LoginActivity : AppCompatActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(com.github.andreyasadchy.xtra.ui.view.TvUi.wrapTvContext(newBase))
+    }
+
+    override fun applyOverrideConfiguration(overrideConfiguration: android.content.res.Configuration?) {
+        com.github.andreyasadchy.xtra.ui.view.TvUi.enforceTvUiMode(overrideConfiguration)
+        super.applyOverrideConfiguration(overrideConfiguration)
+    }
+
     lateinit var xtraModule: XtraModule
 
     private val tokenPattern = Pattern.compile("token=(.+?)(?=&)")

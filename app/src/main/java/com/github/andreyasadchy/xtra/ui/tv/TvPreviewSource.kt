@@ -8,6 +8,7 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 
@@ -32,9 +33,10 @@ object TvPreviewSource {
         val adFree: Boolean,
     )
 
-    /** A list that plays previews: they are all stopped when a player opens. */
-    fun interface Previewer {
+    /** A list that plays previews: they are all released when a player opens or another screen previews. */
+    interface Previewer {
         fun stopPreview()
+        fun releasePreview() = stopPreview()
     }
 
     private val previewers = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Previewer, Boolean>())
@@ -43,12 +45,26 @@ object TvPreviewSource {
         previewers.add(previewer)
     }
 
+    /** Releases preview ExoPlayers held by other browsing screens so at most one preview player stays in RAM. */
+    fun releaseOthers(active: Previewer) {
+        previewers.toList().forEach {
+            if (it !== active) {
+                it.releasePreview()
+            }
+        }
+    }
+
+    /** Releases all preview ExoPlayers immediately (e.g. when entering a real player or backgrounding the app). */
+    fun releaseAll() {
+        previewers.toList().forEach { it.releasePreview() }
+    }
+
     /** True while a player or the multi-stream is on screen: the lists behind it play no preview. */
     var suspended = false
         set(value) {
             field = value
             if (value) {
-                previewers.toList().forEach { it.stopPreview() }
+                releaseAll()
             }
         }
 
@@ -261,5 +277,86 @@ object TvPreviewSource {
         } catch (e: Exception) {
             false
         }
+    }
+
+    /** Zero-network check of the currently loaded HLS manifest tags already in RAM inside ExoPlayer. */
+    fun manifestHasAds(player: Player): Boolean {
+        val playlist = (player.currentManifest as? androidx.media3.exoplayer.hls.HlsManifest)?.mediaPlaylist ?: return false
+        return playlist.tags.any {
+            it.contains("stitched-ad", true) ||
+                it.contains("X-TV-TWITCH-AD", true) ||
+                it.contains("twitch-stitched-ad", true) ||
+                it.contains("COMMERCIAL-BREAK", true)
+        }
+    }
+
+    /**
+     * Lightweight mid-preview ad guard: inspects the already-parsed HLS manifest tags on [Player.Listener.onTimelineChanged]
+     * (zero extra network polling) and hot-swaps the same preview [ExoPlayer] to an ad-free backup playlist if Twitch
+     * injects an ad after ~15–30 s. Cooldown + cap prevent any loop or overhead.
+     */
+    fun createPreviewAdGuard(
+        context: Context,
+        scope: kotlinx.coroutines.CoroutineScope,
+        player: ExoPlayer,
+        channelLogin: String,
+        wantSound: () -> Boolean,
+        isStillActive: () -> Boolean,
+    ): Pair<Player.Listener, () -> Unit>? {
+        val appCtx = context.applicationContext
+        if (!TvExperimentalAdblock.isSwapAdblockEnabled(appCtx) && !TvExperimentalAdblock.isAnyProxyEnabled(appCtx)) {
+            return null
+        }
+        var swapJob: kotlinx.coroutines.Job? = null
+        var lastSwapAttemptMs = 0L
+        var swapAttempts = 0
+        var adMuted = false
+
+        val listener = object : Player.Listener {
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                if (!isStillActive()) return
+                val hasAdNow = manifestHasAds(player)
+                if (!hasAdNow) {
+                    if (adMuted) {
+                        adMuted = false
+                        player.volume = if (wantSound()) 1f else 0f
+                    }
+                    return
+                }
+                if (!adMuted) {
+                    adMuted = true
+                    player.volume = 0f
+                }
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (swapJob?.isActive == true || swapAttempts >= 3 || now - lastSwapAttemptMs < 18_000L) {
+                    return
+                }
+                lastSwapAttemptMs = now
+                swapAttempts++
+                swapJob = scope.launch {
+                    val backup = findBackupPlaylist(appCtx, channelLogin)
+                    if (backup != null && backup.adFree) {
+                        withContext(Dispatchers.Main) {
+                            if (!isStillActive()) return@withContext
+                            adMuted = false
+                            player.volume = if (wantSound()) 1f else 0f
+                            player.setMediaItem(
+                                androidx.media3.common.MediaItem.Builder()
+                                    .setUri(backup.url)
+                                    .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                                    .build()
+                            )
+                            player.prepare()
+                            player.playWhenReady = true
+                        }
+                    }
+                }
+            }
+        }
+        val cancel: () -> Unit = {
+            swapJob?.cancel()
+            swapJob = null
+        }
+        return listener to cancel
     }
 }

@@ -1,29 +1,25 @@
-# Xtra TV 1.4.7.1
+# Xtra TV 1.4.7.2
 
-### New & Improvements
-- **Live Chat on Phone via QR Code (Local Wi-Fi Companion)**:
-  - **Instant Phone Live Chat**: open the new **QR** button directly from the Chat pill (live player or Multi-Stream) or from **Chat settings** to scan and follow live chat in your phone's browser — no app install or second Twitch login required.
-  - **Full Chat & Emote Experience on Mobile**: real-time messages with username colors, badges, and inline Twitch / Channel / 7TV / BTTV / FFZ emotes, free scroll-up with auto-pause & *"↓ Chat paused"* jump pill, tap-to-reply (`@user`), text size & badge toggles, searchable emote picker with **★ Most Used** synced with the TV, and clean read-only mode when logged out or in Guest mode.
-  - **Seamless Live & Multi-Stream Session**: stays active after closing the TV QR popup and when switching between single stream and Multi-Stream, automatically follows channel switches while zapping and follows the focused streamer in Multi-Stream (toggleable in Chat settings), displays **channel tabs on your phone in Multi-Stream** so you can also switch chats manually in one tap without re-scanning, is accessible from both the Chat pill and the Multi-Stream streamer menu, and shuts down automatically when leaving the player.
-- **Redesigned Smoked-Glass Chat Composer & "Most Used" Emotes Tab**:
-  - **Volume-Style Smoked-Glass Chat Pill**: writing a chat message in the live player or Multi-Stream now opens a sleek, compact smoked-glass pill anchored above the bottom timeline with a seamless white rim, accent halo, and pointer aligned over the Chat button (matching the Volume pill without darkening or shifting the stream when the on-screen keyboard opens, and floating cleanly above Gboard TV). Pressing **Down** closes the pill immediately unless you actively clicked into the text box to type, are using voice input, or are browsing the emotes drawer.
-  - **Dedicated "Most Used" Emotes Tab & Smart Focus**: tracks lifetime usage for Twitch, 7TV, BTTV, and FFZ emotes — **counted only when a message is actually sent** (TV or phone) — automatically sorted from most to least used with usage badges, provider color dots, live hover details, and automatic focus on the active tab when opening the emotes drawer.
-- **Smoother Navigation & Faster Stream Startup on Android TV Boxes**:
-  - **Reliable Home Startup Focus & Live Preview (Shield TV / Android TV)**: fixed an issue where initial focus on the Home Hero or the first live stream card could disappear 1–2 seconds after app launch due to background tab prewarming or live preview mounting, and fixed live previews failing to start on the first stream card when the Hero banner is disabled.
-  - **Fluid Scrolling on Lists & Categories**: optimized thumbnail, box-art, blur backdrop, and avatar decoding sizes for TV with dedicated in-memory and disk caching, removing cold-load stutter while preserving smoked-glass transparency and live refreshes.
-  - **Faster Stream Startup**: lowered initial TV playback buffer startup threshold and deferred third-party emote loading slightly so streams render their first frame faster without touching ad-blocker behavior.
-  - **Fluid Left Menu Hover ("Navigate without OK")**: faster hover settle (`130 ms`) with instant section transitions and no redundant fade animations or stale network reloads while moving through the left navigation bar.
-- **Player, Visuals & Reliability Fixes**:
-  - **Reliable Cross-Device VOD History Sync & `★ SUB` Badge**: fixed Twitch VOD position syncing across Android TV devices and PC (pushing final progress on stop, pause, and seek with clock-skew protection and automatic recovery so locally watched VODs never vanish on Refresh, while strictly excluding live streams, DVR catch-up, and Experimental ad-blocker sessions), and added a lightweight **`★ SUB`** badge on subscriber-only VOD cards across Home, Channel, Category, and Search lists.
-  - **Reliable Automatic Raid Switching**: fixed a bug where announced raids were cleared before the stream stopped, ensuring the player waits for and switches cleanly to the raided channel even when the broadcaster ends their stream early.
-  - **HUD & Switch Overlay Auto-Hide Timing**: when opening or switching a stream, the player HUD peek and left/right stream-switch overlays now wait for the first video frame to render before starting their 2.5 s auto-hide countdown (with a 12 s safety fallback).
-  - **Sleek `● LIVE` / `● DIRECT` Button on DVR VODs**: replaced the heavy dark solid pill with a compact, translucent smoked-glass pill with a subtle red rim at rest and crisp white focus highlight.
-  - **Refined Night Shift**: replaced the harsh yellow tint with a calibrated cinema-amber warmth curve and subtle black-contrast compensation for comfortable night viewing with zero GPU overhead.
-  - **Modernized Left Navigation Bar**: kept the familiar collapsible rail and gliding focus pill while adding a subtle top ambient wash, hairline group dividers, an avatar ring with online dot, a left accent bar on the active section, and subtle hierarchy guide lines on sub-items.
-  - **Categories Language-Aware Broadcaster Count**: category cards now clarify `(global)` when a TV stream language filter is active, and opened category pages display the live language-filtered broadcaster count (e.g., `18 broadcasters (FR)` / `30+ broadcasters (FR)`).
-  - **Hero Live Preview Clarity**: slightly reduced edge transparency on the Home Hero live preview video over custom wallpapers so streams remain crisp while blending smoothly.
-  - **Statistics Period Tabs ("Navigate without OK")**: the **7 days**, **30 days**, and **All time** tabs now switch automatically on focus when "Navigate without OK" is enabled (while **Reset** remains click-only for safety).
-  - **Unified Refresh Button**: on the app's default background, the **Refresh** header button now matches Home's sleek dark pill style across every screen.
+### Fixes & Improvements
+- **TV Interface Enabled on 100% of Android Boxes**:
+  - Forced Android TV UI mode across all app activities and services, fixing generic / non-certified AOSP Android boxes that previously fell back to the mobile layout with 4 bottom icons (zero-cost no-op on certified Android TV / Google TV devices, preserving theme & language settings).
+- **Instant Live-Apply for TV Customization & Preview Settings**:
+  - Changing **Card size on Home**, **Card size in lists**, **Focused card zoom**, **Compact side menu**, **Truncate viewer count**, **Streamer name display**, **Round avatars**, **Tags**, or **Uptime** now refreshes the Home screen and all open lists immediately — no more force-closing or restarting the app.
+  - Global theme and pager options (dark theme, Material 3, rounded corners, reduced padding, compact text, Follow/Game tabs) cleanly refresh the UI automatically as soon as you leave Settings.
+- **Multi-Streamer Live Alert Banners Fixed**:
+  - Fixed a layout bug where simultaneous live notifications crushed the **`LIVE`** badge down to `"L"` and misaligned streamer names with titles.
+  - When **1 to 3 followed streamers** go live at the same time, each now gets its own clean banner (avatar, name, game, title); **4 or more** simultaneous launches are neatly grouped into a summary banner.
+- **Persistent QR Phone Live Chat, Web App Shortcut & Streamer Avatar**:
+  - **Stable Local URL & Installable Web App**: the QR companion now uses a fixed local port (`8765`, with automatic fallback if busy) and a persistent token, plus a proper Web App Manifest & Xtra TV app icon (`/manifest.json` + `/icon.png`) so **"Add to Home Screen"** on Android/iOS gets the real Xtra TV icon and reconnects without re-scanning.
+  - **Regenerate QR Link & Reconnect**: added a **Regenerate QR link** button in the QR panel to instantly rotate the link and revoke previously paired phones, plus smooth automatic/one-tap reconnection in the mobile chat page.
+  - **Real Streamer Profile Picture**: the mobile chat header now displays the streamer's actual profile picture (in both single stream and Multi-Stream, updating across switches), with automatic fallback to the initial letter if unavailable.
+  - **Optional Auto-Start**: added an optional **Auto-start phone chat** setting (OFF by default, available in the QR panel and Chat settings) to start the local Wi-Fi server automatically whenever you open a live stream or Multi-Stream.
+- **Direct Focus on the First Tab in Side Panels**:
+  - Opening tabbed TV side panels (**Chat settings**, **PiP settings**, **Multi-Stream menu**, and **Wallpaper panel**) now focuses the first tab right away so you can browse tabs left/right immediately, with crash-safe post-frame focus handling.
+- **Lightweight Navigation, Preview & Multi-Stream Optimizations**:
+  - **Multi-Stream Live Sync**: aligned Multi-Stream live tiles with the main player's low-latency live target offset (`PLAYER_LIVE_TARGET_OFFSET`), preventing the active stream from jumping 6–10 seconds backward when launching Multi-Stream.
+  - **Ad-Free Live Previews**: added a zero-polling in-memory HLS manifest ad guard to live card and Home Hero previews — if Twitch injects a mid-preview ad after ~15–30 seconds while adblock is active, the same preview player seamlessly swaps to an ad-free backup playlist (or mutes until the ad clears).
+  - **Smoother Layout & Lower Memory**: eliminated redundant double layout passes (`requestLayout() during layout`) on sort bars and ensured at most **1 live-preview `ExoPlayer`** stays allocated across browsing lists, releasing idle preview players immediately when switching screens, opening a real player / Multi-Stream, or leaving the app.
 
 ### Install
-Download `XtraTV-1.4.7.1-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.4.7.2-tv.apk` below and install it over the previous version, your settings and account are kept.

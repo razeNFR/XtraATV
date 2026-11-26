@@ -127,8 +127,12 @@ class TvHomeActions(
     /** The count alone ("7.1K"), for the small cards. */
     val formatCount: (Int) -> String = { it.toString() },
     val refresh: () -> Unit,
-    /** Stream cards in the width of the screen, from the settings. */
-    val cardsPerRow: Int = 3,
+    /** Stream cards in the width of the screen, from the settings (reactive provider for live updates). */
+    private val cardsPerRowProvider: () -> Int = { 3 },
+    /** Live card zoom on preview, from the settings. */
+    private val cardZoomProvider: () -> Boolean = { false },
+    /** Compact side rail inset, from the settings. */
+    private val compactRailProvider: () -> Boolean = { true },
     /** Changes at each load: the thumbnails are downloaded again. */
     val thumbnailStamp: () -> Long = { 0L },
     val refreshing: () -> Boolean = { false },
@@ -167,7 +171,11 @@ class TvHomeActions(
         com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem,
         List<com.github.andreyasadchy.xtra.ui.tv.TvRecentChannels.ResolvedItem>,
     ) -> Unit = { _, _ -> },
-)
+) {
+    val cardsPerRow: Int get() = cardsPerRowProvider()
+    val cardZoom: Boolean get() = cardZoomProvider()
+    val compactRail: Boolean get() = compactRailProvider()
+}
 
 class TvHomeRow<T>(
     val title: String,
@@ -198,6 +206,7 @@ private class HomeCardSignals(
     val playbackBadge: (android.content.Context, String?) -> com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.Badge? = { _, _ -> null },
     val coStreamCount: (String?, String?) -> Int = { _, _ -> 0 },
     val isVerticalScrolling: () -> Boolean = { false },
+    val cardZoom: () -> Boolean = { false },
 )
 
 private val LocalHomeCardSignals = androidx.compose.runtime.staticCompositionLocalOf { HomeCardSignals() }
@@ -257,7 +266,7 @@ fun TvHomeScreen(
     }
     val playbackState = com.github.andreyasadchy.xtra.ui.tv.TvPlaybackState.state.collectAsState()
     val coStreamVersionState = com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.version.collectAsState()
-    val cardSignals = remember(listState) {
+    val cardSignals = remember(listState, actions) {
         HomeCardSignals(
             isFavorite = { login -> !login.isNullOrBlank() && favoriteLoginsState.value.contains(login.lowercase()) },
             playbackBadge = { ctx, login ->
@@ -267,6 +276,7 @@ fun TvHomeScreen(
                 com.github.andreyasadchy.xtra.ui.tv.TvCoStreamCache.getCount(channelId, channelLogin, coStreamVersionState.value)
             },
             isVerticalScrolling = { listState.isScrollInProgress },
+            cardZoom = { actions.cardZoom },
         )
     }
     val hasHero = hero != null
@@ -488,7 +498,7 @@ fun TvHomeScreen(
             done()
         }
     }
-    val compactRail = homeContext.prefs().getBoolean(C.TV_COMPACT_RAIL, true)
+    val compactRail = actions.compactRail
     val startInset = if (compactRail) 16.dp else 48.dp
     val endInset = 48.dp
     LaunchedEffect(showStatsBadge) {
@@ -2570,9 +2580,9 @@ private fun FocusCard(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    val signals = LocalHomeCardSignals.current
     // the growth of the card can be turned off in the Xtra TV settings
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val zoom = remember { context.prefs().getBoolean(C.TV_CARD_ZOOM, false) }
+    val zoom = signals.cardZoom()
     val canZoom = zoom && growth > 1f
     val sizeModifier = if (canZoom) {
         val big = focused && grown()
@@ -2597,7 +2607,6 @@ private fun FocusCard(
     }
     var longPressed by remember { mutableStateOf(false) }
     val focusToken = remember { Any() }
-    val signals = LocalHomeCardSignals.current
     val miniPlayerListening = com.github.andreyasadchy.xtra.ui.tv.TvMiniPlayerFocus.isListening
     val coordsRef = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     if (focused && miniPlayerListening) {
