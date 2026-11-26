@@ -471,14 +471,14 @@ class MainActivity : AppCompatActivity() {
         loginResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val prevKey = pendingAddAccountPreviousKey
             pendingAddAccountPreviousKey = null
-            if (isTv) {
-                com.github.andreyasadchy.xtra.ui.tv.TvAccounts.restoreAfterCanceledAdd(this, prevKey)
-                com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
-            }
+            com.github.andreyasadchy.xtra.ui.tv.TvAccounts.restoreAfterCanceledAdd(this, prevKey)
+            com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
             if (result.resultCode == RESULT_OK) {
                 restartActivity()
             } else if (isTv) {
                 updateTvMenuAccount()
+            } else {
+                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.ensureAccountAvatarLoaded(this)
             }
         }
         logoutResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -2727,18 +2727,18 @@ class MainActivity : AppCompatActivity() {
             }
             return
         }
-        val isLoggedIn = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank() ||
-                !TwitchApiHelper.getHelixHeaders(this)[C.HEADER_TOKEN].isNullOrBlank()
-        if (isLoggedIn) {
-            getAlertDialogBuilder().apply {
-                setTitle(getString(R.string.logout_title))
-                tokenPrefs().getString(C.USERNAME, null)?.let { setMessage(getString(R.string.logout_msg, it)) }
-                setNegativeButton(getString(R.string.no), null)
-                setPositiveButton(getString(R.string.yes)) { _, _ -> logoutResultLauncher?.launch(Intent(this@MainActivity, LoginActivity::class.java)) }
-            }.show()
-        } else {
-            loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
-        }
+        com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
+        com.github.andreyasadchy.xtra.ui.mobile.MobileBottomSheets.showAccountsSheet(
+            activity = this,
+            onOpenCurrentLoginMethods = {
+                pendingAddAccountPreviousKey = null
+                loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+            },
+            onAddAnotherAccount = {
+                pendingAddAccountPreviousKey = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.prepareAddAccount(this)
+                loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+            },
+        )
     }
 
     /** True while one of the screens of the app opens over this one (settings, login): the streams go on. */
@@ -3663,7 +3663,7 @@ class MainActivity : AppCompatActivity() {
         if (playerFragment == null || currentStreamLogin != stream.channelLogin) {
             com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
         }
-        if (isTv && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
+        if (prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
             // the picture of the stream instead of a black screen while it loads: the newest one there is
             // a thumbnail Twitch has not made yet is replaced by the picture of the channel (TvThumbnails)
             com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.remember(stream)

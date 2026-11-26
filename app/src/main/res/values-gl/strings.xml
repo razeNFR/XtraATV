@@ -1535,4 +1535,11 @@
     <string name="mobile_copy_link">Copiar ligazón</string>
     <string name="mobile_open_browser">Abrir no navegador</string>
     <string name="mobile_claim_drop">Reclamar</string>
+    <string name="mobile_hud_show_quality_title">Insignia de calidade en directo</string>
+    <string name="mobile_hud_show_quality_summary">Amosar a calidade de vídeo actual (ex. 1080p60) no HUD do reprodutor</string>
+    <string name="mobile_hud_show_viewers_title">Amosar espectadores</string>
+    <string name="mobile_hud_show_viewers_summary">Amosar o número de espectadores en directo no HUD do reprodutor</string>
+    <string name="mobile_hud_show_uptime_summary">Amosar a duración da emisión no HUD do reprodutor</string>
+    <string name="mobile_accounts_remove">Eliminar a %1$s deste dispositivo</string>
+    <string name="mobile_accounts_login_methods">Xestionar métodos de inicio de sesión</string>
 </resources>

@@ -1535,4 +1535,11 @@
     <string name="mobile_copy_link">Copiar link</string>
     <string name="mobile_open_browser">Abrir no navegador</string>
     <string name="mobile_claim_drop">Resgatar</string>
+    <string name="mobile_hud_show_quality_title">Selo de qualidade ao vivo</string>
+    <string name="mobile_hud_show_quality_summary">Mostrar a qualidade de vídeo atual (ex. 1080p60) no HUD do player</string>
+    <string name="mobile_hud_show_viewers_title">Mostrar espectadores</string>
+    <string name="mobile_hud_show_viewers_summary">Mostrar a contagem de espectadores ao vivo no HUD do player</string>
+    <string name="mobile_hud_show_uptime_summary">Mostrar o tempo de transmissão ao vivo no HUD do player</string>
+    <string name="mobile_accounts_remove">Remover %1$s deste dispositivo</string>
+    <string name="mobile_accounts_login_methods">Gerenciar métodos de login</string>
 </resources>

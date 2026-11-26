@@ -10,6 +10,7 @@ import android.graphics.Outline
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -17,6 +18,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
+import coil3.imageLoader
+import coil3.request.target
+import coil3.request.transformations
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.XtraApp
 import com.github.andreyasadchy.xtra.model.ui.Clip
@@ -30,6 +34,8 @@ import com.github.andreyasadchy.xtra.ui.tv.TvFollow
 import com.github.andreyasadchy.xtra.ui.tv.TvToast
 import com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync
 import com.github.andreyasadchy.xtra.ui.view.TvUi
+import com.github.andreyasadchy.xtra.util.prefs
+import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.launch
@@ -135,6 +141,164 @@ object MobileUi {
 
         toolbar.title = null
         toolbar.addView(container)
+    }
+
+    private val _accountAvatarUrl = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val accountAvatarUrl: kotlinx.coroutines.flow.StateFlow<String?> = _accountAvatarUrl
+    private var accountAvatarLoadedForUserId: String? = null
+
+    /**
+     * Ensures the active mobile account's avatar URL is synced into [com.github.andreyasadchy.xtra.ui.tv.TvAccounts]
+     * and published to [accountAvatarUrl] so every mobile toolbar displays the real circular avatar.
+     */
+    fun ensureAccountAvatarLoaded(activity: MainActivity) {
+        if (TvUi.isTv(activity)) return
+        com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(activity)
+        val activeKey = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.activeAccountKey(activity)
+        if (activeKey == null) {
+            _accountAvatarUrl.value = null
+            accountAvatarLoadedForUserId = null
+            return
+        }
+        val cached = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.listAccounts(activity)
+            .firstOrNull { it.key == activeKey }
+            ?.avatarUrl
+        if (!cached.isNullOrBlank()) {
+            _accountAvatarUrl.value = cached
+        }
+        val userId = activity.tokenPrefs().getString(com.github.andreyasadchy.xtra.util.C.USER_ID, null)
+            ?.takeIf { it.isNotBlank() }
+        if (userId == null) return
+        if (userId == accountAvatarLoadedForUserId && !_accountAvatarUrl.value.isNullOrBlank()) return
+        accountAvatarLoadedForUserId = userId
+        activity.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val url = runCatching {
+                val app = activity.applicationContext as XtraApp
+                val netLib = activity.prefs().getString(
+                    com.github.andreyasadchy.xtra.util.C.NETWORK_LIBRARY,
+                    com.github.andreyasadchy.xtra.util.C.OKHTTP,
+                )
+                app.xtraModule.graphQLRepository.loadQueryUser(
+                    netLib,
+                    com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(activity),
+                    id = userId,
+                ).data?.user?.profileImageURL
+            }.getOrNull()
+            if (!url.isNullOrBlank()) {
+                com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(activity, avatarUrl = url)
+                _accountAvatarUrl.value = url
+            }
+        }
+    }
+
+    /**
+     * Unifies mobile toolbars across all screens: ensures the Settings gear icon and circular Account
+     * avatar (or anonymous icon) are always directly visible and open the multi-account sheet on tap.
+     * Strictly no-op on Android TV.
+     */
+    fun setupMobileToolbar(
+        toolbar: MaterialToolbar,
+        activity: MainActivity,
+        brandSubtitle: String? = null,
+    ) {
+        if (TvUi.isTv(activity)) return
+        if (brandSubtitle != null) {
+            applyBrandHeader(toolbar, brandSubtitle)
+        }
+        ensureAccountAvatarLoaded(activity)
+
+        toolbar.menu.findItem(R.id.settings)?.let { item ->
+            item.setIcon(R.drawable.tv_ic_settings)
+            item.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+        }
+
+        val loginItem = toolbar.menu.findItem(R.id.login) ?: return
+        loginItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+
+        val density = activity.resources.displayMetrics.density
+        val touchSize = (40 * density).toInt()
+        val avatarSize = (28 * density).toInt()
+        val onSurface = MaterialColors.getColor(
+            activity,
+            com.google.android.material.R.attr.colorOnSurfaceVariant,
+            0xCCFFFFFF.toInt(),
+        )
+        val badgeBg = MaterialColors.getColor(
+            activity,
+            com.google.android.material.R.attr.colorSurfaceVariant,
+            0x33FFFFFF,
+        )
+
+        val container = android.widget.FrameLayout(activity).apply {
+            layoutParams = ViewGroup.LayoutParams(touchSize, touchSize)
+            val rippleAttr = android.util.TypedValue()
+            if (activity.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, rippleAttr, true)) {
+                setBackgroundResource(rippleAttr.resourceId)
+            }
+            contentDescription = activity.getString(R.string.tv_accounts_title)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { activity.onAccountClicked() }
+        }
+
+        val avatarView = ImageView(activity).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(avatarSize, avatarSize, Gravity.CENTER)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setOval(0, 0, view.width, view.height)
+                }
+            }
+            clipToOutline = true
+        }
+        container.addView(avatarView)
+
+        fun renderAvatar(url: String?) {
+            val activeKey = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.activeAccountKey(activity)
+            if (activeKey != null && !url.isNullOrBlank()) {
+                avatarView.imageTintList = null
+                avatarView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                avatarView.setPadding(0, 0, 0, 0)
+                activity.imageLoader.enqueue(
+                    coil3.request.ImageRequest.Builder(activity)
+                        .data(url)
+                        .transformations(coil3.transform.CircleCropTransformation())
+                        .target(avatarView)
+                        .build()
+                )
+            } else {
+                val pad = (4 * density).toInt()
+                avatarView.setPadding(pad, pad, pad, pad)
+                avatarView.setBackgroundColor(badgeBg)
+                avatarView.setImageResource(R.drawable.baseline_person_black_24)
+                avatarView.imageTintList = android.content.res.ColorStateList.valueOf(onSurface)
+            }
+        }
+
+        renderAvatar(_accountAvatarUrl.value)
+        loginItem.actionView = container
+
+        // Observe live avatar fetch updates while this toolbar is attached
+        var collectJob: kotlinx.coroutines.Job? = null
+        val attachListener = object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                collectJob?.cancel()
+                collectJob = activity.lifecycleScope.launch {
+                    accountAvatarUrl.collect { url ->
+                        renderAvatar(url)
+                    }
+                }
+            }
+
+            override fun onViewDetachedFromWindow(v: View) {
+                collectJob?.cancel()
+                collectJob = null
+            }
+        }
+        container.addOnAttachStateChangeListener(attachListener)
+        if (container.isAttachedToWindow) {
+            attachListener.onViewAttachedToWindow(container)
+        }
     }
 
     fun openUrl(context: Context, url: String) {

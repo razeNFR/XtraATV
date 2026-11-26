@@ -1536,4 +1536,11 @@
     <string name="mobile_copy_link">Bağlantıyı kopyala</string>
     <string name="mobile_open_browser">Tarayıcıda aç</string>
     <string name="mobile_claim_drop">Al</string>
+    <string name="mobile_hud_show_quality_title">Canlı kalite rozeti</string>
+    <string name="mobile_hud_show_quality_summary">Oynatıcı arayüzünde anlık video kalitesini (örn. 1080p60) göster</string>
+    <string name="mobile_hud_show_viewers_title">İzleyici sayısını göster</string>
+    <string name="mobile_hud_show_viewers_summary">Oynatıcı arayüzünde canlı izleyici sayısını göster</string>
+    <string name="mobile_hud_show_uptime_summary">Oynatıcı arayüzünde yayın süresini göster</string>
+    <string name="mobile_accounts_remove">%1$s hesabını bu cihazdan kaldır</string>
+    <string name="mobile_accounts_login_methods">Giriş yöntemlerini yönet</string>
 </resources>

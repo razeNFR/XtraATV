@@ -1535,4 +1535,11 @@
     <string name="mobile_copy_link">Copier le lien</string>
     <string name="mobile_open_browser">Ouvrir dans le navigateur</string>
     <string name="mobile_claim_drop">Réclamer</string>
+    <string name="mobile_hud_show_quality_title">Badge de qualité en direct</string>
+    <string name="mobile_hud_show_quality_summary">Afficher la qualité vidéo en temps réel (ex. 1080p60) sur le HUD du lecteur</string>
+    <string name="mobile_hud_show_viewers_title">Afficher les spectateurs</string>
+    <string name="mobile_hud_show_viewers_summary">Afficher le nombre de spectateurs en direct sur le HUD du lecteur</string>
+    <string name="mobile_hud_show_uptime_summary">Afficher la durée du stream en direct sur le HUD du lecteur</string>
+    <string name="mobile_accounts_remove">Retirer %1$s de cet appareil</string>
+    <string name="mobile_accounts_login_methods">Gérer les méthodes de connexion</string>
 </resources>

@@ -141,7 +141,7 @@ class FollowedGamesAdapter(
                     if (item.viewerCount != null) {
                         viewers.visibility = View.VISIBLE
                         val count = item.viewerCount ?: 0
-                        viewers.text = if (gameBackground != null) {
+                        viewers.text = if (gameBackground != null || !isTv) {
                             TwitchApiHelper.formatCount(count, context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
                         } else {
                             context.resources.getQuantityString(
@@ -170,9 +170,17 @@ class FollowedGamesAdapter(
                     } else {
                         broadcastersCount.visibility = View.GONE
                     }
-                    if (!isTv && !item.tags.isNullOrEmpty() && context.prefs().getBoolean(C.UI_TAGS, true)) {
+                    val mobileCols = if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
+                        maxOf(2, context.prefs().getString(C.PORTRAIT_COLUMN_COUNT, "1")?.toIntOrNull() ?: 1)
+                    } else {
+                        maxOf(3, context.prefs().getString(C.LANDSCAPE_COLUMN_COUNT, "2")?.toIntOrNull() ?: 2)
+                    }
+                    val maxTags = if (mobileCols >= 3) 0 else 2
+                    if (!isTv && maxTags > 0 && !item.tags.isNullOrEmpty() && context.prefs().getBoolean(C.UI_TAGS, true)) {
                         tagsLayout.removeAllViews()
                         tagsLayout.visibility = View.VISIBLE
+                        val density = context.resources.displayMetrics.density
+                        val gap = (4 * density).toInt()
                         val tagsFlowLayout = Flow(context).apply {
                             layoutParams = ConstraintLayout.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -184,25 +192,31 @@ class FollowedGamesAdapter(
                                 endToEnd = tagsLayout.id
                             }
                             setWrapMode(Flow.WRAP_CHAIN)
+                            setHorizontalStyle(Flow.CHAIN_PACKED)
+                            setHorizontalBias(0f)
+                            setHorizontalGap(gap)
+                            setVerticalGap(gap)
                         }
                         tagsLayout.addView(tagsFlowLayout)
                         val ids = mutableListOf<Int>()
-                        for (tag in item.tags!!) {
+                        val hPad = (7 * density).toInt()
+                        val vPad = (2 * density).toInt()
+                        for (tag in item.tags!!.take(maxTags)) {
                             val text = TextView(context)
                             val id = View.generateViewId()
                             text.id = id
                             ids.add(id)
                             text.text = tag.name
-                            context.obtainStyledAttributes(intArrayOf(com.google.android.material.R.attr.textAppearanceBodyMedium)).use {
-                                TextViewCompat.setTextAppearance(text, it.getResourceId(0, 0))
-                            }
+                            text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
+                            text.maxLines = 1
+                            text.ellipsize = android.text.TextUtils.TruncateAt.END
+                            text.setBackgroundResource(R.drawable.mobile_subtle_chip_bg)
                             if (tag.id != null) {
                                 text.setOnClickListener {
                                     selectTag(tag)
                                 }
                             }
-                            val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 5f, context.resources.displayMetrics).toInt()
-                            text.setPadding(padding, 0, padding, 0)
+                            text.setPadding(hPad, vPad, hPad, vPad)
                             tagsLayout.addView(text)
                         }
                         tagsFlowLayout.referencedIds = ids.toIntArray()

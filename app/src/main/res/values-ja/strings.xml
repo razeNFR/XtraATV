@@ -1535,4 +1535,11 @@
     <string name="mobile_copy_link">リンクをコピー</string>
     <string name="mobile_open_browser">ブラウザで開く</string>
     <string name="mobile_claim_drop">受け取る</string>
+    <string name="mobile_hud_show_quality_title">リアルタイム画質バッジ</string>
+    <string name="mobile_hud_show_quality_summary">プレイヤーHUDに現在の画質（例：1080p60）を表示</string>
+    <string name="mobile_hud_show_viewers_title">視聴者数を表示</string>
+    <string name="mobile_hud_show_viewers_summary">プレイヤーHUDにライブ視聴者数を表示</string>
+    <string name="mobile_hud_show_uptime_summary">プレイヤーHUDに配信経過時間を表示</string>
+    <string name="mobile_accounts_remove">このデバイスから %1$s を削除</string>
+    <string name="mobile_accounts_login_methods">ログイン方法を管理</string>
 </resources>

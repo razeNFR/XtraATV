@@ -1535,4 +1535,11 @@
     <string name="mobile_copy_link">复制链接</string>
     <string name="mobile_open_browser">在浏览器中打开</string>
     <string name="mobile_claim_drop">领取</string>
+    <string name="mobile_hud_show_quality_title">实时画质标签</string>
+    <string name="mobile_hud_show_quality_summary">在播放器 HUD 中显示当前视频画质（例如 1080p60）</string>
+    <string name="mobile_hud_show_viewers_title">显示观众人数</string>
+    <string name="mobile_hud_show_viewers_summary">在播放器 HUD 中显示实时观众人数</string>
+    <string name="mobile_hud_show_uptime_summary">在播放器 HUD 中显示直播时长</string>
+    <string name="mobile_accounts_remove">从此设备移除 %1$s</string>
+    <string name="mobile_accounts_login_methods">管理登录方式</string>
 </resources>

@@ -215,8 +215,50 @@ class FollowedChannelsAdapter(
                     } else {
                         localText.visibility = View.GONE
                     }
-                    if (liveBadge != null) {
+                    val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
+                    if (isTv && liveBadge != null) {
                         bindTv(item)
+                    } else if (!isTv) {
+                        val live = item.liveViewers != null
+                        userRing?.visibility = if (live) View.VISIBLE else View.INVISIBLE
+                        liveBadge?.visibility = if (live) View.VISIBLE else View.GONE
+                        favoriteStar?.visibility = if (com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.login)) View.VISIBLE else View.GONE
+                        // Display name clean without duplicate star prefix when favoriteStar icon is present
+                        if (favoriteStar != null && item.name != null) {
+                            username.text = item.name
+                        }
+                        if (live) {
+                            userStream.visibility = View.VISIBLE
+                            userStream.setTextColor(0xFFFF6B6B.toInt())
+                            val viewers = TwitchApiHelper.formatCount(item.liveViewers ?: 0, context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
+                            userStream.text = listOfNotNull(item.liveGame?.takeIf { it.isNotBlank() }, viewers).joinToString(" · ")
+                            userFollowed.visibility = View.GONE
+                        } else {
+                            val secondaryColor = com.google.android.material.color.MaterialColors.getColor(
+                                context,
+                                android.R.attr.textColorSecondary,
+                                0xB3FFFFFF.toInt(),
+                            )
+                            userStream.setTextColor(secondaryColor)
+                            val last = item.lastBroadcast?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } }
+                            if (last != null) {
+                                userStream.visibility = View.VISIBLE
+                                userStream.text = android.text.format.DateUtils.getRelativeTimeSpanString(
+                                    last, System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS
+                                ).toString().replaceFirstChar { it.uppercase() }
+                            } else {
+                                userStream.visibility = View.GONE
+                            }
+                            val followed = item.followedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { ms -> ms > 0 } }
+                            if (followed != null) {
+                                val locale = java.util.Locale.getDefault()
+                                val month = java.text.SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "MMMyyyy"), locale).format(java.util.Date(followed))
+                                userFollowed.visibility = View.VISIBLE
+                                userFollowed.text = context.getString(R.string.tv_followed_since, month)
+                            } else {
+                                userFollowed.visibility = View.GONE
+                            }
+                        }
                     }
                 }
             }

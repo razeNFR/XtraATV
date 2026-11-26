@@ -262,7 +262,7 @@ class VideosAdapter(
                         type.visibility = View.GONE
                     }
                     bindSubOnlyBadge(item)
-                    if (isTv && !item.subOnly && !com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isKnown(item.id)) {
+                    if (!item.subOnly && !com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isKnown(item.id)) {
                         com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.enqueue(context, item.id)
                     }
                     if (position != null && item.durationSeconds != null && item.durationSeconds > 0L) {

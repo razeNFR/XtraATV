@@ -146,14 +146,14 @@
         android:defaultValue="true"
         android:key="player_settings"
         android:title="@string/quality"
-        android:icon="@drawable/baseline_settings_black_24"
+        android:icon="@drawable/tv_ic_hd"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="player_menu"
         android:title="@string/player_menu"
-        android:icon="@drawable/baseline_more_vert_black_24"
+        android:icon="@drawable/tv_ic_settings"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat

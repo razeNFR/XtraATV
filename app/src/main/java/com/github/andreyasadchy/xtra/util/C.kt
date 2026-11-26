@@ -434,6 +434,10 @@ object C {
     const val TV_STREAM_END_ACTION = "tv_stream_end_action"
     /** Mobile: live DVR rewind timeline & back-to-live pill in the player (default true). */
     const val MOBILE_LIVE_DVR = "mobile_live_dvr"
+    /** Mobile: show real-time quality badge (e.g. 1080p60) in the player HUD (default true). */
+    const val MOBILE_HUD_SHOW_QUALITY = "mobile_hud_show_quality"
+    /** Mobile: show live viewer count in the player HUD (default true). */
+    const val MOBILE_HUD_SHOW_VIEWERS = "mobile_hud_show_viewers"
     const val TV_EXPERIMENTAL_ADBLOCK = "tv_experimental_adblock"
     /** Custom proxies: "0" for the whole stream, "1" only while an ad plays. */
     const val PLAYER_CUSTOM_PROXY_MODE = "custom_proxy_mode"

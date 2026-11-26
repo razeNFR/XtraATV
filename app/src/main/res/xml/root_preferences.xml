@@ -117,6 +117,30 @@
 
         <SwitchPreferenceCompat
             android:defaultValue="true"
+            android:icon="@drawable/tv_ic_hd"
+            android:key="mobile_hud_show_quality"
+            android:summary="@string/mobile_hud_show_quality_summary"
+            android:title="@string/mobile_hud_show_quality_title"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:icon="@drawable/tv_ic_eye"
+            android:key="mobile_hud_show_viewers"
+            android:summary="@string/mobile_hud_show_viewers_summary"
+            android:title="@string/mobile_hud_show_viewers_title"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="player_show_uptime"
+            android:summary="@string/mobile_hud_show_uptime_summary"
+            android:title="@string/show_uptime"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
             android:icon="@drawable/tv_ic_pip"
             android:key="player_picture_in_picture"
             android:title="@string/picture_in_picture"

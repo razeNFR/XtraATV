@@ -234,6 +234,12 @@ class GridRecyclerView : RecyclerView {
         if (isTv) {
             scheduleFocusCheck()
             applyTvLayoutForAdapter(adapter, forceRelayout = false)
+        } else {
+            val columns = getColumnsForConfiguration(resources.configuration)
+            if (gridLayoutManager.spanCount != columns) {
+                gridLayoutManager.spanCount = columns
+                addItemDecoration(columns)
+            }
         }
     }
 
@@ -746,12 +752,17 @@ class GridRecyclerView : RecyclerView {
     }
 
     private fun getColumnsForConfiguration(configuration: Configuration): Int {
-        return if (isTv) {
-            tvColumns
-        } else if (configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
-            portraitColumns
+        if (isTv) return tvColumns
+        val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+        val base = if (isPortrait) portraitColumns else landscapeColumns
+        val isCompactPosterOrAvatar = adapter is GamesAdapter ||
+            adapter is FollowedGamesAdapter ||
+            adapter is FollowedChannelsAdapter ||
+            adapter is com.github.andreyasadchy.xtra.ui.player.PlayerGamesDialogAdapter
+        return if (isCompactPosterOrAvatar) {
+            maxOf(if (isPortrait) 2 else 3, base)
         } else {
-            landscapeColumns
+            base
         }
     }
 

@@ -186,8 +186,10 @@ class ExoPlayerFragment : PlayerFragment() {
                 } else if (
                     playbackState == Player.STATE_ENDED &&
                     playbackService?.type == BasePlaybackService.CLIP &&
-                    com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext()) &&
-                    requireContext().prefs().getBoolean(C.TV_CLIPS_AUTOPLAY, true)
+                    run {
+                        val tv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())
+                        requireContext().prefs().getBoolean(C.TV_CLIPS_AUTOPLAY, tv)
+                    }
                 ) {
                     if ((activity as? com.github.andreyasadchy.xtra.ui.main.MainActivity)?.playNextClip(1) == true) {
                         return

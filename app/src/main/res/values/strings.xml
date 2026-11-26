@@ -1555,4 +1555,11 @@
     <string name="mobile_copy_link">Copy link</string>
     <string name="mobile_open_browser">Open in browser</string>
     <string name="mobile_claim_drop">Claim</string>
+    <string name="mobile_hud_show_quality_title">Live quality badge</string>
+    <string name="mobile_hud_show_quality_summary">Show the current video quality (e.g. 1080p60) in the player HUD</string>
+    <string name="mobile_hud_show_viewers_title">Show viewer count</string>
+    <string name="mobile_hud_show_viewers_summary">Show the live viewer count in the player HUD</string>
+    <string name="mobile_hud_show_uptime_summary">Show how long the stream has been live in the player HUD</string>
+    <string name="mobile_accounts_remove">Remove %1$s from this device</string>
+    <string name="mobile_accounts_login_methods">Manage login methods</string>
 </resources>

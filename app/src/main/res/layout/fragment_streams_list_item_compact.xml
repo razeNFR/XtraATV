@@ -85,20 +85,36 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="7dp"
-                android:layout_marginEnd="5dp"
+                android:layout_marginEnd="10dp"
                 android:gravity="end"
                 android:orientation="vertical"
                 app:layout_constraintBottom_toBottomOf="@id/layout1"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/layout1"
                 app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintVertical_bias="1.0">
+                app:layout_constraintVertical_bias="0.5">
+
+                <TextView
+                    android:id="@+id/mobileLiveBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="3dp"
+                    android:background="@drawable/mobile_live_badge_bg"
+                    android:paddingStart="6dp"
+                    android:paddingTop="1dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="1dp"
+                    android:text="@string/tv_live_badge"
+                    android:textColor="@android:color/white"
+                    android:textSize="9.5sp"
+                    android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/viewers"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textStyle="bold"
                     android:visibility="gone"
                     tools:text="1337499"
                     tools:visibility="visible" />
@@ -107,7 +123,8 @@
                     android:id="@+id/uptime"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?android:attr/textColorSecondary"
                     android:visibility="gone"
                     tools:text="8:21:33"
                     tools:visibility="visible" />

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Mobile: modern 3:4 poster followed category card (scales cleanly across 2–6 columns without stretching) -->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -18,84 +19,41 @@
 
             <ImageView
                 android:id="@+id/gameImage"
-                android:layout_width="49dp"
-                android:layout_height="65dp"
-                android:layout_marginStart="10dp"
-                android:layout_marginTop="10dp"
-                android:layout_marginBottom="10dp"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:scaleType="centerCrop"
                 android:visibility="gone"
-                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintDimensionRatio="H,3:4"
+                app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintVertical_bias="0.0"
                 tools:src="@tools:sample/backgrounds/scenic"
                 tools:visibility="visible" />
-
-            <LinearLayout
-                android:id="@+id/layout1"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:layout_marginTop="7dp"
-                android:layout_marginEnd="5dp"
-                android:layout_marginBottom="7dp"
-                android:orientation="vertical"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@id/layout2"
-                app:layout_constraintStart_toEndOf="@id/gameImage"
-                app:layout_constraintTop_toTopOf="parent">
-
-                <TextView
-                    android:id="@+id/gameName"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:visibility="gone"
-                    tools:text="@sample/games.json/top/game/name"
-                    tools:visibility="visible" />
-
-                <TextView
-                    android:id="@+id/viewers"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:visibility="gone"
-                    tools:text="123456 viewers"
-                    tools:visibility="visible" />
-
-                <TextView
-                    android:id="@+id/broadcastersCount"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:visibility="gone"
-                    tools:text="123456 broadcasters"
-                    tools:visibility="visible" />
-            </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/layout2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
-                android:layout_marginEnd="7dp"
-                android:layout_marginBottom="10dp"
+                android:layout_marginTop="6dp"
+                android:layout_marginEnd="6dp"
                 android:gravity="end"
-                android:orientation="vertical"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@id/layout1"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintVertical_bias="1.0">
+                android:orientation="horizontal"
+                app:layout_constraintEnd_toEndOf="@id/gameImage"
+                app:layout_constraintTop_toTopOf="@id/gameImage">
 
                 <TextView
                     android:id="@+id/accountText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:background="@drawable/mobile_badge_pill"
+                    android:paddingStart="6dp"
+                    android:paddingTop="2dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="2dp"
                     android:text="@string/account"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textColor="@android:color/white"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
                     android:visibility="gone"
                     tools:visibility="visible" />
 
@@ -103,9 +61,83 @@
                     android:id="@+id/localText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/mobile_badge_pill"
+                    android:paddingStart="6dp"
+                    android:paddingTop="2dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="2dp"
                     android:text="@string/local"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textColor="@android:color/white"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
                     android:visibility="gone"
+                    tools:visibility="visible" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/viewers"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:layout_marginBottom="6dp"
+                android:background="@drawable/mobile_badge_pill"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingStart="7dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="7dp"
+                android:paddingBottom="2dp"
+                android:textColor="@android:color/white"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                app:layout_constrainedWidth="true"
+                app:layout_constraintBottom_toBottomOf="@id/gameImage"
+                app:layout_constraintEnd_toEndOf="@id/gameImage"
+                app:layout_constraintHorizontal_bias="0.0"
+                app:layout_constraintStart_toStartOf="@id/gameImage"
+                tools:text="123.4K"
+                tools:visibility="visible" />
+
+            <LinearLayout
+                android:id="@+id/layout1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="10dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="8dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/gameImage">
+
+                <TextView
+                    android:id="@+id/gameName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:text="@sample/games.json/top/game/name"
+                    tools:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/broadcastersCount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:visibility="gone"
+                    tools:text="1.2K channels"
                     tools:visibility="visible" />
             </LinearLayout>
 
@@ -115,10 +147,9 @@
             android:id="@+id/tagsLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_marginTop="7dp"
-            android:layout_marginEnd="10dp"
-            android:layout_marginBottom="7dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="8dp"
             android:visibility="gone"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"

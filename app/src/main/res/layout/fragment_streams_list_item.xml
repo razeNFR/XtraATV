@@ -25,6 +25,24 @@
                 tools:src="@tools:sample/backgrounds/scenic"
                 tools:visibility="visible" />
 
+            <TextView
+                android:id="@+id/mobileLiveBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/mobile_live_badge_bg"
+                android:paddingStart="7dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="7dp"
+                android:paddingBottom="2dp"
+                android:text="@string/tv_live_badge"
+                android:textColor="@android:color/white"
+                android:textSize="10.5sp"
+                android:textStyle="bold"
+                app:layout_constraintStart_toStartOf="@id/thumbnail"
+                app:layout_constraintTop_toTopOf="@id/thumbnail" />
+
             <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
                 android:id="@+id/viewers"
                 style="@style/ThumbnailItem"
@@ -88,8 +106,10 @@
 
                 <TextView
                     android:id="@+id/username"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     android:textColor="?android:attr/textColorSecondary"
                     android:visibility="gone"
@@ -98,8 +118,10 @@
 
                 <TextView
                     android:id="@+id/gameName"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     android:textColor="?android:attr/textColorSecondary"
                     android:visibility="gone"

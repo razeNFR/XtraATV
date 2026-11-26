@@ -1536,4 +1536,11 @@
     <string name="mobile_copy_link">Salin tautan</string>
     <string name="mobile_open_browser">Buka di browser</string>
     <string name="mobile_claim_drop">Klaim</string>
+    <string name="mobile_hud_show_quality_title">Lencana kualitas langsung</string>
+    <string name="mobile_hud_show_quality_summary">Tampilkan kualitas video saat ini (mis. 1080p60) di HUD pemutar</string>
+    <string name="mobile_hud_show_viewers_title">Tampilkan jumlah penonton</string>
+    <string name="mobile_hud_show_viewers_summary">Tampilkan jumlah penonton langsung di HUD pemutar</string>
+    <string name="mobile_hud_show_uptime_summary">Tampilkan lama siaran berlangsung di HUD pemutar</string>
+    <string name="mobile_accounts_remove">Hapus %1$s dari perangkat ini</string>
+    <string name="mobile_accounts_login_methods">Kelola metode masuk</string>
 </resources>

@@ -286,7 +286,7 @@
             android:layout_width="@dimen/player_button_size"
             android:layout_height="@dimen/player_button_size"
             android:background="@drawable/player_control_background"
-            android:src="@drawable/baseline_settings_black_24"
+            android:src="@drawable/tv_ic_hd"
             android:visibility="gone"
             app:tint="@android:color/white"
             tools:visibility="visible" />
@@ -296,7 +296,7 @@
             android:layout_width="@dimen/player_button_size"
             android:layout_height="@dimen/player_button_size"
             android:background="@drawable/player_control_background"
-            android:src="@drawable/baseline_more_vert_black_24"
+            android:src="@drawable/tv_ic_settings"
             android:visibility="gone"
             app:tint="@android:color/white"
             tools:visibility="visible" />
@@ -450,23 +450,26 @@
         android:layout_above="@id/bottomLayout"
         android:layout_centerHorizontal="true"
         android:layout_marginBottom="8dp"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
         <LinearLayout
             android:id="@+id/uptimeLayout"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="26dp"
             android:layout_marginEnd="6dp"
+            android:background="@drawable/mobile_hud_pill_bg"
+            android:gravity="center_vertical"
+            android:paddingStart="9dp"
+            android:paddingEnd="10dp"
             android:visibility="gone"
             tools:visibility="visible">
 
             <ImageView
                 android:id="@+id/uptimeIcon"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginTop="9dp"
-                android:layout_marginEnd="4dp"
-                android:background="@drawable/player_control_background"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginEnd="5dp"
                 android:src="@drawable/baseline_circle_24"
                 android:visibility="gone"
                 app:tint="@color/liveStreamRed"
@@ -476,25 +479,30 @@
                 android:id="@+id/uptimeTimer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:layout_marginBottom="7dp"
-                android:textColor="@android:color/white" />
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/viewersLayout"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/player_control_background">
+            android:layout_height="26dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/mobile_hud_pill_bg"
+            android:gravity="center_vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="10dp"
+            android:visibility="gone"
+            tools:visibility="visible">
 
             <ImageView
                 android:id="@+id/viewersIcon"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
-                android:layout_gravity="center_vertical"
-                android:background="@drawable/player_control_background"
-                android:src="@drawable/baseline_person_black_24"
+                android:layout_width="15dp"
+                android:layout_height="15dp"
+                android:layout_marginEnd="4dp"
+                android:src="@drawable/tv_ic_eye"
                 android:visibility="gone"
                 app:tint="@android:color/white"
                 tools:visibility="visible" />
@@ -503,12 +511,27 @@
                 android:id="@+id/viewersText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:layout_marginBottom="7dp"
                 android:textColor="@android:color/white"
+                android:textSize="12sp"
+                android:textStyle="bold"
                 tools:text="13.3K" />
 
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvQualityInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="26dp"
+            android:background="@drawable/mobile_hud_pill_bg"
+            android:gravity="center"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:text="1080p60"
+            tools:visibility="visible" />
 
     </LinearLayout>
 

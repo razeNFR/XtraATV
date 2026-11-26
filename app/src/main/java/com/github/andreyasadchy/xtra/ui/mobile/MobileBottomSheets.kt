@@ -2678,4 +2678,350 @@ object MobileBottomSheets {
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // 11. Multi-Account Switcher Sheet (reusing TvAccounts vault)
+    // -------------------------------------------------------------------------
+
+    fun showAccountsSheet(
+        activity: MainActivity,
+        onOpenCurrentLoginMethods: () -> Unit,
+        onAddAnotherAccount: () -> Unit,
+    ) {
+        com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(activity)
+        MobileUi.ensureAccountAvatarLoaded(activity)
+        showSheet(activity) { dismiss ->
+            var accounts by remember { mutableStateOf(com.github.andreyasadchy.xtra.ui.tv.TvAccounts.listAccounts(activity)) }
+            val activeKey = remember(accounts) { com.github.andreyasadchy.xtra.ui.tv.TvAccounts.activeAccountKey(activity) }
+            val guestActive = remember(accounts) { com.github.andreyasadchy.xtra.ui.tv.TvAccounts.isGuestMode(activity) }
+            val liveAvatarUrl by MobileUi.accountAvatarUrl.collectAsState()
+            var confirmRemove by remember { mutableStateOf<com.github.andreyasadchy.xtra.ui.tv.TvAccounts.SavedAccount?>(null) }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.baseline_person_black_24),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = activity.getString(R.string.tv_accounts_title),
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                if (accounts.isEmpty() && !guestActive) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                text = activity.getString(R.string.tv_accounts_guest),
+                                fontSize = 14.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    dismiss()
+                                    onOpenCurrentLoginMethods()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                            ) {
+                                Text(activity.getString(R.string.log_in))
+                            }
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        accounts.forEach { acc ->
+                            val isActive = acc.key == activeKey
+                            val avatarToShow = acc.avatarUrl ?: if (isActive) liveAvatarUrl else null
+                            Surface(
+                                color = if (isActive) {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(
+                                        if (isActive) {
+                                            Modifier.border(
+                                                1.dp,
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                                RoundedCornerShape(16.dp),
+                                            )
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                                    .clickable {
+                                        if (isActive) {
+                                            dismiss()
+                                            onOpenCurrentLoginMethods()
+                                        } else {
+                                            val switched = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.switchToAccount(activity, acc.key)
+                                            dismiss()
+                                            if (switched != null) {
+                                                TvToast.makeText(
+                                                    activity,
+                                                    activity.getString(R.string.tv_accounts_switched_to, switched.username),
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
+                                                activity.onTvAccountSwitched()
+                                            }
+                                        }
+                                    },
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                ) {
+                                    if (!avatarToShow.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = avatarToShow,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape),
+                                        )
+                                    } else {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.baseline_person_black_24),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(22.dp),
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = acc.username,
+                                            fontSize = 15.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        if (isActive) {
+                                            Text(
+                                                text = activity.getString(R.string.tv_accounts_active),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    }
+                                    IconButton(
+                                        onClick = { confirmRemove = acc },
+                                        modifier = Modifier.size(36.dp),
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.tv_ic_delete),
+                                            contentDescription = activity.getString(R.string.mobile_accounts_remove, acc.username),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Guest / Anonymous mode row
+                        Surface(
+                            color = if (guestActive) {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (guestActive) {
+                                        Modifier.border(
+                                            1.dp,
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                            RoundedCornerShape(16.dp),
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .clickable {
+                                    if (!guestActive) {
+                                        com.github.andreyasadchy.xtra.ui.tv.TvAccounts.switchToGuest(activity)
+                                        dismiss()
+                                        TvToast.makeText(
+                                            activity,
+                                            activity.getString(R.string.tv_accounts_switched_guest),
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                        activity.onTvAccountSwitched()
+                                    } else {
+                                        dismiss()
+                                    }
+                                },
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.baseline_person_black_24),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(22.dp),
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = activity.getString(R.string.tv_accounts_guest),
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    if (guestActive) {
+                                        Text(
+                                            text = activity.getString(R.string.tv_accounts_active),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Inline confirmation banner when removing an account
+                    val pending = confirmRemove
+                    if (pending != null) {
+                        Spacer(Modifier.height(12.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text(
+                                    text = activity.getString(R.string.mobile_accounts_remove, pending.username),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { confirmRemove = null },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp),
+                                    ) {
+                                        Text(activity.getString(R.string.no))
+                                    }
+                                    Button(
+                                        onClick = {
+                                            val wasActive = pending.key == activeKey
+                                            com.github.andreyasadchy.xtra.ui.tv.TvAccounts.removeAccount(activity, pending.key)
+                                            TvToast.makeText(
+                                                activity,
+                                                activity.getString(R.string.tv_accounts_removed, pending.username),
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                            confirmRemove = null
+                                            if (wasActive) {
+                                                dismiss()
+                                                activity.onTvAccountSwitched()
+                                            } else {
+                                                accounts = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.listAccounts(activity)
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp),
+                                    ) {
+                                        Text(activity.getString(R.string.yes), color = MaterialTheme.colorScheme.onError)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    Button(
+                        onClick = {
+                            dismiss()
+                            onAddAnotherAccount()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Text(activity.getString(R.string.tv_accounts_add))
+                    }
+                    if (activeKey != null) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                dismiss()
+                                onOpenCurrentLoginMethods()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Text(activity.getString(R.string.mobile_accounts_login_methods))
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
 }
+

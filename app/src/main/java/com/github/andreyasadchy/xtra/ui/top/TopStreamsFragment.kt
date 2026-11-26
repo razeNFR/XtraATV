@@ -87,7 +87,7 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                     }
                 }
             } else {
-                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyBrandHeader(toolbar, args.title ?: getString(R.string.streams))
+                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.setupMobileToolbar(toolbar, activity, args.title ?: getString(R.string.streams))
             }
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             toolbar.setOnMenuItemClickListener { menuItem ->
@@ -101,16 +101,7 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                         true
                     }
                     R.id.login -> {
-                        if (isLoggedIn) {
-                            activity.getAlertDialogBuilder().apply {
-                                setTitle(getString(R.string.logout_title))
-                                requireContext().tokenPrefs().getString(C.USERNAME, null)?.let { setMessage(getString(R.string.logout_msg, it)) }
-                                setNegativeButton(getString(R.string.no), null)
-                                setPositiveButton(getString(R.string.yes)) { _, _ -> activity.logoutResultLauncher?.launch(Intent(activity, LoginActivity::class.java)) }
-                            }.show()
-                        } else {
-                            activity.loginResultLauncher?.launch(Intent(activity, LoginActivity::class.java))
-                        }
+                        activity.onAccountClicked()
                         true
                     }
                     else -> false

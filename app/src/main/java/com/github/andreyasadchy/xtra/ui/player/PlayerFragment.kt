@@ -491,8 +491,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        showLoadingPicture()
         if (isTv) {
-            showLoadingPicture()
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     while (true) {
@@ -2312,6 +2312,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (isTv) {
                 // TV: the badge has a background, an empty one stays hidden (videos, clips)
                 viewersLayout.visibility = if (viewerCount != null) View.VISIBLE else View.GONE
+            } else {
+                val showViewers = requireContext().prefs().getBoolean(C.MOBILE_HUD_SHOW_VIEWERS, true)
+                viewersLayout.visibility = if (viewerCount != null && showViewers) View.VISIBLE else View.GONE
             }
         }
     }
@@ -7065,6 +7068,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                         info.visibility = if (label.isNullOrBlank()) View.GONE else View.VISIBLE
                     }
+                }
+            } else if (binding.playerControls.root.isVisible) {
+                val prefs = requireContext().prefs()
+                binding.playerControls.tvQualityInfo?.let { info ->
+                    val showQuality = prefs.getBoolean(C.MOBILE_HUD_SHOW_QUALITY, true)
+                    val label = if (showQuality) getCurrentQualityLabel() else null
+                    if (info.text?.toString() != label) {
+                        info.text = label
+                    }
+                    info.visibility = if (label.isNullOrBlank()) View.GONE else View.VISIBLE
+                }
+                val showViewers = prefs.getBoolean(C.MOBILE_HUD_SHOW_VIEWERS, true)
+                val hasViewers = !binding.playerControls.viewersText.text.isNullOrBlank()
+                binding.playerControls.viewersLayout.visibility = if (showViewers && hasViewers) View.VISIBLE else View.GONE
+                if (!prefs.getBoolean(C.PLAYER_SHOW_UPTIME, true) && binding.playerControls.uptimeLayout.isVisible) {
+                    binding.playerControls.uptimeTimer.stop()
+                    binding.playerControls.uptimeLayout.visibility = View.GONE
                 }
             }
             updateAdblockBadge()

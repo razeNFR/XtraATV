@@ -1535,4 +1535,11 @@
     <string name="mobile_copy_link">نسخ الرابط</string>
     <string name="mobile_open_browser">فتح في المتصفح</string>
     <string name="mobile_claim_drop">استلام</string>
+    <string name="mobile_hud_show_quality_title">شارة الجودة المباشرة</string>
+    <string name="mobile_hud_show_quality_summary">إظهار جودة الفيديو الحالية (مثل 1080p60) في واجهة المشغّل</string>
+    <string name="mobile_hud_show_viewers_title">إظهار عدد المشاهدين</string>
+    <string name="mobile_hud_show_viewers_summary">إظهار عدد المشاهدين المباشر في واجهة المشغّل</string>
+    <string name="mobile_hud_show_uptime_summary">إظهار مدة البث المباشر في واجهة المشغّل</string>
+    <string name="mobile_accounts_remove">إزالة %1$s من هذا الجهاز</string>
+    <string name="mobile_accounts_login_methods">إدارة طرق تسجيل الدخول</string>
 </resources>
