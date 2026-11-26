@@ -1677,7 +1677,7 @@ tryReconnect();
         cachedIconPng?.let { return it }
         return runCatching {
             val drawable = ContextCompat.getDrawable(appCtx, R.mipmap.ic_launcher)
-                ?: ContextCompat.getDrawable(appCtx, R.drawable.ic_launcher_foreground)
+                ?: appCtx.applicationInfo.loadIcon(appCtx.packageManager)
                 ?: return@runCatching null
             val size = 192
             val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)

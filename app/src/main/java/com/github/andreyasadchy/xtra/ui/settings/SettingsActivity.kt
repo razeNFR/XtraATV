@@ -96,7 +96,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 class SettingsActivity : AppCompatActivity() {
 
-    override fun attachBaseContext(newBase: Context) {
+    override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(com.github.andreyasadchy.xtra.ui.view.TvUi.wrapTvContext(newBase))
     }
 
