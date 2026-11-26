@@ -19,11 +19,57 @@ object TvUi {
 
     fun isTv(context: Context) = context.resources.getBoolean(R.bool.isTv)
 
+    @Volatile
+    private var cachedUseTvUi: Boolean? = null
+
+    /**
+     * Detects TVs and non-certified AOSP Android TV boxes while leaving real smartphones/tablets in mobile mode:
+     * - Certified TV / Fire TV / Leanback devices
+     * - Devices without a touchscreen (generic AOSP TV boxes)
+     * - Devices without telephony and without a battery (AOSP TV boxes that falsely declare touchscreen)
+     */
+    fun shouldUseTvUi(context: Context): Boolean {
+        cachedUseTvUi?.let { return it }
+        val uiModeType = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK
+        val pm = context.packageManager
+        val hasTvFeature = uiModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION ||
+            pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
+            @Suppress("DEPRECATION") pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEVISION) ||
+            pm.hasSystemFeature("amazon.hardware.fire_tv")
+        if (hasTvFeature) {
+            cachedUseTvUi = true
+            return true
+        }
+        val noTouchscreen = !pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN)
+        if (noTouchscreen) {
+            cachedUseTvUi = true
+            return true
+        }
+        if (!pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEPHONY)) {
+            val batteryIntent = runCatching {
+                context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            }.getOrNull()
+            if (batteryIntent != null) {
+                val hasBattery = batteryIntent.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, true)
+                val result = !hasBattery
+                cachedUseTvUi = result
+                return result
+            }
+            // Don't cache false if sticky broadcast wasn't readable yet during early attachBaseContext
+            return false
+        }
+        cachedUseTvUi = false
+        return false
+    }
+
     /**
      * Forces UI_MODE_TYPE_TELEVISION on non-certified AOSP Android TV boxes (which report UI_MODE_TYPE_NORMAL)
-     * while preserving night mode and locale. Returns [base] untouched on certified Android TV devices.
+     * while keeping smartphones in mobile mode and preserving night mode and locale.
      */
     fun wrapTvContext(base: Context): Context {
+        if (!shouldUseTvUi(base)) {
+            return base
+        }
         val current = base.resources.configuration
         if ((current.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
             android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
@@ -37,9 +83,9 @@ object TvUi {
         return base.createConfigurationContext(config)
     }
 
-    /** Ensures AppCompat override configurations keep UI_MODE_TYPE_TELEVISION intact without altering night mode. */
+    /** Ensures AppCompat override configurations keep UI_MODE_TYPE_TELEVISION intact on TV devices without altering night mode. */
     fun enforceTvUiMode(config: android.content.res.Configuration?) {
-        if (config == null) return
+        if (config == null || cachedUseTvUi != true) return
         if ((config.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) !=
             android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
         ) {

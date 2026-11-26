@@ -140,10 +140,16 @@ object TvExperimentalAdblock {
         return prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false) && !isAnyProxyEnabled(context)
     }
 
+    /** True when the experimental continuous Shadow HLS adblocker (`Adblock (Swap+)`) is active. */
+    fun isSwapPlusEnabled(context: Context): Boolean {
+        if (!TvUi.isTv(context)) return false
+        val prefs = context.prefs()
+        return prefs.getBoolean(C.TV_ADBLOCK_SWAP_PLUS, false) && !isAnyProxyEnabled(context)
+    }
+
     /**
-     * On TV, Swap Adblock (`player_adblock`) is always active and locked ON unless a Custom Proxy
-     * or HTTP Stream Proxy is enabled (including when Experimental Adblock is ON, where Swap acts
-     * as the automatic fallback for streams without VODs or brand-new streams).
+     * On TV, Swap Adblock (`player_adblock`) is always active unless a Custom Proxy or HTTP Stream Proxy
+     * is enabled (acting as the automatic fallback for both Adblock (Swap+) and Adblock (VOD)).
      */
     fun isSwapAdblockEnabled(context: Context): Boolean {
         val prefs = context.prefs()
@@ -154,15 +160,16 @@ object TvExperimentalAdblock {
         }
     }
 
-    /** Enforces the 3-state mutual exclusion rules in SharedPreferences on TV. */
+    /** Enforces mutual exclusion rules between Adblock (VOD), Adblock (Swap+), Adblock (Swap), and Proxies on TV. */
     fun normalizePrefs(context: Context) {
         if (!TvUi.isTv(context)) return
         val prefs = context.prefs()
         val exp = prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
+        val swapPlus = prefs.getBoolean(C.TV_ADBLOCK_SWAP_PLUS, false)
         val customProxy = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
         val streamProxy = prefs.getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
         val swap = prefs.getBoolean(C.PLAYER_ADBLOCK, true)
-        if (exp && (customProxy || streamProxy || !swap)) {
+        if ((exp || swapPlus) && (customProxy || streamProxy || !swap)) {
             prefs.edit {
                 putBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                 putBoolean(C.PLAYER_USE_STREAM_PROXY, false)
@@ -250,8 +257,14 @@ object TvExperimentalAdblock {
             .setMimeType(MimeTypes.APPLICATION_M3U8)
             .setLiveConfiguration(liveConfiguration())
             .build()
-        return HlsMediaSource.Factory(DefaultDataSource.Factory(context, httpFactory))
-            .setPlaylistParserFactory(PlaylistParserFactory(slidingWindowOnly, createdAtMs))
+        val audioSession = TvVodAudioRecovery.createSession(context, publishToUi = !slidingWindowOnly)
+        val prober = TvVodAudioRecovery.createOkHttpProber(xtraModule.okHttpClient.value)
+        val baseDsFactory = DefaultDataSource.Factory(context, httpFactory)
+        val wrappedDsFactory = TvVodAudioRecovery.FallbackDataSourceFactory(baseDsFactory, audioSession)
+        val baseParserFactory = PlaylistParserFactory(slidingWindowOnly, createdAtMs)
+        val wrappedParserFactory = TvVodAudioRecovery.PlaylistParserFactory(baseParserFactory, audioSession, prober)
+        return HlsMediaSource.Factory(wrappedDsFactory)
+            .setPlaylistParserFactory(wrappedParserFactory)
             .createMediaSource(mediaItem)
     }
 

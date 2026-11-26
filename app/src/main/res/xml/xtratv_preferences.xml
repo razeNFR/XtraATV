@@ -76,6 +76,34 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
+        <ListPreference
+            android:defaultValue="0"
+            android:entries="@array/tvOledScreensaverTimeoutEntries"
+            android:entryValues="@array/tvOledScreensaverTimeoutValues"
+            android:key="tv_oled_screensaver_timeout"
+            android:summary="@string/tv_oled_screensaver_timeout_summary"
+            android:title="@string/tv_oled_screensaver_timeout"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <ListPreference
+            android:defaultValue="100"
+            android:entries="@array/tvOledScreensaverDimEntries"
+            android:entryValues="@array/tvOledScreensaverDimValues"
+            android:key="tv_oled_screensaver_dim"
+            android:summary="%s"
+            android:title="@string/tv_oled_screensaver_dim"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="tv_vod_audio_recovery"
+            android:summary="@string/tv_vod_audio_recovery_summary"
+            android:title="@string/tv_vod_audio_recovery"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
         <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="tv_clips_autoplay"

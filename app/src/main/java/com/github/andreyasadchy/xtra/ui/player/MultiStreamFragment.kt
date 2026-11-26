@@ -3253,6 +3253,7 @@ class MultiStreamFragment : Fragment() {
             it.player.release()
         }
         tiles.clear()
+        com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.stopAll()
         releasePlaybackSignals()
         (activity as? MainActivity)?.onMultiStreamDestroyed()
         super.onDestroyView()

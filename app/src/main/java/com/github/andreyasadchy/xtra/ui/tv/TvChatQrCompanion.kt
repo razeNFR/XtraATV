@@ -207,7 +207,16 @@ object TvChatQrCompanion {
                     onDisconnect = {
                         stop()
                         TvToast.makeText(appCtx, R.string.tv_chat_qr_disconnected, Toast.LENGTH_SHORT).show()
-                        dismiss()
+                    },
+                    onRestart = {
+                        uiScope.launch {
+                            val newUrl = withContext(Dispatchers.IO) {
+                                ensureStarted(appCtx, chatFragment, channelName, channelLogin, channelAvatar)
+                            }
+                            if (newUrl == null) {
+                                TvToast.makeText(appCtx, R.string.tv_backup_no_network, Toast.LENGTH_LONG).show()
+                            }
+                        }
                     },
                 )
             }
@@ -223,10 +232,12 @@ object TvChatQrCompanion {
         onClose: () -> Unit,
         onRegenerate: () -> Unit,
         onDisconnect: () -> Unit,
+        onRestart: () -> Unit,
     ) {
         val prefs = remember(context) { context.prefs() }
         val connected by connectedClients.collectAsState()
         val liveUrl by sessionUrl.collectAsState()
+        val serverActive = liveUrl != null
         val displayUrl = liveUrl ?: initialUrl
         var qrBitmap by remember { mutableStateOf(initialQrBitmap) }
         LaunchedEffect(displayUrl) {
@@ -264,16 +275,22 @@ object TvChatQrCompanion {
                             rightTarget = disconnectReq,
                             upTarget = autoStartReq,
                             downTarget = closeRequester,
-                            onClick = onRegenerate,
+                            onClick = {
+                                if (serverActive) onRegenerate() else onRestart()
+                            },
                         )
                         FooterActionChip(
-                            label = context.getString(R.string.tv_chat_qr_disconnect),
-                            icon = R.drawable.tv_ic_close,
+                            label = context.getString(
+                                if (serverActive) R.string.tv_chat_qr_disconnect else R.string.tv_chat_qr_restart
+                            ),
+                            icon = if (serverActive) R.drawable.tv_ic_close else R.drawable.tv_ic_refresh,
                             requester = disconnectReq,
                             leftTarget = regenReq,
                             upTarget = autoStartReq,
                             downTarget = closeRequester,
-                            onClick = onDisconnect,
+                            onClick = {
+                                if (serverActive) onDisconnect() else onRestart()
+                            },
                         )
                     }
                     Spacer(Modifier.height(6.dp))
@@ -310,15 +327,24 @@ object TvChatQrCompanion {
                         Modifier
                             .size(164.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color.White)
+                            .background(if (serverActive) Color.White else Color(0xFF1F2430))
                             .padding(8.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Image(
-                            bitmap = qrBitmap.asImageBitmap(),
-                            contentDescription = displayUrl,
-                            modifier = Modifier.size(148.dp),
-                        )
+                        if (serverActive) {
+                            Image(
+                                bitmap = qrBitmap.asImageBitmap(),
+                                contentDescription = displayUrl,
+                                modifier = Modifier.size(148.dp),
+                            )
+                        } else {
+                            Text(
+                                text = context.getString(R.string.tv_chat_qr_disconnected),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF9CA3AF),
+                            )
+                        }
                     }
                     Column(
                         modifier = Modifier.weight(1f),
@@ -328,25 +354,41 @@ object TvChatQrCompanion {
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(999.dp))
-                                .background(if (connected > 0) Color(0x3310B981) else Color(0x22FFFFFF))
+                                .background(
+                                    when {
+                                        !serverActive -> Color(0x33EF4444)
+                                        connected > 0 -> Color(0x3310B981)
+                                        else -> Color(0x22FFFFFF)
+                                    }
+                                )
                                 .padding(horizontal = 10.dp, vertical = 4.dp),
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(7.dp)
                                     .clip(CircleShape)
-                                    .background(if (connected > 0) Color(0xFF34D399) else Color(0xFF9CA3AF))
+                                    .background(
+                                        when {
+                                            !serverActive -> Color(0xFFF87171)
+                                            connected > 0 -> Color(0xFF34D399)
+                                            else -> Color(0xFF9CA3AF)
+                                        }
+                                    )
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = if (connected > 0) {
-                                    context.getString(R.string.tv_chat_qr_connected, connected)
-                                } else {
-                                    context.getString(R.string.tv_chat_qr_waiting)
+                                text = when {
+                                    !serverActive -> context.getString(R.string.tv_chat_qr_disconnected)
+                                    connected > 0 -> context.getString(R.string.tv_chat_qr_connected, connected)
+                                    else -> context.getString(R.string.tv_chat_qr_waiting)
                                 },
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (connected > 0) Color(0xFFA7F3D0) else Color(0xFFE5E7EB),
+                                color = when {
+                                    !serverActive -> Color(0xFFFECACA)
+                                    connected > 0 -> Color(0xFFA7F3D0)
+                                    else -> Color(0xFFE5E7EB)
+                                },
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             )

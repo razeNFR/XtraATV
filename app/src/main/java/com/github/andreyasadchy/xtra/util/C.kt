@@ -422,6 +422,14 @@ object C {
     const val TV_BUTTON_CLIP = "tv_button_clip"
     /** TV: dim static HUD/chat overlays and shift pixels slightly after 3 min of remote inactivity. */
     const val TV_OLED_PROTECTION = "tv_oled_protection"
+    /** TV: OLED screen dimmer / pure black screensaver delay in seconds on Home/menus or paused player ("0" = off). */
+    const val TV_OLED_SCREENSAVER_TIMEOUT = "tv_oled_screensaver_timeout"
+    /** TV: OLED screen dimmer darkness percent ("100" = pure #000000 black, pixels off). */
+    const val TV_OLED_SCREENSAVER_DIM = "tv_oled_screensaver_dim"
+    /** TV: recover DMCA-muted audio segments in VODs, live DVR rewind, and Adblock VOD when still cached on CDN. */
+    const val TV_VOD_AUDIO_RECOVERY = "tv_vod_audio_recovery"
+    /** TV: experimental continuous Shadow HLS adblocker (replaces ad segments in-place, preserving 1440p). */
+    const val TV_ADBLOCK_SWAP_PLUS = "tv_adblock_swap_plus"
     /** TV: what happens when a live stream ends without a raid: "home" (default), "next", or "stay". */
     const val TV_STREAM_END_ACTION = "tv_stream_end_action"
     const val TV_EXPERIMENTAL_ADBLOCK = "tv_experimental_adblock"

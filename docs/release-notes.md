@@ -1,25 +1,25 @@
-# Xtra TV 1.4.7.2
+# Xtra TV 1.4.8
 
-### Fixes & Improvements
-- **TV Interface Enabled on 100% of Android Boxes**:
-  - Forced Android TV UI mode across all app activities and services, fixing generic / non-certified AOSP Android boxes that previously fell back to the mobile layout with 4 bottom icons (zero-cost no-op on certified Android TV / Google TV devices, preserving theme & language settings).
-- **Instant Live-Apply for TV Customization & Preview Settings**:
-  - Changing **Card size on Home**, **Card size in lists**, **Focused card zoom**, **Compact side menu**, **Truncate viewer count**, **Streamer name display**, **Round avatars**, **Tags**, or **Uptime** now refreshes the Home screen and all open lists immediately — no more force-closing or restarting the app.
-  - Global theme and pager options (dark theme, Material 3, rounded corners, reduced padding, compact text, Follow/Game tabs) cleanly refresh the UI automatically as soon as you leave Settings.
-- **Multi-Streamer Live Alert Banners Fixed**:
-  - Fixed a layout bug where simultaneous live notifications crushed the **`LIVE`** badge down to `"L"` and misaligned streamer names with titles.
-  - When **1 to 3 followed streamers** go live at the same time, each now gets its own clean banner (avatar, name, game, title); **4 or more** simultaneous launches are neatly grouped into a summary banner.
-- **Persistent QR Phone Live Chat, Web App Shortcut & Streamer Avatar**:
-  - **Stable Local URL & Installable Web App**: the QR companion now uses a fixed local port (`8765`, with automatic fallback if busy) and a persistent token, plus a proper Web App Manifest & Xtra TV app icon (`/manifest.json` + `/icon.png`) so **"Add to Home Screen"** on Android/iOS gets the real Xtra TV icon and reconnects without re-scanning.
-  - **Regenerate QR Link & Reconnect**: added a **Regenerate QR link** button in the QR panel to instantly rotate the link and revoke previously paired phones, plus smooth automatic/one-tap reconnection in the mobile chat page.
-  - **Real Streamer Profile Picture**: the mobile chat header now displays the streamer's actual profile picture (in both single stream and Multi-Stream, updating across switches), with automatic fallback to the initial letter if unavailable.
-  - **Optional Auto-Start**: added an optional **Auto-start phone chat** setting (OFF by default, available in the QR panel and Chat settings) to start the local Wi-Fi server automatically whenever you open a live stream or Multi-Stream.
-- **Direct Focus on the First Tab in Side Panels**:
-  - Opening tabbed TV side panels (**Chat settings**, **PiP settings**, **Multi-Stream menu**, and **Wallpaper panel**) now focuses the first tab right away so you can browse tabs left/right immediately, with crash-safe post-frame focus handling.
-- **Lightweight Navigation, Preview & Multi-Stream Optimizations**:
-  - **Multi-Stream Live Sync**: aligned Multi-Stream live tiles with the main player's low-latency live target offset (`PLAYER_LIVE_TARGET_OFFSET`), preventing the active stream from jumping 6–10 seconds backward when launching Multi-Stream.
-  - **Ad-Free Live Previews**: added a zero-polling in-memory HLS manifest ad guard to live card and Home Hero previews — if Twitch injects a mid-preview ad after ~15–30 seconds while adblock is active, the same preview player seamlessly swaps to an ad-free backup playlist (or mutes until the ad clears).
-  - **Smoother Layout & Lower Memory**: eliminated redundant double layout passes (`requestLayout() during layout`) on sort bars and ensured at most **1 live-preview `ExoPlayer`** stays allocated across browsing lists, releasing idle preview players immediately when switching screens, opening a real player / Multi-Stream, or leaving the app.
+### What's New
+- **New `Adblock (Swap+)` Continuous Shadow HLS Engine *(Experimental)***:
+  - Maintains a lightweight anonymous shadow HLS playlist on the main fullscreen player to splice out pre-roll and mid-roll ads **without cuts**, with **less quality drop** and **normal live latency** (unlike `Adblock (VOD)`), showing a lightweight **`Ad`** badge during breaks and falling back automatically to `Adblock (Swap)` (`Swap fallback (Swap+ failed)`) if needed.
+  - Multi-Stream and PiP stay on classic `Adblock (Swap)` (or `Adblock (VOD)` when enabled) for maximum stability and low resource usage.
+  - Renamed Experimental Adblock to **`Adblock (VOD)`** *(Experimental)* everywhere, clarifying that it works everywhere (main player, Multi-Stream, and PiP) with automatic fallback to `Swap+` / `Swap`.
+  - **Clearer Adblock & Proxies Panel & Settings**: added concise descriptions under `Adblock (Swap)`, `Adblock (Swap+)`, and `Adblock (VOD)`, replaced confusing duplicate toggles with a clear **`Active fallback`** badge on fallback blockers, and automatically hides Custom Proxy and HTTP Stream Proxy lists in the player panel when toggled off.
+- **DMCA-Muted VOD Audio Recovery (VOD, Live DVR Rewind & `Adblock (VOD)`)**:
+  - Opt-in toggle in Player Settings (**off by default**, best-effort depending on whether Twitch still keeps the original audio cached) that attempts to restore muted music segments across **classic VODs**, **sub-only VODs**, **live DVR rewind**, **`Adblock (VOD)`**, and **VOD quality switches**.
+  - **Green & Red Seek Bar**: shows **green** segments for verified recovered audio and **red** segments for muted audio (always visible even when recovery is off), with per-range majority probing, silent-copy filtering, permanent per-segment fallback memory on HTTP 403/404/410, and a one-shot recovery toast (`Muted audio recovered (~X min)`).
+- **Instant Live DVR Rewind via Async Background Pre-Lookup**:
+  - 3 seconds after a fullscreen live stream loads (skipped in PiP and Multi-Stream), quietly resolves `index-dvr.m3u8` on a background thread so rewinding or resuming from pause switches to DVR immediately without waiting on *"Looking for VOD..."*.
+- **Pure-Black OLED Idle Screen Dimming (SmartTube-Style)**:
+  - Protects OLED TVs from burn-in by dimming or turning the screen **pure `#000000` black** (100% default, configurable 100% / 85% / 70% / 50%) after configurable inactivity (**Off / 1 / 2 / 3 / 5 / 10 min**) on Home, menus, or when playback is **paused** — never during active video playback.
+  - Releases idle preview players while active and wakes instantly on the first remote press without triggering accidental clicks.
+- **1440p & 4K (2160p) Preferred Quality Options**:
+  - Added **`2160p60 (4K)`**, **`2160p (4K)`**, **`1440p60`**, and **`1440p`** right after **`Source`** in quality preferences, automatically falling back to `1080p60` or the highest available lower quality when unavailable.
+- **Smart TV & Mobile Layout Detection**:
+  - Restores the mobile layout for smartphone users while keeping the Android TV interface forced on 100% of Android TVs, Fire TVs, and generic / non-certified AOSP Android TV boxes (no touchscreen, or no telephony & no battery).
+- **QR Phone Chat Panel Polish**:
+  - Clicking **Disconnect** stops the local Wi-Fi server while keeping the QR panel open so you can restart it with one click whenever needed.
 
 ### Install
-Download `XtraTV-1.4.7.2-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download `XtraTV-1.4.8-tv.apk` below and install it over the previous version, your settings and account are kept.

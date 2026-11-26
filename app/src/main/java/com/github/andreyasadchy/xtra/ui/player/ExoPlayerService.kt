@@ -985,28 +985,8 @@ class ExoPlayerService : BasePlaybackService() {
                                                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                                                         setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
                                                     }.build()
-                                                    val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
                                                     player.setMediaSource(
-                                                        HlsMediaSource.Factory(
-                                                            DefaultDataSource.Factory(
-                                                                this@ExoPlayerService,
-                                                                when {
-                                                                    networkLibrary == C.HTTP_ENGINE && xtraModule.httpEngine.value != null -> @SuppressLint("NewApi") {
-                                                                        HttpEngineDataSource.Factory(xtraModule.httpEngine.value, xtraModule.cronetExecutor.value, null, 0, false, false, null, null, null) { false }
-                                                                    }
-                                                                    networkLibrary == C.CRONET && xtraModule.cronetEngine.value != null -> {
-                                                                        CronetDataSource.Factory(xtraModule.cronetEngine.value, xtraModule.cronetExecutor.value, null, 0, false, false, null, null, null) { false }
-                                                                    }
-                                                                    else -> {
-                                                                        OkHttpDataSource.Factory(xtraModule.okHttpClient.value, null, null, null, null) { false }
-                                                                    }
-                                                                }
-                                                            )
-                                                        ).apply {
-                                                            setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
-                                                        }.createMediaSource(
-                                                            MediaItem.fromUri(url)
-                                                        ),
+                                                        buildVodHlsMediaSource(url),
                                                         playbackPosition
                                                     )
                                                     player.volume = userVolume()
@@ -1451,28 +1431,8 @@ class ExoPlayerService : BasePlaybackService() {
                                             setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
                                         }.build()
                                     }
-                                    val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
                                     player.setMediaSource(
-                                        HlsMediaSource.Factory(
-                                            DefaultDataSource.Factory(
-                                                this@ExoPlayerService,
-                                                when {
-                                                    networkLibrary == C.HTTP_ENGINE && xtraModule.httpEngine.value != null -> @SuppressLint("NewApi") {
-                                                        HttpEngineDataSource.Factory(xtraModule.httpEngine.value, xtraModule.cronetExecutor.value, null, 0, false, false, null, null, null) { false }
-                                                    }
-                                                    networkLibrary == C.CRONET && xtraModule.cronetEngine.value != null -> {
-                                                        CronetDataSource.Factory(xtraModule.cronetEngine.value, xtraModule.cronetExecutor.value, null, 0, false, false, null, null, null) { false }
-                                                    }
-                                                    else -> {
-                                                        OkHttpDataSource.Factory(xtraModule.okHttpClient.value, null, null, null, null) { false }
-                                                    }
-                                                }
-                                            )
-                                        ).apply {
-                                            setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
-                                        }.createMediaSource(
-                                            MediaItem.fromUri(url)
-                                        ),
+                                        buildVodHlsMediaSource(url),
                                         initialPos
                                     )
                                     player.volume = userVolume()
@@ -1838,6 +1798,18 @@ class ExoPlayerService : BasePlaybackService() {
                     val proxyUser = streamProxy?.username
                     val proxyPassword = streamProxy?.password
                     val proxyMultivariantPlaylist = streamProxy?.proxyMultivariantPlaylist == true && !proxyHost.isNullOrBlank() && proxyPort != null
+                    com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.clearActiveState()
+                    val useShadowAdblock = TvExperimentalAdblock.isSwapPlusEnabled(this@ExoPlayerService) &&
+                        !useCustomProxy &&
+                        !useStreamProxy &&
+                        !proxyMultivariantPlaylist
+                    if (useShadowAdblock) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.onChannelNavigated(
+                            this@ExoPlayerService,
+                            channelLogin,
+                            multiStreamTile = false,
+                        )
+                    }
                     player.setMediaSource(
                         HlsMediaSource.Factory(
                             DefaultDataSource.Factory(
@@ -1979,7 +1951,21 @@ class ExoPlayerService : BasePlaybackService() {
                                 }
                             )
                         ).apply {
-                            setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
+                            val baseParserFactory = CustomHlsPlaylistParserFactory()
+                            shadowAdActive = false
+                            setPlaylistParserFactory(
+                                if (useShadowAdblock) {
+                                    com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.ShadowPlaylistParserFactory(
+                                        context = this@ExoPlayerService,
+                                        delegate = baseParserFactory,
+                                        channelLoginHint = channelLogin,
+                                        onAdHandled = { active -> shadowAdActive = active },
+                                        shouldBypass = { videoSwapActive || proxyMediaPlaylist },
+                                    )
+                                } else {
+                                    baseParserFactory
+                                }
+                            )
                             setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(
                                 if (useCustomProxy || proxyMultivariantPlaylist) {
                                     1
@@ -2191,28 +2177,8 @@ class ExoPlayerService : BasePlaybackService() {
                             }
                         }.build()
                     }
-                    val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
                     player.setMediaSource(
-                        HlsMediaSource.Factory(
-                            DefaultDataSource.Factory(
-                                this@ExoPlayerService,
-                                when {
-                                    networkLibrary == C.HTTP_ENGINE && xtraModule.httpEngine.value != null -> @SuppressLint("NewApi") {
-                                        HttpEngineDataSource.Factory(xtraModule.httpEngine.value, xtraModule.cronetExecutor.value, null, 0, false, false, null, null, null) { false }
-                                    }
-                                    networkLibrary == C.CRONET && xtraModule.cronetEngine.value != null -> {
-                                        CronetDataSource.Factory(xtraModule.cronetEngine.value, xtraModule.cronetExecutor.value, null, 0, false, false, null, null, null) { false }
-                                    }
-                                    else -> {
-                                        OkHttpDataSource.Factory(xtraModule.okHttpClient.value, null, null, null, null) { false }
-                                    }
-                                }
-                            )
-                        ).apply {
-                            setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
-                        }.createMediaSource(
-                            MediaItem.fromUri(url)
-                        ),
+                        buildVodHlsMediaSource(url),
                         playbackPosition
                     )
                     player.volume = userVolume()
@@ -2224,6 +2190,42 @@ class ExoPlayerService : BasePlaybackService() {
                 videoStartPosition = null
             }
         }
+    }
+
+    private fun buildVodHlsMediaSource(url: String): HlsMediaSource {
+        val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP)
+        val vodBaseDsFactory = DefaultDataSource.Factory(
+            this@ExoPlayerService,
+            when {
+                networkLibrary == C.HTTP_ENGINE && xtraModule.httpEngine.value != null -> @SuppressLint("NewApi") {
+                    HttpEngineDataSource.Factory(xtraModule.httpEngine.value, xtraModule.cronetExecutor.value, null, 0, false, false, null, null, null) { false }
+                }
+                networkLibrary == C.CRONET && xtraModule.cronetEngine.value != null -> {
+                    CronetDataSource.Factory(xtraModule.cronetEngine.value, xtraModule.cronetExecutor.value, null, 0, false, false, null, null, null) { false }
+                }
+                else -> {
+                    OkHttpDataSource.Factory(xtraModule.okHttpClient.value, null, null, null, null) { false }
+                }
+            }
+        )
+        val audioSession = com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.createSession(
+            this@ExoPlayerService,
+            publishToUi = true,
+        )
+        val audioProber = com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.createOkHttpProber(xtraModule.okHttpClient.value)
+        return HlsMediaSource.Factory(
+            com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.FallbackDataSourceFactory(vodBaseDsFactory, audioSession)
+        ).apply {
+            setPlaylistParserFactory(
+                com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.PlaylistParserFactory(
+                    CustomHlsPlaylistParserFactory(),
+                    audioSession,
+                    audioProber,
+                )
+            )
+        }.createMediaSource(
+            MediaItem.fromUri(url)
+        )
     }
 
     private suspend fun updateVideoInfo() {
@@ -2405,6 +2407,9 @@ class ExoPlayerService : BasePlaybackService() {
     private fun setStreamMediaUri(player: ExoPlayer, mediaItem: MediaItem, uriString: String, seekPositionMs: Long) {
         if (experimentalVodActive) {
             player.setMediaSource(TvExperimentalAdblock.buildMediaSource(this, xtraModule, uriString.toUri()), seekPositionMs)
+            player.prepare()
+        } else if (type == VIDEO) {
+            player.setMediaSource(buildVodHlsMediaSource(uriString), seekPositionMs)
             player.prepare()
         } else {
             player.setMediaItem(mediaItem.buildUpon().setUri(uriString).build())
@@ -3247,7 +3252,24 @@ class ExoPlayerService : BasePlaybackService() {
         videoSwapActive = true
         if (!silentRetry && !hidden) {
             val adProxy = videoSwapList?.getOrNull(currentVideoSwapItem)?.platform == AD_PROXY_PLATFORM
-            serviceListener?.toast(if (adProxy) R.string.starting_proxy else R.string.starting_video_swap, Toast.LENGTH_SHORT)
+            val swapPlusFallback = !adProxy && TvExperimentalAdblock.isSwapPlusEnabled(this) && !experimentalVodActive
+            if (swapPlusFallback) {
+                runCatching {
+                    val pl = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
+                    val lastTitle = pl?.segments?.lastOrNull()?.title.orEmpty()
+                    val dateRanges = pl?.interstitials?.joinToString(",") { it.id }.orEmpty()
+                    android.util.Log.i(
+                        "TvShadowAdblock",
+                        "Classic Swap fallback on $channelLogin: lastTitle='$lastTitle' dateRanges=[$dateRanges] shadowAdActive=$shadowAdActive"
+                    )
+                }
+            }
+            val toastRes = when {
+                adProxy -> R.string.starting_proxy
+                swapPlusFallback -> R.string.tv_adblock_swap_plus_fallback_toast
+                else -> R.string.starting_video_swap
+            }
+            serviceListener?.toast(toastRes, Toast.LENGTH_SHORT)
         }
         player?.let { player ->
             if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {
@@ -3429,6 +3451,9 @@ class ExoPlayerService : BasePlaybackService() {
      * without the ad, a bar for the ad playing that starts again with the next one, then "Back to live…" until the stream
      * is back. Without the marks of Twitch: the kind of ad and the source only.
      */
+    @Volatile
+    private var shadowAdActive: Boolean = false
+
     fun getAdblockInfo(): AdblockInfo? {
         if (type != STREAM) return null
         val source = when {
@@ -3450,6 +3475,9 @@ class ExoPlayerService : BasePlaybackService() {
         if (source == null && !hidden) {
             backLiveFrom = 0L
             backLiveProgress = 0f
+            if (shadowAdActive && !experimentalVodActive) {
+                return AdblockInfo(getString(R.string.tv_adblock_ad), null, null)
+            }
             if (experimentalNoticeTitleRes != 0) {
                 if (!streamPictureShown && player?.playbackState != Player.STATE_READY) {
                     return null
@@ -3779,6 +3807,8 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
         experimentalVodBaseDir = null
+        shadowAdActive = false
+        com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.clearActiveState()
         clearLivePauseState()
         // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
         // no sound), it must not come back on the screen for a moment when the backup player goes
@@ -5464,6 +5494,9 @@ class ExoPlayerService : BasePlaybackService() {
         proxyMediaPlaylist = false
         hidden = false
         fallbackH264ForStream = false
+        shadowAdActive = false
+        com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.clearActiveState()
+        com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.stopAll()
     }
 
     override fun onDestroy() {

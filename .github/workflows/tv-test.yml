@@ -32,6 +32,8 @@ jobs:
         cache-provider: 'basic'
     - name: Check the translations of the TV strings
       run: python3 .github/scripts/check_translations.py
+    - name: Run unit tests
+      run: ./gradlew testDebugUnitTest
     - name: Build with Gradle
       run: ./gradlew assembleDebug
     - name: Build the release APK

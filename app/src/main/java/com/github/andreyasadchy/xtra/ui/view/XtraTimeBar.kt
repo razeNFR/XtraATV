@@ -34,12 +34,17 @@ class XtraTimeBar : DefaultTimeBar {
     private var currentPosMs: Long = 0L
     private var scrubberShown: Boolean = true
     private var mutedSegments: List<Pair<Long, Long>> = emptyList()
+    private var recoveredSegments: List<Pair<Long, Long>> = emptyList()
     private var chapterTimesMs: LongArray = LongArray(0)
     private var chapterTickWidthPx: Float = 0f
 
     private val mutedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = 0xF0FF3B3B.toInt()
+    }
+    private val recoveredPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0xF022C55E.toInt()
     }
     private val chapterOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
@@ -116,6 +121,12 @@ class XtraTimeBar : DefaultTimeBar {
         invalidate()
     }
 
+    fun setRecoveredSegments(segments: List<Pair<Long, Long>>) {
+        if (recoveredSegments == segments) return
+        recoveredSegments = segments
+        invalidate()
+    }
+
     override fun setAdGroupTimesMs(
         adGroupTimesMs: LongArray?,
         playedAdGroups: BooleanArray?,
@@ -161,9 +172,10 @@ class XtraTimeBar : DefaultTimeBar {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val segments = mutedSegments
+        val muted = mutedSegments
+        val recovered = recoveredSegments
         val duration = totalDurationMs
-        if (segments.isEmpty() || duration <= 0L) return
+        if ((muted.isEmpty() && recovered.isEmpty()) || duration <= 0L) return
 
         val barLeft = (paddingLeft + scrubberPaddingPx).toFloat()
         val barRight = (width - paddingRight - scrubberPaddingPx).toFloat()
@@ -198,24 +210,28 @@ class XtraTimeBar : DefaultTimeBar {
         }
 
         val durDouble = duration.toDouble()
-        for ((rawStart, rawEnd) in segments) {
-            val s = rawStart.coerceIn(0L, duration)
-            val e = rawEnd.coerceIn(s, duration)
-            if (e <= s) continue
-            val x1 = barLeft + (barWidth * (s.toDouble() / durDouble)).toFloat()
-            val rawX2 = barLeft + (barWidth * (e.toDouble() / durDouble)).toFloat()
-            val x2 = max(x1 + minSegmentWidthPx, rawX2).coerceAtMost(barRight)
-            if (x2 > x1) {
-                segmentRect.set(x1, barTop, x2, barBottom)
-                canvas.drawRoundRect(segmentRect, corner, corner, mutedPaint)
+        fun drawRanges(list: List<Pair<Long, Long>>, paint: Paint) {
+            for ((rawStart, rawEnd) in list) {
+                val s = rawStart.coerceIn(0L, duration)
+                val e = rawEnd.coerceIn(s, duration)
+                if (e <= s) continue
+                val x1 = barLeft + (barWidth * (s.toDouble() / durDouble)).toFloat()
+                val rawX2 = barLeft + (barWidth * (e.toDouble() / durDouble)).toFloat()
+                val x2 = max(x1 + minSegmentWidthPx, rawX2).coerceAtMost(barRight)
+                if (x2 > x1) {
+                    segmentRect.set(x1, barTop, x2, barBottom)
+                    canvas.drawRoundRect(segmentRect, corner, corner, paint)
+                }
             }
         }
+        drawRanges(recovered, recoveredPaint)
+        drawRanges(muted, mutedPaint)
         if (chapterTimesMs.isNotEmpty()) {
             val halfTick = chapterTickWidthPx / 2f
             for (markerMs in chapterTimesMs) {
                 if (markerMs <= 0L || markerMs >= duration) continue
-                val inMuted = segments.any { (s, e) -> markerMs in s..e }
-                if (!inMuted) continue
+                val inAny = muted.any { (s, e) -> markerMs in s..e } || recovered.any { (s, e) -> markerMs in s..e }
+                if (!inAny) continue
                 val tx = (barLeft + (barWidth * (markerMs.toDouble() / durDouble)).toFloat())
                     .coerceIn(barLeft + halfTick, barRight - halfTick)
                 canvas.drawRect(tx - halfTick, barTop, tx + halfTick, barBottom, chapterOverlayPaint)

@@ -29,8 +29,8 @@ android {
         applicationId = "com.github.razenfr.xtratv"
         minSdk = 24
         targetSdk = 37
-        versionCode = 173
-        versionName = "1.4.7.2-tv"
+        versionCode = 174
+        versionName = "1.4.8-tv"
         val releaseNotesFile = rootProject.file("docs/release-notes.md")
         val escapedReleaseNotes = (if (releaseNotesFile.isFile) releaseNotesFile.readText(Charsets.UTF_8) else "")
             .replace("\\", "\\\\")
@@ -63,6 +63,9 @@ android {
     }
     lint {
         disable += "ContentDescription"
+    }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
     packaging.jniLibs.excludes.addAll(listOf(
         "lib/x86/libtranslate_jni.so",
@@ -134,6 +137,7 @@ dependencies {
     implementation(libs.glide.webpdecoder)
 
     implementation(libs.coroutines)
+    testImplementation("junit:junit:4.13.2")
 }
 
 apollo {
