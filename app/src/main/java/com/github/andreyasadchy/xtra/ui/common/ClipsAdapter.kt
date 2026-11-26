@@ -277,6 +277,18 @@ class ClipsAdapter(
                     } else {
                         gameName.visibility = View.GONE
                     }
+                    if (!com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                        com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyResponsiveMediaCardDensity(
+                            cardRoot = root,
+                            userImage = userImage,
+                            title = title,
+                            username = username,
+                            gameName = gameName,
+                            primaryBadges = listOf(duration),
+                            secondaryBadges = listOf(views, date, type),
+                            optionsButton = options,
+                        )
+                    }
                     options.setOnClickListener { it ->
                         if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
                             // TV: the 3 dots open the panel of the actions, like OK held on the card

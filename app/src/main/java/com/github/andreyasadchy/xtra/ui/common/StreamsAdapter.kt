@@ -355,6 +355,17 @@ class StreamsAdapter(
                         tagsLayout.visibility = View.GONE
                     }
                     bindPlaybackBadgeOnly(item)
+                    if (!isTv) {
+                        com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyResponsiveMediaCardDensity(
+                            cardRoot = root,
+                            userImage = userImage,
+                            title = title,
+                            username = username,
+                            gameName = gameName,
+                            primaryBadges = listOf(viewers),
+                            secondaryBadges = listOf(mobileLiveBadge, uptime),
+                        )
+                    }
                 } else {
                     tvPlayingBadge?.visibility = View.GONE
                 }

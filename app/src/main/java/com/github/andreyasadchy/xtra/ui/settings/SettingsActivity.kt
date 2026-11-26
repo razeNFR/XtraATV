@@ -1991,6 +1991,27 @@ class SettingsActivity : AppCompatActivity() {
                     // every icon at the same size, whatever the size of its picture
                     preference.icon = android.graphics.drawable.LayerDrawable(arrayOf(drawable)).apply { setLayerSize(0, size, size) }
                 }
+            } else {
+                // Mobile-only HUD switches inside "Player buttons" (never shown on Android TV)
+                val ctx = requireContext()
+                val qualityPref = SwitchPreferenceCompat(ctx).apply {
+                    key = C.MOBILE_HUD_SHOW_QUALITY
+                    title = getString(R.string.mobile_hud_show_quality_title)
+                    summary = getString(R.string.mobile_hud_show_quality_summary)
+                    setIcon(R.drawable.tv_ic_hd)
+                    setDefaultValue(true)
+                    isSingleLineTitle = false
+                }
+                val viewersPref = SwitchPreferenceCompat(ctx).apply {
+                    key = C.MOBILE_HUD_SHOW_VIEWERS
+                    title = getString(R.string.mobile_hud_show_viewers_title)
+                    summary = getString(R.string.mobile_hud_show_viewers_summary)
+                    setIcon(R.drawable.tv_ic_eye)
+                    setDefaultValue(true)
+                    isSingleLineTitle = false
+                }
+                preferenceScreen.addPreference(qualityPref)
+                preferenceScreen.addPreference(viewersPref)
             }
             findPreference<SwitchPreferenceCompat>("sleep_timer_lock")?.setOnPreferenceChangeListener { _, newValue ->
                 if (newValue == true) {

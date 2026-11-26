@@ -1542,4 +1542,6 @@
     <string name="mobile_hud_show_uptime_summary">Amosar a duración da emisión no HUD do reprodutor</string>
     <string name="mobile_accounts_remove">Eliminar a %1$s deste dispositivo</string>
     <string name="mobile_accounts_login_methods">Xestionar métodos de inicio de sesión</string>
+    <string name="mobile_show_adblock_badge_title">Amosar insignia do bloqueador de anuncios</string>
+    <string name="mobile_show_adblock_badge_summary">Amosar o aviso flotante de bloqueo de anuncios sobre o vídeo durante as pausas</string>
 </resources>

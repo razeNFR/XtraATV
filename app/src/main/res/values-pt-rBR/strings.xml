@@ -1542,4 +1542,6 @@
     <string name="mobile_hud_show_uptime_summary">Mostrar o tempo de transmissão ao vivo no HUD do player</string>
     <string name="mobile_accounts_remove">Remover %1$s deste dispositivo</string>
     <string name="mobile_accounts_login_methods">Gerenciar métodos de login</string>
+    <string name="mobile_show_adblock_badge_title">Mostrar selo de bloqueio de anúncios</string>
+    <string name="mobile_show_adblock_badge_summary">Exibir o selo flutuante de bloqueio de anúncios sobre o vídeo durante intervalos</string>
 </resources>

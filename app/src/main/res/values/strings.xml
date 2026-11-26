@@ -1562,4 +1562,6 @@
     <string name="mobile_hud_show_uptime_summary">Show how long the stream has been live in the player HUD</string>
     <string name="mobile_accounts_remove">Remove %1$s from this device</string>
     <string name="mobile_accounts_login_methods">Manage login methods</string>
+    <string name="mobile_show_adblock_badge_title">Show adblock badge during ads</string>
+    <string name="mobile_show_adblock_badge_summary">Display the floating ad-blocking status pill on top of the video during ad breaks</string>
 </resources>

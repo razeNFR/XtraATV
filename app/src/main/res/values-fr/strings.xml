@@ -1542,4 +1542,6 @@
     <string name="mobile_hud_show_uptime_summary">Afficher la durée du stream en direct sur le HUD du lecteur</string>
     <string name="mobile_accounts_remove">Retirer %1$s de cet appareil</string>
     <string name="mobile_accounts_login_methods">Gérer les méthodes de connexion</string>
+    <string name="mobile_show_adblock_badge_title">Afficher le badge anti-pub</string>
+    <string name="mobile_show_adblock_badge_summary">Afficher l\'encart flottant de blocage pub sur la vidéo pendant les coupures publicitaires</string>
 </resources>

@@ -1542,4 +1542,6 @@
     <string name="mobile_hud_show_uptime_summary">Показывать длительность стрима в HUD плеера</string>
     <string name="mobile_accounts_remove">Удалить %1$s с этого устройства</string>
     <string name="mobile_accounts_login_methods">Управление способами входа</string>
+    <string name="mobile_show_adblock_badge_title">Показывать значок блокировки рекламы</string>
+    <string name="mobile_show_adblock_badge_summary">Отображать плавающий значок блокировщика поверх видео во время рекламы</string>
 </resources>

@@ -301,6 +301,158 @@ object MobileUi {
         }
     }
 
+    /**
+     * Mobile-only responsive card scaling for Stream, VOD, and Clip grids (1, 2, 3, 4+ columns).
+     * Strictly no-op on Android TV.
+     * - 1 column: full-size avatar (50dp), normal typography & thumbnail badges.
+     * - 2 columns: compact 30dp avatar, tighter margins, crisp 13sp/11.5sp text, slimmer 10sp badges.
+     * - 3+ columns: hides avatar & overflow button so title/streamer get 100% width, keeps only
+     *   a single micro-pill on the thumbnail so the video preview always stays clearly visible.
+     */
+    fun applyResponsiveMediaCardDensity(
+        cardRoot: View,
+        userImage: ImageView?,
+        title: TextView?,
+        username: TextView?,
+        gameName: TextView?,
+        primaryBadges: List<TextView?>,
+        secondaryBadges: List<TextView?>,
+        optionsButton: View? = null,
+    ) {
+        val context = cardRoot.context
+        if (TvUi.isTv(context)) return
+
+        val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+        val cols = if (isPortrait) {
+            context.prefs().getString(com.github.andreyasadchy.xtra.util.C.PORTRAIT_COLUMN_COUNT, "1")?.toIntOrNull() ?: 1
+        } else {
+            context.prefs().getString(com.github.andreyasadchy.xtra.util.C.LANDSCAPE_COLUMN_COUNT, "2")?.toIntOrNull() ?: 2
+        }
+        val d = context.resources.displayMetrics.density
+
+        // 1. Card outer margins
+        (cardRoot.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            val m = when {
+                cols >= 3 -> (3 * d).toInt()
+                cols == 2 -> (5 * d).toInt()
+                else -> (8 * d).toInt()
+            }
+            if (lp.leftMargin != m || lp.topMargin != m) {
+                lp.setMargins(m, m, m, m)
+                cardRoot.layoutParams = lp
+            }
+        }
+
+        // 2. Avatar sizing (hide in 3+ columns so text takes 100% width; compact 30dp in 2 columns)
+        if (userImage != null) {
+            if (cols >= 3) {
+                userImage.visibility = View.GONE
+            } else if (userImage.visibility == View.VISIBLE) {
+                val avatarPx = if (cols == 2) (30 * d).toInt() else (50 * d).toInt()
+                val marginStart = if (cols == 2) (8 * d).toInt() else (12 * d).toInt()
+                val marginVert = if (cols == 2) (8 * d).toInt() else (12 * d).toInt()
+                (userImage.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                    if (lp.width != avatarPx || lp.height != avatarPx || lp.marginStart != marginStart) {
+                        lp.width = avatarPx
+                        lp.height = avatarPx
+                        lp.marginStart = marginStart
+                        lp.topMargin = marginVert
+                        lp.bottomMargin = marginVert
+                        userImage.layoutParams = lp
+                    }
+                }
+            }
+        }
+
+        // 3. Overflow button on VOD/Clip cards (hide in 3+ columns; long-press opens full action sheet)
+        if (optionsButton != null) {
+            optionsButton.visibility = if (cols >= 3) View.GONE else View.VISIBLE
+        }
+
+        // 4. Text container margins & typography
+        val textParent = title?.parent as? View
+        (textParent?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            val hMargin = when {
+                cols >= 3 -> (6 * d).toInt()
+                cols == 2 -> (8 * d).toInt()
+                else -> (12 * d).toInt()
+            }
+            val vMargin = when {
+                cols >= 3 -> (6 * d).toInt()
+                cols == 2 -> (8 * d).toInt()
+                else -> (10 * d).toInt()
+            }
+            if (lp.marginStart != hMargin || lp.topMargin != vMargin) {
+                lp.marginStart = hMargin
+                lp.marginEnd = hMargin
+                lp.topMargin = vMargin
+                lp.bottomMargin = vMargin
+                textParent.layoutParams = lp
+            }
+        }
+        title?.setTextSize(
+            android.util.TypedValue.COMPLEX_UNIT_SP,
+            when {
+                cols >= 3 -> 11.5f
+                cols == 2 -> 13f
+                else -> 15.5f
+            }
+        )
+        val subSize = when {
+            cols >= 3 -> 10.5f
+            cols == 2 -> 11.5f
+            else -> 13.5f
+        }
+        username?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subSize)
+        gameName?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subSize)
+
+        // 5. Thumbnail badges: slimmer in 2 columns; hide secondary badges in 3+ columns so thumbnail stays clear
+        val badgeTextSp = when {
+            cols >= 3 -> 9f
+            cols == 2 -> 10f
+            else -> 11.5f
+        }
+        val badgeHPad = when {
+            cols >= 3 -> (4 * d).toInt()
+            cols == 2 -> (5 * d).toInt()
+            else -> (7 * d).toInt()
+        }
+        val badgeVPad = when {
+            cols >= 3 -> (1 * d).toInt()
+            cols == 2 -> (1.5f * d).toInt()
+            else -> (2 * d).toInt()
+        }
+        val badgeMargin = when {
+            cols >= 3 -> (3 * d).toInt()
+            cols == 2 -> (5 * d).toInt()
+            else -> (8 * d).toInt()
+        }
+
+        fun styleBadge(tv: TextView?) {
+            if (tv == null) return
+            tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, badgeTextSp)
+            tv.setPadding(badgeHPad, badgeVPad, badgeHPad, badgeVPad)
+            (tv.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                if (lp.marginStart > 0) lp.marginStart = badgeMargin
+                if (lp.marginEnd > 0) lp.marginEnd = badgeMargin
+                if (lp.topMargin > 0) lp.topMargin = badgeMargin
+                if (lp.bottomMargin > 0) lp.bottomMargin = badgeMargin
+                tv.layoutParams = lp
+            }
+        }
+
+        primaryBadges.forEach { styleBadge(it) }
+        secondaryBadges.forEach { tv ->
+            if (tv != null) {
+                if (cols >= 3) {
+                    tv.visibility = View.GONE
+                } else {
+                    styleBadge(tv)
+                }
+            }
+        }
+    }
+
     fun openUrl(context: Context, url: String) {
         try {
             val intent = Intent(Intent.ACTION_VIEW, url.toUri()).apply {

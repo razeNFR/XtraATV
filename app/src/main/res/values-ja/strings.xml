@@ -1542,4 +1542,6 @@
     <string name="mobile_hud_show_uptime_summary">プレイヤーHUDに配信経過時間を表示</string>
     <string name="mobile_accounts_remove">このデバイスから %1$s を削除</string>
     <string name="mobile_accounts_login_methods">ログイン方法を管理</string>
+    <string name="mobile_show_adblock_badge_title">広告ブロック中にバッジを表示</string>
+    <string name="mobile_show_adblock_badge_summary">広告再生中に動画の上へ広告ブロック状況バッジを表示する</string>
 </resources>

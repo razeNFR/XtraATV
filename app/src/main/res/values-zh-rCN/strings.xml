@@ -1542,4 +1542,6 @@
     <string name="mobile_hud_show_uptime_summary">在播放器 HUD 中显示直播时长</string>
     <string name="mobile_accounts_remove">从此设备移除 %1$s</string>
     <string name="mobile_accounts_login_methods">管理登录方式</string>
+    <string name="mobile_show_adblock_badge_title">广告期间显示去广告标签</string>
+    <string name="mobile_show_adblock_badge_summary">在插播广告期间于视频上方显示悬浮的去广告状态标签</string>
 </resources>

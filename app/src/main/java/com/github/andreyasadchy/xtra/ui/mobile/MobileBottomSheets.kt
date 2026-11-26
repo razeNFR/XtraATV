@@ -2782,7 +2782,6 @@ object MobileBottomSheets {
                                     .clickable {
                                         if (isActive) {
                                             dismiss()
-                                            onOpenCurrentLoginMethods()
                                         } else {
                                             val switched = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.switchToAccount(activity, acc.key)
                                             dismiss()
@@ -3005,19 +3004,6 @@ object MobileBottomSheets {
                         shape = RoundedCornerShape(14.dp),
                     ) {
                         Text(activity.getString(R.string.tv_accounts_add))
-                    }
-                    if (activeKey != null) {
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = {
-                                dismiss()
-                                onOpenCurrentLoginMethods()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Text(activity.getString(R.string.mobile_accounts_login_methods))
-                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))

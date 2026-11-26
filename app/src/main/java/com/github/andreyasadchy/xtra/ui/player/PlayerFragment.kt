@@ -7674,6 +7674,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
      * "Mid-roll ad 2/3 · 12 s", the source of the stream without the ad under it, smaller, and the bar of the ad.
      */
     private fun updateAdblockBadge() {
+        if (!isTv && !requireContext().prefs().getBoolean(C.MOBILE_SHOW_ADBLOCK_BADGE, false)) {
+            tvAdblockView?.let {
+                it.removeCallbacks(adblockBadgeRefresh)
+                it.visibility = View.GONE
+            }
+            return
+        }
         val info = getAdblockInfo()
         val badge = tvAdblockView ?: if (info == null) return else AdblockBadge(requireContext()).apply {
             setBackgroundResource(R.drawable.tv_chat_overlay_background)

@@ -1547,4 +1547,6 @@
     <string name="mobile_hud_show_uptime_summary">Mostrar la duración del directo en el HUD del reproductor</string>
     <string name="mobile_accounts_remove">Quitar a %1$s de este dispositivo</string>
     <string name="mobile_accounts_login_methods">Gestionar métodos de inicio de sesión</string>
+    <string name="mobile_show_adblock_badge_title">Mostrar insignia de bloqueo de anuncios</string>
+    <string name="mobile_show_adblock_badge_summary">Mostrar el aviso flotante de bloqueo de anuncios sobre el vídeo durante las pausas</string>
 </resources>

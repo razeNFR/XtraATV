@@ -348,6 +348,18 @@ class VideosAdapter(
                     } else {
                         gameName.visibility = View.GONE
                     }
+                    if (!isTv) {
+                        com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyResponsiveMediaCardDensity(
+                            cardRoot = root,
+                            userImage = userImage,
+                            title = title,
+                            username = username,
+                            gameName = gameName,
+                            primaryBadges = listOf(duration, subOnlyBadge),
+                            secondaryBadges = listOf(views, date, type),
+                            optionsButton = options,
+                        )
+                    }
                     options.setOnClickListener { it ->
                         if (isTv) {
                             // TV: the 3 dots open the panel of the actions of the video, like OK held on the card
