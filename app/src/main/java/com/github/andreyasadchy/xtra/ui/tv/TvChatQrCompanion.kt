@@ -33,6 +33,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -237,78 +240,149 @@ object TvChatQrCompanion {
         val autoStartState = remember {
             mutableIntStateOf(if (prefs.getBoolean(C.TV_CHAT_QR_AUTO_START, false)) 1 else 0)
         }
+        val autoStartReq = remember { FocusRequester() }
+        val regenReq = remember { FocusRequester() }
+        val disconnectReq = remember { FocusRequester() }
         val closeRequester = remember { FocusRequester() }
 
         SidePanel(
             title = context.getString(R.string.tv_chat_qr_title),
             alignEnd = alignEnd,
-            width = 410.dp,
-            scrollable = true,
+            width = 430.dp,
+            scrollable = false,
             compactHeader = true,
+            footer = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FooterActionChip(
+                            label = context.getString(R.string.tv_chat_qr_regenerate),
+                            icon = R.drawable.tv_ic_refresh,
+                            requester = regenReq,
+                            rightTarget = disconnectReq,
+                            upTarget = autoStartReq,
+                            downTarget = closeRequester,
+                            onClick = onRegenerate,
+                        )
+                        FooterActionChip(
+                            label = context.getString(R.string.tv_chat_qr_disconnect),
+                            icon = R.drawable.tv_ic_close,
+                            requester = disconnectReq,
+                            leftTarget = regenReq,
+                            upTarget = autoStartReq,
+                            downTarget = closeRequester,
+                            onClick = onDisconnect,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    ButtonRow(
+                        label = context.getString(R.string.close_player),
+                        compact = true,
+                        modifier = Modifier
+                            .focusRequester(closeRequester)
+                            .onPreviewKeyEvent { ev ->
+                                if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                                    ev.key == androidx.compose.ui.input.key.Key.DirectionUp
+                                ) {
+                                    runCatching { regenReq.requestFocus() }
+                                    true
+                                } else {
+                                    false
+                                }
+                            },
+                        onClick = onClose,
+                    )
+                }
+            },
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                // Connection status badge
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(if (connected > 0) Color(0x3310B981) else Color(0x22FFFFFF))
-                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (connected > 0) Color(0xFF34D399) else Color(0xFF9CA3AF))
-                    )
-                    Spacer(Modifier.width(7.dp))
-                    Text(
-                        text = if (connected > 0) {
-                            context.getString(R.string.tv_chat_qr_connected, connected)
-                        } else {
-                            context.getString(R.string.tv_chat_qr_waiting)
-                        },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (connected > 0) Color(0xFFA7F3D0) else Color(0xFFE5E7EB),
-                    )
+                        Modifier
+                            .size(164.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.White)
+                            .padding(8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            bitmap = qrBitmap.asImageBitmap(),
+                            contentDescription = displayUrl,
+                            modifier = Modifier.size(148.dp),
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(if (connected > 0) Color(0x3310B981) else Color(0x22FFFFFF))
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(if (connected > 0) Color(0xFF34D399) else Color(0xFF9CA3AF))
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (connected > 0) {
+                                    context.getString(R.string.tv_chat_qr_connected, connected)
+                                } else {
+                                    context.getString(R.string.tv_chat_qr_waiting)
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (connected > 0) Color(0xFFA7F3D0) else Color(0xFFE5E7EB),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = context.getString(R.string.tv_chat_qr_help),
+                            fontSize = 12.5.sp,
+                            lineHeight = 16.5.sp,
+                            color = TvColors.secondaryText,
+                            textAlign = TextAlign.Start,
+                            maxLines = 6,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    text = context.getString(R.string.tv_chat_qr_help),
-                    fontSize = 13.5.sp,
-                    lineHeight = 18.sp,
-                    color = TvColors.secondaryText,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(14.dp))
                 Box(
-                    Modifier
-                        .size(204.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color.White)
-                        .padding(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0x18FFFFFF))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Image(
-                        bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = displayUrl,
-                        modifier = Modifier.size(184.dp),
+                    Text(
+                        text = displayUrl,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    text = displayUrl,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(14.dp))
                 SelectorRow(
                     label = context.getString(R.string.tv_chat_qr_follow_channel),
                     options = listOf(
@@ -332,33 +406,14 @@ object TvChatQrCompanion {
                     selected = autoStartState.intValue,
                     icon = R.drawable.tv_ic_qr,
                     compact = true,
+                    modifier = Modifier.tvPanelLastRow(autoStartReq, regenReq),
                 ) {
                     autoStartState.intValue = it
                     prefs.edit { putBoolean(C.TV_CHAT_QR_AUTO_START, it == 1) }
                 }
-                Spacer(Modifier.height(8.dp))
-                ButtonRow(
-                    label = context.getString(R.string.close_player),
-                    compact = true,
-                    modifier = Modifier.focusRequester(closeRequester),
-                    onClick = onClose,
-                )
-                Spacer(Modifier.height(6.dp))
-                ButtonRow(
-                    label = context.getString(R.string.tv_chat_qr_regenerate),
-                    icon = R.drawable.tv_ic_refresh,
-                    compact = true,
-                    onClick = onRegenerate,
-                )
-                Spacer(Modifier.height(6.dp))
-                ButtonRow(
-                    label = context.getString(R.string.tv_chat_qr_disconnect),
-                    icon = R.drawable.tv_ic_close,
-                    compact = true,
-                    onClick = onDisconnect,
-                )
             }
             LaunchedEffect(Unit) {
+                androidx.compose.runtime.withFrameNanos {}
                 runCatching { closeRequester.requestFocus() }
             }
         }
