@@ -2186,9 +2186,10 @@ class TvSettingsFragment : Fragment() {
 
         val prefs = context.prefs()
         val expOn = prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
+        val swapPlusOn = prefs.getBoolean(C.TV_ADBLOCK_SWAP_PLUS, false)
         val customProxyOn = prefs.getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
         val streamProxyOn = prefs.getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
-        val anyProxyOn = !expOn && (customProxyOn || streamProxyOn)
+        val anyProxyOn = !expOn && !swapPlusOn && (customProxyOn || streamProxyOn)
 
         var enabled = raw.isEnabled
         var disabledHint: (() -> String)? = null
@@ -2204,12 +2205,16 @@ class TvSettingsFragment : Fragment() {
                     context.getString(if (expOn) R.string.tv_adblock_swap_locked_exp_hint else R.string.tv_adblock_swap_locked_hint)
                 }
             }
+            C.TV_ADBLOCK_SWAP_PLUS -> {
+                enabled = !anyProxyOn
+                disabledHint = { context.getString(R.string.tv_adblock_exp_disabled_by_proxy) }
+            }
             C.TV_EXPERIMENTAL_ADBLOCK -> {
                 enabled = !anyProxyOn
                 disabledHint = { context.getString(R.string.tv_adblock_exp_disabled_by_proxy) }
             }
             "custom_proxy_settings", C.PLAYER_USE_STREAM_PROXY, "stream_proxy_settings" -> {
-                enabled = !expOn
+                enabled = !expOn && !swapPlusOn
                 disabledHint = { context.getString(R.string.tv_adblock_exp_proxies_disabled) }
             }
         }
@@ -2227,8 +2232,9 @@ class TvSettingsFragment : Fragment() {
             is RawKind.Toggle -> {
                 val checked = when (key) {
                     C.PLAYER_ADBLOCK -> if (!anyProxyOn) true else prefs.getBoolean(C.PLAYER_ADBLOCK, true)
+                    C.TV_ADBLOCK_SWAP_PLUS -> swapPlusOn
                     C.TV_EXPERIMENTAL_ADBLOCK -> expOn
-                    C.PLAYER_USE_STREAM_PROXY -> !expOn && streamProxyOn
+                    C.PLAYER_USE_STREAM_PROXY -> !expOn && !swapPlusOn && streamProxyOn
                     else -> if (key.isNotBlank() && prefs.contains(key)) prefs.getBoolean(key, rk.defaultChecked) else rk.defaultChecked
                 }
                 if (key == C.PLAYER_ADBLOCK) {
@@ -2436,16 +2442,28 @@ class TvSettingsFragment : Fragment() {
             is Kind.Toggle -> {
                 val next = !kind.checked
                 when (key) {
+                    C.TV_ADBLOCK_SWAP_PLUS -> {
+                        if (next && TvExperimentalAdblock.isAnyProxyEnabled(context)) {
+                            com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_adblock_exp_disabled_by_proxy, Toast.LENGTH_LONG).show()
+                            return
+                        }
+                        context.prefs().edit { putBoolean(C.TV_ADBLOCK_SWAP_PLUS, next) }
+                        TvExperimentalAdblock.normalizePrefs(context)
+                        (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                    }
                     C.TV_EXPERIMENTAL_ADBLOCK -> {
                         if (next && TvExperimentalAdblock.isAnyProxyEnabled(context)) {
                             com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_adblock_exp_disabled_by_proxy, Toast.LENGTH_LONG).show()
                             return
                         }
                         context.prefs().edit { putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, next) }
+                        TvExperimentalAdblock.normalizePrefs(context)
                         (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
                     }
                     C.PLAYER_USE_STREAM_PROXY -> {
-                        if (next && context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                        if (next && (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false) ||
+                                context.prefs().getBoolean(C.TV_ADBLOCK_SWAP_PLUS, false))
+                        ) {
                             com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
                             return
                         }
@@ -2463,6 +2481,10 @@ class TvSettingsFragment : Fragment() {
                             return
                         }
                         context.prefs().edit { putBoolean(C.PLAYER_ADBLOCK, next) }
+                        (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                    }
+                    C.TV_VOD_AUDIO_RECOVERY -> {
+                        context.prefs().edit { putBoolean(C.TV_VOD_AUDIO_RECOVERY, next) }
                         (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
                     }
                     "live_notifications_enabled" -> {
@@ -2578,6 +2600,8 @@ class TvSettingsFragment : Fragment() {
                         if (chosen != previous) {
                             when (key) {
                                 C.TV_AMBIENT_COLOR -> (activity as? MainActivity)?.refreshTvAmbientColor()
+                                C.TV_OLED_SCREENSAVER_TIMEOUT, C.TV_OLED_SCREENSAVER_DIM ->
+                                    (activity as? MainActivity)?.refreshTvOledScreensaver()
                                 C.TV_HOME_CARDS, C.TV_STREAM_COLUMNS ->
                                     (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = false)
                                 C.UI_NAME_DISPLAY ->
@@ -2697,7 +2721,9 @@ class TvSettingsFragment : Fragment() {
                 focusRightTrigger.intValue++
             }
             "stream_proxy_settings" -> {
-                if (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                if (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false) ||
+                    context.prefs().getBoolean(C.TV_ADBLOCK_SWAP_PLUS, false)
+                ) {
                     com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
                     return
                 }
@@ -2708,7 +2734,9 @@ class TvSettingsFragment : Fragment() {
                 focusRightTrigger.intValue++
             }
             "custom_proxy_settings" -> {
-                if (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)) {
+                if (context.prefs().getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false) ||
+                    context.prefs().getBoolean(C.TV_ADBLOCK_SWAP_PLUS, false)
+                ) {
                     com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, Toast.LENGTH_LONG).show()
                     return
                 }

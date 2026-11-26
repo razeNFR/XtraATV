@@ -199,15 +199,40 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return merged
     }
 
+    private var vodAudioToastShownSessionId: Long = -1L
+
+    protected fun applyVodAudioBarRanges() {
+        val bar = _binding?.playerControls?.progressBar ?: return
+        val isVodLike = playbackService?.type == BasePlaybackService.VIDEO || isExperimentalVodActive()
+        if (!isVodLike) {
+            bar.setRecoveredSegments(emptyList())
+            bar.setMutedSegments(emptyList())
+            return
+        }
+        val recState = com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.activeState.value
+        val recovered = recState?.recoveredRanges.orEmpty()
+        val rawMuted = if (playbackService?.type == BasePlaybackService.VIDEO) {
+            val fromRecovery = recState?.mutedRanges.orEmpty()
+            val gqlMuted = viewModel.mutedSegments.value
+            if (recovered.isNotEmpty()) {
+                // Exclude GraphQL ranges that were successfully recovered (so they show green, not red)
+                val unrecoveredGql = gqlMuted.filter { (gs, ge) ->
+                    recovered.none { (rs, re) -> gs >= rs - 1500L && ge <= re + 1500L }
+                }
+                combineMutedSegments(unrecoveredGql, fromRecovery)
+            } else {
+                combineMutedSegments(gqlMuted, if (fromRecovery.isNotEmpty()) fromRecovery else hlsMutedSegments)
+            }
+        } else {
+            recState?.mutedRanges.orEmpty()
+        }
+        bar.setRecoveredSegments(recovered)
+        bar.setMutedSegments(rawMuted)
+    }
+
     protected fun updateHlsMutedSegments(segments: List<Pair<Long, Long>>) {
         hlsMutedSegments = segments
-        val bar = _binding?.playerControls?.progressBar ?: return
-        val effective = if (playbackService?.type != BasePlaybackService.VIDEO) {
-            emptyList()
-        } else {
-            combineMutedSegments(viewModel.mutedSegments.value, segments)
-        }
-        bar.setMutedSegments(effective)
+        applyVodAudioBarRanges()
     }
 
     /** A live stream: from the service, or from the screen itself while its service connects (a switch just made it). */
@@ -1459,13 +1484,29 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 progressBar.setAdGroupTimesMs(null, null, 0)
                 hlsMutedSegments = emptyList()
                 progressBar.setMutedSegments(emptyList())
+                progressBar.setRecoveredSegments(emptyList())
                 seekPreview?.setChapters(null)
+                viewLifecycleOwner.lifecycleScope.launch {
+                    repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.activeState.collectLatest { state ->
+                            applyVodAudioBarRanges()
+                            if (state != null && state.recoveredDurationMs > 0L && state.sessionId != vodAudioToastShownSessionId) {
+                                vodAudioToastShownSessionId = state.sessionId
+                                val mins = ((state.recoveredDurationMs + 30_000L) / 60_000L).coerceAtLeast(1L)
+                                com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(
+                                    requireContext(),
+                                    getString(R.string.tv_vod_audio_recovered_toast, mins.toInt()),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    }
+                }
                 if (playbackService?.type == BasePlaybackService.VIDEO) {
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
-                            viewModel.mutedSegments.collectLatest { segments ->
-                                val effective = combineMutedSegments(segments, hlsMutedSegments)
-                                progressBar.setMutedSegments(effective)
+                            viewModel.mutedSegments.collectLatest { _ ->
+                                applyVodAudioBarRanges()
                             }
                         }
                     }
@@ -2895,6 +2936,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             duration.text = DateUtils.formatElapsedTime(uptime / 1000)
             syncUptimeBadgeElapsedMs(uptime)
+            maybeScheduleTvDvrPrefetch()
         }
     }
 
@@ -3004,21 +3046,91 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return true
     }
 
+    private fun maybeScheduleTvDvrPrefetch() {
+        val ctx = context ?: return
+        val service = playbackService ?: return
+        if (!isTv || !isMaximized || service.type != BasePlaybackService.STREAM || isExperimentalVodActive()) {
+            return
+        }
+        val qualities = collectUnlistedVideoQualities()
+        if (qualities.isNullOrEmpty()) return
+        viewModel.prefetchDvrForLive(
+            networkLibrary = ctx.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+            gqlHeaders = TwitchApiHelper.getGQLHeaders(ctx),
+            qualities = qualities,
+            channelId = service.channelId,
+            streamId = service.streamId,
+            channelLogin = service.channelLogin,
+            streamCreatedAt = service.createdAt,
+        )
+    }
+
+    private fun collectUnlistedVideoQualities(): List<VideoQuality>? {
+        val unavailableQualities = getUnavailableQualities()
+        return if (unavailableQualities.isNotEmpty()) {
+            mutableListOf<VideoQuality>().apply {
+                playbackService?.qualities?.filter { !it.url.isNullOrBlank() }?.let { addAll(it) }
+                addAll(unavailableQualities)
+            }
+                .sortedByDescending { it.bitrate }
+                .sortedByDescending { it.frameRate }
+                .sortedByDescending { it.resolution }
+                .toMutableList().apply {
+                    find { it.name?.startsWith("audio", true) == true }?.let { audio ->
+                        remove(audio)
+                        add(audio)
+                    }
+                }
+        } else {
+            playbackService?.qualities?.filter { !it.url.isNullOrBlank() }
+        }
+    }
+
     private fun startTvDvr(position: Long) {
+        val service = playbackService
+        val mainActivity = activity as? MainActivity
+        mainActivity?.dvrStream = Stream(
+            id = service?.streamId,
+            channelId = service?.channelId,
+            channelLogin = service?.channelLogin,
+            channelName = service?.channelName,
+            gameId = service?.gameId,
+            gameSlug = service?.gameSlug,
+            gameName = service?.gameName,
+            title = service?.title,
+            createdAt = service?.createdAt,
+            viewerCount = service?.viewerCount,
+        )
+        val prefetched = viewModel.getPrefetchedDvr(service?.channelLogin, service?.streamId, service?.createdAt)
+        if (prefetched != null && mainActivity != null) {
+            pendingDvr = false
+            pendingDvrResumeFromPause = false
+            val offset = position.coerceAtLeast(0L)
+            val video = Video(
+                channelId = service?.channelId,
+                channelLogin = service?.channelLogin,
+                channelName = service?.channelName,
+                gameId = service?.gameId,
+                gameSlug = service?.gameSlug,
+                gameName = service?.gameName,
+                title = service?.title,
+                createdAt = service?.createdAt,
+            )
+            if (!prefetched.archiveVideoId.isNullOrBlank()) {
+                mainActivity.dvrChatVideoId = prefetched.archiveVideoId
+                com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync.recordLiveStreamSession(
+                    context = mainActivity,
+                    channelId = service?.channelId,
+                    channelLogin = service?.channelLogin,
+                    streamCreatedAt = service?.createdAt,
+                    archiveVideoId = prefetched.archiveVideoId,
+                )
+            }
+            mainActivity.startVideo(video, offset, qualities = prefetched.qualitiesJson)
+            return
+        }
         pendingDvr = true
         pendingDvrPosition = position
-        (activity as? MainActivity)?.dvrStream = Stream(
-            id = playbackService?.streamId,
-            channelId = playbackService?.channelId,
-            channelLogin = playbackService?.channelLogin,
-            channelName = playbackService?.channelName,
-            gameId = playbackService?.gameId,
-            gameSlug = playbackService?.gameSlug,
-            gameName = playbackService?.gameName,
-            title = playbackService?.title,
-            createdAt = playbackService?.createdAt,
-            viewerCount = playbackService?.viewerCount,
-        )
         com.github.andreyasadchy.xtra.ui.tv.TvToast.makeText(requireContext(), R.string.tv_looking_for_vod, Toast.LENGTH_SHORT).show()
         findUnlistedVideo()
     }
@@ -4380,10 +4492,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private fun updateTvProxyIcon() {
         val context = context ?: return
         val expOn = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(context)
-        val customOn = !expOn && context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
-        val streamProxyOn = !expOn && context.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
+        val swapPlusOn = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapPlusEnabled(context)
+        val customOn = !expOn && !swapPlusOn && context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+        val streamProxyOn = !expOn && !swapPlusOn && context.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
         _binding?.playerControls?.tvProxy?.apply {
-            setImageResource(if (expOn || customOn || streamProxyOn) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
+            setImageResource(if (expOn || swapPlusOn || customOn || streamProxyOn) R.drawable.tv_ic_proxy_on else R.drawable.tv_ic_proxy)
             alpha = 1f
         }
     }
@@ -4399,6 +4512,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 return@launch
             }
             val swapBefore = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(activity)
+            val swapPlusBefore = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapPlusEnabled(activity)
             val expBefore = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(activity)
             val useBefore = activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
             val useStreamBefore = activity.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
@@ -4424,12 +4538,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     activity.lifecycleScope.launch {
                         repository.updateCustomProxies(changed)
                         val swapNow = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(activity)
+                        val swapPlusNow = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapPlusEnabled(activity)
                         val expNow = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isExperimentalEnabled(activity)
                         val useNow = activity.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
                         val useStreamNow = activity.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
                         val modeNow = activity.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0")
-                        if (swapNow != swapBefore || expNow != expBefore || useNow || useNow != useBefore ||
-                            useStreamNow || useStreamNow != useStreamBefore || streamListChanged || modeNow != modeBefore
+                        if (swapNow != swapBefore || swapPlusNow != swapPlusBefore || expNow != expBefore ||
+                            useNow || useNow != useBefore || useStreamNow || useStreamNow != useStreamBefore ||
+                            streamListChanged || modeNow != modeBefore
                         ) {
                             activity.restartCurrentStream()
                         }
@@ -6718,6 +6834,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         -3 to 0,
         -2 to 2,
     )
+
+    fun isActivelyPlayingVideo(): Boolean =
+        isAdded && view != null && isMaximized && isPlayingNow()
 
     private fun updateTvOledProtection() {
         val ctx = context ?: return

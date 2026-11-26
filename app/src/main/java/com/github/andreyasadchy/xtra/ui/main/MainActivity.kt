@@ -1238,6 +1238,79 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var lastUserInteractionAt = android.os.SystemClock.elapsedRealtime()
+    private var oledScreensaverView: View? = null
+    private var oledScreensaverActive = false
+    private var oledWakeKeyCode = 0
+    private val oledScreensaverHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val oledScreensaverTick: Runnable = object : Runnable {
+        override fun run() {
+            if (isFinishing || isDestroyed) return
+            val timeoutSec = prefs().getString(C.TV_OLED_SCREENSAVER_TIMEOUT, "0")?.toLongOrNull() ?: 0L
+            if (timeoutSec <= 0L) {
+                dismissTvOledScreensaver()
+                return
+            }
+            val playingActiveVideo = tvMultiStreamShown ||
+                (playerFragment as? PlayerFragment)?.isActivelyPlayingVideo() == true
+            if (playingActiveVideo) {
+                if (oledScreensaverActive) dismissTvOledScreensaver()
+            } else if (idleDurationMs() >= timeoutSec * 1_000L) {
+                showTvOledScreensaver()
+            }
+            oledScreensaverHandler.postDelayed(this, 5_000L)
+        }
+    }
+
+    fun refreshTvOledScreensaver() {
+        oledScreensaverHandler.removeCallbacks(oledScreensaverTick)
+        if (!isTv) return
+        val timeoutSec = prefs().getString(C.TV_OLED_SCREENSAVER_TIMEOUT, "0")?.toLongOrNull() ?: 0L
+        if (timeoutSec <= 0L) {
+            dismissTvOledScreensaver()
+        } else {
+            oledScreensaverHandler.postDelayed(oledScreensaverTick, 5_000L)
+        }
+    }
+
+    private fun showTvOledScreensaver() {
+        val targetAlpha = (prefs().getString(C.TV_OLED_SCREENSAVER_DIM, "100")?.toIntOrNull() ?: 100)
+            .coerceIn(50, 100) / 100f
+        if (oledScreensaverActive) {
+            oledScreensaverView?.let { v ->
+                if (v.alpha != targetAlpha) v.alpha = targetAlpha
+            }
+            return
+        }
+        oledScreensaverActive = true
+        com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.releaseAll()
+        val overlay = oledScreensaverView ?: View(this).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+            isFocusable = false
+            isFocusableInTouchMode = false
+            isClickable = false
+            elevation = 10_000f
+            alpha = 0f
+            visibility = View.GONE
+            (findViewById<ViewGroup>(android.R.id.content))?.addView(
+                this,
+                ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+            )
+            oledScreensaverView = this
+        }
+        overlay.animate().cancel()
+        overlay.visibility = View.VISIBLE
+        overlay.animate().alpha(targetAlpha).setDuration(600L).start()
+    }
+
+    private fun dismissTvOledScreensaver() {
+        if (!oledScreensaverActive && oledScreensaverView?.visibility != View.VISIBLE) return
+        oledScreensaverActive = false
+        oledScreensaverView?.let { v ->
+            v.animate().cancel()
+            v.alpha = 0f
+            v.visibility = View.GONE
+        }
+    }
 
     fun idleDurationMs(): Long =
         (android.os.SystemClock.elapsedRealtime() - lastUserInteractionAt).coerceAtLeast(0L)
@@ -1245,6 +1318,10 @@ class MainActivity : AppCompatActivity() {
     override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
         if (ev?.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
             lastUserInteractionAt = android.os.SystemClock.elapsedRealtime()
+            if (oledScreensaverActive) {
+                dismissTvOledScreensaver()
+                return true
+            }
         }
         return super.dispatchTouchEvent(ev)
     }
@@ -1465,6 +1542,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (oledScreensaverActive) {
+            lastUserInteractionAt = android.os.SystemClock.elapsedRealtime()
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                oledWakeKeyCode = event.keyCode
+                dismissTvOledScreensaver()
+            }
+            return true
+        }
+        if (oledWakeKeyCode != 0 && event.keyCode == oledWakeKeyCode) {
+            if (event.action == KeyEvent.ACTION_UP) {
+                oledWakeKeyCode = 0
+            }
+            return true
+        }
         if (event.action == KeyEvent.ACTION_DOWN) {
             lastTvKeyCode = event.keyCode
             lastTvKeyAt = android.os.SystemClock.elapsedRealtime()
@@ -2676,6 +2767,7 @@ class MainActivity : AppCompatActivity() {
         keepPlayerInBackground = false
         if (isTv && ::binding.isInitialized) {
             tvLiveAlerts.start()
+            refreshTvOledScreensaver()
         }
     }
 
@@ -2684,6 +2776,8 @@ class MainActivity : AppCompatActivity() {
     val isKeepingPlayerInBackground get() = keepPlayerInBackground
 
     override fun onStop() {
+        oledScreensaverHandler.removeCallbacks(oledScreensaverTick)
+        dismissTvOledScreensaver()
         if (isTv && ::binding.isInitialized) {
             tvLiveAlerts.stop()
             com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.releaseAll()

@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.encodeToJsonElement
@@ -212,114 +213,191 @@ class PlayerViewModel(
         }
     }
 
+    data class PrefetchedDvr(
+        val key: String,
+        val qualitiesJson: String,
+        val archiveVideoId: String?,
+    )
+
+    @Volatile
+    private var prefetchedDvr: PrefetchedDvr? = null
+    private var prefetchedDvrKeyAttempted: String? = null
+    private var dvrPrefetchJob: Job? = null
+
+    private fun buildDvrPrefetchKey(channelLogin: String?, streamId: String?, streamCreatedAt: String?): String? {
+        val login = channelLogin?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
+        val sid = streamId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val created = streamCreatedAt?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return "$login|$sid|$created"
+    }
+
+    fun getPrefetchedDvr(channelLogin: String?, streamId: String?, streamCreatedAt: String?): PrefetchedDvr? {
+        val key = buildDvrPrefetchKey(channelLogin, streamId, streamCreatedAt) ?: return null
+        return prefetchedDvr?.takeIf { it.key == key }
+    }
+
+    fun clearPrefetchedDvr() {
+        dvrPrefetchJob?.cancel()
+        dvrPrefetchJob = null
+        prefetchedDvr = null
+        prefetchedDvrKeyAttempted = null
+    }
+
+    /**
+     * Background DVR VOD pre-lookup for the fullscreen live player: waits 3 seconds after stream load
+     * (avoiding any network traffic during quick channel zapping), then resolves the ongoing VOD playlist
+     * + archive video ID once on Dispatchers.IO so rewinding or resuming from pause switches instantaneously.
+     */
+    fun prefetchDvrForLive(
+        networkLibrary: String?,
+        gqlHeaders: Map<String, String>,
+        qualities: List<VideoQuality>?,
+        channelId: String?,
+        streamId: String?,
+        channelLogin: String?,
+        streamCreatedAt: String?,
+    ) {
+        val key = buildDvrPrefetchKey(channelLogin, streamId, streamCreatedAt) ?: return
+        if (qualities.isNullOrEmpty()) return
+        if (prefetchedDvr?.key == key || prefetchedDvrKeyAttempted == key) return
+        dvrPrefetchJob?.cancel()
+        prefetchedDvr = null
+        prefetchedDvrKeyAttempted = key
+        dvrPrefetchJob = viewModelScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(3_000L)
+            val jsonStr = withTimeoutOrNull(6_000L) {
+                resolveUnlistedVideoQualitiesJson(networkLibrary, qualities, streamId, channelLogin, streamCreatedAt)
+            }
+            if (jsonStr.isNullOrBlank()) return@launch
+            val archiveId = withTimeoutOrNull(3_000L) {
+                findArchiveVideoId(networkLibrary, gqlHeaders, channelId, channelLogin, streamCreatedAt)
+            }
+            if (prefetchedDvrKeyAttempted == key) {
+                prefetchedDvr = PrefetchedDvr(key = key, qualitiesJson = jsonStr, archiveVideoId = archiveId)
+            }
+        }
+    }
+
+    @SuppressLint("NewApi")
+    private suspend fun resolveUnlistedVideoQualitiesJson(
+        networkLibrary: String?,
+        qualities: List<VideoQuality>?,
+        streamId: String?,
+        channelLogin: String?,
+        streamCreatedAt: String?,
+    ): String? {
+        val createdAtSeconds = streamCreatedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { time -> time > 0 }?.div(1000) }
+        if (qualities.isNullOrEmpty() || streamId == null || channelLogin == null || createdAtSeconds == null) {
+            return null
+        }
+        val semaphore = Semaphore(10)
+        val winner = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        coroutineScope {
+            val probeJob = SupervisorJob(coroutineContext[Job])
+            val probeScope = CoroutineScope(Dispatchers.IO + probeJob)
+            val offsetList = listOf(0, -1)
+            for (offset in offsetList) {
+                if (winner.get() != null) break
+                val data = "${channelLogin}_${streamId}_${createdAtSeconds + offset}"
+                val messageDigest = MessageDigest.getInstance("SHA-1")
+                messageDigest.update(data.toByteArray())
+                val hash = messageDigest.digest().toHexString().take(20)
+                for (domain in TwitchApiHelper.vodDomains) {
+                    if (winner.get() != null) break
+                    val url = "${domain}/${hash}_${data}/chunked/index-dvr.m3u8"
+                    probeScope.launch {
+                        semaphore.withPermit {
+                            if (winner.get() != null) return@withPermit
+                            val found = try {
+                                when {
+                                    networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> {
+                                        val response = suspendCancellableCoroutine { continuation ->
+                                            val timeout = NetworkUtils.HttpEngineTimeout()
+                                            val request = httpEngine.value!!.newUrlRequestBuilder(
+                                                url,
+                                                cronetExecutor.value,
+                                                NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
+                                            ).apply {
+                                                addHeader("Range", "bytes=0-63")
+                                            }.build()
+                                            timeout.start(request, continuation)
+                                            request.start()
+                                            continuation.invokeOnCancellation {
+                                                request.cancel()
+                                                timeout.stop()
+                                            }
+                                        }
+                                        response.info.httpStatusCode in 200..299
+                                    }
+                                    networkLibrary == C.CRONET && cronetEngine.value != null -> {
+                                        val response = suspendCancellableCoroutine { continuation ->
+                                            val timeout = NetworkUtils.CronetTimeout()
+                                            val request = cronetEngine.value!!.newUrlRequestBuilder(
+                                                url,
+                                                NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
+                                                cronetExecutor.value
+                                            ).apply {
+                                                addHeader("Range", "bytes=0-63")
+                                            }.build()
+                                            timeout.start(request, continuation)
+                                            request.start()
+                                            continuation.invokeOnCancellation {
+                                                request.cancel()
+                                                timeout.stop()
+                                            }
+                                        }
+                                        response.info.httpStatusCode in 200..299
+                                    }
+                                    else -> {
+                                        okHttpClient.value.newCall(
+                                            Request.Builder()
+                                                .url(url)
+                                                .header("Range", "bytes=0-63")
+                                                .build()
+                                        ).executeAsync().use { response ->
+                                            response.isSuccessful
+                                        }
+                                    }
+                                }
+                            } catch (e: CancellationException) {
+                                ensureActive()
+                                false
+                            } catch (_: Exception) {
+                                false
+                            }
+                            if (found && winner.compareAndSet(null, url)) {
+                                probeJob.cancel()
+                            }
+                        }
+                    }
+                }
+            }
+            probeJob.complete()
+            probeJob.join()
+        }
+        val resultUrl = winner.get() ?: return null
+        val videoQualities = qualities.mapIndexed { index, quality ->
+            val url = if (index == 0) {
+                resultUrl
+            } else {
+                resultUrl.replace("chunked", quality.name.toString())
+            }
+            VideoQuality(quality.name, quality.resolution, quality.frameRate, quality.bitrate, quality.codecs, url)
+        }
+        return buildJsonArray {
+            videoQualities.forEach {
+                add(json.encodeToJsonElement(it))
+            }
+        }.toString()
+    }
+
     @SuppressLint("NewApi")
     fun findUnlistedVideo(networkLibrary: String?, qualities: List<VideoQuality>?, streamId: String?, channelLogin: String?, streamCreatedAt: String?) {
         val createdAtSeconds = streamCreatedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.takeIf { time -> time > 0 }?.div(1000) }
         if (!qualities.isNullOrEmpty() && streamId != null && channelLogin != null && createdAtSeconds != null) {
             viewModelScope.launch(Dispatchers.IO) {
-                val semaphore = Semaphore(10)
-                val winner = java.util.concurrent.atomic.AtomicReference<String?>(null)
-                coroutineScope {
-                    val probeJob = SupervisorJob(coroutineContext[Job])
-                    val probeScope = CoroutineScope(Dispatchers.IO + probeJob)
-                    val offsetList = listOf(0, -1)
-                    for (offset in offsetList) {
-                        if (winner.get() != null) break
-                        val data = "${channelLogin}_${streamId}_${createdAtSeconds + offset}"
-                        val messageDigest = MessageDigest.getInstance("SHA-1")
-                        messageDigest.update(data.toByteArray())
-                        val hash = messageDigest.digest().toHexString().take(20)
-                        for (domain in TwitchApiHelper.vodDomains) {
-                            if (winner.get() != null) break
-                            val url = "${domain}/${hash}_${data}/chunked/index-dvr.m3u8"
-                            probeScope.launch {
-                                semaphore.withPermit {
-                                    if (winner.get() != null) return@withPermit
-                                    val found = try {
-                                        when {
-                                            networkLibrary == C.HTTP_ENGINE && httpEngine.value != null -> {
-                                                val response = suspendCancellableCoroutine { continuation ->
-                                                    val timeout = NetworkUtils.HttpEngineTimeout()
-                                                    val request = httpEngine.value!!.newUrlRequestBuilder(
-                                                        url,
-                                                        cronetExecutor.value,
-                                                        NetworkUtils.ByteArrayUrlCallback(continuation, timeout)
-                                                    ).apply {
-                                                        addHeader("Range", "bytes=0-63")
-                                                    }.build()
-                                                    timeout.start(request, continuation)
-                                                    request.start()
-                                                    continuation.invokeOnCancellation {
-                                                        request.cancel()
-                                                        timeout.stop()
-                                                    }
-                                                }
-                                                response.info.httpStatusCode in 200..299
-                                            }
-                                            networkLibrary == C.CRONET && cronetEngine.value != null -> {
-                                                val response = suspendCancellableCoroutine { continuation ->
-                                                    val timeout = NetworkUtils.CronetTimeout()
-                                                    val request = cronetEngine.value!!.newUrlRequestBuilder(
-                                                        url,
-                                                        NetworkUtils.ByteArrayCronetCallback(continuation, timeout),
-                                                        cronetExecutor.value
-                                                    ).apply {
-                                                        addHeader("Range", "bytes=0-63")
-                                                    }.build()
-                                                    timeout.start(request, continuation)
-                                                    request.start()
-                                                    continuation.invokeOnCancellation {
-                                                        request.cancel()
-                                                        timeout.stop()
-                                                    }
-                                                }
-                                                response.info.httpStatusCode in 200..299
-                                            }
-                                            else -> {
-                                                okHttpClient.value.newCall(
-                                                    Request.Builder()
-                                                        .url(url)
-                                                        .header("Range", "bytes=0-63")
-                                                        .build()
-                                                ).executeAsync().use { response ->
-                                                    response.isSuccessful
-                                                }
-                                            }
-                                        }
-                                    } catch (e: CancellationException) {
-                                        ensureActive()
-                                        false
-                                    } catch (_: Exception) {
-                                        false
-                                    }
-                                    if (found && winner.compareAndSet(null, url)) {
-                                        probeJob.cancel()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    probeJob.complete()
-                    probeJob.join()
-                }
-                val resultUrl = winner.get()
-                unlistedVideoQualities.value = if (resultUrl != null) {
-                    val videoQualities = qualities.mapIndexed { index, quality ->
-                        val url = if (index == 0) {
-                            resultUrl
-                        } else {
-                            resultUrl.replace("chunked", quality.name.toString())
-                        }
-                        VideoQuality(quality.name, quality.resolution, quality.frameRate, quality.bitrate, quality.codecs, url)
-                    }
-                    buildJsonArray {
-                        videoQualities.forEach {
-                            add(json.encodeToJsonElement(it))
-                        }
-                    }.toString()
-                } else {
-                    ""
-                }
+                val resolved = resolveUnlistedVideoQualitiesJson(networkLibrary, qualities, streamId, channelLogin, streamCreatedAt)
+                unlistedVideoQualities.value = resolved ?: ""
             }
         }
     }

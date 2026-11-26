@@ -2812,7 +2812,37 @@ class MultiStreamFragment : Fragment() {
                 tile.adMuted = usingBackup && backupChoice?.adFree == false
                 applySound()
                 updateAdBadge(tile)
-                player.setMediaItem(buildTileLiveMediaItem(url))
+                val useShadowAdblock = !usingBackup &&
+                    com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapPlusEnabled(context)
+                if (useShadowAdblock) {
+                    com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.onChannelNavigated(
+                        context,
+                        login,
+                        multiStreamTile = true,
+                    )
+                    val baseDs = androidx.media3.datasource.DefaultDataSource.Factory(
+                        context,
+                        com.github.andreyasadchy.xtra.player.lowlatency.OkHttpDataSource.Factory(
+                            app.xtraModule.okHttpClient.value,
+                            null,
+                            null,
+                            null,
+                            null,
+                        ) { false },
+                    )
+                    val hlsSource = androidx.media3.exoplayer.hls.HlsMediaSource.Factory(baseDs).apply {
+                        setPlaylistParserFactory(
+                            com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.ShadowPlaylistParserFactory(
+                                context = context,
+                                delegate = ExoPlayerService.CustomHlsPlaylistParserFactory(),
+                                channelLoginHint = login,
+                            )
+                        )
+                    }.createMediaSource(buildTileLiveMediaItem(url))
+                    player.setMediaSource(hlsSource)
+                } else {
+                    player.setMediaItem(buildTileLiveMediaItem(url))
+                }
                 player.repeatMode = Player.REPEAT_MODE_OFF
                 player.prepare()
                 player.playWhenReady = true
@@ -3253,6 +3283,7 @@ class MultiStreamFragment : Fragment() {
             it.player.release()
         }
         tiles.clear()
+        com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.stopAll()
         releasePlaybackSignals()
         (activity as? MainActivity)?.onMultiStreamDestroyed()
         super.onDestroyView()

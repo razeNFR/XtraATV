@@ -86,7 +86,7 @@ object TvProxyPanel {
         onStreamProxiesClosed: ((List<StreamProxy>) -> Unit)? = null,
         onClosed: (List<CustomProxy>?) -> Unit,
     ) {
-        if (manage != null && TvExperimentalAdblock.isExperimentalEnabled(context)) {
+        if (manage != null && (TvExperimentalAdblock.isExperimentalEnabled(context) || TvExperimentalAdblock.isSwapPlusEnabled(context))) {
             TvToast.makeText(context, R.string.tv_adblock_exp_proxies_disabled, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
@@ -96,6 +96,7 @@ object TvProxyPanel {
         val original = proxies.sortedBy { it.position }.map { it.id to it.enabled }
         val originalStream = streamProxies.sortedBy { it.position }.map { it.id to it.enabled }
         val swapBefore = TvExperimentalAdblock.isSwapAdblockEnabled(context)
+        val swapPlusBefore = TvExperimentalAdblock.isSwapPlusEnabled(context)
         val expBefore = TvExperimentalAdblock.isExperimentalEnabled(context)
         val useBefore = context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
         val useStreamBefore = context.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)
@@ -106,10 +107,11 @@ object TvProxyPanel {
             SidePanel(title = panelTitle, subtitle = panelSubtitle, width = if (manage != null) 500.dp else 460.dp, scrollable = true) {
                 val first = remember { FocusRequester() }
                 var expAdblock by remember { mutableStateOf(TvExperimentalAdblock.isExperimentalEnabled(context)) }
-                var useProxies by remember { mutableStateOf(!expAdblock && context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)) }
-                var useStreamProxies by remember { mutableStateOf(!expAdblock && context.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)) }
+                var swapPlus by remember { mutableStateOf(TvExperimentalAdblock.isSwapPlusEnabled(context)) }
+                var useProxies by remember { mutableStateOf(!expAdblock && !swapPlus && context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)) }
+                var useStreamProxies by remember { mutableStateOf(!expAdblock && !swapPlus && context.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false)) }
                 var swapAdblock by remember { mutableStateOf(TvExperimentalAdblock.isSwapAdblockEnabled(context)) }
-                val anyProxyOn = !expAdblock && (useProxies || useStreamProxies)
+                val anyProxyOn = !expAdblock && !swapPlus && (useProxies || useStreamProxies)
 
                 if (manage == null) {
                     Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp).focusRequester(first), {
@@ -130,14 +132,60 @@ object TvProxyPanel {
                         }
                     }) { focused ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                context.getString(R.string.tv_adblock_swap_title),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (focused) TvColors.onFocused else Color.White,
-                                modifier = Modifier.weight(1f),
-                            )
+                            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+                                Text(
+                                    context.getString(R.string.tv_adblock_swap_title),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (focused) TvColors.onFocused else Color.White,
+                                )
+                                Text(
+                                    context.getString(R.string.tv_adblock_swap_desc),
+                                    fontSize = 12.sp,
+                                    lineHeight = 15.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (focused) TvColors.onFocused.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.65f),
+                                )
+                            }
                             TvListPanel.Switch(if (!anyProxyOn) true else swapAdblock, focused)
+                        }
+                    }
+                    Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp), {
+                        swapPlus = !swapPlus
+                        if (swapPlus) {
+                            useProxies = false
+                            useStreamProxies = false
+                        }
+                        context.prefs().edit {
+                            putBoolean(C.TV_ADBLOCK_SWAP_PLUS, swapPlus)
+                            if (swapPlus) {
+                                putBoolean(C.PLAYER_USE_CUSTOM_PROXY, false)
+                                putBoolean(C.PLAYER_USE_STREAM_PROXY, false)
+                            }
+                        }
+                        TvExperimentalAdblock.normalizePrefs(context)
+                        swapAdblock = TvExperimentalAdblock.isSwapAdblockEnabled(context)
+                        swapPlus = TvExperimentalAdblock.isSwapPlusEnabled(context)
+                    }) { focused ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+                                Text(
+                                    context.getString(R.string.tv_adblock_swap_plus_title),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (focused) TvColors.onFocused else Color.White,
+                                )
+                                Text(
+                                    context.getString(R.string.tv_adblock_swap_plus_desc),
+                                    fontSize = 12.sp,
+                                    lineHeight = 15.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (focused) TvColors.onFocused.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.65f),
+                                )
+                            }
+                            TvListPanel.Switch(swapPlus, focused)
                         }
                     }
                     Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp), {
@@ -157,13 +205,22 @@ object TvProxyPanel {
                         swapAdblock = TvExperimentalAdblock.isSwapAdblockEnabled(context)
                     }) { focused ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                context.getString(R.string.tv_adblock_exp_title),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (focused) TvColors.onFocused else Color.White,
-                                modifier = Modifier.weight(1f),
-                            )
+                            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+                                Text(
+                                    context.getString(R.string.tv_adblock_exp_title),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (focused) TvColors.onFocused else Color.White,
+                                )
+                                Text(
+                                    context.getString(R.string.tv_adblock_vod_desc),
+                                    fontSize = 12.sp,
+                                    lineHeight = 15.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (focused) TvColors.onFocused.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.65f),
+                                )
+                            }
                             TvListPanel.Switch(expAdblock, focused)
                         }
                     }
@@ -178,11 +235,13 @@ object TvProxyPanel {
                     useProxies = !useProxies
                     if (useProxies) {
                         expAdblock = false
+                        swapPlus = false
                     }
                     context.prefs().edit {
                         putBoolean(C.PLAYER_USE_CUSTOM_PROXY, useProxies)
                         if (useProxies) {
                             putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
+                            putBoolean(C.TV_ADBLOCK_SWAP_PLUS, false)
                         }
                     }
                     TvExperimentalAdblock.normalizePrefs(context)
@@ -199,7 +258,7 @@ object TvProxyPanel {
                         TvListPanel.Switch(useProxies, focused)
                     }
                 }
-                if (!expAdblock) {
+                if (manage != null || useProxies) {
                     // the proxies for the whole stream, or only while an ad plays (the stream itself from Twitch)
                     SelectorRow(
                         context.getString(R.string.tv_proxy_mode),
@@ -278,16 +337,18 @@ object TvProxyPanel {
                     }
                 }
                 if (manage == null) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
                     Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp), {
                         useStreamProxies = !useStreamProxies
                         if (useStreamProxies) {
                             expAdblock = false
+                            swapPlus = false
                         }
                         context.prefs().edit {
                             putBoolean(C.PLAYER_USE_STREAM_PROXY, useStreamProxies)
                             if (useStreamProxies) {
                                 putBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
+                                putBoolean(C.TV_ADBLOCK_SWAP_PLUS, false)
                             }
                         }
                         TvExperimentalAdblock.normalizePrefs(context)
@@ -304,7 +365,7 @@ object TvProxyPanel {
                             TvListPanel.Switch(useStreamProxies, focused)
                         }
                     }
-                    if (!expAdblock) {
+                    if (useStreamProxies) {
                         if (streamEntries.isNotEmpty()) {
                             Spacer(Modifier.height(4.dp))
                             streamEntries.forEachIndexed { index, entry ->
@@ -354,12 +415,13 @@ object TvProxyPanel {
                 })
             }
             val swapSame = TvExperimentalAdblock.isSwapAdblockEnabled(context) == swapBefore
+            val swapPlusSame = TvExperimentalAdblock.isSwapPlusEnabled(context) == swapPlusBefore
             val expSame = TvExperimentalAdblock.isExperimentalEnabled(context) == expBefore
             val useSame = context.prefs().getBoolean(C.PLAYER_USE_CUSTOM_PROXY, false) == useBefore
             val useStreamSame = context.prefs().getBoolean(C.PLAYER_USE_STREAM_PROXY, false) == useStreamBefore
             val modeSame = context.prefs().getString(C.PLAYER_CUSTOM_PROXY_MODE, "0") == modeBefore
             // on/off or mode changed: as a change of the list (the stream starts again with it)
-            if (now == original && nowStream == originalStream && swapSame && expSame && useSame && useStreamSame && modeSame) {
+            if (now == original && nowStream == originalStream && swapSame && swapPlusSame && expSame && useSame && useStreamSame && modeSame) {
                 onClosed(null)
             } else {
                 onClosed(entries.mapIndexed { index, entry ->
