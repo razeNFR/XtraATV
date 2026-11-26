@@ -30,7 +30,7 @@ class TvVodAudioRecoveryTest {
             #EXT-X-ENDLIST
         """.trimIndent()
         var probeCalls = 0
-        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { _, _ ->
+        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { _, _, _, _ ->
             probeCalls++
             TvVodAudioRecovery.SegmentMode.UNMUTED
         }
@@ -47,7 +47,7 @@ class TvVodAudioRecoveryTest {
         val liveUrl = "https://usher.ttvnw.net/api/channel/hls/test.m3u8"
         val playlist = "#EXTM3U\n#EXTINF:2.0,\n0-muted.ts\n"
         var probeCalls = 0
-        val out = TvVodAudioRecovery.rewriteMediaPlaylist(liveUrl, playlist, session) { _, _ ->
+        val out = TvVodAudioRecovery.rewriteMediaPlaylist(liveUrl, playlist, session) { _, _, _, _ ->
             probeCalls++
             TvVodAudioRecovery.SegmentMode.UNMUTED
         }
@@ -67,7 +67,7 @@ class TvVodAudioRecoveryTest {
             "sub/2-unmuted.mp4?token=def\r\n" +
             "#EXT-X-ENDLIST"
 
-        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { unmutedUrl, _ ->
+        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { unmutedUrl, _, _, _ ->
             if (unmutedUrl.contains("1-unmuted.mp4") || unmutedUrl.contains("2-unmuted.mp4")) {
                 TvVodAudioRecovery.SegmentMode.UNMUTED
             } else {
@@ -110,7 +110,7 @@ class TvVodAudioRecoveryTest {
         }
 
         val probedUrls = mutableListOf<String>()
-        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { unmutedUrl, plainUrl ->
+        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { unmutedUrl, plainUrl, _, _ ->
             probedUrls.add(unmutedUrl)
             val segNum = Regex("""/(\d+)-unmuted\.ts""").find(unmutedUrl)?.groupValues?.get(1)?.toInt() ?: -1
             if (segNum in 1..4 && plainUrl.endsWith("/$segNum.ts")) {
@@ -151,7 +151,7 @@ class TvVodAudioRecoveryTest {
             #EXT-X-ENDLIST
         """.trimIndent()
 
-        val out1 = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { _, _ ->
+        val out1 = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { _, _, _, _ ->
             TvVodAudioRecovery.SegmentMode.UNMUTED
         }
         assertTrue(out1.contains("2-unmuted.ts"))
@@ -167,7 +167,7 @@ class TvVodAudioRecoveryTest {
         assertEquals(false, session.state.statusAt(25_000L))
 
         // On subsequent playlist reload (e.g. live DVR / Adblock VOD refresh), segment 2 stays -muted.ts
-        val out2 = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { _, _ ->
+        val out2 = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { _, _, _, _ ->
             TvVodAudioRecovery.SegmentMode.UNMUTED
         }
         assertTrue(out2.contains("1-unmuted.ts"))
@@ -188,7 +188,7 @@ class TvVodAudioRecoveryTest {
             #EXT-X-ENDLIST
         """.trimIndent()
         var probeCalls = 0
-        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { _, _ ->
+        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { _, _, _, _ ->
             probeCalls++
             TvVodAudioRecovery.SegmentMode.UNMUTED
         }
@@ -213,7 +213,7 @@ class TvVodAudioRecoveryTest {
         }
 
         // Only segment 1 (edge) returns UNMUTED; middle (4) and end (7) return 403 -> MUTED
-        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { unmutedUrl, _ ->
+        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { unmutedUrl, _, _, _ ->
             if (unmutedUrl.endsWith("/1-unmuted.mp4")) {
                 TvVodAudioRecovery.SegmentMode.UNMUTED
             } else {
@@ -228,5 +228,39 @@ class TvVodAudioRecoveryTest {
         assertTrue(out.contains("7-muted.mp4"))
         assertEquals(listOf(0L to 10_000L), session.state.recoveredRanges)
         assertEquals(listOf(10_000L to 70_000L), session.state.mutedRanges)
+    }
+
+    @Test
+    fun probeRejectsSilentOrIdenticalUnmutedAndPrefersPlainWithRealAudio() {
+        val muted = TvVodAudioRecovery.ProbeMeta(ok = true, contentLength = 5_000_000L, etag = "\"aaa\"")
+
+        // Case 1: -unmuted.mp4 returns 200 OK with identical size/silent audio while plain is 403 -> reject as MUTED
+        val silentUnmuted = TvVodAudioRecovery.ProbeMeta(ok = true, contentLength = 5_002_000L, etag = "\"bbb\"")
+        val missingPlain = TvVodAudioRecovery.ProbeMeta(ok = false)
+        assertEquals(
+            TvVodAudioRecovery.SegmentMode.MUTED,
+            TvVodAudioRecovery.evaluateProbeCandidates(missingPlain, silentUnmuted, muted, 10_000L),
+        )
+
+        // Case 2: identical ETag -> reject as MUTED even if size header absent
+        val sameEtag = TvVodAudioRecovery.ProbeMeta(ok = true, contentLength = null, etag = "\"aaa\"")
+        assertEquals(
+            TvVodAudioRecovery.SegmentMode.MUTED,
+            TvVodAudioRecovery.evaluateProbeCandidates(sameEtag, sameEtag, muted, 10_000L),
+        )
+
+        // Case 3: both plain and unmuted have real audio (+180 KB over muted) -> prefer PLAIN
+        val realPlain = TvVodAudioRecovery.ProbeMeta(ok = true, contentLength = 5_180_000L, etag = "\"ccc\"")
+        val realUnmuted = TvVodAudioRecovery.ProbeMeta(ok = true, contentLength = 5_180_000L, etag = "\"ddd\"")
+        assertEquals(
+            TvVodAudioRecovery.SegmentMode.PLAIN,
+            TvVodAudioRecovery.evaluateProbeCandidates(realPlain, realUnmuted, muted, 10_000L),
+        )
+
+        // Case 4: plain is 403, unmuted has real audio (+180 KB over muted) -> choose UNMUTED
+        assertEquals(
+            TvVodAudioRecovery.SegmentMode.UNMUTED,
+            TvVodAudioRecovery.evaluateProbeCandidates(missingPlain, realUnmuted, muted, 10_000L),
+        )
     }
 }

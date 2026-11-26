@@ -1504,7 +1504,7 @@
     <string name="tv_adblock_swap_plus_summary">Expérimental — maintient une playlist HLS shadow anonyme pour couper les pubs sans interruption tout en gardant le 1440p / HEVC sur le lecteur principal (non utilisé en Multi-Stream ni PiP, qui restent sur Swap). Secours automatique sur Swap si besoin. Peut ne pas fonctionner à 100 %.</string>
     <string name="tv_adblock_vod_desc">Expérimental — via la VOD du live (~30 s), fonctionne partout (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Récupérer l\'audio coupé des VOD</string>
-    <string name="tv_vod_audio_recovery_summary">Restaure l\'audio coupé par DMCA dans les VOD, le retour arrière DVR et Adblock (VOD) lorsque l\'audio original est encore en cache CDN. Affiche les segments verts (récupérés) et rouges (coupés) sur la barre.</string>
+    <string name="tv_vod_audio_recovery_summary">Tente de restaurer l\'audio coupé (DMCA) dans les VOD, le retour arrière DVR et Adblock (VOD) si l\'audio d\'origine est encore disponible chez Twitch (ne fonctionne pas à 100 % selon les VOD). Affiche les zones vertes (récupérées) et rouges (coupées) sur la barre.</string>
     <string name="tv_vod_audio_recovered_toast">Audio coupé récupéré (~%1$d min)</string>
     <string name="tv_oled_screensaver_timeout">Assombrissement OLED d\'inactivité</string>
     <string name="tv_oled_screensaver_timeout_summary">Assombrit ou passe l\'écran en noir pur après inactivité sur l\'accueil, les menus ou en pause pour éviter le burn-in OLED. Appuie sur une touche pour réveiller.</string>
@@ -1516,5 +1516,6 @@
     <string name="tv_oled_screensaver_5m">5 minutes</string>
     <string name="tv_oled_screensaver_10m">10 minutes</string>
     <string name="tv_adblock_fallback_badge">Secours actif</string>
+    <string name="tv_adblock_swap_plus_fallback_toast">Relais Swap (échec Swap+)</string>
     <string name="tv_chat_qr_restart">Relancer</string>
 </resources>

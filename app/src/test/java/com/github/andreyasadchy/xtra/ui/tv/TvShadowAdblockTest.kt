@@ -386,4 +386,30 @@ class TvShadowAdblockTest {
         assertEquals(1440, variants[0].height)
         assertEquals(1080, variants[1].height)
     }
+
+    @Test
+    fun daterangeMidrollClassifiesLiveTitledSegmentsAsAd() {
+        val playlist = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:300
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:00.000Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_300.ts
+            #EXT-X-DATERANGE:ID="stitched-ad-555",CLASS="twitch-stitched-ad",START-DATE="2026-11-26T12:00:02.000Z",DURATION=15.0
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:02.000Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/stitched_301.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:04.000Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/stitched_302.ts
+        """.trimIndent()
+
+        val parsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, playlist)
+        assertEquals(TvShadowAdblock.PlaylistVerdict.PARTIAL_AD, parsed.verdict)
+        assertEquals(TvShadowAdblock.SegmentClass.CONTENT, parsed.segments[0].classification)
+        assertEquals(TvShadowAdblock.SegmentClass.AD, parsed.segments[1].classification)
+        assertEquals(TvShadowAdblock.SegmentClass.AD, parsed.segments[2].classification)
+    }
 }

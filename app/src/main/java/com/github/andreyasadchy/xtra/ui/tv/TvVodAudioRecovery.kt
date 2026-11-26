@@ -73,7 +73,43 @@ object TvVodAudioRecovery {
     }
 
     fun interface SegmentProber {
-        fun probe(unmutedUrl: String, plainUrl: String): SegmentMode
+        fun probe(unmutedUrl: String, plainUrl: String, mutedUrl: String, durationMs: Long): SegmentMode
+    }
+
+    internal data class ProbeMeta(
+        val ok: Boolean,
+        val contentLength: Long? = null,
+        val etag: String? = null,
+    )
+
+    internal fun minAudioDeltaBytes(durationMs: Long): Long =
+        ((durationMs / 1_000L) * 2_000L).coerceAtLeast(8_000L)
+
+    internal fun isDistinctRealAudio(candidate: ProbeMeta, muted: ProbeMeta?, durationMs: Long): Boolean {
+        if (!candidate.ok) return false
+        if (candidate.contentLength != null && candidate.contentLength <= MIN_VALID_CONTENT_LENGTH) return false
+        if (muted != null && muted.ok) {
+            if (!candidate.etag.isNullOrBlank() && !muted.etag.isNullOrBlank() && candidate.etag == muted.etag) {
+                return false
+            }
+            if (candidate.contentLength != null && muted.contentLength != null) {
+                if (candidate.contentLength < muted.contentLength + minAudioDeltaBytes(durationMs)) {
+                    return false
+                }
+            }
+        }
+        return true
+    }
+
+    internal fun evaluateProbeCandidates(
+        plain: ProbeMeta,
+        unmuted: ProbeMeta,
+        muted: ProbeMeta?,
+        durationMs: Long,
+    ): SegmentMode = when {
+        isDistinctRealAudio(plain, muted, durationMs) -> SegmentMode.PLAIN
+        isDistinctRealAudio(unmuted, muted, durationMs) -> SegmentMode.UNMUTED
+        else -> SegmentMode.MUTED
     }
 
     internal data class ParsedMutedSegment(
@@ -165,12 +201,12 @@ object TvVodAudioRecovery {
     private val _activeState = MutableStateFlow<VodAudioState?>(null)
     val activeState: StateFlow<VodAudioState?> get() = _activeState
 
-    private val probeExecutor = Executors.newFixedThreadPool(4) { r ->
+    private val probeExecutor = Executors.newFixedThreadPool(6) { r ->
         Thread(r, "XtraVodAudioProbe").apply { isDaemon = true }
     }
 
     fun isEnabled(context: Context): Boolean =
-        context.prefs().getBoolean(C.TV_VOD_AUDIO_RECOVERY, true)
+        context.prefs().getBoolean(C.TV_VOD_AUDIO_RECOVERY, false)
 
     fun isLivePlaylistUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
@@ -202,41 +238,72 @@ object TvVodAudioRecovery {
             .readTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .callTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .build()
-        return SegmentProber { unmutedUrl, plainUrl ->
-            probeInParallel(probeClient, unmutedUrl, plainUrl)
+        return SegmentProber { unmutedUrl, plainUrl, mutedUrl, durationMs ->
+            probeInParallel(probeClient, unmutedUrl, plainUrl, mutedUrl, durationMs)
         }
     }
 
-    private fun probeInParallel(client: OkHttpClient, unmutedUrl: String, plainUrl: String): SegmentMode {
-        val fUnmuted = probeExecutor.submit(Callable { probeSingleUrl(client, unmutedUrl) })
-        val fPlain = probeExecutor.submit(Callable { probeSingleUrl(client, plainUrl) })
-        val unmutedOk = runCatching { fUnmuted.get(PROBE_TIMEOUT_MS + 300L, TimeUnit.MILLISECONDS) }.getOrDefault(false)
-        if (unmutedOk) {
-            fPlain.cancel(true)
-            return SegmentMode.UNMUTED
+    private fun probeInParallel(
+        client: OkHttpClient,
+        unmutedUrl: String,
+        plainUrl: String,
+        mutedUrl: String,
+        durationMs: Long,
+    ): SegmentMode {
+        val fPlain = probeExecutor.submit(Callable { probeSingleUrlMeta(client, plainUrl) })
+        val fUnmuted = probeExecutor.submit(Callable { probeSingleUrlMeta(client, unmutedUrl) })
+        val fMuted = probeExecutor.submit(Callable { probeSingleUrlMeta(client, mutedUrl) })
+        val mutedMeta = runCatching { fMuted.get(PROBE_TIMEOUT_MS + 300L, TimeUnit.MILLISECONDS) }.getOrDefault(ProbeMeta(false))
+        val plainMeta = runCatching { fPlain.get(PROBE_TIMEOUT_MS + 300L, TimeUnit.MILLISECONDS) }.getOrDefault(ProbeMeta(false))
+        if (isDistinctRealAudio(plainMeta, mutedMeta, durationMs)) {
+            fUnmuted.cancel(true)
+            runCatching {
+                Log.i(TAG, "Probe -> PLAIN (plain=${plainMeta.contentLength} muted=${mutedMeta.contentLength} durMs=$durationMs)")
+            }
+            return SegmentMode.PLAIN
         }
-        val plainOk = runCatching { fPlain.get(PROBE_TIMEOUT_MS + 300L, TimeUnit.MILLISECONDS) }.getOrDefault(false)
-        return if (plainOk) SegmentMode.PLAIN else SegmentMode.MUTED
+        val unmutedMeta = runCatching { fUnmuted.get(PROBE_TIMEOUT_MS + 300L, TimeUnit.MILLISECONDS) }.getOrDefault(ProbeMeta(false))
+        val mode = evaluateProbeCandidates(plainMeta, unmutedMeta, mutedMeta, durationMs)
+        runCatching {
+            Log.i(
+                TAG,
+                "Probe -> $mode (plain=${plainMeta.ok}/${plainMeta.contentLength} " +
+                    "unmuted=${unmutedMeta.ok}/${unmutedMeta.contentLength} " +
+                    "muted=${mutedMeta.ok}/${mutedMeta.contentLength} durMs=$durationMs)"
+            )
+        }
+        return mode
     }
 
-    private fun probeSingleUrl(client: OkHttpClient, url: String): Boolean {
-        val call = client.newCall(
-            Request.Builder()
-                .url(url)
-                .get()
-                .build()
-        )
+    private fun probeSingleUrlMeta(client: OkHttpClient, url: String): ProbeMeta {
+        // Use HEAD first to avoid downloading any media payload; fall back to header-only GET on HTTP 405.
+        val headResult = runCatching {
+            client.newCall(Request.Builder().url(url).head().build()).execute().use { resp ->
+                if (resp.code == 405) return@use null
+                if (!resp.isSuccessful) return@use ProbeMeta(false)
+                ProbeMeta(
+                    ok = true,
+                    contentLength = resp.header("Content-Length")?.toLongOrNull(),
+                    etag = resp.header("ETag")?.trim(),
+                )
+            }
+        }.getOrNull()
+        if (headResult != null) return headResult
+
+        val call = client.newCall(Request.Builder().url(url).get().build())
         return try {
             call.execute().use { resp ->
-                if (!resp.isSuccessful) return false
-                val lenHeader = resp.header("Content-Length")?.toLongOrNull()
-                val valid = lenHeader == null || lenHeader > MIN_VALID_CONTENT_LENGTH
-                // Cancel immediately after headers so we never download the media body
+                if (!resp.isSuccessful) return ProbeMeta(false)
+                val meta = ProbeMeta(
+                    ok = true,
+                    contentLength = resp.header("Content-Length")?.toLongOrNull(),
+                    etag = resp.header("ETag")?.trim(),
+                )
                 call.cancel()
-                valid
+                meta
             }
         } catch (_: Exception) {
-            false
+            ProbeMeta(false)
         }
     }
 
@@ -334,19 +401,21 @@ object TvVodAudioRecovery {
                 val repModes = reps.map { rep ->
                     val unmutedAbs = resolveAbsoluteUrl(playlistUrl, rep.urlFor(SegmentMode.UNMUTED))
                     val plainAbs = resolveAbsoluteUrl(playlistUrl, rep.urlFor(SegmentMode.PLAIN))
-                    val mode = runCatching { prober.probe(unmutedAbs, plainAbs) }.getOrDefault(SegmentMode.MUTED)
+                    val mutedAbs = resolveAbsoluteUrl(playlistUrl, rep.urlFor(SegmentMode.MUTED))
+                    val durMs = (rep.endMs - rep.startMs).coerceAtLeast(1_000L)
+                    val mode = runCatching { prober.probe(unmutedAbs, plainAbs, mutedAbs, durMs) }.getOrDefault(SegmentMode.MUTED)
                     session.segmentModes[rep.segmentKey] = mode
                     rep to mode
                 }
                 // Require majority confirmation (e.g. >= 2/3 when 3 probed) so a single cached edge segment
                 // does not mark an entire muted range green only to fall back to silent -muted during playback.
                 val needed = (repModes.size + 1) / 2
-                val unmutedHits = repModes.count { it.second == SegmentMode.UNMUTED }
                 val plainHits = repModes.count { it.second == SegmentMode.PLAIN }
+                val unmutedHits = repModes.count { it.second == SegmentMode.UNMUTED }
                 val rangeMode = when {
-                    unmutedHits >= needed -> SegmentMode.UNMUTED
                     plainHits >= needed -> SegmentMode.PLAIN
-                    unmutedHits + plainHits >= needed -> if (unmutedHits >= plainHits) SegmentMode.UNMUTED else SegmentMode.PLAIN
+                    unmutedHits >= needed -> SegmentMode.UNMUTED
+                    plainHits + unmutedHits >= needed -> if (plainHits >= unmutedHits) SegmentMode.PLAIN else SegmentMode.UNMUTED
                     else -> SegmentMode.MUTED
                 }
                 for (seg in unresolved) {

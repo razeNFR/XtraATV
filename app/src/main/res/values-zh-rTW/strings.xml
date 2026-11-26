@@ -1504,7 +1504,7 @@
     <string name="tv_adblock_swap_plus_summary">實驗性 — 維護匿名影子HLS以在主播放器上無縫略過廣告並保留1440p / HEVC（多串流與子母畫面仍使用Swap）。必要時自動退回至Swap。</string>
     <string name="tv_adblock_vod_desc">實驗性 — 透過即時VOD播放（約30秒延遲），支援全模式（含子母畫面/多串流）。</string>
     <string name="tv_vod_audio_recovery">還原 VOD 靜音音訊</string>
-    <string name="tv_vod_audio_recovery_summary">當原始音訊仍在 CDN 快取中時，還原 VOD、直播 DVR 回看與 Adblock (VOD) 中被 DMCA 靜音的片段。進度條會顯示綠色（已還原）與紅色（靜音）。</string>
+    <string name="tv_vod_audio_recovery_summary">當原始音訊仍在 Twitch 可用時，嘗試還原 VOD、直播 DVR 回看與 Adblock (VOD) 中被 DMCA 靜音的片段（視個別 VOD 而定，不保證 100% 成功）。進度條顯示綠色（已還原）與紅色（靜音）。</string>
     <string name="tv_vod_audio_recovered_toast">已還原靜音音訊（約 %1$d 分鐘）</string>
     <string name="tv_oled_screensaver_timeout">OLED 閒置螢幕變暗</string>
     <string name="tv_oled_screensaver_timeout_summary">在首頁、選單或暫停播放無操作後自動變暗或純黑顯示以防 OLED 烙印。按任意鍵喚醒。</string>
@@ -1516,5 +1516,6 @@
     <string name="tv_oled_screensaver_5m">5 分鐘</string>
     <string name="tv_oled_screensaver_10m">10 分鐘</string>
     <string name="tv_adblock_fallback_badge">備援已啟用</string>
+    <string name="tv_adblock_swap_plus_fallback_toast">Swap 備用（Swap+ 失敗）</string>
     <string name="tv_chat_qr_restart">重新啟動</string>
 </resources>

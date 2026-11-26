@@ -228,9 +228,10 @@ object TvShadowAdblock {
         var curByteRange: String? = null
         val curTags = ArrayList<String>(6)
 
-        // Track active DATERANGE ad marker across segments
+        // Track active DATERANGE ad marker across segments (matches ExoPlayerService.isAdSegment)
         var lastPdtMs: Long? = null
         var elapsedSincePdtMs = 0.0
+        val adDateRanges = ArrayList<Pair<Long, Long>>(4)
 
         for (raw in lines) {
             val trimmed = raw.trim()
@@ -291,6 +292,10 @@ object TvShadowAdblock {
                             elapsedSincePdtMs = 0.0
                         }
                     }
+                    trimmed.startsWith("#EXT-X-DATERANGE:") -> {
+                        parseAdDateRangeWindow(trimmed)?.let { adDateRanges.add(it) }
+                        curTags.add(trimmed)
+                    }
                     trimmed.startsWith("#EXT-X-MAP:") -> {
                         activeMapLine = absolutizeQuotedUri(trimmed, playlistUrl)
                         curTags.add(activeMapLine!!)
@@ -310,7 +315,8 @@ object TvShadowAdblock {
                 val absUri = resolveAbsoluteUrl(playlistUrl, trimmed)
                 val segPdtMs = curPdtMs ?: lastPdtMs?.let { it + elapsedSincePdtMs.roundToLong() }
                 elapsedSincePdtMs += curDuration * 1_000.0
-                val segClass = classifySegment(curTitle, absUri, curTags, streamSourceNotLive)
+                val inAdDateRange = segPdtMs != null && adDateRanges.any { (startMs, endMs) -> segPdtMs in startMs until endMs }
+                val segClass = classifySegment(curTitle, absUri, curTags, streamSourceNotLive, inAdDateRange)
                 segments.add(
                     HlsSegment(
                         uri = absUri,
@@ -352,6 +358,38 @@ object TvShadowAdblock {
         )
     }
 
+    private fun parseAdDateRangeWindow(trimmed: String): Pair<Long, Long>? {
+        val isAd = trimmed.contains("stitched-ad", ignoreCase = true) ||
+            trimmed.contains("twitch-stitched-ad", ignoreCase = true) ||
+            trimmed.contains("X-TV-TWITCH-AD-", ignoreCase = true) ||
+            STRONG_AD_ID_REGEX.containsMatchIn(trimmed)
+        if (!isAd) return null
+
+        val attrs = splitAttributesRespectingQuotes(trimmed.removePrefix("#EXT-X-DATERANGE:"))
+        var startMs: Long? = null
+        var endMs: Long? = null
+        var durationSec: Double? = null
+        var plannedDurationSec: Double? = null
+        for (attr in attrs) {
+            val eq = attr.indexOf('=')
+            if (eq <= 0) continue
+            val key = attr.substring(0, eq).trim().uppercase(java.util.Locale.US)
+            val rawVal = attr.substring(eq + 1).trim().trim('"')
+            when (key) {
+                "START-DATE" -> startMs = parseIsoMs(rawVal)
+                "END-DATE" -> endMs = parseIsoMs(rawVal)
+                "DURATION" -> durationSec = rawVal.toDoubleOrNull()
+                "PLANNED-DURATION" -> plannedDurationSec = rawVal.toDoubleOrNull()
+            }
+        }
+        val start = startMs ?: return null
+        val end = endMs
+            ?: durationSec?.takeIf { it > 0.0 }?.let { start + (it * 1_000.0).roundToLong() }
+            ?: plannedDurationSec?.takeIf { it > 0.0 }?.let { start + (it * 1_000.0).roundToLong() }
+            ?: return null
+        return if (end > start) start to end else null
+    }
+
     private fun isSegmentScopedTag(trimmed: String): Boolean =
         trimmed.startsWith("#EXTINF:") ||
             (trimmed.startsWith("#EXT-X-DISCONTINUITY") && !trimmed.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE")) ||
@@ -366,9 +404,10 @@ object TvShadowAdblock {
         uri: String,
         tags: List<String>,
         streamSourceNotLive: Boolean,
+        inAdDateRange: Boolean = false,
     ): SegmentClass {
         val strongContent = title.equals("live", ignoreCase = true)
-        var strongAd = BRAND_AD_TITLE_REGEX.matches(title)
+        var strongAd = inAdDateRange || BRAND_AD_TITLE_REGEX.matches(title)
         if (!strongAd) {
             for (tag in tags) {
                 if (tag.contains("twitch-stitched-ad", true) ||
@@ -391,9 +430,7 @@ object TvShadowAdblock {
             lowerUri.contains("adsegment") ||
             (streamSourceNotLive && !strongContent)
 
-        val anyAd = strongAd || mediumAd
         return when {
-            anyAd && strongContent -> SegmentClass.UNKNOWN
             strongAd -> SegmentClass.AD
             strongContent -> SegmentClass.CONTENT
             mediumAd -> SegmentClass.AD

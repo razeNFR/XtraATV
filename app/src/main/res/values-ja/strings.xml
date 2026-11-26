@@ -1504,7 +1504,7 @@
     <string name="tv_adblock_swap_plus_summary">実験的 — 匿名シャドウHLSでメイン再生の1440p / HEVCを維持しつつ広告を回避します（マルチストリーム・PiPはSwapを使用）。必要時はSwapへフォールバックします。</string>
     <string name="tv_adblock_vod_desc">実験的 — 進行中VOD再生（約30秒遅延）、マルチ/PiP含む全域対応。</string>
     <string name="tv_vod_audio_recovery">ミュートされたVOD音声を復元</string>
-    <string name="tv_vod_audio_recovery_summary">CDNキャッシュに元音声が残っている場合、VOD・ライブDVR巻き戻し・Adblock (VOD) のDMCAミュート区間を復元します。シークバーに緑（復元）と赤（ミュート）を表示します。</string>
+    <string name="tv_vod_audio_recovery_summary">Twitchに元音声が残っている場合、VOD・ライブDVR巻き戻し・Adblock (VOD) のDMCAミュート音声の復元を試みます（VODによっては100%復元できるわけではありません）。シークバーに緑（復元）と赤（ミュート）を表示します。</string>
     <string name="tv_vod_audio_recovered_toast">ミュート音声を復元しました（約%1$d分）</string>
     <string name="tv_oled_screensaver_timeout">OLED 無操作時の画面減光</string>
     <string name="tv_oled_screensaver_timeout_summary">OLED焼き付き防止のため、ホーム・メニュー・一時停止中に無操作が続くと画面を減光または純黒にします。任意のボタンで復帰します。</string>
@@ -1516,5 +1516,6 @@
     <string name="tv_oled_screensaver_5m">5分</string>
     <string name="tv_oled_screensaver_10m">10分</string>
     <string name="tv_adblock_fallback_badge">予備として有効</string>
+    <string name="tv_adblock_swap_plus_fallback_toast">Swap代替（Swap+失敗）</string>
     <string name="tv_chat_qr_restart">再開</string>
 </resources>

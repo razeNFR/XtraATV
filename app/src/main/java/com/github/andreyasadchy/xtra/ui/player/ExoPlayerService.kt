@@ -754,7 +754,10 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                         if (useProxy || useVideoSwap || hideAds) {
                             val playlist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
-                            val ads = checkPlaylist(playlist, mainPlayer = true)
+                            val rawAds = checkPlaylist(playlist, mainPlayer = true)
+                            // If classic Swap already stepped in as fallback while Swap+ was warming up,
+                            // keep it active until the real ad break finishes instead of ping-ponging mid-break.
+                            val ads = rawAds || (shadowAdActive && (videoSwapActive || proxyMediaPlaylist))
                             val oldValue = playingAds
                             playingAds = ads
                             // the ad being blocked from the marks of Twitch ("2/3", its end), for the badge
@@ -3251,7 +3254,13 @@ class ExoPlayerService : BasePlaybackService() {
         videoSwapActive = true
         if (!silentRetry && !hidden) {
             val adProxy = videoSwapList?.getOrNull(currentVideoSwapItem)?.platform == AD_PROXY_PLATFORM
-            serviceListener?.toast(if (adProxy) R.string.starting_proxy else R.string.starting_video_swap, Toast.LENGTH_SHORT)
+            val toastRes = when {
+                adProxy -> R.string.starting_proxy
+                com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.isEnabled(this) && !experimentalVodActive ->
+                    R.string.tv_adblock_swap_plus_fallback_toast
+                else -> R.string.starting_video_swap
+            }
+            serviceListener?.toast(toastRes, Toast.LENGTH_SHORT)
         }
         player?.let { player ->
             if (quality?.name != VideoQuality.AUDIO_ONLY_QUALITY) {

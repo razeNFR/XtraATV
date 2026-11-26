@@ -1505,7 +1505,7 @@
     <string name="tv_adblock_swap_plus_summary">Deneysel — ana oynatıcıda 1440p / HEVC koruyarak reklamları kesintisiz atlamak için anonim shadow HLS kullanır (Çoklu Yayın ve PiP modlarında Swap kullanılır). Gerekirse Swap moduna düşer.</string>
     <string name="tv_adblock_vod_desc">Deneysel — canlı VOD üzerinden (~30 sn), her yerde çalışır (PiP/Çoklu Yayın).</string>
     <string name="tv_vod_audio_recovery">Sessize alınan VOD sesini kurtar</string>
-    <string name="tv_vod_audio_recovery_summary">Orijinal ses CDN önbelleğindeyse VOD, canlı DVR geri sarma ve Adblock (VOD) içindeki DMCA sessiz bölümlerini geri getirir. Çubukta yeşil (kurtarıldı) ve kırmızı (sessiz) gösterir.</string>
+    <string name="tv_vod_audio_recovery_summary">Orijinal ses Twitch\'te hâlâ mevcutsa VOD, canlı DVR geri sarma ve Adblock (VOD) içindeki DMCA sessiz bölümlerini kurtarmayı dener (VOD\'a bağlı olarak %100 garanti değildir). Çubukta yeşil (kurtarıldı) ve kırmızı (sessiz) alanları gösterir.</string>
     <string name="tv_vod_audio_recovered_toast">Sessiz ses kurtarıldı (~%1$d dk)</string>
     <string name="tv_oled_screensaver_timeout">OLED boşta ekran karartma</string>
     <string name="tv_oled_screensaver_timeout_summary">OLED yanmasını önlemek için Ana Sayfa, menüler veya duraklatılmış oynatmada hareketsizlik sonrası ekranı karartır. Uyandırmak için herhangi bir tuşa basın.</string>
@@ -1517,5 +1517,6 @@
     <string name="tv_oled_screensaver_5m">5 dakika</string>
     <string name="tv_oled_screensaver_10m">10 dakika</string>
     <string name="tv_adblock_fallback_badge">Aktif yedek</string>
+    <string name="tv_adblock_swap_plus_fallback_toast">Yedek Swap (Swap+ başarısız)</string>
     <string name="tv_chat_qr_restart">Yeniden başlat</string>
 </resources>

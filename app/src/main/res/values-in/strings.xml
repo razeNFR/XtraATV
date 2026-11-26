@@ -1505,7 +1505,7 @@
     <string name="tv_adblock_swap_plus_summary">Eksperimental — menjaga playlist shadow HLS anonim untuk melewati iklan sambil mempertahankan 1440p / HEVC di pemutar utama (tidak digunakan di Multi-Stream atau PiP yang memakai Swap). Beralih ke Swap jika perlu.</string>
     <string name="tv_adblock_vod_desc">Eksperimental — via VOD berjalan (~30 dtk), aktif di semua mode (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Pulihkan audio VOD yang dibisukan</string>
-    <string name="tv_vod_audio_recovery_summary">Memulihkan segmen audio yang dibisukan DMCA di VOD, rewind DVR live, dan Adblock (VOD) jika audio asli masih ada di cache CDN. Menampilkan segmen hijau (pulih) dan merah (bisu).</string>
+    <string name="tv_vod_audio_recovery_summary">Mencoba memulihkan audio yang dibisukan DMCA di VOD, rewind DVR live, dan Adblock (VOD) jika audio asli masih tersedia di Twitch (tidak 100% berhasil tergantung VOD). Menampilkan area hijau (pulih) dan merah (bisu) di bilah.</string>
     <string name="tv_vod_audio_recovered_toast">Audio bisu dipulihkan (~%1$d mnt)</string>
     <string name="tv_oled_screensaver_timeout">Peredupan layar OLED saat diam</string>
     <string name="tv_oled_screensaver_timeout_summary">Meredupkan atau menghitamkan layar setelah tidak aktif di Beranda, menu, atau saat dijeda untuk mencegah burn-in OLED. Tekan tombol apa saja untuk bangun.</string>
@@ -1517,5 +1517,6 @@
     <string name="tv_oled_screensaver_5m">5 menit</string>
     <string name="tv_oled_screensaver_10m">10 menit</string>
     <string name="tv_adblock_fallback_badge">Cadangan aktif</string>
+    <string name="tv_adblock_swap_plus_fallback_toast">Cadangan Swap (Swap+ gagal)</string>
     <string name="tv_chat_qr_restart">Mulai ulang</string>
 </resources>

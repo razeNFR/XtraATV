@@ -1504,7 +1504,7 @@
     <string name="tv_adblock_swap_plus_summary">Экспериментально — поддерживает анонимный shadow HLS-плейлист для плавного вырезания рекламы с сохранением 1440p / HEVC в основном плеере (в Multi-Stream и PiP используется Swap). При необходимости переключается на Swap.</string>
     <string name="tv_adblock_vod_desc">Экспериментально — через текущий VOD (~30 с), работает везде (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Восстанавливать заглушённый звук VOD</string>
-    <string name="tv_vod_audio_recovery_summary">Восстанавливает заглушённые по DMCA сегменты в VOD, перемотке DVR и Adblock (VOD), если оригинал ещё в кэше CDN. Зелёные (восстановлено) и красные (без звука) участки на шкале.</string>
+    <string name="tv_vod_audio_recovery_summary">Пытается восстановить заглушённый по DMCA звук в VOD, перемотке DVR и Adblock (VOD), если оригинал ещё доступен на Twitch (не гарантируется на 100% для всех VOD). Показывает зелёные (восстановлено) и красные (без звука) участки на шкале.</string>
     <string name="tv_vod_audio_recovered_toast">Звук восстановлен (~%1$d мин)</string>
     <string name="tv_oled_screensaver_timeout">OLED-затемнение при бездействии</string>
     <string name="tv_oled_screensaver_timeout_summary">Затемняет экран при бездействии на главном экране, в меню или на паузе для защиты OLED от выгорания. Нажмите любую кнопку для выхода.</string>
@@ -1516,5 +1516,6 @@
     <string name="tv_oled_screensaver_5m">5 минут</string>
     <string name="tv_oled_screensaver_10m">10 минут</string>
     <string name="tv_adblock_fallback_badge">Активный резерв</string>
+    <string name="tv_adblock_swap_plus_fallback_toast">Резерв Swap (сбой Swap+)</string>
     <string name="tv_chat_qr_restart">Запустить</string>
 </resources>

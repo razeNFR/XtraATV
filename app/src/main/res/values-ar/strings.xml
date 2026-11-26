@@ -1504,7 +1504,7 @@
     <string name="tv_adblock_swap_plus_summary">تجريبي — يستخدم قائمة HLS خفية مجهولة لتجاوز الإعلانات بسلاسة مع الحفاظ على 1440p / HEVC في المشغّل الرئيسي (لا يُستخدم في البث المتعدد أو PiP حيث يعمل Swap). يعود إلى Swap عند الحاجة.</string>
     <string name="tv_adblock_vod_desc">تجريبي — عبر VOD المباشر (~30 ث)، يعمل في كل مكان (PiP/البث المتعدد).</string>
     <string name="tv_vod_audio_recovery">استعادة صوت VOD المكتوم</string>
-    <string name="tv_vod_audio_recovery_summary">يستعيد الصوت المكتوم بسبب DMCA في VOD والرجوع المباشر DVR وAdblock (VOD) عند توفره في ذاكرة CDN. يعرض مقاطع خضراء (مستعادة) وحمراء (مكتومة) على الشريط.</string>
+    <string name="tv_vod_audio_recovery_summary">يحاول استعادة الصوت المكتوم بسبب DMCA في VOD والرجوع المباشر DVR وAdblock (VOD) إذا كان الصوت الأصلي لا يزال متوفراً على Twitch (غير مضمون بنسبة 100% حسب كل VOD). يعرض مقاطع خضراء (مستعادة) وحمراء (مكتومة) على الشريط.</string>
     <string name="tv_vod_audio_recovered_toast">تمت استعادة الصوت المكتوم (~%1$d د)</string>
     <string name="tv_oled_screensaver_timeout">تعتيم شاشة OLED عند الخمول</string>
     <string name="tv_oled_screensaver_timeout_summary">يعتم الشاشة أو يحولها إلى أسود نقي بعد الخمول في الرئيسية أو القوائم أو عند الإيقاف المؤقت لحماية شاشة OLED. اضغط أي زر للاستيقاظ.</string>
@@ -1516,5 +1516,6 @@
     <string name="tv_oled_screensaver_5m">5 دقائق</string>
     <string name="tv_oled_screensaver_10m">10 دقائق</string>
     <string name="tv_adblock_fallback_badge">بديل نشط</string>
+    <string name="tv_adblock_swap_plus_fallback_toast">بديل Swap (فشل Swap+)</string>
     <string name="tv_chat_qr_restart">إعادة تشغيل</string>
 </resources>

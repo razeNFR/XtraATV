@@ -2,13 +2,13 @@
 
 ### What's New
 - **New `Adblock (Swap+)` Continuous Shadow HLS Engine *(Experimental)***:
-  - Maintains a lightweight anonymous shadow HLS playlist on the main fullscreen player and splices out pre-roll and mid-roll ad segments seamlessly — **preserving 1440p / HEVC / AV1** on the primary stream, with automatic fallback to `Adblock (Swap)` if needed.
+  - Maintains a lightweight anonymous shadow HLS playlist on the main fullscreen player and splices out pre-roll and mid-roll ad segments seamlessly — **preserving 1440p / HEVC / AV1** on the primary stream, showing a lightweight **`Ad`** badge during breaks, with automatic fallback to `Adblock (Swap)` (`Swap fallback (Swap+ failed)`) if needed.
   - Multi-Stream and PiP stay on classic `Adblock (Swap)` (or `Adblock (VOD)` when enabled) for maximum stability and low resource usage.
   - Renamed Experimental Adblock to **`Adblock (VOD)`** *(Experimental)* everywhere, clarifying that it works everywhere (main player, Multi-Stream, and PiP) with automatic fallback to `Swap+` / `Swap`.
   - **Clearer Adblock & Proxies Panel & Settings**: added concise descriptions under `Adblock (Swap)`, `Adblock (Swap+)`, and `Adblock (VOD)`, replaced confusing duplicate toggles with a clear **`Active fallback`** badge on fallback blockers, and automatically hides Custom Proxy and HTTP Stream Proxy lists in the player panel when toggled off.
 - **DMCA-Muted VOD Audio Recovery (VOD, Live DVR Rewind & `Adblock (VOD)`)**:
-  - Automatically restores muted music segments when the unmuted original is still cached on Twitch's CDN across **classic VODs**, **sub-only VODs**, **live DVR rewind**, **`Adblock (VOD)`**, and **VOD quality switches** (configurable toggle in Player Settings, enabled by default).
-  - **Green & Red Seek Bar**: shows **green** segments for recovered audio and **red** segments for permanently muted audio, with per-range probing (start/mid/end), permanent per-segment fallback memory on HTTP 403/404/410, and a one-shot recovery toast (`Muted audio recovered (~X min)`).
+  - Opt-in toggle in Player Settings (**off by default**, best-effort depending on whether Twitch still keeps the original audio cached) that attempts to restore muted music segments across **classic VODs**, **sub-only VODs**, **live DVR rewind**, **`Adblock (VOD)`**, and **VOD quality switches**.
+  - **Green & Red Seek Bar**: shows **green** segments for verified recovered audio and **red** segments for muted audio (always visible even when recovery is off), with per-range majority probing, silent-copy filtering, permanent per-segment fallback memory on HTTP 403/404/410, and a one-shot recovery toast (`Muted audio recovered (~X min)`).
 - **Instant Live DVR Rewind via Async Background Pre-Lookup**:
   - 3 seconds after a fullscreen live stream loads (skipped in PiP and Multi-Stream), quietly resolves `index-dvr.m3u8` on a background thread so rewinding or resuming from pause switches to DVR immediately without waiting on *"Looking for VOD..."*.
 - **Pure-Black OLED Idle Screen Dimming (SmartTube-Style)**:

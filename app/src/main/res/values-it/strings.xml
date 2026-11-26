@@ -1504,7 +1504,7 @@
     <string name="tv_adblock_swap_plus_summary">Sperimentale — mantiene una playlist HLS shadow anonima per saltare gli annunci mantenendo 1440p / HEVC sul player principale (non usato in Multi-Stream o PiP, che usano Swap). Passa a Swap se necessario.</string>
     <string name="tv_adblock_vod_desc">Sperimentale — tramite VOD in corso (~30 s), funziona ovunque (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Recupera audio VOD silenziato</string>
-    <string name="tv_vod_audio_recovery_summary">Ripristina i segmenti silenziati per DMCA in VOD, DVR live e Adblock (VOD) se ancora in cache CDN. Mostra segmenti verdi (recuperati) e rossi (silenziati) sulla barra.</string>
+    <string name="tv_vod_audio_recovery_summary">Tenta di ripristinare l\'audio silenziato per DMCA in VOD, DVR live e Adblock (VOD) se l\'audio originale è ancora disponibile su Twitch (non garantito al 100% a seconda del VOD). Mostra zone verdi (recuperate) e rosse (silenziate) sulla barra.</string>
     <string name="tv_vod_audio_recovered_toast">Audio silenziato recuperato (~%1$d min)</string>
     <string name="tv_oled_screensaver_timeout">Oscuramento OLED per inattività</string>
     <string name="tv_oled_screensaver_timeout_summary">Oscura lo schermo dopo inattività nella Home, nei menu o in pausa per prevenire il burn-in OLED. Premi un tasto qualsiasi per riattivare.</string>
@@ -1516,5 +1516,6 @@
     <string name="tv_oled_screensaver_5m">5 minuti</string>
     <string name="tv_oled_screensaver_10m">10 minuti</string>
     <string name="tv_adblock_fallback_badge">Fallback attivo</string>
+    <string name="tv_adblock_swap_plus_fallback_toast">Riserva Swap (Swap+ fallito)</string>
     <string name="tv_chat_qr_restart">Riavvia</string>
 </resources>
