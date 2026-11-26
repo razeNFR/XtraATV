@@ -125,7 +125,7 @@ class StreamsAdapter(
                     item.channelName
                 }
                 val isTv = context.resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)
-                if (isTv && com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.channelLogin)) {
+                if (com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.channelLogin)) {
                     base = android.text.SpannableStringBuilder("★ ").apply {
                         setSpan(android.text.style.ForegroundColorSpan(0xFFFACC15.toInt()), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                         append(base)
@@ -161,6 +161,14 @@ class StreamsAdapter(
                         (fragment.activity as MainActivity).startStream(item, snapshot().items, queueSource)
                     }
                     val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
+                    if (!isTv) {
+                        root.setOnLongClickListener {
+                            (fragment.activity as? MainActivity)?.let { act ->
+                                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.showStreamActions(act, item)
+                            }
+                            true
+                        }
+                    }
                     if (item.channelImage != null) {
                         userImage.visibility = View.VISIBLE
                         fragment.requireContext().imageLoader.enqueue(

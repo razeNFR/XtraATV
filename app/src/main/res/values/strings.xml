@@ -1538,4 +1538,21 @@
     <string name="tv_adblock_fallback_badge">Active fallback</string>
     <string name="tv_adblock_swap_plus_fallback_toast">Swap fallback (Swap+ failed)</string>
     <string name="tv_chat_qr_restart">Restart</string>
+    <string name="mobile_settings_cat_general">Appearance &amp; general</string>
+    <string name="mobile_settings_cat_adblock">Adblock &amp; proxies</string>
+    <string name="mobile_settings_cat_player">Player</string>
+    <string name="mobile_settings_cat_chat">Chat</string>
+    <string name="mobile_settings_cat_data">Data &amp; personalization</string>
+    <string name="mobile_settings_cat_system">System &amp; about</string>
+    <string name="mobile_stats_title">My statistics</string>
+    <string name="mobile_stats_summary">Watch time, ads blocked, top streamers and categories</string>
+    <string name="mobile_live_dvr_title">Live rewind (DVR)</string>
+    <string name="mobile_live_dvr_summary">Show a timeline on live streams to rewind and return to live</string>
+    <string name="mobile_favorites_how">Long press a stream card, then choose “Add to favorites”</string>
+    <string name="mobile_favorites_empty">None: long press a stream, then “Add to favorites”</string>
+    <string name="mobile_blacklist_hint_cards">Long press any stream or category card to hide it from your lists.</string>
+    <string name="mobile_copied_clipboard">Copied to clipboard</string>
+    <string name="mobile_copy_link">Copy link</string>
+    <string name="mobile_open_browser">Open in browser</string>
+    <string name="mobile_claim_drop">Claim</string>
 </resources>

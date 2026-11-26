@@ -1518,4 +1518,21 @@
     <string name="tv_adblock_fallback_badge">Fallback attivo</string>
     <string name="tv_adblock_swap_plus_fallback_toast">Riserva Swap (Swap+ fallito)</string>
     <string name="tv_chat_qr_restart">Riavvia</string>
+    <string name="mobile_settings_cat_general">Aspetto e generali</string>
+    <string name="mobile_settings_cat_adblock">Adblock e proxy</string>
+    <string name="mobile_settings_cat_player">Player</string>
+    <string name="mobile_settings_cat_chat">Chat</string>
+    <string name="mobile_settings_cat_data">Dati e personalizzazione</string>
+    <string name="mobile_settings_cat_system">Sistema e informazioni</string>
+    <string name="mobile_stats_title">Le mie statistiche</string>
+    <string name="mobile_stats_summary">Tempo di visione, pubblicità bloccate, migliori streamer e categorie</string>
+    <string name="mobile_live_dvr_title">Riavvolgimento live (DVR)</string>
+    <string name="mobile_live_dvr_summary">Mostra una barra temporale nelle dirette per tornare indietro e ritornare al live</string>
+    <string name="mobile_favorites_how">Tieni premuto su uno stream, poi scegli «Aggiungi ai preferiti»</string>
+    <string name="mobile_favorites_empty">Nessuno: tieni premuto su uno stream, poi «Aggiungi ai preferiti»</string>
+    <string name="mobile_blacklist_hint_cards">Tieni premuto su uno stream o una categoria per nasconderlo dagli elenchi.</string>
+    <string name="mobile_copied_clipboard">Copiato negli appunti</string>
+    <string name="mobile_copy_link">Copia link</string>
+    <string name="mobile_open_browser">Apri nel browser</string>
+    <string name="mobile_claim_drop">Riscatta</string>
 </resources>

@@ -1518,4 +1518,21 @@
     <string name="tv_adblock_fallback_badge">备用已启用</string>
     <string name="tv_adblock_swap_plus_fallback_toast">Swap 备用（Swap+ 失败）</string>
     <string name="tv_chat_qr_restart">重新启动</string>
+    <string name="mobile_settings_cat_general">外观与常规</string>
+    <string name="mobile_settings_cat_adblock">广告拦截与代理</string>
+    <string name="mobile_settings_cat_player">播放器</string>
+    <string name="mobile_settings_cat_chat">聊天</string>
+    <string name="mobile_settings_cat_data">数据与个性化</string>
+    <string name="mobile_settings_cat_system">系统与关于</string>
+    <string name="mobile_stats_title">我的统计</string>
+    <string name="mobile_stats_summary">观看时长、已拦截广告、常看主播与分类</string>
+    <string name="mobile_live_dvr_title">直播回看 (DVR)</string>
+    <string name="mobile_live_dvr_summary">在直播中显示时间轴以回看并随时返回直播</string>
+    <string name="mobile_favorites_how">长按直播卡片，然后选择“添加到收藏”</string>
+    <string name="mobile_favorites_empty">暂无：长按直播，然后选择“添加到收藏”</string>
+    <string name="mobile_blacklist_hint_cards">长按任意直播或分类卡片即可将其从列表中隐藏。</string>
+    <string name="mobile_copied_clipboard">已复制到剪贴板</string>
+    <string name="mobile_copy_link">复制链接</string>
+    <string name="mobile_open_browser">在浏览器中打开</string>
+    <string name="mobile_claim_drop">领取</string>
 </resources>

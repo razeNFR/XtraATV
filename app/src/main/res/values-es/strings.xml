@@ -1523,4 +1523,21 @@
     <string name="tv_adblock_fallback_badge">Respaldo activo</string>
     <string name="tv_adblock_swap_plus_fallback_toast">Relevo Swap (fallo de Swap+)</string>
     <string name="tv_chat_qr_restart">Reiniciar</string>
+    <string name="mobile_settings_cat_general">Apariencia y general</string>
+    <string name="mobile_settings_cat_adblock">Bloqueador y proxies</string>
+    <string name="mobile_settings_cat_player">Reproductor</string>
+    <string name="mobile_settings_cat_chat">Chat</string>
+    <string name="mobile_settings_cat_data">Datos y personalización</string>
+    <string name="mobile_settings_cat_system">Sistema y acerca de</string>
+    <string name="mobile_stats_title">Mis estadísticas</string>
+    <string name="mobile_stats_summary">Tiempo visto, anuncios bloqueados, mejores streamers y categorías</string>
+    <string name="mobile_live_dvr_title">Rebobinado en directo (DVR)</string>
+    <string name="mobile_live_dvr_summary">Mostrar una línea de tiempo en directos para retroceder y volver al directo</string>
+    <string name="mobile_favorites_how">Mantén pulsado un directo y elige «Añadir a favoritos»</string>
+    <string name="mobile_favorites_empty">Ninguno: mantén pulsado un directo y elige «Añadir a favoritos»</string>
+    <string name="mobile_blacklist_hint_cards">Mantén pulsado cualquier directo o categoría para ocultarlo de tus listas.</string>
+    <string name="mobile_copied_clipboard">Copiado al portapapeles</string>
+    <string name="mobile_copy_link">Copiar enlace</string>
+    <string name="mobile_open_browser">Abrir en el navegador</string>
+    <string name="mobile_claim_drop">Reclamar</string>
 </resources>

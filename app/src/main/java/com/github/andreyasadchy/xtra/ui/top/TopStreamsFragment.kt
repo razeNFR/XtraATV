@@ -86,6 +86,8 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                         toolbar.title = getString(R.string.tv_popular_in, label)
                     }
                 }
+            } else {
+                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyBrandHeader(toolbar, args.title ?: getString(R.string.top))
             }
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             toolbar.setOnMenuItemClickListener { menuItem ->

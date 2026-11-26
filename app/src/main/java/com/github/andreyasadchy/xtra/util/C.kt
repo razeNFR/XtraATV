@@ -432,6 +432,8 @@ object C {
     const val TV_ADBLOCK_SWAP_PLUS = "tv_adblock_swap_plus"
     /** TV: what happens when a live stream ends without a raid: "home" (default), "next", or "stay". */
     const val TV_STREAM_END_ACTION = "tv_stream_end_action"
+    /** Mobile: live DVR rewind timeline & back-to-live pill in the player (default true). */
+    const val MOBILE_LIVE_DVR = "mobile_live_dvr"
     const val TV_EXPERIMENTAL_ADBLOCK = "tv_experimental_adblock"
     /** Custom proxies: "0" for the whole stream, "1" only while an ad plays. */
     const val PLAYER_CUSTOM_PROXY_MODE = "custom_proxy_mode"

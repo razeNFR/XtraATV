@@ -90,7 +90,14 @@ class GamesAdapter(
                             true
                         }
                     } else {
-                        root.setOnLongClickListener(null)
+                        root.setOnLongClickListener {
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileUi.showGameActions(
+                                context = context,
+                                game = item,
+                                onOpenCategory = openCategory,
+                            )
+                            true
+                        }
                     }
                     if (item.boxArt != null) {
                         gameImage.visibility = View.VISIBLE

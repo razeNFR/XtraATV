@@ -191,11 +191,17 @@
 
     <style name="CompactCard" parent="Widget.Material3.CardView.Elevated">
         <item name="android:layout_margin">4dp</item>
+        <item name="cardCornerRadius">14dp</item>
+        <item name="strokeColor">#1F888899</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <style name="CompactCardAmoled" parent="Widget.Material3.CardView.Elevated">
         <item name="materialThemeOverlay">@style/CardOverlayAmoled</item>
         <item name="android:layout_margin">4dp</item>
+        <item name="cardCornerRadius">14dp</item>
+        <item name="strokeColor">#24FFFFFF</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <style name="CompactRadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
@@ -1106,11 +1112,15 @@
     <style name="ThumbnailItem">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:shadowColor">#000000</item>
-        <item name="android:shadowRadius">4</item>
+        <item name="android:background">@drawable/mobile_badge_pill</item>
+        <item name="android:paddingStart">7dp</item>
+        <item name="android:paddingEnd">7dp</item>
+        <item name="android:paddingTop">2dp</item>
+        <item name="android:paddingBottom">2dp</item>
         <item name="android:textAppearance">?attr/textAppearanceBodyMedium</item>
         <item name="android:textColor">@android:color/white</item>
-        <item name="android:textSize">13sp</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
     </style>
 
     <style name="UserPicture">
@@ -1125,11 +1135,19 @@
 
     <style name="Card" parent="Widget.Material3.CardView.Elevated">
         <item name="android:layout_margin">8dp</item>
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardElevation">1dp</item>
+        <item name="strokeColor">#1F888899</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <style name="CardAmoled" parent="Widget.Material3.CardView.Elevated">
         <item name="materialThemeOverlay">@style/CardOverlayAmoled</item>
         <item name="android:layout_margin">8dp</item>
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">#24FFFFFF</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <style name="CardOverlayAmoled">
@@ -1196,10 +1214,25 @@
 
     <style name="BottomSheetModal" parent="Widget.Material3.BottomSheet.Modal">
         <item name="android:elevation">0dp</item>
+        <item name="shapeAppearance">@style/MobileSheetShape</item>
+    </style>
+
+    <style name="MobileSheetShape" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">24dp</item>
+        <item name="cornerSizeTopRight">24dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <style name="MobileDialogShape" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
     </style>
 
     <style name="Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="android:background">?attr/colorSurface</item>
+        <item name="shapeAppearanceOverlay">@style/MobileDialogShape</item>
     </style>
 
     <style name="PreferenceTheme" parent="@style/PreferenceThemeOverlay">

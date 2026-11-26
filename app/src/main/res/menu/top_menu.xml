@@ -18,7 +18,10 @@
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/settings"
-        android:title="@string/settings" />
+        android:icon="@drawable/tv_ic_settings"
+        android:title="@string/settings"
+        app:iconTint="?attr/colorControlNormal"
+        app:showAsAction="ifRoom" />
     <item
         android:id="@+id/login"
         android:title="@string/log_in" />

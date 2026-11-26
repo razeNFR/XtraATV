@@ -151,7 +151,15 @@ class ClipsAdapter(
                                 actions,
                             )
                         } else {
-                            showDownloadDialog(item)
+                            val activity = fragment.activity as? MainActivity ?: return@setOnLongClickListener true
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileUi.showClipActions(
+                                activity = activity,
+                                clip = item,
+                                allClips = snapshot().items.filterNotNull(),
+                                showChannel = showChannel,
+                                showGame = showGame,
+                                onDownload = { showDownloadDialog(item) },
+                            )
                         }
                         true
                     }

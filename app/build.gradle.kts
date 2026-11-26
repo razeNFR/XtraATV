@@ -29,8 +29,8 @@ android {
         applicationId = "com.github.razenfr.xtratv"
         minSdk = 24
         targetSdk = 37
-        versionCode = 174
-        versionName = "1.4.8-tv"
+        versionCode = 175
+        versionName = "1.4.9-tv"
         val releaseNotesFile = rootProject.file("docs/release-notes.md")
         val escapedReleaseNotes = (if (releaseNotesFile.isFile) releaseNotesFile.readText(Charsets.UTF_8) else "")
             .replace("\\", "\\\\")

@@ -1519,4 +1519,21 @@
     <string name="tv_adblock_fallback_badge">Cadangan aktif</string>
     <string name="tv_adblock_swap_plus_fallback_toast">Cadangan Swap (Swap+ gagal)</string>
     <string name="tv_chat_qr_restart">Mulai ulang</string>
+    <string name="mobile_settings_cat_general">Tampilan &amp; umum</string>
+    <string name="mobile_settings_cat_adblock">Pemblokir iklan &amp; proksi</string>
+    <string name="mobile_settings_cat_player">Pemutar</string>
+    <string name="mobile_settings_cat_chat">Obrolan</string>
+    <string name="mobile_settings_cat_data">Data &amp; personalisasi</string>
+    <string name="mobile_settings_cat_system">Sistem &amp; tentang</string>
+    <string name="mobile_stats_title">Statistik saya</string>
+    <string name="mobile_stats_summary">Waktu tonton, iklan diblokir, streamer dan kategori teratas</string>
+    <string name="mobile_live_dvr_title">Putar ulang siaran langsung (DVR)</string>
+    <string name="mobile_live_dvr_summary">Tampilkan lini masa di siaran langsung untuk mundur dan kembali ke live</string>
+    <string name="mobile_favorites_how">Tekan lama kartu siaran, lalu pilih “Tambah ke favorit”</string>
+    <string name="mobile_favorites_empty">Belum ada: tekan lama siaran, lalu “Tambah ke favorit”</string>
+    <string name="mobile_blacklist_hint_cards">Tekan lama siaran atau kategori mana pun untuk menyembunyikannya dari daftar.</string>
+    <string name="mobile_copied_clipboard">Disalin ke papan klip</string>
+    <string name="mobile_copy_link">Salin tautan</string>
+    <string name="mobile_open_browser">Buka di browser</string>
+    <string name="mobile_claim_drop">Klaim</string>
 </resources>

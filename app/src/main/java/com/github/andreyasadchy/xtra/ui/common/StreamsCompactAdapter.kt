@@ -80,6 +80,14 @@ class StreamsCompactAdapter(
                     root.setOnClickListener {
                         (fragment.activity as MainActivity).startStream(item)
                     }
+                    if (!com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                        root.setOnLongClickListener {
+                            (fragment.activity as? MainActivity)?.let { act ->
+                                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.showStreamActions(act, item)
+                            }
+                            true
+                        }
+                    }
                     if (item.channelImage != null) {
                         userImage.visibility = View.VISIBLE
                         fragment.requireContext().imageLoader.enqueue(
@@ -98,7 +106,7 @@ class StreamsCompactAdapter(
                     }
                     if (item.channelName != null) {
                         username.visibility = View.VISIBLE
-                        username.text = if (item.channelLogin != null && !item.channelLogin.equals(item.channelName, true)) {
+                        var label: CharSequence = if (item.channelLogin != null && !item.channelLogin.equals(item.channelName, true)) {
                             when (context.prefs().getString(C.UI_NAME_DISPLAY, "0")) {
                                 "0" -> "${item.channelName}(${item.channelLogin})"
                                 "1" -> item.channelName
@@ -107,6 +115,13 @@ class StreamsCompactAdapter(
                         } else {
                             item.channelName
                         }
+                        if (com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.channelLogin)) {
+                            label = android.text.SpannableStringBuilder("★ ").apply {
+                                setSpan(android.text.style.ForegroundColorSpan(0xFFFACC15.toInt()), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                                append(label)
+                            }
+                        }
+                        username.text = label
                         username.setOnClickListener(channelListener)
                     } else {
                         username.visibility = View.GONE

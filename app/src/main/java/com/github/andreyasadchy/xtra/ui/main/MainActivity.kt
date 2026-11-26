@@ -172,14 +172,14 @@ class MainActivity : AppCompatActivity() {
         showLastCrash()
         migrateSettings()
         forceDisplaySettings()
+        // favorite channels, read before the followed streams are loaded (TV and mobile)
+        com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
         if (resources.getBoolean(R.bool.isTv)) {
             if (savedInstanceState == null) {
                 com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.advanceRotationIfDue(this, onLaunch = true)
             }
             // the color of accent, read again (the app restarts this screen when the ambiance color changes)
             com.github.andreyasadchy.xtra.ui.tv.TvAccent.init(this)
-            // favorite channels, read before the followed streams are loaded
-            com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
             // pre-warm the TV settings XML cache in the background so opening Settings is instant
             com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment.prewarmAsync(this)
             prefs.edit {
@@ -650,12 +650,13 @@ class MainActivity : AppCompatActivity() {
                             // TV: the version and its changelog, the focus on "Update"
                             com.github.andreyasadchy.xtra.ui.tv.TvUpdateDialog.show(this@MainActivity, viewModel.updateVersion, viewModel.updateNotes, startUpdate, ignoreUpdate)
                         } else {
-                            getAlertDialogBuilder()
-                                .setTitle(getString(R.string.update_available))
-                                .setMessage(getString(R.string.update_message))
-                                .setPositiveButton(getString(R.string.yes)) { _, _ -> startUpdate() }
-                                .setNegativeButton(getString(R.string.no)) { _, _ -> ignoreUpdate() }
-                                .show()
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileBottomSheets.showUpdate(
+                                this@MainActivity,
+                                viewModel.updateVersion,
+                                viewModel.updateNotes,
+                                startUpdate,
+                                ignoreUpdate,
+                            )
                         }
                     }
                 }

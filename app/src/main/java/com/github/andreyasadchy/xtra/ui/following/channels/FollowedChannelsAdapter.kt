@@ -121,6 +121,21 @@ class FollowedChannelsAdapter(
                             )
                             true
                         }
+                    } else {
+                        root.setOnLongClickListener {
+                            val activity = fragment.activity as? com.github.andreyasadchy.xtra.ui.main.MainActivity ?: return@setOnLongClickListener false
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileUi.showStreamActions(
+                                activity,
+                                com.github.andreyasadchy.xtra.model.ui.Stream(
+                                    channelId = item.id,
+                                    channelLogin = item.login,
+                                    channelName = item.name,
+                                    channelImageURL = item.profileImageURL,
+                                    gameName = item.liveGame,
+                                )
+                            )
+                            true
+                        }
                     }
                     if (item.profileImage != null) {
                         userImage.visibility = View.VISIBLE
@@ -141,7 +156,7 @@ class FollowedChannelsAdapter(
                     }
                     if (item.name != null) {
                         username.visibility = View.VISIBLE
-                        username.text = if (item.login != null && !item.login.equals(item.name, true)) {
+                        var label: CharSequence = if (item.login != null && !item.login.equals(item.name, true)) {
                             when (context.prefs().getString(C.UI_NAME_DISPLAY, "0")) {
                                 "0" -> "${item.name}(${item.login})"
                                 "1" -> item.name
@@ -150,6 +165,13 @@ class FollowedChannelsAdapter(
                         } else {
                             item.name
                         }
+                        if (!com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context) && com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.login)) {
+                            label = android.text.SpannableStringBuilder("★ ").apply {
+                                setSpan(android.text.style.ForegroundColorSpan(0xFFFACC15.toInt()), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                                append(label)
+                            }
+                        }
+                        username.text = label
                     } else {
                         username.visibility = View.GONE
                     }

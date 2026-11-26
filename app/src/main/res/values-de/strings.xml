@@ -1518,4 +1518,21 @@
     <string name="tv_adblock_fallback_badge">Aktives Fallback</string>
     <string name="tv_adblock_swap_plus_fallback_toast">Swap-Notfall (Swap+ fehlgeschlagen)</string>
     <string name="tv_chat_qr_restart">Neu starten</string>
+    <string name="mobile_settings_cat_general">Darstellung &amp; Allgemein</string>
+    <string name="mobile_settings_cat_adblock">Werbeblocker &amp; Proxys</string>
+    <string name="mobile_settings_cat_player">Player</string>
+    <string name="mobile_settings_cat_chat">Chat</string>
+    <string name="mobile_settings_cat_data">Daten &amp; Personalisierung</string>
+    <string name="mobile_settings_cat_system">System &amp; Über</string>
+    <string name="mobile_stats_title">Meine Statistiken</string>
+    <string name="mobile_stats_summary">Wiedergabezeit, blockierte Werbung, Top-Streamer und Kategorien</string>
+    <string name="mobile_live_dvr_title">Live-Rückspulen (DVR)</string>
+    <string name="mobile_live_dvr_summary">Zeitleiste in Livestreams anzeigen zum Zurückspulen und Zurückkehren zum Live-Stream</string>
+    <string name="mobile_favorites_how">Lange auf einen Stream drücken und „Zu Favoriten hinzufügen“ wählen</string>
+    <string name="mobile_favorites_empty">Keine: Lange auf einen Stream drücken, dann „Zu Favoriten hinzufügen“</string>
+    <string name="mobile_blacklist_hint_cards">Lange auf einen Stream oder eine Kategorie drücken, um sie auszublenden.</string>
+    <string name="mobile_copied_clipboard">In Zwischenablage kopiert</string>
+    <string name="mobile_copy_link">Link kopieren</string>
+    <string name="mobile_open_browser">Im Browser öffnen</string>
+    <string name="mobile_claim_drop">Abholen</string>
 </resources>

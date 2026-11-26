@@ -49,8 +49,8 @@ class XtraApp : Application(), SingletonImageLoader.Factory {
         INSTANCE = this
         xtraModule = XtraModule(this)
         com.github.andreyasadchy.xtra.ui.tv.TvToast.init(this)
+        com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.load(this)
         if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(this)) {
-            com.github.andreyasadchy.xtra.ui.tv.TvBlacklist.load(this)
             com.github.andreyasadchy.xtra.ui.tv.TvLauncherSyncWorker.schedule(this)
         }
         if (BuildConfig.DEBUG) {

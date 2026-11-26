@@ -177,7 +177,19 @@ class VideosAdapter(
                                 },
                             )
                         } else {
-                            showDownloadDialog(item)
+                            val activity = fragment.activity as? MainActivity ?: return@setOnLongClickListener true
+                            val bookmarked = bookmarks?.any { it.videoId == item.id } == true
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileUi.showVideoActions(
+                                activity = activity,
+                                video = item,
+                                positionMs = position,
+                                finished = startFromBeginning,
+                                isBookmarked = bookmarked,
+                                showChannel = showChannel,
+                                showGame = showGame,
+                                onBookmark = { saveBookmark(item) },
+                                onDownload = { showDownloadDialog(item) },
+                            )
                         }
                         true
                     }

@@ -9,11 +9,18 @@
     tools:alpha="1"
     tools:visibility="visible">
 
+    <!-- Top & bottom soft gradients (clean center video, modern mobile HUD) -->
     <View
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:alpha="0.4"
-        android:background="@android:color/black" />
+        android:layout_height="112dp"
+        android:layout_alignParentTop="true"
+        android:background="@drawable/mobile_player_scrim_top" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="136dp"
+        android:layout_alignParentBottom="true"
+        android:background="@drawable/mobile_player_scrim_bottom" />
 
     <ImageButton
         android:id="@+id/playPause"
@@ -71,7 +78,7 @@
         android:layout_height="wrap_content"
         android:layout_alignParentStart="true"
         android:layout_marginStart="10dp"
-        android:layout_marginTop="5dp"
+        android:layout_marginTop="6dp"
         android:layout_toStartOf="@id/topRightLayout">
 
         <ImageButton
@@ -89,23 +96,27 @@
             android:id="@+id/infoLayout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:layout_marginEnd="10dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="8dp"
             android:orientation="vertical">
 
             <TextView
                 android:id="@+id/channel"
-                android:background="@drawable/player_control_background"
                 android:layout_width="wrap_content"
-                android:layout_height="27dp"
+                android:layout_height="26dp"
                 android:layout_marginBottom="1dp"
+                android:background="@drawable/player_control_background"
                 android:ellipsize="end"
                 android:gravity="center_vertical|start"
                 android:maxLines="1"
+                android:shadowColor="#B3000000"
+                android:shadowDy="1"
+                android:shadowRadius="4"
                 android:textColor="@android:color/white"
-                android:textSize="20sp"
+                android:textSize="19sp"
+                android:textStyle="bold"
                 android:visibility="gone"
-                app:autoSizeMaxTextSize="20sp"
+                app:autoSizeMaxTextSize="19sp"
                 app:autoSizeMinTextSize="10sp"
                 app:autoSizeStepGranularity="1sp"
                 app:autoSizeTextType="uniform"
@@ -114,18 +125,21 @@
 
             <TextView
                 android:id="@+id/title"
-                android:background="@drawable/player_control_background"
                 android:layout_width="wrap_content"
-                android:layout_height="20dp"
+                android:layout_height="19dp"
                 android:layout_marginBottom="1dp"
+                android:background="@drawable/player_control_background"
                 android:ellipsize="end"
                 android:gravity="center_vertical|start"
                 android:maxLines="1"
-                android:textColor="@android:color/white"
-                android:textSize="15sp"
+                android:shadowColor="#B3000000"
+                android:shadowDy="1"
+                android:shadowRadius="4"
+                android:textColor="#E6FFFFFF"
+                android:textSize="14sp"
                 android:visibility="gone"
-                app:autoSizeMaxTextSize="15sp"
-                app:autoSizeMinTextSize="7sp"
+                app:autoSizeMaxTextSize="14sp"
+                app:autoSizeMinTextSize="8sp"
                 app:autoSizeStepGranularity="1sp"
                 app:autoSizeTextType="uniform"
                 tools:text="title"
@@ -133,18 +147,21 @@
 
             <TextView
                 android:id="@+id/category"
-                android:background="@drawable/player_control_background"
                 android:layout_width="wrap_content"
                 android:layout_height="15dp"
                 android:layout_marginBottom="1dp"
+                android:background="@drawable/player_control_background"
                 android:ellipsize="end"
                 android:gravity="center_vertical|start"
                 android:maxLines="1"
-                android:textColor="@android:color/white"
+                android:shadowColor="#B3000000"
+                android:shadowDy="1"
+                android:shadowRadius="4"
+                android:textColor="#CCFFFFFF"
                 android:textSize="12sp"
                 android:visibility="gone"
                 app:autoSizeMaxTextSize="12sp"
-                app:autoSizeMinTextSize="6sp"
+                app:autoSizeMinTextSize="7sp"
                 app:autoSizeStepGranularity="1sp"
                 app:autoSizeTextType="uniform"
                 tools:text="game"
@@ -159,8 +176,60 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentEnd="true"
-        android:layout_marginTop="5dp"
-        android:layout_marginEnd="10dp">
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="10dp"
+        android:gravity="center_vertical">
+
+        <ImageButton
+            android:id="@+id/tvProxy"
+            android:layout_width="@dimen/player_button_size"
+            android:layout_height="@dimen/player_button_size"
+            android:background="@drawable/player_control_background"
+            android:contentDescription="@string/tv_proxy_button"
+            android:src="@drawable/tv_ic_proxy"
+            android:visibility="gone"
+            app:tint="@android:color/white"
+            tools:visibility="visible" />
+
+        <ImageButton
+            android:id="@+id/tvPollsPredictions"
+            android:layout_width="@dimen/player_button_size"
+            android:layout_height="@dimen/player_button_size"
+            android:background="@drawable/player_control_background"
+            android:contentDescription="@string/tv_polls_predictions_title"
+            android:src="@drawable/tv_ic_bar_chart"
+            android:visibility="gone"
+            app:tint="@android:color/white" />
+
+        <ImageButton
+            android:id="@+id/tvPoints"
+            android:layout_width="@dimen/player_button_size"
+            android:layout_height="@dimen/player_button_size"
+            android:background="@drawable/player_control_background"
+            android:contentDescription="@string/tv_points_and_drops"
+            android:src="@drawable/tv_ic_diamond"
+            android:visibility="gone"
+            app:tint="@android:color/white" />
+
+        <ImageButton
+            android:id="@+id/tvClip"
+            android:layout_width="@dimen/player_button_size"
+            android:layout_height="@dimen/player_button_size"
+            android:background="@drawable/player_control_background"
+            android:contentDescription="@string/tv_create_clip"
+            android:src="@drawable/tv_ic_clip"
+            android:visibility="gone"
+            app:tint="@android:color/white" />
+
+        <ImageButton
+            android:id="@+id/statsForNerds"
+            android:layout_width="@dimen/player_button_size"
+            android:layout_height="@dimen/player_button_size"
+            android:background="@drawable/player_control_background"
+            android:contentDescription="@string/tv_stats_for_nerds"
+            android:src="@drawable/tv_ic_stats"
+            android:visibility="gone"
+            app:tint="@android:color/white" />
 
         <ImageButton
             android:id="@+id/download"
@@ -241,7 +310,24 @@
         android:layout_above="@id/bottomLayout"
         android:layout_alignParentStart="true"
         android:layout_marginStart="10dp"
-        android:layout_marginBottom="5dp">
+        android:layout_marginBottom="4dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tvGoLive"
+            android:layout_width="wrap_content"
+            android:layout_height="30dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/mobile_live_pill_bg"
+            android:gravity="center_vertical"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/tv_go_to_live"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:visibility="visible" />
 
         <ImageButton
             android:id="@+id/restart"
@@ -312,7 +398,8 @@
         android:layout_above="@id/bottomLayout"
         android:layout_alignParentEnd="true"
         android:layout_marginEnd="10dp"
-        android:layout_marginBottom="5dp">
+        android:layout_marginBottom="4dp"
+        android:gravity="center_vertical">
 
         <ImageButton
             android:id="@+id/subtitles"
@@ -362,7 +449,8 @@
         android:layout_height="wrap_content"
         android:layout_above="@id/bottomLayout"
         android:layout_centerHorizontal="true"
-        android:layout_marginBottom="8dp">
+        android:layout_marginBottom="8dp"
+        android:gravity="center_vertical">
 
         <LinearLayout
             android:id="@+id/uptimeLayout"
@@ -374,8 +462,8 @@
 
             <ImageView
                 android:id="@+id/uptimeIcon"
-                android:layout_width="12dp"
-                android:layout_height="12dp"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
                 android:layout_marginTop="9dp"
                 android:layout_marginEnd="4dp"
                 android:background="@drawable/player_control_background"
@@ -396,14 +484,15 @@
 
         <LinearLayout
             android:id="@+id/viewersLayout"
-            android:background="@drawable/player_control_background"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:background="@drawable/player_control_background">
 
             <ImageView
                 android:id="@+id/viewersIcon"
-                android:layout_width="30dp"
-                android:layout_height="30dp"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:layout_gravity="center_vertical"
                 android:background="@drawable/player_control_background"
                 android:src="@drawable/baseline_person_black_24"
                 android:visibility="gone"
@@ -445,11 +534,11 @@
 
         <com.github.andreyasadchy.xtra.ui.view.XtraTimeBar
             android:id="@+id/progressBar"
-            android:background="@drawable/player_control_background"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginEnd="5dp"
-            android:layout_marginBottom="5dp" />
+            android:layout_marginBottom="5dp"
+            android:background="@drawable/player_control_background" />
 
     </LinearLayout>
 

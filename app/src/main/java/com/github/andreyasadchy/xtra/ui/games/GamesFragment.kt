@@ -67,6 +67,7 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
             val navController = findNavController()
             val appBarConfiguration = AppBarConfiguration(setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment))
             toolbar.setupWithNavController(navController, appBarConfiguration)
+            com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyBrandHeader(toolbar, getString(R.string.games))
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {

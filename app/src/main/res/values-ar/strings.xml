@@ -1518,4 +1518,21 @@
     <string name="tv_adblock_fallback_badge">بديل نشط</string>
     <string name="tv_adblock_swap_plus_fallback_toast">بديل Swap (فشل Swap+)</string>
     <string name="tv_chat_qr_restart">إعادة تشغيل</string>
+    <string name="mobile_settings_cat_general">المظهر والعام</string>
+    <string name="mobile_settings_cat_adblock">حظر الإعلانات والوكلاء</string>
+    <string name="mobile_settings_cat_player">المشغّل</string>
+    <string name="mobile_settings_cat_chat">الدردشة</string>
+    <string name="mobile_settings_cat_data">البيانات والتخصيص</string>
+    <string name="mobile_settings_cat_system">النظام وحول التطبيق</string>
+    <string name="mobile_stats_title">إحصائياتي</string>
+    <string name="mobile_stats_summary">وقت المشاهدة، الإعلانات المحظورة، أكثر القنوات والفئات مشاهدة</string>
+    <string name="mobile_live_dvr_title">الترجيع المباشر (DVR)</string>
+    <string name="mobile_live_dvr_summary">إظهار شريط زمني في البث المباشر للرجوع للخلف والعودة للبث المباشر</string>
+    <string name="mobile_favorites_how">اضغط مطولاً على بطاقة البث، ثم اختر «إضافة إلى المفضلة»</string>
+    <string name="mobile_favorites_empty">لا يوجد: اضغط مطولاً على بث، ثم «إضافة إلى المفضلة»</string>
+    <string name="mobile_blacklist_hint_cards">اضغط مطولاً على أي بث أو فئة لإخفائها من قوائمك.</string>
+    <string name="mobile_copied_clipboard">تم النسخ إلى الحافظة</string>
+    <string name="mobile_copy_link">نسخ الرابط</string>
+    <string name="mobile_open_browser">فتح في المتصفح</string>
+    <string name="mobile_claim_drop">استلام</string>
 </resources>

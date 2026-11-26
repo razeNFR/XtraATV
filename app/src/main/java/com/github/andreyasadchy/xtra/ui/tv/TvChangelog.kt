@@ -231,7 +231,7 @@ object TvChangelog {
         }
     }
 
-    private fun initialEntries(context: Context): List<Entry> {
+    internal fun initialEntries(context: Context): List<Entry> {
         memoryCache?.takeIf { it.isNotEmpty() }?.let { return it }
         val app = context.applicationContext as XtraApp
         val installed = BuildConfig.VERSION_NAME
@@ -248,7 +248,7 @@ object TvChangelog {
         return configured.replace(Regex("""/releases(?:/latest)?(?:\?.*)?$"""), "/releases?per_page=25")
     }
 
-    private suspend fun fetchFreshEntries(context: Context): List<Entry>? = withContext(Dispatchers.IO) {
+    internal suspend fun fetchFreshEntries(context: Context): List<Entry>? = withContext(Dispatchers.IO) {
         runCatching {
             val app = context.applicationContext as XtraApp
             val url = resolveReleasesListUrl(context)
@@ -271,14 +271,14 @@ object TvChangelog {
         }.getOrNull()
     }
 
-    private fun formatDate(context: Context, epochMs: Long?): String? {
+    internal fun formatDate(context: Context, epochMs: Long?): String? {
         if (epochMs == null || epochMs <= 0L) return null
         return runCatching {
             DateFormat.getMediumDateFormat(context).format(Date(epochMs))
         }.getOrNull()
     }
 
-    private fun formatMarkdown(markdown: String, accentColor: Color): AnnotatedString = buildAnnotatedString {
+    internal fun formatMarkdown(markdown: String, accentColor: Color, textColor: Color = Color.White): AnnotatedString = buildAnnotatedString {
         val lines = markdown.replace("\r", "").lines()
         lines.forEachIndexed { index, raw ->
             val trimmedEnd = raw.trimEnd()
@@ -293,7 +293,7 @@ object TvChangelog {
                         SpanStyle(
                             fontWeight = FontWeight.Bold,
                             fontSize = if (level <= 2) 17.sp else 15.5.sp,
-                            color = if (level >= 3) accentColor else Color.White,
+                            color = if (level >= 3) accentColor else textColor,
                         )
                     ) {
                         append(heading)
@@ -304,24 +304,24 @@ object TvChangelog {
                     withStyle(
                         SpanStyle(
                             fontWeight = FontWeight.Bold,
-                            color = if (nested) Color(0xB3FFFFFF) else accentColor,
+                            color = if (nested) textColor.copy(alpha = 0.70f) else accentColor,
                         )
                     ) {
                         append(if (nested) "      ◦  " else "  •  ")
                     }
-                    appendInlineMarkdown(stripped.drop(2), accentColor)
+                    appendInlineMarkdown(stripped.drop(2), accentColor, textColor)
                 }
-                else -> appendInlineMarkdown(stripped, accentColor)
+                else -> appendInlineMarkdown(stripped, accentColor, textColor)
             }
             if (index < lines.lastIndex) append("\n")
         }
     }
 
-    private fun AnnotatedString.Builder.appendInlineMarkdown(text: String, accentColor: Color) {
+    private fun AnnotatedString.Builder.appendInlineMarkdown(text: String, accentColor: Color, textColor: Color = Color.White) {
         val boldParts = text.split("**")
         boldParts.forEachIndexed { bIdx, segment ->
             if (bIdx % 2 == 1) {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color.White)) {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = textColor)) {
                     append(segment.replace("`", ""))
                 }
             } else {

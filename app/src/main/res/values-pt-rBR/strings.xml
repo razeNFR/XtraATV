@@ -1518,4 +1518,21 @@
     <string name="tv_adblock_fallback_badge">Fallback ativo</string>
     <string name="tv_adblock_swap_plus_fallback_toast">Reserva Swap (falha no Swap+)</string>
     <string name="tv_chat_qr_restart">Reiniciar</string>
+    <string name="mobile_settings_cat_general">Aparência e geral</string>
+    <string name="mobile_settings_cat_adblock">Adblock e proxies</string>
+    <string name="mobile_settings_cat_player">Reprodutor</string>
+    <string name="mobile_settings_cat_chat">Chat</string>
+    <string name="mobile_settings_cat_data">Dados e personalização</string>
+    <string name="mobile_settings_cat_system">Sistema e sobre</string>
+    <string name="mobile_stats_title">Minhas estatísticas</string>
+    <string name="mobile_stats_summary">Tempo assistido, anúncios bloqueados, principais streamers e categorias</string>
+    <string name="mobile_live_dvr_title">Retroceder ao vivo (DVR)</string>
+    <string name="mobile_live_dvr_summary">Exibir linha do tempo em transmissões ao vivo para voltar e retornar ao vivo</string>
+    <string name="mobile_favorites_how">Pressione e segure uma live e escolha “Adicionar aos favoritos”</string>
+    <string name="mobile_favorites_empty">Nenhum: pressione e segure uma live e escolha “Adicionar aos favoritos”</string>
+    <string name="mobile_blacklist_hint_cards">Pressione e segure qualquer live ou categoria para ocultá-la das suas listas.</string>
+    <string name="mobile_copied_clipboard">Copiado para a área de transferência</string>
+    <string name="mobile_copy_link">Copiar link</string>
+    <string name="mobile_open_browser">Abrir no navegador</string>
+    <string name="mobile_claim_drop">Resgatar</string>
 </resources>

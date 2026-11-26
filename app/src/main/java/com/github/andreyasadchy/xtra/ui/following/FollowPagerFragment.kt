@@ -343,6 +343,7 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost {
             val isLoggedIn = !TwitchApiHelper.getGQLHeaders(requireContext(), true)[C.HEADER_TOKEN].isNullOrBlank() ||
                     !TwitchApiHelper.getHelixHeaders(requireContext())[C.HEADER_TOKEN].isNullOrBlank()
             toolbar.setupWithNavController(navController, appBarConfiguration)
+            com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyBrandHeader(toolbar, getString(R.string.following))
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
