@@ -3256,7 +3256,7 @@ class ExoPlayerService : BasePlaybackService() {
             val adProxy = videoSwapList?.getOrNull(currentVideoSwapItem)?.platform == AD_PROXY_PLATFORM
             val toastRes = when {
                 adProxy -> R.string.starting_proxy
-                com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.isEnabled(this) && !experimentalVodActive ->
+                TvExperimentalAdblock.isSwapPlusEnabled(this) && !experimentalVodActive ->
                     R.string.tv_adblock_swap_plus_fallback_toast
                 else -> R.string.starting_video_swap
             }
