@@ -42,6 +42,8 @@ class TvStreamPreview(
 
     private var player: ExoPlayer? = null
     private var firstFrameListener: Player.Listener? = null
+    private var adGuardListener: Player.Listener? = null
+    private var adGuardCancel: (() -> Unit)? = null
     private var textureView: TextureView? = null
     private var thumbnailResize: Pair<View, View.OnLayoutChangeListener>? = null
     private var card: View? = null
@@ -104,6 +106,10 @@ class TvStreamPreview(
             }
             val player = player ?: TvPreviewSource.createPlayer(context).also { player = it }
             firstFrameListener?.let { player.removeListener(it) }
+            adGuardCancel?.invoke()
+            adGuardCancel = null
+            adGuardListener?.let { player.removeListener(it) }
+            adGuardListener = null
             val wantSound = TvPreviewSource.hasSound(context)
             player.volume = if (wantSound) 1f else 0f
             if (player.trackSelectionParameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_AUDIO) == wantSound) {
@@ -138,6 +144,18 @@ class TvStreamPreview(
             }
             firstFrameListener = listener
             player.addListener(listener)
+            TvPreviewSource.createPreviewAdGuard(
+                context = context,
+                scope = owner.lifecycleScope,
+                player = player,
+                channelLogin = login,
+                wantSound = { TvPreviewSource.hasSound(context) },
+                isStillActive = { this@TvStreamPreview.card == card && card.hasFocus() && (inPlayer || !TvPreviewSource.suspended) },
+            )?.let { (guard, cancel) ->
+                adGuardListener = guard
+                adGuardCancel = cancel
+                player.addListener(guard)
+            }
             player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
             player.prepare()
             player.playWhenReady = true
@@ -155,6 +173,10 @@ class TvStreamPreview(
         playingLogin = null
         firstFrameListener?.let { player?.removeListener(it) }
         firstFrameListener = null
+        adGuardCancel?.invoke()
+        adGuardCancel = null
+        adGuardListener?.let { player?.removeListener(it) }
+        adGuardListener = null
         player?.stop()
         player?.clearVideoSurface()
         textureView?.let { (it.parent as? FrameLayout)?.removeView(it) }

@@ -2812,7 +2812,7 @@ class MultiStreamFragment : Fragment() {
                 tile.adMuted = usingBackup && backupChoice?.adFree == false
                 applySound()
                 updateAdBadge(tile)
-                player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+                player.setMediaItem(buildTileLiveMediaItem(url))
                 player.repeatMode = Player.REPEAT_MODE_OFF
                 player.prepare()
                 player.playWhenReady = true
@@ -2823,6 +2823,19 @@ class MultiStreamFragment : Fragment() {
                 scheduleTileRecovery(tile, login)
             }
         }
+    }
+
+    private fun buildTileLiveMediaItem(url: String): MediaItem {
+        val targetOffsetMs = (context?.prefs()?.getString(C.PLAYER_LIVE_TARGET_OFFSET, "2000")?.toLongOrNull() ?: 2000L)
+            .coerceIn(1500L, 15_000L)
+        val liveConfig = MediaItem.LiveConfiguration.Builder()
+            .setTargetOffsetMs(targetOffsetMs)
+            .build()
+        return MediaItem.Builder()
+            .setUri(url)
+            .setMimeType(MimeTypes.APPLICATION_M3U8)
+            .setLiveConfiguration(liveConfig)
+            .build()
     }
 
     private fun scheduleTileExperimentalUpgrade(
@@ -2911,7 +2924,7 @@ class MultiStreamFragment : Fragment() {
                         tile.adMuted = false
                         applySound()
                         tile.playingSince = 0L
-                        player.setMediaItem(MediaItem.Builder().setUri(freshBackup.url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+                        player.setMediaItem(buildTileLiveMediaItem(freshBackup.url))
                         player.prepare()
                         player.playWhenReady = true
                         continue
@@ -2928,7 +2941,7 @@ class MultiStreamFragment : Fragment() {
                     applySound()
                     updateAdBadge(tile)
                     tile.playingSince = 0L
-                    player.setMediaItem(MediaItem.Builder().setUri(normal).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+                    player.setMediaItem(buildTileLiveMediaItem(normal))
                     player.prepare()
                     player.playWhenReady = true
                     return@launch

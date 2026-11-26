@@ -16,9 +16,10 @@
   - **Optional Auto-Start**: added an optional **Auto-start phone chat** setting (OFF by default, available in the QR panel and Chat settings) to start the local Wi-Fi server automatically whenever you open a live stream or Multi-Stream.
 - **Direct Focus on the First Tab in Side Panels**:
   - Opening tabbed TV side panels (**Chat settings**, **PiP settings**, **Multi-Stream menu**, and **Wallpaper panel**) now focuses the first tab right away so you can browse tabs left/right immediately, with crash-safe post-frame focus handling.
-- **Lightweight Navigation & Memory Optimizations**:
-  - Eliminated redundant double layout passes (`requestLayout() during layout`) when switching tabs/sections with sort bars.
-  - Ensured at most **1 live-preview `ExoPlayer`** stays allocated across browsing lists at any time, releasing idle preview players immediately when switching screens, opening a real player / Multi-Stream, or leaving the app.
+- **Lightweight Navigation, Preview & Multi-Stream Optimizations**:
+  - **Multi-Stream Live Sync**: aligned Multi-Stream live tiles with the main player's low-latency live target offset (`PLAYER_LIVE_TARGET_OFFSET`), preventing the active stream from jumping 6–10 seconds backward when launching Multi-Stream.
+  - **Ad-Free Live Previews**: added a zero-polling in-memory HLS manifest ad guard to live card and Home Hero previews — if Twitch injects a mid-preview ad after ~15–30 seconds while adblock is active, the same preview player seamlessly swaps to an ad-free backup playlist (or mutes until the ad clears).
+  - **Smoother Layout & Lower Memory**: eliminated redundant double layout passes (`requestLayout() during layout`) on sort bars and ensured at most **1 live-preview `ExoPlayer`** stays allocated across browsing lists, releasing idle preview players immediately when switching screens, opening a real player / Multi-Stream, or leaving the app.
 
 ### Install
 Download `XtraTV-1.4.7.2-tv.apk` below and install it over the previous version, your settings and account are kept.

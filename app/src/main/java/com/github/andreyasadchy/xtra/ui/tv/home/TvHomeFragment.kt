@@ -997,12 +997,28 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
             val player = previewPlayer.value ?: com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.createPlayer(context).also {
                 previewPlayer.value = it
             }
+            previewAdGuardCancel?.invoke()
+            previewAdGuardCancel = null
+            previewAdGuardListener?.let { player.removeListener(it) }
+            previewAdGuardListener = null
             val wantSound = !muted && com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.hasSound(context)
             player.volume = if (wantSound) 1f else 0f
             if (player.trackSelectionParameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_AUDIO) == wantSound) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, !wantSound)
                     .build()
+            }
+            com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.createPreviewAdGuard(
+                context = context,
+                scope = viewLifecycleOwner.lifecycleScope,
+                player = player,
+                channelLogin = login,
+                wantSound = { !previewMuted && com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.hasSound(context) },
+                isStillActive = { previewLogin.value == login && !com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.suspended },
+            )?.let { (guard, cancel) ->
+                previewAdGuardListener = guard
+                previewAdGuardCancel = cancel
+                player.addListener(guard)
             }
             player.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build())
             player.prepare()
@@ -1022,6 +1038,8 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
     private var scheduledMuted = false
     private var scheduledOwner: Any? = null
     private val heroPreviewOwner = Any()
+    private var previewAdGuardListener: androidx.media3.common.Player.Listener? = null
+    private var previewAdGuardCancel: (() -> Unit)? = null
 
     override fun stopPreview() {
         scheduledLogin = null
@@ -1029,6 +1047,10 @@ class TvHomeFragment : Fragment(), com.github.andreyasadchy.xtra.ui.tv.TvPreview
         scheduledOwner = null
         previewJob?.cancel()
         previewJob = null
+        previewAdGuardCancel?.invoke()
+        previewAdGuardCancel = null
+        previewAdGuardListener?.let { previewPlayer.value?.removeListener(it) }
+        previewAdGuardListener = null
         val wasPlaying = previewLogin.value != null
         if (wasPlaying && !previewMuted) {
             context?.let { com.github.andreyasadchy.xtra.ui.tv.TvPreviewSource.notifyPreviewSound(it, false) }
