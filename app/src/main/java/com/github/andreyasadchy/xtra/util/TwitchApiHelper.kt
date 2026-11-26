@@ -245,7 +245,8 @@ object TwitchApiHelper {
 
     /** True when the user is logged in to Twitch: "Recommended for you" is only offered then (the same order as the viewers otherwise). */
     fun isLoggedIn(context: Context): Boolean {
-        return !getGQLHeaders(context, true)[C.HEADER_TOKEN].isNullOrBlank()
+        return !getGQLHeaders(context, true)[C.HEADER_TOKEN].isNullOrBlank() ||
+            !getGQLWebHeaders(context, true)[C.HEADER_TOKEN].isNullOrBlank()
     }
 
     /**
@@ -254,7 +255,10 @@ object TwitchApiHelper {
      * same for the app, like the device of the website.
      */
     fun getGQLRecommendationHeaders(context: Context): Map<String, String> {
-        val headers = getGQLHeaders(context, true).toMutableMap()
+        val base = getGQLHeaders(context, true).let { gql ->
+            if (!gql[C.HEADER_TOKEN].isNullOrBlank()) gql else getGQLWebHeaders(context, true)
+        }
+        val headers = base.toMutableMap()
         if (headers.keys.none { it.equals("X-Device-Id", true) }) {
             val prefs = context.tokenPrefs()
             val deviceId = prefs.getString(C.GQL_RECOMMENDATIONS_DEVICE_ID, null)?.takeIf { it.isNotBlank() }

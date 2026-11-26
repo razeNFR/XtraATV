@@ -233,8 +233,67 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
                     }
                 }
             } else {
-                sortBar.root.setOnClickListener { openTagsDialog() }
-                sortBar.sortText.visibility = View.GONE
+                updateSortText()
+                sortBar.sortText.visibility = View.VISIBLE
+                sortBar.root.setOnClickListener {
+                    val loggedIn = TwitchApiHelper.isLoggedIn(requireContext())
+                    val current = when {
+                        viewModel.relevance -> SORT_RELEVANCE
+                        viewModel.ascending -> SORT_VIEWERS_ASC
+                        else -> SORT_VIEWERS
+                    }
+                    fun applyCategorySort(selected: String) {
+                        if (selected == current) return
+                        val ascending = selected == SORT_VIEWERS_ASC
+                        val relevance = selected == SORT_RELEVANCE
+                        requireContext().prefs().edit()
+                            .putBoolean(C.GAMES_SORT_ASCENDING, ascending)
+                            .putBoolean(C.GAMES_SORT_RELEVANCE, relevance)
+                            .apply()
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            pagingAdapter.submitData(PagingData.empty())
+                            viewModel.setFilter(viewModel.tags, ascending, relevance)
+                            updateSortText()
+                        }
+                    }
+                    val actions = buildList {
+                        if (loggedIn) {
+                            add(
+                                com.github.andreyasadchy.xtra.ui.mobile.MobileBottomSheets.SheetAction(
+                                    label = getString(R.string.tv_sort_recommended),
+                                    iconRes = R.drawable.tv_ic_star,
+                                    highlighted = current == SORT_RELEVANCE,
+                                ) { applyCategorySort(SORT_RELEVANCE) }
+                            )
+                        }
+                        add(
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileBottomSheets.SheetAction(
+                                label = getString(R.string.viewers_high),
+                                iconRes = R.drawable.tv_ic_eye,
+                                highlighted = current == SORT_VIEWERS,
+                            ) { applyCategorySort(SORT_VIEWERS) }
+                        )
+                        add(
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileBottomSheets.SheetAction(
+                                label = getString(R.string.viewers_low_top),
+                                iconRes = R.drawable.tv_ic_eye,
+                                highlighted = current == SORT_VIEWERS_ASC,
+                            ) { applyCategorySort(SORT_VIEWERS_ASC) }
+                        )
+                        add(
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileBottomSheets.SheetAction(
+                                label = getString(R.string.tags_filter),
+                                iconRes = R.drawable.tv_ic_tune,
+                            ) { openTagsDialog() }
+                        )
+                    }
+                    com.github.andreyasadchy.xtra.ui.mobile.MobileBottomSheets.showActionSheet(
+                        context = requireContext(),
+                        title = getString(R.string.sort_and_filter),
+                        subtitle = null,
+                        actions = actions,
+                    )
+                }
             }
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
