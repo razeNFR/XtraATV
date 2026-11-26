@@ -754,10 +754,7 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                         if (useProxy || useVideoSwap || hideAds) {
                             val playlist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
-                            val rawAds = checkPlaylist(playlist, mainPlayer = true)
-                            // If classic Swap already stepped in as fallback while Swap+ was warming up,
-                            // keep it active until the real ad break finishes instead of ping-ponging mid-break.
-                            val ads = rawAds || (shadowAdActive && (videoSwapActive || proxyMediaPlaylist))
+                            val ads = checkPlaylist(playlist, mainPlayer = true)
                             val oldValue = playingAds
                             playingAds = ads
                             // the ad being blocked from the marks of Twitch ("2/3", its end), for the badge
@@ -1963,6 +1960,7 @@ class ExoPlayerService : BasePlaybackService() {
                                         delegate = baseParserFactory,
                                         channelLoginHint = channelLogin,
                                         onAdHandled = { active -> shadowAdActive = active },
+                                        shouldBypass = { videoSwapActive || proxyMediaPlaylist },
                                     )
                                 } else {
                                     baseParserFactory
@@ -3254,10 +3252,21 @@ class ExoPlayerService : BasePlaybackService() {
         videoSwapActive = true
         if (!silentRetry && !hidden) {
             val adProxy = videoSwapList?.getOrNull(currentVideoSwapItem)?.platform == AD_PROXY_PLATFORM
+            val swapPlusFallback = !adProxy && TvExperimentalAdblock.isSwapPlusEnabled(this) && !experimentalVodActive
+            if (swapPlusFallback) {
+                runCatching {
+                    val pl = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
+                    val lastTitle = pl?.segments?.lastOrNull()?.title.orEmpty()
+                    val dateRanges = pl?.interstitials?.joinToString(",") { it.id }.orEmpty()
+                    android.util.Log.i(
+                        "TvShadowAdblock",
+                        "Classic Swap fallback on $channelLogin: lastTitle='$lastTitle' dateRanges=[$dateRanges] shadowAdActive=$shadowAdActive"
+                    )
+                }
+            }
             val toastRes = when {
                 adProxy -> R.string.starting_proxy
-                TvExperimentalAdblock.isSwapPlusEnabled(this) && !experimentalVodActive ->
-                    R.string.tv_adblock_swap_plus_fallback_toast
+                swapPlusFallback -> R.string.tv_adblock_swap_plus_fallback_toast
                 else -> R.string.starting_video_swap
             }
             serviceListener?.toast(toastRes, Toast.LENGTH_SHORT)

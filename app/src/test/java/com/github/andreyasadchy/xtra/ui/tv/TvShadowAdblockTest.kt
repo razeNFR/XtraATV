@@ -412,4 +412,47 @@ class TvShadowAdblockTest {
         assertEquals(TvShadowAdblock.SegmentClass.AD, parsed.segments[1].classification)
         assertEquals(TvShadowAdblock.SegmentClass.AD, parsed.segments[2].classification)
     }
+
+    @Test
+    fun bottomDaterangeWithClockDriftAndBareAmazonTitleAreDetectedAsAd() {
+        // DATERANGE placed at the bottom of the playlist + 50ms drift between segment PDT and START-DATE
+        val bottomDateRangePlaylist = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:400
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:00.000Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_400.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:01.950Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/stitched_401.ts
+            #EXT-X-DATERANGE:ID="stitched-ad-777",CLASS="twitch-stitched-ad",START-DATE="2026-11-26T12:00:02.000Z",DURATION=15.0
+        """.trimIndent()
+
+        val parsedBottom = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, bottomDateRangePlaylist)
+        assertEquals(TvShadowAdblock.PlaylistVerdict.PARTIAL_AD, parsedBottom.verdict)
+        assertEquals(TvShadowAdblock.SegmentClass.CONTENT, parsedBottom.segments[0].classification)
+        assertEquals(TvShadowAdblock.SegmentClass.AD, parsedBottom.segments[1].classification)
+
+        // Bare Amazon / Adform / DCM or special-char suffix titles (matches ExoPlayerService.isAdSegment)
+        val bareBrandPlaylist = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:410
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:00.000Z
+            #EXTINF:2.000,Amazon
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/s_410.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:02.000Z
+            #EXTINF:2.000,Adform|a:b/c=1
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/s_411.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:04.000Z
+            #EXTINF:2.000,DCM
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/s_412.ts
+        """.trimIndent()
+
+        val parsedBrands = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, bareBrandPlaylist)
+        assertEquals(TvShadowAdblock.PlaylistVerdict.FULL_AD, parsedBrands.verdict)
+    }
 }

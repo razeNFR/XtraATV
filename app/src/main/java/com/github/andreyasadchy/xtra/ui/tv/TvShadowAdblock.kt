@@ -228,10 +228,17 @@ object TvShadowAdblock {
         var curByteRange: String? = null
         val curTags = ArrayList<String>(6)
 
-        // Track active DATERANGE ad marker across segments (matches ExoPlayerService.isAdSegment)
+        // Pass 1: collect all ad DATERANGE windows across the entire playlist (top, middle, or bottom)
+        // so segment classification matches Media3/ExoPlayerService.isAdSegment regardless of tag placement.
         var lastPdtMs: Long? = null
         var elapsedSincePdtMs = 0.0
         val adDateRanges = ArrayList<Pair<Long, Long>>(4)
+        for (raw in lines) {
+            val trimmed = raw.trim()
+            if (trimmed.startsWith("#EXT-X-DATERANGE:")) {
+                parseAdDateRangeWindow(trimmed)?.let { adDateRanges.add(it) }
+            }
+        }
 
         for (raw in lines) {
             val trimmed = raw.trim()
@@ -292,10 +299,6 @@ object TvShadowAdblock {
                             elapsedSincePdtMs = 0.0
                         }
                     }
-                    trimmed.startsWith("#EXT-X-DATERANGE:") -> {
-                        parseAdDateRangeWindow(trimmed)?.let { adDateRanges.add(it) }
-                        curTags.add(trimmed)
-                    }
                     trimmed.startsWith("#EXT-X-MAP:") -> {
                         activeMapLine = absolutizeQuotedUri(trimmed, playlistUrl)
                         curTags.add(activeMapLine!!)
@@ -314,8 +317,12 @@ object TvShadowAdblock {
             } else {
                 val absUri = resolveAbsoluteUrl(playlistUrl, trimmed)
                 val segPdtMs = curPdtMs ?: lastPdtMs?.let { it + elapsedSincePdtMs.roundToLong() }
+                val segDurMs = (curDuration * 1_000.0).roundToLong().coerceAtLeast(1L)
                 elapsedSincePdtMs += curDuration * 1_000.0
-                val inAdDateRange = segPdtMs != null && adDateRanges.any { (startMs, endMs) -> segPdtMs in startMs until endMs }
+                val segMidMs = segPdtMs?.let { it + segDurMs / 2L }
+                val inAdDateRange = segPdtMs != null && adDateRanges.any { (startMs, endMs) ->
+                    segPdtMs in startMs until endMs || (segMidMs != null && segMidMs in startMs until endMs)
+                }
                 val segClass = classifySegment(curTitle, absUri, curTags, streamSourceNotLive, inAdDateRange)
                 segments.add(
                     HlsSegment(
@@ -396,8 +403,7 @@ object TvShadowAdblock {
             trimmed.startsWith("#EXT-X-PROGRAM-DATE-TIME:") ||
             trimmed.startsWith("#EXT-X-KEY:") ||
             trimmed.startsWith("#EXT-X-MAP:") ||
-            trimmed.startsWith("#EXT-X-BYTERANGE:") ||
-            trimmed.startsWith("#EXT-X-DATERANGE:")
+            trimmed.startsWith("#EXT-X-BYTERANGE:")
 
     private fun classifySegment(
         title: String,
@@ -407,7 +413,11 @@ object TvShadowAdblock {
         inAdDateRange: Boolean = false,
     ): SegmentClass {
         val strongContent = title.equals("live", ignoreCase = true)
-        var strongAd = inAdDateRange || BRAND_AD_TITLE_REGEX.matches(title)
+        val titlePrefix = title.substringBefore('|').trim()
+        val knownAdBrand = titlePrefix.equals("Amazon", ignoreCase = true) ||
+            titlePrefix.equals("Adform", ignoreCase = true) ||
+            titlePrefix.equals("DCM", ignoreCase = true)
+        var strongAd = inAdDateRange || knownAdBrand || BRAND_AD_TITLE_REGEX.matches(title)
         if (!strongAd) {
             for (tag in tags) {
                 if (tag.contains("twitch-stitched-ad", true) ||
@@ -1194,23 +1204,25 @@ object TvShadowAdblock {
         private val delegate: HlsPlaylistParserFactory,
         private val channelLoginHint: String?,
         private val onAdHandled: ((Boolean) -> Unit)? = null,
+        private val shouldBypass: (() -> Boolean)? = null,
     ) : HlsPlaylistParserFactory {
         private val appCtx = context.applicationContext
 
         override fun createPlaylistParser(): ParsingLoadable.Parser<HlsPlaylist> =
-            WrappingParser(appCtx, delegate.createPlaylistParser(), channelLoginHint, onAdHandled)
+            WrappingParser(appCtx, delegate.createPlaylistParser(), channelLoginHint, onAdHandled, shouldBypass)
 
         override fun createPlaylistParser(
             multivariantPlaylist: HlsMultivariantPlaylist,
             previousMediaPlaylist: HlsMediaPlaylist?,
         ): ParsingLoadable.Parser<HlsPlaylist> =
-            WrappingParser(appCtx, delegate.createPlaylistParser(multivariantPlaylist, previousMediaPlaylist), channelLoginHint, onAdHandled)
+            WrappingParser(appCtx, delegate.createPlaylistParser(multivariantPlaylist, previousMediaPlaylist), channelLoginHint, onAdHandled, shouldBypass)
 
         private class WrappingParser(
             private val appCtx: Context,
             private val inner: ParsingLoadable.Parser<HlsPlaylist>,
             private val channelLoginHint: String?,
             private val onAdHandled: ((Boolean) -> Unit)?,
+            private val shouldBypass: (() -> Boolean)?,
         ) : ParsingLoadable.Parser<HlsPlaylist> {
             override fun parse(uri: Uri, inputStream: InputStream): HlsPlaylist {
                 val url = uri.toString()
@@ -1226,7 +1238,9 @@ object TvShadowAdblock {
                     return inner.parse(uri, ByteArrayInputStream(rawBytes))
                 }
                 val outputText = runCatching {
-                    interceptPlaylistText(appCtx, url, text, channelLoginHint, onAdHandled)
+                    interceptPlaylistText(appCtx, url, text, channelLoginHint, onAdHandled, shouldBypass)
+                }.onFailure { err ->
+                    runCatching { Log.w(TAG, "Playlist intercept failed for $url", err) }
                 }.getOrDefault(text)
                 return inner.parse(uri, ByteArrayInputStream(outputText.toByteArray(Charsets.UTF_8)))
             }
@@ -1239,6 +1253,7 @@ object TvShadowAdblock {
         text: String,
         channelLoginHint: String?,
         onAdHandled: ((Boolean) -> Unit)?,
+        shouldBypass: (() -> Boolean)?,
     ): String {
         val login = resolveChannelLogin(url, channelLoginHint) ?: return text
         if (text.contains("#EXT-X-STREAM-INF:")) {
@@ -1255,6 +1270,19 @@ object TvShadowAdblock {
         }
 
         val state = channels.computeIfAbsent(login) { ChannelState(it) }
+
+        // While Classic Swap / Proxy fallback is actively covering an ad break, step aside completely
+        // so the hidden main player reads raw Twitch playlists and exits the backup player right on time.
+        if (shouldBypass?.invoke() == true) {
+            synchronized(state.lock) {
+                if (!state.window.isEmpty()) {
+                    state.window.reset()
+                }
+            }
+            onAdHandled?.invoke(false)
+            return text
+        }
+
         val variantHeight = variantToHeight[url] ?: 0
         if (variantHeight > 0) {
             maybeAlignShadowQuality(appCtx, state, variantHeight)
@@ -1294,7 +1322,7 @@ object TvShadowAdblock {
         onAdHandled?.invoke(adBadgeActive)
         if (hasAd) {
             runCatching {
-                Log.d(TAG, "Ad break on $login: source=${result.sourceUsed} suppressed=${result.adSegmentsSuppressed} shadow=${state.shadowPlayerType} splices=${state.window.spliceCount}")
+                Log.i(TAG, "Ad break on $login: source=${result.sourceUsed} suppressed=${result.adSegmentsSuppressed} shadow=${state.shadowPlayerType} splices=${state.window.spliceCount}")
             }
         }
         return result.outputPlaylist
