@@ -76,7 +76,7 @@ object TvVodAudioRecovery {
         fun probe(unmutedUrl: String, plainUrl: String): SegmentMode
     }
 
-    private data class ParsedMutedSegment(
+    internal data class ParsedMutedSegment(
         val lineIndex: Int,
         val prefix: String,
         val number: String,
@@ -94,7 +94,7 @@ object TvVodAudioRecovery {
         }
     }
 
-    private data class FallbackEntry(
+    internal data class FallbackEntry(
         val segmentKey: String,
         val mutedAbsoluteUrl: String,
     )
