@@ -1153,7 +1153,7 @@
     <string name="tv_adblock_swap_locked_hint">مفعّل افتراضياً. فعّل وكيل بث مخصص أو HTTP لتتمكن من إيقافه.</string>
     <string name="tv_adblock_swap_locked_exp_hint">يبقى نشطًا كخيار احتياطي تلقائي مع Adblock (Swap+) أو Adblock (VOD).</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">تجريبي — يشغّل البث عبر VOD الجاري (تأخير ~30 ث ودردشة متزامنة) لتجنب الإعلانات. ينتقل تلقائيًا إلى Swap+ أو Swap إذا لم يتوفر VOD.</string>
+    <string name="tv_adblock_exp_summary">تجريبي — يشغّل البث عبر VOD الجاري (تأخير ~30 ث ودردشة متزامنة) لتجنب الإعلانات. يعمل في كل مكان مثل Swap (المشغّل الرئيسي والبث المتعدد وPiP) وينتقل إلى Swap+ أو Swap إذا لم يتوفر VOD.</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) نشط</string>
     <string name="tv_adblock_exp_proxies_disabled">لا يمكن تفعيل الوكلاء أثناء تفعيل Adblock (Swap+) أو Adblock (VOD).</string>
     <string name="tv_adblock_exp_disabled_by_proxy">قم بتعطيل الوكلاء المخصصة ووكلاء HTTP أولاً.</string>
@@ -1500,9 +1500,9 @@
     <string name="tv_chat_qr_reconnect">إعادة الاتصال</string>
     <string name="tv_adblock_swap_desc">ينتقل إلى بث احتياطي أثناء الإعلانات (قد تنخفض الجودة مؤقتًا).</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">تجريبي — دمج HLS خفي سلس مع الحفاظ على 1440p. قد لا يعمل بنسبة 100%.</string>
-    <string name="tv_adblock_swap_plus_summary">تجريبي — يستخدم قائمة HLS خفية مجهولة لتجاوز الإعلانات بسلاسة مع الحفاظ على 1440p / HEVC. يعود إلى Swap عند الحاجة. قد لا يعمل بنسبة 100% على كل بث.</string>
-    <string name="tv_adblock_vod_desc">تجريبي — التشغيل عبر VOD المباشر (تأخير ~30 ث)، مع بديل Swap+/Swap.</string>
+    <string name="tv_adblock_swap_plus_desc">تجريبي — يحافظ على 1440p (المشغّل الرئيسي فقط، دون البث المتعدد/PiP).</string>
+    <string name="tv_adblock_swap_plus_summary">تجريبي — يستخدم قائمة HLS خفية مجهولة لتجاوز الإعلانات بسلاسة مع الحفاظ على 1440p / HEVC في المشغّل الرئيسي (لا يُستخدم في البث المتعدد أو PiP حيث يعمل Swap). يعود إلى Swap عند الحاجة.</string>
+    <string name="tv_adblock_vod_desc">تجريبي — عبر VOD المباشر (~30 ث)، يعمل في كل مكان (PiP/البث المتعدد).</string>
     <string name="tv_vod_audio_recovery">استعادة صوت VOD المكتوم</string>
     <string name="tv_vod_audio_recovery_summary">يستعيد الصوت المكتوم بسبب DMCA في VOD والرجوع المباشر DVR وAdblock (VOD) عند توفره في ذاكرة CDN. يعرض مقاطع خضراء (مستعادة) وحمراء (مكتومة) على الشريط.</string>
     <string name="tv_vod_audio_recovered_toast">تمت استعادة الصوت المكتوم (~%1$d د)</string>
@@ -1515,4 +1515,6 @@
     <string name="tv_oled_screensaver_3m">3 دقائق</string>
     <string name="tv_oled_screensaver_5m">5 دقائق</string>
     <string name="tv_oled_screensaver_10m">10 دقائق</string>
+    <string name="tv_adblock_fallback_badge">بديل نشط</string>
+    <string name="tv_chat_qr_restart">إعادة تشغيل</string>
 </resources>

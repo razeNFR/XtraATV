@@ -113,10 +113,13 @@ object TvProxyPanel {
                 var swapAdblock by remember { mutableStateOf(TvExperimentalAdblock.isSwapAdblockEnabled(context)) }
                 val anyProxyOn = !expAdblock && !swapPlus && (useProxies || useStreamProxies)
 
+                val swapIsFallback = !anyProxyOn && (swapPlus || expAdblock)
+                val swapPlusIsFallback = !anyProxyOn && expAdblock && swapPlus
+
                 if (manage == null) {
                     Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp).focusRequester(first), {
                         if (!anyProxyOn) {
-                            val hintRes = if (expAdblock) {
+                            val hintRes = if (expAdblock || swapPlus) {
                                 R.string.tv_adblock_swap_locked_exp_hint
                             } else {
                                 R.string.tv_adblock_swap_locked_hint
@@ -148,7 +151,11 @@ object TvProxyPanel {
                                     color = if (focused) TvColors.onFocused.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.65f),
                                 )
                             }
-                            TvListPanel.Switch(if (!anyProxyOn) true else swapAdblock, focused)
+                            if (swapIsFallback) {
+                                FallbackBadge(context.getString(R.string.tv_adblock_fallback_badge), focused)
+                            } else {
+                                TvListPanel.Switch(if (!anyProxyOn) true else swapAdblock, focused)
+                            }
                         }
                     }
                     Pill(Modifier.fillMaxWidth().padding(vertical = 4.dp), {
@@ -170,12 +177,20 @@ object TvProxyPanel {
                     }) { focused ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
-                                Text(
-                                    context.getString(R.string.tv_adblock_swap_plus_title),
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (focused) TvColors.onFocused else Color.White,
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Text(
+                                        context.getString(R.string.tv_adblock_swap_plus_title),
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (focused) TvColors.onFocused else Color.White,
+                                    )
+                                    if (swapPlusIsFallback) {
+                                        FallbackBadge(context.getString(R.string.tv_adblock_fallback_badge), focused)
+                                    }
+                                }
                                 Text(
                                     context.getString(R.string.tv_adblock_swap_plus_desc),
                                     fontSize = 12.sp,
@@ -584,6 +599,30 @@ object TvProxyPanel {
             Pill(Modifier, { if (canDown) onMove(1) }, alpha = if (canDown) 1f else 0.35f) { focused ->
                 Icon(painterResource(R.drawable.tv_arrow_down), contentDescription = null, tint = if (focused) TvColors.onFocused else Color.White, modifier = Modifier.size(20.dp))
             }
+        }
+    }
+
+    @Composable
+    private fun FallbackBadge(label: String, focused: Boolean) {
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(
+                    if (focused) TvColors.onFocused.copy(alpha = 0.14f)
+                    else TvColors.accent.copy(alpha = 0.22f)
+                )
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (focused) TvColors.onFocused else TvColors.accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 

@@ -1291,13 +1291,14 @@ class MainActivity : AppCompatActivity() {
             elevation = 10_000f
             alpha = 0f
             visibility = View.GONE
-            (findViewById<ViewGroup>(android.R.id.content))?.addView(
+            this@MainActivity.findViewById<ViewGroup>(android.R.id.content)?.addView(
                 this,
                 ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
             )
             oledScreensaverView = this
         }
         overlay.animate().cancel()
+        overlay.bringToFront()
         overlay.visibility = View.VISIBLE
         overlay.animate().alpha(targetAlpha).setDuration(600L).start()
     }

@@ -78,9 +78,10 @@ class TvShadowAdblockTest {
         Regex("""#EXT-X-DISCONTINUITY-SEQUENCE:(\d+)""").find(playlist)?.groupValues?.get(1)?.toLong() ?: 0L
 
     @Test
-    fun cleanPlaylistIngestsPrimaryWithoutDiscontinuity() {
+    fun cleanPlaylistBeforeSplicePassesThroughUntouched() {
         val window = TvShadowAdblock.ContinuityWindow()
-        val raw = buildCleanPlaylist(mediaSeq = 100L, startSec = 0)
+        val raw = buildCleanPlaylist(mediaSeq = 100L, startSec = 0) +
+            "#EXT-X-TWITCH-PREFETCH:https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_105.ts\n"
         val parsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, raw)
 
         assertEquals(TvShadowAdblock.PlaylistVerdict.CLEAN, parsed.verdict)
@@ -97,13 +98,12 @@ class TvShadowAdblockTest {
 
         assertEquals("primary", res.sourceUsed)
         assertEquals(0, res.adSegmentsSuppressed)
-        assertFalse(res.outputPlaylist.contains("#EXT-X-DISCONTINUITY\n"))
-        assertTrue(res.outputPlaylist.contains("live_100.ts"))
-        assertEquals(100L, extractMediaSequence(res.outputPlaylist))
+        assertEquals(raw, res.outputPlaylist)
+        assertTrue(window.hasSeenContent)
     }
 
     @Test
-    fun prerollFullAdSplicesShadowCleanly() {
+    fun prerollFullAdSplicesShadowCleanlyWithoutPrefetch() {
         val window = TvShadowAdblock.ContinuityWindow()
         val adRaw = buildFullAdPlaylist(mediaSeq = 200L, startSec = 0)
         val adParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, adRaw)
@@ -113,7 +113,7 @@ class TvShadowAdblockTest {
             mediaSeq = 500L,
             startSec = 0,
             prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow",
-        )
+        ) + "#EXT-X-TWITCH-PREFETCH:https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow_505.ts\n"
         val shadowParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadowRaw)
         assertEquals(TvShadowAdblock.PlaylistVerdict.CLEAN, shadowParsed.verdict)
 
@@ -132,13 +132,14 @@ class TvShadowAdblockTest {
         assertTrue(res.outputPlaylist.contains("shadow_500.ts"))
         assertFalse(res.outputPlaylist.contains("cloudfront.net/ad/"))
         assertFalse(res.outputPlaylist.contains("stitched-ad"))
+        assertFalse("Synthesized playlist must never emit #EXT-X-TWITCH-PREFETCH", res.outputPlaylist.contains("#EXT-X-TWITCH-PREFETCH:"))
     }
 
     @Test
     fun midrollPartialAdSplicesShadowAndReturnsAfterCleanStreak() {
         val window = TvShadowAdblock.ContinuityWindow()
 
-        // Step 1: initial clean primary
+        // Step 1: initial clean primary (passed through untouched, snapshot recorded)
         val clean1 = buildCleanPlaylist(mediaSeq = 100L, startSec = 0, count = 4)
         val r1 = TvShadowAdblock.processMediaPlaylistDecision(
             variantUrl = primaryVariantUrl,
@@ -152,7 +153,7 @@ class TvShadowAdblockTest {
         assertEquals("primary", r1.sourceUsed)
         val seq1 = extractMediaSequence(r1.outputPlaylist)
 
-        // Step 2: mid-roll partial ad while shadow is fresh
+        // Step 2: mid-roll partial ad while shadow is fresh -> seeds from snapshot and splices shadow
         val partial = buildPartialAdPlaylist(mediaSeq = 104L, startSec = 8)
         val shadow1 = buildCleanPlaylist(
             mediaSeq = 800L,
@@ -215,7 +216,7 @@ class TvShadowAdblockTest {
         )
         assertEquals("passthrough", coldRes.sourceUsed)
 
-        // Warm window (has content) + mid-roll ad without fresh shadow -> hold clean window
+        // Warm window (has clean snapshot) + mid-roll ad without fresh shadow -> seeds from snapshot & holds clean window
         val warmWindow = TvShadowAdblock.ContinuityWindow()
         val clean = buildCleanPlaylist(mediaSeq = 10L, startSec = 0, count = 4)
         TvShadowAdblock.processMediaPlaylistDecision(
@@ -302,10 +303,10 @@ class TvShadowAdblockTest {
     }
 
     @Test
-    fun qualitySwitchResetsWindowAndPreservesMonotonicMediaSequence() {
+    fun qualitySwitchAfterSplicePreservesMonotonicMediaSequence() {
         val window = TvShadowAdblock.ContinuityWindow()
         val p1 = buildCleanPlaylist(mediaSeq = 500L, startSec = 0, count = 4)
-        val r1 = TvShadowAdblock.processMediaPlaylistDecision(
+        TvShadowAdblock.processMediaPlaylistDecision(
             variantUrl = primaryVariantUrl,
             primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, p1),
             primaryRawText = p1,
@@ -314,10 +315,27 @@ class TvShadowAdblockTest {
             shadowVariantUrl = null,
             shadowFresh = false,
         )
-        val seqBefore = extractMediaSequence(r1.outputPlaylist)
+        // Trigger a splice so ContinuityWindow is active
+        val ad = buildFullAdPlaylist(mediaSeq = 504L, startSec = 8)
+        val shadow = buildCleanPlaylist(
+            mediaSeq = 900L,
+            startSec = 8,
+            count = 3,
+            prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow",
+        )
+        val rSplice = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, ad),
+            primaryRawText = ad,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadow),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+        )
+        val seqBefore = extractMediaSequence(rSplice.outputPlaylist)
 
         // Switch variant URL to 1080p with lower upstream sequence number
-        val p2 = buildCleanPlaylist(mediaSeq = 490L, startSec = 8, count = 4)
+        val p2 = buildCleanPlaylist(mediaSeq = 490L, startSec = 16, count = 4)
         val r2 = TvShadowAdblock.processMediaPlaylistDecision(
             variantUrl = primaryVariant1080Url,
             primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariant1080Url, p2),

@@ -1153,7 +1153,7 @@
     <string name="tv_adblock_swap_locked_hint">Standardmäßig aktiviert. Aktiviere einen benutzerdefinierten oder HTTP-Proxy, um ihn auszuschalten.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Bleibt als automatisches Fallback aktiv, solange Adblock (Swap+) oder Adblock (VOD) aktiv ist.</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">Experimentell — spielt Livestreams über das laufende VOD (~30 s Verzögerung, synchronisierter Chat) ohne Werbung ab. Fällt automatisch auf Swap+ oder Swap zurück, wenn kein VOD verfügbar ist.</string>
+    <string name="tv_adblock_exp_summary">Experimentell — spielt Livestreams über das laufende VOD (~30 s Verzögerung, synchronisierter Chat) ohne Werbung ab. Funktioniert überall wie Swap (Hauptplayer, Multi-Stream und PiP) und fällt ohne VOD auf Swap+ oder Swap zurück.</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) aktiv</string>
     <string name="tv_adblock_exp_proxies_disabled">Proxys können nicht aktiviert werden, solange Adblock (Swap+) oder Adblock (VOD) aktiv ist.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Deaktiviere zuerst benutzerdefinierte und HTTP-Proxys.</string>
@@ -1500,9 +1500,9 @@
     <string name="tv_chat_qr_reconnect">Neu verbinden</string>
     <string name="tv_adblock_swap_desc">Wechselt bei Werbung auf einen Ersatzstream (Qualität kann kurz sinken).</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Experimentell — nahtloser Shadow-HLS-Übergang, behält 1440p. Evtl. nicht 100 % stabil.</string>
-    <string name="tv_adblock_swap_plus_summary">Experimentell — nutzt eine anonyme Shadow-HLS-Playlist, um Werbung nahtlos auszublenden und 1440p / HEVC zu erhalten. Fällt bei Bedarf auf Swap zurück. Funktioniert evtl. nicht bei jedem Stream zu 100 %.</string>
-    <string name="tv_adblock_vod_desc">Experimentell — spielt über laufendes VOD (~30 s Verzögerung), Fallback Swap+/Swap.</string>
+    <string name="tv_adblock_swap_plus_desc">Experimentell — behält 1440p (nur Hauptplayer, nicht Multi-Stream/PiP).</string>
+    <string name="tv_adblock_swap_plus_summary">Experimentell — nutzt eine anonyme Shadow-HLS-Playlist für nahtloses Ausblenden von Werbung mit 1440p / HEVC im Hauptplayer (nicht in Multi-Stream oder PiP, dort läuft Swap). Fällt bei Bedarf auf Swap zurück.</string>
+    <string name="tv_adblock_vod_desc">Experimentell — über laufendes VOD (~30 s), überall aktiv (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Stummgeschalteten VOD-Ton wiederherstellen</string>
     <string name="tv_vod_audio_recovery_summary">Stellt DMCA-stummgeschaltete Segmente in VODs, Live-DVR und Adblock (VOD) wieder her, falls der Originalton im CDN-Cache liegt. Zeigt grüne (wiederhergestellt) und rote (stumm) Bereiche.</string>
     <string name="tv_vod_audio_recovered_toast">Stummer Ton wiederhergestellt (~%1$d Min.)</string>
@@ -1515,4 +1515,6 @@
     <string name="tv_oled_screensaver_3m">3 Minuten</string>
     <string name="tv_oled_screensaver_5m">5 Minuten</string>
     <string name="tv_oled_screensaver_10m">10 Minuten</string>
+    <string name="tv_adblock_fallback_badge">Aktives Fallback</string>
+    <string name="tv_chat_qr_restart">Neu starten</string>
 </resources>

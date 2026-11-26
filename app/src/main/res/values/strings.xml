@@ -1173,7 +1173,7 @@
     <string name="tv_adblock_swap_locked_hint">Enabled by default. Activate a custom or HTTP stream proxy to turn it off.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Stays active as automatic fallback while Adblock (Swap+) or Adblock (VOD) is enabled.</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">Experimental — plays live broadcasts via their ongoing VOD (~30s delay, synced chat) to avoid ads. Automatically falls back to Swap+ or Swap if no VOD is available. May not work 100% on every channel.</string>
+    <string name="tv_adblock_exp_summary">Experimental — plays live broadcasts via their ongoing VOD (~30s delay, synced chat) to avoid ads. Works everywhere like Swap (main player, Multi-Stream, and PiP) and falls back to Swap+ or Swap if no VOD is available. May not work 100% on every channel.</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) active</string>
     <string name="tv_adblock_exp_proxies_disabled">Proxies cannot be enabled while Adblock (Swap+) or Adblock (VOD) is active.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Disable custom and HTTP stream proxies first.</string>
@@ -1520,9 +1520,9 @@
     <string name="tv_chat_qr_reconnect">Reconnect</string>
     <string name="tv_adblock_swap_desc">Switches to a backup stream during ads (may drop quality during the ad).</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Experimental — seamless shadow HLS splice, keeps 1440p. May not work 100%.</string>
-    <string name="tv_adblock_swap_plus_summary">Experimental — maintains an anonymous shadow HLS playlist to splice out ads seamlessly while keeping 1440p / HEVC on the primary stream. Falls back to Swap if needed. May not work 100% on every stream.</string>
-    <string name="tv_adblock_vod_desc">Experimental — plays via ongoing VOD (~30s delay), falls back to Swap+/Swap.</string>
+    <string name="tv_adblock_swap_plus_desc">Experimental — keeps 1440p (main player only, not Multi-Stream/PiP).</string>
+    <string name="tv_adblock_swap_plus_summary">Experimental — maintains an anonymous shadow HLS playlist to splice out ads seamlessly while keeping 1440p / HEVC on the main player (not used in Multi-Stream or PiP, which stay on Swap). Falls back to Swap if needed. May not work 100% on every stream.</string>
+    <string name="tv_adblock_vod_desc">Experimental — via ongoing VOD (~30s delay), works everywhere (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Recover muted VOD audio</string>
     <string name="tv_vod_audio_recovery_summary">Restores DMCA-muted audio segments in VODs, live DVR rewind, and Adblock (VOD) when the original audio is still cached on Twitch CDN. Shows green (recovered) and red (muted) segments on the seek bar.</string>
     <string name="tv_vod_audio_recovered_toast">Muted audio recovered (~%1$d min)</string>
@@ -1535,4 +1535,6 @@
     <string name="tv_oled_screensaver_3m">3 minutes</string>
     <string name="tv_oled_screensaver_5m">5 minutes</string>
     <string name="tv_oled_screensaver_10m">10 minutes</string>
+    <string name="tv_adblock_fallback_badge">Active fallback</string>
+    <string name="tv_chat_qr_restart">Restart</string>
 </resources>

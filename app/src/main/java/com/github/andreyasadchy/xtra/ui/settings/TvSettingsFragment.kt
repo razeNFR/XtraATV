@@ -2239,6 +2239,11 @@ class TvSettingsFragment : Fragment() {
                 }
                 if (key == C.PLAYER_ADBLOCK) {
                     summary = context.getString(R.string.tv_adblock_summary_1440p)
+                    if (!anyProxyOn && (swapPlusOn || expOn)) {
+                        valueBadge = context.getString(R.string.tv_adblock_fallback_badge)
+                    }
+                } else if (key == C.TV_ADBLOCK_SWAP_PLUS && !anyProxyOn && expOn && swapPlusOn) {
+                    valueBadge = context.getString(R.string.tv_adblock_fallback_badge)
                 }
                 Kind.Toggle(checked)
             }

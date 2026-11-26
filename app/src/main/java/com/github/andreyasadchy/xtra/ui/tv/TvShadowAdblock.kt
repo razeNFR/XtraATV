@@ -496,6 +496,8 @@ object TvShadowAdblock {
 
         private var lastVariantUrl: String? = null
         private var lastPrefetches: List<String> = emptyList()
+        var lastCleanSnapshot: ParsedPlaylist? = null
+            private set
 
         fun reset() {
             window.clear()
@@ -511,35 +513,45 @@ object TvShadowAdblock {
             spliceCount = 0
             lastVariantUrl = null
             lastPrefetches = emptyList()
+            lastCleanSnapshot = null
+        }
+
+        fun recordCleanSnapshot(parsed: ParsedPlaylist) {
+            lastCleanSnapshot = parsed
+            hasSeenContent = true
+            consecutiveCleanPrimary++
         }
 
         fun onQualitySwitch(newVariantUrl: String, incoming: ParsedPlaylist) {
-            if (lastVariantUrl != null && lastVariantUrl != newVariantUrl && window.isNotEmpty()) {
-                // Keep monotonic mediaSequence & discontinuitySequence across quality switch
-                val oldSeqEnd = mediaSequence + window.size
-                val oldDiscCount = window.count { it.hasDiscontinuity }
-                val firstIncoming = incoming.segments.firstOrNull()
-                val matchIdx = if (firstIncoming != null) {
-                    val key = segmentIdentityKey(firstIncoming)
-                    window.indexOfFirst { it.identityKey == key }
-                } else -1
-                if (matchIdx >= 0) {
-                    var droppedDisc = 0
-                    for (i in 0 until matchIdx) {
-                        if (window.elementAt(i).hasDiscontinuity) droppedDisc++
+            if (lastVariantUrl != null && lastVariantUrl != newVariantUrl) {
+                lastCleanSnapshot = null
+                if (window.isNotEmpty()) {
+                    // Keep monotonic mediaSequence & discontinuitySequence across quality switch
+                    val oldSeqEnd = mediaSequence + window.size
+                    val oldDiscCount = window.count { it.hasDiscontinuity }
+                    val firstIncoming = incoming.segments.firstOrNull()
+                    val matchIdx = if (firstIncoming != null) {
+                        val key = segmentIdentityKey(firstIncoming)
+                        window.indexOfFirst { it.identityKey == key }
+                    } else -1
+                    if (matchIdx >= 0) {
+                        var droppedDisc = 0
+                        for (i in 0 until matchIdx) {
+                            if (window.elementAt(i).hasDiscontinuity) droppedDisc++
+                        }
+                        mediaSequence += matchIdx
+                        discontinuitySequence += droppedDisc
+                    } else {
+                        mediaSequence = oldSeqEnd
+                        discontinuitySequence += oldDiscCount
                     }
-                    mediaSequence += matchIdx
-                    discontinuitySequence += droppedDisc
-                } else {
-                    mediaSequence = oldSeqEnd
-                    discontinuitySequence += oldDiscCount
+                    window.clear()
+                    seenOrder.clear()
+                    seenSet.clear()
+                    seenPdtMs.clear()
+                    activeSourceId = null
+                    currentWindowLimit = BASE_WINDOW_SIZE
                 }
-                window.clear()
-                seenOrder.clear()
-                seenSet.clear()
-                seenPdtMs.clear()
-                activeSourceId = null
-                currentWindowLimit = BASE_WINDOW_SIZE
             }
             lastVariantUrl = newVariantUrl
         }
@@ -692,9 +704,6 @@ object TvShadowAdblock {
                 sb.append("#EXTINF:").append(String.format(java.util.Locale.US, "%.3f", seg.durationSec)).append(",live\n")
                 sb.append(seg.uri).append('\n')
             }
-            for (pref in lastPrefetches) {
-                sb.append(pref).append('\n')
-            }
             return sb.toString()
         }
 
@@ -761,6 +770,27 @@ object TvShadowAdblock {
         val cleanShadowAvailable = shadowFresh && shadowPlaylist != null &&
             shadowPlaylist.verdict == PlaylistVerdict.CLEAN && !shadowVariantUrl.isNullOrBlank()
 
+        // Before any ad splice has occurred, pass clean primary playlists through untouched so native low-latency
+        // prefetch and ABR quality switching are never altered; record snapshot to seed mid-rolls cleanly.
+        if (!primaryHasAd && primaryParsed.verdict == PlaylistVerdict.CLEAN && window.spliceCount == 0 && !onShadow && window.isEmpty()) {
+            window.recordCleanSnapshot(primaryParsed)
+            return DecisionResult(primaryRawText, "primary", 0)
+        }
+
+        // First mid-roll after clean passthrough: seed ContinuityWindow from the last clean snapshot
+        if (primaryHasAd && window.isEmpty()) {
+            window.lastCleanSnapshot?.let { snap ->
+                window.ingest(
+                    sourceId = "primary",
+                    segments = snap.segments,
+                    sourceMediaSequence = snap.mediaSequence,
+                    sourceDiscontinuitySequence = snap.discontinuitySequence,
+                    prefetches = emptyList(),
+                    allowPrefetches = false,
+                )
+            }
+        }
+
         if (!primaryHasAd && primaryParsed.verdict == PlaylistVerdict.CLEAN) {
             window.noteCleanPrimary(true)
         } else if (primaryHasAd) {
@@ -776,8 +806,8 @@ object TvShadowAdblock {
                     segments = shadowPlaylist!!.segments,
                     sourceMediaSequence = shadowPlaylist.mediaSequence,
                     sourceDiscontinuitySequence = shadowPlaylist.discontinuitySequence,
-                    prefetches = shadowPlaylist.prefetchLines,
-                    allowPrefetches = true,
+                    prefetches = emptyList(),
+                    allowPrefetches = false,
                 )
             }
             primaryHasAd && !cleanShadowAvailable && (onShadow || (primaryParsed.verdict == PlaylistVerdict.FULL_AD && !window.isEmpty())) -> {
@@ -801,8 +831,8 @@ object TvShadowAdblock {
                     segments = shadowPlaylist!!.segments,
                     sourceMediaSequence = shadowPlaylist.mediaSequence,
                     sourceDiscontinuitySequence = shadowPlaylist.discontinuitySequence,
-                    prefetches = shadowPlaylist.prefetchLines,
-                    allowPrefetches = true,
+                    prefetches = emptyList(),
+                    allowPrefetches = false,
                 )
             }
             !primaryHasAd && primaryParsed.verdict == PlaylistVerdict.CLEAN -> {
@@ -812,8 +842,8 @@ object TvShadowAdblock {
                     segments = primaryParsed.segments,
                     sourceMediaSequence = primaryParsed.mediaSequence,
                     sourceDiscontinuitySequence = primaryParsed.discontinuitySequence,
-                    prefetches = primaryParsed.prefetchLines,
-                    allowPrefetches = true,
+                    prefetches = emptyList(),
+                    allowPrefetches = false,
                 )
             }
             else -> {
@@ -833,8 +863,8 @@ object TvShadowAdblock {
                 segments = shadowPlaylist!!.segments,
                 sourceMediaSequence = shadowPlaylist.mediaSequence,
                 sourceDiscontinuitySequence = shadowPlaylist.discontinuitySequence,
-                prefetches = shadowPlaylist.prefetchLines,
-                allowPrefetches = true,
+                prefetches = emptyList(),
+                allowPrefetches = false,
             )
             return DecisionResult(window.emit(primaryParsed.headerLines, shadowPlaylist.activeMapLine), "shadow-fallback", adCount)
         }
@@ -849,7 +879,7 @@ object TvShadowAdblock {
         val lock = Any()
         val window = ContinuityWindow()
 
-        @Volatile var targetHeight: Int = 1080
+        @Volatile var targetHeight: Int = 2160
         @Volatile var lastPrimaryAdAtMs: Long = 0L
         @Volatile var shadowMasterVariants: List<MasterVariant> = emptyList()
         @Volatile var shadowMasterFetchedAtMs: Long = 0L

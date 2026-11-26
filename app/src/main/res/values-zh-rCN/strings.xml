@@ -1153,7 +1153,7 @@
     <string name="tv_adblock_swap_locked_hint">默认开启。启用自定义代理或 HTTP 流代理后才可关闭。</string>
     <string name="tv_adblock_swap_locked_exp_hint">启用 Adblock (Swap+) 或 Adblock (VOD) 时保持开启作为自动回退。</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">实验性 — 通过正在录制的VOD播放直播（约30秒延迟，聊天自动同步）以避开广告。若无VOD则自动回退到Swap+或Swap。</string>
+    <string name="tv_adblock_exp_summary">实验性 — 通过正在录制的VOD播放直播（约30秒延迟，聊天自动同步）以避开广告。与Swap一样支持主播放器、多流和画中画，无VOD时自动回退至Swap+或Swap。</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) 已启用</string>
     <string name="tv_adblock_exp_proxies_disabled">启用 Adblock (Swap+) 或 Adblock (VOD) 时无法开启代理。</string>
     <string name="tv_adblock_exp_disabled_by_proxy">请先关闭自定义代理和 HTTP 流代理。</string>
@@ -1500,9 +1500,9 @@
     <string name="tv_chat_qr_reconnect">重新连接</string>
     <string name="tv_adblock_swap_desc">广告期间切换至备用流（广告期间画质可能暂时下降）。</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">实验性 — 无缝影子HLS拼接，保留1440p，不保证100%生效。</string>
-    <string name="tv_adblock_swap_plus_summary">实验性 — 维护匿名影子HLS播放列表以无缝跳过广告，同时保留主直播流的1440p / HEVC。必要时自动回退至Swap。可能无法在所有直播间100%生效。</string>
-    <string name="tv_adblock_vod_desc">实验性 — 通过实时VOD播放（延迟约30秒），无VOD时回退至Swap+/Swap。</string>
+    <string name="tv_adblock_swap_plus_desc">实验性 — 保留1440p（仅主播放器，不含多流/画中画）。</string>
+    <string name="tv_adblock_swap_plus_summary">实验性 — 维护匿名影子HLS以在主播放器上无缝跳过广告并保留1440p / HEVC（多流与画中画仍使用Swap）。必要时自动回退至Swap。</string>
+    <string name="tv_adblock_vod_desc">实验性 — 通过实时VOD播放（约30秒延迟），支持全模式（含画中画/多流）。</string>
     <string name="tv_vod_audio_recovery">恢复 VOD 静音音频</string>
     <string name="tv_vod_audio_recovery_summary">当原始音频仍在 CDN 缓存中时，恢复 VOD、直播 DVR 回看及 Adblock (VOD) 中被 DMCA 静音的片段。进度条显示绿色（已恢复）和红色（静音）。</string>
     <string name="tv_vod_audio_recovered_toast">已恢复静音音频（约 %1$d 分钟）</string>
@@ -1515,4 +1515,6 @@
     <string name="tv_oled_screensaver_3m">3 分钟</string>
     <string name="tv_oled_screensaver_5m">5 分钟</string>
     <string name="tv_oled_screensaver_10m">10 分钟</string>
+    <string name="tv_adblock_fallback_badge">备用已启用</string>
+    <string name="tv_chat_qr_restart">重新启动</string>
 </resources>
