@@ -338,10 +338,15 @@ object TvVodAudioRecovery {
                     session.segmentModes[rep.segmentKey] = mode
                     rep to mode
                 }
-                // Choose best working mode found in this range: prefer UNMUTED, then PLAIN, else MUTED
+                // Require majority confirmation (e.g. >= 2/3 when 3 probed) so a single cached edge segment
+                // does not mark an entire muted range green only to fall back to silent -muted during playback.
+                val needed = (repModes.size + 1) / 2
+                val unmutedHits = repModes.count { it.second == SegmentMode.UNMUTED }
+                val plainHits = repModes.count { it.second == SegmentMode.PLAIN }
                 val rangeMode = when {
-                    repModes.any { it.second == SegmentMode.UNMUTED } -> SegmentMode.UNMUTED
-                    repModes.any { it.second == SegmentMode.PLAIN } -> SegmentMode.PLAIN
+                    unmutedHits >= needed -> SegmentMode.UNMUTED
+                    plainHits >= needed -> SegmentMode.PLAIN
+                    unmutedHits + plainHits >= needed -> if (unmutedHits >= plainHits) SegmentMode.UNMUTED else SegmentMode.PLAIN
                     else -> SegmentMode.MUTED
                 }
                 for (seg in unresolved) {
@@ -351,6 +356,8 @@ object TvVodAudioRecovery {
         }
 
         var recoveredCount = 0
+        var unmutedCount = 0
+        var plainCount = 0
         var mutedCount = 0
         for (seg in parsedSegments) {
             val chosenMode = if (!enabled || session.failedToMuted.contains(seg.segmentKey)) {
@@ -362,6 +369,7 @@ object TvVodAudioRecovery {
             rawLines[seg.lineIndex] = rewrittenLine
             if (chosenMode != SegmentMode.MUTED) {
                 recoveredCount++
+                if (chosenMode == SegmentMode.UNMUTED) unmutedCount++ else plainCount++
                 val rewrittenAbs = resolveAbsoluteUrl(playlistUrl, rewrittenLine)
                 val mutedAbs = resolveAbsoluteUrl(playlistUrl, seg.urlFor(SegmentMode.MUTED))
                 session.fallbackByRewrittenUrl[rewrittenAbs] = FallbackEntry(seg.segmentKey, mutedAbs)
@@ -372,7 +380,7 @@ object TvVodAudioRecovery {
 
         session.updateSegments(parsedSegments, enabled)
         runCatching {
-            Log.d(TAG, "Rewrote VOD playlist: recovered=$recoveredCount muted=$mutedCount enabled=$enabled")
+            Log.i(TAG, "Rewrote VOD playlist: recovered=$recoveredCount (unmuted=$unmutedCount plain=$plainCount) muted=$mutedCount enabled=$enabled")
         }
         return rawLines.joinToString(lineEnding)
     }
@@ -487,7 +495,7 @@ object TvVodAudioRecovery {
                     runCatching { upstream.close() }
                     session.markSegmentFailed(entry.segmentKey)
                     runCatching {
-                        Log.d(TAG, "Segment fallback ($code) -> muted for ${entry.segmentKey}")
+                        Log.i(TAG, "Segment fallback ($code) -> muted for ${entry.segmentKey}")
                     }
                     val mutedSpec = dataSpec.buildUpon().setUri(Uri.parse(entry.mutedAbsoluteUrl)).build()
                     upstream.open(mutedSpec)

@@ -1952,12 +1952,14 @@ class ExoPlayerService : BasePlaybackService() {
                             )
                         ).apply {
                             val baseParserFactory = CustomHlsPlaylistParserFactory()
+                            shadowAdActive = false
                             setPlaylistParserFactory(
                                 if (useShadowAdblock) {
                                     com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.ShadowPlaylistParserFactory(
                                         context = this@ExoPlayerService,
                                         delegate = baseParserFactory,
                                         channelLoginHint = channelLogin,
+                                        onAdHandled = { active -> shadowAdActive = active },
                                     )
                                 } else {
                                     baseParserFactory
@@ -3431,6 +3433,9 @@ class ExoPlayerService : BasePlaybackService() {
      * without the ad, a bar for the ad playing that starts again with the next one, then "Back to live…" until the stream
      * is back. Without the marks of Twitch: the kind of ad and the source only.
      */
+    @Volatile
+    private var shadowAdActive: Boolean = false
+
     fun getAdblockInfo(): AdblockInfo? {
         if (type != STREAM) return null
         val source = when {
@@ -3452,6 +3457,9 @@ class ExoPlayerService : BasePlaybackService() {
         if (source == null && !hidden) {
             backLiveFrom = 0L
             backLiveProgress = 0f
+            if (shadowAdActive && !experimentalVodActive) {
+                return AdblockInfo(getString(R.string.tv_adblock_ad), null, null)
+            }
             if (experimentalNoticeTitleRes != 0) {
                 if (!streamPictureShown && player?.playbackState != Player.STATE_READY) {
                     return null
@@ -3781,6 +3789,7 @@ class ExoPlayerService : BasePlaybackService() {
         experimentalVodUserRewound = false
         experimentalVodCreatedAtMs = null
         experimentalVodBaseDir = null
+        shadowAdActive = false
         com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.clearActiveState()
         clearLivePauseState()
         // the main player stops first: while the ad blocker replaced an ad, it still played the ad behind (no picture,
@@ -5467,6 +5476,7 @@ class ExoPlayerService : BasePlaybackService() {
         proxyMediaPlaylist = false
         hidden = false
         fallbackH264ForStream = false
+        shadowAdActive = false
         com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.clearActiveState()
         com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.stopAll()
     }

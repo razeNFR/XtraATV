@@ -1500,7 +1500,7 @@
     <string name="tv_chat_qr_reconnect">重新連線</string>
     <string name="tv_adblock_swap_desc">廣告期間切換至備用串流（廣告期間畫質可能暫時下降）。</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">實驗性 — 保留1440p（僅主播放器，不含多串流/子母畫面）。</string>
+    <string name="tv_adblock_swap_plus_desc">實驗性 — 主播放器保留1440p（子母畫面/多串流使用經典Swap攔截）。</string>
     <string name="tv_adblock_swap_plus_summary">實驗性 — 維護匿名影子HLS以在主播放器上無縫略過廣告並保留1440p / HEVC（多串流與子母畫面仍使用Swap）。必要時自動退回至Swap。</string>
     <string name="tv_adblock_vod_desc">實驗性 — 透過即時VOD播放（約30秒延遲），支援全模式（含子母畫面/多串流）。</string>
     <string name="tv_vod_audio_recovery">還原 VOD 靜音音訊</string>

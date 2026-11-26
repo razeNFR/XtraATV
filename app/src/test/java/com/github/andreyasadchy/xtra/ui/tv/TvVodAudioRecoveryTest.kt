@@ -199,4 +199,34 @@ class TvVodAudioRecoveryTest {
         assertTrue(session.state.recoveredRanges.isEmpty())
         assertEquals(listOf(0L to 20_000L), session.state.mutedRanges)
     }
+
+    @Test
+    fun singleBoundaryProbeHitDoesNotMarkWholeRangeGreen() {
+        val session = newSession(enabled = true)
+        val playlist = buildString {
+            appendLine("#EXTM3U")
+            for (i in 1..7) {
+                appendLine("#EXTINF:10.000,")
+                appendLine("$i-muted.mp4")
+            }
+            appendLine("#EXT-X-ENDLIST")
+        }
+
+        // Only segment 1 (edge) returns UNMUTED; middle (4) and end (7) return 403 -> MUTED
+        val out = TvVodAudioRecovery.rewriteMediaPlaylist(vodUrl, playlist, session) { unmutedUrl, _ ->
+            if (unmutedUrl.endsWith("/1-unmuted.mp4")) {
+                TvVodAudioRecovery.SegmentMode.UNMUTED
+            } else {
+                TvVodAudioRecovery.SegmentMode.MUTED
+            }
+        }
+
+        // Only the verified segment 1 is unmuted; segments 2..7 must remain -muted.mp4 (red, not falsely green)
+        assertTrue(out.contains("1-unmuted.mp4"))
+        assertTrue(out.contains("2-muted.mp4"))
+        assertTrue(out.contains("4-muted.mp4"))
+        assertTrue(out.contains("7-muted.mp4"))
+        assertEquals(listOf(0L to 10_000L), session.state.recoveredRanges)
+        assertEquals(listOf(10_000L to 70_000L), session.state.mutedRanges)
+    }
 }

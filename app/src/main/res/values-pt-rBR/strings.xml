@@ -1500,7 +1500,7 @@
     <string name="tv_chat_qr_reconnect">Reconectar</string>
     <string name="tv_adblock_swap_desc">Alterna para um fluxo reserva nos anúncios (a qualidade pode cair durante o anúncio).</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Experimental — mantém 1440p (apenas player principal, sem Multi-Stream/PiP).</string>
+    <string name="tv_adblock_swap_plus_desc">Experimental — mantém 1440p no player principal (Swap clássico no PiP/Multi-Stream).</string>
     <string name="tv_adblock_swap_plus_summary">Experimental — mantém uma playlist HLS shadow anônima para pular anúncios mantendo 1440p / HEVC no player principal (não usado em Multi-Stream ou PiP, que usam Swap). Recorre ao Swap se necessário.</string>
     <string name="tv_adblock_vod_desc">Experimental — via VOD em andamento (~30 s), funciona em tudo (PiP/Multi-Stream).</string>
     <string name="tv_vod_audio_recovery">Recuperar áudio mutado de VOD</string>

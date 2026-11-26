@@ -1249,7 +1249,12 @@ object TvShadowAdblock {
                 shadowFresh = state.isShadowFresh(),
             )
         }
-        onAdHandled?.invoke(hasAd && result.sourceUsed != "passthrough")
+        val adBadgeActive = result.sourceUsed == "shadow" ||
+            result.sourceUsed == "shadow-cooldown" ||
+            result.sourceUsed == "shadow-fallback" ||
+            result.sourceUsed == "hold" ||
+            (hasAd && result.sourceUsed != "passthrough")
+        onAdHandled?.invoke(adBadgeActive)
         if (hasAd) {
             runCatching {
                 Log.d(TAG, "Ad break on $login: source=${result.sourceUsed} suppressed=${result.adSegmentsSuppressed} shadow=${state.shadowPlayerType} splices=${state.window.spliceCount}")
