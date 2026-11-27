@@ -2613,7 +2613,7 @@ class TvSettingsFragment : Fragment() {
                                     (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = true)
                                 C.UI_INTERFACE_MODE -> {
                                     context.prefs().edit(commit = true) { putString(key, chosen) }
-                                    TvUi.restartAppForInterfaceMode(context)
+                                    com.github.andreyasadchy.xtra.ui.view.TvUi.restartAppForInterfaceMode(context)
                                     return@showChoices
                                 }
                                 else -> if (key.startsWith("ui_theme_")) {

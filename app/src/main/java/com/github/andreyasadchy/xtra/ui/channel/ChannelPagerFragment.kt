@@ -168,7 +168,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                     } else {
                         it
                     }
-                    if (!TvUi.isTv(requireContext())) {
+                    if (!com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
                         com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyStreamerNameTint(userName)
                     }
                 } else {
