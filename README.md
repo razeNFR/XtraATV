@@ -3,7 +3,7 @@
 <img src="docs/icon.png" align="left" width="110"/>
 
 **XtraPlus** is a Twitch player and browser for **Android TV and Mobile** (phones & tablets), built on top of [Xtra](https://github.com/crackededed/Xtra).
-One single APK adapts automatically to your device — bringing a dedicated remote-first **Android TV** interface and a modernized Material 3 **Mobile** interface, with a built-in ad blocker (**Swap+**, **Swap / VAFT**, **VOD** & proxies), streams up to **1440p60 / 4K**, multi-stream up to 4 channels on TV, live DVR rewind, and much more.
+One single APK adapts automatically to your device — bringing a dedicated remote-first **Android TV** interface and a modernized Material 3 **Mobile** interface, with a built-in ad blocker (**Swap+**, **Swap / VAFT**, **VOD** & proxies), streams up to **1440p60 / 4K**, multi-stream up to 6 channels on TV, live DVR rewind, and much more.
 
 <br clear="left"/>
 
