@@ -2257,7 +2257,7 @@ class ExoPlayerService : BasePlaybackService() {
         ).apply {
             setPlaylistParserFactory(
                 com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.PlaylistParserFactory(
-                    CustomHlsPlaylistParserFactory(),
+                    CustomHlsPlaylistParserFactory(preserveUnmutedSegments = true),
                     audioSession,
                     audioProber,
                 )
@@ -5552,13 +5552,15 @@ class ExoPlayerService : BasePlaybackService() {
         releaseNow()
     }
 
-    class CustomHlsPlaylistParserFactory: HlsPlaylistParserFactory {
+    class CustomHlsPlaylistParserFactory(
+        private val preserveUnmutedSegments: Boolean = false,
+    ): HlsPlaylistParserFactory {
         override fun createPlaylistParser(): ParsingLoadable.Parser<HlsPlaylist> {
-            return HlsPlaylistParser()
+            return HlsPlaylistParser(preserveUnmutedSegments)
         }
 
         override fun createPlaylistParser(multivariantPlaylist: HlsMultivariantPlaylist, previousMediaPlaylist: HlsMediaPlaylist?): ParsingLoadable.Parser<HlsPlaylist> {
-            return HlsPlaylistParser(multivariantPlaylist, previousMediaPlaylist)
+            return HlsPlaylistParser(multivariantPlaylist, previousMediaPlaylist, preserveUnmutedSegments)
         }
     }
 

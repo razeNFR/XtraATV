@@ -320,13 +320,22 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
 
   private final HlsMultivariantPlaylist multivariantPlaylist;
   @Nullable private final HlsMediaPlaylist previousMediaPlaylist;
+  private final boolean preserveUnmutedSegments;
 
   /**
    * Creates an instance where media playlists are parsed without inheriting attributes from a
    * multivariant playlist.
    */
   public HlsPlaylistParser() {
-    this(HlsMultivariantPlaylist.EMPTY, /* previousMediaPlaylist= */ null);
+    this(HlsMultivariantPlaylist.EMPTY, /* previousMediaPlaylist= */ null, /* preserveUnmutedSegments= */ false);
+  }
+
+  /**
+   * Creates an instance where media playlists are parsed without inheriting attributes from a
+   * multivariant playlist, optionally preserving `-unmuted` segment URIs for VOD audio recovery.
+   */
+  public HlsPlaylistParser(boolean preserveUnmutedSegments) {
+    this(HlsMultivariantPlaylist.EMPTY, /* previousMediaPlaylist= */ null, preserveUnmutedSegments);
   }
 
   /**
@@ -341,8 +350,16 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
   public HlsPlaylistParser(
       HlsMultivariantPlaylist multivariantPlaylist,
       @Nullable HlsMediaPlaylist previousMediaPlaylist) {
+    this(multivariantPlaylist, previousMediaPlaylist, /* preserveUnmutedSegments= */ false);
+  }
+
+  public HlsPlaylistParser(
+      HlsMultivariantPlaylist multivariantPlaylist,
+      @Nullable HlsMediaPlaylist previousMediaPlaylist,
+      boolean preserveUnmutedSegments) {
     this.multivariantPlaylist = multivariantPlaylist;
     this.previousMediaPlaylist = previousMediaPlaylist;
+    this.preserveUnmutedSegments = preserveUnmutedSegments;
   }
 
   @Override
@@ -377,7 +394,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
               previousMediaPlaylist,
               new LineIterator(extraLines, reader),
               uri,
-              matcherCache);
+              matcherCache,
+              preserveUnmutedSegments);
         } else {
           extraLines.add(line);
         }
@@ -981,7 +999,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       @Nullable HlsMediaPlaylist previousMediaPlaylist,
       LineIterator iterator,
       Uri playlistUri,
-      MatcherCache matcherCache)
+      MatcherCache matcherCache,
+      boolean preserveUnmutedSegments)
       throws IOException {
     String baseUri = playlistUri.toString();
     @HlsMediaPlaylist.PlaylistType int playlistType = HlsMediaPlaylist.PLAYLIST_TYPE_UNKNOWN;
@@ -1578,8 +1597,10 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
           segmentDurationUs = 2 * C.MICROS_PER_SECOND;
           line = line.substring(line.indexOf(':') + 1);
         }
-        String segmentUri = replaceVariableReferences(line, variableDefinitions, matcherCache)
-                .replace("-unmuted", "-muted"); // xtra: unmuted segments
+        String segmentUri = replaceVariableReferences(line, variableDefinitions, matcherCache);
+        if (!preserveUnmutedSegments) {
+          segmentUri = segmentUri.replace("-unmuted", "-muted"); // xtra: unmuted segments
+        }
         @Nullable Segment inferredInitSegment = urlToInferredInitSegment.get(segmentUri);
         if (segmentByteRangeLength == C.LENGTH_UNSET) {
           // The segment has no byte range defined.
