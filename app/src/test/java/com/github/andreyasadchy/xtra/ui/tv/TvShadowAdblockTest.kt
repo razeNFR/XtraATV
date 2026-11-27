@@ -1076,4 +1076,23 @@ class TvShadowAdblockTest {
         assertEquals("DISCONTINUITY-SEQUENCE must NOT bump while discontinuity is still in window", 0L, extractDiscontinuitySequence(r2.outputPlaylist))
         assertEquals(100L, extractMediaSequence(r2.outputPlaylist))
     }
+
+    @Test
+    fun filterMasterToCodecFamilyStripsHevcWhileKeepingAvcAndAudio() {
+        val master = """
+            #EXTM3U
+            #EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="chunked",NAME="1440p60"
+            #EXT-X-STREAM-INF:BANDWIDTH=8500000,RESOLUTION=2560x1440,FRAME-RATE=60.000,CODECS="hev1.1.6.L150.B0,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/1440p60_hevc.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,FRAME-RATE=60.000,CODECS="avc1.64002A,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/1080p60_avc.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=160000,CODECS="mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/audio_only.m3u8
+        """.trimIndent()
+
+        val avcOnly = TvShadowAdblock.filterMasterToCodecFamily(master, "avc1")
+        assertFalse(avcOnly.contains("1440p60_hevc.m3u8"))
+        assertTrue(avcOnly.contains("1080p60_avc.m3u8"))
+        assertTrue(avcOnly.contains("audio_only.m3u8"))
+    }
 }

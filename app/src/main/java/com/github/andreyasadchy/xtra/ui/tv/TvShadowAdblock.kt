@@ -276,6 +276,32 @@ object TvShadowAdblock {
         return out.joinToString("\n") to variants
     }
 
+    /** Keeps only `#EXT-X-STREAM-INF` variants matching [codecFamily] (e.g. `"avc1"`) plus audio/non-variant lines. */
+    internal fun filterMasterToCodecFamily(masterText: String, codecFamily: String): String {
+        val lines = masterText.split("\r\n", "\n")
+        val out = ArrayList<String>(lines.size)
+        var keptVariants = 0
+        var i = 0
+        while (i < lines.size) {
+            val line = lines[i]
+            val trimmed = line.trim()
+            if (trimmed.startsWith("#EXT-X-STREAM-INF:")) {
+                val urlLine = lines.getOrNull(i + 1)
+                val family = normalizeVideoCodecFamily(parseCodecs(trimmed))
+                if (family.isEmpty() || family == codecFamily) {
+                    out.add(line)
+                    if (urlLine != null) out.add(urlLine)
+                    keptVariants++
+                }
+                i += 2
+                continue
+            }
+            out.add(line)
+            i++
+        }
+        return if (keptVariants > 0) out.joinToString("\n") else masterText
+    }
+
     private fun isPortraitVariant(streamInf: String): Boolean {
         if (streamInf.contains("IVS-GROUPS", ignoreCase = true) && streamInf.contains("portrait", ignoreCase = true)) {
             return true
@@ -1552,8 +1578,11 @@ object TvShadowAdblock {
                 listOf(userCodecs, "avc1")
         }
 
-        var sawCodecMismatch = false
+        var codecMismatchCount = 0
         for ((platform, playerType) in SHADOW_PLAYER_TYPES) {
+            if (desiredFamily.isNotEmpty() && desiredFamily != "avc1" && codecMismatchCount >= 2) {
+                break
+            }
             for (codecs in codecAttempts) {
                 val masterUrl = runCatching {
                     withTimeoutOrNull(SHADOW_REQUEST_TIMEOUT_MS) {
@@ -1590,7 +1619,7 @@ object TvShadowAdblock {
                 }
                 val chosen = pickShadowVariant(variants, targetForPick, state.targetHeight)
                 if (chosen == null) {
-                    sawCodecMismatch = true
+                    codecMismatchCount++
                     continue
                 }
                 val mediaText = fetchText(client, chosen.url) ?: continue
@@ -1618,7 +1647,7 @@ object TvShadowAdblock {
 
         // Shadow could not match primary's non-H.264 codec (e.g. primary is HEVC/AV1 while anonymous shadow only offers avc1):
         // align BOTH primary and shadow to H.264 (supported_codecs=avc1) instead of switching decoders mid-ad.
-        if (sawCodecMismatch && desiredFamily.isNotEmpty() && desiredFamily != "avc1" && !state.forceH264) {
+        if (codecMismatchCount > 0 && desiredFamily.isNotEmpty() && desiredFamily != "avc1" && !state.forceH264) {
             state.forceH264 = true
             state.invalidateShadow()
             state.shadowMasterVariants = emptyList()
@@ -2008,12 +2037,47 @@ object TvShadowAdblock {
             state.onCodecMismatchForceH264 = onCodecMismatchForceH264
             state.closeJob?.cancel()
             state.closeJob = null
-            // Seed primaryVariantMeta from highest-bandwidth variant so shadow warms with matching codec right away
-            variants.maxByOrNull { it.bandwidth }?.let { top ->
-                if (state.primaryVariantMeta == null) {
-                    state.primaryVariantMeta = top
-                    if (top.height > 0) state.targetHeight = top.height
+
+            val topVariant = variants.maxByOrNull { it.bandwidth }
+            val topFamily = topVariant?.videoCodecFamily.orEmpty()
+            val hasPrimaryAvc = variants.any { it.videoCodecFamily == "avc1" }
+
+            // If primary offers HEVC/AV1 alongside H.264, check if the pre-warmed shadow already knows its codecs
+            // (wait briefly if pre-warm is already in flight) so we align immediately on the 1st open without
+            // falling back to Classic Swap or reloading mid-preroll.
+            if (topFamily.isNotEmpty() && topFamily != "avc1" && hasPrimaryAvc && !state.forceH264) {
+                if (state.shadowMasterVariants.isEmpty() && state.warmJob?.isActive == true) {
+                    runBlocking {
+                        withTimeoutOrNull(1_200L) {
+                            state.warmJob?.join()
+                        }
+                    }
                 }
+                val shadowVariants = state.shadowMasterVariants
+                if (shadowVariants.isNotEmpty() && shadowVariants.none { it.videoCodecFamily == topFamily }) {
+                    state.forceH264 = true
+                    val avcTop = variants.filter { it.videoCodecFamily == "avc1" }.maxByOrNull { it.bandwidth }
+                    if (avcTop != null) {
+                        state.primaryVariantMeta = avcTop
+                        if (avcTop.height > 0) state.targetHeight = avcTop.height
+                    }
+                    runCatching {
+                        Log.i(
+                            TAG,
+                            "Shadow lacks codec=$topFamily on $login -> aligning primary master to H.264 (avc1) on 1st open",
+                        )
+                    }
+                    val avcFiltered = filterMasterToCodecFamily(filtered, "avc1")
+                    if (!state.isShadowFresh()) {
+                        warmShadowAsync(appCtx, state, force = true)
+                    }
+                    return avcFiltered
+                }
+            }
+
+            if (topVariant != null && state.primaryVariantMeta == null) {
+                state.primaryVariantMeta = topVariant
+                if (topVariant.height > 0) state.targetHeight = topVariant.height
             }
             warmShadowAsync(appCtx, state)
             return filtered
