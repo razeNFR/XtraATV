@@ -3482,7 +3482,12 @@ class ExoPlayerService : BasePlaybackService() {
             backLiveFrom = 0L
             backLiveProgress = 0f
             if (shadowAdActive && !experimentalVodActive) {
-                return AdblockInfo(getString(R.string.tv_adblock_ad), null, null)
+                val rollTitle = when (com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.activeRollType(channelLogin)) {
+                    "preroll" -> R.string.tv_adblock_ad_preroll
+                    "midroll" -> R.string.tv_adblock_ad_midroll
+                    else -> R.string.tv_adblock_ad
+                }
+                return AdblockInfo(getString(rollTitle), null, null)
             }
             if (experimentalNoticeTitleRes != 0) {
                 if (!streamPictureShown && player?.playbackState != Player.STATE_READY) {

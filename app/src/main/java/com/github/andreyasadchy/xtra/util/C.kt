@@ -442,6 +442,8 @@ object C {
     const val MOBILE_HUD_SHOW_VIEWERS = "mobile_hud_show_viewers"
     /** Mobile: show floating adblock badge during ad breaks in the player (default false). */
     const val MOBILE_SHOW_ADBLOCK_BADGE = "mobile_show_adblock_badge"
+    /** TV: show floating adblock badge during ad breaks in the player & multi-stream (default true). */
+    const val TV_SHOW_ADBLOCK_BADGE = "tv_show_adblock_badge"
     const val TV_EXPERIMENTAL_ADBLOCK = "tv_experimental_adblock"
     /** Custom proxies: "0" for the whole stream, "1" only while an ad plays. */
     const val PLAYER_CUSTOM_PROXY_MODE = "custom_proxy_mode"

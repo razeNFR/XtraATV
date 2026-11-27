@@ -64,6 +64,14 @@
 
         <SwitchPreferenceCompat
             android:defaultValue="false"
+            android:icon="@drawable/tv_ic_shield"
+            android:key="mobile_show_adblock_badge"
+            android:summary="@string/mobile_show_adblock_badge_summary"
+            android:title="@string/mobile_show_adblock_badge_title"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
             android:icon="@drawable/tv_ic_proxy"
             android:key="player_use_custom_proxy"
             android:title="@string/use_custom_proxies"
@@ -113,14 +121,6 @@
             android:key="mobile_live_dvr"
             android:summary="@string/mobile_live_dvr_summary"
             android:title="@string/mobile_live_dvr_title"
-            app:singleLineTitle="false" />
-
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:icon="@drawable/tv_ic_shield"
-            android:key="mobile_show_adblock_badge"
-            android:summary="@string/mobile_show_adblock_badge_summary"
-            android:title="@string/mobile_show_adblock_badge_title"
             app:singleLineTitle="false" />
 
         <SwitchPreferenceCompat
@@ -270,6 +270,13 @@
             android:summary="%s"
             android:title="@string/network_library"
             app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:icon="@drawable/tv_ic_block"
+            android:key="player_hide_ads"
+            android:title="@string/hide_during_ads"
             app:singleLineTitle="false" />
 
         <Preference

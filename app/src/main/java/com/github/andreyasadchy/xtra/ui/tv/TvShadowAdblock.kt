@@ -1187,6 +1187,7 @@ object TvShadowAdblock {
         @Volatile var consecutiveWarmFailures: Int = 0
         @Volatile var backoffUntilMs: Long = 0L
         @Volatile var lastQualityAlignMs: Long = 0L
+        @Volatile var activeRollType: String? = null
 
         var warmJob: Job? = null
         var refreshJob: Job? = null
@@ -1208,6 +1209,7 @@ object TvShadowAdblock {
             warmJob = null
             refreshJob = null
             closeJob = null
+            activeRollType = null
             invalidateShadow()
             shadowMasterVariants = emptyList()
             shadowMasterFetchedAtMs = 0L
@@ -1221,6 +1223,12 @@ object TvShadowAdblock {
     private val variantToHeight = ConcurrentHashMap<String, Int>()
     @Volatile
     private var activeDisplayedChannel: String? = null
+
+    /** Returns `"preroll"` or `"midroll"` while Swap+ is actively covering an ad break on [channelLogin]. */
+    fun activeRollType(channelLogin: String?): String? {
+        val norm = channelLogin?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
+        return channels[norm]?.activeRollType
+    }
 
     /** Step 1 + Step 2 on TV channel zap: schedule old channel close (2 min), reset & pre-warm new channel. */
     fun onChannelNavigated(context: Context, channelLogin: String?, multiStreamTile: Boolean = false) {
@@ -1693,6 +1701,7 @@ object TvShadowAdblock {
                     state.window.reset()
                 }
             }
+            state.activeRollType = null
             onAdHandled?.invoke(false)
             return text
         }
@@ -1755,6 +1764,21 @@ object TvShadowAdblock {
             result.sourceUsed == "shadow-fallback" ||
             result.sourceUsed == "hold" ||
             (hasAd && result.sourceUsed != "passthrough")
+        if (adBadgeActive) {
+            if (state.activeRollType == null || hasAd) {
+                val rollTag = Regex("""X-TV-TWITCH-AD-ROLL-TYPE="?([A-Za-z]+)""", RegexOption.IGNORE_CASE)
+                    .find(text)?.groupValues?.get(1)
+                state.activeRollType = when {
+                    rollTag?.contains("pre", ignoreCase = true) == true -> "preroll"
+                    rollTag?.contains("mid", ignoreCase = true) == true -> "midroll"
+                    state.activeRollType != null -> state.activeRollType
+                    isInitialPlaylist -> "preroll"
+                    else -> "midroll"
+                }
+            }
+        } else {
+            state.activeRollType = null
+        }
         onAdHandled?.invoke(adBadgeActive)
         if (hasAd) {
             runCatching {

@@ -7117,9 +7117,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return tvTopRightStack ?: LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.END
+            val density = resources.displayMetrics.density
             binding.playerLayout.addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
-                topMargin = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
-                marginEnd = resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal)
+                topMargin = if (isTv) resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical) else (10 * density).toInt()
+                marginEnd = if (isTv) resources.getDimensionPixelSize(R.dimen.tv_overscan_horizontal) else (10 * density).toInt()
             })
             tvTopRightStack = this
         }
@@ -7674,7 +7675,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
      * "Mid-roll ad 2/3 · 12 s", the source of the stream without the ad under it, smaller, and the bar of the ad.
      */
     private fun updateAdblockBadge() {
-        if (!isTv && !requireContext().prefs().getBoolean(C.MOBILE_SHOW_ADBLOCK_BADGE, false)) {
+        val prefs = requireContext().prefs()
+        val badgeEnabled = if (isTv) {
+            prefs.getBoolean(C.TV_SHOW_ADBLOCK_BADGE, true)
+        } else {
+            prefs.getBoolean(C.MOBILE_SHOW_ADBLOCK_BADGE, false)
+        }
+        val mobileControlsVisible = !isTv && _binding?.let { it.playerControls.root.isVisible && !controllerHiding } == true
+        if (!badgeEnabled || mobileControlsVisible) {
             tvAdblockView?.let {
                 it.removeCallbacks(adblockBadgeRefresh)
                 it.visibility = View.GONE
@@ -7685,18 +7693,42 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val badge = tvAdblockView ?: if (info == null) return else AdblockBadge(requireContext()).apply {
             setBackgroundResource(R.drawable.tv_chat_overlay_background)
             setTextColor(android.graphics.Color.WHITE)
-            textSize = 13f
+            textSize = if (isTv) 13f else 11f
             val density = resources.displayMetrics.density
-            // room under the text for the bar
-            setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
+            if (isTv) {
+                // room under the text for the bar
+                setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
+            } else {
+                setPadding((8 * density).toInt(), (4 * density).toInt(), (8 * density).toInt(), (4 * density).toInt())
+            }
             getTopRightStack().addView(this, 0, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = (8 * density).toInt()
+                bottomMargin = ((if (isTv) 8 else 4) * density).toInt()
             })
             tvAdblockView = this
         }
         badge.removeCallbacks(adblockBadgeRefresh)
         if (info != null) {
             val density = resources.displayMetrics.density
+            if (!isTv) {
+                val padH = (8 * density).toInt()
+                val padV = (4 * density).toInt()
+                if (badge.paddingLeft != padH || badge.paddingBottom != padV) {
+                    badge.setPadding(padH, padV, padH, padV)
+                }
+                val accent = com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.color(requireContext())
+                    ?: com.github.andreyasadchy.xtra.ui.tv.TvAccent.color
+                val text = android.text.SpannableStringBuilder()
+                com.github.andreyasadchy.xtra.util.chat.TvChatNotices.appendIcon(requireContext(), text, R.drawable.tv_ic_shield, accent, badge.textSize * 1.05f)
+                val titleStart = text.length
+                text.append(getString(R.string.tv_adblock_ad))
+                text.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), titleStart, text.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                if (badge.text?.toString() != text.toString()) {
+                    badge.text = text
+                }
+                (badge as? AdblockBadge)?.setProgress(null)
+                badge.visibility = View.VISIBLE
+                return
+            }
             val padBottom = ((if (info.progress != null) 10 else 6) * density).toInt()
             if (badge.paddingBottom != padBottom) {
                 badge.setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), padBottom)
@@ -8253,6 +8285,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             binding.playerControls.root.removeCallbacks(controllerHideAction)
             binding.playerControls.root.alpha = 1f
             binding.playerControls.root.visibility = View.VISIBLE
+            if (!isTv) updateAdblockBadge()
             updateProgress()
             if (controllerAutoHide && controllerHideOnTouch && !binding.playerControls.progressBar.isPressed) {
                 binding.playerControls.root.postDelayed(controllerHideAction, controllerHideDelay)
@@ -8265,6 +8298,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (show) {
                     binding.playerControls.root.alpha = 0f
                     binding.playerControls.root.visibility = View.VISIBLE
+                    if (!isTv) updateAdblockBadge()
                     updateProgress()
                     controllerAnimation = binding.playerControls.root.animate().apply {
                         alpha(1f)
@@ -8339,6 +8373,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                     binding.dragView.requestFocus()
                                 }
                                 binding.playerControls.root.visibility = View.GONE
+                                if (!isTv) updateAdblockBadge()
                             }
                         }
                     }
@@ -8352,6 +8387,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 controllerHiding = false
                 binding.playerControls.root.alpha = 0f
                 binding.playerControls.root.visibility = View.GONE
+                if (!isTv) updateAdblockBadge()
             }
         }
     }
