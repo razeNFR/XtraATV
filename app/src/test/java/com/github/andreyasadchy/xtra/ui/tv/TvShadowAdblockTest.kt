@@ -801,4 +801,298 @@ class TvShadowAdblockTest {
         assertFalse(res.outputPlaylist.contains("#EXT-X-TWITCH-PREFETCH:"))
         assertFalse(res.outputPlaylist.contains("stitched-ad-"))
     }
+
+    @Test
+    fun midrollSpliceNeverRollsBackWhenShadowContainsEarlierOrShiftedSegments() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val mapPrimary = """#EXT-X-MAP:URI="https://video-edge.cdg02.abs.hls.ttvnw.net/v1/primary_init.mp4""""
+        val mapShadow = """#EXT-X-MAP:URI="https://video-edge.cdg02.abs.hls.ttvnw.net/v1/shadow_init.mp4""""
+
+        // Primary plays cleanly 12:00:00 .. 12:00:10 (last segment 12:00:08..12:00:10 -> lastServedEndMs = 12:00:10.000)
+        val cleanPrimary = buildString {
+            appendLine("#EXTM3U")
+            appendLine("#EXT-X-VERSION:7")
+            appendLine("#EXT-X-TARGETDURATION:6")
+            appendLine("#EXT-X-MEDIA-SEQUENCE:100")
+            appendLine(mapPrimary)
+            for (i in 0..4) {
+                val sec = (i * 2).toString().padStart(2, '0')
+                appendLine("#EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:$sec.000Z")
+                appendLine("#EXTINF:2.000,live")
+                appendLine("https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_${100 + i}.m4s")
+            }
+        }
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, cleanPrimary),
+            primaryRawText = cleanPrimary,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+
+        // Midroll starts at 12:00:10. Shadow has older segments shifted by -1.1s (12:00:03.9, 12:00:05.9, 12:00:07.9)
+        // AND aligned segments starting at 12:00:09.900 (delta = -100ms, within 45% and |Δ| < 250ms), 12:00:11.900, 12:00:13.900, 12:00:15.900
+        val midrollAd = buildString {
+            appendLine("#EXTM3U")
+            appendLine("#EXT-X-VERSION:7")
+            appendLine("#EXT-X-TARGETDURATION:6")
+            appendLine("#EXT-X-MEDIA-SEQUENCE:105")
+            appendLine(mapPrimary)
+            appendLine("""#EXT-X-DATERANGE:ID="stitched-ad-1",CLASS="twitch-stitched-ad",START-DATE="2026-11-26T12:00:10.000Z",DURATION=30.0""")
+            for (i in 0..3) {
+                val sec = (10 + i * 2).toString().padStart(2, '0')
+                appendLine("#EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:$sec.000Z")
+                appendLine("#EXTINF:2.000,Amazon|ad_1")
+                appendLine("https://d2v02pertd.cloudfront.net/ad/seg_${105 + i}.m4s")
+            }
+        }
+        val shadowRaw = buildString {
+            appendLine("#EXTM3U")
+            appendLine("#EXT-X-VERSION:7")
+            appendLine("#EXT-X-TARGETDURATION:6")
+            appendLine("#EXT-X-MEDIA-SEQUENCE:500")
+            appendLine(mapShadow)
+            val pdts = listOf("03.900", "05.900", "07.900", "09.900", "11.900", "13.900", "15.900")
+            pdts.forEachIndexed { idx, s ->
+                appendLine("#EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:$s" + "Z")
+                appendLine("#EXTINF:2.000,live")
+                appendLine("https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow_${500 + idx}.m4s")
+            }
+        }
+        val avcMeta = TvShadowAdblock.MasterVariant(
+            url = primaryVariantUrl,
+            width = 1920,
+            height = 1080,
+            bandwidth = 6_000_000L,
+            codecs = "avc1.64002A,mp4a.40.2",
+            frameRate = 60.0,
+        )
+        val shadowMeta = avcMeta.copy(url = shadowVariantUrl)
+
+        val res = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, midrollAd),
+            primaryRawText = midrollAd,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadowRaw),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            primaryVariantMeta = avcMeta,
+            shadowVariantMeta = shadowMeta,
+        )
+
+        assertEquals("shadow", res.sourceUsed)
+        // Must NEVER include overlapping segments 500, 501, 502 (03.9s, 05.9s, 07.9s)
+        assertFalse(res.outputPlaylist.contains("shadow_500.m4s"))
+        assertFalse(res.outputPlaylist.contains("shadow_501.m4s"))
+        assertFalse(res.outputPlaylist.contains("shadow_502.m4s"))
+        // Must start at shadow_503 (09.900s, delta = -100ms) and cap at 3 segments (503, 504, 505; NOT 506)
+        assertTrue(res.outputPlaylist.contains("shadow_503.m4s"))
+        assertTrue(res.outputPlaylist.contains("shadow_504.m4s"))
+        assertTrue(res.outputPlaylist.contains("shadow_505.m4s"))
+        assertFalse("Must ingest at most 3 segments per refresh", res.outputPlaylist.contains("shadow_506.m4s"))
+        assertTrue(res.outputPlaylist.contains("#EXT-X-DISCONTINUITY\n$mapShadow"))
+        assertEquals(0L, extractDiscontinuitySequence(res.outputPlaylist))
+
+        val splice = res.spliceEvent
+        assertTrue("SpliceEvent must be recorded", splice != null)
+        assertEquals(-100L, splice!!.deltaMs)
+        assertTrue("Splice |deltaMs| must be < 250ms", kotlin.math.abs(splice.deltaMs!!) < 250L)
+        assertTrue(splice.discontinuityEmitted)
+        assertEquals("avc1", splice.primaryCodec)
+        assertEquals("avc1", splice.shadowCodec)
+        assertEquals("fmp4", splice.primaryContainer)
+        assertEquals("fmp4", splice.shadowContainer)
+    }
+
+    @Test
+    fun shadowAheadAndBehindAreHandledWithoutBulkDumpOrRollback() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val clean = buildCleanPlaylist(mediaSeq = 100L, startSec = 10, count = 5) // 10..20s -> lastServedEndMs = 20s
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, clean),
+            primaryRawText = clean,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+
+        val ad = buildFullAdPlaylist(mediaSeq = 105L, startSec = 20, count = 4)
+
+        // Case 1: Shadow is behind (latest segment starts at 18s < 20s - 900ms) -> zero segments appended, no rollback!
+        val behindShadow = buildCleanPlaylist(
+            mediaSeq = 400L,
+            startSec = 10,
+            count = 5, // 10, 12, 14, 16, 18
+            prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow",
+        )
+        val resBehind = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, ad),
+            primaryRawText = ad,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, behindShadow),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+        )
+        assertFalse("Behind shadow must never roll back into already-played window", resBehind.outputPlaylist.contains("shadow_"))
+
+        // Case 2: Shadow is way ahead with 16 segments starting at 26s -> strictly capped at 3 segments (no bulk 14 dump!)
+        val aheadShadow = buildCleanPlaylist(
+            mediaSeq = 410L,
+            startSec = 26,
+            count = 16,
+            prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow",
+        )
+        val resAhead = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, ad),
+            primaryRawText = ad,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, aheadShadow),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+        )
+        val shadowSegCount = resAhead.outputPlaylist.lines().count { it.contains("shadow_") }
+        assertEquals("Ahead shadow must append at most 3 segments per refresh", 3, shadowSegCount)
+        assertTrue(resAhead.outputPlaylist.contains("shadow_410.ts"))
+        assertTrue(resAhead.outputPlaylist.contains("shadow_412.ts"))
+        assertFalse(resAhead.outputPlaylist.contains("shadow_413.ts"))
+    }
+
+    @Test
+    fun hevcChannelVariantSelectionRequiresMatchingCodecAndBlocksMixedCodecSplice() {
+        val shadowMasterAvcOnly = """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,FRAME-RATE=60.000,CODECS="avc1.64002A,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/shadow_1080p60_avc.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,FRAME-RATE=60.000,CODECS="avc1.4D401F,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/shadow_720p60_avc.m3u8
+        """.trimIndent()
+        val shadowMasterWithHevc = shadowMasterAvcOnly + "\n" + """
+            #EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=2560x1440,FRAME-RATE=60.000,CODECS="hev1.1.6.L150.B0,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/shadow_1440p60_hevc.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=6500000,RESOLUTION=2560x1440,FRAME-RATE=30.000,CODECS="hev1.1.6.L150.B0,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/shadow_1440p30_hevc.m3u8
+        """.trimIndent()
+
+        val primaryHevc = TvShadowAdblock.MasterVariant(
+            url = primaryVariantUrl,
+            width = 2560,
+            height = 1440,
+            bandwidth = 8_500_000L,
+            codecs = "hev1.1.6.L150.B0,mp4a.40.2",
+            frameRate = 60.0,
+        )
+        val (_, avcOnlyVariants) = TvShadowAdblock.filterMasterAndExtractVariants("https://usher.ttvnw.net/master.m3u8", shadowMasterAvcOnly)
+        val (_, hevcVariants) = TvShadowAdblock.filterMasterAndExtractVariants("https://usher.ttvnw.net/master.m3u8", shadowMasterWithHevc)
+
+        // When shadow has only avc1, pickShadowVariant must return null for HEVC primary
+        assertEquals(null, TvShadowAdblock.pickShadowVariant(avcOnlyVariants, primaryHevc))
+
+        // When shadow has HEVC 1440p30 and 1440p60, pickShadowVariant must select HEVC 1440p60
+        val picked = TvShadowAdblock.pickShadowVariant(hevcVariants, primaryHevc)
+        assertTrue(picked != null)
+        assertEquals("hevc", picked!!.videoCodecFamily)
+        assertEquals(1440, picked.height)
+        assertEquals(60.0, picked.frameRate, 0.1)
+
+        // Decision engine must also refuse to splice an avc1 shadow into an hevc primary
+        val window = TvShadowAdblock.ContinuityWindow()
+        val clean = buildCleanPlaylist(mediaSeq = 10L, startSec = 0, count = 4)
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, clean),
+            primaryRawText = clean,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+            primaryVariantMeta = primaryHevc,
+        )
+        val ad = buildFullAdPlaylist(mediaSeq = 14L, startSec = 8, count = 4)
+        val avcShadow = buildCleanPlaylist(mediaSeq = 50L, startSec = 8, count = 4, prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow")
+        val blocked = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, ad),
+            primaryRawText = ad,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, avcShadow),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            primaryVariantMeta = primaryHevc,
+            shadowVariantMeta = avcOnlyVariants.first(),
+        )
+        assertEquals("hold", blocked.sourceUsed)
+        assertFalse(blocked.outputPlaylist.contains("shadow_"))
+    }
+
+    @Test
+    fun discontinuitySequenceStaysStableAcrossRefreshesUntilDiscontinuityIsEvicted() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val clean = buildCleanPlaylist(mediaSeq = 100L, startSec = 0, count = 4)
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, clean),
+            primaryRawText = clean,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+
+        val ad = buildFullAdPlaylist(mediaSeq = 104L, startSec = 8, count = 4)
+        val shadow1 = buildCleanPlaylist(mediaSeq = 500L, startSec = 8, count = 3, prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow")
+        val r1 = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, ad),
+            primaryRawText = ad,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadow1),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            continuityFloor = TvShadowAdblock.ContinuityFloor(minMediaSequence = 100L, minEndMediaSequence = 104L, minDiscontinuitySequence = 0L, minDiscontinuitySequenceForReset = 0L),
+        )
+        assertEquals(0L, extractDiscontinuitySequence(r1.outputPlaylist))
+        assertTrue(r1.outputPlaylist.contains("#EXT-X-DISCONTINUITY-SEQUENCE:0"))
+
+        // Subsequent refresh while #EXT-X-DISCONTINUITY is still inside the window:
+        // prev.discontinuitySequence is STILL 0 (first segment's sequence), even though tail has relativeDiscontinuitySequence=1!
+        val shadow2 = buildCleanPlaylist(mediaSeq = 503L, startSec = 14, count = 3, prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow")
+        val r2 = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, ad),
+            primaryRawText = ad,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadow2),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            continuityFloor = TvShadowAdblock.ContinuityFloor(minMediaSequence = 100L, minEndMediaSequence = 107L, minDiscontinuitySequence = 0L, minDiscontinuitySequenceForReset = 1L),
+        )
+        assertEquals("DISCONTINUITY-SEQUENCE must NOT bump while discontinuity is still in window", 0L, extractDiscontinuitySequence(r2.outputPlaylist))
+        assertEquals(100L, extractMediaSequence(r2.outputPlaylist))
+    }
+
+    @Test
+    fun filterMasterToCodecFamilyStripsHevcWhileKeepingAvcAndAudio() {
+        val master = """
+            #EXTM3U
+            #EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="chunked",NAME="1440p60"
+            #EXT-X-STREAM-INF:BANDWIDTH=8500000,RESOLUTION=2560x1440,FRAME-RATE=60.000,CODECS="hev1.1.6.L150.B0,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/1440p60_hevc.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,FRAME-RATE=60.000,CODECS="avc1.64002A,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/1080p60_avc.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=160000,CODECS="mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/audio_only.m3u8
+        """.trimIndent()
+
+        val avcOnly = TvShadowAdblock.filterMasterToCodecFamily(master, "avc1")
+        assertFalse(avcOnly.contains("1440p60_hevc.m3u8"))
+        assertTrue(avcOnly.contains("1080p60_avc.m3u8"))
+        assertTrue(avcOnly.contains("audio_only.m3u8"))
+    }
 }

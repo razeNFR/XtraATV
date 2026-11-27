@@ -158,6 +158,9 @@ class ExoPlayerService : BasePlaybackService() {
     private var updateQualities = false
     private var ignorePlaylistUpdate = false
     private var fallbackH264ForStream = false
+    @Volatile
+    private var swapPlusForceH264ForStream = false
+    private var swapPlusEmbedFallbackToSite = false
     private var created = false
     private var intentionalStopOrPause = false
     private var streamEnded = false
@@ -929,6 +932,19 @@ class ExoPlayerService : BasePlaybackService() {
                                                 player?.seekToDefaultPosition()
                                                 player?.prepare()
                                                 player?.play()
+                                            }
+                                        }
+                                    }
+                                    responseCode == 403 && !useCustomProxy && !useStreamProxy && !swapPlusEmbedFallbackToSite &&
+                                        TvExperimentalAdblock.isSwapPlusEnabled(this@ExoPlayerService) -> {
+                                        // Swap+ primary playerType="embed" rejected with 403 -> fall back cleanly to "site"
+                                        swapPlusEmbedFallbackToSite = true
+                                        android.util.Log.i("TvShadowAdblock", "Primary playerType=embed returned HTTP 403 on $login -> falling back to site")
+                                        liveRecoveryJob?.cancel()
+                                        liveRecoveryJob = lifecycleScope.launch {
+                                            if (generation == streamGeneration && !intentionalStopOrPause && !streamEnded) {
+                                                liveRecoveryJob = null
+                                                restartPlayer(fromAutoRecovery = true)
                                             }
                                         }
                                     }
@@ -1739,11 +1755,16 @@ class ExoPlayerService : BasePlaybackService() {
                     playlistUrl = proxyUrl
                 } else {
                     useCustomProxy = false
-                    val codecOverride = if (fallbackH264ForStream) "h264" else null
+                    val codecOverride = when {
+                        fallbackH264ForStream -> "h264"
+                        swapPlusForceH264ForStream -> "avc1"
+                        else -> null
+                    }
+                    val playerTypeOverride = if (swapPlusEmbedFallbackToSite) "site" else null
                     val url = if (streamProxy?.proxyPlaybackAccessToken == true) {
                         var url: String?
                         while (true) {
-                            val result = getStreamPlaylistUrl(channelLogin, streamProxy, codecOverride)
+                            val result = getStreamPlaylistUrl(channelLogin, streamProxy, codecOverride, playerTypeOverride)
                             if (result != null) {
                                 url = result
                                 break
@@ -1756,11 +1777,11 @@ class ExoPlayerService : BasePlaybackService() {
                                 streamProxy = streamProxyList?.getOrNull(currentStreamProxy)
                                 if (streamProxy == null) {
                                     useStreamProxy = false
-                                    url = getStreamPlaylistUrl(channelLogin, supportedCodecsOverride = codecOverride)
+                                    url = getStreamPlaylistUrl(channelLogin, supportedCodecsOverride = codecOverride, playerTypeOverride = playerTypeOverride)
                                     break
                                 } else {
                                     if (!streamProxy.proxyPlaybackAccessToken) {
-                                        url = getStreamPlaylistUrl(channelLogin, supportedCodecsOverride = codecOverride)
+                                        url = getStreamPlaylistUrl(channelLogin, supportedCodecsOverride = codecOverride, playerTypeOverride = playerTypeOverride)
                                         break
                                     }
                                 }
@@ -1768,9 +1789,9 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                         url
                     } else {
-                        // asked as soon as OK was pressed (same request, no proxy): not asked a second time unless falling back to H.264
-                        (if (!restart && !fallbackH264ForStream) TvStreamPrefetch.take(channelLogin) else null)
-                            ?: getStreamPlaylistUrl(channelLogin, supportedCodecsOverride = codecOverride)
+                        // asked as soon as OK was pressed (same request, no proxy): not asked a second time unless falling back to H.264 / site
+                        (if (!restart && !fallbackH264ForStream && !swapPlusForceH264ForStream && !swapPlusEmbedFallbackToSite) TvStreamPrefetch.take(channelLogin) else null)
+                            ?: getStreamPlaylistUrl(channelLogin, supportedCodecsOverride = codecOverride, playerTypeOverride = playerTypeOverride)
                     }
                     fetchedUrl = url
                     if (url != null || !restart) {
@@ -1814,6 +1835,7 @@ class ExoPlayerService : BasePlaybackService() {
                             this@ExoPlayerService,
                             channelLogin,
                             multiStreamTile = false,
+                            forceH264 = swapPlusForceH264ForStream || fallbackH264ForStream,
                         )
                     }
                     player.setMediaSource(
@@ -1967,6 +1989,16 @@ class ExoPlayerService : BasePlaybackService() {
                                         channelLoginHint = channelLogin,
                                         onAdHandled = { active -> shadowAdActive = active },
                                         shouldBypass = { videoSwapActive || proxyMediaPlaylist },
+                                        onCodecMismatchForceH264 = {
+                                            if (!swapPlusForceH264ForStream && !fallbackH264ForStream && !useCustomProxy && !useStreamProxy) {
+                                                swapPlusForceH264ForStream = true
+                                                lifecycleScope.launch {
+                                                    if (type == STREAM && !intentionalStopOrPause && !streamEnded) {
+                                                        restartPlayer(fromAutoRecovery = true)
+                                                    }
+                                                }
+                                            }
+                                        },
                                     )
                                 } else {
                                     baseParserFactory
@@ -2013,9 +2045,10 @@ class ExoPlayerService : BasePlaybackService() {
         channelLogin: String,
         streamProxy: StreamProxy? = null,
         supportedCodecsOverride: String? = null,
+        playerTypeOverride: String? = null,
     ): String? {
         return try {
-            loadStreamPlaylistUrl(this, xtraModule, channelLogin, streamProxy, supportedCodecsOverride)
+            loadStreamPlaylistUrl(this, xtraModule, channelLogin, streamProxy, supportedCodecsOverride, playerTypeOverride)
         } catch (e: Exception) {
             if (e.message == C.FAILED_INTEGRITY_CHECK) {
                 waitingIntegrity = true
@@ -2224,7 +2257,7 @@ class ExoPlayerService : BasePlaybackService() {
         ).apply {
             setPlaylistParserFactory(
                 com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.PlaylistParserFactory(
-                    CustomHlsPlaylistParserFactory(),
+                    CustomHlsPlaylistParserFactory(preserveUnmutedSegments = true),
                     audioSession,
                     audioProber,
                 )
@@ -3907,6 +3940,8 @@ class ExoPlayerService : BasePlaybackService() {
         updateQualities = false
         ignorePlaylistUpdate = false
         fallbackH264ForStream = false
+        swapPlusForceH264ForStream = false
+        swapPlusEmbedFallbackToSite = false
         qualities = null
         quality = null
         previousQuality = null
@@ -5505,6 +5540,8 @@ class ExoPlayerService : BasePlaybackService() {
         proxyMediaPlaylist = false
         hidden = false
         fallbackH264ForStream = false
+        swapPlusForceH264ForStream = false
+        swapPlusEmbedFallbackToSite = false
         shadowAdActive = false
         com.github.andreyasadchy.xtra.ui.tv.TvVodAudioRecovery.clearActiveState()
         com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.stopAll()
@@ -5515,13 +5552,15 @@ class ExoPlayerService : BasePlaybackService() {
         releaseNow()
     }
 
-    class CustomHlsPlaylistParserFactory: HlsPlaylistParserFactory {
+    class CustomHlsPlaylistParserFactory(
+        private val preserveUnmutedSegments: Boolean = false,
+    ): HlsPlaylistParserFactory {
         override fun createPlaylistParser(): ParsingLoadable.Parser<HlsPlaylist> {
-            return HlsPlaylistParser()
+            return HlsPlaylistParser(preserveUnmutedSegments)
         }
 
         override fun createPlaylistParser(multivariantPlaylist: HlsMultivariantPlaylist, previousMediaPlaylist: HlsMediaPlaylist?): ParsingLoadable.Parser<HlsPlaylist> {
-            return HlsPlaylistParser(multivariantPlaylist, previousMediaPlaylist)
+            return HlsPlaylistParser(multivariantPlaylist, previousMediaPlaylist, preserveUnmutedSegments)
         }
     }
 
@@ -5551,27 +5590,59 @@ class ExoPlayerService : BasePlaybackService() {
             channelLogin: String,
             streamProxy: StreamProxy? = null,
             supportedCodecsOverride: String? = null,
+            playerTypeOverride: String? = null,
         ): String {
             val prefs = context.prefs()
-            return xtraModule.playerRepository.loadStreamPlaylistUrl(
+            val networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP)
+            val platform = prefs.getString(C.TOKEN_PLATFORM, "web")
+            val gqlHeaders = getStreamTokenHeaders(context, platform)
+            val supportedCodecs = supportedCodecsOverride ?: prefs.getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264")
+            val proxyTimeout = prefs.getString(C.PROXY_TIMEOUT, "3000")?.toIntOrNull() ?: 3000
+            val enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false) && streamProxy == null
+            val configuredPlayerType = prefs.getString(C.TOKEN_PLAYER_TYPE, "site")
+            val swapPlusActive = TvExperimentalAdblock.isSwapPlusEnabled(context) && streamProxy == null
+            val resolvedPlayerType = when {
+                !playerTypeOverride.isNullOrBlank() -> playerTypeOverride
+                swapPlusActive && (configuredPlayerType.isNullOrBlank() || configuredPlayerType == "site") -> "embed"
+                // Classic Swap untouched: like VAFT, "popout" gets fewer ads than "site"
+                !swapPlusActive && TvExperimentalAdblock.isSwapAdblockEnabled(context) && (configuredPlayerType.isNullOrBlank() || configuredPlayerType == "site") -> "popout"
+                else -> configuredPlayerType
+            }
+
+            suspend fun fetchWith(pType: String?): String = xtraModule.playerRepository.loadStreamPlaylistUrl(
                 context = context,
-                networkLibrary = prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                gqlHeaders = getStreamTokenHeaders(context, prefs.getString(C.TOKEN_PLATFORM, "web")),
+                networkLibrary = networkLibrary,
+                gqlHeaders = gqlHeaders,
                 channelLogin = channelLogin,
-                platform = prefs.getString(C.TOKEN_PLATFORM, "web"),
-                playerType = prefs.getString(C.TOKEN_PLAYER_TYPE, "site").let {
-                    // like VAFT, the "popout" player type gets fewer ads than the default "site" one
-                    if (TvExperimentalAdblock.isSwapAdblockEnabled(context) && (it.isNullOrBlank() || it == "site")) "popout" else it
-                },
-                supportedCodecs = supportedCodecsOverride ?: prefs.getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
+                platform = platform,
+                playerType = pType,
+                supportedCodecs = supportedCodecs,
                 proxyPlaybackAccessToken = streamProxy != null,
                 proxyHost = streamProxy?.host,
                 proxyPort = streamProxy?.port,
                 proxyUser = streamProxy?.username,
                 proxyPassword = streamProxy?.password,
-                proxyTimeout = prefs.getString(C.PROXY_TIMEOUT, "3000")?.toIntOrNull() ?: 3000,
-                enableIntegrity = prefs.getBoolean(C.ENABLE_INTEGRITY, false) && streamProxy == null
+                proxyTimeout = proxyTimeout,
+                enableIntegrity = enableIntegrity,
             )
+
+            if (swapPlusActive && resolvedPlayerType == "embed") {
+                val url = try {
+                    fetchWith("embed")
+                } catch (e: Exception) {
+                    if (e.message == C.FAILED_INTEGRITY_CHECK) throw e
+                    android.util.Log.i("TvShadowAdblock", "Primary playerType=embed failed on $channelLogin (${e.message}) -> falling back to site")
+                    return fetchWith("site")
+                }
+                val tokenParam = runCatching { url.toUri().getQueryParameter("token") }.getOrNull()
+                if (tokenParam?.contains("\"forbidden\":true") == true) {
+                    android.util.Log.i("TvShadowAdblock", "Primary playerType=embed returned forbidden token on $channelLogin -> falling back to site")
+                    return fetchWith("site")
+                }
+                return url
+            }
+
+            return fetchWith(resolvedPlayerType)
         }
 
         /** Player types whose playlists usually come without ads (same idea as the VAFT userscript). */

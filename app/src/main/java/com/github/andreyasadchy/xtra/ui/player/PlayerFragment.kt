@@ -215,9 +215,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val fromRecovery = recState?.mutedRanges.orEmpty()
             val gqlMuted = viewModel.mutedSegments.value
             if (recovered.isNotEmpty()) {
-                // Exclude GraphQL ranges that were successfully recovered (so they show green, not red)
+                // Exclude GraphQL ranges that were successfully recovered (allow 12s boundary margin for 10s HLS rounding)
                 val unrecoveredGql = gqlMuted.filter { (gs, ge) ->
-                    recovered.none { (rs, re) -> gs >= rs - 1500L && ge <= re + 1500L }
+                    recovered.none { (rs, re) -> gs >= rs - 12_000L && ge <= re + 12_000L }
                 }
                 combineMutedSegments(unrecoveredGql, fromRecovery)
             } else {

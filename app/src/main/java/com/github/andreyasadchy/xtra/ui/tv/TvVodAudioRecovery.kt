@@ -41,11 +41,12 @@ import kotlin.math.roundToLong
 object TvVodAudioRecovery {
 
     private const val TAG = "TvVodAudioRecovery"
-    private const val PROBE_TIMEOUT_MS = 2_000L
+    private const val PROBE_TIMEOUT_MS = 4_000L
     private const val MIN_VALID_CONTENT_LENGTH = 512L
     private const val MERGE_GAP_MS = 500L
 
     private val SEGMENT_REGEX = Regex("""^(.*\/)?(\d+)-(?:un)?muted\.(mp4|m4s|ts)(\?.*)?$""", RegexOption.IGNORE_CASE)
+    private val CONTENT_RANGE_TOTAL_REGEX = Regex("""/(\d+)$""")
 
     enum class SegmentMode {
         UNMUTED,
@@ -78,42 +79,27 @@ object TvVodAudioRecovery {
 
     internal data class ProbeMeta(
         val ok: Boolean,
+        val httpCode: Int = 0,
         val contentLength: Long? = null,
         val etag: String? = null,
     )
 
-    internal fun minAudioDeltaBytes(durationMs: Long): Long =
-        ((durationMs / 1_000L) * 2_000L).coerceAtLeast(8_000L)
+    internal fun isUsableProbe(candidate: ProbeMeta): Boolean =
+        candidate.ok && (candidate.contentLength == null || candidate.contentLength > MIN_VALID_CONTENT_LENGTH)
 
-    internal fun isDistinctRealAudio(candidate: ProbeMeta, muted: ProbeMeta?, durationMs: Long): Boolean {
-        if (!candidate.ok) return false
-        if (candidate.contentLength != null && candidate.contentLength <= MIN_VALID_CONTENT_LENGTH) return false
-        if (muted != null && muted.ok) {
-            if (!candidate.etag.isNullOrBlank() && !muted.etag.isNullOrBlank() && candidate.etag == muted.etag) {
-                return false
-            }
-            if (candidate.contentLength != null && muted.contentLength != null) {
-                if (candidate.contentLength < muted.contentLength + minAudioDeltaBytes(durationMs)) {
-                    return false
-                }
-            }
-        }
-        return true
-    }
-
+    /** Prioritizes `N-unmuted.<ext>` over plain `N.<ext>`; a 403/404 on plain never causes abandonment. */
     internal fun evaluateProbeCandidates(
-        plain: ProbeMeta,
         unmuted: ProbeMeta,
-        muted: ProbeMeta?,
-        durationMs: Long,
+        plain: ProbeMeta,
     ): SegmentMode = when {
-        isDistinctRealAudio(plain, muted, durationMs) -> SegmentMode.PLAIN
-        isDistinctRealAudio(unmuted, muted, durationMs) -> SegmentMode.UNMUTED
+        isUsableProbe(unmuted) -> SegmentMode.UNMUTED
+        isUsableProbe(plain) -> SegmentMode.PLAIN
         else -> SegmentMode.MUTED
     }
 
     internal data class ParsedMutedSegment(
         val lineIndex: Int,
+        val baseDir: String,
         val prefix: String,
         val number: String,
         val ext: String,
@@ -121,7 +107,7 @@ object TvVodAudioRecovery {
         val startMs: Long,
         val endMs: Long,
     ) {
-        val segmentKey: String get() = "$prefix$number.$ext"
+        val segmentKey: String get() = "$baseDir/$prefix$number.$ext"
 
         fun urlFor(mode: SegmentMode): String = when (mode) {
             SegmentMode.UNMUTED -> "$prefix$number-unmuted.$ext$query"
@@ -201,7 +187,7 @@ object TvVodAudioRecovery {
     private val _activeState = MutableStateFlow<VodAudioState?>(null)
     val activeState: StateFlow<VodAudioState?> get() = _activeState
 
-    private val probeExecutor = Executors.newFixedThreadPool(6) { r ->
+    private val probeExecutor = Executors.newFixedThreadPool(8) { r ->
         Thread(r, "XtraVodAudioProbe").apply { isDaemon = true }
     }
 
@@ -211,8 +197,16 @@ object TvVodAudioRecovery {
     fun isLivePlaylistUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         val lower = url.lowercase()
-        return lower.contains("usher.ttvnw.net/") || lower.contains("playlist.ttvnw.net/")
+        return lower.contains("/api/channel/hls/") ||
+            lower.contains("/api/v2/channel/hls/") ||
+            lower.contains("playlist.ttvnw.net/") ||
+            lower.contains("video-weaver.") ||
+            lower.contains(".hls.ttvnw.net/")
     }
+
+    private fun isLivePlaylistText(text: String): Boolean =
+        text.contains("#EXT-X-TWITCH-LIVE-SEQUENCE", ignoreCase = true) ||
+            text.contains("#EXT-X-TWITCH-PREFETCH:", ignoreCase = true)
 
     fun createSession(context: Context, publishToUi: Boolean = true): Session {
         val appCtx = context.applicationContext
@@ -233,13 +227,18 @@ object TvVodAudioRecovery {
     }
 
     fun createOkHttpProber(baseClient: OkHttpClient): SegmentProber {
+        // Strip any debug BODY logging interceptors so probes never buffer multi-MB media payloads
         val probeClient = baseClient.newBuilder()
+            .apply {
+                interceptors().clear()
+                networkInterceptors().clear()
+            }
             .connectTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .readTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .callTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .build()
-        return SegmentProber { unmutedUrl, plainUrl, mutedUrl, durationMs ->
-            probeInParallel(probeClient, unmutedUrl, plainUrl, mutedUrl, durationMs)
+        return SegmentProber { unmutedUrl, plainUrl, _, _ ->
+            probeInParallel(probeClient, unmutedUrl, plainUrl)
         }
     }
 
@@ -247,69 +246,70 @@ object TvVodAudioRecovery {
         client: OkHttpClient,
         unmutedUrl: String,
         plainUrl: String,
-        mutedUrl: String,
-        durationMs: Long,
     ): SegmentMode {
-        val fPlain = probeExecutor.submit(Callable { probeSingleUrlMeta(client, plainUrl) })
         val fUnmuted = probeExecutor.submit(Callable { probeSingleUrlMeta(client, unmutedUrl) })
-        val fMuted = probeExecutor.submit(Callable { probeSingleUrlMeta(client, mutedUrl) })
-        val mutedMeta = runCatching { fMuted.get(PROBE_TIMEOUT_MS + 300L, TimeUnit.MILLISECONDS) }.getOrDefault(ProbeMeta(false))
-        val plainMeta = runCatching { fPlain.get(PROBE_TIMEOUT_MS + 300L, TimeUnit.MILLISECONDS) }.getOrDefault(ProbeMeta(false))
-        if (isDistinctRealAudio(plainMeta, mutedMeta, durationMs)) {
-            fUnmuted.cancel(true)
-            runCatching {
-                Log.i(TAG, "Probe -> PLAIN (plain=${plainMeta.contentLength} muted=${mutedMeta.contentLength} durMs=$durationMs)")
-            }
-            return SegmentMode.PLAIN
-        }
-        val unmutedMeta = runCatching { fUnmuted.get(PROBE_TIMEOUT_MS + 300L, TimeUnit.MILLISECONDS) }.getOrDefault(ProbeMeta(false))
-        val mode = evaluateProbeCandidates(plainMeta, unmutedMeta, mutedMeta, durationMs)
+        val fPlain = probeExecutor.submit(Callable { probeSingleUrlMeta(client, plainUrl) })
+        val unmutedMeta = runCatching { fUnmuted.get(PROBE_TIMEOUT_MS + 500L, TimeUnit.MILLISECONDS) }
+            .getOrDefault(ProbeMeta(ok = false, httpCode = -1))
+        val plainMeta = runCatching { fPlain.get(PROBE_TIMEOUT_MS + 500L, TimeUnit.MILLISECONDS) }
+            .getOrDefault(ProbeMeta(ok = false, httpCode = -1))
+        val mode = evaluateProbeCandidates(unmutedMeta, plainMeta)
         runCatching {
             Log.i(
                 TAG,
-                "Probe -> $mode (plain=${plainMeta.ok}/${plainMeta.contentLength} " +
-                    "unmuted=${unmutedMeta.ok}/${unmutedMeta.contentLength} " +
-                    "muted=${mutedMeta.ok}/${mutedMeta.contentLength} durMs=$durationMs)"
+                "Probe -> $mode | unmuted=[$unmutedUrl http=${unmutedMeta.httpCode} size=${unmutedMeta.contentLength}] " +
+                    "plain=[$plainUrl http=${plainMeta.httpCode} size=${plainMeta.contentLength}]",
             )
         }
         return mode
     }
 
     private fun probeSingleUrlMeta(client: OkHttpClient, url: String): ProbeMeta {
-        // Use HEAD first to avoid downloading any media payload; fall back to header-only GET on HTTP 405.
+        // HEAD first (zero payload); fall back to 1-byte Range GET on HTTP 405
         val headResult = runCatching {
             client.newCall(Request.Builder().url(url).head().build()).execute().use { resp ->
                 if (resp.code == 405) return@use null
-                if (!resp.isSuccessful) return@use ProbeMeta(false)
+                val len = resp.header("Content-Length")?.toLongOrNull()
+                if (!resp.isSuccessful) {
+                    return@use ProbeMeta(ok = false, httpCode = resp.code, contentLength = len)
+                }
                 ProbeMeta(
                     ok = true,
-                    contentLength = resp.header("Content-Length")?.toLongOrNull(),
+                    httpCode = resp.code,
+                    contentLength = len,
                     etag = resp.header("ETag")?.trim(),
                 )
             }
         }.getOrNull()
         if (headResult != null) return headResult
 
-        val call = client.newCall(Request.Builder().url(url).get().build())
-        return try {
-            call.execute().use { resp ->
-                if (!resp.isSuccessful) return ProbeMeta(false)
-                val meta = ProbeMeta(
+        return runCatching {
+            val req = Request.Builder()
+                .url(url)
+                .header("Range", "bytes=0-0")
+                .get()
+                .build()
+            client.newCall(req).execute().use { resp ->
+                val contentRange = resp.header("Content-Range")
+                val totalSize = contentRange?.let { CONTENT_RANGE_TOTAL_REGEX.find(it)?.groupValues?.get(1)?.toLongOrNull() }
+                    ?: resp.header("Content-Length")?.toLongOrNull()
+                if (!resp.isSuccessful) {
+                    return@use ProbeMeta(ok = false, httpCode = resp.code, contentLength = totalSize)
+                }
+                ProbeMeta(
                     ok = true,
-                    contentLength = resp.header("Content-Length")?.toLongOrNull(),
+                    httpCode = resp.code,
+                    contentLength = totalSize,
                     etag = resp.header("ETag")?.trim(),
                 )
-                call.cancel()
-                meta
             }
-        } catch (_: Exception) {
-            ProbeMeta(false)
-        }
+        }.getOrDefault(ProbeMeta(ok = false, httpCode = -1))
     }
 
     /**
      * Pure, unit-testable VOD playlist rewriter.
-     * Detects `-muted.` / `-unmuted.` segments, probes representative segments per muted range (start, mid, end),
+     * Detects `-muted.` / `-unmuted.` segments (`.mp4`, `.m4s`, `.ts`, with or without query),
+     * probes representative segments per muted range (start, mid, end) with `UNMUTED` prioritized over `PLAIN`,
      * rewrites segment URIs while preserving prefix/query/line-endings, populates [Session.fallbackByRewrittenUrl],
      * and updates merged real `#EXTINF` ranges on [session].
      */
@@ -319,7 +319,7 @@ object TvVodAudioRecovery {
         session: Session,
         prober: SegmentProber,
     ): String {
-        if (isLivePlaylistUrl(playlistUrl)) return playlistText
+        if (isLivePlaylistUrl(playlistUrl) || isLivePlaylistText(playlistText)) return playlistText
         if (playlistText.contains("#EXT-X-STREAM-INF:")) return playlistText
         if (!playlistText.contains("-muted.", ignoreCase = true) &&
             !playlistText.contains("-unmuted.", ignoreCase = true)
@@ -328,6 +328,7 @@ object TvVodAudioRecovery {
             return playlistText
         }
 
+        val baseDir = playlistUrl.substringBefore('?').substringBeforeLast('/')
         val lineEnding = if (playlistText.contains("\r\n")) "\r\n" else "\n"
         val rawLines = playlistText.split("\r\n", "\n").toMutableList()
         val parsedSegments = ArrayList<ParsedMutedSegment>()
@@ -356,6 +357,7 @@ object TvVodAudioRecovery {
             parsedSegments.add(
                 ParsedMutedSegment(
                     lineIndex = idx,
+                    baseDir = baseDir,
                     prefix = match.groupValues[1],
                     number = match.groupValues[2],
                     ext = match.groupValues[3],
@@ -403,19 +405,23 @@ object TvVodAudioRecovery {
                     val plainAbs = resolveAbsoluteUrl(playlistUrl, rep.urlFor(SegmentMode.PLAIN))
                     val mutedAbs = resolveAbsoluteUrl(playlistUrl, rep.urlFor(SegmentMode.MUTED))
                     val durMs = (rep.endMs - rep.startMs).coerceAtLeast(1_000L)
-                    val mode = runCatching { prober.probe(unmutedAbs, plainAbs, mutedAbs, durMs) }.getOrDefault(SegmentMode.MUTED)
+                    val mode = runCatching { prober.probe(unmutedAbs, plainAbs, mutedAbs, durMs) }
+                        .onFailure { err ->
+                            runCatching { Log.w(TAG, "VOD audio probe exception for $unmutedAbs", err) }
+                        }
+                        .getOrDefault(SegmentMode.MUTED)
                     session.segmentModes[rep.segmentKey] = mode
                     rep to mode
                 }
                 // Require majority confirmation (e.g. >= 2/3 when 3 probed) so a single cached edge segment
                 // does not mark an entire muted range green only to fall back to silent -muted during playback.
                 val needed = (repModes.size + 1) / 2
-                val plainHits = repModes.count { it.second == SegmentMode.PLAIN }
                 val unmutedHits = repModes.count { it.second == SegmentMode.UNMUTED }
+                val plainHits = repModes.count { it.second == SegmentMode.PLAIN }
                 val rangeMode = when {
-                    plainHits >= needed -> SegmentMode.PLAIN
                     unmutedHits >= needed -> SegmentMode.UNMUTED
-                    plainHits + unmutedHits >= needed -> if (plainHits >= unmutedHits) SegmentMode.PLAIN else SegmentMode.UNMUTED
+                    plainHits >= needed -> SegmentMode.PLAIN
+                    unmutedHits + plainHits >= needed -> if (unmutedHits >= plainHits) SegmentMode.UNMUTED else SegmentMode.PLAIN
                     else -> SegmentMode.MUTED
                 }
                 for (seg in unresolved) {
@@ -428,6 +434,7 @@ object TvVodAudioRecovery {
         var unmutedCount = 0
         var plainCount = 0
         var mutedCount = 0
+        val firstThreeRewritten = ArrayList<String>(3)
         for (seg in parsedSegments) {
             val chosenMode = if (!enabled || session.failedToMuted.contains(seg.segmentKey)) {
                 SegmentMode.MUTED
@@ -442,6 +449,9 @@ object TvVodAudioRecovery {
                 val rewrittenAbs = resolveAbsoluteUrl(playlistUrl, rewrittenLine)
                 val mutedAbs = resolveAbsoluteUrl(playlistUrl, seg.urlFor(SegmentMode.MUTED))
                 session.fallbackByRewrittenUrl[rewrittenAbs] = FallbackEntry(seg.segmentKey, mutedAbs)
+                if (firstThreeRewritten.size < 3) {
+                    firstThreeRewritten.add(rewrittenAbs)
+                }
             } else {
                 mutedCount++
             }
@@ -449,7 +459,18 @@ object TvVodAudioRecovery {
 
         session.updateSegments(parsedSegments, enabled)
         runCatching {
-            Log.i(TAG, "Rewrote VOD playlist: recovered=$recoveredCount (unmuted=$unmutedCount plain=$plainCount) muted=$mutedCount enabled=$enabled")
+            val modeSummary = when {
+                unmutedCount > 0 && plainCount == 0 -> "unmuted"
+                plainCount > 0 && unmutedCount == 0 -> "plain"
+                unmutedCount > 0 && plainCount > 0 -> "mixed(unmuted=$unmutedCount,plain=$plainCount)"
+                else -> "muted"
+            }
+            Log.i(
+                TAG,
+                "VOD playlist rewritten ($playlistUrl): detected=${parsedSegments.size} mode=$modeSummary " +
+                    "recovered=$recoveredCount (unmuted=$unmutedCount plain=$plainCount) muted=$mutedCount enabled=$enabled " +
+                    "first3=${firstThreeRewritten.joinToString(", ")}",
+            )
         }
         return rawLines.joinToString(lineEnding)
     }
@@ -520,6 +541,8 @@ object TvVodAudioRecovery {
                 val text = String(rawBytes, Charsets.UTF_8)
                 val rewritten = runCatching {
                     rewriteMediaPlaylist(url, text, session, prober)
+                }.onFailure { err ->
+                    runCatching { Log.w(TAG, "VOD playlist rewrite failed for $url", err) }
                 }.getOrDefault(text)
                 return inner.parse(uri, ByteArrayInputStream(rewritten.toByteArray(Charsets.UTF_8)))
             }
@@ -564,7 +587,7 @@ object TvVodAudioRecovery {
                     runCatching { upstream.close() }
                     session.markSegmentFailed(entry.segmentKey)
                     runCatching {
-                        Log.i(TAG, "Segment fallback ($code) -> muted for ${entry.segmentKey}")
+                        Log.w(TAG, "VOD segment fallback (HTTP $code): $reqUrl -> ${entry.mutedAbsoluteUrl}")
                     }
                     val mutedSpec = dataSpec.buildUpon().setUri(Uri.parse(entry.mutedAbsoluteUrl)).build()
                     upstream.open(mutedSpec)

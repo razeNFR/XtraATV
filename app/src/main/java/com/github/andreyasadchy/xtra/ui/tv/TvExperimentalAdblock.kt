@@ -284,13 +284,13 @@ object TvExperimentalAdblock {
         private val createdAtMs: Long? = null,
     ) : HlsPlaylistParserFactory {
         override fun createPlaylistParser(): ParsingLoadable.Parser<HlsPlaylist> =
-            WrappingParser(HlsPlaylistParser(), slidingWindowOnly, createdAtMs)
+            WrappingParser(HlsPlaylistParser(true), slidingWindowOnly, createdAtMs)
 
         override fun createPlaylistParser(
             multivariantPlaylist: HlsMultivariantPlaylist,
             previousMediaPlaylist: HlsMediaPlaylist?,
         ): ParsingLoadable.Parser<HlsPlaylist> =
-            WrappingParser(HlsPlaylistParser(multivariantPlaylist, previousMediaPlaylist), slidingWindowOnly, createdAtMs)
+            WrappingParser(HlsPlaylistParser(multivariantPlaylist, previousMediaPlaylist, true), slidingWindowOnly, createdAtMs)
 
         private data class SegmentBlock(
             val lines: List<String>,

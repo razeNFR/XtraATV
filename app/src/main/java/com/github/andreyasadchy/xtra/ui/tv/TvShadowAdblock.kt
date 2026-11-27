@@ -145,7 +145,33 @@ object TvShadowAdblock {
     data class ContinuityFloor(
         val minMediaSequence: Long = 0L,
         val minEndMediaSequence: Long = 0L,
+        /** Header `#EXT-X-DISCONTINUITY-SEQUENCE` of the previous playlist (first segment's sequence). */
         val minDiscontinuitySequence: Long = 0L,
+        /** Discontinuity sequence at the tail of the previous playlist, used only when anchoring a brand-new window. */
+        val minDiscontinuitySequenceForReset: Long = minDiscontinuitySequence,
+    )
+
+    data class SpliceEvent(
+        val sourceBefore: String,
+        val sourceAfter: String,
+        val lastServedPdtMs: Long?,
+        val lastServedEndMs: Long?,
+        val lastServedSeq: Long,
+        val insertedFirstPdtMs: Long?,
+        val insertedFirstSeq: Long,
+        val deltaMs: Long?,
+        val insertedCount: Int,
+        val discontinuityEmitted: Boolean,
+        val discontinuitySequence: Long,
+        val primaryCodec: String?,
+        val primaryContainer: String?,
+        val shadowCodec: String?,
+        val shadowContainer: String?,
+    )
+
+    data class IngestResult(
+        val insertedCount: Int,
+        val spliceEvent: SpliceEvent? = null,
     )
 
     data class WindowSegment(
@@ -164,7 +190,27 @@ object TvShadowAdblock {
         val url: String,
         val height: Int,
         val bandwidth: Long,
-    )
+        val width: Int = 0,
+        val codecs: String = "",
+        val frameRate: Double = 0.0,
+    ) {
+        val videoCodecFamily: String
+            get() = normalizeVideoCodecFamily(codecs)
+    }
+
+    internal fun normalizeVideoCodecFamily(codecs: String?): String {
+        if (codecs.isNullOrBlank()) return ""
+        for (rawToken in codecs.split(',')) {
+            val token = rawToken.trim().lowercase(java.util.Locale.US)
+            if (token.isEmpty()) continue
+            when {
+                token.startsWith("avc1") || token.startsWith("avc3") || token == "h264" -> return "avc1"
+                token.startsWith("hev1") || token.startsWith("hvc1") || token == "h265" || token == "hevc" -> return "hevc"
+                token.startsWith("av01") || token == "av1" -> return "av01"
+            }
+        }
+        return ""
+    }
 
     // -------------------------------------------------------------------------
     // VOD exclusion & Master parsing
@@ -205,11 +251,15 @@ object TvShadowAdblock {
                     out.add(line)
                     out.add(urlLine)
                     val absUrl = resolveAbsoluteUrl(masterUrl, urlLine)
+                    val (w, h) = parseResolution(trimmed)
                     variants.add(
                         MasterVariant(
                             url = absUrl,
-                            height = parseResolutionHeight(trimmed),
+                            width = w,
+                            height = h,
                             bandwidth = parseBandwidth(trimmed),
+                            codecs = parseCodecs(trimmed),
+                            frameRate = parseFrameRate(trimmed),
                         )
                     )
                 }
@@ -226,27 +276,61 @@ object TvShadowAdblock {
         return out.joinToString("\n") to variants
     }
 
+    /** Keeps only `#EXT-X-STREAM-INF` variants matching [codecFamily] (e.g. `"avc1"`) plus audio/non-variant lines. */
+    internal fun filterMasterToCodecFamily(masterText: String, codecFamily: String): String {
+        val lines = masterText.split("\r\n", "\n")
+        val out = ArrayList<String>(lines.size)
+        var keptVariants = 0
+        var i = 0
+        while (i < lines.size) {
+            val line = lines[i]
+            val trimmed = line.trim()
+            if (trimmed.startsWith("#EXT-X-STREAM-INF:")) {
+                val urlLine = lines.getOrNull(i + 1)
+                val family = normalizeVideoCodecFamily(parseCodecs(trimmed))
+                if (family.isEmpty() || family == codecFamily) {
+                    out.add(line)
+                    if (urlLine != null) out.add(urlLine)
+                    keptVariants++
+                }
+                i += 2
+                continue
+            }
+            out.add(line)
+            i++
+        }
+        return if (keptVariants > 0) out.joinToString("\n") else masterText
+    }
+
     private fun isPortraitVariant(streamInf: String): Boolean {
         if (streamInf.contains("IVS-GROUPS", ignoreCase = true) && streamInf.contains("portrait", ignoreCase = true)) {
             return true
         }
-        val resMatch = Regex("""RESOLUTION=(\d+)x(\d+)""", RegexOption.IGNORE_CASE).find(streamInf)
-        if (resMatch != null) {
-            val w = resMatch.groupValues[1].toIntOrNull() ?: 0
-            val h = resMatch.groupValues[2].toIntOrNull() ?: 0
-            if (w > 0 && h > w) return true
-        }
+        val (w, h) = parseResolution(streamInf)
+        if (w > 0 && h > w) return true
         return false
     }
 
-    private fun parseResolutionHeight(streamInf: String): Int {
-        val resMatch = Regex("""RESOLUTION=\d+x(\d+)""", RegexOption.IGNORE_CASE).find(streamInf)
-        return resMatch?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    private fun parseResolution(streamInf: String): Pair<Int, Int> {
+        val resMatch = Regex("""RESOLUTION=(\d+)x(\d+)""", RegexOption.IGNORE_CASE).find(streamInf)
+        val w = resMatch?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val h = resMatch?.groupValues?.get(2)?.toIntOrNull() ?: 0
+        return w to h
     }
 
     private fun parseBandwidth(streamInf: String): Long {
         val bwMatch = Regex("""BANDWIDTH=(\d+)""", RegexOption.IGNORE_CASE).find(streamInf)
         return bwMatch?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+    }
+
+    private fun parseCodecs(streamInf: String): String {
+        val codecsMatch = Regex("""CODECS="([^"]+)"""", RegexOption.IGNORE_CASE).find(streamInf)
+        return codecsMatch?.groupValues?.get(1)?.trim().orEmpty()
+    }
+
+    private fun parseFrameRate(streamInf: String): Double {
+        val fpsMatch = Regex("""FRAME-RATE=([0-9]+(?:\.[0-9]+)?)""", RegexOption.IGNORE_CASE).find(streamInf)
+        return fpsMatch?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
     }
 
     // -------------------------------------------------------------------------
@@ -686,6 +770,12 @@ object TvShadowAdblock {
             private set
         var spliceCount: Int = 0
             private set
+        var lastServedStartMs: Long? = null
+            private set
+        var lastServedEndMs: Long? = null
+            private set
+        var lastSpliceEvent: SpliceEvent? = null
+            private set
 
         private var lastVariantUrl: String? = null
         private var lastPrefetches: List<String> = emptyList()
@@ -705,6 +795,9 @@ object TvShadowAdblock {
             consecutiveCleanPrimary = 0
             consecutiveHoldPasses = 0
             spliceCount = 0
+            lastServedStartMs = null
+            lastServedEndMs = null
+            lastSpliceEvent = null
             lastVariantUrl = null
             lastPrefetches = emptyList()
             lastCleanSnapshot = null
@@ -749,6 +842,8 @@ object TvShadowAdblock {
                     seenSet.clear()
                     seenPdtMs.clear()
                     activeSourceId = null
+                    lastServedStartMs = null
+                    lastServedEndMs = null
                     currentWindowLimit = BASE_WINDOW_SIZE
                 }
             }
@@ -772,25 +867,65 @@ object TvShadowAdblock {
             sourceDiscontinuitySequence: Long,
             prefetches: List<String>,
             allowPrefetches: Boolean,
-        ) {
+            primaryCodec: String? = null,
+            primaryContainer: String? = null,
+            shadowCodec: String? = null,
+            shadowContainer: String? = null,
+        ): IngestResult {
             val nonAd = segments.filter { it.classification != SegmentClass.AD }
-            if (nonAd.isEmpty()) return
+            if (nonAd.isEmpty()) return IngestResult(0)
             hasSeenContent = true
 
             val firstPass = mediaSequence < 0L
             if (firstPass) {
-                mediaSequence = sourceMediaSequence
-                discontinuitySequence = sourceDiscontinuitySequence
+                mediaSequence = sourceMediaSequence.coerceAtLeast(0L)
+                discontinuitySequence = sourceDiscontinuitySequence.coerceAtLeast(0L)
             }
 
-            val fresh = nonAd.filter { !isAlreadySeen(it) }
+            val prevSource = activeSourceId
+            val sourceChanged = prevSource != null && prevSource != sourceId
+            val prevLastStartMs = lastServedStartMs
+            val prevLastEndMs = lastServedEndMs
+            val prevLastSeq = if (window.isNotEmpty() && mediaSequence >= 0L) {
+                mediaSequence + window.size.toLong() - 1L
+            } else {
+                -1L
+            }
+
+            // Clock-aligned selection: never serve a segment whose start precedes lastServedEndMs
+            // beyond 45% of a segment's duration, and never re-serve an already seen identity.
+            val fresh = ArrayList<HlsSegment>(nonAd.size)
+            for (seg in nonAd) {
+                if (isAlreadySeen(seg)) continue
+                if (!firstPass && prevLastEndMs != null && seg.pdtMs != null) {
+                    val segDurMs = (seg.durationSec * 1_000.0).roundToLong().coerceAtLeast(1_000L)
+                    val tolMs = (segDurMs * 0.45).roundToLong().coerceAtLeast(450L)
+                    if (seg.pdtMs < prevLastEndMs - tolMs) {
+                        markSeen(seg)
+                        continue
+                    }
+                }
+                fresh.add(seg)
+            }
+
+            // If the first eligible segment overlaps slightly backwards (< prevLastEndMs) while the very
+            // next segment is closer (or equal) to prevLastEndMs, start from the next segment to minimize |Δ|.
+            if (!firstPass && prevLastEndMs != null && fresh.size >= 2) {
+                val firstPdt = fresh[0].pdtMs
+                val secondPdt = fresh[1].pdtMs
+                if (firstPdt != null && secondPdt != null && firstPdt < prevLastEndMs) {
+                    if (abs(secondPdt - prevLastEndMs) <= abs(firstPdt - prevLastEndMs)) {
+                        markSeen(fresh.removeAt(0))
+                    }
+                }
+            }
+
             if (fresh.isEmpty()) {
                 lastPrefetches = if (allowPrefetches) prefetches else emptyList()
-                return
+                return IngestResult(0)
             }
 
-            val sourceChanged = activeSourceId != null && activeSourceId != sourceId
-            var needDiscontinuity = sourceChanged
+            val needDiscontinuity = sourceChanged
 
             val toAppend: List<HlsSegment>
             if (firstPass) {
@@ -800,12 +935,8 @@ object TvShadowAdblock {
                 }
                 // Mark any earlier segments in firstPass as seen too
                 fresh.forEach { markSeen(it) }
-            } else if (fresh.size > BASE_WINDOW_SIZE) {
-                // Catch-up: keep latest 14, mark all as seen, insert discontinuity
-                fresh.forEach { markSeen(it) }
-                toAppend = fresh.takeLast(BASE_WINDOW_SIZE)
-                needDiscontinuity = true
             } else {
+                // Strictly cap to MAX_INGEST_PER_PASS (3) new segments per refresh — never bulk-dump
                 toAppend = fresh.take(MAX_INGEST_PER_PASS)
                 toAppend.forEach { markSeen(it) }
             }
@@ -817,14 +948,18 @@ object TvShadowAdblock {
                 currentWindowLimit = (currentWindowLimit - 1).coerceAtLeast(BASE_WINDOW_SIZE)
             }
 
+            val firstInsertedSeq = mediaSequence + window.size.toLong()
+            val discEmittedOnFirst = needDiscontinuity && window.isNotEmpty()
             toAppend.forEachIndexed { idx, seg ->
                 val disc = needDiscontinuity && idx == 0 && window.isNotEmpty()
+                val segDurMs = (seg.durationSec * 1_000.0).roundToLong().coerceAtLeast(1L)
+                val segPdtMs = seg.pdtMs ?: lastServedEndMs
                 window.addLast(
                     WindowSegment(
                         uri = seg.uri,
                         durationSec = seg.durationSec,
                         pdtIso = seg.pdtIso,
-                        identityMs = seg.pdtMs,
+                        identityMs = segPdtMs,
                         identityKey = segmentIdentityKey(seg),
                         hasDiscontinuity = disc,
                         mapLine = seg.mapLine,
@@ -832,6 +967,10 @@ object TvShadowAdblock {
                         byteRangeLine = seg.byteRangeLine,
                     )
                 )
+                if (segPdtMs != null) {
+                    lastServedStartMs = segPdtMs
+                    lastServedEndMs = segPdtMs + segDurMs
+                }
             }
 
             activeSourceId = sourceId
@@ -846,6 +985,36 @@ object TvShadowAdblock {
                 }
                 evicted++
             }
+
+            val spliceEvent = if (sourceChanged && toAppend.isNotEmpty()) {
+                val firstInsertedPdt = toAppend.first().pdtMs
+                val deltaMs = if (firstInsertedPdt != null && prevLastEndMs != null) {
+                    firstInsertedPdt - prevLastEndMs
+                } else {
+                    null
+                }
+                SpliceEvent(
+                    sourceBefore = prevSource ?: "none",
+                    sourceAfter = sourceId,
+                    lastServedPdtMs = prevLastStartMs,
+                    lastServedEndMs = prevLastEndMs,
+                    lastServedSeq = prevLastSeq,
+                    insertedFirstPdtMs = firstInsertedPdt,
+                    insertedFirstSeq = firstInsertedSeq,
+                    deltaMs = deltaMs,
+                    insertedCount = toAppend.size,
+                    discontinuityEmitted = discEmittedOnFirst,
+                    discontinuitySequence = discontinuitySequence,
+                    primaryCodec = primaryCodec,
+                    primaryContainer = primaryContainer,
+                    shadowCodec = shadowCodec,
+                    shadowContainer = shadowContainer,
+                ).also { lastSpliceEvent = it }
+            } else {
+                null
+            }
+
+            return IngestResult(toAppend.size, spliceEvent)
         }
 
         /**
@@ -885,8 +1054,8 @@ object TvShadowAdblock {
                 sb.append("#EXT-X-TARGETDURATION:").append(maxDur).append('\n')
             }
             sb.append("#EXT-X-MEDIA-SEQUENCE:").append(mediaSequence.coerceAtLeast(0L)).append('\n')
-            if (discontinuitySequence > 0L) {
-                sb.append("#EXT-X-DISCONTINUITY-SEQUENCE:").append(discontinuitySequence).append('\n')
+            if (discontinuitySequence > 0L || spliceCount > 0) {
+                sb.append("#EXT-X-DISCONTINUITY-SEQUENCE:").append(discontinuitySequence.coerceAtLeast(0L)).append('\n')
             }
             if (spliceCount == 0 && activeSourceId?.startsWith("shadow@") == true && window.size >= 4) {
                 sb.append("#EXT-X-START:TIME-OFFSET=-4.0,PRECISE=NO\n")
@@ -897,10 +1066,12 @@ object TvShadowAdblock {
             window.forEachIndexed { idx, seg ->
                 if (seg.hasDiscontinuity) {
                     sb.append("#EXT-X-DISCONTINUITY\n")
-                    // Re-emit MAP on splice if present so ExoPlayer re-initializes codec/init segment cleanly
-                    seg.mapLine?.let {
-                        sb.append(it).append('\n')
-                        currentMap = it
+                    // Re-emit MAP on every source splice if the new source uses fMP4 init segments
+                    if (seg.mapLine != null) {
+                        sb.append(seg.mapLine).append('\n')
+                        currentMap = seg.mapLine
+                    } else {
+                        currentMap = null
                     }
                 } else if (idx == 0) {
                     val firstMap = seg.mapLine ?: activeMapFallback
@@ -917,8 +1088,9 @@ object TvShadowAdblock {
                     sb.append(seg.keyLine).append('\n')
                     currentKey = seg.keyLine
                 }
-                if (seg.pdtIso != null) {
-                    sb.append("#EXT-X-PROGRAM-DATE-TIME:").append(seg.pdtIso).append('\n')
+                val pdtTag = seg.pdtIso ?: seg.identityMs?.let { Instant.fromEpochMilliseconds(it).toString() }
+                if (pdtTag != null) {
+                    sb.append("#EXT-X-PROGRAM-DATE-TIME:").append(pdtTag).append('\n')
                 }
                 if (seg.byteRangeLine != null) {
                     sb.append(seg.byteRangeLine).append('\n')
@@ -973,6 +1145,7 @@ object TvShadowAdblock {
         val outputPlaylist: String,
         val sourceUsed: String,
         val adSegmentsSuppressed: Int,
+        val spliceEvent: SpliceEvent? = null,
     )
 
     fun processMediaPlaylistDecision(
@@ -985,6 +1158,8 @@ object TvShadowAdblock {
         shadowFresh: Boolean,
         continuityFloor: ContinuityFloor? = null,
         isInitialPlaylist: Boolean = !window.hasSeenContent,
+        primaryVariantMeta: MasterVariant? = null,
+        shadowVariantMeta: MasterVariant? = null,
     ): DecisionResult {
         window.onQualitySwitch(variantUrl, primaryParsed)
 
@@ -1001,11 +1176,17 @@ object TvShadowAdblock {
         val onShadow = window.activeSourceId?.startsWith("shadow@") == true
         val primaryHasMap = primaryParsed.activeMapLine != null || window.lastCleanSnapshot?.activeMapLine != null
         val shadowHasMap = shadowPlaylist?.activeMapLine != null
+        val primaryContainer = if (primaryHasMap) "fmp4" else "ts"
+        val shadowContainer = if (shadowPlaylist != null) (if (shadowHasMap) "fmp4" else "ts") else null
+        val primaryCodec = primaryVariantMeta?.videoCodecFamily.orEmpty()
+        val shadowCodec = shadowVariantMeta?.videoCodecFamily.orEmpty()
         val containerCompatible = primaryHasMap == shadowHasMap
+        val codecCompatible = primaryCodec.isEmpty() || shadowCodec.isEmpty() || primaryCodec == shadowCodec
         val cleanShadowAvailable = shadowFresh && shadowPlaylist != null &&
             shadowPlaylist.verdict == PlaylistVerdict.CLEAN &&
             !shadowVariantUrl.isNullOrBlank() &&
-            containerCompatible
+            containerCompatible &&
+            codecCompatible
 
         // Before any ad splice has occurred (or right after Classic Swap finished while historical ads are still
         // ageing out of a long 60s LL-HLS sliding window), pass clean-tail primary playlists through untouched.
@@ -1033,6 +1214,10 @@ object TvShadowAdblock {
                     sourceDiscontinuitySequence = snap.discontinuitySequence,
                     prefetches = emptyList(),
                     allowPrefetches = false,
+                    primaryCodec = primaryCodec.ifEmpty { null },
+                    primaryContainer = primaryContainer,
+                    shadowCodec = shadowCodec.ifEmpty { null },
+                    shadowContainer = shadowContainer,
                 )
             }
             if (!window.isEmpty() && (primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD || primaryParsed.verdict == PlaylistVerdict.CLEAN)) {
@@ -1043,6 +1228,10 @@ object TvShadowAdblock {
                     sourceDiscontinuitySequence = primaryParsed.discontinuitySequence,
                     prefetches = emptyList(),
                     allowPrefetches = false,
+                    primaryCodec = primaryCodec.ifEmpty { null },
+                    primaryContainer = primaryContainer,
+                    shadowCodec = shadowCodec.ifEmpty { null },
+                    shadowContainer = shadowContainer,
                 )
             }
         }
@@ -1054,6 +1243,7 @@ object TvShadowAdblock {
         }
 
         val sourceUsed: String
+        var spliceEvent: SpliceEvent? = null
         when {
             primaryHasAd && cleanShadowAvailable -> {
                 sourceUsed = "shadow"
@@ -1065,18 +1255,23 @@ object TvShadowAdblock {
                     shadowPlaylist!!.mediaSequence
                 }
                 val shadowStartDisc = if (anchorToPrevious) {
-                    maxOf(shadowPlaylist!!.discontinuitySequence, continuityFloor!!.minDiscontinuitySequence + 1L)
+                    maxOf(shadowPlaylist!!.discontinuitySequence, continuityFloor!!.minDiscontinuitySequenceForReset + 1L)
                 } else {
                     shadowPlaylist!!.discontinuitySequence
                 }
-                window.ingest(
+                val ingestRes = window.ingest(
                     sourceId = "shadow@$shadowVariantUrl",
                     segments = shadowPlaylist!!.segments,
                     sourceMediaSequence = shadowStartSeq,
                     sourceDiscontinuitySequence = shadowStartDisc,
                     prefetches = emptyList(),
                     allowPrefetches = false,
+                    primaryCodec = primaryCodec.ifEmpty { null },
+                    primaryContainer = primaryContainer,
+                    shadowCodec = shadowCodec.ifEmpty { null },
+                    shadowContainer = shadowContainer,
                 )
+                spliceEvent = ingestRes.spliceEvent
             }
             primaryHasAd && !cleanShadowAvailable && (onShadow || (primaryParsed.verdict == PlaylistVerdict.FULL_AD && !window.isEmpty())) -> {
                 val holdCount = window.noteHoldPass(true)
@@ -1090,26 +1285,36 @@ object TvShadowAdblock {
             primaryHasAd && !cleanShadowAvailable && (primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD || primaryParsed.verdict == PlaylistVerdict.CLEAN) -> {
                 sourceUsed = "primary-partial"
                 window.noteHoldPass(false)
-                window.ingest(
+                val ingestRes = window.ingest(
                     sourceId = "primary",
                     segments = primaryParsed.segments,
                     sourceMediaSequence = primaryParsed.mediaSequence,
                     sourceDiscontinuitySequence = primaryParsed.discontinuitySequence,
                     prefetches = emptyList(),
                     allowPrefetches = false,
+                    primaryCodec = primaryCodec.ifEmpty { null },
+                    primaryContainer = primaryContainer,
+                    shadowCodec = shadowCodec.ifEmpty { null },
+                    shadowContainer = shadowContainer,
                 )
+                spliceEvent = ingestRes.spliceEvent
             }
             primaryCleanAtLiveEdge && onShadow && window.consecutiveCleanPrimary < CLEAN_STREAK_TO_RETURN && cleanShadowAvailable -> {
                 sourceUsed = "shadow-cooldown"
                 window.noteHoldPass(false)
-                window.ingest(
+                val ingestRes = window.ingest(
                     sourceId = "shadow@$shadowVariantUrl",
                     segments = shadowPlaylist!!.segments,
                     sourceMediaSequence = shadowPlaylist.mediaSequence,
                     sourceDiscontinuitySequence = shadowPlaylist.discontinuitySequence,
                     prefetches = emptyList(),
                     allowPrefetches = false,
+                    primaryCodec = primaryCodec.ifEmpty { null },
+                    primaryContainer = primaryContainer,
+                    shadowCodec = shadowCodec.ifEmpty { null },
+                    shadowContainer = shadowContainer,
                 )
+                spliceEvent = ingestRes.spliceEvent
             }
             primaryCleanAtLiveEdge -> {
                 sourceUsed = "primary"
@@ -1119,14 +1324,19 @@ object TvShadowAdblock {
                 } else {
                     primaryParsed.cleanTailOnly()
                 }
-                window.ingest(
+                val ingestRes = window.ingest(
                     sourceId = "primary",
                     segments = primaryTail.segments,
                     sourceMediaSequence = primaryTail.mediaSequence,
                     sourceDiscontinuitySequence = primaryTail.discontinuitySequence,
                     prefetches = emptyList(),
                     allowPrefetches = false,
+                    primaryCodec = primaryCodec.ifEmpty { null },
+                    primaryContainer = primaryContainer,
+                    shadowCodec = shadowCodec.ifEmpty { null },
+                    shadowContainer = shadowContainer,
                 )
+                spliceEvent = ingestRes.spliceEvent
             }
             else -> {
                 sourceUsed = "fallback"
@@ -1137,7 +1347,7 @@ object TvShadowAdblock {
         if (!window.isEmpty()) {
             continuityFloor?.let { window.enforceContinuityFloor(it) }
             val emitted = window.emit(primaryParsed.headerLines, primaryParsed.activeMapLine)
-            return DecisionResult(emitted, sourceUsed, if (sourceUsed == "fallback") 0 else adCount)
+            return DecisionResult(emitted, sourceUsed, if (sourceUsed == "fallback") 0 else adCount, spliceEvent)
         }
 
         // Empty window fallback: never return an empty playlist that would break ExoPlayer
@@ -1150,20 +1360,29 @@ object TvShadowAdblock {
                 shadowPlaylist!!.mediaSequence
             }
             val shadowStartDisc = if (anchorToPrevious) {
-                maxOf(shadowPlaylist!!.discontinuitySequence, continuityFloor!!.minDiscontinuitySequence + 1L)
+                maxOf(shadowPlaylist!!.discontinuitySequence, continuityFloor!!.minDiscontinuitySequenceForReset + 1L)
             } else {
                 shadowPlaylist!!.discontinuitySequence
             }
-            window.ingest(
+            val ingestRes = window.ingest(
                 sourceId = "shadow@$shadowVariantUrl",
                 segments = shadowPlaylist!!.segments,
                 sourceMediaSequence = shadowStartSeq,
                 sourceDiscontinuitySequence = shadowStartDisc,
                 prefetches = emptyList(),
                 allowPrefetches = false,
+                primaryCodec = primaryCodec.ifEmpty { null },
+                primaryContainer = primaryContainer,
+                shadowCodec = shadowCodec.ifEmpty { null },
+                shadowContainer = shadowContainer,
             )
             continuityFloor?.let { window.enforceContinuityFloor(it) }
-            return DecisionResult(window.emit(primaryParsed.headerLines, shadowPlaylist.activeMapLine), "shadow-fallback", adCount)
+            return DecisionResult(
+                window.emit(primaryParsed.headerLines, shadowPlaylist.activeMapLine),
+                "shadow-fallback",
+                adCount,
+                ingestRes.spliceEvent,
+            )
         }
         return DecisionResult(primaryRawText, "passthrough", 0)
     }
@@ -1177,10 +1396,14 @@ object TvShadowAdblock {
         val window = ContinuityWindow()
 
         @Volatile var targetHeight: Int = 2160
+        @Volatile var primaryVariantMeta: MasterVariant? = null
+        @Volatile var forceH264: Boolean = false
+        @Volatile var onCodecMismatchForceH264: (() -> Unit)? = null
         @Volatile var lastPrimaryAdAtMs: Long = 0L
         @Volatile var shadowMasterVariants: List<MasterVariant> = emptyList()
         @Volatile var shadowMasterFetchedAtMs: Long = 0L
         @Volatile var shadowVariantUrl: String? = null
+        @Volatile var shadowVariantMeta: MasterVariant? = null
         @Volatile var shadowPlayerType: String? = null
         @Volatile var shadowParsed: ParsedPlaylist? = null
         @Volatile var shadowFetchedAtMs: Long = 0L
@@ -1188,6 +1411,11 @@ object TvShadowAdblock {
         @Volatile var backoffUntilMs: Long = 0L
         @Volatile var lastQualityAlignMs: Long = 0L
         @Volatile var activeRollType: String? = null
+        @Volatile var inAdBreak: Boolean = false
+        @Volatile var adBreakStartElapsedMs: Long = 0L
+        @Volatile var adBreakMaxSuppressed: Int = 0
+        @Volatile var adBreakStartSplices: Int = 0
+        @Volatile var adBreakRollType: String? = null
 
         var warmJob: Job? = null
         var refreshJob: Job? = null
@@ -1198,6 +1426,7 @@ object TvShadowAdblock {
 
         fun invalidateShadow() {
             shadowVariantUrl = null
+            shadowVariantMeta = null
             shadowParsed = null
             shadowFetchedAtMs = 0L
         }
@@ -1210,6 +1439,14 @@ object TvShadowAdblock {
             refreshJob = null
             closeJob = null
             activeRollType = null
+            inAdBreak = false
+            adBreakStartElapsedMs = 0L
+            adBreakMaxSuppressed = 0
+            adBreakStartSplices = 0
+            adBreakRollType = null
+            primaryVariantMeta = null
+            forceH264 = false
+            onCodecMismatchForceH264 = null
             invalidateShadow()
             shadowMasterVariants = emptyList()
             shadowMasterFetchedAtMs = 0L
@@ -1220,7 +1457,7 @@ object TvShadowAdblock {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val channels = ConcurrentHashMap<String, ChannelState>()
     private val variantToChannel = ConcurrentHashMap<String, String>()
-    private val variantToHeight = ConcurrentHashMap<String, Int>()
+    private val variantToMeta = ConcurrentHashMap<String, MasterVariant>()
     @Volatile
     private var activeDisplayedChannel: String? = null
 
@@ -1231,13 +1468,22 @@ object TvShadowAdblock {
     }
 
     /** Step 1 + Step 2 on TV channel zap: schedule old channel close (2 min), reset & pre-warm new channel. */
-    fun onChannelNavigated(context: Context, channelLogin: String?, multiStreamTile: Boolean = false) {
+    fun onChannelNavigated(
+        context: Context,
+        channelLogin: String?,
+        multiStreamTile: Boolean = false,
+        forceH264: Boolean = false,
+    ) {
         val norm = channelLogin?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return
         val appCtx = context.applicationContext
         if (!multiStreamTile) {
             val prev = activeDisplayedChannel
             if (prev != null && prev != norm) {
                 channels[prev]?.let { oldState ->
+                    oldState.warmJob?.cancel()
+                    oldState.warmJob = null
+                    oldState.refreshJob?.cancel()
+                    oldState.refreshJob = null
                     oldState.closeJob?.cancel()
                     oldState.closeJob = scope.launch {
                         delay(SHADOW_LEAVE_TTL_MS)
@@ -1253,10 +1499,24 @@ object TvShadowAdblock {
         val state = channels.computeIfAbsent(norm) { ChannelState(it) }
         state.closeJob?.cancel()
         state.closeJob = null
+        if (forceH264 && !state.forceH264) {
+            state.forceH264 = true
+            state.invalidateShadow()
+            state.shadowMasterVariants = emptyList()
+            state.shadowMasterFetchedAtMs = 0L
+        } else if (!forceH264) {
+            state.forceH264 = false
+        }
+        state.inAdBreak = false
+        state.activeRollType = null
         synchronized(state.lock) {
             state.window.reset()
         }
-        warmShadowAsync(appCtx, state)
+        if (state.isShadowFresh() && !forceH264) {
+            ensureRefreshLoop(appCtx, state)
+        } else {
+            warmShadowAsync(appCtx, state, force = forceH264)
+        }
     }
 
     /** Stops and releases all shadow sessions (e.g. when player closes or Swap+ is disabled). */
@@ -1265,7 +1525,7 @@ object TvShadowAdblock {
         channels.values.forEach { it.shutdown() }
         channels.clear()
         variantToChannel.clear()
-        variantToHeight.clear()
+        variantToMeta.clear()
     }
 
     private fun warmShadowAsync(appCtx: Context, state: ChannelState, force: Boolean = false) {
@@ -1315,9 +1575,22 @@ object TvShadowAdblock {
         val xtraModule = app.xtraModule
         val client = buildShadowHttpClient(xtraModule.okHttpClient.value)
         val userCodecs = appCtx.prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264") ?: "av1,h265,h264"
-        val codecAttempts = if (userCodecs.equals("h264", true)) listOf("h264") else listOf(userCodecs, "h264")
+        val primaryMeta = state.primaryVariantMeta
+        val desiredFamily = if (state.forceH264) "avc1" else primaryMeta?.videoCodecFamily.orEmpty()
+        val codecAttempts = when {
+            state.forceH264 || desiredFamily == "avc1" || userCodecs.equals("h264", true) || userCodecs.equals("avc1", true) ->
+                listOf("avc1")
+            desiredFamily.isNotEmpty() ->
+                listOf(userCodecs)
+            else ->
+                listOf(userCodecs, "avc1")
+        }
 
+        var codecMismatchCount = 0
         for ((platform, playerType) in SHADOW_PLAYER_TYPES) {
+            if (desiredFamily.isNotEmpty() && desiredFamily != "avc1" && codecMismatchCount >= 2) {
+                break
+            }
             for (codecs in codecAttempts) {
                 val masterUrl = runCatching {
                     withTimeoutOrNull(SHADOW_REQUEST_TIMEOUT_MS) {
@@ -1346,22 +1619,55 @@ object TvShadowAdblock {
 
                 val masterText = fetchText(client, masterUrl) ?: continue
                 val (_, variants) = filterMasterAndExtractVariants(masterUrl, masterText)
-                val chosen = pickShadowVariant(variants, state.targetHeight) ?: continue
+                if (variants.isEmpty()) continue
+                val targetForPick = if (state.forceH264) {
+                    primaryMeta?.copy(codecs = "avc1") ?: MasterVariant(url = "", height = state.targetHeight, bandwidth = 0L, codecs = "avc1")
+                } else {
+                    primaryMeta
+                }
+                val chosen = pickShadowVariant(variants, targetForPick, state.targetHeight)
+                if (chosen == null) {
+                    codecMismatchCount++
+                    continue
+                }
                 val mediaText = fetchText(client, chosen.url) ?: continue
                 val parsed = parseAndClassifyMediaPlaylist(chosen.url, mediaText)
                 if (parsed.verdict == PlaylistVerdict.CLEAN) {
                     state.shadowMasterVariants = variants
                     state.shadowMasterFetchedAtMs = SystemClock.elapsedRealtime()
                     state.shadowVariantUrl = chosen.url
+                    state.shadowVariantMeta = chosen
                     state.shadowPlayerType = "$platform/$playerType"
                     state.shadowParsed = parsed
                     state.shadowFetchedAtMs = SystemClock.elapsedRealtime()
                     runCatching {
-                        Log.d(TAG, "Shadow warmed for ${state.login}: ${state.shadowPlayerType} (${chosen.height}p, codecs=$codecs)")
+                        Log.i(
+                            TAG,
+                            "Shadow warmed for ${state.login}: ${state.shadowPlayerType} " +
+                                "${chosen.width}x${chosen.height}@${String.format(java.util.Locale.US, "%.0f", chosen.frameRate)} " +
+                                "codec=${chosen.videoCodecFamily.ifEmpty { codecs }} container=${if (parsed.activeMapLine != null) "fmp4" else "ts"}",
+                        )
                     }
                     return true
                 }
             }
+        }
+
+        // Shadow could not match primary's non-H.264 codec (e.g. primary is HEVC/AV1 while anonymous shadow only offers avc1):
+        // align BOTH primary and shadow to H.264 (supported_codecs=avc1) instead of switching decoders mid-ad.
+        if (codecMismatchCount > 0 && desiredFamily.isNotEmpty() && desiredFamily != "avc1" && !state.forceH264) {
+            state.forceH264 = true
+            state.invalidateShadow()
+            state.shadowMasterVariants = emptyList()
+            state.shadowMasterFetchedAtMs = 0L
+            runCatching {
+                Log.i(
+                    TAG,
+                    "Shadow lacks codec=$desiredFamily on ${state.login} -> forcing H.264 (supported_codecs=avc1) on both primary and shadow",
+                )
+            }
+            state.onCodecMismatchForceH264?.invoke()
+            return warmShadowNow(appCtx, state)
         }
         return false
     }
@@ -1408,18 +1714,35 @@ object TvShadowAdblock {
         }
     }
 
-    private fun maybeAlignShadowQuality(appCtx: Context, state: ChannelState, newHeight: Int) {
-        if (newHeight <= 0) return
-        val prevTarget = state.targetHeight
-        if (abs(newHeight - prevTarget) <= 100) return
+    private fun maybeAlignShadowVariant(appCtx: Context, state: ChannelState, primaryMeta: MasterVariant) {
+        val prevMeta = state.primaryVariantMeta
+        state.primaryVariantMeta = primaryMeta
+        if (primaryMeta.height > 0) {
+            state.targetHeight = primaryMeta.height
+        }
+
+        val currentShadow = state.shadowVariantMeta
+        val primaryFamily = primaryMeta.videoCodecFamily
+        val shadowFamily = currentShadow?.videoCodecFamily.orEmpty()
+        val codecMismatch = primaryFamily.isNotEmpty() && shadowFamily.isNotEmpty() && primaryFamily != shadowFamily
+
+        val resolutionChanged = prevMeta == null ||
+            abs(primaryMeta.height - prevMeta.height) > 100 ||
+            abs(primaryMeta.frameRate - prevMeta.frameRate) >= 10.0
+
         val now = SystemClock.elapsedRealtime()
-        val bigJump = prevTarget > 0 && newHeight.toFloat() / prevTarget.toFloat() >= 1.5f
-        if (!bigJump && now - state.lastQualityAlignMs < 30_000L) return
-        state.targetHeight = newHeight
+        if (!codecMismatch && !resolutionChanged) return
+        if (!codecMismatch && now - state.lastQualityAlignMs < 15_000L && prevMeta != null) return
         state.lastQualityAlignMs = now
 
         if (now - state.shadowMasterFetchedAtMs < SHADOW_MASTER_MAX_AGE_MS && state.shadowMasterVariants.isNotEmpty()) {
-            val candidate = pickShadowVariant(state.shadowMasterVariants, newHeight) ?: return
+            val candidate = pickShadowVariant(state.shadowMasterVariants, primaryMeta, primaryMeta.height)
+            if (candidate == null) {
+                // Current shadow master doesn't contain primary's codec family -> re-warm (will align to avc1 if none available)
+                state.invalidateShadow()
+                warmShadowAsync(appCtx, state, force = true)
+                return
+            }
             if (candidate.url == state.shadowVariantUrl) return
             scope.launch {
                 val app = appCtx as? XtraApp ?: return@launch
@@ -1428,20 +1751,41 @@ object TvShadowAdblock {
                 val parsed = parseAndClassifyMediaPlaylist(candidate.url, text)
                 if (parsed.verdict == PlaylistVerdict.CLEAN) {
                     state.shadowVariantUrl = candidate.url
+                    state.shadowVariantMeta = candidate
                     state.shadowParsed = parsed
                     state.shadowFetchedAtMs = SystemClock.elapsedRealtime()
                 }
             }
+        } else if (codecMismatch) {
+            state.invalidateShadow()
+            warmShadowAsync(appCtx, state, force = true)
         } else {
             warmShadowAsync(appCtx, state)
         }
     }
 
-    private fun pickShadowVariant(variants: List<MasterVariant>, targetHeight: Int): MasterVariant? {
+    internal fun pickShadowVariant(
+        variants: List<MasterVariant>,
+        targetMeta: MasterVariant? = null,
+        targetHeight: Int = targetMeta?.height ?: 0,
+    ): MasterVariant? {
         if (variants.isEmpty()) return null
-        if (targetHeight <= 0) return variants.maxByOrNull { it.bandwidth }
-        return variants.minWithOrNull(
-            compareBy<MasterVariant> { abs(it.height - targetHeight) }
+        val desiredCodec = targetMeta?.videoCodecFamily.orEmpty()
+        val pool = if (desiredCodec.isNotEmpty()) {
+            val matched = variants.filter { it.videoCodecFamily == desiredCodec }
+            if (matched.isEmpty()) return null
+            matched
+        } else {
+            variants
+        }
+        val effHeight = targetMeta?.height?.takeIf { it > 0 } ?: targetHeight
+        val effWidth = targetMeta?.width ?: 0
+        val effFps = targetMeta?.frameRate ?: 0.0
+        if (effHeight <= 0) return pool.maxByOrNull { it.bandwidth }
+        return pool.minWithOrNull(
+            compareBy<MasterVariant> { abs(it.height - effHeight) }
+                .thenBy { if (effWidth > 0 && it.width > 0) abs(it.width - effWidth) else 0 }
+                .thenBy { if (effFps > 0.0 && it.frameRate > 0.0) abs(it.frameRate - effFps) else 0.0 }
                 .thenByDescending { it.bandwidth }
         )
     }
@@ -1461,7 +1805,7 @@ object TvShadowAdblock {
 
     private fun resolveChannelLogin(url: String, fallbackLogin: String?): String? {
         variantToChannel[url]?.let { return it }
-        Regex("""/api/channel/hls/([A-Za-z0-9_]+)\.m3u8""", RegexOption.IGNORE_CASE).find(url)?.let {
+        Regex("""/api/(?:v2/)?channel/hls/([A-Za-z0-9_]+)\.m3u8""", RegexOption.IGNORE_CASE).find(url)?.let {
             return it.groupValues[1].lowercase()
         }
         return fallbackLogin?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: activeDisplayedChannel
@@ -1480,6 +1824,12 @@ object TvShadowAdblock {
             }
     }
 
+    private fun formatPdtForLog(pdtMs: Long?): String =
+        if (pdtMs == null) "null" else runCatching { Instant.fromEpochMilliseconds(pdtMs).toString() }.getOrDefault(pdtMs.toString())
+
+    private fun shortSourceLabel(sourceId: String): String =
+        if (sourceId.startsWith("shadow@")) "shadow" else sourceId
+
     // -------------------------------------------------------------------------
     // Media3 HlsPlaylistParserFactory integration
     // -------------------------------------------------------------------------
@@ -1491,11 +1841,12 @@ object TvShadowAdblock {
         private val channelLoginHint: String?,
         private val onAdHandled: ((Boolean) -> Unit)? = null,
         private val shouldBypass: (() -> Boolean)? = null,
+        private val onCodecMismatchForceH264: (() -> Unit)? = null,
     ) : HlsPlaylistParserFactory {
         private val appCtx = context.applicationContext
 
         override fun createPlaylistParser(): ParsingLoadable.Parser<HlsPlaylist> =
-            WrappingParser(appCtx, delegate.createPlaylistParser(), null, channelLoginHint, onAdHandled, shouldBypass)
+            WrappingParser(appCtx, delegate.createPlaylistParser(), null, channelLoginHint, onAdHandled, shouldBypass, onCodecMismatchForceH264)
 
         override fun createPlaylistParser(
             multivariantPlaylist: HlsMultivariantPlaylist,
@@ -1508,6 +1859,7 @@ object TvShadowAdblock {
                 channelLoginHint = channelLoginHint,
                 onAdHandled = onAdHandled,
                 shouldBypass = shouldBypass,
+                onCodecMismatchForceH264 = onCodecMismatchForceH264,
             )
 
         private class WrappingParser(
@@ -1517,6 +1869,7 @@ object TvShadowAdblock {
             private val channelLoginHint: String?,
             private val onAdHandled: ((Boolean) -> Unit)?,
             private val shouldBypass: (() -> Boolean)?,
+            private val onCodecMismatchForceH264: (() -> Unit)?,
         ) : ParsingLoadable.Parser<HlsPlaylist> {
             override fun parse(uri: Uri, inputStream: InputStream): HlsPlaylist {
                 val url = uri.toString()
@@ -1547,11 +1900,14 @@ object TvShadowAdblock {
                         channelLoginHint = channelLoginHint,
                         onAdHandled = onAdHandled,
                         shouldBypass = shouldBypass,
+                        onCodecMismatchForceH264 = onCodecMismatchForceH264,
                         media3Playlist = preParsedMedia,
                         previousMediaPlaylist = previousMediaPlaylist,
                     )
                 }.onFailure { err ->
-                    runCatching { Log.w(TAG, "Playlist intercept failed for $url", err) }
+                    if (err !is InterruptedException) {
+                        runCatching { Log.w(TAG, "Playlist intercept failed for $url", err) }
+                    }
                 }.getOrDefault(text)
                 if (preParsedMedia != null && outputText === text) {
                     return preParsedMedia
@@ -1662,7 +2018,9 @@ object TvShadowAdblock {
         return ContinuityFloor(
             minMediaSequence = prev.mediaSequence,
             minEndMediaSequence = prev.mediaSequence + prev.segments.size.toLong(),
-            minDiscontinuitySequence = prev.discontinuitySequence.toLong() + prevDiscDelta.toLong(),
+            // Header DISCONTINUITY-SEQUENCE applies to the FIRST segment of prev, not the last!
+            minDiscontinuitySequence = prev.discontinuitySequence.toLong(),
+            minDiscontinuitySequenceForReset = prev.discontinuitySequence.toLong() + prevDiscDelta.toLong(),
         )
     }
 
@@ -1674,6 +2032,7 @@ object TvShadowAdblock {
         channelLoginHint: String?,
         onAdHandled: ((Boolean) -> Unit)?,
         shouldBypass: (() -> Boolean)?,
+        onCodecMismatchForceH264: (() -> Unit)? = null,
         media3Playlist: HlsMediaPlaylist? = null,
         previousMediaPlaylist: HlsMediaPlaylist? = null,
     ): String {
@@ -1682,16 +2041,62 @@ object TvShadowAdblock {
             val (filtered, variants) = filterMasterAndExtractVariants(url, text)
             for (v in variants) {
                 variantToChannel[v.url] = login
-                if (v.height > 0) variantToHeight[v.url] = v.height
+                variantToMeta[v.url] = v
             }
             val state = channels.computeIfAbsent(login) { ChannelState(it) }
+            state.onCodecMismatchForceH264 = onCodecMismatchForceH264
             state.closeJob?.cancel()
             state.closeJob = null
+
+            val topVariant = variants.maxByOrNull { it.bandwidth }
+            val topFamily = topVariant?.videoCodecFamily.orEmpty()
+            val hasPrimaryAvc = variants.any { it.videoCodecFamily == "avc1" }
+
+            // If primary offers HEVC/AV1 alongside H.264, check if the pre-warmed shadow already knows its codecs
+            // (wait briefly if pre-warm is already in flight) so we align immediately on the 1st open without
+            // falling back to Classic Swap or reloading mid-preroll.
+            if (topFamily.isNotEmpty() && topFamily != "avc1" && hasPrimaryAvc && !state.forceH264) {
+                if (state.shadowMasterVariants.isEmpty() && state.warmJob?.isActive == true) {
+                    runBlocking {
+                        withTimeoutOrNull(1_200L) {
+                            state.warmJob?.join()
+                        }
+                    }
+                }
+                val shadowVariants = state.shadowMasterVariants
+                if (shadowVariants.isNotEmpty() && shadowVariants.none { it.videoCodecFamily == topFamily }) {
+                    state.forceH264 = true
+                    val avcTop = variants.filter { it.videoCodecFamily == "avc1" }.maxByOrNull { it.bandwidth }
+                    if (avcTop != null) {
+                        state.primaryVariantMeta = avcTop
+                        if (avcTop.height > 0) state.targetHeight = avcTop.height
+                    }
+                    runCatching {
+                        Log.i(
+                            TAG,
+                            "Shadow lacks codec=$topFamily on $login -> aligning primary master to H.264 (avc1) on 1st open",
+                        )
+                    }
+                    val avcFiltered = filterMasterToCodecFamily(filtered, "avc1")
+                    if (!state.isShadowFresh()) {
+                        warmShadowAsync(appCtx, state, force = true)
+                    }
+                    return avcFiltered
+                }
+            }
+
+            if (topVariant != null && state.primaryVariantMeta == null) {
+                state.primaryVariantMeta = topVariant
+                if (topVariant.height > 0) state.targetHeight = topVariant.height
+            }
             warmShadowAsync(appCtx, state)
             return filtered
         }
 
         val state = channels.computeIfAbsent(login) { ChannelState(it) }
+        if (onCodecMismatchForceH264 != null) {
+            state.onCodecMismatchForceH264 = onCodecMismatchForceH264
+        }
 
         // While Classic Swap / Proxy fallback is actively covering an ad break, step aside completely
         // so the hidden main player reads raw Twitch playlists and exits the backup player right on time.
@@ -1702,13 +2107,14 @@ object TvShadowAdblock {
                 }
             }
             state.activeRollType = null
+            state.inAdBreak = false
             onAdHandled?.invoke(false)
             return text
         }
 
-        val variantHeight = variantToHeight[url] ?: 0
-        if (variantHeight > 0) {
-            maybeAlignShadowQuality(appCtx, state, variantHeight)
+        val primaryMeta = variantToMeta[url]
+        if (primaryMeta != null) {
+            maybeAlignShadowVariant(appCtx, state, primaryMeta)
         }
 
         val timingHint = buildTimingHintFromMedia3(url, text, media3Playlist, previousMediaPlaylist)
@@ -1757,26 +2163,72 @@ object TvShadowAdblock {
                 shadowFresh = state.isShadowFresh(),
                 continuityFloor = continuityFloor,
                 isInitialPlaylist = isInitialPlaylist,
+                primaryVariantMeta = primaryMeta ?: state.primaryVariantMeta,
+                shadowVariantMeta = state.shadowVariantMeta,
             )
         }
+
+        result.spliceEvent?.let { ev ->
+            runCatching {
+                Log.i(
+                    TAG,
+                    "Splice on $login: ${shortSourceLabel(ev.sourceBefore)} -> ${shortSourceLabel(ev.sourceAfter)} " +
+                        "lastPdt=${formatPdtForLog(ev.lastServedPdtMs)} lastEnd=${formatPdtForLog(ev.lastServedEndMs)} lastSeq=${ev.lastServedSeq} " +
+                        "firstPdt=${formatPdtForLog(ev.insertedFirstPdtMs)} firstSeq=${ev.insertedFirstSeq} " +
+                        "deltaMs=${ev.deltaMs ?: "null"} inserted=${ev.insertedCount} " +
+                        "primary=${ev.primaryCodec ?: "?"}/${ev.primaryContainer ?: "?"} " +
+                        "shadow=${ev.shadowCodec ?: "?"}/${ev.shadowContainer ?: "?"} " +
+                        "disc=${ev.discontinuityEmitted} discSeq=${ev.discontinuitySequence}",
+                )
+            }
+        }
+
         val adBadgeActive = result.sourceUsed == "shadow" ||
             result.sourceUsed == "shadow-cooldown" ||
             result.sourceUsed == "shadow-fallback" ||
             result.sourceUsed == "hold" ||
             (hasAd && result.sourceUsed != "passthrough")
+        val nowElapsed = SystemClock.elapsedRealtime()
         if (adBadgeActive) {
+            if (!state.inAdBreak) {
+                state.inAdBreak = true
+                state.adBreakStartElapsedMs = nowElapsed
+                state.adBreakMaxSuppressed = result.adSegmentsSuppressed
+                state.adBreakStartSplices = state.window.spliceCount
+            } else if (result.adSegmentsSuppressed > state.adBreakMaxSuppressed) {
+                state.adBreakMaxSuppressed = result.adSegmentsSuppressed
+            }
             if (state.activeRollType == null || hasAd) {
                 val rollTag = Regex("""X-TV-TWITCH-AD-ROLL-TYPE="?([A-Za-z]+)""", RegexOption.IGNORE_CASE)
                     .find(text)?.groupValues?.get(1)
-                state.activeRollType = when {
+                val roll = when {
                     rollTag?.contains("pre", ignoreCase = true) == true -> "preroll"
                     rollTag?.contains("mid", ignoreCase = true) == true -> "midroll"
                     state.activeRollType != null -> state.activeRollType
                     isInitialPlaylist -> "preroll"
                     else -> "midroll"
                 }
+                state.activeRollType = roll
+                state.adBreakRollType = roll
             }
         } else {
+            if (state.inAdBreak) {
+                val durMs = (nowElapsed - state.adBreakStartElapsedMs).coerceAtLeast(0L)
+                val breakSplices = (state.window.spliceCount - state.adBreakStartSplices).coerceAtLeast(0)
+                runCatching {
+                    Log.i(
+                        TAG,
+                        "Ad break ended on $login: roll=${state.adBreakRollType ?: "?"} durationMs=$durMs " +
+                            "maxSuppressed=${state.adBreakMaxSuppressed} splices=$breakSplices " +
+                            "totalSplices=${state.window.spliceCount} shadow=${state.shadowPlayerType}",
+                    )
+                }
+                state.inAdBreak = false
+                state.adBreakStartElapsedMs = 0L
+                state.adBreakMaxSuppressed = 0
+                state.adBreakStartSplices = 0
+                state.adBreakRollType = null
+            }
             state.activeRollType = null
         }
         onAdHandled?.invoke(adBadgeActive)
