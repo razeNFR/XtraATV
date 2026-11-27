@@ -1480,6 +1480,10 @@ object TvShadowAdblock {
             val prev = activeDisplayedChannel
             if (prev != null && prev != norm) {
                 channels[prev]?.let { oldState ->
+                    oldState.warmJob?.cancel()
+                    oldState.warmJob = null
+                    oldState.refreshJob?.cancel()
+                    oldState.refreshJob = null
                     oldState.closeJob?.cancel()
                     oldState.closeJob = scope.launch {
                         delay(SHADOW_LEAVE_TTL_MS)
@@ -1508,7 +1512,11 @@ object TvShadowAdblock {
         synchronized(state.lock) {
             state.window.reset()
         }
-        warmShadowAsync(appCtx, state, force = forceH264)
+        if (state.isShadowFresh() && !forceH264) {
+            ensureRefreshLoop(appCtx, state)
+        } else {
+            warmShadowAsync(appCtx, state, force = forceH264)
+        }
     }
 
     /** Stops and releases all shadow sessions (e.g. when player closes or Swap+ is disabled). */
@@ -1897,7 +1905,9 @@ object TvShadowAdblock {
                         previousMediaPlaylist = previousMediaPlaylist,
                     )
                 }.onFailure { err ->
-                    runCatching { Log.w(TAG, "Playlist intercept failed for $url", err) }
+                    if (err !is InterruptedException) {
+                        runCatching { Log.w(TAG, "Playlist intercept failed for $url", err) }
+                    }
                 }.getOrDefault(text)
                 if (preParsedMedia != null && outputText === text) {
                     return preParsedMedia
