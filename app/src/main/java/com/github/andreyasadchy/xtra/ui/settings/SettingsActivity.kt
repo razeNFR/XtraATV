@@ -973,7 +973,7 @@ class SettingsActivity : AppCompatActivity() {
             findPreference<Preference>("check_updates")?.setOnPreferenceClickListener {
                 viewModel.checkUpdates(
                     requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    requireContext().prefs().getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraATV/releases/latest",
+                    requireContext().prefs().getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraPlus/releases/latest",
                     requireContext().tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0)
                 )
                 true
@@ -1405,6 +1405,30 @@ class SettingsActivity : AppCompatActivity() {
                     setEntryValues(R.array.themeNoDynamicValues)
                 }
             }
+            val isTv = TvUi.isTv(requireContext())
+            findPreference<ListPreference>(C.MOBILE_ACCENT_COLOR)?.apply {
+                isVisible = !isTv
+                if (!isTv) {
+                    setOnPreferenceClickListener {
+                        val current = requireContext().prefs().getString(C.MOBILE_ACCENT_COLOR, "violet") ?: "violet"
+                        com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.showColorPickerDialog(
+                            context = requireContext(),
+                            title = title ?: getString(R.string.mobile_accent_color_title),
+                            entries = entries ?: emptyArray(),
+                            values = entryValues ?: emptyArray(),
+                            currentValue = current,
+                        ) { chosen ->
+                            if (chosen != current) {
+                                value = chosen
+                                requireContext().prefs().edit { putString(C.MOBILE_ACCENT_COLOR, chosen) }
+                                (requireActivity() as? SettingsActivity)?.changed = true
+                                requireActivity().recreate()
+                            }
+                        }
+                        true
+                    }
+                }
+            }
             val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
                 (requireActivity() as? SettingsActivity)?.changed = true
                 requireActivity().recreate()
@@ -1458,6 +1482,21 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.ui_preferences, rootKey)
+            val isTv = TvUi.isTv(requireContext())
+            findPreference<ListPreference>(C.UI_INTERFACE_MODE)?.apply {
+                isVisible = !isTv
+                if (!isTv) {
+                    setOnPreferenceChangeListener { _, newValue ->
+                        val chosen = newValue as? String ?: return@setOnPreferenceChangeListener false
+                        val previous = requireContext().prefs().getString(C.UI_INTERFACE_MODE, "auto") ?: "auto"
+                        if (chosen != previous) {
+                            requireContext().prefs().edit(commit = true) { putString(C.UI_INTERFACE_MODE, chosen) }
+                            TvUi.restartAppForInterfaceMode(requireContext())
+                        }
+                        true
+                    }
+                }
+            }
             val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
                 (requireActivity() as? SettingsActivity)?.setResult()
                 true
@@ -2599,12 +2638,15 @@ class SettingsActivity : AppCompatActivity() {
                     swapPlusPref?.apply {
                         isChecked = swapPlusOn
                         summary = if (expOn && swapPlusOn) {
-                            "${getString(R.string.tv_adblock_fallback_badge)} · ${getString(R.string.tv_adblock_swap_plus_summary)}"
+                            "${getString(R.string.tv_adblock_fallback_badge)} · ${getString(R.string.mobile_adblock_swap_plus_summary)}"
                         } else {
-                            getString(R.string.tv_adblock_swap_plus_summary)
+                            getString(R.string.mobile_adblock_swap_plus_summary)
                         }
                     }
-                    vodPref?.isChecked = expOn
+                    vodPref?.apply {
+                        isChecked = expOn
+                        summary = getString(R.string.mobile_adblock_vod_summary)
+                    }
                     useVideoSwap?.isEnabled = !swapOn
                     useVideoSwap?.summary = getString(if (swapOn) R.string.use_video_swap_adblock_on else R.string.use_video_swap_desc)
                 }

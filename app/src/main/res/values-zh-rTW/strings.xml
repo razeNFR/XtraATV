@@ -587,7 +587,7 @@
     <string name="tv_more_actions">更多動作</string>
     <string name="tv_account">帳號</string>
     <string name="tv_stream_preview">所選直播的即時預覽（電視）</string>
-    <string name="xtratv_settings">Xtra TV 設定</string>
+    <string name="xtratv_settings">XtraPlus 設定</string>
     <string name="xtratv_settings_summary">廣告封鎖、影格率匹配、預覽、首頁和遙控器快捷鍵</string>
     <string name="tv_preview_sound">預覽聲音</string>
     <string name="close_player">關閉</string>
@@ -666,7 +666,7 @@
     <string name="tv_back_audio">僅音訊</string>
     <string name="tv_dpad_up_down">直播與 VOD 中的上下快捷鍵</string>
     <string name="tv_dpad_up_down_summary">控制項隱藏時：上鍵顯示其他直播，下鍵顯示或隱藏聊天</string>
-    <string name="tv_1440p_warning">⚠ 1440p 無法透過公共代理 (Luminous 等，最高 1080p) 使用。要觀看 1440p，請關閉自訂代理並使用廣告封鎖 (Xtra TV 設定)，或使用支援 1440p 的自有代理。</string>
+    <string name="tv_1440p_warning">⚠ 1440p 無法透過公共代理 (Luminous 等，最高 1080p) 使用。要觀看 1440p，請關閉自訂代理並使用廣告封鎖 (XtraPlus 設定)，或使用支援 1440p 的自有代理。</string>
     <string name="tv_login_with_code">在 twitch.tv/activate 輸入代碼</string>
     <string name="tv_login_with_page">使用 Twitch 登入頁面 (1440p 需要)</string>
     <string name="tv_login_code_help">在手機或電腦上開啟 twitch.tv/activate 並輸入此代碼，登入會自動完成。1440p 需要使用 Twitch 頁面登入。</string>
@@ -811,7 +811,7 @@
     <string name="tv_pip_pos_c">置中</string>
     <string name="tv_pip_pos_mr">右側置中</string>
     <string name="tv_pip_pos_bc">底部置中</string>
-    <string name="tv_enable_unknown_sources">請在安裝未知應用程式中允許 Xtra TV，然後按返回鍵開始更新</string>
+    <string name="tv_enable_unknown_sources">請在安裝未知應用程式中允許 XtraPlus，然後按返回鍵開始更新</string>
     <string name="tv_pip_size">大小</string>
     <string name="tv_pip_size_small">小</string>
     <string name="tv_pip_size_medium">中</string>
@@ -856,7 +856,7 @@
     <string name="tv_proxy_all_settings">所有代理設定…</string>
     <string name="tv_focus_switch">不用按 OK 切換頁面</string>
     <string name="tv_focus_switch_summary">分頁和側邊選單取得焦點後立即顯示對應頁面</string>
-    <string name="tv_update_title_version">Xtra TV %1$s 已推出</string>
+    <string name="tv_update_title_version">XtraPlus %1$s 已推出</string>
     <string name="tv_update_now">更新</string>
     <string name="tv_update_ignore">忽略</string>
     <string name="tv_proxy_add">新增代理</string>
@@ -1187,7 +1187,7 @@
     <string name="tv_remote_action_pip_close">小視窗：關閉</string>
     <string name="tv_adblock_and_proxies_title">廣告攔截與代理</string>
     <string name="tv_adblock_and_proxies_subtitle">內建廣告攔截器或直播自訂 HLS / HTTP 代理</string>
-    <string name="tv_update_install_blocked">Android 封鎖了安裝。請在系統設定中允許 Xtra TV「安裝未知應用程式」，或透過瀏覽器下載更新。</string>
+    <string name="tv_update_install_blocked">Android 封鎖了安裝。請在系統設定中允許 XtraPlus「安裝未知應用程式」，或透過瀏覽器下載更新。</string>
     <string name="tv_update_try_again">重試</string>
     <string name="tv_remote_action_pip_swap_default">小視窗：交換直播（預設）</string>
     <string name="tv_remote_action_show_controls">顯示控制列</string>
@@ -1346,7 +1346,7 @@
     <string name="tv_osd_chat_shown">已顯示聊天室</string>
     <string name="tv_osd_chat_hidden">已隱藏聊天室</string>
     <string name="tv_backup_perm_title">需要檔案存取權限</string>
-    <string name="tv_backup_perm_summary">若要在下載資料夾中覆寫或讀取 XtraTV-backup.zip，請在下一個畫面允許檔案存取。</string>
+    <string name="tv_backup_perm_summary">若要在下載資料夾中覆寫或讀取 XtraPlus-backup.zip，請在下一個畫面允許檔案存取。</string>
     <string name="tv_backup_perm_grant">允許檔案存取</string>
     <string name="tv_backup_perm_continue_anyway">不授權繼續</string>
     <string name="tv_backup_save_failed">無法儲存備份檔案</string>
@@ -1487,12 +1487,12 @@
     <string name="tv_chat_qr_follow_channel">跟隨頻道切換</string>
     <string name="tv_chat_qr_disconnect">中斷連線</string>
     <string name="tv_chat_qr_disconnected">手機聊天已中斷</string>
-    <string name="tv_chat_qr_readonly">唯讀模式（在 Xtra TV 登入後即可傳送訊息）</string>
+    <string name="tv_chat_qr_readonly">唯讀模式（在 XtraPlus 登入後即可傳送訊息）</string>
     <string name="tv_chat_qr_paused">聊天已暫停</string>
     <string name="tv_chat_qr_replying_to">回覆 %s</string>
     <string name="tv_chat_qr_search_emotes">搜尋表情…</string>
     <string name="tv_chat_qr_switched">已切換至 %s</string>
-    <string name="tv_chat_qr_session_ended">Xtra TV 工作階段已結束</string>
+    <string name="tv_chat_qr_session_ended">XtraPlus 工作階段已結束</string>
     <string name="tv_chat_qr_auto_start">自動啟動手機聊天室</string>
     <string name="tv_chat_qr_auto_start_summary">開啟實況時自動啟動本機 Wi-Fi QR 聊天室伺服器，讓手機桌面捷徑可立即重新連線</string>
     <string name="tv_chat_qr_regenerate">重新產生 QR 連結</string>
@@ -1544,4 +1544,13 @@
     <string name="mobile_accounts_login_methods">管理登入方式</string>
     <string name="mobile_show_adblock_badge_title">廣告期間顯示去廣告標籤</string>
     <string name="mobile_show_adblock_badge_summary">在插播廣告期間於影片上方顯示懸浮的去廣告狀態標籤</string>
+    <string name="interface_mode_title">介面模式</string>
+    <string name="interface_mode_auto">自動</string>
+    <string name="interface_mode_tv">電視</string>
+    <string name="interface_mode_mobile">手機</string>
+    <string name="mobile_accent_color_title">強調色</string>
+    <string name="mobile_adblock_swap_plus_desc">在主播放器內無縫替換廣告，同時保留 1440p / HEVC / AV1。無法使用時自動退回經典 Swap。</string>
+    <string name="mobile_adblock_swap_plus_summary">播放器內無縫廣告替換（保留 1440p / HEVC / AV1，自動退回經典 Swap）</string>
+    <string name="mobile_adblock_vod_desc">播放即時 VOD 串流以實現無廣告觀看。無法使用時自動退回。</string>
+    <string name="mobile_adblock_vod_summary">無廣告即時 VOD 播放並支援自動退回</string>
 </resources>

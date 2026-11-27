@@ -588,7 +588,7 @@
     <string name="tv_more_actions">Tindakan lainnya</string>
     <string name="tv_account">Akun</string>
     <string name="tv_stream_preview">Pratinjau langsung stream yang dipilih (TV)</string>
-    <string name="xtratv_settings">Pengaturan Xtra TV</string>
+    <string name="xtratv_settings">Pengaturan XtraPlus</string>
     <string name="xtratv_settings_summary">Pemblokir iklan, penyesuaian frame rate, pratinjau, beranda dan pintasan remote</string>
     <string name="tv_preview_sound">Suara pratinjau</string>
     <string name="close_player">Tutup</string>
@@ -667,7 +667,7 @@
     <string name="tv_back_audio">Hanya audio</string>
     <string name="tv_dpad_up_down">Pintasan atas dan bawah di siaran dan VOD</string>
     <string name="tv_dpad_up_down_summary">Saat kontrol tersembunyi: atas menampilkan stream lain, bawah menampilkan atau menyembunyikan chat</string>
-    <string name="tv_1440p_warning">⚠ 1440p tidak berfungsi dengan proxy publik (Luminous, dll.) yang terbatas 1080p. Untuk 1440p matikan proxy kustom dan gunakan pemblokir iklan (pengaturan Xtra TV), atau gunakan proxy sendiri yang mendukung 1440p.</string>
+    <string name="tv_1440p_warning">⚠ 1440p tidak berfungsi dengan proxy publik (Luminous, dll.) yang terbatas 1080p. Untuk 1440p matikan proxy kustom dan gunakan pemblokir iklan (pengaturan XtraPlus), atau gunakan proxy sendiri yang mendukung 1440p.</string>
     <string name="tv_login_with_code">Dengan kode di twitch.tv/activate</string>
     <string name="tv_login_with_page">Dengan halaman masuk Twitch (diperlukan untuk 1440p)</string>
     <string name="tv_login_code_help">Di ponsel atau komputer, buka twitch.tv/activate dan ketik kode ini. Login berlanjut sendiri. 1440p memerlukan login dengan halaman Twitch.</string>
@@ -812,7 +812,7 @@
     <string name="tv_pip_pos_c">Tengah</string>
     <string name="tv_pip_pos_mr">Kanan tengah</string>
     <string name="tv_pip_pos_bc">Tengah bawah</string>
-    <string name="tv_enable_unknown_sources">Izinkan Xtra TV di Instal aplikasi tidak dikenal, lalu tekan Kembali untuk memulai pembaruan</string>
+    <string name="tv_enable_unknown_sources">Izinkan XtraPlus di Instal aplikasi tidak dikenal, lalu tekan Kembali untuk memulai pembaruan</string>
     <string name="tv_pip_size">Ukuran</string>
     <string name="tv_pip_size_small">Kecil</string>
     <string name="tv_pip_size_medium">Sedang</string>
@@ -857,7 +857,7 @@
     <string name="tv_proxy_all_settings">Semua pengaturan proxy…</string>
     <string name="tv_focus_switch">Ganti halaman tanpa OK</string>
     <string name="tv_focus_switch_summary">Tab dan menu samping menampilkan halamannya begitu mendapat fokus</string>
-    <string name="tv_update_title_version">Xtra TV %1$s tersedia</string>
+    <string name="tv_update_title_version">XtraPlus %1$s tersedia</string>
     <string name="tv_update_now">Perbarui</string>
     <string name="tv_update_ignore">Abaikan</string>
     <string name="tv_proxy_add">Tambah proxy</string>
@@ -1188,7 +1188,7 @@
     <string name="tv_remote_action_pip_close">Jendela kecil: tutup</string>
     <string name="tv_adblock_and_proxies_title">Pemblokir iklan &amp; proxy</string>
     <string name="tv_adblock_and_proxies_subtitle">Pemblokir iklan bawaan atau proxy HLS / HTTP kustom untuk siaran langsung</string>
-    <string name="tv_update_install_blocked">Android memblokir pemasangan. Izinkan \"Instal aplikasi tak dikenal\" untuk Xtra TV di pengaturan sistem, atau unduh pembaruan melalui browser.</string>
+    <string name="tv_update_install_blocked">Android memblokir pemasangan. Izinkan \"Instal aplikasi tak dikenal\" untuk XtraPlus di pengaturan sistem, atau unduh pembaruan melalui browser.</string>
     <string name="tv_update_try_again">Coba lagi</string>
     <string name="tv_remote_action_pip_swap_default">Jendela kecil: tukar siaran (bawaan)</string>
     <string name="tv_remote_action_show_controls">Tampilkan kontrol</string>
@@ -1347,7 +1347,7 @@
     <string name="tv_osd_chat_shown">Obrolan ditampilkan</string>
     <string name="tv_osd_chat_hidden">Obrolan disembunyikan</string>
     <string name="tv_backup_perm_title">Izin akses file diperlukan</string>
-    <string name="tv_backup_perm_summary">Untuk menimpa atau membaca XtraTV-backup.zip di Unduhan, izinkan akses file di layar berikutnya.</string>
+    <string name="tv_backup_perm_summary">Untuk menimpa atau membaca XtraPlus-backup.zip di Unduhan, izinkan akses file di layar berikutnya.</string>
     <string name="tv_backup_perm_grant">Izinkan akses file</string>
     <string name="tv_backup_perm_continue_anyway">Lanjutkan tanpa izin</string>
     <string name="tv_backup_save_failed">Gagal menyimpan file cadangan</string>
@@ -1488,12 +1488,12 @@
     <string name="tv_chat_qr_follow_channel">Ikuti perpindahan saluran</string>
     <string name="tv_chat_qr_disconnect">Putuskan</string>
     <string name="tv_chat_qr_disconnected">Obrolan ponsel terputus</string>
-    <string name="tv_chat_qr_readonly">Mode baca saja (masuk di Xtra TV untuk mengirim pesan)</string>
+    <string name="tv_chat_qr_readonly">Mode baca saja (masuk di XtraPlus untuk mengirim pesan)</string>
     <string name="tv_chat_qr_paused">Obrolan dijeda</string>
     <string name="tv_chat_qr_replying_to">Membalas %s</string>
     <string name="tv_chat_qr_search_emotes">Cari emote…</string>
     <string name="tv_chat_qr_switched">Beralih ke %s</string>
-    <string name="tv_chat_qr_session_ended">Sesi Xtra TV berakhir</string>
+    <string name="tv_chat_qr_session_ended">Sesi XtraPlus berakhir</string>
     <string name="tv_chat_qr_auto_start">Mulai otomatis chat ponsel</string>
     <string name="tv_chat_qr_auto_start_summary">Jalankan server Wi-Fi chat QR secara otomatis saat membuka siaran langsung agar pintasan di ponsel langsung tersambung kembali</string>
     <string name="tv_chat_qr_regenerate">Buat ulang tautan QR</string>
@@ -1545,4 +1545,13 @@
     <string name="mobile_accounts_login_methods">Kelola metode masuk</string>
     <string name="mobile_show_adblock_badge_title">Tampilkan lencana pemblokir iklan</string>
     <string name="mobile_show_adblock_badge_summary">Tampilkan lencana status pemblokir iklan mengambang di atas video saat jeda iklan</string>
+    <string name="interface_mode_title">Mode antarmuka</string>
+    <string name="interface_mode_auto">Otomatis</string>
+    <string name="interface_mode_tv">TV</string>
+    <string name="interface_mode_mobile">Seluler</string>
+    <string name="mobile_accent_color_title">Warna aksen</string>
+    <string name="mobile_adblock_swap_plus_desc">Penggantian iklan mulus di pemutar utama sambil mempertahankan 1440p / HEVC / AV1. Beralih ke Swap klasik jika tidak tersedia.</string>
+    <string name="mobile_adblock_swap_plus_summary">Penggantian iklan mulus di pemutar (mempertahankan 1440p / HEVC / AV1, cadangan Swap klasik)</string>
+    <string name="mobile_adblock_vod_desc">Memutar aliran VOD langsung tanpa iklan. Beralih otomatis jika tidak tersedia.</string>
+    <string name="mobile_adblock_vod_summary">Memutar aliran VOD langsung tanpa iklan dengan cadangan otomatis</string>
 </resources>

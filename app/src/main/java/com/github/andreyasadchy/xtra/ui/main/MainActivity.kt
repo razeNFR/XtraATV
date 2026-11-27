@@ -435,6 +435,30 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }, true)
+        } else {
+            com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyScreenAmbient(binding.root)
+            (binding.navBar as? com.google.android.material.navigation.NavigationBarView)?.let {
+                com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyBottomNavTint(it)
+            }
+            supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
+                override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
+                    fun applyToTree(node: View) {
+                        when (node) {
+                            is com.google.android.material.tabs.TabLayout ->
+                                com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyTabLayoutTint(node)
+                            is androidx.swiperefreshlayout.widget.SwipeRefreshLayout -> {
+                                com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.color(node.context)?.let { c ->
+                                    node.setColorSchemeColors(c)
+                                }
+                            }
+                            is ViewGroup -> {
+                                for (i in 0 until node.childCount) applyToTree(node.getChildAt(i))
+                            }
+                        }
+                    }
+                    applyToTree(v)
+                }
+            }, true)
         }
         setNavBarColor(resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT)
         val ignoreCutouts = prefs.getBoolean(C.UI_DRAW_BEHIND_CUTOUTS, false)
@@ -533,7 +557,7 @@ class MainActivity : AppCompatActivity() {
                                 ) {
                                     viewModel.checkUpdates(
                                         prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                                        prefs.getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraATV/releases/latest",
+                                        prefs.getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraPlus/releases/latest",
                                         tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0)
                                     )
                                 }

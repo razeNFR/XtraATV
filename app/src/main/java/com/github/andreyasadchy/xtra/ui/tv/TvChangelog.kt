@@ -87,7 +87,7 @@ import kotlin.time.Instant
 object TvChangelog {
 
     private const val PREF_CHANGELOG_CACHE = "tv_changelog_releases_cache"
-    private const val DEFAULT_RELEASES_URL = "https://api.github.com/repos/razeNFR/XtraATV/releases?per_page=25"
+    private const val DEFAULT_RELEASES_URL = "https://api.github.com/repos/razeNFR/XtraPlus/releases?per_page=25"
     private val VERSION_REGEX = Regex("""\d+(?:\.\d+)+""")
     private val INSTALL_FOOTER_REGEX = Regex("""\n+#{1,4}\s*Install\b[\s\S]*$""", RegexOption.IGNORE_CASE)
 
@@ -158,7 +158,7 @@ object TvChangelog {
             ?.trim()
         val installedNum = extractVersionNumber(installedVersion)
         val notesNum = extractVersionNumber(firstHeading) ?: installedNum
-        val title = firstHeading?.takeIf { it.isNotBlank() } ?: "Xtra TV ${installedNum ?: installedVersion}"
+        val title = firstHeading?.takeIf { it.isNotBlank() } ?: "XtraPlus ${installedNum ?: installedVersion}"
         val cleaned = cleanNotesBody(raw)
         if (cleaned.isBlank()) return null
         return Entry(

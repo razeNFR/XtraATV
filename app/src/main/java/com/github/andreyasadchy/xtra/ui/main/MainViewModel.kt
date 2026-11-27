@@ -1296,7 +1296,12 @@ class MainViewModel(
                 }
                 return false
             }
-            val cleanRemote = remoteVersion.trim().removePrefix("Xtra TV").trim().removePrefix("v").removeSuffix("-DEBUG")
+            val cleanRemote = remoteVersion.trim()
+                .removePrefix("XtraPlus")
+                .removePrefix("Xtra TV")
+                .trim()
+                .removePrefix("v")
+                .removeSuffix("-DEBUG")
             val cleanLocal = installedVersion.trim().removePrefix("v").removeSuffix("-DEBUG")
             return cleanRemote != cleanLocal
         }
@@ -1308,9 +1313,11 @@ class MainViewModel(
             val notes: String?,
         )
 
-        /** Rewrites GitHub `/releases/latest` URLs to `/releases?per_page=15` so missed intermediate release notes can be shown. */
+        /** Rewrites GitHub `/releases/latest` URLs to `/releases?per_page=15` (and migrates legacy XtraATV URL to XtraPlus) so missed intermediate release notes can be shown. */
         fun resolveUpdateRequestUrl(url: String): String =
-            url.trim().replace(Regex("""/releases/latest/?$"""), "/releases?per_page=15")
+            url.trim()
+                .replace("api.github.com/repos/razeNFR/XtraATV/", "api.github.com/repos/razeNFR/XtraPlus/", ignoreCase = true)
+                .replace(Regex("""/releases/latest/?$"""), "/releases?per_page=15")
 
         /** Parses either a GitHub `/releases` JSON array or a single `/releases/latest` JSON object and concatenates all newer release notes. */
         fun parseUpdatePayload(

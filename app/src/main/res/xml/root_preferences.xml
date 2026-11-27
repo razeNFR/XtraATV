@@ -281,7 +281,7 @@
         <Preference
             android:icon="@drawable/tv_ic_info"
             android:key="about_app"
-            android:summary="XtraTV forked from https://github.com/crackededed/Xtra by razeN with AI"
+            android:summary="XtraPlus forked from https://github.com/crackededed/Xtra by razeN with AI"
             android:title="@string/tv_settings_section_about"
             app:singleLineTitle="false" />
 

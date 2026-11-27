@@ -322,6 +322,8 @@ object MobileUi {
         val context = cardRoot.context
         if (TvUi.isTv(context)) return
 
+        username?.let { MobileAccent.applyStreamerNameTint(it) }
+
         val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
         val cols = if (isPortrait) {
             context.prefs().getString(com.github.andreyasadchy.xtra.util.C.PORTRAIT_COLUMN_COUNT, "1")?.toIntOrNull() ?: 1

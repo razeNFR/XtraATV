@@ -58,7 +58,7 @@ object UpdateInstallHelper {
     private const val ATTEMPTS_WINDOW_MS = 24 * 60 * 60_000L
 
     private const val APK_DIR = "update"
-    private const val APK_NAME = "XtraTV-update.apk"
+    private const val APK_NAME = "XtraPlus-update.apk"
 
     /**
      * "Update" pressed: the dialog when both ways already failed, else the settings "Install unknown apps" when Android

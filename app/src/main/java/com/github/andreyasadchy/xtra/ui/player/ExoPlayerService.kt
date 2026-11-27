@@ -754,7 +754,11 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                         if (useProxy || useVideoSwap || hideAds) {
                             val playlist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
-                            val ads = checkPlaylist(playlist, mainPlayer = true)
+                            val ads = if (shadowAdActive && !videoSwapActive && !proxyMediaPlaylist) {
+                                false
+                            } else {
+                                checkPlaylist(playlist, mainPlayer = true)
+                            }
                             val oldValue = playingAds
                             playingAds = ads
                             // the ad being blocked from the marks of Twitch ("2/3", its end), for the badge

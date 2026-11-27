@@ -587,7 +587,7 @@
     <string name="tv_more_actions">その他の操作</string>
     <string name="tv_account">アカウント</string>
     <string name="tv_stream_preview">選択中の配信のライブプレビュー (TV)</string>
-    <string name="xtratv_settings">Xtra TV の設定</string>
+    <string name="xtratv_settings">XtraPlus の設定</string>
     <string name="xtratv_settings_summary">広告ブロック、フレームレート調整、プレビュー、ホーム、リモコンのショートカット</string>
     <string name="tv_preview_sound">プレビューの音声</string>
     <string name="close_player">閉じる</string>
@@ -666,7 +666,7 @@
     <string name="tv_back_audio">音声のみ</string>
     <string name="tv_dpad_up_down">ライブ配信とVODでの上下ショートカット</string>
     <string name="tv_dpad_up_down_summary">コントロール非表示時: 上で他の配信、下でチャットの表示/非表示</string>
-    <string name="tv_1440p_warning">⚠ 1440p は公開プロキシ (Luminous など) では使えません (最大 1080p)。1440p にはカスタムプロキシをオフにして広告ブロック (Xtra TV の設定) を使うか、1440p 対応の自分のプロキシを使ってください。</string>
+    <string name="tv_1440p_warning">⚠ 1440p は公開プロキシ (Luminous など) では使えません (最大 1080p)。1440p にはカスタムプロキシをオフにして広告ブロック (XtraPlus の設定) を使うか、1440p 対応の自分のプロキシを使ってください。</string>
     <string name="tv_login_with_code">twitch.tv/activate でコードを入力</string>
     <string name="tv_login_with_page">Twitch のログインページ (1440p に必要)</string>
     <string name="tv_login_code_help">スマホやパソコンで twitch.tv/activate を開き、このコードを入力してください。ログインは自動で続きます。1440p には Twitch のページでのログインが必要です。</string>
@@ -811,7 +811,7 @@
     <string name="tv_pip_pos_c">中央</string>
     <string name="tv_pip_pos_mr">中央右</string>
     <string name="tv_pip_pos_bc">中央下</string>
-    <string name="tv_enable_unknown_sources">不明なアプリのインストールで Xtra TV を許可してから、戻るを押して更新を開始してください</string>
+    <string name="tv_enable_unknown_sources">不明なアプリのインストールで XtraPlus を許可してから、戻るを押して更新を開始してください</string>
     <string name="tv_pip_size">サイズ</string>
     <string name="tv_pip_size_small">小</string>
     <string name="tv_pip_size_medium">中</string>
@@ -856,7 +856,7 @@
     <string name="tv_proxy_all_settings">プロキシの設定をすべて表示…</string>
     <string name="tv_focus_switch">OK なしでページを切り替える</string>
     <string name="tv_focus_switch_summary">タブとサイドメニューはフォーカスが当たるとすぐにページを表示します</string>
-    <string name="tv_update_title_version">Xtra TV %1$s が利用可能です</string>
+    <string name="tv_update_title_version">XtraPlus %1$s が利用可能です</string>
     <string name="tv_update_now">アップデート</string>
     <string name="tv_update_ignore">無視</string>
     <string name="tv_proxy_add">プロキシを追加</string>
@@ -1187,7 +1187,7 @@
     <string name="tv_remote_action_pip_close">小窓: 閉じる</string>
     <string name="tv_adblock_and_proxies_title">広告ブロックとプロキシ</string>
     <string name="tv_adblock_and_proxies_subtitle">内蔵広告ブロッカーまたはライブ配信用カスタムHLS / HTTPプロキシ</string>
-    <string name="tv_update_install_blocked">Androidによりインストールがブロックされました。システム設定でXtra TVの「不明なアプリのインストール」を許可するか、ブラウザから更新をダウンロードしてください。</string>
+    <string name="tv_update_install_blocked">Androidによりインストールがブロックされました。システム設定でXtraPlusの「不明なアプリのインストール」を許可するか、ブラウザから更新をダウンロードしてください。</string>
     <string name="tv_update_try_again">再試行</string>
     <string name="tv_remote_action_pip_swap_default">小窓: 配信を入れ替え（デフォルト）</string>
     <string name="tv_remote_action_show_controls">コントロールを表示</string>
@@ -1346,7 +1346,7 @@
     <string name="tv_osd_chat_shown">チャットを表示</string>
     <string name="tv_osd_chat_hidden">チャットを非表示</string>
     <string name="tv_backup_perm_title">ファイルへのアクセス権が必要です</string>
-    <string name="tv_backup_perm_summary">ダウンロード内の XtraTV-backup.zip を上書きまたは読み取るには、次の画面でファイルへのアクセスを許可してください。</string>
+    <string name="tv_backup_perm_summary">ダウンロード内の XtraPlus-backup.zip を上書きまたは読み取るには、次の画面でファイルへのアクセスを許可してください。</string>
     <string name="tv_backup_perm_grant">ファイルへのアクセスを許可</string>
     <string name="tv_backup_perm_continue_anyway">権限なしで続行</string>
     <string name="tv_backup_save_failed">バックアップファイルを保存できませんでした</string>
@@ -1487,12 +1487,12 @@
     <string name="tv_chat_qr_follow_channel">チャンネル切替に追従</string>
     <string name="tv_chat_qr_disconnect">切断</string>
     <string name="tv_chat_qr_disconnected">スマホチャットを切断しました</string>
-    <string name="tv_chat_qr_readonly">閲覧専用（送信するにはXtra TVでログイン）</string>
+    <string name="tv_chat_qr_readonly">閲覧専用（送信するにはXtraPlusでログイン）</string>
     <string name="tv_chat_qr_paused">チャット一時停止中</string>
     <string name="tv_chat_qr_replying_to">%s への返信</string>
     <string name="tv_chat_qr_search_emotes">エモートを検索…</string>
     <string name="tv_chat_qr_switched">%s に切り替えました</string>
-    <string name="tv_chat_qr_session_ended">Xtra TVセッションが終了しました</string>
+    <string name="tv_chat_qr_session_ended">XtraPlusセッションが終了しました</string>
     <string name="tv_chat_qr_auto_start">スマホチャットを自動起動</string>
     <string name="tv_chat_qr_auto_start_summary">ライブ配信を開いたときにローカルWi-FiのQRチャットサーバーを自動起動し、保存したスマホのショートカットからすぐ再接続します</string>
     <string name="tv_chat_qr_regenerate">QRリンクを再生成</string>
@@ -1544,4 +1544,13 @@
     <string name="mobile_accounts_login_methods">ログイン方法を管理</string>
     <string name="mobile_show_adblock_badge_title">広告ブロック中にバッジを表示</string>
     <string name="mobile_show_adblock_badge_summary">広告再生中に動画の上へ広告ブロック状況バッジを表示する</string>
+    <string name="interface_mode_title">インターフェースモード</string>
+    <string name="interface_mode_auto">自動</string>
+    <string name="interface_mode_tv">TV</string>
+    <string name="interface_mode_mobile">モバイル</string>
+    <string name="mobile_accent_color_title">アクセントカラー</string>
+    <string name="mobile_adblock_swap_plus_desc">1440p / HEVC / AV1 を維持したままメインプレーヤー内で広告をシームレスに置換します。利用できない場合は従来の Swap に切り替わります。</string>
+    <string name="mobile_adblock_swap_plus_summary">プレーヤー内で広告をシームレス置換（1440p / HEVC / AV1維持、従来のSwapへ自動フォールバック）</string>
+    <string name="mobile_adblock_vod_desc">ライブVODストリームを広告なしで再生します。利用できない場合は自動で切り替わります。</string>
+    <string name="mobile_adblock_vod_summary">自動フォールバック付きの広告なしライブVOD再生</string>
 </resources>

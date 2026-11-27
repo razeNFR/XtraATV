@@ -2611,6 +2611,11 @@ class TvSettingsFragment : Fragment() {
                                     (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = false)
                                 C.UI_NAME_DISPLAY ->
                                     (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = true)
+                                C.UI_INTERFACE_MODE -> {
+                                    context.prefs().edit(commit = true) { putString(key, chosen) }
+                                    TvUi.restartAppForInterfaceMode(context)
+                                    return@showChoices
+                                }
                                 else -> if (key.startsWith("ui_theme_")) {
                                     (activity as? MainActivity)?.markTvRecreateOnLeaveSettings()
                                 }
@@ -2960,7 +2965,7 @@ class TvSettingsFragment : Fragment() {
             "check_updates" -> {
                 settingsViewModel.checkUpdates(
                     context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    context.prefs().getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraATV/releases/latest",
+                    context.prefs().getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraPlus/releases/latest",
                     context.tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0),
                 )
             }

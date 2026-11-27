@@ -188,6 +188,8 @@ object C {
     const val UI_THEME_APPBAR_LIFT = "ui_theme_appbar_lift"
     const val UI_THEME_BOTTOM_NAV_COLOR = "ui_theme_bottom_nav_color"
     const val UI_THEME_MATERIAL3 = "ui_theme_material3"
+    const val UI_INTERFACE_MODE = "ui_interface_mode"
+    const val MOBILE_ACCENT_COLOR = "mobile_accent_color"
     const val PLAYER_DOUBLE_TAP = "player_doubletap"
     const val PLAYER_PAUSE = "player_pause"
     const val PLAYER_MINIMIZE = "player_minimize"

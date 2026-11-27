@@ -141,11 +141,11 @@ object MobileBottomSheets {
         val surfaceColor = Color(surfaceInt)
         val isDark = surfaceColor.luminance() < 0.45f ||
             (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        val primary = if (isDark && Color(primaryInt).luminance() > 0.85f) {
-            // AMOLED theme uses pure white as colorPrimary; keep a crisp Twitch-purple accent on buttons/chips
-            Color(0xFFA970FF)
-        } else {
-            Color(primaryInt)
+        val customAccent = MobileAccent.color(context)
+        val primary = when {
+            customAccent != null -> Color(customAccent)
+            isDark && Color(primaryInt).luminance() > 0.85f -> Color(0xFFA970FF)
+            else -> Color(primaryInt)
         }
         val onPrimary = if (primary.luminance() > 0.5f) Color(0xFF12101A) else Color.White
 
@@ -492,7 +492,7 @@ object MobileBottomSheets {
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .clickable {
-                            MobileUi.copyToClipboard(context, "XtraTV", "$versionTitle\n$deviceInfo")
+                            MobileUi.copyToClipboard(context, "XtraPlus", "$versionTitle\n$deviceInfo")
                         },
                 ) {
                     Row(
@@ -903,7 +903,7 @@ object MobileBottomSheets {
                 // Adblock (Swap+)
                 ToggleCardRow(
                     title = context.getString(R.string.tv_adblock_swap_plus_title),
-                    subtitle = context.getString(R.string.tv_adblock_swap_plus_desc),
+                    subtitle = context.getString(R.string.mobile_adblock_swap_plus_desc),
                     checked = swapPlus,
                     badge = if (swapPlusIsFallback) context.getString(R.string.tv_adblock_fallback_badge) else null,
                     showSwitch = true,
@@ -924,7 +924,7 @@ object MobileBottomSheets {
                 // Adblock (VOD)
                 ToggleCardRow(
                     title = context.getString(R.string.tv_adblock_exp_title),
-                    subtitle = context.getString(R.string.tv_adblock_vod_desc),
+                    subtitle = context.getString(R.string.mobile_adblock_vod_desc),
                     checked = expAdblock,
                     badge = null,
                     showSwitch = true,

@@ -5,7 +5,7 @@
 
     <Preference
         android:key="about_app"
-        android:summary="XtraTV forked from https://github.com/crackededed/Xtra by razeN with AI"
+        android:summary="XtraPlus forked from https://github.com/crackededed/Xtra by razeN with AI"
         android:title="@string/app_name"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
@@ -19,7 +19,7 @@
 
     <Preference
         android:key="about_github"
-        android:summary="https://github.com/razeNFR/XtraATV"
+        android:summary="https://github.com/razeNFR/XtraPlus"
         android:title="@string/tv_about_github"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />

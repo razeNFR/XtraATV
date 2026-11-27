@@ -455,4 +455,96 @@ class TvShadowAdblockTest {
         val parsedBrands = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, bareBrandPlaylist)
         assertEquals(TvShadowAdblock.PlaylistVerdict.FULL_AD, parsedBrands.verdict)
     }
+
+    @Test
+    fun adDaterangeWithStreamSourceIsCompletelyDropped() {
+        val leakedLine =
+            """#EXT-X-DATERANGE:ID="stitched-ad-999",CLASS="twitch-stitched-ad",START-DATE="2026-11-26T12:00:00.000Z",DURATION=30.0,X-TV-TWITCH-STREAM-SOURCE="ad",X-TV-TWITCH-AD-POD-POSITION="1""""
+        assertEquals(null, TvShadowAdblock.cleanHeaderLine(leakedLine))
+    }
+
+    @Test
+    fun prolongedHoldWithoutShadowFallsBackToPassthroughBeforeStarvation() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val clean = buildCleanPlaylist(mediaSeq = 10L, startSec = 0, count = 4)
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, clean),
+            primaryRawText = clean,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+        val adRaw = buildFullAdPlaylist(mediaSeq = 14L, startSec = 8)
+        val adParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, adRaw)
+
+        // First 3 passes hold cleanly while warming
+        repeat(3) {
+            val res = TvShadowAdblock.processMediaPlaylistDecision(
+                variantUrl = primaryVariantUrl,
+                primaryParsed = adParsed,
+                primaryRawText = adRaw,
+                window = window,
+                shadowPlaylist = null,
+                shadowVariantUrl = null,
+                shadowFresh = false,
+            )
+            assertEquals("hold", res.sourceUsed)
+        }
+
+        // 4th pass exceeds hold cap and hands off cleanly to Classic Swap ("passthrough")
+        val handoff = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = adParsed,
+            primaryRawText = adRaw,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+        assertEquals("passthrough", handoff.sourceUsed)
+    }
+
+    @Test
+    fun incompatibleContainerMapBlocksUnsafeSplice() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val fmp4Primary = """
+            #EXTM3U
+            #EXT-X-VERSION:7
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:100
+            #EXT-X-MAP:URI="https://video-edge.cdg02.abs.hls.ttvnw.net/v1/init.mp4"
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:00.000Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_100.m4s
+        """.trimIndent()
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, fmp4Primary),
+            primaryRawText = fmp4Primary,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+
+        val adRaw = buildFullAdPlaylist(mediaSeq = 101L, startSec = 2)
+        val tsShadow = buildCleanPlaylist(
+            mediaSeq = 500L,
+            startSec = 2,
+            count = 3,
+            prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow",
+        )
+        val res = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, adRaw),
+            primaryRawText = adRaw,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, tsShadow),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+        )
+        assertEquals("hold", res.sourceUsed)
+    }
 }

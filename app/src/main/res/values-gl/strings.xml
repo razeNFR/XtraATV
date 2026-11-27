@@ -587,7 +587,7 @@
     <string name="tv_more_actions">Máis accións</string>
     <string name="tv_account">Conta</string>
     <string name="tv_stream_preview">Vista previa en directo do stream seleccionado (TV)</string>
-    <string name="xtratv_settings">Axustes de Xtra TV</string>
+    <string name="xtratv_settings">Axustes de XtraPlus</string>
     <string name="xtratv_settings_summary">Bloqueador de anuncios, axuste de fotogramas, vistas previas, inicio e atallos do mando</string>
     <string name="tv_preview_sound">Son das vistas previas</string>
     <string name="close_player">Pechar</string>
@@ -666,7 +666,7 @@
     <string name="tv_back_audio">Só audio</string>
     <string name="tv_dpad_up_down">Atallos arriba e abaixo en directos e VODs</string>
     <string name="tv_dpad_up_down_summary">Cos controis ocultos: arriba amosa os outros streams, abaixo amosa ou oculta o chat</string>
-    <string name="tv_1440p_warning">⚠ O 1440p non funciona cos proxies públicos (Luminous, etc.), limitados a 1080p. Para 1440p desactiva o proxy personalizado e usa o bloqueador de anuncios (axustes de Xtra TV), ou usa o teu propio proxy compatible con 1440p.</string>
+    <string name="tv_1440p_warning">⚠ O 1440p non funciona cos proxies públicos (Luminous, etc.), limitados a 1080p. Para 1440p desactiva o proxy personalizado e usa o bloqueador de anuncios (axustes de XtraPlus), ou usa o teu propio proxy compatible con 1440p.</string>
     <string name="tv_login_with_code">Cun código en twitch.tv/activate</string>
     <string name="tv_login_with_page">Coa páxina de inicio de sesión de Twitch (necesaria para 1440p)</string>
     <string name="tv_login_code_help">No teu móbil ou ordenador, vai a twitch.tv/activate e escribe este código. O inicio de sesión segue só. O 1440p precisa iniciar sesión coa páxina de Twitch.</string>
@@ -811,7 +811,7 @@
     <string name="tv_pip_pos_c">Centro</string>
     <string name="tv_pip_pos_mr">Centro á dereita</string>
     <string name="tv_pip_pos_bc">Abaixo no centro</string>
-    <string name="tv_enable_unknown_sources">Autoriza Xtra TV en Instalar aplicacións descoñecidas e preme Atrás para iniciar a actualización</string>
+    <string name="tv_enable_unknown_sources">Autoriza XtraPlus en Instalar aplicacións descoñecidas e preme Atrás para iniciar a actualización</string>
     <string name="tv_pip_size">Tamaño</string>
     <string name="tv_pip_size_small">Pequena</string>
     <string name="tv_pip_size_medium">Mediana</string>
@@ -856,7 +856,7 @@
     <string name="tv_proxy_all_settings">Todos os axustes dos proxys…</string>
     <string name="tv_focus_switch">Cambiar de páxina sen OK</string>
     <string name="tv_focus_switch_summary">As lapelas e o menú lateral amosan a súa páxina en canto teñen o foco</string>
-    <string name="tv_update_title_version">Xtra TV %1$s está dispoñible</string>
+    <string name="tv_update_title_version">XtraPlus %1$s está dispoñible</string>
     <string name="tv_update_now">Actualizar</string>
     <string name="tv_update_ignore">Ignorar</string>
     <string name="tv_proxy_add">Engadir un proxy</string>
@@ -1187,7 +1187,7 @@
     <string name="tv_remote_action_pip_close">Xanela pequena: pechar</string>
     <string name="tv_adblock_and_proxies_title">Bloqueador de anuncios e proxys</string>
     <string name="tv_adblock_and_proxies_subtitle">Bloqueadores integrados ou proxies HLS / HTTP personalizados para directos</string>
-    <string name="tv_update_install_blocked">Android bloqueou a instalación. Permite «Instalar aplicacións descoñecidas» para Xtra TV nos axustes do sistema ou descarga a actualización no navegador.</string>
+    <string name="tv_update_install_blocked">Android bloqueou a instalación. Permite «Instalar aplicacións descoñecidas» para XtraPlus nos axustes do sistema ou descarga a actualización no navegador.</string>
     <string name="tv_update_try_again">Tentar de novo</string>
     <string name="tv_remote_action_pip_swap_default">Xanela pequena: intercambiar directos (predeterminado)</string>
     <string name="tv_remote_action_show_controls">Amosar controis</string>
@@ -1346,7 +1346,7 @@
     <string name="tv_osd_chat_shown">Chat mostrado</string>
     <string name="tv_osd_chat_hidden">Chat oculto</string>
     <string name="tv_backup_perm_title">Requírese acceso aos ficheiros</string>
-    <string name="tv_backup_perm_summary">Para sobrescribir ou ler XtraTV-backup.zip en Descargas, permite o acceso aos ficheiros na seguinte pantalla.</string>
+    <string name="tv_backup_perm_summary">Para sobrescribir ou ler XtraPlus-backup.zip en Descargas, permite o acceso aos ficheiros na seguinte pantalla.</string>
     <string name="tv_backup_perm_grant">Permitir acceso aos ficheiros</string>
     <string name="tv_backup_perm_continue_anyway">Continuar sen permiso</string>
     <string name="tv_backup_save_failed">Non se puido gardar o ficheiro de copia de seguranza</string>
@@ -1487,12 +1487,12 @@
     <string name="tv_chat_qr_follow_channel">Seguir o cambio de canle</string>
     <string name="tv_chat_qr_disconnect">Desconectar</string>
     <string name="tv_chat_qr_disconnected">Chat do teléfono desconectado</string>
-    <string name="tv_chat_qr_readonly">Modo só lectura (inicia sesión en Xtra TV para enviar mensaxes)</string>
+    <string name="tv_chat_qr_readonly">Modo só lectura (inicia sesión en XtraPlus para enviar mensaxes)</string>
     <string name="tv_chat_qr_paused">Chat en pausa</string>
     <string name="tv_chat_qr_replying_to">Respondendo a %s</string>
     <string name="tv_chat_qr_search_emotes">Buscar emotes…</string>
     <string name="tv_chat_qr_switched">Cambiado a %s</string>
-    <string name="tv_chat_qr_session_ended">Sesión de Xtra TV rematada</string>
+    <string name="tv_chat_qr_session_ended">Sesión de XtraPlus rematada</string>
     <string name="tv_chat_qr_auto_start">Inicio automático do chat móbil</string>
     <string name="tv_chat_qr_auto_start_summary">Inicia automaticamente o servidor Wi-Fi do chat QR ao abrir un directo para que o atallo do teléfono se reconecte ao instante</string>
     <string name="tv_chat_qr_regenerate">Rexenerar ligazón QR</string>
@@ -1544,4 +1544,13 @@
     <string name="mobile_accounts_login_methods">Xestionar métodos de inicio de sesión</string>
     <string name="mobile_show_adblock_badge_title">Amosar insignia do bloqueador de anuncios</string>
     <string name="mobile_show_adblock_badge_summary">Amosar o aviso flotante de bloqueo de anuncios sobre o vídeo durante as pausas</string>
+    <string name="interface_mode_title">Modo de interface</string>
+    <string name="interface_mode_auto">Automático</string>
+    <string name="interface_mode_tv">TV</string>
+    <string name="interface_mode_mobile">Móbil</string>
+    <string name="mobile_accent_color_title">Cor de acento</string>
+    <string name="mobile_adblock_swap_plus_desc">Substitución fluída de anuncios no reprodutor principal mantendo 1440p / HEVC / AV1. Usa Swap clásico se non está dispoñible.</string>
+    <string name="mobile_adblock_swap_plus_summary">Substitución fluída no reprodutor (mantén 1440p / HEVC / AV1, respaldo Swap clásico)</string>
+    <string name="mobile_adblock_vod_desc">Reproduce o fluxo VOD en directo sen anuncios. Respaldo automático se non está dispoñible.</string>
+    <string name="mobile_adblock_vod_summary">Reproduce o fluxo VOD en directo sen anuncios con respaldo automático</string>
 </resources>

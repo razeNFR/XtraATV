@@ -1177,11 +1177,11 @@ object TvChatQrCompanion {
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="Xtra Chat"/>
+<meta name="apple-mobile-web-app-title" content="XtraPlus Chat"/>
 <link rel="manifest" href="/$token/manifest.json"/>
 <link rel="icon" type="image/png" sizes="192x192" href="/$token/icon.png"/>
 <link rel="apple-touch-icon" sizes="192x192" href="/$token/icon.png"/>
-<title>Xtra TV Chat</title>
+<title>XtraPlus Chat</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;height:100%;background:#0E0E13;color:#F3F2F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overflow:hidden}
@@ -1257,10 +1257,10 @@ html,body{margin:0;padding:0;height:100%;background:#0E0E13;color:#F3F2F8;font-f
 <div class="app">
   <div class="hdr">
     <div class="hdr-left">
-      <div class="av" id="av">X</div>
+      <div class="av" id="av">X+</div>
       <div class="ch-wrap">
-        <div class="ch-row"><span class="ch-name" id="chName">Xtra TV</span><span class="dot" id="dot"></span></div>
-        <div class="ch-sub" id="chSub">Xtra TV · Wi-Fi</div>
+        <div class="ch-row"><span class="ch-name" id="chName">XtraPlus</span><span class="dot" id="dot"></span></div>
+        <div class="ch-sub" id="chSub">XtraPlus · Wi-Fi</div>
       </div>
     </div>
     <div class="hdr-btns">
@@ -1337,7 +1337,7 @@ let canSend = false;
 let emoteGroups = [];
 let channels = [];
 let activeChannelLogin = "";
-let activeChannelName = "Xtra TV";
+let activeChannelName = "XtraPlus";
 let activeTab = 0;
 let reply = null;
 let es = null;
@@ -1622,7 +1622,7 @@ window.addEventListener("focus", ()=>{
 
 function applyState(st, isSwitch){
   const prevLogin = activeChannelLogin;
-  const name = st.channelName || st.channelLogin || "Xtra TV";
+  const name = st.channelName || st.channelLogin || "XtraPlus";
   activeChannelName = name;
   activeChannelLogin = st.channelLogin || "";
   channels = st.channels || [];
@@ -1760,8 +1760,8 @@ tryReconnect();
                     .put("purpose", "any"),
             )
         return JSONObject()
-            .put("name", "Xtra TV Chat")
-            .put("short_name", "Xtra Chat")
+            .put("name", "XtraPlus Chat")
+            .put("short_name", "XtraPlus Chat")
             .put("start_url", "/$token/")
             .put("scope", "/$token/")
             .put("display", "standalone")

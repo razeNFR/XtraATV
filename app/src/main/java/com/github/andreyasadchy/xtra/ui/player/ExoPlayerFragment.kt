@@ -888,8 +888,11 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun onStop() {
         super.onStop()
-        if (isTv && ((activity as? MainActivity)?.isOpeningOwnScreen == true || (activity as? MainActivity)?.isKeepingPlayerInBackground == true) && playbackService != null) {
-            // TV: a screen of the app opens over the player (settings), the mini player or the sound goes on
+        val mainActivity = activity as? MainActivity
+        val keepAcrossOwnScreen = mainActivity?.isOpeningOwnScreen == true
+        val keepInTvBackground = isTv && mainActivity?.isKeepingPlayerInBackground == true
+        if ((keepAcrossOwnScreen || keepInTvBackground) && playbackService != null) {
+            // Another screen of the app opens over the player (e.g. settings), keep playback alive
             keptAcrossStop = true
             binding.playerControls.root.removeCallbacks(updateProgressAction)
             return

@@ -23,6 +23,7 @@ object TvSettingIcons {
         "player_menu_settings" to R.drawable.tv_ic_list,
         "ui_language" to R.drawable.tv_ic_globe,
         "ui_settings" to R.drawable.tv_ic_view_quilt,
+        "ui_interface_mode" to R.drawable.tv_ic_tv_small,
         "chat_settings" to R.drawable.tv_ic_chat,
         "xtratv_settings" to R.drawable.tv_ic_tv_small,
         "adblock_settings" to R.drawable.tv_ic_shield,

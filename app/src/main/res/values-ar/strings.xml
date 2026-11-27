@@ -587,7 +587,7 @@
     <string name="tv_more_actions">إجراءات أخرى</string>
     <string name="tv_account">الحساب</string>
     <string name="tv_stream_preview">معاينة مباشرة للبث المحدد (التلفاز)</string>
-    <string name="xtratv_settings">إعدادات Xtra TV</string>
+    <string name="xtratv_settings">إعدادات XtraPlus</string>
     <string name="xtratv_settings_summary">مانع الإعلانات، مطابقة معدل الإطارات، المعاينات، الصفحة الرئيسية واختصارات جهاز التحكم</string>
     <string name="tv_preview_sound">صوت المعاينات</string>
     <string name="close_player">إغلاق</string>
@@ -666,7 +666,7 @@
     <string name="tv_back_audio">الصوت فقط</string>
     <string name="tv_dpad_up_down">اختصارات أعلى وأسفل في البث المباشر والفيديوهات</string>
     <string name="tv_dpad_up_down_summary">عند إخفاء عناصر التحكم: أعلى يعرض البثوث الأخرى، وأسفل يعرض الدردشة أو يخفيها</string>
-    <string name="tv_1440p_warning">⚠ دقة 1440p لا تعمل مع البروكسيات العامة (Luminous وغيرها) المحدودة بدقة 1080p. للحصول على 1440p، عطّل البروكسي المخصص واستخدم مانع الإعلانات (إعدادات Xtra TV) أو استخدم بروكسي خاصًا بك يدعم 1440p.</string>
+    <string name="tv_1440p_warning">⚠ دقة 1440p لا تعمل مع البروكسيات العامة (Luminous وغيرها) المحدودة بدقة 1080p. للحصول على 1440p، عطّل البروكسي المخصص واستخدم مانع الإعلانات (إعدادات XtraPlus) أو استخدم بروكسي خاصًا بك يدعم 1440p.</string>
     <string name="tv_login_with_code">باستخدام رمز على twitch.tv/activate</string>
     <string name="tv_login_with_page">بصفحة تسجيل الدخول إلى Twitch (مطلوبة لدقة 1440p)</string>
     <string name="tv_login_code_help">على هاتفك أو حاسوبك، انتقل إلى twitch.tv/activate واكتب هذا الرمز. يكتمل تسجيل الدخول تلقائيًا. دقة 1440p تتطلب تسجيل الدخول بصفحة Twitch.</string>
@@ -811,7 +811,7 @@
     <string name="tv_pip_pos_c">الوسط</string>
     <string name="tv_pip_pos_mr">وسط اليمين</string>
     <string name="tv_pip_pos_bc">أسفل الوسط</string>
-    <string name="tv_enable_unknown_sources">اسمح لتطبيق Xtra TV بتثبيت التطبيقات غير المعروفة، ثم اضغط على رجوع لبدء التحديث</string>
+    <string name="tv_enable_unknown_sources">اسمح لتطبيق XtraPlus بتثبيت التطبيقات غير المعروفة، ثم اضغط على رجوع لبدء التحديث</string>
     <string name="tv_pip_size">الحجم</string>
     <string name="tv_pip_size_small">صغيرة</string>
     <string name="tv_pip_size_medium">متوسطة</string>
@@ -856,7 +856,7 @@
     <string name="tv_proxy_all_settings">كل إعدادات البروكسي…</string>
     <string name="tv_focus_switch">تغيير الصفحة بدون OK</string>
     <string name="tv_focus_switch_summary">تعرض التبويبات والقائمة الجانبية صفحتها بمجرد حصولها على التركيز</string>
-    <string name="tv_update_title_version">Xtra TV %1$s متاح</string>
+    <string name="tv_update_title_version">XtraPlus %1$s متاح</string>
     <string name="tv_update_now">تحديث</string>
     <string name="tv_update_ignore">تجاهل</string>
     <string name="tv_proxy_add">إضافة بروكسي</string>
@@ -1187,7 +1187,7 @@
     <string name="tv_remote_action_pip_close">النافذة الصغيرة: إغلاق</string>
     <string name="tv_adblock_and_proxies_title">مانع الإعلانات والبروكسيات</string>
     <string name="tv_adblock_and_proxies_subtitle">مانعات الإعلانات المدمجة أو وكلاء HLS / HTTP المخصصة للبث المباشر</string>
-    <string name="tv_update_install_blocked">منع النظام التثبيت. اسمح بخيار «تثبيت تطبيقات غير معروفة» لتطبيق Xtra TV من إعدادات النظام، أو نزّل التحديث عبر المتصفح.</string>
+    <string name="tv_update_install_blocked">منع النظام التثبيت. اسمح بخيار «تثبيت تطبيقات غير معروفة» لتطبيق XtraPlus من إعدادات النظام، أو نزّل التحديث عبر المتصفح.</string>
     <string name="tv_update_try_again">إعادة المحاولة</string>
     <string name="tv_remote_action_pip_swap_default">النافذة الصغيرة: تبديل البثوث (افتراضي)</string>
     <string name="tv_remote_action_show_controls">إظهار عناصر التحكم</string>
@@ -1346,7 +1346,7 @@
     <string name="tv_osd_chat_shown">تم إظهار الدردشة</string>
     <string name="tv_osd_chat_hidden">تم إخفاء الدردشة</string>
     <string name="tv_backup_perm_title">مطلوب إذن الوصول إلى الملفات</string>
-    <string name="tv_backup_perm_summary">لاستبدال أو قراءة ملف XtraTV-backup.zip في التنزيلات، اسمح بالوصول إلى الملفات في الشاشة التالية.</string>
+    <string name="tv_backup_perm_summary">لاستبدال أو قراءة ملف XtraPlus-backup.zip في التنزيلات، اسمح بالوصول إلى الملفات في الشاشة التالية.</string>
     <string name="tv_backup_perm_grant">السماح بالوصول إلى الملفات</string>
     <string name="tv_backup_perm_continue_anyway">المتابعة بدون إذن</string>
     <string name="tv_backup_save_failed">تعذّر حفظ ملف النسخ الاحتياطي</string>
@@ -1487,12 +1487,12 @@
     <string name="tv_chat_qr_follow_channel">متابعة تبديل القناة</string>
     <string name="tv_chat_qr_disconnect">قطع الاتصال</string>
     <string name="tv_chat_qr_disconnected">تم قطع دردشة الهاتف</string>
-    <string name="tv_chat_qr_readonly">وضع القراءة فقط (سجّل الدخول في Xtra TV لإرسال الرسائل)</string>
+    <string name="tv_chat_qr_readonly">وضع القراءة فقط (سجّل الدخول في XtraPlus لإرسال الرسائل)</string>
     <string name="tv_chat_qr_paused">الدردشة متوقفة مؤقتاً</string>
     <string name="tv_chat_qr_replying_to">الرد على %s</string>
     <string name="tv_chat_qr_search_emotes">ابحث عن الرموز…</string>
     <string name="tv_chat_qr_switched">تم التبديل إلى %s</string>
-    <string name="tv_chat_qr_session_ended">انتهت جلسة Xtra TV</string>
+    <string name="tv_chat_qr_session_ended">انتهت جلسة XtraPlus</string>
     <string name="tv_chat_qr_auto_start">تشغيل دردشة الهاتف تلقائياً</string>
     <string name="tv_chat_qr_auto_start_summary">تشغيل خادم دردشة QR المحلي عبر Wi-Fi تلقائياً عند فتح بث مباشر لإعادة اتصال اختصار الهاتف فوراً</string>
     <string name="tv_chat_qr_regenerate">إعادة إنشاء رابط QR</string>
@@ -1544,4 +1544,13 @@
     <string name="mobile_accounts_login_methods">إدارة طرق تسجيل الدخول</string>
     <string name="mobile_show_adblock_badge_title">إظهار شارة مانع الإعلانات</string>
     <string name="mobile_show_adblock_badge_summary">عرض شارة حالة حظر الإعلانات العائمة فوق الفيديو أثناء الفواصل الإعلانية</string>
+    <string name="interface_mode_title">وضع الواجهة</string>
+    <string name="interface_mode_auto">تلقائي</string>
+    <string name="interface_mode_tv">التلفاز</string>
+    <string name="interface_mode_mobile">الهاتف</string>
+    <string name="mobile_accent_color_title">لون التمييز</string>
+    <string name="mobile_adblock_swap_plus_desc">استبدال سلس للإعلانات داخل المشغل الرئيسي مع الحفاظ على 1440p / HEVC / AV1. يعود إلى Swap الكلاسيكي عند عدم التوفر.</string>
+    <string name="mobile_adblock_swap_plus_summary">استبدال سلس داخل المشغل (يحافظ على 1440p / HEVC / AV1 مع رجوع تلقائي لـ Swap)</string>
+    <string name="mobile_adblock_vod_desc">يشغل بث VOD المباشر بدون إعلانات. يعود تلقائياً إذا لم يكن متاحاً.</string>
+    <string name="mobile_adblock_vod_summary">يشغل بث VOD المباشر بدون إعلانات مع رجوع تلقائي</string>
 </resources>

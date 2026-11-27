@@ -587,7 +587,7 @@
     <string name="tv_more_actions">Другие действия</string>
     <string name="tv_account">Аккаунт</string>
     <string name="tv_stream_preview">Предпросмотр выбранного стрима (ТВ)</string>
-    <string name="xtratv_settings">Настройки Xtra TV</string>
+    <string name="xtratv_settings">Настройки XtraPlus</string>
     <string name="xtratv_settings_summary">Блокировщик рекламы, подстройка частоты кадров, превью, главная и кнопки пульта</string>
     <string name="tv_preview_sound">Звук превью</string>
     <string name="close_player">Закрыть</string>
@@ -666,7 +666,7 @@
     <string name="tv_back_audio">Только звук</string>
     <string name="tv_dpad_up_down">Кнопки вверх и вниз на стримах и VOD</string>
     <string name="tv_dpad_up_down_summary">Когда управление скрыто: вверх — другие трансляции, вниз — показать или скрыть чат</string>
-    <string name="tv_1440p_warning">⚠ 1440p не работает с публичными прокси (Luminous и др.), они ограничены 1080p. Для 1440p отключите свой прокси и используйте блокировщик рекламы (настройки Xtra TV) или собственный прокси с поддержкой 1440p.</string>
+    <string name="tv_1440p_warning">⚠ 1440p не работает с публичными прокси (Luminous и др.), они ограничены 1080p. Для 1440p отключите свой прокси и используйте блокировщик рекламы (настройки XtraPlus) или собственный прокси с поддержкой 1440p.</string>
     <string name="tv_login_with_code">С кодом на twitch.tv/activate</string>
     <string name="tv_login_with_page">Через страницу входа Twitch (нужно для 1440p)</string>
     <string name="tv_login_code_help">На телефоне или компьютере откройте twitch.tv/activate и введите этот код. Вход продолжится сам. Для 1440p нужен вход через страницу Twitch.</string>
@@ -811,7 +811,7 @@
     <string name="tv_pip_pos_c">По центру</string>
     <string name="tv_pip_pos_mr">Посередине справа</string>
     <string name="tv_pip_pos_bc">Снизу по центру</string>
-    <string name="tv_enable_unknown_sources">Разрешите Xtra TV установку неизвестных приложений, затем нажмите Назад, чтобы начать обновление</string>
+    <string name="tv_enable_unknown_sources">Разрешите XtraPlus установку неизвестных приложений, затем нажмите Назад, чтобы начать обновление</string>
     <string name="tv_pip_size">Размер</string>
     <string name="tv_pip_size_small">Маленькое</string>
     <string name="tv_pip_size_medium">Среднее</string>
@@ -856,7 +856,7 @@
     <string name="tv_proxy_all_settings">Все настройки прокси…</string>
     <string name="tv_focus_switch">Переключать страницу без OK</string>
     <string name="tv_focus_switch_summary">Вкладки и боковое меню показывают страницу, как только получают фокус</string>
-    <string name="tv_update_title_version">Доступна Xtra TV %1$s</string>
+    <string name="tv_update_title_version">Доступна XtraPlus %1$s</string>
     <string name="tv_update_now">Обновить</string>
     <string name="tv_update_ignore">Пропустить</string>
     <string name="tv_proxy_add">Добавить прокси</string>
@@ -1187,7 +1187,7 @@
     <string name="tv_remote_action_pip_close">Маленькое окно: закрыть</string>
     <string name="tv_adblock_and_proxies_title">Блокировщик рекламы и прокси</string>
     <string name="tv_adblock_and_proxies_subtitle">Встроенные блокировщики рекламы или пользовательские HLS / HTTP прокси</string>
-    <string name="tv_update_install_blocked">Android заблокировал установку. Разрешите «Установка неизвестных приложений» для Xtra TV в системных настройках или скачайте обновление через браузер.</string>
+    <string name="tv_update_install_blocked">Android заблокировал установку. Разрешите «Установка неизвестных приложений» для XtraPlus в системных настройках или скачайте обновление через браузер.</string>
     <string name="tv_update_try_again">Повторить</string>
     <string name="tv_remote_action_pip_swap_default">Маленькое окно: поменять стримы (по умолчанию)</string>
     <string name="tv_remote_action_show_controls">Показать управление</string>
@@ -1346,7 +1346,7 @@
     <string name="tv_osd_chat_shown">Чат показан</string>
     <string name="tv_osd_chat_hidden">Чат скрыт</string>
     <string name="tv_backup_perm_title">Требуется доступ к файлам</string>
-    <string name="tv_backup_perm_summary">Чтобы перезаписать или прочитать XtraTV-backup.zip в папке Загрузки, разрешите доступ к файлам на следующем экране.</string>
+    <string name="tv_backup_perm_summary">Чтобы перезаписать или прочитать XtraPlus-backup.zip в папке Загрузки, разрешите доступ к файлам на следующем экране.</string>
     <string name="tv_backup_perm_grant">Разрешить доступ к файлам</string>
     <string name="tv_backup_perm_continue_anyway">Продолжить без разрешения</string>
     <string name="tv_backup_save_failed">Не удалось сохранить файл резервной копии</string>
@@ -1487,12 +1487,12 @@
     <string name="tv_chat_qr_follow_channel">Следовать за сменой канала</string>
     <string name="tv_chat_qr_disconnect">Отключить</string>
     <string name="tv_chat_qr_disconnected">Чат на телефоне отключён</string>
-    <string name="tv_chat_qr_readonly">Только чтение (войдите в Xtra TV, чтобы отправлять сообщения)</string>
+    <string name="tv_chat_qr_readonly">Только чтение (войдите в XtraPlus, чтобы отправлять сообщения)</string>
     <string name="tv_chat_qr_paused">Чат на паузе</string>
     <string name="tv_chat_qr_replying_to">Ответ для %s</string>
     <string name="tv_chat_qr_search_emotes">Поиск эмоций…</string>
     <string name="tv_chat_qr_switched">Переключено на %s</string>
-    <string name="tv_chat_qr_session_ended">Сеанс Xtra TV завершён</string>
+    <string name="tv_chat_qr_session_ended">Сеанс XtraPlus завершён</string>
     <string name="tv_chat_qr_auto_start">Автозапуск чата на телефоне</string>
     <string name="tv_chat_qr_auto_start_summary">Автоматически запускает локальный Wi-Fi сервер QR-чата при открытии трансляции, чтобы ярлык на телефоне сразу переподключался</string>
     <string name="tv_chat_qr_regenerate">Обновить QR-ссылку</string>
@@ -1544,4 +1544,13 @@
     <string name="mobile_accounts_login_methods">Управление способами входа</string>
     <string name="mobile_show_adblock_badge_title">Показывать значок блокировки рекламы</string>
     <string name="mobile_show_adblock_badge_summary">Отображать плавающий значок блокировщика поверх видео во время рекламы</string>
+    <string name="interface_mode_title">Режим интерфейса</string>
+    <string name="interface_mode_auto">Автоматически</string>
+    <string name="interface_mode_tv">ТВ</string>
+    <string name="interface_mode_mobile">Мобильный</string>
+    <string name="mobile_accent_color_title">Цвет акцента</string>
+    <string name="mobile_adblock_swap_plus_desc">Плавная замена рекламы в основном плеере с сохранением 1440p / HEVC / AV1. Переключается на классический Swap при недоступности.</string>
+    <string name="mobile_adblock_swap_plus_summary">Плавная замена рекламы в плеере (сохраняет 1440p / HEVC / AV1, авто-откат на Swap)</string>
+    <string name="mobile_adblock_vod_desc">Воспроизводит живой VOD-поток без рекламы. Автоматический откат, если недоступен.</string>
+    <string name="mobile_adblock_vod_summary">Воспроизводит живой VOD-поток без рекламы с автоматическим откатом</string>
 </resources>

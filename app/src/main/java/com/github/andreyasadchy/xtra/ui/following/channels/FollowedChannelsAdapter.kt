@@ -172,6 +172,9 @@ class FollowedChannelsAdapter(
                             }
                         }
                         username.text = label
+                        if (!com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyStreamerNameTint(username)
+                        }
                     } else {
                         username.visibility = View.GONE
                     }

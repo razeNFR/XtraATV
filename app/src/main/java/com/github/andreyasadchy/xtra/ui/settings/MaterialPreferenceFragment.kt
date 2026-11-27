@@ -229,6 +229,10 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
             // TV: its own panel opens from its click listener, not the list of Android as well
             return
         }
+        if (preference.key == C.MOBILE_ACCENT_COLOR && !com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
+            // Mobile: custom color-dot picker opens from its click listener
+            return
+        }
         if (requireContext().prefs().getBoolean(C.UI_THEME_MATERIAL3, true)) {
             when (preference) {
                 is ListPreference -> showPreferenceDialog(preference, MaterialListPreference())

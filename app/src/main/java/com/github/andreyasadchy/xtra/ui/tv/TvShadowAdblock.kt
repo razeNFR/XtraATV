@@ -52,15 +52,18 @@ object TvShadowAdblock {
     private const val MAX_EVICT_PER_PASS = 3
     private const val SEEN_IDENTITY_LIMIT = 600
     private const val PREROLL_WAIT_MS = 3_000L
-    private const val MIDROLL_WAIT_MS = 700L
-    private const val SHADOW_REFRESH_IDLE_MS = 6_000L
-    private const val SHADOW_REFRESH_HOT_MS = 2_000L
+    private const val MIDROLL_WAIT_MS = 2_200L
+    private const val SHADOW_REFRESH_IDLE_MS = 4_000L
+    private const val SHADOW_REFRESH_HOT_MS = 1_500L
+    private const val SHADOW_STALE_ON_AD_MS = 1_800L
+    private const val SHADOW_FAST_REFRESH_TIMEOUT_MS = 1_200L
     private const val SHADOW_HOT_WINDOW_MS = 90_000L
-    private const val SHADOW_MAX_AGE_MS = 12_000L
+    private const val SHADOW_MAX_AGE_MS = 15_000L
     private const val SHADOW_LEAVE_TTL_MS = 120_000L
-    private const val SHADOW_MASTER_MAX_AGE_MS = 600_000L
+    private const val SHADOW_MASTER_MAX_AGE_MS = 480_000L
     private const val SHADOW_REQUEST_TIMEOUT_MS = 4_000L
     private const val CLEAN_STREAK_TO_RETURN = 3
+    private const val MAX_HOLD_PASSES = 3
 
     private val SHADOW_PLAYER_TYPES = listOf(
         "web" to "frontpage",
@@ -453,13 +456,11 @@ object TvShadowAdblock {
         if (trimmed.startsWith("#EXT-X-START")) return null
         if (trimmed.startsWith("#EXT-X-DATERANGE:")) {
             val isAd = trimmed.contains("stitched-ad", true) ||
+                trimmed.contains("twitch-stitched-ad", true) ||
                 trimmed.contains("X-TV-TWITCH-AD-", true) ||
                 STRONG_AD_ID_REGEX.containsMatchIn(trimmed)
             if (isAd) {
-                if (!trimmed.contains("STREAM-SOURCE", ignoreCase = true)) {
-                    return null
-                }
-                return stripAdDateRangeAttributes(trimmed)
+                return null
             }
         }
         var cleaned = raw
@@ -538,6 +539,8 @@ object TvShadowAdblock {
             private set
         var consecutiveCleanPrimary: Int = 0
             private set
+        var consecutiveHoldPasses: Int = 0
+            private set
         var spliceCount: Int = 0
             private set
 
@@ -557,10 +560,16 @@ object TvShadowAdblock {
             currentWindowLimit = BASE_WINDOW_SIZE
             hasSeenContent = false
             consecutiveCleanPrimary = 0
+            consecutiveHoldPasses = 0
             spliceCount = 0
             lastVariantUrl = null
             lastPrefetches = emptyList()
             lastCleanSnapshot = null
+        }
+
+        fun noteHoldPass(isHold: Boolean): Int {
+            consecutiveHoldPasses = if (isHold) consecutiveHoldPasses + 1 else 0
+            return consecutiveHoldPasses
         }
 
         fun recordCleanSnapshot(parsed: ParsedPlaylist) {
@@ -643,6 +652,9 @@ object TvShadowAdblock {
             val toAppend: List<HlsSegment>
             if (firstPass) {
                 toAppend = fresh.takeLast(BASE_WINDOW_SIZE)
+                if (fresh.size > toAppend.size) {
+                    mediaSequence += (fresh.size - toAppend.size)
+                }
                 // Mark any earlier segments in firstPass as seen too
                 fresh.forEach { markSeen(it) }
             } else if (fresh.size > BASE_WINDOW_SIZE) {
@@ -814,12 +826,18 @@ object TvShadowAdblock {
         val adCount = primaryParsed.segments.count { it.classification == SegmentClass.AD }
         val primaryHasAd = primaryParsed.verdict == PlaylistVerdict.FULL_AD || primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD
         val onShadow = window.activeSourceId?.startsWith("shadow@") == true
+        val primaryHasMap = primaryParsed.activeMapLine != null || window.lastCleanSnapshot?.activeMapLine != null
+        val shadowHasMap = shadowPlaylist?.activeMapLine != null
+        val containerCompatible = primaryHasMap == shadowHasMap
         val cleanShadowAvailable = shadowFresh && shadowPlaylist != null &&
-            shadowPlaylist.verdict == PlaylistVerdict.CLEAN && !shadowVariantUrl.isNullOrBlank()
+            shadowPlaylist.verdict == PlaylistVerdict.CLEAN &&
+            !shadowVariantUrl.isNullOrBlank() &&
+            containerCompatible
 
         // Before any ad splice has occurred, pass clean primary playlists through untouched so native low-latency
         // prefetch and ABR quality switching are never altered; record snapshot to seed mid-rolls cleanly.
         if (!primaryHasAd && primaryParsed.verdict == PlaylistVerdict.CLEAN && window.spliceCount == 0 && !onShadow && window.isEmpty()) {
+            window.noteHoldPass(false)
             window.recordCleanSnapshot(primaryParsed)
             return DecisionResult(primaryRawText, "primary", 0)
         }
@@ -848,6 +866,7 @@ object TvShadowAdblock {
         when {
             primaryHasAd && cleanShadowAvailable -> {
                 sourceUsed = "shadow"
+                window.noteHoldPass(false)
                 window.ingest(
                     sourceId = "shadow@$shadowVariantUrl",
                     segments = shadowPlaylist!!.segments,
@@ -858,10 +877,17 @@ object TvShadowAdblock {
                 )
             }
             primaryHasAd && !cleanShadowAvailable && (onShadow || (primaryParsed.verdict == PlaylistVerdict.FULL_AD && !window.isEmpty())) -> {
+                val holdCount = window.noteHoldPass(true)
+                if (holdCount > MAX_HOLD_PASSES) {
+                    // Never freeze ExoPlayer indefinitely waiting for a dead shadow: hand off cleanly to Classic Swap
+                    window.reset()
+                    return DecisionResult(primaryRawText, "passthrough", 0)
+                }
                 sourceUsed = "hold"
             }
             primaryHasAd && !cleanShadowAvailable && primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD -> {
                 sourceUsed = "primary-partial"
+                window.noteHoldPass(false)
                 window.ingest(
                     sourceId = "primary",
                     segments = primaryParsed.segments,
@@ -873,6 +899,7 @@ object TvShadowAdblock {
             }
             !primaryHasAd && onShadow && window.consecutiveCleanPrimary < CLEAN_STREAK_TO_RETURN && cleanShadowAvailable -> {
                 sourceUsed = "shadow-cooldown"
+                window.noteHoldPass(false)
                 window.ingest(
                     sourceId = "shadow@$shadowVariantUrl",
                     segments = shadowPlaylist!!.segments,
@@ -884,6 +911,7 @@ object TvShadowAdblock {
             }
             !primaryHasAd && primaryParsed.verdict == PlaylistVerdict.CLEAN -> {
                 sourceUsed = "primary"
+                window.noteHoldPass(false)
                 window.ingest(
                     sourceId = "primary",
                     segments = primaryParsed.segments,
@@ -895,6 +923,7 @@ object TvShadowAdblock {
             }
             else -> {
                 sourceUsed = "fallback"
+                window.noteHoldPass(false)
             }
         }
 
@@ -905,6 +934,7 @@ object TvShadowAdblock {
 
         // Empty window fallback: never return an empty playlist that would break ExoPlayer
         if (primaryParsed.verdict == PlaylistVerdict.FULL_AD && cleanShadowAvailable) {
+            window.noteHoldPass(false)
             window.ingest(
                 sourceId = "shadow@$shadowVariantUrl",
                 segments = shadowPlaylist!!.segments,
@@ -1010,9 +1040,13 @@ object TvShadowAdblock {
         variantToHeight.clear()
     }
 
-    private fun warmShadowAsync(appCtx: Context, state: ChannelState) {
+    private fun warmShadowAsync(appCtx: Context, state: ChannelState, force: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
-        if (now < state.backoffUntilMs) return
+        if (force) {
+            state.backoffUntilMs = 0L
+        } else if (now < state.backoffUntilMs) {
+            return
+        }
         if (state.warmJob?.isActive == true) return
         state.warmJob = scope.launch {
             val ok = warmShadowNow(appCtx, state)
@@ -1022,10 +1056,29 @@ object TvShadowAdblock {
                 ensureRefreshLoop(appCtx, state)
             } else {
                 state.consecutiveWarmFailures++
-                val shift = (state.consecutiveWarmFailures - 1).coerceIn(0, 4)
-                val waitMs = (30_000L shl shift).coerceAtMost(300_000L)
+                val shift = (state.consecutiveWarmFailures - 1).coerceIn(0, 3)
+                val waitMs = (10_000L shl shift).coerceAtMost(60_000L)
                 state.backoffUntilMs = SystemClock.elapsedRealtime() + waitMs
             }
+        }
+    }
+
+    /** Fast single-GET refresh of the existing shadow media playlist (avoids 3-step GQL warm when URL is still valid). */
+    private suspend fun refreshShadowVariantNow(appCtx: Context, state: ChannelState): Boolean {
+        val url = state.shadowVariantUrl ?: return false
+        val app = appCtx as? XtraApp ?: return false
+        val client = buildShadowHttpClient(app.xtraModule.okHttpClient.value)
+        val text = withTimeoutOrNull(SHADOW_FAST_REFRESH_TIMEOUT_MS) {
+            fetchText(client, url)
+        } ?: return false
+        val parsed = parseAndClassifyMediaPlaylist(url, text)
+        return if (parsed.verdict == PlaylistVerdict.CLEAN) {
+            state.shadowParsed = parsed
+            state.shadowFetchedAtMs = SystemClock.elapsedRealtime()
+            true
+        } else {
+            state.invalidateShadow()
+            false
         }
     }
 
@@ -1092,21 +1145,26 @@ object TvShadowAdblock {
             val client = buildShadowHttpClient(app.xtraModule.okHttpClient.value)
             while (channels[state.login] === state) {
                 val now = SystemClock.elapsedRealtime()
-                val interval = if (now - state.lastPrimaryAdAtMs < SHADOW_HOT_WINDOW_MS) {
-                    SHADOW_REFRESH_HOT_MS
-                } else {
-                    SHADOW_REFRESH_IDLE_MS
-                }
+                val inHotWindow = now - state.lastPrimaryAdAtMs < SHADOW_HOT_WINDOW_MS
+                val interval = if (inHotWindow) SHADOW_REFRESH_HOT_MS else SHADOW_REFRESH_IDLE_MS
                 delay(interval)
+                val afterDelay = SystemClock.elapsedRealtime()
                 val url = state.shadowVariantUrl
                 if (url == null) {
+                    warmShadowAsync(appCtx, state, force = inHotWindow)
+                    return@launch
+                }
+                // Proactively renew shadow session before Twitch's ~15-min HLS token expires during long watches
+                if (!inHotWindow && state.shadowMasterFetchedAtMs > 0L &&
+                    (afterDelay - state.shadowMasterFetchedAtMs) >= SHADOW_MASTER_MAX_AGE_MS
+                ) {
                     warmShadowAsync(appCtx, state)
                     return@launch
                 }
                 val text = fetchText(client, url)
                 if (text == null) {
                     state.invalidateShadow()
-                    warmShadowAsync(appCtx, state)
+                    warmShadowAsync(appCtx, state, force = inHotWindow)
                     return@launch
                 }
                 val parsed = parseAndClassifyMediaPlaylist(url, text)
@@ -1115,7 +1173,7 @@ object TvShadowAdblock {
                     state.shadowFetchedAtMs = SystemClock.elapsedRealtime()
                 } else {
                     state.invalidateShadow()
-                    warmShadowAsync(appCtx, state)
+                    warmShadowAsync(appCtx, state, force = inHotWindow)
                     return@launch
                 }
             }
@@ -1291,15 +1349,25 @@ object TvShadowAdblock {
         val parsed = parseAndClassifyMediaPlaylist(url, text)
         val hasAd = parsed.verdict == PlaylistVerdict.FULL_AD || parsed.verdict == PlaylistVerdict.PARTIAL_AD
         if (hasAd) {
-            state.lastPrimaryAdAtMs = SystemClock.elapsedRealtime()
+            val now = SystemClock.elapsedRealtime()
+            state.lastPrimaryAdAtMs = now
+            val needsFastRefresh = state.shadowVariantUrl != null &&
+                (now - state.shadowFetchedAtMs) >= SHADOW_STALE_ON_AD_MS
+            if (needsFastRefresh) {
+                runBlocking {
+                    refreshShadowVariantNow(appCtx, state)
+                }
+            }
             if (!state.isShadowFresh()) {
-                warmShadowAsync(appCtx, state)
+                warmShadowAsync(appCtx, state, force = true)
                 val waitBudget = if (!state.window.hasSeenContent) PREROLL_WAIT_MS else MIDROLL_WAIT_MS
                 runBlocking {
                     withTimeoutOrNull(waitBudget) {
                         state.warmJob?.join()
                     }
                 }
+            } else {
+                ensureRefreshLoop(appCtx, state)
             }
         }
 

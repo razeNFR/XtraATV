@@ -588,7 +588,7 @@
     <string name="tv_more_actions">Diğer işlemler</string>
     <string name="tv_account">Hesap</string>
     <string name="tv_stream_preview">Seçili yayının canlı önizlemesi (TV)</string>
-    <string name="xtratv_settings">Xtra TV ayarları</string>
+    <string name="xtratv_settings">XtraPlus ayarları</string>
     <string name="xtratv_settings_summary">Reklam engelleyici, kare hızı eşleme, önizlemeler, ana sayfa ve kumanda kısayolları</string>
     <string name="tv_preview_sound">Önizleme sesi</string>
     <string name="close_player">Kapat</string>
@@ -667,7 +667,7 @@
     <string name="tv_back_audio">Yalnızca ses</string>
     <string name="tv_dpad_up_down">Yayınlarda ve VOD\'larda yukarı / aşağı kısayolları</string>
     <string name="tv_dpad_up_down_summary">Kontroller gizliyken: yukarı diğer yayınları gösterir, aşağı sohbeti gösterir veya gizler</string>
-    <string name="tv_1440p_warning">⚠ 1440p, 1080p ile sınırlı genel proxylerle (Luminous vb.) çalışmaz. 1440p için özel proxyyi kapatıp reklam engelleyiciyi (Xtra TV ayarları) kullanın veya 1440p destekleyen kendi proxynizi kullanın.</string>
+    <string name="tv_1440p_warning">⚠ 1440p, 1080p ile sınırlı genel proxylerle (Luminous vb.) çalışmaz. 1440p için özel proxyyi kapatıp reklam engelleyiciyi (XtraPlus ayarları) kullanın veya 1440p destekleyen kendi proxynizi kullanın.</string>
     <string name="tv_login_with_code">twitch.tv/activate üzerinde kodla</string>
     <string name="tv_login_with_page">Twitch giriş sayfasıyla (1440p için gerekli)</string>
     <string name="tv_login_code_help">Telefonunuzda veya bilgisayarınızda twitch.tv/activate adresine gidip bu kodu yazın. Giriş kendiliğinden devam eder. 1440p için Twitch sayfasıyla giriş gerekir.</string>
@@ -812,7 +812,7 @@
     <string name="tv_pip_pos_c">Orta</string>
     <string name="tv_pip_pos_mr">Sağ orta</string>
     <string name="tv_pip_pos_bc">Alt orta</string>
-    <string name="tv_enable_unknown_sources">Bilinmeyen uygulamaları yükle bölümünden Xtra TV iznini açın, ardından güncellemeyi başlatmak için Geri tuşuna basın</string>
+    <string name="tv_enable_unknown_sources">Bilinmeyen uygulamaları yükle bölümünden XtraPlus iznini açın, ardından güncellemeyi başlatmak için Geri tuşuna basın</string>
     <string name="tv_pip_size">Boyut</string>
     <string name="tv_pip_size_small">Küçük</string>
     <string name="tv_pip_size_medium">Orta</string>
@@ -857,7 +857,7 @@
     <string name="tv_proxy_all_settings">Tüm proxy ayarları…</string>
     <string name="tv_focus_switch">OK olmadan sayfa değiştir</string>
     <string name="tv_focus_switch_summary">Sekmeler ve yan menü odak alır almaz sayfalarını gösterir</string>
-    <string name="tv_update_title_version">Xtra TV %1$s mevcut</string>
+    <string name="tv_update_title_version">XtraPlus %1$s mevcut</string>
     <string name="tv_update_now">Güncelle</string>
     <string name="tv_update_ignore">Yoksay</string>
     <string name="tv_proxy_add">Proxy ekle</string>
@@ -1188,7 +1188,7 @@
     <string name="tv_remote_action_pip_close">Küçük pencere: kapat</string>
     <string name="tv_adblock_and_proxies_title">Reklam engelleyici ve proxyler</string>
     <string name="tv_adblock_and_proxies_subtitle">Canlı yayınlar için yerleşik reklam engelleyiciler veya özel HLS / HTTP proxy\'ler</string>
-    <string name="tv_update_install_blocked">Android yüklemeyi engelledi. Sistem ayarlarından Xtra TV için \"Bilinmeyen uygulamaları yükle\" iznini verin veya güncellemeyi tarayıcıdan indirin.</string>
+    <string name="tv_update_install_blocked">Android yüklemeyi engelledi. Sistem ayarlarından XtraPlus için \"Bilinmeyen uygulamaları yükle\" iznini verin veya güncellemeyi tarayıcıdan indirin.</string>
     <string name="tv_update_try_again">Tekrar dene</string>
     <string name="tv_remote_action_pip_swap_default">Küçük pencere: yayınları değiştir (varsayılan)</string>
     <string name="tv_remote_action_show_controls">Kontrolleri göster</string>
@@ -1347,7 +1347,7 @@
     <string name="tv_osd_chat_shown">Sohbet gösterildi</string>
     <string name="tv_osd_chat_hidden">Sohbet gizlendi</string>
     <string name="tv_backup_perm_title">Dosya erişimi gerekli</string>
-    <string name="tv_backup_perm_summary">İndirilenler klasöründeki XtraTV-backup.zip dosyasının üzerine yazmak veya okumak için sonraki ekranda dosya erişimine izin verin.</string>
+    <string name="tv_backup_perm_summary">İndirilenler klasöründeki XtraPlus-backup.zip dosyasının üzerine yazmak veya okumak için sonraki ekranda dosya erişimine izin verin.</string>
     <string name="tv_backup_perm_grant">Dosya erişimine izin ver</string>
     <string name="tv_backup_perm_continue_anyway">İzin olmadan devam et</string>
     <string name="tv_backup_save_failed">Yedekleme dosyası kaydedilemedi</string>
@@ -1488,12 +1488,12 @@
     <string name="tv_chat_qr_follow_channel">Kanal değişimini takip et</string>
     <string name="tv_chat_qr_disconnect">Bağlantıyı kes</string>
     <string name="tv_chat_qr_disconnected">Telefon sohbeti kesildi</string>
-    <string name="tv_chat_qr_readonly">Salt okunur mod (mesaj göndermek için Xtra TV üzerinden giriş yapın)</string>
+    <string name="tv_chat_qr_readonly">Salt okunur mod (mesaj göndermek için XtraPlus üzerinden giriş yapın)</string>
     <string name="tv_chat_qr_paused">Sohbet duraklatıldı</string>
     <string name="tv_chat_qr_replying_to">%s kullanıcısına yanıt</string>
     <string name="tv_chat_qr_search_emotes">İfade ara…</string>
     <string name="tv_chat_qr_switched">%s kanalına geçildi</string>
-    <string name="tv_chat_qr_session_ended">Xtra TV oturumu sona erdi</string>
+    <string name="tv_chat_qr_session_ended">XtraPlus oturumu sona erdi</string>
     <string name="tv_chat_qr_auto_start">Telefon sohbetini otomatik başlat</string>
     <string name="tv_chat_qr_auto_start_summary">Canlı yayın açıldığında yerel Wi-Fi QR sohbet sunucusunu otomatik başlatır, böylece telefondaki kısayol hemen yeniden bağlanır</string>
     <string name="tv_chat_qr_regenerate">QR bağlantısını yenile</string>
@@ -1545,4 +1545,13 @@
     <string name="mobile_accounts_login_methods">Giriş yöntemlerini yönet</string>
     <string name="mobile_show_adblock_badge_title">Reklam sırasında engelleyici rozetini göster</string>
     <string name="mobile_show_adblock_badge_summary">Reklam aralarında video üzerinde yüzen reklam engelleyici durum rozetini göster</string>
+    <string name="interface_mode_title">Arayüz modu</string>
+    <string name="interface_mode_auto">Otomatik</string>
+    <string name="interface_mode_tv">TV</string>
+    <string name="interface_mode_mobile">Mobil</string>
+    <string name="mobile_accent_color_title">Vurgu rengi</string>
+    <string name="mobile_adblock_swap_plus_desc">1440p / HEVC / AV1 korunarak ana oynatıcıda kesintisiz reklam değişimi. Kullanılamazsa klasik Swap\'a geçer.</string>
+    <string name="mobile_adblock_swap_plus_summary">Oynatıcı içi kesintisiz reklam değişimi (1440p / HEVC / AV1 korunur, otomatik Swap yedeği)</string>
+    <string name="mobile_adblock_vod_desc">Reklamsız izleme için canlı VOD akışını oynatır. Kullanılamazsa otomatik olarak geri döner.</string>
+    <string name="mobile_adblock_vod_summary">Otomatik yedekleme ile reklamsız canlı VOD akışı oynatır</string>
 </resources>
