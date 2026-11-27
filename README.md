@@ -7,10 +7,9 @@ One single APK adapts automatically to your device — bringing a dedicated remo
 
 <br clear="left"/>
 
-<p align="center">
-  <img src="docs/screenshots/home.jpg" width="49%"/>
-  <img src="docs/screenshots/mobile_home.jpg" width="49%"/>
-</p>
+| TV Home | Mobile Home |
+| :---: | :---: |
+| <img src="docs/screenshots/home.jpg" width="580"/> | <img src="docs/screenshots/mobile_home.jpg" width="160"/> |
 
 ## Download
 
@@ -60,7 +59,7 @@ Twitch only serves 1440p - 4K streams to its website client with a logged-in acc
 | ![Side menu](docs/screenshots/menu.jpg) | ![Home](docs/screenshots/home.jpg) |
 | Leanback side menu | Home with rows and live preview |
 | ![Player](docs/screenshots/player.jpg) | ![Multi-stream](docs/screenshots/multistream.jpg) |
-| Player with HUD and chat overlay | Multi-stream (up to 4 streams) |
+| Player with HUD and chat overlay | Multi-stream (up to 6 streams) |
 | ![Games](docs/screenshots/games.jpg) | ![Category](docs/screenshots/category.jpg) |
 | Games | Category with live preview |
 | ![Sort panel](docs/screenshots/sort.jpg) | ![Search](docs/screenshots/search.jpg) |
