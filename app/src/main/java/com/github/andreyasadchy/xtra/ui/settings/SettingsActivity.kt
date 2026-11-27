@@ -2957,6 +2957,26 @@ class SettingsActivity : AppCompatActivity() {
                 IntegrityDialog.newInstance(null).show(childFragmentManager, null)
                 true
             }
+            val isTv = TvUi.isTv(requireContext())
+            findPreference<Preference>(C.PLAYER_USE_VIDEO_SWAP)?.apply {
+                isVisible = !isTv
+                if (!isTv) {
+                    val swapOn = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(requireContext())
+                    isEnabled = !swapOn
+                    summary = getString(if (swapOn) R.string.use_video_swap_adblock_on else R.string.use_video_swap_desc)
+                }
+            }
+            findPreference<Preference>("video_swap_settings")?.apply {
+                isVisible = !isTv
+                if (!isTv) {
+                    setOnPreferenceClickListener {
+                        requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                        findNavController().navigate(SettingsNavGraphDirections.actionGlobalVideoSwapSettingsFragment())
+                        true
+                    }
+                }
+            }
+            findPreference<Preference>(C.PLAYER_HIDE_ADS)?.isVisible = !isTv
         }
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {

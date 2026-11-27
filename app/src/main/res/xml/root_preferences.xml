@@ -272,13 +272,6 @@
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
 
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:icon="@drawable/tv_ic_block"
-            android:key="player_hide_ads"
-            android:title="@string/hide_during_ads"
-            app:singleLineTitle="false" />
-
         <Preference
             android:icon="@drawable/tv_ic_bug"
             android:key="debug_settings"

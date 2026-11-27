@@ -9,8 +9,8 @@
   - Eliminated post-ad looping on long 60s sliding playlists, enforced strict monotonic `MEDIA-SEQUENCE` / `DISCONTINUITY-SEQUENCE` continuity to prevent ExoPlayer crashes/quality drops, and cleaned LL-HLS control tags in synthesized playlists.
   - Added proactive shadow token renewal, fast single-GET shadow refresh on active ads, smoother cold preroll start offset (no early micro-rebuffering), and fixed the preroll loading overlay getting stuck on startup.
 - **Adblock Badge Polish & Cleaner Settings (TV & Mobile)**:
-  - **Android TV**: added **Show adblock badge during ads** (enabled by default) in **Settings → Ads & Proxy**, upgraded the **Swap+** badge to display **`Pre-roll ad` / `Mid-roll ad`**, and moved **Hide player during ads** to **Settings → Advanced**.
-  - **Mobile**: moved **Show adblock badge during ads** (off by default) to **Settings → Adblock & Proxies**, moved **Hide player during ads** to **Settings → System & About**, and redesigned the mobile adblock badge into a compact **`Ad`** pill with clean top-right spacing that never overlaps player controls.
+  - **Android TV**: added **`Adblock (Swap+)`** and **Show adblock badge during ads** (enabled by default) to **Settings → Ads & Proxy**, upgraded the **Swap+** badge to display **`Pre-roll ad` / `Mid-roll ad`**, and moved **Hide player during ads** to **Settings → Advanced**.
+  - **Mobile**: moved **Show adblock badge during ads** (off by default) to **Settings → Adblock & Proxies**, moved **Hide player during ads** and **Video swap settings** to **Settings → Debug**, and redesigned the mobile adblock badge into a compact **`Ad`** pill with clean top-right spacing that never overlaps player controls.
 - **Improved Android TV Box Detection & Manual Interface Mode**:
   - Strengthened auto-detection for non-certified AOSP Android TV boxes (such as **Beelink Amlogic GT1mini-2** on Android 8) that falsely declare touchscreen/battery features.
   - Added a manual **Interface mode** setting (**Automatic / TV / Mobile**) in **Settings → Interface** on both mobile and TV.

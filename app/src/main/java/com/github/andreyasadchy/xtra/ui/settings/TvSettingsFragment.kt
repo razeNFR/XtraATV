@@ -2170,6 +2170,7 @@ class TvSettingsFragment : Fragment() {
         val key = raw.key
         if (key in MaterialPreferenceFragment.TV_HIDDEN_KEYS) return null
         if (xmlRes == R.xml.adblock_preferences && key == "video_swap_settings") return null
+        if (xmlRes == R.xml.debug_preferences && (key == "video_swap_settings" || key == C.PLAYER_USE_VIDEO_SWAP || key == C.PLAYER_HIDE_ADS)) return null
         if (!caps.hasPip) {
             if (key == C.PLAYER_PICTURE_IN_PICTURE || key == C.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED || key == C.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED) {
                 return null

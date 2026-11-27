@@ -15,6 +15,14 @@
 
         <SwitchPreferenceCompat
             android:defaultValue="false"
+            android:key="tv_adblock_swap_plus"
+            android:summary="@string/tv_adblock_swap_plus_summary"
+            android:title="@string/tv_adblock_swap_plus_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
             android:key="tv_experimental_adblock"
             android:summary="@string/tv_adblock_exp_summary"
             android:title="@string/tv_adblock_exp_title"
