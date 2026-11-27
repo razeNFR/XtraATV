@@ -54,8 +54,8 @@ object TvShadowAdblock {
     private const val PREROLL_WAIT_MS = 3_000L
     private const val MIDROLL_WAIT_MS = 2_200L
     private const val SHADOW_REFRESH_IDLE_MS = 4_000L
-    private const val SHADOW_REFRESH_HOT_MS = 1_500L
-    private const val SHADOW_STALE_ON_AD_MS = 1_800L
+    private const val SHADOW_REFRESH_HOT_MS = 1_000L
+    private const val SHADOW_STALE_ON_AD_MS = 800L
     private const val SHADOW_FAST_REFRESH_TIMEOUT_MS = 1_200L
     private const val SHADOW_HOT_WINDOW_MS = 90_000L
     private const val SHADOW_MAX_AGE_MS = 15_000L
@@ -727,6 +727,9 @@ object TvShadowAdblock {
             sb.append("#EXT-X-MEDIA-SEQUENCE:").append(mediaSequence.coerceAtLeast(0L)).append('\n')
             if (discontinuitySequence > 0L) {
                 sb.append("#EXT-X-DISCONTINUITY-SEQUENCE:").append(discontinuitySequence).append('\n')
+            }
+            if (spliceCount == 0 && activeSourceId?.startsWith("shadow@") == true && window.size >= 4) {
+                sb.append("#EXT-X-START:TIME-OFFSET=-4.0,PRECISE=NO\n")
             }
 
             var currentMap: String? = null

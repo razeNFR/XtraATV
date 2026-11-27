@@ -2511,6 +2511,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideTvMenu() {
+        if (!isTv) return
         tvMenuOpenedByBack = false
         tvMenuState.pendingFocus = false
         // a player or a multi-stream is over the screens: they stay out of reach of the focus
