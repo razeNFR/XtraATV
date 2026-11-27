@@ -62,8 +62,6 @@ Twitch only serves 1440p - 4K streams to its website client with a logged-in acc
 | Player with HUD and chat overlay | Multi-stream (up to 6 streams) |
 | ![Games](docs/screenshots/games.jpg) | ![Category](docs/screenshots/category.jpg) |
 | Games | Category with live preview |
-| ![Sort panel](docs/screenshots/sort.jpg) | ![Search](docs/screenshots/search.jpg) |
-| Sort and filters panel | Voice search |
 
 ### Mobile
 
