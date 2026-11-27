@@ -90,6 +90,8 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
                     }
                 }
             }, 150L)
+        } else {
+            com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyPreferenceListAccent(listView)
         }
     }
 

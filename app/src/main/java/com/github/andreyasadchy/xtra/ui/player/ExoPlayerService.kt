@@ -755,6 +755,9 @@ class ExoPlayerService : BasePlaybackService() {
                         if (useProxy || useVideoSwap || hideAds) {
                             val playlist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
                             val ads = if (shadowAdActive && !videoSwapActive && !proxyMediaPlaylist) {
+                                if (playlist != null) {
+                                    checkFirstPlaylist = false
+                                }
                                 false
                             } else {
                                 checkPlaylist(playlist, mainPlayer = true)

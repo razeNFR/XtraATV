@@ -523,9 +523,9 @@
     <string name="about">À propos</string>
     <string name="team">Équipe : %s</string>
     <string name="owner">Propriétaire : %s</string>
-    <string name="use_background_audio_locked">Play audio in the background when locking the screen</string>
+    <string name="use_background_audio_locked">Lire l\'audio en arrière-plan écran verrouillé</string>
     <string name="use_background_audio_pip_closed">Lire l\'audio en arrière-plan en fermant le PiP</string>
-    <string name="use_background_audio_pip_locked">Play audio in the background when locking the screen in PiP mode</string>
+    <string name="use_background_audio_pip_locked">Lire l\'audio en arrière-plan écran verrouillé en mode PiP</string>
     <string name="old_username">Ancien nom : %s</string>
     <string name="default_cellular_quality">Qualité par défaut sur réseau mobile</string>
     <string name="player">Lecteur</string>

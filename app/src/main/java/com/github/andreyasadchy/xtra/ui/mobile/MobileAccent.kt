@@ -163,6 +163,81 @@ object MobileAccent {
         view.background = LayerDrawable(arrayOf(ColorDrawable(baseBg), topGlow))
     }
 
+    /**
+     * Tints active switches and category headers inside mobile Preference screens using the chosen accent color.
+     * Strictly no-op on Android TV or when accent color is set to "none".
+     */
+    fun applyPreferenceListAccent(listView: androidx.recyclerview.widget.RecyclerView) {
+        val context = listView.context
+        if (TvUi.isTv(context)) return
+        val accent = color(context) ?: return
+        val light = isLightTheme(context)
+        val headerColor = streamerNameColor(context) ?: accent
+
+        val trackChecked = accent
+        val trackUnchecked = if (light) 0xFFD4D4DC.toInt() else 0xFF33333D.toInt()
+        val trackDisabledChecked = ColorUtils.setAlphaComponent(accent, 96)
+        val trackDisabledUnchecked = if (light) 0xFFE5E5EC.toInt() else 0xFF24242C.toInt()
+
+        val thumbChecked = if (ColorUtils.calculateLuminance(accent) > 0.58) 0xFF14121C.toInt() else Color.WHITE
+        val thumbUnchecked = if (light) 0xFF747480.toInt() else 0xFF9E9EAB.toInt()
+        val thumbDisabled = if (light) 0xFFB0B0BC.toInt() else 0xFF5A5A66.toInt()
+
+        val states = arrayOf(
+            intArrayOf(-android.R.attr.state_enabled, android.R.attr.state_checked),
+            intArrayOf(-android.R.attr.state_enabled),
+            intArrayOf(android.R.attr.state_checked),
+            intArrayOf(),
+        )
+        val trackCsl = ColorStateList(
+            states,
+            intArrayOf(trackDisabledChecked, trackDisabledUnchecked, trackChecked, trackUnchecked),
+        )
+        val thumbCsl = ColorStateList(
+            states,
+            intArrayOf(thumbDisabled, thumbDisabled, thumbChecked, thumbUnchecked),
+        )
+        val outlineUnchecked = if (light) 0xFF8C8C98.toInt() else 0xFF6B6B78.toInt()
+        val decorCsl = ColorStateList(
+            states,
+            intArrayOf(Color.TRANSPARENT, outlineUnchecked, Color.TRANSPARENT, outlineUnchecked),
+        )
+
+        fun tintRow(row: View) {
+            fun walk(node: View) {
+                if (node is androidx.appcompat.widget.SwitchCompat) {
+                    node.trackTintList = trackCsl
+                    node.thumbTintList = thumbCsl
+                    if (node is com.google.android.material.materialswitch.MaterialSwitch) {
+                        node.trackDecorationTintList = decorCsl
+                    }
+                    return
+                }
+                if (node is android.view.ViewGroup) {
+                    for (i in 0 until node.childCount) walk(node.getChildAt(i))
+                }
+            }
+            walk(row)
+            // PreferenceCategory headers are non-clickable rows without a widget_frame
+            if (!row.isClickable && row.findViewById<View>(android.R.id.widget_frame) == null) {
+                row.findViewById<TextView>(android.R.id.title)?.setTextColor(headerColor)
+            }
+        }
+
+        for (i in 0 until listView.childCount) {
+            tintRow(listView.getChildAt(i))
+        }
+        listView.addOnChildAttachStateChangeListener(
+            object : androidx.recyclerview.widget.RecyclerView.OnChildAttachStateChangeListener {
+                override fun onChildViewAttachedToWindow(view: View) {
+                    tintRow(view)
+                }
+
+                override fun onChildViewDetachedFromWindow(view: View) = Unit
+            },
+        )
+    }
+
     /** Visual color picker dialog with color dots for Paramètres -> Thème -> Couleur (mobile-only). */
     fun showColorPickerDialog(
         context: Context,
