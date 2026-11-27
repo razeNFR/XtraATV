@@ -40,13 +40,24 @@ fun Activity.applyTheme() {
             }
         )
     }
-    val theme = if (prefs().getBoolean(C.UI_THEME_FOLLOW_SYSTEM, false)) {
+    val rawTheme = if (prefs().getBoolean(C.UI_THEME_FOLLOW_SYSTEM, false)) {
         when (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) {
             Configuration.UI_MODE_NIGHT_YES -> prefs().getString(C.UI_THEME_DARK_ON, "0") ?: "0"
             else -> prefs().getString(C.UI_THEME_DARK_OFF, "2") ?: "2"
         }
     } else {
         prefs().getString(C.THEME, "0") ?: "0"
+    }
+    val theme = if (rawTheme == "3" && !com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(this)) {
+        val editor = prefs().edit()
+        if (prefs().getString(C.THEME, null) == "3") editor.putString(C.THEME, "0")
+        if (prefs().getString(C.UI_THEME_DARK_ON, null) == "3") editor.putString(C.UI_THEME_DARK_ON, "0")
+        if (prefs().getString(C.UI_THEME_DARK_OFF, null) == "3") editor.putString(C.UI_THEME_DARK_OFF, "0")
+        if (!prefs().contains(C.MOBILE_ACCENT_COLOR)) editor.putString(C.MOBILE_ACCENT_COLOR, "blue")
+        editor.apply()
+        "0"
+    } else {
+        rawTheme
     }
     if (prefs().getBoolean(C.UI_THEME_MATERIAL3, true)) {
         val reducedPadding = prefs().getBoolean(C.UI_THEME_REDUCED_PADDING, false)

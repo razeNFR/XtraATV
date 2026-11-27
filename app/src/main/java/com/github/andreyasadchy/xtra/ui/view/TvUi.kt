@@ -22,20 +22,91 @@ object TvUi {
     @Volatile
     private var cachedUseTvUi: Boolean? = null
 
+    fun invalidateCache() {
+        cachedUseTvUi = null
+    }
+
+    /** Restarts the app into the newly selected interface mode (Auto / TV / Mobile). */
+    fun restartAppForInterfaceMode(context: Context) {
+        invalidateCache()
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        } ?: return
+        context.startActivity(intent)
+        (context as? android.app.Activity)?.finishAffinity()
+    }
+
+    private fun readInterfaceModeOverride(context: Context): String {
+        return runCatching {
+            context.prefs().getString(com.github.andreyasadchy.xtra.util.C.UI_INTERFACE_MODE, "auto")
+        }.getOrNull().orEmpty().ifBlank { "auto" }
+    }
+
+    private fun hasRealVibrator(context: Context): Boolean {
+        return runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                vm?.defaultVibrator?.hasVibrator() == true
+            } else {
+                @Suppress("DEPRECATION")
+                val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                v?.hasVibrator() == true
+            }
+        }.getOrDefault(false)
+    }
+
+    private fun isKnownTvBoxHardware(): Boolean {
+        val signature = listOf(
+            android.os.Build.HARDWARE,
+            android.os.Build.BOARD,
+            android.os.Build.MANUFACTURER,
+            android.os.Build.BRAND,
+            android.os.Build.MODEL,
+            android.os.Build.DEVICE,
+            android.os.Build.PRODUCT,
+        ).joinToString(" ").lowercase(java.util.Locale.US)
+        return TV_BOX_SIGNATURES.any { signature.contains(it) }
+    }
+
+    private val TV_BOX_SIGNATURES = listOf(
+        "amlogic", "meson", "g12a", "g12b", "gxl", "gxm", "s905", "s912", "s922",
+        "beelink", "gt1", "rockchip", "rk32", "rk33", "rk35", "sunxi", "allwinner",
+        "h616", "h618", "tanix", "x96", "h96", "mecool", "minix", "ugoos",
+        "formuler", "buzztv", "homatics", "tx3", "tx6", "mxq", "t95",
+    )
+
     /**
      * Detects TVs and non-certified AOSP Android TV boxes while leaving real smartphones/tablets in mobile mode:
-     * - Certified TV / Fire TV / Leanback devices
+     * - Respects manual override (`ui_interface_mode`: "tv" / "mobile" / "auto")
+     * - Certified TV / Fire TV / Leanback / HDMI-CEC devices
      * - Devices without a touchscreen (generic AOSP TV boxes)
-     * - Devices without telephony and without a battery (AOSP TV boxes that falsely declare touchscreen)
+     * - Non-certified AOSP boxes (e.g. Beelink Amlogic GT1mini-2 Android 8) that falsely declare touchscreen/battery:
+     *   no camera + no vibrator combined with Ethernet, known TV box SoC/brand, or dummy/missing battery
+     * - Devices without telephony and without a battery
      */
     fun shouldUseTvUi(context: Context): Boolean {
         cachedUseTvUi?.let { return it }
+        when (readInterfaceModeOverride(context)) {
+            "tv" -> {
+                cachedUseTvUi = true
+                return true
+            }
+            "mobile" -> {
+                cachedUseTvUi = false
+                return false
+            }
+        }
         val uiModeType = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK
+        val uiModeMgrType = runCatching {
+            (context.getSystemService(Context.UI_MODE_SERVICE) as? android.app.UiModeManager)?.currentModeType
+        }.getOrNull()
         val pm = context.packageManager
         val hasTvFeature = uiModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION ||
+            uiModeMgrType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION ||
             pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
             @Suppress("DEPRECATION") pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEVISION) ||
-            pm.hasSystemFeature("amazon.hardware.fire_tv")
+            pm.hasSystemFeature("amazon.hardware.fire_tv") ||
+            pm.hasSystemFeature("android.hardware.hdmi.cec")
         if (hasTvFeature) {
             cachedUseTvUi = true
             return true
@@ -45,13 +116,34 @@ object TvUi {
             cachedUseTvUi = true
             return true
         }
+
+        val batteryIntent = runCatching {
+            context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        }.getOrNull()
+        val hasBattery = batteryIntent?.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, true)
+        val dummyAcBattery = batteryIntent != null && run {
+            val plugged = batteryIntent.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0)
+            val level = batteryIntent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+            val voltage = batteryIntent.getIntExtra(android.os.BatteryManager.EXTRA_VOLTAGE, -1)
+            val temp = batteryIntent.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, -1)
+            plugged == android.os.BatteryManager.BATTERY_PLUGGED_AC &&
+                level == 100 &&
+                (voltage <= 0 || temp <= 0)
+        }
+
+        val hasCamera = pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY) ||
+            @Suppress("DEPRECATION") pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA) ||
+            pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_FRONT)
+        val hasVibrator = hasRealVibrator(context)
+        val hasEthernet = pm.hasSystemFeature("android.hardware.ethernet")
+        if (!hasCamera && !hasVibrator && (hasEthernet || isKnownTvBoxHardware() || hasBattery == false || dummyAcBattery)) {
+            cachedUseTvUi = true
+            return true
+        }
+
         if (!pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEPHONY)) {
-            val batteryIntent = runCatching {
-                context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
-            }.getOrNull()
             if (batteryIntent != null) {
-                val hasBattery = batteryIntent.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, true)
-                val result = !hasBattery
+                val result = hasBattery == false || dummyAcBattery
                 cachedUseTvUi = result
                 return result
             }
@@ -63,22 +155,27 @@ object TvUi {
     }
 
     /**
-     * Forces UI_MODE_TYPE_TELEVISION on non-certified AOSP Android TV boxes (which report UI_MODE_TYPE_NORMAL)
-     * while keeping smartphones in mobile mode and preserving night mode and locale.
+     * Forces UI_MODE_TYPE_TELEVISION on TVs and non-certified AOSP Android TV boxes (which report UI_MODE_TYPE_NORMAL),
+     * or UI_MODE_TYPE_NORMAL when manually forced to mobile mode, while preserving night mode and locale.
      */
     fun wrapTvContext(base: Context): Context {
-        if (!shouldUseTvUi(base)) {
+        val useTv = shouldUseTvUi(base)
+        val current = base.resources.configuration
+        val currentType = current.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK
+        val desiredType = if (useTv) {
+            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        } else {
+            android.content.res.Configuration.UI_MODE_TYPE_NORMAL
+        }
+        if (currentType == desiredType) {
             return base
         }
-        val current = base.resources.configuration
-        if ((current.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
-            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
-        ) {
+        // Only override an existing TELEVISION mode when the user explicitly forced "mobile"
+        if (!useTv && readInterfaceModeOverride(base) != "mobile") {
             return base
         }
         val config = android.content.res.Configuration(current).apply {
-            uiMode = (uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK.inv()) or
-                android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+            uiMode = (uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK.inv()) or desiredType
         }
         return base.createConfigurationContext(config)
     }

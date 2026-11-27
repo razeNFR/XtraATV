@@ -85,7 +85,9 @@ import androidx.compose.ui.graphics.Color as ComposeColor
  */
 object TvBackup {
 
-    const val FILE_NAME = "XtraTV-backup.zip"
+    const val FILE_NAME = "XtraPlus-backup.zip"
+    private const val LEGACY_FILE_PREFIX = "XtraTV-backup"
+    private const val FILE_PREFIX = "XtraPlus-backup"
     const val REQ_STORAGE_PERMISSION = 4901
     private const val PREFS_ENTRY = "preferences.xml"
     private const val TV_FAVORITES_ENTRY = "tv_favorites.xml"
@@ -758,8 +760,8 @@ object TvBackup {
             resolver.query(
                 MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                 arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
-                "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
-                arrayOf("XtraTV-backup%"),
+                "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? OR ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                arrayOf("$FILE_PREFIX%", "$LEGACY_FILE_PREFIX%"),
                 null,
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
@@ -862,8 +864,8 @@ object TvBackup {
                 resolver.query(
                     MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                     arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DATE_MODIFIED),
-                    "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
-                    arrayOf("XtraTV-backup%"),
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? OR ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                    arrayOf("$FILE_PREFIX%", "$LEGACY_FILE_PREFIX%"),
                     "${MediaStore.MediaColumns.DATE_MODIFIED} DESC, ${MediaStore.MediaColumns._ID} DESC",
                 )?.use { cursor ->
                     val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
@@ -899,7 +901,7 @@ object TvBackup {
             dir.listFiles()?.forEach { f ->
                 if (f.isFile &&
                     f.absolutePath != keepFile.absolutePath &&
-                    f.name.startsWith("XtraTV-backup", ignoreCase = true) &&
+                    (f.name.startsWith(FILE_PREFIX, ignoreCase = true) || f.name.startsWith(LEGACY_FILE_PREFIX, ignoreCase = true)) &&
                     (f.name.endsWith(".zip", ignoreCase = true) || f.name.endsWith(".tmp", ignoreCase = true))
                 ) {
                     runCatching { f.delete() }
@@ -1049,7 +1051,9 @@ object TvBackup {
                             add(File(dir, FILE_NAME))
                             runCatching {
                                 dir.listFiles()?.filter {
-                                    it.isFile && it.name.startsWith("XtraTV-backup", ignoreCase = true) && it.name.endsWith(".zip", ignoreCase = true)
+                                    it.isFile &&
+                                        (it.name.startsWith(FILE_PREFIX, ignoreCase = true) || it.name.startsWith(LEGACY_FILE_PREFIX, ignoreCase = true)) &&
+                                        it.name.endsWith(".zip", ignoreCase = true)
                                 }?.let { addAll(it) }
                             }
                         }.distinctBy { it.absolutePath }
@@ -1272,10 +1276,10 @@ object TvBackup {
                 val body = """
                     <!DOCTYPE html><html><head><meta charset="utf-8">
                     <meta name="viewport" content="width=device-width,initial-scale=1">
-                    <title>Xtra TV</title>
+                    <title>XtraPlus</title>
                     <style>body{background:#121216;color:#fff;font-family:sans-serif;text-align:center;padding:40px 20px}
                     a.btn{display:inline-block;margin-top:24px;padding:14px 28px;background:#9147ff;color:#fff;text-decoration:none;border-radius:10px;font-weight:bold;font-size:17px}</style>
-                    </head><body><h2>Xtra TV</h2><p>$title</p>
+                    </head><body><h2>XtraPlus</h2><p>$title</p>
                     <a class="btn" href="/backup">$FILE_NAME</a>
                     <script>setTimeout(function(){location.href='/backup'},300);</script>
                     </body></html>
@@ -1325,11 +1329,11 @@ object TvBackup {
                 val html = """
                     <!DOCTYPE html><html><head><meta charset="utf-8">
                     <meta name="viewport" content="width=device-width,initial-scale=1">
-                    <title>Xtra TV</title>
+                    <title>XtraPlus</title>
                     <style>body{background:#121216;color:#fff;font-family:sans-serif;text-align:center;padding:40px 20px}
                     input[type=file]{display:block;margin:24px auto;color:#fff;font-size:16px}
                     button{padding:14px 28px;background:#9147ff;color:#fff;border:0;border-radius:10px;font-weight:bold;font-size:17px}</style>
-                    </head><body><h2>Xtra TV</h2><p>$title</p>
+                    </head><body><h2>XtraPlus</h2><p>$title</p>
                     <input type="file" id="f" accept=".zip,.xml,*/*">
                     <button onclick="send()">OK</button><p id="s"></p>
                     <script>

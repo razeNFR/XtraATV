@@ -125,7 +125,7 @@ class StreamsAdapter(
                     item.channelName
                 }
                 val isTv = context.resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)
-                if (isTv && com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.channelLogin)) {
+                if (com.github.andreyasadchy.xtra.ui.tv.TvFavorites.isFavorite(item.channelLogin)) {
                     base = android.text.SpannableStringBuilder("★ ").apply {
                         setSpan(android.text.style.ForegroundColorSpan(0xFFFACC15.toInt()), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                         append(base)
@@ -161,6 +161,14 @@ class StreamsAdapter(
                         (fragment.activity as MainActivity).startStream(item, snapshot().items, queueSource)
                     }
                     val isTv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)
+                    if (!isTv) {
+                        root.setOnLongClickListener {
+                            (fragment.activity as? MainActivity)?.let { act ->
+                                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.showStreamActions(act, item)
+                            }
+                            true
+                        }
+                    }
                     if (item.channelImage != null) {
                         userImage.visibility = View.VISIBLE
                         fragment.requireContext().imageLoader.enqueue(
@@ -241,14 +249,24 @@ class StreamsAdapter(
                     } else {
                         thumbnail.visibility = View.GONE
                     }
+                    mobileLiveBadge?.visibility = if (item.thumbnailURL != null) View.VISIBLE else View.GONE
+                    val mobileCols = if (!isTv) {
+                        if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
+                            context.prefs().getString(C.PORTRAIT_COLUMN_COUNT, "1")?.toIntOrNull() ?: 1
+                        } else {
+                            context.prefs().getString(C.LANDSCAPE_COLUMN_COUNT, "2")?.toIntOrNull() ?: 2
+                        }
+                    } else 1
+                    val compactMobileGrid = !isTv && mobileCols >= 2
                     if (item.viewerCount != null) {
                         viewers.visibility = View.VISIBLE
                         val count = item.viewerCount ?: 0
-                        viewers.text = context.resources.getQuantityString(
-                            R.plurals.viewers,
-                            count,
-                            TwitchApiHelper.formatCount(count, context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
-                        )
+                        val formatted = TwitchApiHelper.formatCount(count, context.prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
+                        viewers.text = if (compactMobileGrid) {
+                            formatted
+                        } else {
+                            context.resources.getQuantityString(R.plurals.viewers, count, formatted)
+                        }
                     } else {
                         viewers.visibility = View.GONE
                     }
@@ -263,8 +281,8 @@ class StreamsAdapter(
                         }
                         if (text != null) {
                             uptime.visibility = View.VISIBLE
-                            // TV: the same short badge as the cards of the home ("2 h 39")
-                            uptime.text = if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                            // TV or compact multi-column mobile grid: short badge ("2 h 39") so badges never overlap
+                            uptime.text = if (isTv || compactMobileGrid) {
                                 com.github.andreyasadchy.xtra.ui.tv.TvUptime.format(context, item.createdAt) ?: text
                             } else {
                                 context.getString(R.string.uptime, text)
@@ -275,9 +293,17 @@ class StreamsAdapter(
                     } else {
                         uptime.visibility = View.GONE
                     }
-                    if (!item.tags.isNullOrEmpty() && context.prefs().getBoolean(C.UI_TAGS, true)) {
+                    val maxMobileTags = when {
+                        isTv -> Int.MAX_VALUE
+                        mobileCols >= 3 -> 0
+                        mobileCols == 2 -> 2
+                        else -> 4
+                    }
+                    if (maxMobileTags > 0 && !item.tags.isNullOrEmpty() && context.prefs().getBoolean(C.UI_TAGS, true)) {
                         tagsLayout.removeAllViews()
                         tagsLayout.visibility = View.VISIBLE
+                        val density = context.resources.displayMetrics.density
+                        val gap = (4 * density).toInt()
                         val tagsFlowLayout = Flow(context).apply {
                             layoutParams = ConstraintLayout.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -289,23 +315,39 @@ class StreamsAdapter(
                                 endToEnd = tagsLayout.id
                             }
                             setWrapMode(Flow.WRAP_CHAIN)
+                            if (!isTv) {
+                                setHorizontalStyle(Flow.CHAIN_PACKED)
+                                setHorizontalBias(0f)
+                                setHorizontalGap(gap)
+                                setVerticalGap(gap)
+                            }
                         }
                         tagsLayout.addView(tagsFlowLayout)
                         val ids = mutableListOf<Int>()
-                        for (tag in item.tags) {
+                        val hPad = (7 * density).toInt()
+                        val vPad = (2 * density).toInt()
+                        for (tag in item.tags.take(maxMobileTags)) {
                             val text = TextView(context)
                             val id = View.generateViewId()
                             text.id = id
                             ids.add(id)
                             text.text = tag
-                            context.obtainStyledAttributes(intArrayOf(com.google.android.material.R.attr.textAppearanceBodyMedium)).use {
-                                TextViewCompat.setTextAppearance(text, it.getResourceId(0, 0))
+                            if (!isTv) {
+                                text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                                text.maxLines = 1
+                                text.ellipsize = android.text.TextUtils.TruncateAt.END
+                                text.setBackgroundResource(R.drawable.mobile_subtle_chip_bg)
+                                text.setPadding(hPad, vPad, hPad, vPad)
+                            } else {
+                                context.obtainStyledAttributes(intArrayOf(com.google.android.material.R.attr.textAppearanceBodyMedium)).use {
+                                    TextViewCompat.setTextAppearance(text, it.getResourceId(0, 0))
+                                }
+                                val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 5f, context.resources.displayMetrics).toInt()
+                                text.setPadding(padding, 0, padding, 0)
                             }
                             text.setOnClickListener {
                                 selectTag(tag)
                             }
-                            val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 5f, context.resources.displayMetrics).toInt()
-                            text.setPadding(padding, 0, padding, 0)
                             tagsLayout.addView(text)
                         }
                         tagsFlowLayout.referencedIds = ids.toIntArray()
@@ -313,6 +355,17 @@ class StreamsAdapter(
                         tagsLayout.visibility = View.GONE
                     }
                     bindPlaybackBadgeOnly(item)
+                    if (!isTv) {
+                        com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyResponsiveMediaCardDensity(
+                            cardRoot = root,
+                            userImage = userImage,
+                            title = title,
+                            username = username,
+                            gameName = gameName,
+                            primaryBadges = listOf(viewers),
+                            secondaryBadges = listOf(mobileLiveBadge, uptime),
+                        )
+                    }
                 } else {
                     tvPlayingBadge?.visibility = View.GONE
                 }

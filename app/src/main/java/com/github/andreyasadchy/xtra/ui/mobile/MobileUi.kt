@@ -1,0 +1,901 @@
+package com.github.andreyasadchy.xtra.ui.mobile
+
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.graphics.Outline
+import android.graphics.Typeface
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewOutlineProvider
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
+import coil3.imageLoader
+import coil3.request.target
+import coil3.request.transformations
+import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.XtraApp
+import com.github.andreyasadchy.xtra.model.ui.Clip
+import com.github.andreyasadchy.xtra.model.ui.Game
+import com.github.andreyasadchy.xtra.model.ui.Stream
+import com.github.andreyasadchy.xtra.model.ui.Video
+import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import com.github.andreyasadchy.xtra.ui.tv.TvBlacklist
+import com.github.andreyasadchy.xtra.ui.tv.TvFavorites
+import com.github.andreyasadchy.xtra.ui.tv.TvFollow
+import com.github.andreyasadchy.xtra.ui.tv.TvToast
+import com.github.andreyasadchy.xtra.ui.tv.TvVodHistorySync
+import com.github.andreyasadchy.xtra.ui.view.TvUi
+import com.github.andreyasadchy.xtra.util.prefs
+import com.github.andreyasadchy.xtra.util.tokenPrefs
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.color.MaterialColors
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
+/**
+ * Mobile-only UI helpers: official XtraTV brand header for top-level mobile toolbars,
+ * native share/clipboard helpers, and Material 3 long-press action sheets for streams,
+ * channels, categories, VODs, and clips. Never modifies Android TV UI.
+ */
+object MobileUi {
+
+    private const val BRAND_TAG = "mobile_xtratv_brand_header"
+
+    /**
+     * Installs the official XtraTV app icon + "XtraTV" wordmark (and optional subtitle)
+     * inside a mobile [MaterialToolbar]. Strictly no-op on Android TV.
+     */
+    fun applyBrandHeader(toolbar: MaterialToolbar, subtitle: String? = null) {
+        val context = toolbar.context
+        if (TvUi.isTv(context)) return
+
+        val existing = toolbar.findViewWithTag<View>(BRAND_TAG)
+        if (existing != null) {
+            val subtitleView = existing.findViewWithTag<TextView>("mobile_brand_subtitle")
+            if (subtitleView != null) {
+                if (!subtitle.isNullOrBlank()) {
+                    subtitleView.text = subtitle
+                    subtitleView.visibility = View.VISIBLE
+                } else {
+                    subtitleView.visibility = View.GONE
+                }
+            }
+            return
+        }
+
+        val density = context.resources.displayMetrics.density
+        val onSurface = MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorOnSurface,
+            0xFFFFFFFF.toInt(),
+        )
+        val secondary = MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorOnSurfaceVariant,
+            0xB3FFFFFF.toInt(),
+        )
+
+        val container = LinearLayout(context).apply {
+            tag = BRAND_TAG
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = androidx.appcompat.widget.Toolbar.LayoutParams(
+                androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT,
+                androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            }
+        }
+
+        val iconSize = (28 * density).toInt()
+        val iconRadius = 7f * density
+        val iconView = ImageView(context).apply {
+            setImageResource(R.mipmap.ic_launcher)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            layoutParams = LinearLayout.LayoutParams(iconSize, iconSize).apply {
+                marginEnd = (10 * density).toInt()
+            }
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, iconRadius)
+                }
+            }
+            clipToOutline = true
+        }
+
+        val textColumn = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val brandTitle = TextView(context).apply {
+            text = context.getString(R.string.app_name)
+            textSize = 18f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(onSurface)
+            maxLines = 1
+        }
+        textColumn.addView(brandTitle)
+
+        val subtitleView = TextView(context).apply {
+            tag = "mobile_brand_subtitle"
+            text = subtitle.orEmpty()
+            textSize = 11.5f
+            setTextColor(secondary)
+            maxLines = 1
+            visibility = if (subtitle.isNullOrBlank()) View.GONE else View.VISIBLE
+        }
+        textColumn.addView(subtitleView)
+
+        container.addView(iconView)
+        container.addView(textColumn)
+
+        toolbar.title = null
+        toolbar.addView(container)
+    }
+
+    private val _accountAvatarUrl = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val accountAvatarUrl: kotlinx.coroutines.flow.StateFlow<String?> = _accountAvatarUrl
+    private var accountAvatarLoadedForUserId: String? = null
+
+    /**
+     * Ensures the active mobile account's avatar URL is synced into [com.github.andreyasadchy.xtra.ui.tv.TvAccounts]
+     * and published to [accountAvatarUrl] so every mobile toolbar displays the real circular avatar.
+     */
+    fun ensureAccountAvatarLoaded(activity: MainActivity) {
+        if (TvUi.isTv(activity)) return
+        com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(activity)
+        val activeKey = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.activeAccountKey(activity)
+        if (activeKey == null) {
+            _accountAvatarUrl.value = null
+            accountAvatarLoadedForUserId = null
+            return
+        }
+        val cached = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.listAccounts(activity)
+            .firstOrNull { it.key == activeKey }
+            ?.avatarUrl
+        if (!cached.isNullOrBlank()) {
+            _accountAvatarUrl.value = cached
+        }
+        val userId = activity.tokenPrefs().getString(com.github.andreyasadchy.xtra.util.C.USER_ID, null)
+            ?.takeIf { it.isNotBlank() }
+        if (userId == null) return
+        if (userId == accountAvatarLoadedForUserId && !_accountAvatarUrl.value.isNullOrBlank()) return
+        accountAvatarLoadedForUserId = userId
+        activity.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val url = runCatching {
+                val app = activity.applicationContext as XtraApp
+                val netLib = activity.prefs().getString(
+                    com.github.andreyasadchy.xtra.util.C.NETWORK_LIBRARY,
+                    com.github.andreyasadchy.xtra.util.C.OKHTTP,
+                )
+                app.xtraModule.graphQLRepository.loadQueryUser(
+                    netLib,
+                    com.github.andreyasadchy.xtra.util.TwitchApiHelper.getGQLHeaders(activity),
+                    id = userId,
+                ).data?.user?.profileImageURL
+            }.getOrNull()
+            if (!url.isNullOrBlank()) {
+                com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(activity, avatarUrl = url)
+                _accountAvatarUrl.value = url
+            }
+        }
+    }
+
+    /**
+     * Unifies mobile toolbars across all screens: ensures the Settings gear icon and circular Account
+     * avatar (or anonymous icon) are always directly visible and open the multi-account sheet on tap.
+     * Strictly no-op on Android TV.
+     */
+    fun setupMobileToolbar(
+        toolbar: MaterialToolbar,
+        activity: MainActivity,
+        brandSubtitle: String? = null,
+    ) {
+        if (TvUi.isTv(activity)) return
+        if (brandSubtitle != null) {
+            applyBrandHeader(toolbar, brandSubtitle)
+        }
+        ensureAccountAvatarLoaded(activity)
+
+        toolbar.menu.findItem(R.id.settings)?.let { item ->
+            item.setIcon(R.drawable.tv_ic_settings)
+            item.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+        }
+
+        val loginItem = toolbar.menu.findItem(R.id.login) ?: return
+        loginItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+
+        val density = activity.resources.displayMetrics.density
+        val touchSize = (40 * density).toInt()
+        val avatarSize = (28 * density).toInt()
+        val onSurface = MaterialColors.getColor(
+            activity,
+            com.google.android.material.R.attr.colorOnSurfaceVariant,
+            0xCCFFFFFF.toInt(),
+        )
+        val badgeBg = MaterialColors.getColor(
+            activity,
+            com.google.android.material.R.attr.colorSurfaceVariant,
+            0x33FFFFFF,
+        )
+
+        val container = android.widget.FrameLayout(activity).apply {
+            layoutParams = ViewGroup.LayoutParams(touchSize, touchSize)
+            val rippleAttr = android.util.TypedValue()
+            if (activity.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, rippleAttr, true)) {
+                setBackgroundResource(rippleAttr.resourceId)
+            }
+            contentDescription = activity.getString(R.string.tv_accounts_title)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { activity.onAccountClicked() }
+        }
+
+        val avatarView = ImageView(activity).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(avatarSize, avatarSize, Gravity.CENTER)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setOval(0, 0, view.width, view.height)
+                }
+            }
+            clipToOutline = true
+        }
+        container.addView(avatarView)
+
+        fun renderAvatar(url: String?) {
+            val activeKey = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.activeAccountKey(activity)
+            if (activeKey != null && !url.isNullOrBlank()) {
+                avatarView.imageTintList = null
+                avatarView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                avatarView.setPadding(0, 0, 0, 0)
+                activity.imageLoader.enqueue(
+                    coil3.request.ImageRequest.Builder(activity)
+                        .data(url)
+                        .transformations(coil3.transform.CircleCropTransformation())
+                        .target(avatarView)
+                        .build()
+                )
+            } else {
+                val pad = (4 * density).toInt()
+                avatarView.setPadding(pad, pad, pad, pad)
+                avatarView.setBackgroundColor(badgeBg)
+                avatarView.setImageResource(R.drawable.baseline_person_black_24)
+                avatarView.imageTintList = android.content.res.ColorStateList.valueOf(onSurface)
+            }
+        }
+
+        renderAvatar(_accountAvatarUrl.value)
+        loginItem.actionView = container
+
+        // Observe live avatar fetch updates while this toolbar is attached
+        var collectJob: kotlinx.coroutines.Job? = null
+        val attachListener = object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                collectJob?.cancel()
+                collectJob = activity.lifecycleScope.launch {
+                    accountAvatarUrl.collect { url ->
+                        renderAvatar(url)
+                    }
+                }
+            }
+
+            override fun onViewDetachedFromWindow(v: View) {
+                collectJob?.cancel()
+                collectJob = null
+            }
+        }
+        container.addOnAttachStateChangeListener(attachListener)
+        if (container.isAttachedToWindow) {
+            attachListener.onViewAttachedToWindow(container)
+        }
+    }
+
+    /**
+     * Mobile-only responsive card scaling for Stream, VOD, and Clip grids (1, 2, 3, 4+ columns).
+     * Strictly no-op on Android TV.
+     * - 1 column: full-size avatar (50dp), normal typography & thumbnail badges.
+     * - 2 columns: compact 30dp avatar, tighter margins, crisp 13sp/11.5sp text, slimmer 10sp badges.
+     * - 3+ columns: hides avatar & overflow button so title/streamer get 100% width, keeps only
+     *   a single micro-pill on the thumbnail so the video preview always stays clearly visible.
+     */
+    fun applyResponsiveMediaCardDensity(
+        cardRoot: View,
+        userImage: ImageView?,
+        title: TextView?,
+        username: TextView?,
+        gameName: TextView?,
+        primaryBadges: List<TextView?>,
+        secondaryBadges: List<TextView?>,
+        optionsButton: View? = null,
+    ) {
+        val context = cardRoot.context
+        if (TvUi.isTv(context)) return
+
+        username?.let { MobileAccent.applyStreamerNameTint(it) }
+
+        val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+        val cols = if (isPortrait) {
+            context.prefs().getString(com.github.andreyasadchy.xtra.util.C.PORTRAIT_COLUMN_COUNT, "1")?.toIntOrNull() ?: 1
+        } else {
+            context.prefs().getString(com.github.andreyasadchy.xtra.util.C.LANDSCAPE_COLUMN_COUNT, "2")?.toIntOrNull() ?: 2
+        }
+        val d = context.resources.displayMetrics.density
+
+        // 1. Card outer margins
+        (cardRoot.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            val m = when {
+                cols >= 3 -> (3 * d).toInt()
+                cols == 2 -> (5 * d).toInt()
+                else -> (8 * d).toInt()
+            }
+            if (lp.leftMargin != m || lp.topMargin != m) {
+                lp.setMargins(m, m, m, m)
+                cardRoot.layoutParams = lp
+            }
+        }
+
+        // 2. Avatar sizing (hide in 3+ columns so text takes 100% width; compact 30dp in 2 columns)
+        if (userImage != null) {
+            if (cols >= 3) {
+                userImage.visibility = View.GONE
+            } else if (userImage.visibility == View.VISIBLE) {
+                val avatarPx = if (cols == 2) (30 * d).toInt() else (50 * d).toInt()
+                val marginStart = if (cols == 2) (8 * d).toInt() else (12 * d).toInt()
+                val marginVert = if (cols == 2) (8 * d).toInt() else (12 * d).toInt()
+                (userImage.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                    if (lp.width != avatarPx || lp.height != avatarPx || lp.marginStart != marginStart) {
+                        lp.width = avatarPx
+                        lp.height = avatarPx
+                        lp.marginStart = marginStart
+                        lp.topMargin = marginVert
+                        lp.bottomMargin = marginVert
+                        userImage.layoutParams = lp
+                    }
+                }
+            }
+        }
+
+        // 3. Overflow button on VOD/Clip cards (hide in 3+ columns; long-press opens full action sheet)
+        if (optionsButton != null) {
+            optionsButton.visibility = if (cols >= 3) View.GONE else View.VISIBLE
+        }
+
+        // 4. Text container margins & typography
+        val textParent = title?.parent as? View
+        (textParent?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            val hMargin = when {
+                cols >= 3 -> (6 * d).toInt()
+                cols == 2 -> (8 * d).toInt()
+                else -> (12 * d).toInt()
+            }
+            val vMargin = when {
+                cols >= 3 -> (6 * d).toInt()
+                cols == 2 -> (8 * d).toInt()
+                else -> (10 * d).toInt()
+            }
+            if (lp.marginStart != hMargin || lp.topMargin != vMargin) {
+                lp.marginStart = hMargin
+                lp.marginEnd = hMargin
+                lp.topMargin = vMargin
+                lp.bottomMargin = vMargin
+                textParent.layoutParams = lp
+            }
+        }
+        title?.setTextSize(
+            android.util.TypedValue.COMPLEX_UNIT_SP,
+            when {
+                cols >= 3 -> 11.5f
+                cols == 2 -> 13f
+                else -> 15.5f
+            }
+        )
+        val subSize = when {
+            cols >= 3 -> 10.5f
+            cols == 2 -> 11.5f
+            else -> 13.5f
+        }
+        username?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subSize)
+        gameName?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subSize)
+
+        // 5. Thumbnail badges: slimmer in 2 columns; hide secondary badges in 3+ columns so thumbnail stays clear
+        val badgeTextSp = when {
+            cols >= 3 -> 9f
+            cols == 2 -> 10f
+            else -> 11.5f
+        }
+        val badgeHPad = when {
+            cols >= 3 -> (4 * d).toInt()
+            cols == 2 -> (5 * d).toInt()
+            else -> (7 * d).toInt()
+        }
+        val badgeVPad = when {
+            cols >= 3 -> (1 * d).toInt()
+            cols == 2 -> (1.5f * d).toInt()
+            else -> (2 * d).toInt()
+        }
+        val badgeMargin = when {
+            cols >= 3 -> (3 * d).toInt()
+            cols == 2 -> (5 * d).toInt()
+            else -> (8 * d).toInt()
+        }
+
+        fun styleBadge(tv: TextView?) {
+            if (tv == null) return
+            tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, badgeTextSp)
+            tv.setPadding(badgeHPad, badgeVPad, badgeHPad, badgeVPad)
+            (tv.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                if (lp.marginStart > 0) lp.marginStart = badgeMargin
+                if (lp.marginEnd > 0) lp.marginEnd = badgeMargin
+                if (lp.topMargin > 0) lp.topMargin = badgeMargin
+                if (lp.bottomMargin > 0) lp.bottomMargin = badgeMargin
+                tv.layoutParams = lp
+            }
+        }
+
+        primaryBadges.forEach { styleBadge(it) }
+        secondaryBadges.forEach { tv ->
+            if (tv != null) {
+                if (cols >= 3) {
+                    tv.visibility = View.GONE
+                } else {
+                    styleBadge(tv)
+                }
+            }
+        }
+    }
+
+    fun openUrl(context: Context, url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri()).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            TvToast.makeText(context, R.string.no_browser_found, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun shareText(context: Context, text: String, title: String? = null) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            if (!title.isNullOrBlank()) {
+                putExtra(Intent.EXTRA_SUBJECT, title)
+            }
+        }
+        runCatching {
+            context.startActivity(Intent.createChooser(intent, title ?: context.getString(R.string.share)))
+        }
+    }
+
+    fun copyToClipboard(context: Context, label: String, text: String, toastMessage: String? = null) {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        cm.setPrimaryClip(ClipData.newPlainText(label, text))
+        TvToast.makeText(
+            context,
+            toastMessage ?: context.getString(R.string.mobile_copied_clipboard),
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+
+    fun findMainActivity(context: Context): MainActivity? {
+        var cur: Context? = context
+        while (cur is ContextWrapper) {
+            if (cur is MainActivity) return cur
+            cur = cur.baseContext
+        }
+        return cur as? MainActivity
+    }
+
+    /** Long-press Material 3 Bottom Sheet for stream and followed-channel cards on mobile. */
+    fun showStreamActions(activity: MainActivity, stream: Stream) {
+        val channelId = stream.channelId
+        val name = stream.channelName ?: stream.channelLogin ?: ""
+        activity.lifecycleScope.launch {
+            val following = if (channelId != null && TvFollow.isEnabled(activity)) {
+                withTimeoutOrNull(1500L) { TvFollow.isFollowing(activity, channelId) }
+            } else {
+                null
+            }
+            val actions = buildList {
+                stream.channelLogin?.let { login ->
+                    val favorite = TvFavorites.isFavorite(login)
+                    add(
+                        MobileBottomSheets.SheetAction(
+                            label = activity.getString(if (favorite) R.string.tv_favorite_remove else R.string.tv_favorite_add),
+                            iconRes = if (favorite) R.drawable.tv_ic_star else R.drawable.tv_ic_star_outline,
+                            highlighted = favorite,
+                        ) {
+                            if (favorite) {
+                                TvFavorites.remove(activity, login)
+                                TvToast.makeText(activity, activity.getString(R.string.tv_favorite_removed, name), Toast.LENGTH_SHORT).show()
+                            } else {
+                                TvFavorites.add(activity, login, stream.channelName)
+                                TvToast.makeText(activity, activity.getString(R.string.tv_favorite_added, name), Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+                if (channelId != null && following != null) {
+                    add(
+                        MobileBottomSheets.SheetAction(
+                            label = activity.getString(if (following) R.string.unfollow else R.string.follow),
+                            iconRes = if (following) R.drawable.tv_ic_heart else R.drawable.tv_ic_heart_outline,
+                        ) {
+                            activity.lifecycleScope.launch {
+                                val err = TvFollow.setFollowingWithMessage(activity, channelId, stream.channelLogin, stream.channelName, !following)
+                                TvToast.makeText(
+                                    activity,
+                                    when {
+                                        err != null -> err
+                                        following -> activity.getString(R.string.unfollowed, name)
+                                        else -> activity.getString(R.string.now_following, name)
+                                    },
+                                    if (err != null) Toast.LENGTH_LONG else Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        }
+                    )
+                }
+                add(
+                    MobileBottomSheets.SheetAction(
+                        label = activity.getString(R.string.tv_open_channel, name),
+                        iconRes = R.drawable.tv_ic_person,
+                    ) {
+                        activity.openTvChannel(stream, null)
+                    }
+                )
+                add(
+                    MobileBottomSheets.SheetAction(
+                        label = activity.getString(R.string.tv_channel_videos),
+                        iconRes = R.drawable.tv_ic_video_library,
+                    ) {
+                        activity.openTvChannel(stream, "1")
+                    }
+                )
+                if (!stream.gameName.isNullOrBlank()) {
+                    add(
+                        MobileBottomSheets.SheetAction(
+                            label = activity.getString(R.string.tv_open_category, stream.gameName),
+                            iconRes = R.drawable.tv_ic_gamepad,
+                        ) {
+                            activity.openTvGame(stream.gameId, stream.gameSlug, stream.gameName)
+                        }
+                    )
+                }
+                if (!stream.channelLogin.isNullOrBlank()) {
+                    add(
+                        MobileBottomSheets.SheetAction(
+                            label = activity.getString(R.string.share),
+                            iconRes = R.drawable.tv_ic_share,
+                        ) {
+                            shareText(activity, "https://www.twitch.tv/${stream.channelLogin}", name)
+                        }
+                    )
+                }
+                if (!stream.channelId.isNullOrBlank() || !stream.channelLogin.isNullOrBlank()) {
+                    val chBlocked = TvBlacklist.isChannelBlocked(stream.channelId, stream.channelLogin)
+                    val label = name.ifBlank { stream.channelLogin.orEmpty() }
+                    add(
+                        MobileBottomSheets.SheetAction(
+                            label = activity.getString(
+                                if (chBlocked) R.string.tv_blacklist_unhide_channel else R.string.tv_blacklist_hide_channel,
+                                label,
+                            ),
+                            iconRes = R.drawable.tv_ic_block,
+                            destructive = !chBlocked,
+                        ) {
+                            if (chBlocked) {
+                                TvBlacklist.unblockChannel(activity, stream.channelId, stream.channelLogin)
+                                TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_channel_unhidden, label), Toast.LENGTH_SHORT).show()
+                            } else {
+                                TvBlacklist.blockChannel(activity, stream.channelId, stream.channelLogin, stream.channelName, stream.channelImageURL)
+                                TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_channel_hidden, label), Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+                if (!stream.gameName.isNullOrBlank()) {
+                    val gName = stream.gameName!!
+                    val catBlocked = TvBlacklist.isCategoryBlocked(stream.gameId, stream.gameSlug, gName)
+                    add(
+                        MobileBottomSheets.SheetAction(
+                            label = activity.getString(
+                                if (catBlocked) R.string.tv_blacklist_unhide_category else R.string.tv_blacklist_hide_category,
+                                gName,
+                            ),
+                            iconRes = R.drawable.tv_ic_block,
+                            destructive = !catBlocked,
+                        ) {
+                            if (catBlocked) {
+                                TvBlacklist.unblockCategory(activity, stream.gameId, stream.gameSlug, gName)
+                                TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_category_unhidden, gName), Toast.LENGTH_SHORT).show()
+                            } else {
+                                TvBlacklist.blockCategory(activity, stream.gameId, stream.gameSlug, gName, null)
+                                TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_category_hidden, gName), Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+            }
+            MobileBottomSheets.showActionSheet(
+                context = activity,
+                title = name.ifBlank { stream.title.orEmpty() },
+                subtitle = stream.title?.trim()?.takeIf { it.isNotEmpty() && !it.equals(name, true) },
+                actions = actions,
+            )
+        }
+    }
+
+    /** Long-press Material 3 Bottom Sheet for category / game cards on mobile. */
+    fun showGameActions(
+        context: Context,
+        game: Game,
+        onOpenCategory: () -> Unit,
+        onFollowChanged: (() -> Unit)? = null,
+    ) {
+        val activity = findMainActivity(context) ?: return
+        activity.lifecycleScope.launch {
+            val canFollow = TvFollow.isEnabled(activity) &&
+                (!game.id.isNullOrBlank() || !game.slug.isNullOrBlank() || !game.name.isNullOrBlank())
+            val following = if (canFollow) {
+                withTimeoutOrNull(1500L) { TvFollow.isFollowingGame(activity, game) } ?: (game.accountFollow || game.localFollow)
+            } else {
+                null
+            }
+            val catName = game.name ?: game.slug ?: ""
+            val actions = buildList {
+                add(
+                    MobileBottomSheets.SheetAction(
+                        label = activity.getString(R.string.tv_open_this_category),
+                        iconRes = R.drawable.tv_ic_gamepad,
+                    ) { onOpenCategory() }
+                )
+                if (following != null) {
+                    add(
+                        MobileBottomSheets.SheetAction(
+                            label = activity.getString(if (following) R.string.unfollow else R.string.follow),
+                            iconRes = if (following) R.drawable.tv_ic_heart else R.drawable.tv_ic_heart_outline,
+                        ) {
+                            activity.lifecycleScope.launch {
+                                val err = TvFollow.setFollowingGameWithMessage(activity, game, !following)
+                                TvToast.makeText(
+                                    activity,
+                                    when {
+                                        err != null -> err
+                                        following -> activity.getString(R.string.unfollowed, catName)
+                                        else -> activity.getString(R.string.now_following, catName)
+                                    },
+                                    if (err != null) Toast.LENGTH_LONG else Toast.LENGTH_SHORT,
+                                ).show()
+                                if (err == null) onFollowChanged?.invoke()
+                            }
+                        }
+                    )
+                }
+                if (!game.id.isNullOrBlank() || !game.slug.isNullOrBlank() || !game.name.isNullOrBlank()) {
+                    val catBlocked = TvBlacklist.isCategoryBlocked(game.id, game.slug, game.name)
+                    add(
+                        MobileBottomSheets.SheetAction(
+                            label = activity.getString(
+                                if (catBlocked) R.string.tv_blacklist_unhide_category else R.string.tv_blacklist_hide_category,
+                                catName,
+                            ),
+                            iconRes = R.drawable.tv_ic_block,
+                            destructive = !catBlocked,
+                        ) {
+                            if (catBlocked) {
+                                TvBlacklist.unblockCategory(activity, game.id, game.slug, game.name)
+                                TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_category_unhidden, catName), Toast.LENGTH_SHORT).show()
+                            } else {
+                                TvBlacklist.blockCategory(activity, game.id, game.slug, game.name, game.boxArtURL)
+                                TvToast.makeText(activity, activity.getString(R.string.tv_blacklist_category_hidden, catName), Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+            }
+            MobileBottomSheets.showActionSheet(
+                context = activity,
+                title = catName,
+                subtitle = null,
+                actions = actions,
+            )
+        }
+    }
+
+    /** Long-press Material 3 Bottom Sheet for VOD cards on mobile. */
+    fun showVideoActions(
+        activity: MainActivity,
+        video: Video,
+        positionMs: Long?,
+        finished: Boolean,
+        isBookmarked: Boolean,
+        showChannel: Boolean,
+        showGame: Boolean,
+        onBookmark: () -> Unit,
+        onDownload: () -> Unit,
+        onHistoryRemoved: (() -> Unit)? = null,
+    ) {
+        val name = video.channelName ?: video.channelLogin ?: ""
+        val started = positionMs != null && positionMs > 0L
+        val actions = buildList {
+            if (started && !finished) {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.tv_resume), R.drawable.tv_ic_play) {
+                        activity.startVideo(video, positionMs)
+                    }
+                )
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.tv_watch_from_start), R.drawable.tv_ic_replay) {
+                        activity.startVideo(video, 0, ignoreSavedPosition = true)
+                    }
+                )
+            } else {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.tv_multistream_watch), R.drawable.tv_ic_play) {
+                        activity.startVideo(video, if (finished) 0L else null, ignoreSavedPosition = finished)
+                    }
+                )
+            }
+            add(
+                MobileBottomSheets.SheetAction(
+                    label = activity.getString(if (isBookmarked) R.string.remove_bookmark else R.string.add_bookmark),
+                    iconRes = if (isBookmarked) R.drawable.tv_ic_star else R.drawable.tv_ic_star_outline,
+                ) { onBookmark() }
+            )
+            add(
+                MobileBottomSheets.SheetAction(activity.getString(R.string.download), R.drawable.tv_ic_download) {
+                    onDownload()
+                }
+            )
+            if (!video.id.isNullOrBlank()) {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.share), R.drawable.tv_ic_share) {
+                        shareText(activity, "https://www.twitch.tv/videos/${video.id}", video.title ?: name)
+                    }
+                )
+            }
+            val id = video.id
+            if (started && !id.isNullOrBlank()) {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.tv_remove_from_history), R.drawable.tv_ic_delete, destructive = true) {
+                        TvVodHistorySync.removeFromHistory(
+                            context = activity,
+                            xtraModule = (activity.application as XtraApp).xtraModule,
+                            videoId = id,
+                            onLocalDone = onHistoryRemoved,
+                        )
+                    }
+                )
+            }
+            if (showChannel && (!video.channelLogin.isNullOrBlank() || !video.channelId.isNullOrBlank())) {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.tv_open_channel, name), R.drawable.tv_ic_person) {
+                        activity.openTvChannel(
+                            Stream(
+                                channelId = video.channelId,
+                                channelLogin = video.channelLogin,
+                                channelName = video.channelName,
+                                channelImageURL = video.channelImageURL,
+                            ),
+                            null,
+                        )
+                    }
+                )
+            }
+            if (showGame && !video.gameName.isNullOrBlank()) {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.tv_open_category, video.gameName), R.drawable.tv_ic_gamepad) {
+                        activity.openTvGame(video.gameId, video.gameSlug, video.gameName)
+                    }
+                )
+            }
+        }
+        MobileBottomSheets.showActionSheet(
+            context = activity,
+            title = video.title?.trim()?.takeIf { it.isNotEmpty() } ?: name,
+            subtitle = name.takeIf { it.isNotBlank() },
+            actions = actions,
+        )
+    }
+
+    /** Long-press Material 3 Bottom Sheet for Clip cards on mobile. */
+    fun showClipActions(
+        activity: MainActivity,
+        clip: Clip,
+        allClips: List<Clip>,
+        showChannel: Boolean,
+        showGame: Boolean,
+        onDownload: () -> Unit,
+    ) {
+        val channelLabel = clip.channelName ?: clip.channelLogin.orEmpty()
+        val actions = buildList {
+            add(
+                MobileBottomSheets.SheetAction(activity.getString(R.string.tv_multistream_watch), R.drawable.tv_ic_play) {
+                    activity.startClip(clip, allClips)
+                }
+            )
+            if (!clip.videoId.isNullOrBlank()) {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.watch_video), R.drawable.tv_ic_video_library) {
+                        val offsetMs = clip.videoOffsetSeconds?.toLong()?.times(1000L)
+                        activity.startVideo(
+                            Video(
+                                id = clip.videoId,
+                                channelId = clip.channelId,
+                                channelLogin = clip.channelLogin,
+                                channelName = clip.channelName,
+                                channelImageURL = clip.channelImageURL,
+                                gameId = clip.gameId,
+                                gameSlug = clip.gameSlug,
+                                gameName = clip.gameName,
+                                title = clip.title,
+                                createdAt = clip.videoCreatedAt ?: clip.createdAt,
+                                animatedPreviewURL = clip.videoAnimatedPreviewURL,
+                            ),
+                            offset = offsetMs,
+                            ignoreSavedPosition = offsetMs != null,
+                        )
+                    }
+                )
+            }
+            add(
+                MobileBottomSheets.SheetAction(activity.getString(R.string.download), R.drawable.tv_ic_download) {
+                    onDownload()
+                }
+            )
+            val clipUrl = clip.id?.takeIf { it.isNotBlank() }?.let { id ->
+                clip.channelLogin?.takeIf { it.isNotBlank() }?.let { login -> "https://www.twitch.tv/$login/clip/$id" }
+                    ?: "https://clips.twitch.tv/$id"
+            }
+            if (clipUrl != null) {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.share), R.drawable.tv_ic_share) {
+                        shareText(activity, clipUrl, clip.title ?: channelLabel)
+                    }
+                )
+            }
+            if (showChannel && (!clip.channelLogin.isNullOrBlank() || !clip.channelId.isNullOrBlank())) {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.tv_open_channel, channelLabel), R.drawable.tv_ic_person) {
+                        activity.openTvChannel(
+                            Stream(
+                                channelId = clip.channelId,
+                                channelLogin = clip.channelLogin,
+                                channelName = clip.channelName,
+                                channelImageURL = clip.channelImageURL,
+                            ),
+                            null,
+                        )
+                    }
+                )
+            }
+            if (showGame && !clip.gameName.isNullOrBlank()) {
+                add(
+                    MobileBottomSheets.SheetAction(activity.getString(R.string.tv_open_category, clip.gameName), R.drawable.tv_ic_gamepad) {
+                        activity.openTvGame(clip.gameId, clip.gameSlug, clip.gameName)
+                    }
+                )
+            }
+        }
+        MobileBottomSheets.showActionSheet(
+            context = activity,
+            title = clip.title?.trim()?.takeIf { it.isNotEmpty() } ?: channelLabel,
+            subtitle = channelLabel.takeIf { it.isNotBlank() },
+            actions = actions,
+        )
+    }
+}

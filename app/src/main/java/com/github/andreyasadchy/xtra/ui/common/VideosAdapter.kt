@@ -177,7 +177,19 @@ class VideosAdapter(
                                 },
                             )
                         } else {
-                            showDownloadDialog(item)
+                            val activity = fragment.activity as? MainActivity ?: return@setOnLongClickListener true
+                            val bookmarked = bookmarks?.any { it.videoId == item.id } == true
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileUi.showVideoActions(
+                                activity = activity,
+                                video = item,
+                                positionMs = position,
+                                finished = startFromBeginning,
+                                isBookmarked = bookmarked,
+                                showChannel = showChannel,
+                                showGame = showGame,
+                                onBookmark = { saveBookmark(item) },
+                                onDownload = { showDownloadDialog(item) },
+                            )
                         }
                         true
                     }
@@ -250,7 +262,7 @@ class VideosAdapter(
                         type.visibility = View.GONE
                     }
                     bindSubOnlyBadge(item)
-                    if (isTv && !item.subOnly && !com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isKnown(item.id)) {
+                    if (!item.subOnly && !com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.isKnown(item.id)) {
                         com.github.andreyasadchy.xtra.ui.tv.TvSubOnlyVodCache.enqueue(context, item.id)
                     }
                     if (position != null && item.durationSeconds != null && item.durationSeconds > 0L) {
@@ -335,6 +347,18 @@ class VideosAdapter(
                         gameName.setOnClickListener(gameListener)
                     } else {
                         gameName.visibility = View.GONE
+                    }
+                    if (!isTv) {
+                        com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyResponsiveMediaCardDensity(
+                            cardRoot = root,
+                            userImage = userImage,
+                            title = title,
+                            username = username,
+                            gameName = gameName,
+                            primaryBadges = listOf(duration, subOnlyBadge),
+                            secondaryBadges = listOf(views, date, type),
+                            optionsButton = options,
+                        )
                     }
                     options.setOnClickListener { it ->
                         if (isTv) {

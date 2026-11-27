@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Xtra TV</string>
+    <string name="app_name" translatable="false">XtraPlus</string>
     <string name="notification_downloads_channel_id" translatable="false">xtra_downloads_channel</string>
     <string name="notification_live_channel_id" translatable="false">xtra_live_channel</string>
     <string name="notification_playback_channel_id" translatable="false">xtra_playback_channel</string>
@@ -606,7 +606,7 @@
     <string name="tv_more_actions">More actions</string>
     <string name="tv_account">Account</string>
     <string name="tv_stream_preview">Live preview on the selected stream (TV)</string>
-    <string name="xtratv_settings">Xtra TV settings</string>
+    <string name="xtratv_settings">XtraPlus settings</string>
     <string name="xtratv_settings_summary">Ad blocker, frame rate matching, previews, home and remote shortcuts</string>
     <string name="tv_preview_sound">Sound of the previews</string>
     <string name="close_player">Close</string>
@@ -685,7 +685,7 @@
     <string name="tv_back_audio">Audio only</string>
     <string name="tv_dpad_up_down">Up and down shortcuts in streams and VODs</string>
     <string name="tv_dpad_up_down_summary">While the controls are hidden: up shows the other streams, down shows or hides the chat</string>
-    <string name="tv_1440p_warning">⚠ 1440p does not work with public proxies (Luminous and others), they stop at 1080p. For 1440p turn off the custom proxy and use the ad blocker (Xtra TV settings), or use your own proxy that supports 1440p.</string>
+    <string name="tv_1440p_warning">⚠ 1440p does not work with public proxies (Luminous and others), they stop at 1080p. For 1440p turn off the custom proxy and use the ad blocker (XtraPlus settings), or use your own proxy that supports 1440p.</string>
     <string name="tv_login_with_code">With a code on twitch.tv/activate</string>
     <string name="tv_login_with_page">With the Twitch login page (needed for 1440p)</string>
     <string name="tv_login_code_help">On your phone or computer, go to twitch.tv/activate and type this code. The login goes on by itself. 1440p needs the login with the Twitch page.</string>
@@ -830,7 +830,7 @@
     <string name="tv_pip_pos_c">Center</string>
     <string name="tv_pip_pos_mr">Middle right</string>
     <string name="tv_pip_pos_bc">Bottom center</string>
-    <string name="tv_enable_unknown_sources">Allow Xtra TV in Install unknown apps, then press Back to start the update</string>
+    <string name="tv_enable_unknown_sources">Allow XtraPlus in Install unknown apps, then press Back to start the update</string>
     <string name="tv_pip_size">Size</string>
     <string name="tv_pip_size_small">Small</string>
     <string name="tv_pip_size_medium">Medium</string>
@@ -875,7 +875,7 @@
     <string name="tv_proxy_all_settings">All the proxy settings…</string>
     <string name="tv_focus_switch">Change page without OK</string>
     <string name="tv_focus_switch_summary">Tabs and side menu entries show their page as soon as they have the focus</string>
-    <string name="tv_update_title_version">Xtra TV %1$s is available</string>
+    <string name="tv_update_title_version">XtraPlus %1$s is available</string>
     <string name="tv_update_now">Update</string>
     <string name="tv_update_ignore">Ignore</string>
     <string name="tv_proxy_add">Add a proxy</string>
@@ -1207,7 +1207,7 @@
     <string name="tv_remote_action_pip_close">Small window: close</string>
     <string name="tv_adblock_and_proxies_title">Ad blocker &amp; proxies</string>
     <string name="tv_adblock_and_proxies_subtitle">Built-in ad blockers or custom HLS / HTTP proxies for live streams</string>
-    <string name="tv_update_install_blocked">Android blocked the installation. Allow \"Install unknown apps\" for Xtra TV in system settings, or download the update in your browser.</string>
+    <string name="tv_update_install_blocked">Android blocked the installation. Allow \"Install unknown apps\" for XtraPlus in system settings, or download the update in your browser.</string>
     <string name="tv_update_try_again">Try again</string>
     <string name="tv_remote_action_pip_swap_default">Small window: swap streams (default)</string>
     <string name="tv_remote_action_show_controls">Show controls</string>
@@ -1366,7 +1366,7 @@
     <string name="tv_osd_chat_shown">Chat shown</string>
     <string name="tv_osd_chat_hidden">Chat hidden</string>
     <string name="tv_backup_perm_title">File access required</string>
-    <string name="tv_backup_perm_summary">To overwrite or read XtraTV-backup.zip in Downloads, allow file access on the next screen.</string>
+    <string name="tv_backup_perm_summary">To overwrite or read XtraPlus-backup.zip in Downloads, allow file access on the next screen.</string>
     <string name="tv_backup_perm_grant">Allow file access</string>
     <string name="tv_backup_perm_continue_anyway">Continue without permission</string>
     <string name="tv_backup_save_failed">Could not save backup file</string>
@@ -1507,12 +1507,12 @@
     <string name="tv_chat_qr_follow_channel">Follow channel switch</string>
     <string name="tv_chat_qr_disconnect">Disconnect</string>
     <string name="tv_chat_qr_disconnected">Phone chat disconnected</string>
-    <string name="tv_chat_qr_readonly">Read-only mode (sign in on Xtra TV to send messages)</string>
+    <string name="tv_chat_qr_readonly">Read-only mode (sign in on XtraPlus to send messages)</string>
     <string name="tv_chat_qr_paused">Chat paused</string>
     <string name="tv_chat_qr_replying_to">Replying to %s</string>
     <string name="tv_chat_qr_search_emotes">Search emotes…</string>
     <string name="tv_chat_qr_switched">Switched to %s</string>
-    <string name="tv_chat_qr_session_ended">Xtra TV session ended</string>
+    <string name="tv_chat_qr_session_ended">XtraPlus session ended</string>
     <string name="tv_chat_qr_auto_start">Auto-start phone chat</string>
     <string name="tv_chat_qr_auto_start_summary">Start the local Wi-Fi QR chat server automatically when opening a live stream so your saved phone shortcut reconnects right away</string>
     <string name="tv_chat_qr_regenerate">Regenerate QR link</string>
@@ -1538,4 +1538,39 @@
     <string name="tv_adblock_fallback_badge">Active fallback</string>
     <string name="tv_adblock_swap_plus_fallback_toast">Swap fallback (Swap+ failed)</string>
     <string name="tv_chat_qr_restart">Restart</string>
+    <string name="mobile_settings_cat_general">Appearance &amp; general</string>
+    <string name="mobile_settings_cat_adblock">Adblock &amp; proxies</string>
+    <string name="mobile_settings_cat_player">Player</string>
+    <string name="mobile_settings_cat_chat">Chat</string>
+    <string name="mobile_settings_cat_data">Data &amp; personalization</string>
+    <string name="mobile_settings_cat_system">System &amp; about</string>
+    <string name="mobile_stats_title">My statistics</string>
+    <string name="mobile_stats_summary">Watch time, ads blocked, top streamers and categories</string>
+    <string name="mobile_live_dvr_title">Live rewind (DVR)</string>
+    <string name="mobile_live_dvr_summary">Show a timeline on live streams to rewind and return to live</string>
+    <string name="mobile_favorites_how">Long press a stream card, then choose “Add to favorites”</string>
+    <string name="mobile_favorites_empty">None: long press a stream, then “Add to favorites”</string>
+    <string name="mobile_blacklist_hint_cards">Long press any stream or category card to hide it from your lists.</string>
+    <string name="mobile_copied_clipboard">Copied to clipboard</string>
+    <string name="mobile_copy_link">Copy link</string>
+    <string name="mobile_open_browser">Open in browser</string>
+    <string name="mobile_claim_drop">Claim</string>
+    <string name="mobile_hud_show_quality_title">Live quality badge</string>
+    <string name="mobile_hud_show_quality_summary">Show the current video quality (e.g. 1080p60) in the player HUD</string>
+    <string name="mobile_hud_show_viewers_title">Show viewer count</string>
+    <string name="mobile_hud_show_viewers_summary">Show the live viewer count in the player HUD</string>
+    <string name="mobile_hud_show_uptime_summary">Show how long the stream has been live in the player HUD</string>
+    <string name="mobile_accounts_remove">Remove %1$s from this device</string>
+    <string name="mobile_accounts_login_methods">Manage login methods</string>
+    <string name="mobile_show_adblock_badge_title">Show adblock badge during ads</string>
+    <string name="mobile_show_adblock_badge_summary">Display the floating ad-blocking status pill on top of the video during ad breaks</string>
+    <string name="interface_mode_title">Interface mode</string>
+    <string name="interface_mode_auto">Automatic</string>
+    <string name="interface_mode_tv">TV</string>
+    <string name="interface_mode_mobile">Mobile</string>
+    <string name="mobile_accent_color_title">Accent color</string>
+    <string name="mobile_adblock_swap_plus_desc">Seamless ad replacement inside the main player while preserving 1440p / HEVC / AV1. Falls back to Classic Swap if unavailable.</string>
+    <string name="mobile_adblock_swap_plus_summary">Seamless in-player ad replacement (preserves 1440p / HEVC / AV1, automatic Classic Swap fallback)</string>
+    <string name="mobile_adblock_vod_desc">Plays the live VOD stream for an ad-free experience. Falls back automatically if unavailable.</string>
+    <string name="mobile_adblock_vod_summary">Plays the live VOD stream for ad-free playback with automatic fallback</string>
 </resources>

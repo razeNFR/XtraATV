@@ -2952,7 +2952,8 @@ class MultiStreamFragment : Fragment() {
 
     /** Discreet softly breathing badge in the top-right corner of a tile while an ad is being bypassed. */
     private fun updateAdBadge(tile: Tile) {
-        if (tile.onBackup) {
+        val showBadge = requireContext().prefs().getBoolean(C.TV_SHOW_ADBLOCK_BADGE, true)
+        if (tile.onBackup && showBadge) {
             if (tile.adBadge.visibility != View.VISIBLE) {
                 tile.adBadge.alpha = 0.85f
                 tile.adBadge.visibility = View.VISIBLE

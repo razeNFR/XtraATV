@@ -18,10 +18,16 @@
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/settings"
-        android:title="@string/settings" />
+        android:icon="@drawable/tv_ic_settings"
+        android:title="@string/settings"
+        app:iconTint="?attr/colorControlNormal"
+        app:showAsAction="always" />
     <item
         android:id="@+id/login"
-        android:title="@string/log_in" />
+        android:icon="@drawable/baseline_person_black_24"
+        android:title="@string/tv_accounts_title"
+        app:iconTint="?attr/colorControlNormal"
+        app:showAsAction="always" />
     <item
         android:id="@+id/importFolders"
         android:title="@string/import_folders"

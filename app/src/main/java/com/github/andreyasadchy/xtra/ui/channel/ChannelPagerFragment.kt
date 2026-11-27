@@ -168,6 +168,9 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                     } else {
                         it
                     }
+                    if (!com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())) {
+                        com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyStreamerNameTint(userName)
+                    }
                 } else {
                     userName.visibility = View.GONE
                 }
@@ -203,6 +206,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
             val navController = findNavController()
             val appBarConfiguration = AppBarConfiguration(setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment))
             toolbar.setupWithNavController(navController, appBarConfiguration)
+            com.github.andreyasadchy.xtra.ui.mobile.MobileUi.setupMobileToolbar(toolbar, activity)
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             // buttons hidden in the settings (tabs of the channel)
             requireContext().prefs().getStringSet(C.UI_CHANNEL_HIDDEN_BUTTONS, C.DEFAULT_CHANNEL_HIDDEN_BUTTONS)?.let { hidden ->
@@ -316,16 +320,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                         true
                     }
                     R.id.login -> {
-                        if (isLoggedIn) {
-                            activity.getAlertDialogBuilder().apply {
-                                setTitle(getString(R.string.logout_title))
-                                requireContext().tokenPrefs().getString(C.USERNAME, null)?.let { setMessage(getString(R.string.logout_msg, it)) }
-                                setNegativeButton(getString(R.string.no), null)
-                                setPositiveButton(getString(R.string.yes)) { _, _ -> activity.logoutResultLauncher?.launch(Intent(activity, LoginActivity::class.java)) }
-                            }.show()
-                        } else {
-                            activity.loginResultLauncher?.launch(Intent(activity, LoginActivity::class.java))
-                        }
+                        activity.onAccountClicked()
                         true
                     }
                     R.id.share -> {
@@ -637,6 +632,11 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
             if (stream?.viewerCount != null) {
                 watchLive.text = getString(R.string.watch_live)
                 watchLive.setOnClickListener { activity.startStream(stream) }
+                mobileChannelLiveRing?.visibility = View.VISIBLE
+                mobileChannelLiveBadge?.visibility = View.VISIBLE
+            } else {
+                mobileChannelLiveRing?.visibility = View.INVISIBLE
+                mobileChannelLiveBadge?.visibility = View.GONE
             }
             stream?.channelImage.let {
                 if (it != null) {
@@ -781,6 +781,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
             if (user.bannerImageURL != null) {
                 bannerImage.setTag(R.id.bannerImage, user.bannerImageURL)
                 bannerImage.visibility = View.VISIBLE
+                mobileBannerScrim?.visibility = View.VISIBLE
                 requireContext().imageLoader.enqueue(
                     ImageRequest.Builder(requireContext()).apply {
                         data(user.bannerImageURL)
@@ -795,6 +796,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
             } else {
                 bannerImage.setTag(R.id.bannerImage, null)
                 bannerImage.visibility = View.GONE
+                mobileBannerScrim?.visibility = View.GONE
             }
             if (resources.getBoolean(R.bool.isTv)) {
                 com.github.andreyasadchy.xtra.ui.tv.TvAmbient.applyChannelOverride(

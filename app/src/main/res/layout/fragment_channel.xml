@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Mobile: modernized channel page with gradient banner, live ring/badge, rounded live card, and pill CTA button -->
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -44,78 +45,141 @@
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
-                        app:tint="#8C000000"
-                        app:tintMode="src_atop"
                         tools:src="@tools:sample/backgrounds/scenic"
+                        tools:visibility="visible" />
+
+                    <View
+                        android:id="@+id/mobileBannerScrim"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:background="@drawable/mobile_channel_banner_scrim"
+                        android:visibility="gone"
+                        app:layout_constraintBottom_toBottomOf="@id/bannerImage"
+                        app:layout_constraintEnd_toEndOf="@id/bannerImage"
+                        app:layout_constraintStart_toStartOf="@id/bannerImage"
+                        app:layout_constraintTop_toTopOf="@id/bannerImage"
+                        tools:visibility="visible" />
+
+                    <View
+                        android:id="@+id/mobileChannelLiveRing"
+                        android:layout_width="90dp"
+                        android:layout_height="90dp"
+                        android:layout_marginStart="14dp"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="16dp"
+                        android:background="@drawable/tv_live_ring"
+                        android:visibility="invisible"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent"
+                        app:layout_constraintVertical_bias="0.5"
                         tools:visibility="visible" />
 
                     <ImageView
                         android:id="@+id/userImage"
                         style="@style/UserPicture"
-                        android:layout_width="100dp"
-                        android:layout_height="100dp"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginTop="12dp"
-                        android:layout_marginBottom="12dp"
+                        android:layout_width="80dp"
+                        android:layout_height="80dp"
                         android:visibility="gone"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintVertical_bias="0.0"
+                        app:layout_constraintBottom_toBottomOf="@id/mobileChannelLiveRing"
+                        app:layout_constraintEnd_toEndOf="@id/mobileChannelLiveRing"
+                        app:layout_constraintStart_toStartOf="@id/mobileChannelLiveRing"
+                        app:layout_constraintTop_toTopOf="@id/mobileChannelLiveRing"
                         tools:src="@tools:sample/backgrounds/scenic"
+                        tools:visibility="visible" />
+
+                    <TextView
+                        android:id="@+id/mobileChannelLiveBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/mobile_live_badge_bg"
+                        android:paddingStart="7dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="7dp"
+                        android:paddingBottom="1dp"
+                        android:text="@string/tv_live_badge"
+                        android:textColor="@android:color/white"
+                        android:textSize="9.5sp"
+                        android:textStyle="bold"
+                        android:visibility="gone"
+                        app:layout_constraintBottom_toBottomOf="@id/mobileChannelLiveRing"
+                        app:layout_constraintEnd_toEndOf="@id/mobileChannelLiveRing"
+                        app:layout_constraintStart_toStartOf="@id/mobileChannelLiveRing"
+                        app:layout_constraintTop_toBottomOf="@id/mobileChannelLiveRing"
                         tools:visibility="visible" />
 
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginEnd="10dp"
-                        android:layout_marginTop="7dp"
-                        android:layout_marginBottom="7dp"
+                        android:layout_marginStart="14dp"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginEnd="14dp"
+                        android:layout_marginBottom="12dp"
                         android:orientation="vertical"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintStart_toEndOf="@id/userImage"
+                        app:layout_constraintStart_toEndOf="@id/mobileChannelLiveRing"
                         app:layout_constraintTop_toTopOf="parent">
 
                         <TextView
                             android:id="@+id/userName"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:textAppearance="?attr/textAppearanceTitleMedium"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:textAppearance="?attr/textAppearanceTitleLarge"
+                            android:textStyle="bold"
                             android:visibility="gone"
                             tools:text="@sample/games.json/top/game/name"
-                            tools:visibility="visible" />
-
-                        <TextView
-                            android:id="@+id/userCreated"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?android:attr/textColorSecondary"
-                            android:visibility="gone"
-                            tools:text="Created at 123456"
                             tools:visibility="visible" />
 
                         <TextView
                             android:id="@+id/userFollowers"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?android:attr/textColorSecondary"
+                            android:textStyle="bold"
                             android:visibility="gone"
                             tools:text="123456 followers"
                             tools:visibility="visible" />
 
-                        <TextView
-                            android:id="@+id/userType"
+                        <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?android:attr/textColorSecondary"
-                            android:visibility="gone"
-                            tools:text="Partner"
-                            tools:visibility="visible" />
+                            android:layout_marginTop="4dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/userType"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="8dp"
+                                android:background="@drawable/mobile_subtle_chip_bg"
+                                android:paddingStart="8dp"
+                                android:paddingTop="2dp"
+                                android:paddingEnd="8dp"
+                                android:paddingBottom="2dp"
+                                android:textAppearance="?attr/textAppearanceLabelSmall"
+                                android:textStyle="bold"
+                                android:visibility="gone"
+                                tools:text="Partner"
+                                tools:visibility="visible" />
+
+                            <TextView
+                                android:id="@+id/userCreated"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:textAppearance="?attr/textAppearanceBodySmall"
+                                android:textColor="?android:attr/textColorSecondary"
+                                android:visibility="gone"
+                                tools:text="Created at 123456"
+                                tools:visibility="visible" />
+                        </LinearLayout>
                     </LinearLayout>
 
                 </androidx.constraintlayout.widget.ConstraintLayout>
@@ -124,6 +188,11 @@
                     android:id="@+id/streamLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginEnd="14dp"
+                    android:background="@drawable/mobile_live_card_bg"
+                    android:padding="12dp"
                     android:visibility="gone"
                     tools:visibility="visible">
 
@@ -131,10 +200,7 @@
                         android:id="@+id/streamLayout1"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginTop="7dp"
-                        android:layout_marginEnd="5dp"
-                        android:layout_marginBottom="7dp"
+                        android:layout_marginEnd="10dp"
                         android:orientation="vertical"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toStartOf="@id/streamLayout2"
@@ -143,9 +209,12 @@
 
                         <TextView
                             android:id="@+id/title"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:textAppearance="?attr/textAppearanceTitleMedium"
+                            android:ellipsize="end"
+                            android:maxLines="2"
+                            android:textAppearance="?attr/textAppearanceTitleSmall"
+                            android:textStyle="bold"
                             android:visibility="gone"
                             tools:text="@sample/streams.json/streams/channel/status"
                             tools:visibility="visible" />
@@ -154,8 +223,12 @@
                             android:id="@+id/gameName"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?android:attr/textColorSecondary"
+                            android:layout_marginTop="3dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:textAppearance="?attr/textAppearanceBodySmall"
+                            android:textColor="?attr/colorPrimary"
+                            android:textStyle="bold"
                             android:visibility="gone"
                             tools:text="@sample/games.json/top/game/name"
                             tools:visibility="visible" />
@@ -165,32 +238,33 @@
                         android:id="@+id/streamLayout2"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="7dp"
-                        android:layout_marginEnd="5dp"
                         android:gravity="end"
                         android:orientation="vertical"
                         app:layout_constraintBottom_toBottomOf="@id/streamLayout1"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toEndOf="@id/streamLayout1"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintVertical_bias="1.0">
+                        app:layout_constraintTop_toTopOf="@id/streamLayout1">
 
                         <TextView
                             android:id="@+id/viewers"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            android:textAppearance="?attr/textAppearanceBodySmall"
+                            android:textColor="#FFFF6B6B"
+                            android:textStyle="bold"
                             android:visibility="gone"
-                            tools:text="1337499 viewers"
+                            tools:text="13.3K viewers"
                             tools:visibility="visible" />
 
                         <TextView
                             android:id="@+id/uptime"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            android:layout_marginTop="2dp"
+                            android:textAppearance="?attr/textAppearanceLabelSmall"
+                            android:textColor="?android:attr/textColorSecondary"
                             android:visibility="gone"
-                            tools:text="8:21:33 uptime"
+                            tools:text="8:21:33"
                             tools:visibility="visible" />
                     </LinearLayout>
 
@@ -200,8 +274,8 @@
                     android:id="@+id/lastBroadcast"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="7dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginTop="8dp"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
                     android:textColor="?android:attr/textColorSecondary"
                     android:visibility="gone"
                     tools:text="Last broadcast %s"
@@ -209,14 +283,24 @@
 
                 <TextView
                     android:id="@+id/watchLive"
-                    tools:viewBindingType="TextView"
                     android:layout_width="wrap_content"
-                    android:layout_height="50dp"
+                    android:layout_height="42dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="10dp"
+                    android:background="@drawable/mobile_channel_watch_btn_bg"
+                    android:drawablePadding="8dp"
                     android:gravity="center"
+                    android:paddingStart="22dp"
+                    android:paddingEnd="24dp"
                     android:text="@string/open_player"
-                    android:textAllCaps="true"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textSize="17sp" />
+                    android:textAllCaps="false"
+                    android:textAppearance="?attr/textAppearanceLabelLarge"
+                    android:textColor="?attr/colorOnPrimary"
+                    android:textSize="14.5sp"
+                    android:textStyle="bold"
+                    app:drawableStartCompat="@drawable/tv_ic_play"
+                    app:drawableTint="?attr/colorOnPrimary"
+                    tools:viewBindingType="TextView" />
 
             </LinearLayout>
 
@@ -241,6 +325,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="?attr/tabLayoutHeight"
                     app:tabGravity="fill"
+                    app:tabIndicatorFullWidth="false"
+                    app:tabIndicatorHeight="3dp"
                     app:tabMaxWidth="0dp"
                     app:tabMode="fixed" />
 

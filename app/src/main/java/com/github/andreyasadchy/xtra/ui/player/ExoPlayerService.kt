@@ -207,10 +207,10 @@ class ExoPlayerService : BasePlaybackService() {
     }
 
     private fun createLoadControl(): DefaultLoadControl {
-        // TV: 600 ms of video to start instead of 2000 ms when the setting was not changed (after a stall it
-        // still waits for its own setting, 2000 ms) — speeds up startup on modest Android TV boxes
+        // 600 ms of video to start instead of 2000 ms when the setting was not changed (after a stall it
+        // still waits for its own setting, 2000 ms) — speeds up stream startup on both TV and mobile
         val playbackMs = (prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull()
-            ?.let { if (it == 2000 && resources.getBoolean(R.bool.isTv)) 600 else it } ?: 2000)
+            ?.let { if (it == 2000) 600 else it } ?: 600)
             .coerceAtLeast(0)
         val rebufferMs = (prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000)
             .coerceAtLeast(0)
@@ -754,7 +754,14 @@ class ExoPlayerService : BasePlaybackService() {
                         }
                         if (useProxy || useVideoSwap || hideAds) {
                             val playlist = (player?.currentManifest as? HlsManifest)?.mediaPlaylist
-                            val ads = checkPlaylist(playlist, mainPlayer = true)
+                            val ads = if (shadowAdActive && !videoSwapActive && !proxyMediaPlaylist) {
+                                if (playlist != null) {
+                                    checkFirstPlaylist = false
+                                }
+                                false
+                            } else {
+                                checkPlaylist(playlist, mainPlayer = true)
+                            }
                             val oldValue = playingAds
                             playingAds = ads
                             // the ad being blocked from the marks of Twitch ("2/3", its end), for the badge
@@ -1651,8 +1658,7 @@ class ExoPlayerService : BasePlaybackService() {
                     playlistUrl = vod.masterUri.toString()
                     pendingProxyStat = null
                     checkFirstPlaylist = false
-                    val isTvDevice = resources.getBoolean(R.bool.isTv)
-                    if (isTvDevice && !videoHidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY && serviceListener == null) {
+                    if (!videoHidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY && serviceListener == null) {
                         kotlinx.coroutines.withTimeoutOrNull(400L) {
                             while (serviceListener == null) delay(10L)
                         }
@@ -1781,7 +1787,7 @@ class ExoPlayerService : BasePlaybackService() {
                     useCustomProxy -> url.toUri().host?.removePrefix("www.")
                     else -> streamProxy?.takeIf { it.proxyPlaybackAccessToken || it.proxyMultivariantPlaylist }?.host
                 }
-                if (isTvDevice && !videoHidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY && serviceListener == null) {
+                if (!videoHidden && quality?.name != VideoQuality.AUDIO_ONLY_QUALITY && serviceListener == null) {
                     // Wait for the new player fragment to bind its SurfaceView so MediaCodec configures directly on the real surface
                     kotlinx.coroutines.withTimeoutOrNull(400L) {
                         while (serviceListener == null) delay(10L)
@@ -3476,7 +3482,12 @@ class ExoPlayerService : BasePlaybackService() {
             backLiveFrom = 0L
             backLiveProgress = 0f
             if (shadowAdActive && !experimentalVodActive) {
-                return AdblockInfo(getString(R.string.tv_adblock_ad), null, null)
+                val rollTitle = when (com.github.andreyasadchy.xtra.ui.tv.TvShadowAdblock.activeRollType(channelLogin)) {
+                    "preroll" -> R.string.tv_adblock_ad_preroll
+                    "midroll" -> R.string.tv_adblock_ad_midroll
+                    else -> R.string.tv_adblock_ad
+                }
+                return AdblockInfo(getString(rollTitle), null, null)
             }
             if (experimentalNoticeTitleRes != 0) {
                 if (!streamPictureShown && player?.playbackState != Player.STATE_READY) {

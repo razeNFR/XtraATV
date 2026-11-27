@@ -2170,6 +2170,7 @@ class TvSettingsFragment : Fragment() {
         val key = raw.key
         if (key in MaterialPreferenceFragment.TV_HIDDEN_KEYS) return null
         if (xmlRes == R.xml.adblock_preferences && key == "video_swap_settings") return null
+        if (xmlRes == R.xml.debug_preferences && (key == "video_swap_settings" || key == C.PLAYER_USE_VIDEO_SWAP || key == C.PLAYER_HIDE_ADS)) return null
         if (!caps.hasPip) {
             if (key == C.PLAYER_PICTURE_IN_PICTURE || key == C.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED || key == C.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED) {
                 return null
@@ -2611,6 +2612,11 @@ class TvSettingsFragment : Fragment() {
                                     (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = false)
                                 C.UI_NAME_DISPLAY ->
                                     (activity as? MainActivity)?.refreshTvLayoutSettings(rebindCards = true)
+                                C.UI_INTERFACE_MODE -> {
+                                    context.prefs().edit(commit = true) { putString(key, chosen) }
+                                    com.github.andreyasadchy.xtra.ui.view.TvUi.restartAppForInterfaceMode(context)
+                                    return@showChoices
+                                }
                                 else -> if (key.startsWith("ui_theme_")) {
                                     (activity as? MainActivity)?.markTvRecreateOnLeaveSettings()
                                 }
@@ -2960,7 +2966,7 @@ class TvSettingsFragment : Fragment() {
             "check_updates" -> {
                 settingsViewModel.checkUpdates(
                     context.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                    context.prefs().getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraATV/releases/latest",
+                    context.prefs().getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraPlus/releases/latest",
                     context.tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0),
                 )
             }

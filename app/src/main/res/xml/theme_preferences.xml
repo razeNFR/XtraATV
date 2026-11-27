@@ -11,6 +11,16 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <ListPreference
+        android:defaultValue="violet"
+        android:entries="@array/mobileAccentColorEntries"
+        android:entryValues="@array/mobileAccentColorValues"
+        android:key="mobile_accent_color"
+        android:summary="%s"
+        android:title="@string/mobile_accent_color_title"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <SwitchPreferenceCompat
         android:defaultValue="false"
         android:key="ui_theme_follow_system"

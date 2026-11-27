@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Mobile: modern followed channel avatar card with live ring, LIVE badge, favorite star, and subtle source pill -->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -8,87 +9,46 @@
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:paddingStart="10dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="12dp">
 
         <ImageView
-            android:id="@+id/userImage"
-            style="@style/UserPicture"
-            android:layout_marginStart="10dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="12dp"
+            android:id="@+id/favoriteStar"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/tv_ic_star"
             android:visibility="gone"
-            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.0"
-            tools:src="@tools:sample/backgrounds/scenic"
+            app:tint="#FFFACC15"
             tools:visibility="visible" />
-
-        <LinearLayout
-            android:id="@+id/layout1"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_marginTop="7dp"
-            android:layout_marginEnd="5dp"
-            android:layout_marginBottom="7dp"
-            android:orientation="vertical"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/layout2"
-            app:layout_constraintStart_toEndOf="@id/userImage"
-            app:layout_constraintTop_toTopOf="parent">
-
-            <TextView
-                android:id="@+id/username"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textAppearance="?attr/textAppearanceTitleMedium"
-                android:visibility="gone"
-                tools:text="Gorgc"
-                tools:visibility="visible" />
-
-            <TextView
-                android:id="@+id/userStream"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:textColor="?android:attr/textColorSecondary"
-                android:visibility="gone"
-                tools:text="123456 viewers"
-                tools:visibility="visible" />
-
-            <TextView
-                android:id="@+id/userFollowed"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:textColor="?android:attr/textColorSecondary"
-                android:visibility="gone"
-                tools:text="123456 viewers"
-                tools:visibility="visible" />
-        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/layout2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="7dp"
-            android:layout_marginEnd="7dp"
-            android:layout_marginBottom="10dp"
-            android:gravity="bottom|end"
-            android:orientation="vertical"
-            app:layout_constraintBottom_toBottomOf="parent"
+            android:gravity="end"
+            android:orientation="horizontal"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toEndOf="@id/layout1"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="1.0">
+            app:layout_constraintTop_toTopOf="parent">
 
             <TextView
                 android:id="@+id/accountText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:background="@drawable/mobile_subtle_chip_bg"
+                android:paddingStart="6dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="6dp"
+                android:paddingBottom="1dp"
                 android:text="@string/account"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="9.5sp"
+                android:textStyle="bold"
                 android:visibility="gone"
                 tools:visibility="visible" />
 
@@ -96,9 +56,116 @@
                 android:id="@+id/localText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="3dp"
+                android:background="@drawable/mobile_subtle_chip_bg"
+                android:paddingStart="6dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="6dp"
+                android:paddingBottom="1dp"
                 android:text="@string/local"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="9.5sp"
+                android:textStyle="bold"
                 android:visibility="gone"
+                tools:visibility="visible" />
+        </LinearLayout>
+
+        <View
+            android:id="@+id/userRing"
+            android:layout_width="68dp"
+            android:layout_height="68dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/tv_live_ring"
+            android:visibility="invisible"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/userImage"
+            android:layout_width="58dp"
+            android:layout_height="58dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@id/userRing"
+            app:layout_constraintEnd_toEndOf="@id/userRing"
+            app:layout_constraintStart_toStartOf="@id/userRing"
+            app:layout_constraintTop_toTopOf="@id/userRing"
+            tools:src="@tools:sample/backgrounds/scenic"
+            tools:visibility="visible" />
+
+        <TextView
+            android:id="@+id/liveBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/mobile_live_badge_bg"
+            android:paddingStart="6dp"
+            android:paddingTop="1dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="1dp"
+            android:text="@string/tv_live_badge"
+            android:textColor="@android:color/white"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@id/userRing"
+            app:layout_constraintEnd_toEndOf="@id/userRing"
+            app:layout_constraintStart_toStartOf="@id/userRing"
+            app:layout_constraintTop_toBottomOf="@id/userRing"
+            tools:visibility="visible" />
+
+        <LinearLayout
+            android:id="@+id/layout1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/userRing">
+
+            <TextView
+                android:id="@+id/username"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:text="Gorgc"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/userStream"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?android:attr/textColorSecondary"
+                android:visibility="gone"
+                tools:text="Just Chatting · 12.4K"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/userFollowed"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
+                android:textColor="?android:attr/textColorSecondary"
+                android:visibility="gone"
+                tools:text="Followed since Oct 2025"
                 tools:visibility="visible" />
         </LinearLayout>
 

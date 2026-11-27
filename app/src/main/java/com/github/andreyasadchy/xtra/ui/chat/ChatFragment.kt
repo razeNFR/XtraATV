@@ -375,6 +375,16 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             messageView.visibility = View.GONE
                         } else {
                             messageView.visibility = View.VISIBLE
+                            val density = resources.displayMetrics.density
+                            messageView.setBackgroundResource(R.drawable.mobile_chat_input_bg)
+                            val hMargin = (8 * density).toInt()
+                            val vMargin = (6 * density).toInt()
+                            (messageView.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                                lp.setMargins(hMargin, vMargin, hMargin, vMargin)
+                                messageView.layoutParams = lp
+                            }
+                            editText.background = null
+                            editText.setPadding((14 * density).toInt(), (8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt())
                         }
                         viewPager.adapter = object : FragmentStateAdapter(this@ChatFragment) {
                             override fun getItemCount(): Int = 4

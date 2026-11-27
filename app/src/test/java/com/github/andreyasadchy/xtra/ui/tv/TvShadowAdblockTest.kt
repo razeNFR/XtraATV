@@ -455,4 +455,350 @@ class TvShadowAdblockTest {
         val parsedBrands = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, bareBrandPlaylist)
         assertEquals(TvShadowAdblock.PlaylistVerdict.FULL_AD, parsedBrands.verdict)
     }
+
+    @Test
+    fun adDaterangeWithStreamSourceIsCompletelyDropped() {
+        val leakedLine =
+            """#EXT-X-DATERANGE:ID="stitched-ad-999",CLASS="twitch-stitched-ad",START-DATE="2026-11-26T12:00:00.000Z",DURATION=30.0,X-TV-TWITCH-STREAM-SOURCE="ad",X-TV-TWITCH-AD-POD-POSITION="1""""
+        assertEquals(null, TvShadowAdblock.cleanHeaderLine(leakedLine))
+    }
+
+    @Test
+    fun prolongedHoldWithoutShadowFallsBackToPassthroughBeforeStarvation() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val clean = buildCleanPlaylist(mediaSeq = 10L, startSec = 0, count = 4)
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, clean),
+            primaryRawText = clean,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+        val adRaw = buildFullAdPlaylist(mediaSeq = 14L, startSec = 8)
+        val adParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, adRaw)
+
+        // First 3 passes hold cleanly while warming
+        repeat(3) {
+            val res = TvShadowAdblock.processMediaPlaylistDecision(
+                variantUrl = primaryVariantUrl,
+                primaryParsed = adParsed,
+                primaryRawText = adRaw,
+                window = window,
+                shadowPlaylist = null,
+                shadowVariantUrl = null,
+                shadowFresh = false,
+            )
+            assertEquals("hold", res.sourceUsed)
+        }
+
+        // 4th pass exceeds hold cap and hands off cleanly to Classic Swap ("passthrough")
+        val handoff = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = adParsed,
+            primaryRawText = adRaw,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+        assertEquals("passthrough", handoff.sourceUsed)
+    }
+
+    @Test
+    fun incompatibleContainerMapBlocksUnsafeSplice() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val fmp4Primary = """
+            #EXTM3U
+            #EXT-X-VERSION:7
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:100
+            #EXT-X-MAP:URI="https://video-edge.cdg02.abs.hls.ttvnw.net/v1/init.mp4"
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:00.000Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_100.m4s
+        """.trimIndent()
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, fmp4Primary),
+            primaryRawText = fmp4Primary,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+
+        val adRaw = buildFullAdPlaylist(mediaSeq = 101L, startSec = 2)
+        val tsShadow = buildCleanPlaylist(
+            mediaSeq = 500L,
+            startSec = 2,
+            count = 3,
+            prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow",
+        )
+        val res = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, adRaw),
+            primaryRawText = adRaw,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, tsShadow),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+        )
+        assertEquals("hold", res.sourceUsed)
+    }
+
+    @Test
+    fun llHlsFmp4DeltaPlaylistDetectsMidrollWithTimingHintAndStripsServerSkip() {
+        val deltaPlaylist = """
+            #EXTM3U
+            #EXT-X-VERSION:7
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:1000
+            #EXT-X-SERVER-CONTROL:CAN-BLOCK-RELOAD=YES,PART-HOLD-BACK=1.500,CAN-SKIP-UNTIL=30.0
+            #EXT-X-PART-INF:PART-TARGET=0.500
+            #EXT-X-SKIP:SKIPPED-SEGMENTS=25
+            #EXT-X-DATERANGE:ID="stitched-ad-1795777627-6241000000",CLASS="twitch-stitched-ad",START-DATE="2026-11-27T11:07:07.000Z",DURATION=30.0
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/seg_1025.m4s
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/seg_1026.m4s
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/seg_1027.m4s
+        """.trimIndent()
+
+        // 2026-11-27T11:07:05.000Z = 1795777625000L; 11:07:07.000Z = 1795777627000L; 11:07:09.000Z = 1795777629000L
+        val hint = TvShadowAdblock.PlaylistTimingHint(
+            segmentPdtMs = listOf(1795777625000L, 1795777627000L, 1795777629000L),
+            fallbackFirstSegmentPdtMs = 1795777625000L,
+            extraAdRangesMs = listOf(1795777627000L to 1795777657000L),
+            fallbackMapLine = """#EXT-X-MAP:URI="https://video-edge.cdg02.abs.hls.ttvnw.net/v1/init.mp4"""",
+        )
+
+        val parsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, deltaPlaylist, hint)
+        assertEquals(TvShadowAdblock.PlaylistVerdict.PARTIAL_AD, parsed.verdict)
+        assertTrue(parsed.hasActiveAdAtLiveEdge)
+        assertEquals(TvShadowAdblock.SegmentClass.UNKNOWN, parsed.segments[0].classification)
+        assertEquals(TvShadowAdblock.SegmentClass.AD, parsed.segments[1].classification)
+        assertEquals(TvShadowAdblock.SegmentClass.AD, parsed.segments[2].classification)
+        assertTrue(parsed.activeMapLine?.contains("init.mp4") == true)
+        assertFalse(parsed.headerLines.any { it.contains("#EXT-X-SKIP") || it.contains("#EXT-X-SERVER-CONTROL") || it.contains("#EXT-X-PART-INF") })
+
+        val noSkip = TvShadowAdblock.disableDeltaSkipping(deltaPlaylist)
+        assertFalse(noSkip.contains("CAN-SKIP-UNTIL"))
+        assertTrue(noSkip.contains("CAN-BLOCK-RELOAD=YES"))
+        assertTrue(noSkip.contains("PART-HOLD-BACK=1.500"))
+    }
+
+    @Test
+    fun historicalAdsInLongSlidingWindowDoNotReloopAfterBreakOrBlockReturn() {
+        fun buildSlidingWindowWithHistoricalAds(mediaSeq: Long, tailCleanCount: Int): String = buildString {
+            appendLine("#EXTM3U")
+            appendLine("#EXT-X-VERSION:7")
+            appendLine("#EXT-X-TARGETDURATION:6")
+            appendLine("#EXT-X-MEDIA-SEQUENCE:$mediaSeq")
+            appendLine("""#EXT-X-DATERANGE:ID="stitched-ad-500",CLASS="twitch-stitched-ad",START-DATE="2026-11-26T12:00:00.000Z",DURATION=58.0""")
+            for (i in 0 until 29) {
+                val sec = i * 2
+                val mm = (sec / 60).toString().padStart(2, '0')
+                val ss = (sec % 60).toString().padStart(2, '0')
+                appendLine("#EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:$mm:$ss.000Z")
+                appendLine("#EXTINF:2.000,")
+                appendLine("https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/ad_${mediaSeq + i}.m4s")
+            }
+            for (j in 0 until tailCleanCount) {
+                val sec = 58 + j * 2
+                val mm = (sec / 60).toString().padStart(2, '0')
+                val ss = (sec % 60).toString().padStart(2, '0')
+                appendLine("#EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:$mm:$ss.000Z")
+                appendLine("#EXTINF:2.000,")
+                appendLine("https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_${mediaSeq + 29 + j}.m4s")
+            }
+        }
+
+        val postAdRaw = buildSlidingWindowWithHistoricalAds(mediaSeq = 1000L, tailCleanCount = 2)
+        val postAdParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, postAdRaw)
+        assertEquals(TvShadowAdblock.PlaylistVerdict.PARTIAL_AD, postAdParsed.verdict)
+        assertFalse("Live edge is already clean live content", postAdParsed.hasActiveAdAtLiveEdge)
+
+        // Scenario A: Right after Classic Swap finished (window reset, not initial playlist) -> must NOT loop into shadow
+        val afterClassicSwapWindow = TvShadowAdblock.ContinuityWindow()
+        val shadowClean = buildCleanPlaylist(
+            mediaSeq = 500L,
+            startSec = 50,
+            count = 4,
+            prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow",
+        )
+        val shadowParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadowClean)
+        val resAfterClassic = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = postAdParsed,
+            primaryRawText = postAdRaw,
+            window = afterClassicSwapWindow,
+            shadowPlaylist = shadowParsed,
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            isInitialPlaylist = false,
+        )
+        assertEquals("primary", resAfterClassic.sourceUsed)
+        assertEquals(0, resAfterClassic.adSegmentsSuppressed)
+
+        // Scenario B: Returning from active Swap+ shadow while 29 old ads remain in sliding window -> returns to primary after 3 polls
+        val activeWindow = TvShadowAdblock.ContinuityWindow()
+        val fullAd = buildFullAdPlaylist(mediaSeq = 990L, startSec = 0, count = 4)
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, fullAd),
+            primaryRawText = fullAd,
+            window = activeWindow,
+            shadowPlaylist = shadowParsed,
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            isInitialPlaylist = true,
+        )
+        var lastRes: TvShadowAdblock.DecisionResult? = null
+        for (step in 1..3) {
+            val pollRaw = buildSlidingWindowWithHistoricalAds(mediaSeq = 1000L + step, tailCleanCount = 1 + step)
+            lastRes = TvShadowAdblock.processMediaPlaylistDecision(
+                variantUrl = primaryVariantUrl,
+                primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, pollRaw),
+                primaryRawText = pollRaw,
+                window = activeWindow,
+                shadowPlaylist = shadowParsed,
+                shadowVariantUrl = shadowVariantUrl,
+                shadowFresh = true,
+                isInitialPlaylist = false,
+            )
+        }
+        assertEquals("primary", lastRes!!.sourceUsed)
+        assertFalse("Old historical ad segments must be stripped when returning to primary", lastRes.outputPlaylist.contains("/ad_"))
+        assertTrue(lastRes.outputPlaylist.contains("/live_"))
+    }
+
+    @Test
+    fun monotonicContinuityFloorPreventsSequenceRegressionOn30To14ShadowSplice() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val floor = TvShadowAdblock.ContinuityFloor(
+            minMediaSequence = 1000L,
+            minEndMediaSequence = 1030L,
+            minDiscontinuitySequence = 1L,
+        )
+        val fullAd = buildFullAdPlaylist(mediaSeq = 1000L, startSec = 0, count = 30)
+        val shadow = buildCleanPlaylist(
+            mediaSeq = 500L,
+            startSec = 60,
+            count = 14,
+            prefix = "https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow",
+        )
+        val res = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, fullAd),
+            primaryRawText = fullAd,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadow),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            continuityFloor = floor,
+            isInitialPlaylist = false,
+        )
+        val emittedSeq = extractMediaSequence(res.outputPlaylist)
+        val emittedSegments = res.outputPlaylist.lines().count { it.startsWith("https://") }
+        val emittedDisc = extractDiscontinuitySequence(res.outputPlaylist)
+
+        assertEquals("shadow", res.sourceUsed)
+        assertTrue("MEDIA-SEQUENCE ($emittedSeq) must be >= previous end (1030)", emittedSeq >= 1030L)
+        assertTrue("End sequence (${emittedSeq + emittedSegments}) must never shrink below 1030", emittedSeq + emittedSegments >= 1030L)
+        assertTrue("DISCONTINUITY-SEQUENCE ($emittedDisc) must advance past previous (1)", emittedDisc >= 2L)
+    }
+
+    @Test
+    fun twitchPrefetchEnteringAdDaterangeTriggersShadowBeforeClassicSwap() {
+        val window = TvShadowAdblock.ContinuityWindow()
+
+        // Step 1: clean live playback so snapshot is warm
+        val cleanBefore = """
+            #EXTM3U
+            #EXT-X-VERSION:7
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:200
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:11:59.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_200.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:01.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_201.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:03.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_202.m4s
+        """.trimIndent()
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, cleanBefore),
+            primaryRawText = cleanBefore,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+
+        // Step 2: midroll DATERANGE starts at 12:12:07; regular #EXTINF ends at 12:12:05 (clean),
+        // while #EXT-X-TWITCH-PREFETCH segments at 12:12:07 and 12:12:09 are already inside the ad!
+        val prefetchAdPlaylist = """
+            #EXTM3U
+            #EXT-X-VERSION:7
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:201
+            #EXT-X-DATERANGE:ID="stitched-ad-1795781527-15241000000",CLASS="twitch-stitched-ad",START-DATE="2026-11-27T12:12:07.000Z",DURATION=60.0
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:01.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_201.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:03.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_202.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:05.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_203.m4s
+            #EXT-X-TWITCH-PREFETCH:https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/pref_ad_204.m4s
+            #EXT-X-TWITCH-PREFETCH:https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/pref_ad_205.m4s
+        """.trimIndent()
+
+        val parsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, prefetchAdPlaylist)
+        assertTrue("Prefetch segments inside stitched-ad must trigger hasPrefetchAd", parsed.hasPrefetchAd)
+        assertEquals(2, parsed.prefetchAdCount)
+        assertTrue("Live edge must be flagged as active ad", parsed.hasActiveAdAtLiveEdge)
+
+        val shadowRaw = """
+            #EXTM3U
+            #EXT-X-VERSION:7
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:900
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:07.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow_900.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:09.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow_901.m4s
+        """.trimIndent()
+        val shadowParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadowRaw)
+
+        val res = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = parsed,
+            primaryRawText = prefetchAdPlaylist,
+            window = window,
+            shadowPlaylist = shadowParsed,
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            isInitialPlaylist = false,
+        )
+
+        assertEquals("shadow", res.sourceUsed)
+        assertEquals(2, res.adSegmentsSuppressed)
+        assertTrue(res.outputPlaylist.contains("live_203.m4s"))
+        assertTrue(res.outputPlaylist.contains("#EXT-X-DISCONTINUITY"))
+        assertTrue(res.outputPlaylist.contains("shadow_900.m4s"))
+        assertFalse(res.outputPlaylist.contains("pref_ad_"))
+        assertFalse(res.outputPlaylist.contains("#EXT-X-TWITCH-PREFETCH:"))
+        assertFalse(res.outputPlaylist.contains("stitched-ad-"))
+    }
 }

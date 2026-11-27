@@ -135,34 +135,34 @@ object TvExperimentalAdblock {
     }
 
     fun isExperimentalEnabled(context: Context): Boolean {
-        if (!TvUi.isTv(context)) return false
         val prefs = context.prefs()
         return prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false) && !isAnyProxyEnabled(context)
     }
 
     /** True when the experimental continuous Shadow HLS adblocker (`Adblock (Swap+)`) is active. */
     fun isSwapPlusEnabled(context: Context): Boolean {
-        if (!TvUi.isTv(context)) return false
         val prefs = context.prefs()
         return prefs.getBoolean(C.TV_ADBLOCK_SWAP_PLUS, false) && !isAnyProxyEnabled(context)
     }
 
     /**
-     * On TV, Swap Adblock (`player_adblock`) is always active unless a Custom Proxy or HTTP Stream Proxy
-     * is enabled (acting as the automatic fallback for both Adblock (Swap+) and Adblock (VOD)).
+     * Swap Adblock (`player_adblock`) is always active on TV unless a proxy is enabled, and acts as the
+     * automatic fallback whenever Adblock (Swap+) or Adblock (VOD) is enabled on both TV and mobile.
      */
     fun isSwapAdblockEnabled(context: Context): Boolean {
         val prefs = context.prefs()
-        return if (TvUi.isTv(context) && !isAnyProxyEnabled(context)) {
-            true
-        } else {
-            prefs.getBoolean(C.PLAYER_ADBLOCK, true)
+        val anyProxy = isAnyProxyEnabled(context)
+        if (!anyProxy && (TvUi.isTv(context) ||
+                prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false) ||
+                prefs.getBoolean(C.TV_ADBLOCK_SWAP_PLUS, false))
+        ) {
+            return true
         }
+        return prefs.getBoolean(C.PLAYER_ADBLOCK, true)
     }
 
-    /** Enforces mutual exclusion rules between Adblock (VOD), Adblock (Swap+), Adblock (Swap), and Proxies on TV. */
+    /** Enforces mutual exclusion rules between Adblock (VOD), Adblock (Swap+), Adblock (Swap), and Proxies. */
     fun normalizePrefs(context: Context) {
-        if (!TvUi.isTv(context)) return
         val prefs = context.prefs()
         val exp = prefs.getBoolean(C.TV_EXPERIMENTAL_ADBLOCK, false)
         val swapPlus = prefs.getBoolean(C.TV_ADBLOCK_SWAP_PLUS, false)
@@ -175,7 +175,7 @@ object TvExperimentalAdblock {
                 putBoolean(C.PLAYER_USE_STREAM_PROXY, false)
                 putBoolean(C.PLAYER_ADBLOCK, true)
             }
-        } else if (!customProxy && !streamProxy && !swap) {
+        } else if (TvUi.isTv(context) && !customProxy && !streamProxy && !swap) {
             prefs.edit {
                 putBoolean(C.PLAYER_ADBLOCK, true)
             }

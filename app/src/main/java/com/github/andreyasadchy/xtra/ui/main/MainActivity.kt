@@ -172,14 +172,14 @@ class MainActivity : AppCompatActivity() {
         showLastCrash()
         migrateSettings()
         forceDisplaySettings()
+        // favorite channels, read before the followed streams are loaded (TV and mobile)
+        com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
         if (resources.getBoolean(R.bool.isTv)) {
             if (savedInstanceState == null) {
                 com.github.andreyasadchy.xtra.ui.tv.TvWallpaper.advanceRotationIfDue(this, onLaunch = true)
             }
             // the color of accent, read again (the app restarts this screen when the ambiance color changes)
             com.github.andreyasadchy.xtra.ui.tv.TvAccent.init(this)
-            // favorite channels, read before the followed streams are loaded
-            com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
             // pre-warm the TV settings XML cache in the background so opening Settings is instant
             com.github.andreyasadchy.xtra.ui.settings.TvSettingsFragment.prewarmAsync(this)
             prefs.edit {
@@ -435,6 +435,30 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }, true)
+        } else {
+            com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyScreenAmbient(binding.root)
+            (binding.navBar as? com.google.android.material.navigation.NavigationBarView)?.let {
+                com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyBottomNavTint(it)
+            }
+            supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
+                override fun onFragmentViewCreated(fm: FragmentManager, f: Fragment, v: View, savedInstanceState: Bundle?) {
+                    fun applyToTree(node: View) {
+                        when (node) {
+                            is com.google.android.material.tabs.TabLayout ->
+                                com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.applyTabLayoutTint(node)
+                            is androidx.swiperefreshlayout.widget.SwipeRefreshLayout -> {
+                                com.github.andreyasadchy.xtra.ui.mobile.MobileAccent.color(node.context)?.let { c ->
+                                    node.setColorSchemeColors(c)
+                                }
+                            }
+                            is ViewGroup -> {
+                                for (i in 0 until node.childCount) applyToTree(node.getChildAt(i))
+                            }
+                        }
+                    }
+                    applyToTree(v)
+                }
+            }, true)
         }
         setNavBarColor(resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT)
         val ignoreCutouts = prefs.getBoolean(C.UI_DRAW_BEHIND_CUTOUTS, false)
@@ -471,14 +495,14 @@ class MainActivity : AppCompatActivity() {
         loginResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val prevKey = pendingAddAccountPreviousKey
             pendingAddAccountPreviousKey = null
-            if (isTv) {
-                com.github.andreyasadchy.xtra.ui.tv.TvAccounts.restoreAfterCanceledAdd(this, prevKey)
-                com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
-            }
+            com.github.andreyasadchy.xtra.ui.tv.TvAccounts.restoreAfterCanceledAdd(this, prevKey)
+            com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
             if (result.resultCode == RESULT_OK) {
                 restartActivity()
             } else if (isTv) {
                 updateTvMenuAccount()
+            } else {
+                com.github.andreyasadchy.xtra.ui.mobile.MobileUi.ensureAccountAvatarLoaded(this)
             }
         }
         logoutResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -533,7 +557,7 @@ class MainActivity : AppCompatActivity() {
                                 ) {
                                     viewModel.checkUpdates(
                                         prefs.getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                                        prefs.getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraATV/releases/latest",
+                                        prefs.getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/razeNFR/XtraPlus/releases/latest",
                                         tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0)
                                     )
                                 }
@@ -650,12 +674,13 @@ class MainActivity : AppCompatActivity() {
                             // TV: the version and its changelog, the focus on "Update"
                             com.github.andreyasadchy.xtra.ui.tv.TvUpdateDialog.show(this@MainActivity, viewModel.updateVersion, viewModel.updateNotes, startUpdate, ignoreUpdate)
                         } else {
-                            getAlertDialogBuilder()
-                                .setTitle(getString(R.string.update_available))
-                                .setMessage(getString(R.string.update_message))
-                                .setPositiveButton(getString(R.string.yes)) { _, _ -> startUpdate() }
-                                .setNegativeButton(getString(R.string.no)) { _, _ -> ignoreUpdate() }
-                                .show()
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileBottomSheets.showUpdate(
+                                this@MainActivity,
+                                viewModel.updateVersion,
+                                viewModel.updateNotes,
+                                startUpdate,
+                                ignoreUpdate,
+                            )
                         }
                     }
                 }
@@ -2486,6 +2511,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideTvMenu() {
+        if (!isTv) return
         tvMenuOpenedByBack = false
         tvMenuState.pendingFocus = false
         // a player or a multi-stream is over the screens: they stay out of reach of the focus
@@ -2726,18 +2752,18 @@ class MainActivity : AppCompatActivity() {
             }
             return
         }
-        val isLoggedIn = !TwitchApiHelper.getGQLHeaders(this, true)[C.HEADER_TOKEN].isNullOrBlank() ||
-                !TwitchApiHelper.getHelixHeaders(this)[C.HEADER_TOKEN].isNullOrBlank()
-        if (isLoggedIn) {
-            getAlertDialogBuilder().apply {
-                setTitle(getString(R.string.logout_title))
-                tokenPrefs().getString(C.USERNAME, null)?.let { setMessage(getString(R.string.logout_msg, it)) }
-                setNegativeButton(getString(R.string.no), null)
-                setPositiveButton(getString(R.string.yes)) { _, _ -> logoutResultLauncher?.launch(Intent(this@MainActivity, LoginActivity::class.java)) }
-            }.show()
-        } else {
-            loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
-        }
+        com.github.andreyasadchy.xtra.ui.tv.TvAccounts.syncCurrentFromPrefs(this)
+        com.github.andreyasadchy.xtra.ui.mobile.MobileBottomSheets.showAccountsSheet(
+            activity = this,
+            onOpenCurrentLoginMethods = {
+                pendingAddAccountPreviousKey = null
+                loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+            },
+            onAddAnotherAccount = {
+                pendingAddAccountPreviousKey = com.github.andreyasadchy.xtra.ui.tv.TvAccounts.prepareAddAccount(this)
+                loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+            },
+        )
     }
 
     /** True while one of the screens of the app opens over this one (settings, login): the streams go on. */
@@ -3662,7 +3688,7 @@ class MainActivity : AppCompatActivity() {
         if (playerFragment == null || currentStreamLogin != stream.channelLogin) {
             com.github.andreyasadchy.xtra.ui.tv.TvStats.addStream(this)
         }
-        if (isTv && prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
+        if (prefs.getString(C.PLAYER, C.EXOPLAYER) != C.MEDIA_PLAYER) {
             // the picture of the stream instead of a black screen while it loads: the newest one there is
             // a thumbnail Twitch has not made yet is replaced by the picture of the channel (TvThumbnails)
             com.github.andreyasadchy.xtra.ui.tv.TvThumbnails.remember(stream)

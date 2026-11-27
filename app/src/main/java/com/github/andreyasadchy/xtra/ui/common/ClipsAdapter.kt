@@ -151,7 +151,15 @@ class ClipsAdapter(
                                 actions,
                             )
                         } else {
-                            showDownloadDialog(item)
+                            val activity = fragment.activity as? MainActivity ?: return@setOnLongClickListener true
+                            com.github.andreyasadchy.xtra.ui.mobile.MobileUi.showClipActions(
+                                activity = activity,
+                                clip = item,
+                                allClips = snapshot().items.filterNotNull(),
+                                showChannel = showChannel,
+                                showGame = showGame,
+                                onDownload = { showDownloadDialog(item) },
+                            )
                         }
                         true
                     }
@@ -268,6 +276,18 @@ class ClipsAdapter(
                         gameName.setOnClickListener(gameListener)
                     } else {
                         gameName.visibility = View.GONE
+                    }
+                    if (!com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {
+                        com.github.andreyasadchy.xtra.ui.mobile.MobileUi.applyResponsiveMediaCardDensity(
+                            cardRoot = root,
+                            userImage = userImage,
+                            title = title,
+                            username = username,
+                            gameName = gameName,
+                            primaryBadges = listOf(duration),
+                            secondaryBadges = listOf(views, date, type),
+                            optionsButton = options,
+                        )
                     }
                     options.setOnClickListener { it ->
                         if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(context)) {

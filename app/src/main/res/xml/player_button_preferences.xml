@@ -35,29 +35,26 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:icon="@drawable/tv_ic_diamond"
         android:key="tv_button_points"
         android:summary="@string/tv_points_button_summary"
         android:title="@string/tv_points_and_drops"
-        app:iconSpaceReserved="false"
-        app:isPreferenceVisible="@bool/isTv"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="false"
+        android:icon="@drawable/tv_ic_clip"
         android:key="tv_button_clip"
         android:summary="@string/tv_clip_button_summary"
         android:title="@string/tv_create_clip"
-        app:iconSpaceReserved="false"
-        app:isPreferenceVisible="@bool/isTv"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:icon="@drawable/tv_ic_proxy"
         android:key="tv_button_proxy"
         android:summary="@string/tv_proxy_button_summary"
         android:title="@string/tv_proxy_button"
-        app:iconSpaceReserved="false"
-        app:isPreferenceVisible="@bool/isTv"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
@@ -71,10 +68,9 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:icon="@drawable/tv_ic_stats"
         android:key="tv_button_stats"
         android:title="@string/tv_stats_for_nerds"
-        app:iconSpaceReserved="false"
-        app:isPreferenceVisible="@bool/isTv"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
@@ -150,14 +146,14 @@
         android:defaultValue="true"
         android:key="player_settings"
         android:title="@string/quality"
-        android:icon="@drawable/baseline_settings_black_24"
+        android:icon="@drawable/tv_ic_hd"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="player_menu"
         android:title="@string/player_menu"
-        android:icon="@drawable/baseline_more_vert_black_24"
+        android:icon="@drawable/tv_ic_settings"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat

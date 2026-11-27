@@ -2,6 +2,16 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <ListPreference
+        android:defaultValue="auto"
+        android:entries="@array/interfaceModeEntries"
+        android:entryValues="@array/interfaceModeValues"
+        android:key="ui_interface_mode"
+        android:summary="%s"
+        android:title="@string/interface_mode_title"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
         android:defaultValue="@string/portraitColumns"
         android:key="columnsPortrait"
         android:entries="@array/portraitColumnCount"

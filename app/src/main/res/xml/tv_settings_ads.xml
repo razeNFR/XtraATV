@@ -15,6 +15,14 @@
 
         <SwitchPreferenceCompat
             android:defaultValue="false"
+            android:key="tv_adblock_swap_plus"
+            android:summary="@string/tv_adblock_swap_plus_summary"
+            android:title="@string/tv_adblock_swap_plus_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
             android:key="tv_experimental_adblock"
             android:summary="@string/tv_adblock_exp_summary"
             android:title="@string/tv_adblock_exp_title"
@@ -22,9 +30,10 @@
             app:singleLineTitle="false" />
 
         <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="player_hide_ads"
-            android:title="@string/hide_during_ads"
+            android:defaultValue="true"
+            android:key="tv_show_adblock_badge"
+            android:summary="@string/mobile_show_adblock_badge_summary"
+            android:title="@string/mobile_show_adblock_badge_title"
             app:iconSpaceReserved="false"
             app:singleLineTitle="false" />
     </PreferenceCategory>

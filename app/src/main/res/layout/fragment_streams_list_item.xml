@@ -25,11 +25,29 @@
                 tools:src="@tools:sample/backgrounds/scenic"
                 tools:visibility="visible" />
 
+            <TextView
+                android:id="@+id/mobileLiveBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/mobile_live_badge_bg"
+                android:paddingStart="7dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="7dp"
+                android:paddingBottom="2dp"
+                android:text="@string/tv_live_badge"
+                android:textColor="@android:color/white"
+                android:textSize="10.5sp"
+                android:textStyle="bold"
+                app:layout_constraintStart_toStartOf="@id/thumbnail"
+                app:layout_constraintTop_toTopOf="@id/thumbnail" />
+
             <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
                 android:id="@+id/viewers"
                 style="@style/ThumbnailItem"
-                android:layout_marginStart="5dp"
-                android:layout_marginBottom="5dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginBottom="8dp"
                 android:visibility="gone"
                 app:layout_constraintBottom_toBottomOf="@+id/thumbnail"
                 app:layout_constraintStart_toStartOf="parent"
@@ -39,8 +57,8 @@
             <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
                 android:id="@+id/uptime"
                 style="@style/ThumbnailItem"
-                android:layout_marginEnd="5dp"
-                android:layout_marginBottom="5dp"
+                android:layout_marginEnd="8dp"
+                android:layout_marginBottom="8dp"
                 android:visibility="gone"
                 app:layout_constraintBottom_toBottomOf="@+id/thumbnail"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -50,7 +68,7 @@
             <ImageView
                 android:id="@+id/userImage"
                 style="@style/UserPicture"
-                android:layout_marginStart="10dp"
+                android:layout_marginStart="12dp"
                 android:layout_marginTop="12dp"
                 android:layout_marginBottom="12dp"
                 android:visibility="gone"
@@ -64,10 +82,10 @@
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:layout_marginEnd="10dp"
-                android:layout_marginTop="7dp"
-                android:layout_marginBottom="7dp"
+                android:layout_marginStart="12dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="10dp"
                 android:orientation="vertical"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -78,17 +96,20 @@
                     android:id="@+id/title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:visibility="gone"
                     android:ellipsize="end"
-                    android:maxLines="3"
+                    android:maxLines="2"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textStyle="bold"
+                    android:visibility="gone"
                     tools:text="@sample/streams.json/streams/channel/status"
                     tools:visibility="visible" />
 
                 <TextView
                     android:id="@+id/username"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     android:textColor="?android:attr/textColorSecondary"
                     android:visibility="gone"
@@ -97,8 +118,10 @@
 
                 <TextView
                     android:id="@+id/gameName"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     android:textColor="?android:attr/textColorSecondary"
                     android:visibility="gone"

@@ -8,7 +8,8 @@
         <item name="dialogPadding">8dp</item>
         <item name="dialogLayoutPadding">8dp</item>
         <item name="tabLayoutHeight">48dp</item>
-        <item name="bottomNavigationHeight">80dp</item>
+        <item name="bottomNavigationHeight">64dp</item>
+        <item name="bottomNavigationStyle">@style/ModernBottomNavigation</item>
         <item name="cardStyle">@style/Card</item>
         <item name="bottomSheetButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
         <item name="elevatedButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
@@ -32,7 +33,8 @@
         <item name="dialogPadding">8dp</item>
         <item name="dialogLayoutPadding">8dp</item>
         <item name="tabLayoutHeight">48dp</item>
-        <item name="bottomNavigationHeight">80dp</item>
+        <item name="bottomNavigationHeight">64dp</item>
+        <item name="bottomNavigationStyle">@style/ModernBottomNavigation</item>
         <item name="cardStyle">@style/Card</item>
         <item name="bottomSheetButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
         <item name="elevatedButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
@@ -62,7 +64,7 @@
         <item name="dialogPadding">8dp</item>
         <item name="dialogLayoutPadding">8dp</item>
         <item name="tabLayoutHeight">48dp</item>
-        <item name="bottomNavigationHeight">80dp</item>
+        <item name="bottomNavigationHeight">64dp</item>
         <item name="cardStyle">@style/CardAmoled</item>
         <item name="bottomSheetButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
         <item name="elevatedButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
@@ -96,7 +98,7 @@
         <item name="dialogPadding">8dp</item>
         <item name="dialogLayoutPadding">8dp</item>
         <item name="tabLayoutHeight">48dp</item>
-        <item name="bottomNavigationHeight">80dp</item>
+        <item name="bottomNavigationHeight">64dp</item>
         <item name="cardStyle">@style/Card</item>
         <item name="bottomSheetButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
         <item name="elevatedButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
@@ -191,11 +193,17 @@
 
     <style name="CompactCard" parent="Widget.Material3.CardView.Elevated">
         <item name="android:layout_margin">4dp</item>
+        <item name="cardCornerRadius">14dp</item>
+        <item name="strokeColor">#1F888899</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <style name="CompactCardAmoled" parent="Widget.Material3.CardView.Elevated">
         <item name="materialThemeOverlay">@style/CardOverlayAmoled</item>
         <item name="android:layout_margin">4dp</item>
+        <item name="cardCornerRadius">14dp</item>
+        <item name="strokeColor">#24FFFFFF</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <style name="CompactRadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
@@ -1106,11 +1114,15 @@
     <style name="ThumbnailItem">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:shadowColor">#000000</item>
-        <item name="android:shadowRadius">4</item>
+        <item name="android:background">@drawable/mobile_badge_pill</item>
+        <item name="android:paddingStart">7dp</item>
+        <item name="android:paddingEnd">7dp</item>
+        <item name="android:paddingTop">2dp</item>
+        <item name="android:paddingBottom">2dp</item>
         <item name="android:textAppearance">?attr/textAppearanceBodyMedium</item>
         <item name="android:textColor">@android:color/white</item>
-        <item name="android:textSize">13sp</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
     </style>
 
     <style name="UserPicture">
@@ -1125,11 +1137,19 @@
 
     <style name="Card" parent="Widget.Material3.CardView.Elevated">
         <item name="android:layout_margin">8dp</item>
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardElevation">1dp</item>
+        <item name="strokeColor">#1F888899</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <style name="CardAmoled" parent="Widget.Material3.CardView.Elevated">
         <item name="materialThemeOverlay">@style/CardOverlayAmoled</item>
         <item name="android:layout_margin">8dp</item>
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">#24FFFFFF</item>
+        <item name="strokeWidth">1dp</item>
     </style>
 
     <style name="CardOverlayAmoled">
@@ -1172,7 +1192,22 @@
         <item name="indicatorColor">@android:color/white</item>
     </style>
 
-    <style name="BottomNavigationAmoled" parent="Widget.Material3.BottomNavigationView">
+    <style name="ModernBottomNavigation" parent="Widget.Material3.BottomNavigationView">
+        <item name="itemPaddingTop">8dp</item>
+        <item name="itemPaddingBottom">8dp</item>
+        <item name="activeIndicatorLabelPadding">4dp</item>
+        <item name="itemIconTint">@color/mobile_nav_item_tint</item>
+        <item name="itemTextColor">@color/mobile_nav_item_tint</item>
+        <item name="itemActiveIndicatorStyle">@style/MobileActiveIndicator</item>
+    </style>
+
+    <style name="MobileActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:width">58dp</item>
+        <item name="android:height">30dp</item>
+        <item name="android:color">@color/mobile_nav_indicator_color</item>
+    </style>
+
+    <style name="BottomNavigationAmoled" parent="ModernBottomNavigation">
         <item name="materialThemeOverlay">@style/BottomNavigationOverlayAmoled</item>
         <item name="elevation">0dp</item>
     </style>
@@ -1182,7 +1217,7 @@
         <item name="colorSecondaryContainer">@color/surfaceContainerAmoled</item>
     </style>
 
-    <style name="BottomNavigationBlue" parent="Widget.Material3.BottomNavigationView">
+    <style name="BottomNavigationBlue" parent="ModernBottomNavigation">
         <item name="materialThemeOverlay">@style/BottomNavigationOverlayBlue</item>
     </style>
 
@@ -1196,10 +1231,25 @@
 
     <style name="BottomSheetModal" parent="Widget.Material3.BottomSheet.Modal">
         <item name="android:elevation">0dp</item>
+        <item name="shapeAppearance">@style/MobileSheetShape</item>
+    </style>
+
+    <style name="MobileSheetShape" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">24dp</item>
+        <item name="cornerSizeTopRight">24dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <style name="MobileDialogShape" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
     </style>
 
     <style name="Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="android:background">?attr/colorSurface</item>
+        <item name="shapeAppearanceOverlay">@style/MobileDialogShape</item>
     </style>
 
     <style name="PreferenceTheme" parent="@style/PreferenceThemeOverlay">

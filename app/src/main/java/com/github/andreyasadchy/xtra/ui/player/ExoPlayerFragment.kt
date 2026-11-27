@@ -186,8 +186,10 @@ class ExoPlayerFragment : PlayerFragment() {
                 } else if (
                     playbackState == Player.STATE_ENDED &&
                     playbackService?.type == BasePlaybackService.CLIP &&
-                    com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext()) &&
-                    requireContext().prefs().getBoolean(C.TV_CLIPS_AUTOPLAY, true)
+                    run {
+                        val tv = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(requireContext())
+                        requireContext().prefs().getBoolean(C.TV_CLIPS_AUTOPLAY, tv)
+                    }
                 ) {
                     if ((activity as? com.github.andreyasadchy.xtra.ui.main.MainActivity)?.playNextClip(1) == true) {
                         return
@@ -886,8 +888,11 @@ class ExoPlayerFragment : PlayerFragment() {
 
     override fun onStop() {
         super.onStop()
-        if (isTv && ((activity as? MainActivity)?.isOpeningOwnScreen == true || (activity as? MainActivity)?.isKeepingPlayerInBackground == true) && playbackService != null) {
-            // TV: a screen of the app opens over the player (settings), the mini player or the sound goes on
+        val mainActivity = activity as? MainActivity
+        val keepAcrossOwnScreen = mainActivity?.isOpeningOwnScreen == true
+        val keepInTvBackground = isTv && mainActivity?.isKeepingPlayerInBackground == true
+        if ((keepAcrossOwnScreen || keepInTvBackground) && playbackService != null) {
+            // Another screen of the app opens over the player (e.g. settings), keep playback alive
             keptAcrossStop = true
             binding.playerControls.root.removeCallbacks(updateProgressAction)
             return

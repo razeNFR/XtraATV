@@ -71,7 +71,7 @@ class FollowedChannelsViewModel(
                 helixRepository = helixRepository,
                 enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                 networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
-                liveFirst = com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(applicationContext),
+                liveFirst = true,
                 favorites = com.github.andreyasadchy.xtra.ui.tv.TvFavorites.run {
                     load(applicationContext)
                     items.value.map { it.login }

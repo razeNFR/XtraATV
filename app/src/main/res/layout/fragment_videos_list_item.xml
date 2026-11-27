@@ -18,11 +18,26 @@
             app:layout_constraintTop_toTopOf="parent"
             tools:src="@tools:sample/backgrounds/scenic" />
 
+        <!-- Fallback when Twitch returns 404_processing ("?"): streamer avatar over blurred copy -->
+        <ImageView
+            android:id="@+id/thumbnailAvatar"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@id/thumbnail"
+            app:layout_constraintDimensionRatio="1:1"
+            app:layout_constraintEnd_toEndOf="@id/thumbnail"
+            app:layout_constraintHeight_percent="0.34"
+            app:layout_constraintStart_toStartOf="@id/thumbnail"
+            app:layout_constraintTop_toTopOf="@id/thumbnail" />
+
         <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
             android:id="@+id/date"
             style="@style/ThumbnailItem"
-            android:layout_marginEnd="5dp"
-            android:layout_marginBottom="5dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="8dp"
             app:layout_constraintBottom_toBottomOf="@id/thumbnail"
             app:layout_constraintEnd_toEndOf="parent"
             tools:text="April 20, 2017" />
@@ -30,8 +45,8 @@
         <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
             android:id="@+id/views"
             style="@style/ThumbnailItem"
-            android:layout_marginStart="5dp"
-            android:layout_marginBottom="5dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginBottom="8dp"
             app:layout_constraintBottom_toBottomOf="@id/thumbnail"
             app:layout_constraintStart_toStartOf="parent"
             tools:text="133769 views" />
@@ -39,19 +54,40 @@
         <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
             android:id="@+id/duration"
             style="@style/ThumbnailItem"
-            android:layout_marginStart="10dp"
-            android:layout_marginTop="10dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             tools:text="13:37" />
 
+        <TextView
+            android:id="@+id/subOnlyBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/tv_sub_only_badge_background"
+            android:paddingStart="7dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="7dp"
+            android:paddingBottom="2dp"
+            android:text="★ SUB"
+            android:textColor="#FFE9DCFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="@id/thumbnail"
+            app:layout_constraintTop_toTopOf="@id/thumbnail"
+            tools:visibility="visible" />
+
         <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
             android:id="@+id/type"
             style="@style/ThumbnailItem"
-            android:layout_marginTop="10dp"
-            android:layout_marginEnd="10dp"
-            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            app:layout_constraintEnd_toStartOf="@id/subOnlyBadge"
             app:layout_constraintTop_toTopOf="parent"
+            app:layout_goneMarginEnd="8dp"
             tools:text="type" />
 
         <com.google.android.material.progressindicator.LinearProgressIndicator
@@ -67,7 +103,7 @@
         <ImageView
             android:id="@+id/userImage"
             style="@style/UserPicture"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="12dp"
             android:layout_marginTop="12dp"
             android:layout_marginBottom="12dp"
             android:visibility="gone"
@@ -81,10 +117,10 @@
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_marginEnd="10dp"
-            android:layout_marginTop="7dp"
-            android:layout_marginBottom="7dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="10dp"
             android:orientation="vertical"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@id/options"
@@ -95,15 +131,20 @@
                 android:id="@+id/title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="2"
                 android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textStyle="bold"
                 android:visibility="gone"
                 tools:text="@sample/videos.json/vods/title"
                 tools:visibility="visible" />
 
             <TextView
                 android:id="@+id/username"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:textColor="?android:attr/textColorSecondary"
                 android:visibility="gone"
@@ -112,8 +153,10 @@
 
             <TextView
                 android:id="@+id/gameName"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:textColor="?android:attr/textColorSecondary"
                 android:visibility="gone"

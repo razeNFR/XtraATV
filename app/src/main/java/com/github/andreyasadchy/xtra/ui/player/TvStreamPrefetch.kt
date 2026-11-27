@@ -42,7 +42,10 @@ object TvStreamPrefetch {
     }
 
     private fun prepare(context: Context, channelLogin: String?, warmUp: Boolean) {
-        if (channelLogin.isNullOrBlank() || !context.resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)) {
+        if (channelLogin.isNullOrBlank()) {
+            return
+        }
+        if (!warmUp && !context.resources.getBoolean(com.github.andreyasadchy.xtra.R.bool.isTv)) {
             return
         }
         val prefs = context.prefs()

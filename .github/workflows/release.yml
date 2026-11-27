@@ -48,14 +48,14 @@ jobs:
       if: steps.version.outputs.publish == 'true'
       run: |
         tag="${{ steps.version.outputs.tag }}"
-        cp app/build/outputs/apk/release/app-release.apk "XtraTV-${tag#v}.apk"
+        cp app/build/outputs/apk/release/app-release.apk "XtraPlus-${tag#v}.apk"
     - name: Publish the release
       if: steps.version.outputs.publish == 'true'
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.version.outputs.tag }}
         target_commitish: ${{ github.sha }}
-        name: Xtra TV ${{ steps.version.outputs.tag }}
+        name: XtraPlus ${{ steps.version.outputs.tag }}
         body_path: docs/release-notes.md
-        files: XtraTV-*.apk
+        files: XtraPlus-*.apk
         make_latest: true

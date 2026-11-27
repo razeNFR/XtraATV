@@ -1,25 +1,27 @@
-# Xtra TV 1.4.8
+# XtraPlus 1.4.9
 
 ### What's New
-- **New `Adblock (Swap+)` Continuous Shadow HLS Engine *(Experimental)***:
-  - Maintains a lightweight anonymous shadow HLS playlist on the main fullscreen player to splice out pre-roll and mid-roll ads **without cuts**, with **less quality drop** and **normal live latency** (unlike `Adblock (VOD)`), showing a lightweight **`Ad`** badge during breaks and falling back automatically to `Adblock (Swap)` (`Swap fallback (Swap+ failed)`) if needed.
-  - Multi-Stream and PiP stay on classic `Adblock (Swap)` (or `Adblock (VOD)` when enabled) for maximum stability and low resource usage.
-  - Renamed Experimental Adblock to **`Adblock (VOD)`** *(Experimental)* everywhere, clarifying that it works everywhere (main player, Multi-Stream, and PiP) with automatic fallback to `Swap+` / `Swap`.
-  - **Clearer Adblock & Proxies Panel & Settings**: added concise descriptions under `Adblock (Swap)`, `Adblock (Swap+)`, and `Adblock (VOD)`, replaced confusing duplicate toggles with a clear **`Active fallback`** badge on fallback blockers, and automatically hides Custom Proxy and HTTP Stream Proxy lists in the player panel when toggled off.
-- **DMCA-Muted VOD Audio Recovery (VOD, Live DVR Rewind & `Adblock (VOD)`)**:
-  - Opt-in toggle in Player Settings (**off by default**, best-effort depending on whether Twitch still keeps the original audio cached) that attempts to restore muted music segments across **classic VODs**, **sub-only VODs**, **live DVR rewind**, **`Adblock (VOD)`**, and **VOD quality switches**.
-  - **Green & Red Seek Bar**: shows **green** segments for verified recovered audio and **red** segments for muted audio (always visible even when recovery is off), with per-range majority probing, silent-copy filtering, permanent per-segment fallback memory on HTTP 403/404/410, and a one-shot recovery toast (`Muted audio recovered (~X min)`).
-- **Instant Live DVR Rewind via Async Background Pre-Lookup**:
-  - 3 seconds after a fullscreen live stream loads (skipped in PiP and Multi-Stream), quietly resolves `index-dvr.m3u8` on a background thread so rewinding or resuming from pause switches to DVR immediately without waiting on *"Looking for VOD..."*.
-- **Pure-Black OLED Idle Screen Dimming (SmartTube-Style)**:
-  - Protects OLED TVs from burn-in by dimming or turning the screen **pure `#000000` black** (100% default, configurable 100% / 85% / 70% / 50%) after configurable inactivity (**Off / 1 / 2 / 3 / 5 / 10 min**) on Home, menus, or when playback is **paused** — never during active video playback.
-  - Releases idle preview players while active and wakes instantly on the first remote press without triggering accidental clicks.
-- **1440p & 4K (2160p) Preferred Quality Options**:
-  - Added **`2160p60 (4K)`**, **`2160p (4K)`**, **`1440p60`**, and **`1440p`** right after **`Source`** in quality preferences, automatically falling back to `1080p60` or the highest available lower quality when unavailable.
-- **Smart TV & Mobile Layout Detection**:
-  - Restores the mobile layout for smartphone users while keeping the Android TV interface forced on 100% of Android TVs, Fire TVs, and generic / non-certified AOSP Android TV boxes (no touchscreen, or no telephony & no battery).
-- **QR Phone Chat Panel Polish**:
-  - Clicking **Disconnect** stops the local Wi-Fi server while keeping the QR panel open so you can restart it with one click whenever needed.
+- **Rebranded to `XtraPlus` (Android TV & Mobile)**:
+  - New **XtraPlus** app icon (adaptive + legacy/round), clean **Android TV banner**, and unified **XtraPlus** branding across the app, toolbars, update checker (`razeNFR/XtraPlus`), backups (`XtraPlus-backup.zip`, while still restoring legacy `XtraTV-backup.zip`), README screenshots, and QR companion portals.
+  - Keeps the existing Android package ID (`com.github.razenfr.xtratv`) so **1.4.8** users upgrade seamlessly without losing accounts or settings.
+- **Swap+ Preroll & Midroll Breakthrough (TV & Mobile)**:
+  - Fixed LL-HLS / fMP4 midroll detection (including `#EXT-X-TWITCH-PREFETCH` segments and `#EXT-X-SKIP` delta updates) so **Swap+** intercepts midrolls continuously on the same player at full quality (1080p60 / 1440p) without falling back to Classic Swap.
+  - Eliminated post-ad looping on long 60s sliding playlists, enforced strict monotonic `MEDIA-SEQUENCE` / `DISCONTINUITY-SEQUENCE` continuity to prevent ExoPlayer crashes/quality drops, and cleaned LL-HLS control tags in synthesized playlists.
+  - Added proactive shadow token renewal, fast single-GET shadow refresh on active ads, smoother cold preroll start offset (no early micro-rebuffering), and fixed the preroll loading overlay getting stuck on startup.
+- **Adblock Badge Polish & Cleaner Settings (TV & Mobile)**:
+  - **Android TV**: added **`Adblock (Swap+)`** and **Show adblock badge during ads** (enabled by default) to **Settings → Ads & Proxy**, upgraded the **Swap+** badge to display **`Pre-roll ad` / `Mid-roll ad`**, and moved **Hide player during ads** to **Settings → Advanced**.
+  - **Mobile**: moved **Show adblock badge during ads** (off by default) to **Settings → Adblock & Proxies**, moved **Hide player during ads** and **Video swap settings** to **Settings → Debug**, and redesigned the mobile adblock badge into a compact **`Ad`** pill with clean top-right spacing that never overlaps player controls.
+- **Improved Android TV Box Detection & Manual Interface Mode**:
+  - Strengthened auto-detection for non-certified AOSP Android TV boxes (such as **Beelink Amlogic GT1mini-2** on Android 8) that falsely declare touchscreen/battery features.
+  - Added a manual **Interface mode** setting (**Automatic / TV / Mobile**) in **Settings → Interface** on both mobile and TV.
+- **Modernized Mobile UI, Accent Color & Multi-Account Switcher (Zero Changes to Android TV)**:
+  - Added a standalone **Accent color** picker inside **Settings → Theme** (decoupled from Dark / AMOLED / Light / Dynamic themes) tinting streamer names, switches, navigation indicators, tabs, refresh spinners, bottom sheets, and a subtle top ambient glow. Replaced the legacy **Blue** mobile theme (auto-migrated to Dark + Blue accent).
+  - Unified mobile top toolbars with the **XtraPlus** brand icon/title, Settings gear, and live circular **Account avatar** opening a Material 3 **Accounts** Bottom Sheet (switch accounts, add account, Guest mode, remove account).
+  - Modernized the mobile **Bottom Navigation Bar**, **Category cards** (3:4 posters + native sort sheet), **Followed Channel cards** (live first, live ring, `LIVE` pill, favorite star), **Stream / VOD / Clip cards** (responsive columns, `★ SUB` badge), and **Channel page**.
+  - Fixed **Recommended for you** sorting on mobile web login and fixed the mobile bottom navigation bar staying hidden after navigating via long-press (**Channel** / **Category**).
+- **Faster Mobile Stream Startup & Seamless Settings Navigation**:
+  - Opening **Settings** on mobile no longer pauses or stops a playing stream / mini-player.
+  - Shows stream thumbnail during loading, pre-warms stream tokens & TLS on tap, uses a snappy `600 ms` initial buffer, and unlocks **`Adblock (Swap+)`**, **`Adblock (VOD)`**, **Live DVR**, **My statistics**, **Favorites**, **Hidden content**, **DMCA-muted VOD audio recovery**, and **Clip autoplay** on mobile.
 
 ### Install
-Download `XtraTV-1.4.8-tv.apk` below and install it over the previous version, your settings and account are kept.
+Download the 1.4.9 APK below and install it over the previous version — your settings and account are kept.

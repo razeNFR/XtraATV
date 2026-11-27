@@ -3943,7 +3943,7 @@ object TvWallpaper {
                 <!DOCTYPE html><html><head><meta charset="utf-8">
                 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
                 <meta name="theme-color" content="#0b0b12">
-                <title>Xtra TV</title>
+                <title>XtraPlus</title>
                 <style>
                 :root{--ac:$accentHex;--ar:$accentR;--ag:$accentG;--ab:$accentB;--bg:#0b0b12;--card:rgba(22,22,33,.78);--bd:rgba(255,255,255,.10);--t1:#f5f6fa;--t2:#9ea3b8}
                 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -4012,8 +4012,8 @@ object TvWallpaper {
                 <div class="wrap">
                   <div class="hdr">
                     <div class="brand">
-                      <div class="logo">X</div>
-                      <div><div class="title">Xtra TV</div><div class="sub">$pageTitle</div></div>
+                      <div class="logo">X+</div>
+                      <div><div class="title">XtraPlus</div><div class="sub">$pageTitle</div></div>
                     </div>
                     <div class="wifi"><span class="dot"></span>$connectedLabel</div>
                   </div>

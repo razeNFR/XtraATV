@@ -52,15 +52,18 @@ object TvShadowAdblock {
     private const val MAX_EVICT_PER_PASS = 3
     private const val SEEN_IDENTITY_LIMIT = 600
     private const val PREROLL_WAIT_MS = 3_000L
-    private const val MIDROLL_WAIT_MS = 700L
-    private const val SHADOW_REFRESH_IDLE_MS = 6_000L
-    private const val SHADOW_REFRESH_HOT_MS = 2_000L
+    private const val MIDROLL_WAIT_MS = 2_200L
+    private const val SHADOW_REFRESH_IDLE_MS = 4_000L
+    private const val SHADOW_REFRESH_HOT_MS = 1_000L
+    private const val SHADOW_STALE_ON_AD_MS = 800L
+    private const val SHADOW_FAST_REFRESH_TIMEOUT_MS = 1_200L
     private const val SHADOW_HOT_WINDOW_MS = 90_000L
-    private const val SHADOW_MAX_AGE_MS = 12_000L
+    private const val SHADOW_MAX_AGE_MS = 15_000L
     private const val SHADOW_LEAVE_TTL_MS = 120_000L
-    private const val SHADOW_MASTER_MAX_AGE_MS = 600_000L
+    private const val SHADOW_MASTER_MAX_AGE_MS = 480_000L
     private const val SHADOW_REQUEST_TIMEOUT_MS = 4_000L
     private const val CLEAN_STREAK_TO_RETURN = 3
+    private const val MAX_HOLD_PASSES = 3
 
     private val SHADOW_PLAYER_TYPES = listOf(
         "web" to "frontpage",
@@ -98,6 +101,51 @@ object TvShadowAdblock {
         val segments: List<HlsSegment>,
         val prefetchLines: List<String>,
         val activeMapLine: String?,
+        val prefetchAdCount: Int = 0,
+    ) {
+        /** True when any `#EXT-X-TWITCH-PREFETCH` live-edge segment falls inside an ad break. */
+        val hasPrefetchAd: Boolean
+            get() = prefetchAdCount > 0
+
+        /** True when ads are actively present at the live edge (matches ExoPlayerService.checkPlaylist, including prefetch). */
+        val hasActiveAdAtLiveEdge: Boolean
+            get() = when {
+                hasPrefetchAd -> true
+                verdict == PlaylistVerdict.FULL_AD -> true
+                verdict == PlaylistVerdict.PARTIAL_AD -> segments.lastOrNull()?.classification == SegmentClass.AD
+                else -> false
+            }
+
+        /** Returns only the trailing clean segments after the last historical ad segment. */
+        fun cleanTailOnly(): ParsedPlaylist {
+            val lastAdIdx = segments.indexOfLast { it.classification == SegmentClass.AD }
+            if (lastAdIdx < 0) return this
+            val tail = segments.drop(lastAdIdx + 1)
+            return copy(
+                verdict = if (tail.isEmpty()) PlaylistVerdict.EMPTY else PlaylistVerdict.CLEAN,
+                mediaSequence = mediaSequence + (lastAdIdx + 1).toLong(),
+                segments = tail,
+                prefetchLines = emptyList(),
+                prefetchAdCount = 0,
+            )
+        }
+    }
+
+    /** Optional timing & ad-range metadata extracted from Media3's HlsMediaPlaylist (handles #EXT-X-SKIP, PDT inheritance, and prefetch). */
+    data class PlaylistTimingHint(
+        val segmentPdtMs: List<Long>? = null,
+        val fallbackFirstSegmentPdtMs: Long? = null,
+        val extraAdRangesMs: List<Pair<Long, Long>> = emptyList(),
+        val fallbackMapLine: String? = null,
+        val media3LiveEdgeIsAd: Boolean = false,
+        val media3AnySegmentIsAd: Boolean = false,
+    )
+
+    /** Monotonic HLS sequence bounds from previousMediaPlaylist to prevent Media3 HlsChunkSource out-of-bounds crashes. */
+    data class ContinuityFloor(
+        val minMediaSequence: Long = 0L,
+        val minEndMediaSequence: Long = 0L,
+        val minDiscontinuitySequence: Long = 0L,
     )
 
     data class WindowSegment(
@@ -205,7 +253,11 @@ object TvShadowAdblock {
     // Media playlist parser & segment classifier (Section 5)
     // -------------------------------------------------------------------------
 
-    fun parseAndClassifyMediaPlaylist(playlistUrl: String, text: String): ParsedPlaylist {
+    fun parseAndClassifyMediaPlaylist(
+        playlistUrl: String,
+        text: String,
+        timingHint: PlaylistTimingHint? = null,
+    ): ParsedPlaylist {
         if (text.contains("#EXT-X-STREAM-INF:")) {
             return ParsedPlaylist(PlaylistVerdict.MASTER, emptyList(), 0L, 0L, emptyList(), emptyList(), null)
         }
@@ -217,7 +269,7 @@ object TvShadowAdblock {
         var mediaSeq = 0L
         var discSeq = 0L
         var streamSourceNotLive = false
-        var activeMapLine: String? = null
+        var activeMapLine: String? = timingHint?.fallbackMapLine
         var activeKeyLine: String? = null
         var inSegments = false
 
@@ -229,10 +281,11 @@ object TvShadowAdblock {
         val curTags = ArrayList<String>(6)
 
         // Pass 1: collect all ad DATERANGE windows across the entire playlist (top, middle, or bottom)
-        // so segment classification matches Media3/ExoPlayerService.isAdSegment regardless of tag placement.
-        var lastPdtMs: Long? = null
+        // plus any Media3-parsed interstitial windows so segment classification matches ExoPlayerService.isAdSegment.
+        var lastPdtMs: Long? = timingHint?.fallbackFirstSegmentPdtMs
         var elapsedSincePdtMs = 0.0
-        val adDateRanges = ArrayList<Pair<Long, Long>>(4)
+        val adDateRanges = ArrayList<Pair<Long, Long>>(4 + (timingHint?.extraAdRangesMs?.size ?: 0))
+        timingHint?.extraAdRangesMs?.let { adDateRanges.addAll(it) }
         for (raw in lines) {
             val trimmed = raw.trim()
             if (trimmed.startsWith("#EXT-X-DATERANGE:")) {
@@ -240,6 +293,7 @@ object TvShadowAdblock {
             }
         }
 
+        var prefetchAdCount = 0
         for (raw in lines) {
             val trimmed = raw.trim()
             if (trimmed.isEmpty()) continue
@@ -247,16 +301,39 @@ object TvShadowAdblock {
             if (trimmed.startsWith("#EXT-X-TWITCH-PREFETCH:")) {
                 val prefUri = trimmed.removePrefix("#EXT-X-TWITCH-PREFETCH:").trim()
                 if (prefUri.isNotEmpty()) {
-                    prefetchLines.add("#EXT-X-TWITCH-PREFETCH:${resolveAbsoluteUrl(playlistUrl, prefUri)}")
+                    val absPrefUri = resolveAbsoluteUrl(playlistUrl, prefUri)
+                    // Xtra's custom HlsPlaylistParser appends #EXT-X-TWITCH-PREFETCH as 2s segments at the end
+                    // of media3Playlist.segments, so ExoPlayerService.checkPlaylist inspects them as the live edge.
+                    val prefIndex = segments.size + prefetchLines.size
+                    val hintedPrefPdtMs = timingHint?.segmentPdtMs?.getOrNull(prefIndex)
+                    val prefPdtMs = hintedPrefPdtMs ?: lastPdtMs?.let { it + elapsedSincePdtMs.roundToLong() }
+                    if (hintedPrefPdtMs != null) {
+                        lastPdtMs = hintedPrefPdtMs
+                        elapsedSincePdtMs = 0.0
+                    }
+                    elapsedSincePdtMs += 2_000.0
+                    val prefMidMs = prefPdtMs?.let { it + 1_000L }
+                    val prefInAdRange = prefPdtMs != null && adDateRanges.any { (startMs, endMs) ->
+                        prefPdtMs in startMs until endMs || (prefMidMs != null && prefMidMs in startMs until endMs)
+                    }
+                    val lowerPref = absPrefUri.lowercase()
+                    val prefUriIsAd = lowerPref.contains("/stitched/") ||
+                        lowerPref.contains("amazon-adsystem") ||
+                        lowerPref.contains("/ad/") ||
+                        lowerPref.contains("/ads/") ||
+                        lowerPref.contains("adsegment")
+                    if (prefInAdRange || prefUriIsAd) {
+                        prefetchAdCount++
+                    }
+                    prefetchLines.add("#EXT-X-TWITCH-PREFETCH:$absPrefUri")
                 }
                 continue
             }
 
-            if (trimmed.contains("X-TV-TWITCH-STREAM-SOURCE", ignoreCase = true) &&
-                !trimmed.contains("X-TV-TWITCH-STREAM-SOURCE=\"live\"", ignoreCase = true) &&
-                !trimmed.contains("X-TV-TWITCH-STREAM-SOURCE=live", ignoreCase = true)
-            ) {
-                streamSourceNotLive = true
+            if (trimmed.contains("X-TV-TWITCH-STREAM-SOURCE", ignoreCase = true)) {
+                val isLiveSource = trimmed.contains("X-TV-TWITCH-STREAM-SOURCE=\"live\"", ignoreCase = true) ||
+                    trimmed.contains("X-TV-TWITCH-STREAM-SOURCE=live", ignoreCase = true)
+                streamSourceNotLive = !isLiveSource
             }
 
             if (!inSegments && !isSegmentScopedTag(trimmed)) {
@@ -268,6 +345,7 @@ object TvShadowAdblock {
                         discSeq = trimmed.removePrefix("#EXT-X-DISCONTINUITY-SEQUENCE:").trim().toLongOrNull() ?: 0L
                     }
                     trimmed.startsWith("#EXT-X-START") -> Unit
+                    trimmed.startsWith("#EXT-X-SKIP:") -> Unit
                     else -> {
                         cleanHeaderLine(raw)?.let { headerLines.add(it) }
                     }
@@ -310,13 +388,23 @@ object TvShadowAdblock {
                     trimmed.startsWith("#EXT-X-BYTERANGE:") -> {
                         curByteRange = trimmed
                     }
+                    trimmed.startsWith("#EXT-X-PART:") ||
+                        trimmed.startsWith("#EXT-X-PRELOAD-HINT:") ||
+                        trimmed.startsWith("#EXT-X-RENDITION-REPORT:") ||
+                        trimmed.startsWith("#EXT-X-SKIP:") -> Unit
                     else -> {
                         curTags.add(trimmed)
                     }
                 }
             } else {
+                val segIndex = segments.size
                 val absUri = resolveAbsoluteUrl(playlistUrl, trimmed)
-                val segPdtMs = curPdtMs ?: lastPdtMs?.let { it + elapsedSincePdtMs.roundToLong() }
+                val hintedPdtMs = timingHint?.segmentPdtMs?.getOrNull(segIndex)
+                val segPdtMs = curPdtMs ?: hintedPdtMs ?: lastPdtMs?.let { it + elapsedSincePdtMs.roundToLong() }
+                if (segPdtMs != null && curPdtMs == null && hintedPdtMs != null) {
+                    lastPdtMs = hintedPdtMs
+                    elapsedSincePdtMs = 0.0
+                }
                 val segDurMs = (curDuration * 1_000.0).roundToLong().coerceAtLeast(1L)
                 elapsedSincePdtMs += curDuration * 1_000.0
                 val segMidMs = segPdtMs?.let { it + segDurMs / 2L }
@@ -347,6 +435,15 @@ object TvShadowAdblock {
             }
         }
 
+        // Strict parity with ExoPlayerService.checkPlaylist: if Media3's parsed live-edge segment (including
+        // prefetch) is an ad and our regular tail segments did not already mark it, flag prefetchAdCount >= 1.
+        if (timingHint?.media3LiveEdgeIsAd == true &&
+            segments.lastOrNull()?.classification != SegmentClass.AD &&
+            prefetchAdCount == 0
+        ) {
+            prefetchAdCount = 1
+        }
+
         val verdict = when {
             segments.isEmpty() -> PlaylistVerdict.EMPTY
             segments.none { it.classification == SegmentClass.AD } -> PlaylistVerdict.CLEAN
@@ -362,6 +459,7 @@ object TvShadowAdblock {
             segments = segments,
             prefetchLines = prefetchLines,
             activeMapLine = activeMapLine,
+            prefetchAdCount = prefetchAdCount,
         )
     }
 
@@ -450,16 +548,24 @@ object TvShadowAdblock {
 
     internal fun cleanHeaderLine(raw: String): String? {
         val trimmed = raw.trim()
-        if (trimmed.startsWith("#EXT-X-START")) return null
+        // Never leak LL-HLS delta/part control tags into synthesized full-segment playlists
+        if (trimmed.startsWith("#EXT-X-START") ||
+            trimmed.startsWith("#EXT-X-SKIP") ||
+            trimmed.startsWith("#EXT-X-SERVER-CONTROL") ||
+            trimmed.startsWith("#EXT-X-PART-INF") ||
+            trimmed.startsWith("#EXT-X-PART:") ||
+            trimmed.startsWith("#EXT-X-PRELOAD-HINT") ||
+            trimmed.startsWith("#EXT-X-RENDITION-REPORT")
+        ) {
+            return null
+        }
         if (trimmed.startsWith("#EXT-X-DATERANGE:")) {
             val isAd = trimmed.contains("stitched-ad", true) ||
+                trimmed.contains("twitch-stitched-ad", true) ||
                 trimmed.contains("X-TV-TWITCH-AD-", true) ||
                 STRONG_AD_ID_REGEX.containsMatchIn(trimmed)
             if (isAd) {
-                if (!trimmed.contains("STREAM-SOURCE", ignoreCase = true)) {
-                    return null
-                }
-                return stripAdDateRangeAttributes(trimmed)
+                return null
             }
         }
         var cleaned = raw
@@ -476,6 +582,44 @@ object TvShadowAdblock {
             )
         }
         return cleaned
+    }
+
+    /**
+     * Strips `CAN-SKIP-UNTIL` / `CAN-SKIP-DATERANGES` from `#EXT-X-SERVER-CONTROL` on passthrough playlists so Media3
+     * requests full playlists (with `#EXT-X-PROGRAM-DATE-TIME` and `#EXT-X-MAP` intact) while keeping low-latency parts.
+     */
+    internal fun disableDeltaSkipping(text: String): String {
+        if (!text.contains("CAN-SKIP-UNTIL", ignoreCase = true) &&
+            !text.contains("CAN-SKIP-DATERANGES", ignoreCase = true)
+        ) {
+            return text
+        }
+        val hadTrailingNewline = text.endsWith("\n")
+        val lines = text.split("\r\n", "\n")
+        val out = ArrayList<String>(lines.size)
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("#EXT-X-SERVER-CONTROL:", ignoreCase = true)) {
+                val prefix = trimmed.substringBefore(':') + ":"
+                val attrs = splitAttributesRespectingQuotes(trimmed.substringAfter(':'))
+                val kept = attrs.filterNot { attr ->
+                    val key = attr.substringBefore('=').trim().uppercase(java.util.Locale.US)
+                    key == "CAN-SKIP-UNTIL" || key == "CAN-SKIP-DATERANGES"
+                }
+                if (kept.isNotEmpty()) {
+                    out.add(prefix + kept.joinToString(","))
+                }
+            } else {
+                out.add(line)
+            }
+        }
+        val joined = out.joinToString("\n")
+        return if (hadTrailingNewline && !joined.endsWith("\n")) "$joined\n" else joined
+    }
+
+    private fun extractSkippedSegmentsCount(text: String): Int {
+        val m = Regex("""#EXT-X-SKIP:[^\r\n]*SKIPPED-SEGMENTS=(\d+)""", RegexOption.IGNORE_CASE).find(text)
+        return m?.groupValues?.get(1)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
     }
 
     private fun stripAdDateRangeAttributes(line: String): String {
@@ -538,6 +682,8 @@ object TvShadowAdblock {
             private set
         var consecutiveCleanPrimary: Int = 0
             private set
+        var consecutiveHoldPasses: Int = 0
+            private set
         var spliceCount: Int = 0
             private set
 
@@ -557,10 +703,16 @@ object TvShadowAdblock {
             currentWindowLimit = BASE_WINDOW_SIZE
             hasSeenContent = false
             consecutiveCleanPrimary = 0
+            consecutiveHoldPasses = 0
             spliceCount = 0
             lastVariantUrl = null
             lastPrefetches = emptyList()
             lastCleanSnapshot = null
+        }
+
+        fun noteHoldPass(isHold: Boolean): Int {
+            consecutiveHoldPasses = if (isHold) consecutiveHoldPasses + 1 else 0
+            return consecutiveHoldPasses
         }
 
         fun recordCleanSnapshot(parsed: ParsedPlaylist) {
@@ -643,6 +795,9 @@ object TvShadowAdblock {
             val toAppend: List<HlsSegment>
             if (firstPass) {
                 toAppend = fresh.takeLast(BASE_WINDOW_SIZE)
+                if (fresh.size > toAppend.size) {
+                    mediaSequence += (fresh.size - toAppend.size)
+                }
                 // Mark any earlier segments in firstPass as seen too
                 fresh.forEach { markSeen(it) }
             } else if (fresh.size > BASE_WINDOW_SIZE) {
@@ -693,6 +848,23 @@ object TvShadowAdblock {
             }
         }
 
+        /**
+         * Enforces RFC 8216 monotonic sequence bounds against Media3's previousMediaPlaylist so
+         * `mediaSequence` never regresses and `mediaSequence + window.size` never shrinks below the
+         * previous playlist's live end (preventing `IndexOutOfBoundsException` in `HlsChunkSource`).
+         */
+        fun enforceContinuityFloor(floor: ContinuityFloor) {
+            if (window.isEmpty()) return
+            val minSeqForEnd = floor.minEndMediaSequence - window.size.toLong()
+            val requiredSeq = maxOf(floor.minMediaSequence, minSeqForEnd)
+            if (mediaSequence < requiredSeq) {
+                mediaSequence = requiredSeq
+            }
+            if (discontinuitySequence < floor.minDiscontinuitySequence) {
+                discontinuitySequence = floor.minDiscontinuitySequence
+            }
+        }
+
         fun emit(primaryHeaders: List<String>, activeMapFallback: String?): String {
             val sb = StringBuilder(2048)
             var hasExtM3u = false
@@ -715,6 +887,9 @@ object TvShadowAdblock {
             sb.append("#EXT-X-MEDIA-SEQUENCE:").append(mediaSequence.coerceAtLeast(0L)).append('\n')
             if (discontinuitySequence > 0L) {
                 sb.append("#EXT-X-DISCONTINUITY-SEQUENCE:").append(discontinuitySequence).append('\n')
+            }
+            if (spliceCount == 0 && activeSourceId?.startsWith("shadow@") == true && window.size >= 4) {
+                sb.append("#EXT-X-START:TIME-OFFSET=-4.0,PRECISE=NO\n")
             }
 
             var currentMap: String? = null
@@ -808,23 +983,47 @@ object TvShadowAdblock {
         shadowPlaylist: ParsedPlaylist?,
         shadowVariantUrl: String?,
         shadowFresh: Boolean,
+        continuityFloor: ContinuityFloor? = null,
+        isInitialPlaylist: Boolean = !window.hasSeenContent,
     ): DecisionResult {
         window.onQualitySwitch(variantUrl, primaryParsed)
 
-        val adCount = primaryParsed.segments.count { it.classification == SegmentClass.AD }
-        val primaryHasAd = primaryParsed.verdict == PlaylistVerdict.FULL_AD || primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD
+        val adCount = primaryParsed.segments.count { it.classification == SegmentClass.AD } + primaryParsed.prefetchAdCount
+        val primaryHasAd = if (isInitialPlaylist) {
+            primaryParsed.verdict == PlaylistVerdict.FULL_AD ||
+                primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD ||
+                primaryParsed.hasPrefetchAd
+        } else {
+            primaryParsed.hasActiveAdAtLiveEdge
+        }
+        val primaryCleanAtLiveEdge = !primaryHasAd &&
+            (primaryParsed.verdict == PlaylistVerdict.CLEAN || primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD)
         val onShadow = window.activeSourceId?.startsWith("shadow@") == true
+        val primaryHasMap = primaryParsed.activeMapLine != null || window.lastCleanSnapshot?.activeMapLine != null
+        val shadowHasMap = shadowPlaylist?.activeMapLine != null
+        val containerCompatible = primaryHasMap == shadowHasMap
         val cleanShadowAvailable = shadowFresh && shadowPlaylist != null &&
-            shadowPlaylist.verdict == PlaylistVerdict.CLEAN && !shadowVariantUrl.isNullOrBlank()
+            shadowPlaylist.verdict == PlaylistVerdict.CLEAN &&
+            !shadowVariantUrl.isNullOrBlank() &&
+            containerCompatible
 
-        // Before any ad splice has occurred, pass clean primary playlists through untouched so native low-latency
-        // prefetch and ABR quality switching are never altered; record snapshot to seed mid-rolls cleanly.
-        if (!primaryHasAd && primaryParsed.verdict == PlaylistVerdict.CLEAN && window.spliceCount == 0 && !onShadow && window.isEmpty()) {
-            window.recordCleanSnapshot(primaryParsed)
-            return DecisionResult(primaryRawText, "primary", 0)
+        // Before any ad splice has occurred (or right after Classic Swap finished while historical ads are still
+        // ageing out of a long 60s LL-HLS sliding window), pass clean-tail primary playlists through untouched.
+        if (primaryCleanAtLiveEdge && window.spliceCount == 0 && !onShadow && window.isEmpty()) {
+            window.noteHoldPass(false)
+            val cleanSnap = if (primaryParsed.verdict == PlaylistVerdict.CLEAN) {
+                primaryParsed
+            } else {
+                primaryParsed.cleanTailOnly()
+            }
+            if (cleanSnap.segments.isNotEmpty()) {
+                window.recordCleanSnapshot(cleanSnap)
+            }
+            return DecisionResult(disableDeltaSkipping(primaryRawText), "primary", 0)
         }
 
         // First mid-roll after clean passthrough: seed ContinuityWindow from the last clean snapshot
+        // and bridge any newer non-ad prefix segments from primaryParsed (including when only prefetch entered the ad).
         if (primaryHasAd && window.isEmpty()) {
             window.lastCleanSnapshot?.let { snap ->
                 window.ingest(
@@ -836,9 +1035,19 @@ object TvShadowAdblock {
                     allowPrefetches = false,
                 )
             }
+            if (!window.isEmpty() && (primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD || primaryParsed.verdict == PlaylistVerdict.CLEAN)) {
+                window.ingest(
+                    sourceId = "primary",
+                    segments = primaryParsed.segments,
+                    sourceMediaSequence = primaryParsed.mediaSequence,
+                    sourceDiscontinuitySequence = primaryParsed.discontinuitySequence,
+                    prefetches = emptyList(),
+                    allowPrefetches = false,
+                )
+            }
         }
 
-        if (!primaryHasAd && primaryParsed.verdict == PlaylistVerdict.CLEAN) {
+        if (primaryCleanAtLiveEdge) {
             window.noteCleanPrimary(true)
         } else if (primaryHasAd) {
             window.noteCleanPrimary(false)
@@ -848,20 +1057,39 @@ object TvShadowAdblock {
         when {
             primaryHasAd && cleanShadowAvailable -> {
                 sourceUsed = "shadow"
+                window.noteHoldPass(false)
+                val anchorToPrevious = window.isEmpty() && continuityFloor != null && continuityFloor.minEndMediaSequence > 0L
+                val shadowStartSeq = if (anchorToPrevious) {
+                    maxOf(continuityFloor!!.minMediaSequence, continuityFloor.minEndMediaSequence)
+                } else {
+                    shadowPlaylist!!.mediaSequence
+                }
+                val shadowStartDisc = if (anchorToPrevious) {
+                    maxOf(shadowPlaylist!!.discontinuitySequence, continuityFloor!!.minDiscontinuitySequence + 1L)
+                } else {
+                    shadowPlaylist!!.discontinuitySequence
+                }
                 window.ingest(
                     sourceId = "shadow@$shadowVariantUrl",
                     segments = shadowPlaylist!!.segments,
-                    sourceMediaSequence = shadowPlaylist.mediaSequence,
-                    sourceDiscontinuitySequence = shadowPlaylist.discontinuitySequence,
+                    sourceMediaSequence = shadowStartSeq,
+                    sourceDiscontinuitySequence = shadowStartDisc,
                     prefetches = emptyList(),
                     allowPrefetches = false,
                 )
             }
             primaryHasAd && !cleanShadowAvailable && (onShadow || (primaryParsed.verdict == PlaylistVerdict.FULL_AD && !window.isEmpty())) -> {
+                val holdCount = window.noteHoldPass(true)
+                if (holdCount > MAX_HOLD_PASSES) {
+                    // Never freeze ExoPlayer indefinitely waiting for a dead shadow: hand off cleanly to Classic Swap
+                    window.reset()
+                    return DecisionResult(primaryRawText, "passthrough", 0)
+                }
                 sourceUsed = "hold"
             }
-            primaryHasAd && !cleanShadowAvailable && primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD -> {
+            primaryHasAd && !cleanShadowAvailable && (primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD || primaryParsed.verdict == PlaylistVerdict.CLEAN) -> {
                 sourceUsed = "primary-partial"
+                window.noteHoldPass(false)
                 window.ingest(
                     sourceId = "primary",
                     segments = primaryParsed.segments,
@@ -871,8 +1099,9 @@ object TvShadowAdblock {
                     allowPrefetches = false,
                 )
             }
-            !primaryHasAd && onShadow && window.consecutiveCleanPrimary < CLEAN_STREAK_TO_RETURN && cleanShadowAvailable -> {
+            primaryCleanAtLiveEdge && onShadow && window.consecutiveCleanPrimary < CLEAN_STREAK_TO_RETURN && cleanShadowAvailable -> {
                 sourceUsed = "shadow-cooldown"
+                window.noteHoldPass(false)
                 window.ingest(
                     sourceId = "shadow@$shadowVariantUrl",
                     segments = shadowPlaylist!!.segments,
@@ -882,37 +1111,58 @@ object TvShadowAdblock {
                     allowPrefetches = false,
                 )
             }
-            !primaryHasAd && primaryParsed.verdict == PlaylistVerdict.CLEAN -> {
+            primaryCleanAtLiveEdge -> {
                 sourceUsed = "primary"
+                window.noteHoldPass(false)
+                val primaryTail = if (primaryParsed.verdict == PlaylistVerdict.CLEAN) {
+                    primaryParsed
+                } else {
+                    primaryParsed.cleanTailOnly()
+                }
                 window.ingest(
                     sourceId = "primary",
-                    segments = primaryParsed.segments,
-                    sourceMediaSequence = primaryParsed.mediaSequence,
-                    sourceDiscontinuitySequence = primaryParsed.discontinuitySequence,
+                    segments = primaryTail.segments,
+                    sourceMediaSequence = primaryTail.mediaSequence,
+                    sourceDiscontinuitySequence = primaryTail.discontinuitySequence,
                     prefetches = emptyList(),
                     allowPrefetches = false,
                 )
             }
             else -> {
                 sourceUsed = "fallback"
+                window.noteHoldPass(false)
             }
         }
 
         if (!window.isEmpty()) {
+            continuityFloor?.let { window.enforceContinuityFloor(it) }
             val emitted = window.emit(primaryParsed.headerLines, primaryParsed.activeMapLine)
             return DecisionResult(emitted, sourceUsed, if (sourceUsed == "fallback") 0 else adCount)
         }
 
         // Empty window fallback: never return an empty playlist that would break ExoPlayer
         if (primaryParsed.verdict == PlaylistVerdict.FULL_AD && cleanShadowAvailable) {
+            window.noteHoldPass(false)
+            val anchorToPrevious = continuityFloor != null && continuityFloor.minEndMediaSequence > 0L
+            val shadowStartSeq = if (anchorToPrevious) {
+                maxOf(continuityFloor!!.minMediaSequence, continuityFloor.minEndMediaSequence)
+            } else {
+                shadowPlaylist!!.mediaSequence
+            }
+            val shadowStartDisc = if (anchorToPrevious) {
+                maxOf(shadowPlaylist!!.discontinuitySequence, continuityFloor!!.minDiscontinuitySequence + 1L)
+            } else {
+                shadowPlaylist!!.discontinuitySequence
+            }
             window.ingest(
                 sourceId = "shadow@$shadowVariantUrl",
                 segments = shadowPlaylist!!.segments,
-                sourceMediaSequence = shadowPlaylist.mediaSequence,
-                sourceDiscontinuitySequence = shadowPlaylist.discontinuitySequence,
+                sourceMediaSequence = shadowStartSeq,
+                sourceDiscontinuitySequence = shadowStartDisc,
                 prefetches = emptyList(),
                 allowPrefetches = false,
             )
+            continuityFloor?.let { window.enforceContinuityFloor(it) }
             return DecisionResult(window.emit(primaryParsed.headerLines, shadowPlaylist.activeMapLine), "shadow-fallback", adCount)
         }
         return DecisionResult(primaryRawText, "passthrough", 0)
@@ -937,6 +1187,7 @@ object TvShadowAdblock {
         @Volatile var consecutiveWarmFailures: Int = 0
         @Volatile var backoffUntilMs: Long = 0L
         @Volatile var lastQualityAlignMs: Long = 0L
+        @Volatile var activeRollType: String? = null
 
         var warmJob: Job? = null
         var refreshJob: Job? = null
@@ -958,6 +1209,7 @@ object TvShadowAdblock {
             warmJob = null
             refreshJob = null
             closeJob = null
+            activeRollType = null
             invalidateShadow()
             shadowMasterVariants = emptyList()
             shadowMasterFetchedAtMs = 0L
@@ -971,6 +1223,12 @@ object TvShadowAdblock {
     private val variantToHeight = ConcurrentHashMap<String, Int>()
     @Volatile
     private var activeDisplayedChannel: String? = null
+
+    /** Returns `"preroll"` or `"midroll"` while Swap+ is actively covering an ad break on [channelLogin]. */
+    fun activeRollType(channelLogin: String?): String? {
+        val norm = channelLogin?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
+        return channels[norm]?.activeRollType
+    }
 
     /** Step 1 + Step 2 on TV channel zap: schedule old channel close (2 min), reset & pre-warm new channel. */
     fun onChannelNavigated(context: Context, channelLogin: String?, multiStreamTile: Boolean = false) {
@@ -1010,9 +1268,13 @@ object TvShadowAdblock {
         variantToHeight.clear()
     }
 
-    private fun warmShadowAsync(appCtx: Context, state: ChannelState) {
+    private fun warmShadowAsync(appCtx: Context, state: ChannelState, force: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
-        if (now < state.backoffUntilMs) return
+        if (force) {
+            state.backoffUntilMs = 0L
+        } else if (now < state.backoffUntilMs) {
+            return
+        }
         if (state.warmJob?.isActive == true) return
         state.warmJob = scope.launch {
             val ok = warmShadowNow(appCtx, state)
@@ -1022,10 +1284,29 @@ object TvShadowAdblock {
                 ensureRefreshLoop(appCtx, state)
             } else {
                 state.consecutiveWarmFailures++
-                val shift = (state.consecutiveWarmFailures - 1).coerceIn(0, 4)
-                val waitMs = (30_000L shl shift).coerceAtMost(300_000L)
+                val shift = (state.consecutiveWarmFailures - 1).coerceIn(0, 3)
+                val waitMs = (10_000L shl shift).coerceAtMost(60_000L)
                 state.backoffUntilMs = SystemClock.elapsedRealtime() + waitMs
             }
+        }
+    }
+
+    /** Fast single-GET refresh of the existing shadow media playlist (avoids 3-step GQL warm when URL is still valid). */
+    private suspend fun refreshShadowVariantNow(appCtx: Context, state: ChannelState): Boolean {
+        val url = state.shadowVariantUrl ?: return false
+        val app = appCtx as? XtraApp ?: return false
+        val client = buildShadowHttpClient(app.xtraModule.okHttpClient.value)
+        val text = withTimeoutOrNull(SHADOW_FAST_REFRESH_TIMEOUT_MS) {
+            fetchText(client, url)
+        } ?: return false
+        val parsed = parseAndClassifyMediaPlaylist(url, text)
+        return if (parsed.verdict == PlaylistVerdict.CLEAN) {
+            state.shadowParsed = parsed
+            state.shadowFetchedAtMs = SystemClock.elapsedRealtime()
+            true
+        } else {
+            state.invalidateShadow()
+            false
         }
     }
 
@@ -1092,21 +1373,26 @@ object TvShadowAdblock {
             val client = buildShadowHttpClient(app.xtraModule.okHttpClient.value)
             while (channels[state.login] === state) {
                 val now = SystemClock.elapsedRealtime()
-                val interval = if (now - state.lastPrimaryAdAtMs < SHADOW_HOT_WINDOW_MS) {
-                    SHADOW_REFRESH_HOT_MS
-                } else {
-                    SHADOW_REFRESH_IDLE_MS
-                }
+                val inHotWindow = now - state.lastPrimaryAdAtMs < SHADOW_HOT_WINDOW_MS
+                val interval = if (inHotWindow) SHADOW_REFRESH_HOT_MS else SHADOW_REFRESH_IDLE_MS
                 delay(interval)
+                val afterDelay = SystemClock.elapsedRealtime()
                 val url = state.shadowVariantUrl
                 if (url == null) {
+                    warmShadowAsync(appCtx, state, force = inHotWindow)
+                    return@launch
+                }
+                // Proactively renew shadow session before Twitch's ~15-min HLS token expires during long watches
+                if (!inHotWindow && state.shadowMasterFetchedAtMs > 0L &&
+                    (afterDelay - state.shadowMasterFetchedAtMs) >= SHADOW_MASTER_MAX_AGE_MS
+                ) {
                     warmShadowAsync(appCtx, state)
                     return@launch
                 }
                 val text = fetchText(client, url)
                 if (text == null) {
                     state.invalidateShadow()
-                    warmShadowAsync(appCtx, state)
+                    warmShadowAsync(appCtx, state, force = inHotWindow)
                     return@launch
                 }
                 val parsed = parseAndClassifyMediaPlaylist(url, text)
@@ -1115,7 +1401,7 @@ object TvShadowAdblock {
                     state.shadowFetchedAtMs = SystemClock.elapsedRealtime()
                 } else {
                     state.invalidateShadow()
-                    warmShadowAsync(appCtx, state)
+                    warmShadowAsync(appCtx, state, force = inHotWindow)
                     return@launch
                 }
             }
@@ -1209,17 +1495,25 @@ object TvShadowAdblock {
         private val appCtx = context.applicationContext
 
         override fun createPlaylistParser(): ParsingLoadable.Parser<HlsPlaylist> =
-            WrappingParser(appCtx, delegate.createPlaylistParser(), channelLoginHint, onAdHandled, shouldBypass)
+            WrappingParser(appCtx, delegate.createPlaylistParser(), null, channelLoginHint, onAdHandled, shouldBypass)
 
         override fun createPlaylistParser(
             multivariantPlaylist: HlsMultivariantPlaylist,
             previousMediaPlaylist: HlsMediaPlaylist?,
         ): ParsingLoadable.Parser<HlsPlaylist> =
-            WrappingParser(appCtx, delegate.createPlaylistParser(multivariantPlaylist, previousMediaPlaylist), channelLoginHint, onAdHandled, shouldBypass)
+            WrappingParser(
+                appCtx = appCtx,
+                inner = delegate.createPlaylistParser(multivariantPlaylist, previousMediaPlaylist),
+                previousMediaPlaylist = previousMediaPlaylist,
+                channelLoginHint = channelLoginHint,
+                onAdHandled = onAdHandled,
+                shouldBypass = shouldBypass,
+            )
 
         private class WrappingParser(
             private val appCtx: Context,
             private val inner: ParsingLoadable.Parser<HlsPlaylist>,
+            private val previousMediaPlaylist: HlsMediaPlaylist?,
             private val channelLoginHint: String?,
             private val onAdHandled: ((Boolean) -> Unit)?,
             private val shouldBypass: (() -> Boolean)?,
@@ -1237,16 +1531,142 @@ object TvShadowAdblock {
                 if (isVodPlaylistText(text)) {
                     return inner.parse(uri, ByteArrayInputStream(rawBytes))
                 }
+                val isMaster = text.contains("#EXT-X-STREAM-INF:")
+                val preParsedMedia = if (!isMaster) {
+                    runCatching {
+                        inner.parse(uri, ByteArrayInputStream(rawBytes)) as? HlsMediaPlaylist
+                    }.getOrNull()
+                } else {
+                    null
+                }
                 val outputText = runCatching {
-                    interceptPlaylistText(appCtx, url, text, channelLoginHint, onAdHandled, shouldBypass)
+                    interceptPlaylistText(
+                        appCtx = appCtx,
+                        url = url,
+                        text = text,
+                        channelLoginHint = channelLoginHint,
+                        onAdHandled = onAdHandled,
+                        shouldBypass = shouldBypass,
+                        media3Playlist = preParsedMedia,
+                        previousMediaPlaylist = previousMediaPlaylist,
+                    )
                 }.onFailure { err ->
                     runCatching { Log.w(TAG, "Playlist intercept failed for $url", err) }
                 }.getOrDefault(text)
+                if (preParsedMedia != null && outputText === text) {
+                    return preParsedMedia
+                }
                 return inner.parse(uri, ByteArrayInputStream(outputText.toByteArray(Charsets.UTF_8)))
             }
         }
     }
 
+    @OptIn(UnstableApi::class)
+    private fun isMedia3AdSegment(playlist: HlsMediaPlaylist, segment: HlsMediaPlaylist.Segment): Boolean {
+        val title = segment.title.substringBefore('|')
+        if (title == "Amazon" || title == "Adform" || title == "DCM") {
+            return true
+        }
+        val segmentStartTime = playlist.startTimeUs + segment.relativeStartTimeUs
+        return playlist.interstitials.any { dateRange ->
+            if (dateRange.id.startsWith("stitched-ad-") ||
+                dateRange.clientDefinedAttributes.find { it.name == "CLASS" }?.textValue == "twitch-stitched-ad" ||
+                dateRange.clientDefinedAttributes.find { it.name.startsWith("X-TV-TWITCH-AD-") } != null
+            ) {
+                val startTime = dateRange.startDateUnixUs
+                val endTime = dateRange.endDateUnixUs.takeIf { it != androidx.media3.common.C.TIME_UNSET }
+                    ?: dateRange.durationUs.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { startTime + it }
+                    ?: dateRange.plannedDurationUs.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { startTime + it }
+                endTime != null && segmentStartTime in startTime..<endTime
+            } else {
+                false
+            }
+        }
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun buildTimingHintFromMedia3(
+        playlistUrl: String,
+        rawText: String,
+        media3Playlist: HlsMediaPlaylist?,
+        previousMediaPlaylist: HlsMediaPlaylist?,
+    ): PlaylistTimingHint? {
+        if (media3Playlist == null && previousMediaPlaylist == null) return null
+        val skippedCount = extractSkippedSegmentsCount(rawText)
+        val segmentPdtMs: List<Long>? = if (media3Playlist != null && media3Playlist.hasProgramDateTime) {
+            val segs = media3Playlist.segments
+            if (skippedCount < segs.size) {
+                val out = ArrayList<Long>(segs.size - skippedCount)
+                for (i in skippedCount until segs.size) {
+                    out.add((media3Playlist.startTimeUs + segs[i].relativeStartTimeUs) / 1_000L)
+                }
+                out
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+
+        val fallbackFirstPdtMs: Long? = segmentPdtMs?.firstOrNull()
+            ?: previousMediaPlaylist?.takeIf { it.hasProgramDateTime }?.let { it.startTimeUs / 1_000L }
+
+        val extraAdRanges = ArrayList<Pair<Long, Long>>(4)
+        media3Playlist?.interstitials?.forEach { dateRange ->
+            val isAd = dateRange.id.startsWith("stitched-ad-", ignoreCase = true) ||
+                dateRange.clientDefinedAttributes.any {
+                    (it.name == "CLASS" && it.textValue == "twitch-stitched-ad") ||
+                        it.name.startsWith("X-TV-TWITCH-AD-", ignoreCase = true)
+                }
+            if (isAd && dateRange.startDateUnixUs != androidx.media3.common.C.TIME_UNSET) {
+                val startUs = dateRange.startDateUnixUs
+                val endUs = dateRange.endDateUnixUs.takeIf { it != androidx.media3.common.C.TIME_UNSET }
+                    ?: dateRange.durationUs.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { startUs + it }
+                    ?: dateRange.plannedDurationUs.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { startUs + it }
+                if (endUs != null && endUs > startUs) {
+                    extraAdRanges.add((startUs / 1_000L) to (endUs / 1_000L))
+                }
+            }
+        }
+
+        val media3LiveEdgeIsAd = media3Playlist?.segments?.lastOrNull()?.let { isMedia3AdSegment(media3Playlist, it) } == true
+        val media3AnySegmentIsAd = media3LiveEdgeIsAd ||
+            (media3Playlist?.segments?.any { isMedia3AdSegment(media3Playlist, it) } == true)
+
+        val initSeg = media3Playlist?.segments?.getOrNull(skippedCount)?.initializationSegment
+            ?: media3Playlist?.segments?.lastOrNull()?.initializationSegment
+            ?: previousMediaPlaylist?.segments?.lastOrNull()?.initializationSegment
+        val fallbackMapLine = initSeg?.url?.takeIf { it.isNotBlank() }?.let { initUrl ->
+            """#EXT-X-MAP:URI="${resolveAbsoluteUrl(playlistUrl, initUrl)}""""
+        }
+
+        if (segmentPdtMs == null && fallbackFirstPdtMs == null && extraAdRanges.isEmpty() &&
+            fallbackMapLine == null && !media3LiveEdgeIsAd && !media3AnySegmentIsAd
+        ) {
+            return null
+        }
+        return PlaylistTimingHint(
+            segmentPdtMs = segmentPdtMs,
+            fallbackFirstSegmentPdtMs = fallbackFirstPdtMs,
+            extraAdRangesMs = extraAdRanges,
+            fallbackMapLine = fallbackMapLine,
+            media3LiveEdgeIsAd = media3LiveEdgeIsAd,
+            media3AnySegmentIsAd = media3AnySegmentIsAd,
+        )
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun buildContinuityFloor(previousMediaPlaylist: HlsMediaPlaylist?): ContinuityFloor? {
+        val prev = previousMediaPlaylist ?: return null
+        val prevDiscDelta = prev.segments.lastOrNull()?.relativeDiscontinuitySequence ?: 0
+        return ContinuityFloor(
+            minMediaSequence = prev.mediaSequence,
+            minEndMediaSequence = prev.mediaSequence + prev.segments.size.toLong(),
+            minDiscontinuitySequence = prev.discontinuitySequence.toLong() + prevDiscDelta.toLong(),
+        )
+    }
+
+    @OptIn(UnstableApi::class)
     private fun interceptPlaylistText(
         appCtx: Context,
         url: String,
@@ -1254,6 +1674,8 @@ object TvShadowAdblock {
         channelLoginHint: String?,
         onAdHandled: ((Boolean) -> Unit)?,
         shouldBypass: (() -> Boolean)?,
+        media3Playlist: HlsMediaPlaylist? = null,
+        previousMediaPlaylist: HlsMediaPlaylist? = null,
     ): String {
         val login = resolveChannelLogin(url, channelLoginHint) ?: return text
         if (text.contains("#EXT-X-STREAM-INF:")) {
@@ -1279,6 +1701,7 @@ object TvShadowAdblock {
                     state.window.reset()
                 }
             }
+            state.activeRollType = null
             onAdHandled?.invoke(false)
             return text
         }
@@ -1288,18 +1711,38 @@ object TvShadowAdblock {
             maybeAlignShadowQuality(appCtx, state, variantHeight)
         }
 
-        val parsed = parseAndClassifyMediaPlaylist(url, text)
-        val hasAd = parsed.verdict == PlaylistVerdict.FULL_AD || parsed.verdict == PlaylistVerdict.PARTIAL_AD
+        val timingHint = buildTimingHintFromMedia3(url, text, media3Playlist, previousMediaPlaylist)
+        val continuityFloor = buildContinuityFloor(previousMediaPlaylist)
+        val parsed = parseAndClassifyMediaPlaylist(url, text, timingHint)
+        val isInitialPlaylist = previousMediaPlaylist == null && !state.window.hasSeenContent
+        val hasAd = if (isInitialPlaylist) {
+            parsed.verdict == PlaylistVerdict.FULL_AD ||
+                parsed.verdict == PlaylistVerdict.PARTIAL_AD ||
+                parsed.hasPrefetchAd ||
+                timingHint?.media3AnySegmentIsAd == true
+        } else {
+            parsed.hasActiveAdAtLiveEdge
+        }
         if (hasAd) {
-            state.lastPrimaryAdAtMs = SystemClock.elapsedRealtime()
+            val now = SystemClock.elapsedRealtime()
+            state.lastPrimaryAdAtMs = now
+            val needsFastRefresh = state.shadowVariantUrl != null &&
+                (now - state.shadowFetchedAtMs) >= SHADOW_STALE_ON_AD_MS
+            if (needsFastRefresh) {
+                runBlocking {
+                    refreshShadowVariantNow(appCtx, state)
+                }
+            }
             if (!state.isShadowFresh()) {
-                warmShadowAsync(appCtx, state)
+                warmShadowAsync(appCtx, state, force = true)
                 val waitBudget = if (!state.window.hasSeenContent) PREROLL_WAIT_MS else MIDROLL_WAIT_MS
                 runBlocking {
                     withTimeoutOrNull(waitBudget) {
                         state.warmJob?.join()
                     }
                 }
+            } else {
+                ensureRefreshLoop(appCtx, state)
             }
         }
 
@@ -1312,6 +1755,8 @@ object TvShadowAdblock {
                 shadowPlaylist = state.shadowParsed,
                 shadowVariantUrl = state.shadowVariantUrl,
                 shadowFresh = state.isShadowFresh(),
+                continuityFloor = continuityFloor,
+                isInitialPlaylist = isInitialPlaylist,
             )
         }
         val adBadgeActive = result.sourceUsed == "shadow" ||
@@ -1319,6 +1764,21 @@ object TvShadowAdblock {
             result.sourceUsed == "shadow-fallback" ||
             result.sourceUsed == "hold" ||
             (hasAd && result.sourceUsed != "passthrough")
+        if (adBadgeActive) {
+            if (state.activeRollType == null || hasAd) {
+                val rollTag = Regex("""X-TV-TWITCH-AD-ROLL-TYPE="?([A-Za-z]+)""", RegexOption.IGNORE_CASE)
+                    .find(text)?.groupValues?.get(1)
+                state.activeRollType = when {
+                    rollTag?.contains("pre", ignoreCase = true) == true -> "preroll"
+                    rollTag?.contains("mid", ignoreCase = true) == true -> "midroll"
+                    state.activeRollType != null -> state.activeRollType
+                    isInitialPlaylist -> "preroll"
+                    else -> "midroll"
+                }
+            }
+        } else {
+            state.activeRollType = null
+        }
         onAdHandled?.invoke(adBadgeActive)
         if (hasAd) {
             runCatching {
