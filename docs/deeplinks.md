@@ -1,6 +1,6 @@
-# Xtra TV — Deep Links & Intent Reference
+# XtraPlus — Deep Links & Intent Reference
 
-Xtra TV registers `android.intent.action.VIEW` for `twitch.tv` and `*.twitch.tv` (`http` and `https`), allowing external apps, custom Android TV launchers (Projectivy, FLauncher, ATV Launcher), button remappers (**tvQuickActions**, **Button Mapper**), **Home Assistant**, and **ADB** scripts to open channels, live streams, VODs, clips, and categories directly.
+XtraPlus registers `android.intent.action.VIEW` for `twitch.tv` and `*.twitch.tv` (`http` and `https`), allowing external apps, custom Android TV launchers (Projectivy, FLauncher, ATV Launcher), button remappers (**tvQuickActions**, **Button Mapper**), **Home Assistant**, and **ADB** scripts to open channels, live streams, VODs, clips, and categories directly.
 
 ## Application Identifiers
 
@@ -91,7 +91,7 @@ https://www.twitch.tv/directory/game/League%20of%20Legends?tl=English
 ### ADB (`adb shell am start`)
 
 ```bash
-# Launch Xtra TV on the Home screen
+# Launch XtraPlus on the Home screen
 adb shell am start -n com.github.razenfr.xtratv/com.github.andreyasadchy.xtra.ui.main.MainActivity
 
 # Start playing a live stream immediately
@@ -133,7 +133,7 @@ data:
   activity: "https://www.twitch.tv/kamet0?xtratv_play=1"
 ```
 
-Or targeting Xtra TV explicitly via `androidtv.adb_command`:
+Or targeting XtraPlus explicitly via `androidtv.adb_command`:
 
 ```yaml
 action: androidtv.adb_command
