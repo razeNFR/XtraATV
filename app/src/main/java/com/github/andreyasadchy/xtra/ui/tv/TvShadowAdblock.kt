@@ -101,12 +101,18 @@ object TvShadowAdblock {
         val segments: List<HlsSegment>,
         val prefetchLines: List<String>,
         val activeMapLine: String?,
+        val prefetchAdCount: Int = 0,
     ) {
-        /** True when ads are actively present at the live edge (matches ExoPlayerService.checkPlaylist). */
+        /** True when any `#EXT-X-TWITCH-PREFETCH` live-edge segment falls inside an ad break. */
+        val hasPrefetchAd: Boolean
+            get() = prefetchAdCount > 0
+
+        /** True when ads are actively present at the live edge (matches ExoPlayerService.checkPlaylist, including prefetch). */
         val hasActiveAdAtLiveEdge: Boolean
-            get() = when (verdict) {
-                PlaylistVerdict.FULL_AD -> true
-                PlaylistVerdict.PARTIAL_AD -> segments.lastOrNull()?.classification == SegmentClass.AD
+            get() = when {
+                hasPrefetchAd -> true
+                verdict == PlaylistVerdict.FULL_AD -> true
+                verdict == PlaylistVerdict.PARTIAL_AD -> segments.lastOrNull()?.classification == SegmentClass.AD
                 else -> false
             }
 
@@ -120,16 +126,19 @@ object TvShadowAdblock {
                 mediaSequence = mediaSequence + (lastAdIdx + 1).toLong(),
                 segments = tail,
                 prefetchLines = emptyList(),
+                prefetchAdCount = 0,
             )
         }
     }
 
-    /** Optional timing & ad-range metadata extracted from Media3's HlsMediaPlaylist (handles #EXT-X-SKIP & PDT inheritance). */
+    /** Optional timing & ad-range metadata extracted from Media3's HlsMediaPlaylist (handles #EXT-X-SKIP, PDT inheritance, and prefetch). */
     data class PlaylistTimingHint(
         val segmentPdtMs: List<Long>? = null,
         val fallbackFirstSegmentPdtMs: Long? = null,
         val extraAdRangesMs: List<Pair<Long, Long>> = emptyList(),
         val fallbackMapLine: String? = null,
+        val media3LiveEdgeIsAd: Boolean = false,
+        val media3AnySegmentIsAd: Boolean = false,
     )
 
     /** Monotonic HLS sequence bounds from previousMediaPlaylist to prevent Media3 HlsChunkSource out-of-bounds crashes. */
@@ -284,6 +293,7 @@ object TvShadowAdblock {
             }
         }
 
+        var prefetchAdCount = 0
         for (raw in lines) {
             val trimmed = raw.trim()
             if (trimmed.isEmpty()) continue
@@ -291,7 +301,31 @@ object TvShadowAdblock {
             if (trimmed.startsWith("#EXT-X-TWITCH-PREFETCH:")) {
                 val prefUri = trimmed.removePrefix("#EXT-X-TWITCH-PREFETCH:").trim()
                 if (prefUri.isNotEmpty()) {
-                    prefetchLines.add("#EXT-X-TWITCH-PREFETCH:${resolveAbsoluteUrl(playlistUrl, prefUri)}")
+                    val absPrefUri = resolveAbsoluteUrl(playlistUrl, prefUri)
+                    // Xtra's custom HlsPlaylistParser appends #EXT-X-TWITCH-PREFETCH as 2s segments at the end
+                    // of media3Playlist.segments, so ExoPlayerService.checkPlaylist inspects them as the live edge.
+                    val prefIndex = segments.size + prefetchLines.size
+                    val hintedPrefPdtMs = timingHint?.segmentPdtMs?.getOrNull(prefIndex)
+                    val prefPdtMs = hintedPrefPdtMs ?: lastPdtMs?.let { it + elapsedSincePdtMs.roundToLong() }
+                    if (hintedPrefPdtMs != null) {
+                        lastPdtMs = hintedPrefPdtMs
+                        elapsedSincePdtMs = 0.0
+                    }
+                    elapsedSincePdtMs += 2_000.0
+                    val prefMidMs = prefPdtMs?.let { it + 1_000L }
+                    val prefInAdRange = prefPdtMs != null && adDateRanges.any { (startMs, endMs) ->
+                        prefPdtMs in startMs until endMs || (prefMidMs != null && prefMidMs in startMs until endMs)
+                    }
+                    val lowerPref = absPrefUri.lowercase()
+                    val prefUriIsAd = lowerPref.contains("/stitched/") ||
+                        lowerPref.contains("amazon-adsystem") ||
+                        lowerPref.contains("/ad/") ||
+                        lowerPref.contains("/ads/") ||
+                        lowerPref.contains("adsegment")
+                    if (prefInAdRange || prefUriIsAd) {
+                        prefetchAdCount++
+                    }
+                    prefetchLines.add("#EXT-X-TWITCH-PREFETCH:$absPrefUri")
                 }
                 continue
             }
@@ -401,6 +435,15 @@ object TvShadowAdblock {
             }
         }
 
+        // Strict parity with ExoPlayerService.checkPlaylist: if Media3's parsed live-edge segment (including
+        // prefetch) is an ad and our regular tail segments did not already mark it, flag prefetchAdCount >= 1.
+        if (timingHint?.media3LiveEdgeIsAd == true &&
+            segments.lastOrNull()?.classification != SegmentClass.AD &&
+            prefetchAdCount == 0
+        ) {
+            prefetchAdCount = 1
+        }
+
         val verdict = when {
             segments.isEmpty() -> PlaylistVerdict.EMPTY
             segments.none { it.classification == SegmentClass.AD } -> PlaylistVerdict.CLEAN
@@ -416,6 +459,7 @@ object TvShadowAdblock {
             segments = segments,
             prefetchLines = prefetchLines,
             activeMapLine = activeMapLine,
+            prefetchAdCount = prefetchAdCount,
         )
     }
 
@@ -944,9 +988,11 @@ object TvShadowAdblock {
     ): DecisionResult {
         window.onQualitySwitch(variantUrl, primaryParsed)
 
-        val adCount = primaryParsed.segments.count { it.classification == SegmentClass.AD }
+        val adCount = primaryParsed.segments.count { it.classification == SegmentClass.AD } + primaryParsed.prefetchAdCount
         val primaryHasAd = if (isInitialPlaylist) {
-            primaryParsed.verdict == PlaylistVerdict.FULL_AD || primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD
+            primaryParsed.verdict == PlaylistVerdict.FULL_AD ||
+                primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD ||
+                primaryParsed.hasPrefetchAd
         } else {
             primaryParsed.hasActiveAdAtLiveEdge
         }
@@ -977,7 +1023,7 @@ object TvShadowAdblock {
         }
 
         // First mid-roll after clean passthrough: seed ContinuityWindow from the last clean snapshot
-        // and bridge any newer non-ad prefix segments from primaryParsed so zero live seconds are lost.
+        // and bridge any newer non-ad prefix segments from primaryParsed (including when only prefetch entered the ad).
         if (primaryHasAd && window.isEmpty()) {
             window.lastCleanSnapshot?.let { snap ->
                 window.ingest(
@@ -989,7 +1035,7 @@ object TvShadowAdblock {
                     allowPrefetches = false,
                 )
             }
-            if (!window.isEmpty() && primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD) {
+            if (!window.isEmpty() && (primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD || primaryParsed.verdict == PlaylistVerdict.CLEAN)) {
                 window.ingest(
                     sourceId = "primary",
                     segments = primaryParsed.segments,
@@ -1041,7 +1087,7 @@ object TvShadowAdblock {
                 }
                 sourceUsed = "hold"
             }
-            primaryHasAd && !cleanShadowAvailable && primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD -> {
+            primaryHasAd && !cleanShadowAvailable && (primaryParsed.verdict == PlaylistVerdict.PARTIAL_AD || primaryParsed.verdict == PlaylistVerdict.CLEAN) -> {
                 sourceUsed = "primary-partial"
                 window.noteHoldPass(false)
                 window.ingest(
@@ -1508,6 +1554,29 @@ object TvShadowAdblock {
     }
 
     @OptIn(UnstableApi::class)
+    private fun isMedia3AdSegment(playlist: HlsMediaPlaylist, segment: HlsMediaPlaylist.Segment): Boolean {
+        val title = segment.title.substringBefore('|')
+        if (title == "Amazon" || title == "Adform" || title == "DCM") {
+            return true
+        }
+        val segmentStartTime = playlist.startTimeUs + segment.relativeStartTimeUs
+        return playlist.interstitials.any { dateRange ->
+            if (dateRange.id.startsWith("stitched-ad-") ||
+                dateRange.clientDefinedAttributes.find { it.name == "CLASS" }?.textValue == "twitch-stitched-ad" ||
+                dateRange.clientDefinedAttributes.find { it.name.startsWith("X-TV-TWITCH-AD-") } != null
+            ) {
+                val startTime = dateRange.startDateUnixUs
+                val endTime = dateRange.endDateUnixUs.takeIf { it != androidx.media3.common.C.TIME_UNSET }
+                    ?: dateRange.durationUs.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { startTime + it }
+                    ?: dateRange.plannedDurationUs.takeIf { it != androidx.media3.common.C.TIME_UNSET }?.let { startTime + it }
+                endTime != null && segmentStartTime in startTime..<endTime
+            } else {
+                false
+            }
+        }
+    }
+
+    @OptIn(UnstableApi::class)
     private fun buildTimingHintFromMedia3(
         playlistUrl: String,
         rawText: String,
@@ -1552,6 +1621,10 @@ object TvShadowAdblock {
             }
         }
 
+        val media3LiveEdgeIsAd = media3Playlist?.segments?.lastOrNull()?.let { isMedia3AdSegment(media3Playlist, it) } == true
+        val media3AnySegmentIsAd = media3LiveEdgeIsAd ||
+            (media3Playlist?.segments?.any { isMedia3AdSegment(media3Playlist, it) } == true)
+
         val initSeg = media3Playlist?.segments?.getOrNull(skippedCount)?.initializationSegment
             ?: media3Playlist?.segments?.lastOrNull()?.initializationSegment
             ?: previousMediaPlaylist?.segments?.lastOrNull()?.initializationSegment
@@ -1559,7 +1632,9 @@ object TvShadowAdblock {
             """#EXT-X-MAP:URI="${resolveAbsoluteUrl(playlistUrl, initUrl)}""""
         }
 
-        if (segmentPdtMs == null && fallbackFirstPdtMs == null && extraAdRanges.isEmpty() && fallbackMapLine == null) {
+        if (segmentPdtMs == null && fallbackFirstPdtMs == null && extraAdRanges.isEmpty() &&
+            fallbackMapLine == null && !media3LiveEdgeIsAd && !media3AnySegmentIsAd
+        ) {
             return null
         }
         return PlaylistTimingHint(
@@ -1567,6 +1642,8 @@ object TvShadowAdblock {
             fallbackFirstSegmentPdtMs = fallbackFirstPdtMs,
             extraAdRangesMs = extraAdRanges,
             fallbackMapLine = fallbackMapLine,
+            media3LiveEdgeIsAd = media3LiveEdgeIsAd,
+            media3AnySegmentIsAd = media3AnySegmentIsAd,
         )
     }
 
@@ -1630,7 +1707,10 @@ object TvShadowAdblock {
         val parsed = parseAndClassifyMediaPlaylist(url, text, timingHint)
         val isInitialPlaylist = previousMediaPlaylist == null && !state.window.hasSeenContent
         val hasAd = if (isInitialPlaylist) {
-            parsed.verdict == PlaylistVerdict.FULL_AD || parsed.verdict == PlaylistVerdict.PARTIAL_AD
+            parsed.verdict == PlaylistVerdict.FULL_AD ||
+                parsed.verdict == PlaylistVerdict.PARTIAL_AD ||
+                parsed.hasPrefetchAd ||
+                timingHint?.media3AnySegmentIsAd == true
         } else {
             parsed.hasActiveAdAtLiveEdge
         }

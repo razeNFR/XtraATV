@@ -710,4 +710,95 @@ class TvShadowAdblockTest {
         assertTrue("End sequence (${emittedSeq + emittedSegments}) must never shrink below 1030", emittedSeq + emittedSegments >= 1030L)
         assertTrue("DISCONTINUITY-SEQUENCE ($emittedDisc) must advance past previous (1)", emittedDisc >= 2L)
     }
+
+    @Test
+    fun twitchPrefetchEnteringAdDaterangeTriggersShadowBeforeClassicSwap() {
+        val window = TvShadowAdblock.ContinuityWindow()
+
+        // Step 1: clean live playback so snapshot is warm
+        val cleanBefore = """
+            #EXTM3U
+            #EXT-X-VERSION:7
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:200
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:11:59.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_200.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:01.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_201.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:03.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_202.m4s
+        """.trimIndent()
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, cleanBefore),
+            primaryRawText = cleanBefore,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+
+        // Step 2: midroll DATERANGE starts at 12:12:07; regular #EXTINF ends at 12:12:05 (clean),
+        // while #EXT-X-TWITCH-PREFETCH segments at 12:12:07 and 12:12:09 are already inside the ad!
+        val prefetchAdPlaylist = """
+            #EXTM3U
+            #EXT-X-VERSION:7
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:201
+            #EXT-X-DATERANGE:ID="stitched-ad-1795781527-15241000000",CLASS="twitch-stitched-ad",START-DATE="2026-11-27T12:12:07.000Z",DURATION=60.0
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:01.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_201.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:03.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_202.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:05.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/live_203.m4s
+            #EXT-X-TWITCH-PREFETCH:https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/pref_ad_204.m4s
+            #EXT-X-TWITCH-PREFETCH:https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/pref_ad_205.m4s
+        """.trimIndent()
+
+        val parsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariantUrl, prefetchAdPlaylist)
+        assertTrue("Prefetch segments inside stitched-ad must trigger hasPrefetchAd", parsed.hasPrefetchAd)
+        assertEquals(2, parsed.prefetchAdCount)
+        assertTrue("Live edge must be flagged as active ad", parsed.hasActiveAdAtLiveEdge)
+
+        val shadowRaw = """
+            #EXTM3U
+            #EXT-X-VERSION:7
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:900
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:07.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow_900.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-27T12:12:09.000Z
+            #EXTINF:2.000,
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow_901.m4s
+        """.trimIndent()
+        val shadowParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadowRaw)
+
+        val res = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariantUrl,
+            primaryParsed = parsed,
+            primaryRawText = prefetchAdPlaylist,
+            window = window,
+            shadowPlaylist = shadowParsed,
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            isInitialPlaylist = false,
+        )
+
+        assertEquals("shadow", res.sourceUsed)
+        assertEquals(2, res.adSegmentsSuppressed)
+        assertTrue(res.outputPlaylist.contains("live_203.m4s"))
+        assertTrue(res.outputPlaylist.contains("#EXT-X-DISCONTINUITY"))
+        assertTrue(res.outputPlaylist.contains("shadow_900.m4s"))
+        assertFalse(res.outputPlaylist.contains("pref_ad_"))
+        assertFalse(res.outputPlaylist.contains("#EXT-X-TWITCH-PREFETCH:"))
+        assertFalse(res.outputPlaylist.contains("stitched-ad-"))
+    }
 }
