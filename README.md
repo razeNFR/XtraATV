@@ -9,7 +9,7 @@ One single APK adapts automatically to your device — bringing a dedicated remo
 
 <p align="center">
   <img src="docs/screenshots/home.jpg" width="49%"/>
-  <img src="docs/screenshots/player.jpg" width="49%"/>
+  <img src="docs/screenshots/mobile_home.jpg" width="49%"/>
 </p>
 
 ## Download
