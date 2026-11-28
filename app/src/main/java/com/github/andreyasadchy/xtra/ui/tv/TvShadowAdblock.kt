@@ -1499,7 +1499,8 @@ object TvShadowAdblock {
         val state = channels.computeIfAbsent(norm) { ChannelState(it) }
         state.closeJob?.cancel()
         state.closeJob = null
-        if (forceH264 && !state.forceH264) {
+        val codecJustSwitched = forceH264 && !state.forceH264
+        if (codecJustSwitched) {
             state.forceH264 = true
             state.invalidateShadow()
             state.shadowMasterVariants = emptyList()
@@ -1512,10 +1513,10 @@ object TvShadowAdblock {
         synchronized(state.lock) {
             state.window.reset()
         }
-        if (state.isShadowFresh() && !forceH264) {
+        if (state.isShadowFresh() && !codecJustSwitched) {
             ensureRefreshLoop(appCtx, state)
         } else {
-            warmShadowAsync(appCtx, state, force = forceH264)
+            warmShadowAsync(appCtx, state, force = codecJustSwitched)
         }
     }
 
@@ -2049,13 +2050,13 @@ object TvShadowAdblock {
             state.closeJob = null
 
             val topVariant = variants.maxByOrNull { it.bandwidth }
-            val topFamily = topVariant?.videoCodecFamily.orEmpty()
+            val nonAvcVariant = variants.firstOrNull { it.videoCodecFamily.isNotEmpty() && it.videoCodecFamily != "avc1" }
             val hasPrimaryAvc = variants.any { it.videoCodecFamily == "avc1" }
 
-            // Anonymous Twitch shadow streams for Swap+ are always H.264 (avc1) and never serve HEVC/AV1.
-            // If primary offers HEVC/AV1 alongside H.264, align immediately to H.264 on 1st open without waiting
-            // on shadow pre-warm timing so the very first pre-roll never falls back to Classic Swap.
-            if (topFamily.isNotEmpty() && topFamily != "avc1" && hasPrimaryAvc && !state.forceH264) {
+            // Safety net: Swap+ requests supported_codecs=avc1 upfront, but if a primary master ever returns mixed
+            // codecs (e.g. HEVC/AV1 alongside H.264, regardless of bitrate ordering), strip non-H.264 variants so
+            // ExoPlayer stays aligned with the H.264 shadow stream from the very first segment.
+            if (nonAvcVariant != null && hasPrimaryAvc) {
                 state.forceH264 = true
                 val avcTop = variants.filter { it.videoCodecFamily == "avc1" }.maxByOrNull { it.bandwidth }
                 if (avcTop != null) {
@@ -2065,7 +2066,7 @@ object TvShadowAdblock {
                 runCatching {
                     Log.i(
                         TAG,
-                        "Swap+ aligning $topFamily primary master on $login to H.264 (avc1) on 1st open",
+                        "Swap+ aligning ${nonAvcVariant.videoCodecFamily} primary master on $login to H.264 (avc1)",
                     )
                 }
                 val avcFiltered = filterMasterToCodecFamily(filtered, "avc1")

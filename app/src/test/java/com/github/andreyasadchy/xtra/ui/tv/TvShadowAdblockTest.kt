@@ -1095,4 +1095,146 @@ class TvShadowAdblockTest {
         assertTrue(avcOnly.contains("1080p60_avc.m3u8"))
         assertTrue(avcOnly.contains("audio_only.m3u8"))
     }
+
+    @Test
+    fun swapPlusRequestsAvc1UpfrontWhileClassicSwapVodAndProxiesKeepUserCodecs() {
+        val userCodecs = "av1,h265,h264"
+
+        // Swap+ active (no proxy): always requests avc1 (1080p60 max H.264) on the 1st request
+        assertEquals(
+            "avc1",
+            com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.resolveSupportedCodecs(
+                supportedCodecsOverride = null,
+                configuredCodecs = userCodecs,
+                swapPlusActive = true,
+            ),
+        )
+
+        // Classic Swap, VOD, Disabled, Stream Proxy, Multi-Stream (swapPlusActive = false): completely untouched
+        assertEquals(
+            userCodecs,
+            com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.resolveSupportedCodecs(
+                supportedCodecsOverride = null,
+                configuredCodecs = userCodecs,
+                swapPlusActive = false,
+            ),
+        )
+
+        // Explicit fallback override still wins
+        assertEquals(
+            "h264",
+            com.github.andreyasadchy.xtra.ui.player.ExoPlayerService.resolveSupportedCodecs(
+                supportedCodecsOverride = "h264",
+                configuredCodecs = userCodecs,
+                swapPlusActive = true,
+            ),
+        )
+    }
+
+    @Test
+    fun enhancedBroadcastingChannelPrerollSplicesImmediatelyIn1080pAvc1WithoutClassicSwapFallback() {
+        // Simulates jltomy/mynthos requested directly with supported_codecs=avc1:
+        // primary master returns 1080p60 H.264 (fMP4), shadow warms in 1080p60 H.264 (fMP4),
+        // and the very first pre-roll playlist (Amazon stitched-ad) splices cleanly with zero passthrough fallback.
+        val masterUrl = "https://usher.ttvnw.net/api/channel/hls/jltomy.m3u8?supported_codecs=avc1"
+        val primaryMaster = """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=6500000,RESOLUTION=1920x1080,FRAME-RATE=60.000,CODECS="avc1.64002A,mp4a.40.2"
+            $primaryVariant1080Url
+            #EXT-X-STREAM-INF:BANDWIDTH=160000,CODECS="mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/audio_only.m3u8
+        """.trimIndent()
+        val (_, primaryVariants) = TvShadowAdblock.filterMasterAndExtractVariants(masterUrl, primaryMaster)
+        val primary1080 = primaryVariants.first { it.height == 1080 }
+        assertEquals("avc1", primary1080.videoCodecFamily)
+
+        val shadow1080 = TvShadowAdblock.MasterVariant(
+            url = shadowVariantUrl,
+            width = 1920,
+            height = 1080,
+            bandwidth = 6500000L,
+            codecs = "avc1.64002A,mp4a.40.2",
+            frameRate = 60.0,
+        )
+
+        val initMap = "#EXT-X-MAP:URI=\"https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/init.mp4\""
+        val prerollAdFmp4 = """
+            #EXTM3U
+            #EXT-X-VERSION:6
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:200
+            $initMap
+            #EXT-X-DATERANGE:ID="stitched-ad-1795865057-15235000000",CLASS="twitch-stitched-ad",START-DATE="2026-11-28T12:24:17.000Z",DURATION=15.235
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T12:24:17.000Z
+            #EXTINF:2.000,Amazon|2488883100494
+            https://d2v02pertd.cloudfront.net/ad/seg_200.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T12:24:19.000Z
+            #EXTINF:2.000,Amazon|2488883100494
+            https://d2v02pertd.cloudfront.net/ad/seg_201.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T12:24:21.000Z
+            #EXTINF:2.000,Amazon|2488883100494
+            https://d2v02pertd.cloudfront.net/ad/seg_202.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T12:24:23.000Z
+            #EXTINF:2.000,Amazon|2488883100494
+            https://d2v02pertd.cloudfront.net/ad/seg_203.m4s
+        """.trimIndent()
+        val shadowCleanFmp4 = """
+            #EXTM3U
+            #EXT-X-VERSION:6
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:500
+            $initMap
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T12:24:17.000Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow_500.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T12:24:19.000Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow_501.m4s
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T12:24:21.000Z
+            #EXTINF:2.000,live
+            https://video-edge.cdg02.abs.hls.ttvnw.net/v1/segment/shadow_502.m4s
+        """.trimIndent()
+
+        val window = TvShadowAdblock.ContinuityWindow()
+        val decision = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariant1080Url,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariant1080Url, prerollAdFmp4),
+            primaryRawText = prerollAdFmp4,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadowCleanFmp4),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            isInitialPlaylist = true,
+            primaryVariantMeta = primary1080,
+            shadowVariantMeta = shadow1080,
+        )
+
+        assertEquals("shadow", decision.sourceUsed)
+        assertEquals(4, decision.adSegmentsSuppressed)
+        assertTrue(decision.outputPlaylist.contains("shadow_500.m4s"))
+        assertFalse(decision.outputPlaylist.contains("Amazon|"))
+    }
+
+    @Test
+    fun filterMasterStripsLowerBitrateHevcEvenWhenAvcHasHigherBandwidth() {
+        val mixedMaster = """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=6500000,RESOLUTION=1920x1080,FRAME-RATE=60.000,CODECS="avc1.64002A,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/1080p60_avc.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=5800000,RESOLUTION=2560x1440,FRAME-RATE=60.000,CODECS="hvc1.1.6.L150.B0,mp4a.40.2"
+            https://video-weaver.cdg02.hls.ttvnw.net/v1/playlist/1440p60_hevc.m3u8
+        """.trimIndent()
+
+        val (filtered, variants) = TvShadowAdblock.filterMasterAndExtractVariants(
+            "https://usher.ttvnw.net/api/channel/hls/jltomy.m3u8",
+            mixedMaster,
+        )
+        assertTrue(variants.any { it.videoCodecFamily == "hevc" })
+        assertTrue(variants.any { it.videoCodecFamily == "avc1" })
+
+        val avcOnly = TvShadowAdblock.filterMasterToCodecFamily(filtered, "avc1")
+        assertTrue(avcOnly.contains("1080p60_avc.m3u8"))
+        assertFalse(avcOnly.contains("1440p60_hevc.m3u8"))
+    }
 }
+
