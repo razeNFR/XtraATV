@@ -1608,6 +1608,9 @@ class MainActivity : AppCompatActivity() {
         if (isTv && !dispatchingPlayerKey && (playerFragment as? PlayerFragment)?.onTvChatFreeMoveKey(event) == true) {
             return true
         }
+        if (isTv && !dispatchingPlayerKey && (playerFragment as? PlayerFragment)?.onTvChatScrollKey(event) == true) {
+            return true
+        }
         if (isTv && !dispatchingPlayerKey && (playerFragment as? PlayerFragment)?.onTvVolumePillKey(event) == true) {
             return true
         }

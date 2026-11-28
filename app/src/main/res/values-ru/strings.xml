@@ -324,7 +324,7 @@
     <string name="proxy_port">Порт</string>
     <string name="proxy_user">Имя пользователя</string>
     <string name="proxy_password">Пароль</string>
-    <string name="proxy_settings">Настройки HTTP-прокси</string>
+    <string name="proxy_settings">Настройки прокси (HTTP / SOCKS)</string>
     <string name="stop_download">Остановить закачку</string>
     <string name="resume_download">Возобновить закачку</string>
     <string name="show_view_count_icon">Значки просмотров и времени в эфире</string>
@@ -932,7 +932,7 @@
     <string name="tv_proxy_mode_always">Всегда</string>
     <string name="tv_proxy_mode_ads">Во время рекламы</string>
     <string name="tv_proxies_1440p">Публичные прокси ограничены 1080p. Для 1440p используйте прокси, который его передаёт, или выберите «Во время рекламы», чтобы получать 1440p вне рекламы.</string>
-    <string name="tv_adblock_summary_1440p">Во время рекламы переключается на поток без рекламы. 1440p работает; качество может снизиться на время рекламы.</string>
+    <string name="tv_adblock_summary_1440p">Временно переключается на 360p во время рекламы, затем возвращает полное качество (поддерживается 1440p).</string>
     <string name="tv_chat_sub_prime">Prime</string>
     <string name="tv_chat_sub_tier">Уровень %1$d</string>
     <string name="tv_chat_sub">%1$s оформил подписку</string>
@@ -1153,7 +1153,7 @@
     <string name="tv_adblock_swap_locked_hint">Включён по умолчанию. Включите пользовательский или HTTP-прокси, чтобы отключить его.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Остаётся активным как автоматический резерв при включённом Adblock (Swap+) или Adblock (VOD).</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">Экспериментально — воспроизводит стрим через текущий VOD (~30 с задержки, синхронизированный чат) без рекламы. Работает везде, как Swap (основной плеер, Multi-Stream и PiP), с откатом на Swap+ или Swap при отсутствии VOD.</string>
+    <string name="tv_adblock_exp_summary">Воспроизводит эфир через текущий VOD (задержка ~30 с) без рекламы. Поддерживается 1440p (на канале должны быть включены VOD).</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) активен</string>
     <string name="tv_adblock_exp_proxies_disabled">Прокси нельзя включить, пока активен Adblock (Swap+) или Adblock (VOD).</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Сначала отключите пользовательские и HTTP-прокси.</string>
@@ -1498,11 +1498,11 @@
     <string name="tv_chat_qr_regenerate">Обновить QR-ссылку</string>
     <string name="tv_chat_qr_regenerated">Создана новая QR-ссылка — прежние устройства отключены</string>
     <string name="tv_chat_qr_reconnect">Переподключить</string>
-    <string name="tv_adblock_swap_desc">Переключает на резервный поток во время рекламы (качество может снизиться).</string>
+    <string name="tv_adblock_swap_desc">Снижает до 360p во время рекламы. Поддерживает 1440p.</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Экспериментально — блокирует рекламу без обрывов, с меньшей потерей качества и обычной задержкой (в PiP/Multi-Stream работает Swap).</string>
-    <string name="tv_adblock_swap_plus_summary">Экспериментально — непрерывно вырезает рекламу без обрывов, с меньшей потерей качества и обычной задержкой эфира (в отличие от Adblock (VOD)). Не используется в Multi-Stream и PiP (там работает Swap). Автоматический откат на Swap при сбое. Может работать не на 100%.</string>
-    <string name="tv_adblock_vod_desc">Экспериментально — через текущий VOD (~30 с), работает везде (PiP/Multi-Stream).</string>
+    <string name="tv_adblock_swap_plus_desc">Без обрывов, до 1080p (без 1440p). В мультистриме и PiP используется Swap.</string>
+    <string name="tv_adblock_swap_plus_summary">Незаметно заменяет рекламу без зависаний и падения до 360p. До 1080p (1440p не поддерживается). В мультистриме и PiP используется Swap.</string>
+    <string name="tv_adblock_vod_desc">Задержка ~30 с, без рекламы. Поддерживает 1440p (нужны VOD).</string>
     <string name="tv_vod_audio_recovery">Восстанавливать заглушённый звук VOD</string>
     <string name="tv_vod_audio_recovery_summary">Пытается восстановить заглушённый по DMCA звук в VOD, перемотке DVR и Adblock (VOD), если оригинал ещё доступен на Twitch (не гарантируется на 100% для всех VOD). Показывает зелёные (восстановлено) и красные (без звука) участки на шкале.</string>
     <string name="tv_vod_audio_recovered_toast">Звук восстановлен (~%1$d мин)</string>
@@ -1549,8 +1549,15 @@
     <string name="interface_mode_tv">ТВ</string>
     <string name="interface_mode_mobile">Мобильный</string>
     <string name="mobile_accent_color_title">Цвет акцента</string>
-    <string name="mobile_adblock_swap_plus_desc">Плавная замена рекламы в основном плеере с сохранением 1440p / HEVC / AV1. Переключается на классический Swap при недоступности.</string>
-    <string name="mobile_adblock_swap_plus_summary">Плавная замена рекламы в плеере (сохраняет 1440p / HEVC / AV1, авто-откат на Swap)</string>
-    <string name="mobile_adblock_vod_desc">Воспроизводит живой VOD-поток без рекламы. Автоматический откат, если недоступен.</string>
-    <string name="mobile_adblock_vod_summary">Воспроизводит живой VOD-поток без рекламы с автоматическим откатом</string>
+    <string name="mobile_adblock_swap_plus_desc">Плавный поток до 1080p (1440p не поддерживается).</string>
+    <string name="mobile_adblock_swap_plus_summary">Незаметно заменяет рекламу без зависаний и падения до 360p. До 1080p (1440p не поддерживается).</string>
+    <string name="mobile_adblock_vod_desc">Задержка ~30 с, без рекламы. Поддерживает 1440p (нужны VOD).</string>
+    <string name="mobile_adblock_vod_summary">Воспроизводит эфир через текущий VOD (задержка ~30 с) без рекламы. Поддерживается 1440p (на канале должны быть включены VOD).</string>
+    <string name="proxy_protocol">Протокол</string>
+    <string name="proxy_host_protocol_hint">Хост (напр. 10.0.1.20 или socks5://host:port)</string>
+    <string name="show_stream_language">Показывать язык трансляции</string>
+    <string name="show_stream_language_summary">Отображать небольшой значок кода языка на превью трансляций</string>
+    <string name="tv_remote_action_scroll_chat">Прокрутка чата</string>
+    <string name="tv_chat_scroll_hint_paused">Чат на паузе · ▲▼ Прокрутка · OK Вниз · Назад Выход</string>
+    <string name="tv_chat_scroll_hint_live">Чат в эфире · ▲▼ Прокрутка · Назад Выход</string>
 </resources>

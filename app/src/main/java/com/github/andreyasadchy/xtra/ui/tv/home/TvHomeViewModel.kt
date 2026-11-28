@@ -616,6 +616,7 @@ class TvHomeViewModel(
                         createdAt = st.createdAt?.toString(),
                         viewerCount = st.viewersCount,
                         tags = st.freeformTags?.mapNotNull { it?.name },
+                        language = st.broadcaster?.broadcastSettings?.language,
                     )
                 }
         }
@@ -636,6 +637,7 @@ class TvHomeViewModel(
                     createdAt = fallback.createdAt,
                     viewerCount = fallback.viewerCount,
                     tags = fallback.tags,
+                    language = fallback.language,
                 )
             }
         ).sortedByDescending { it.viewerCount ?: 0 }
@@ -727,6 +729,7 @@ class TvHomeViewModel(
                             createdAt = st.createdAt?.toString(),
                             viewerCount = st.viewersCount,
                             tags = st.freeformTags?.mapNotNull { it?.name },
+                            language = st.broadcaster?.broadcastSettings?.language,
                         )
                     }
             }
@@ -795,6 +798,7 @@ class TvHomeViewModel(
                         createdAt = st.createdAt?.toString(),
                         viewerCount = st.viewersCount,
                         tags = st.freeformTags?.mapNotNull { it?.name },
+                        language = st.broadcaster?.broadcastSettings?.language,
                     )
                 }
         }

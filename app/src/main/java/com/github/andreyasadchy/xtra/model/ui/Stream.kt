@@ -19,10 +19,20 @@ class Stream(
     var createdAt: String? = null,
     var viewerCount: Int? = null,
     val tags: List<String>? = null,
+    val language: String? = null,
 ) : Parcelable {
 
     val channelImage: String?
         get() = TwitchApiHelper.getProfileImage(channelImageURL)
     val thumbnail: String?
         get() = TwitchApiHelper.getStreamThumbnail(thumbnailURL)
+
+    /** Short uppercase ISO language code for thumbnail badges (e.g. "FR", "EN", "DE"), or null if unset/"other". */
+    val displayLanguageCode: String?
+        get() {
+            val raw = language?.trim()?.lowercase().orEmpty()
+            if (raw.isEmpty() || raw == "other" || raw == "asl") return if (raw == "asl") "ASL" else null
+            val primary = raw.substringBefore('-').substringBefore('_')
+            return primary.takeIf { it.length in 2..3 }?.uppercase()
+        }
 }

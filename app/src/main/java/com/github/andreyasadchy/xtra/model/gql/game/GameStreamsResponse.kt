@@ -40,6 +40,7 @@ class GameStreamsResponse(
         val createdAt: String? = null,
         val previewImageURL: String? = null,
         val freeformTags: List<Tag>? = null,
+        val language: String? = null,
     )
 
     @Serializable

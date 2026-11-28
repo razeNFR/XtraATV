@@ -79,6 +79,7 @@ class SearchStreamsDataSource(
                     createdAt = it.createdAt?.toString(),
                     viewerCount = it.viewersCount,
                     tags = it.freeformTags?.mapNotNull { tag -> tag.name },
+                    language = it.broadcaster?.broadcastSettings?.language,
                 ).takeIf { stream ->
                     stream.channelId != null || stream.channelLogin != null
                 }

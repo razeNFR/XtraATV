@@ -385,10 +385,10 @@ object TvProxyPanel {
                             Spacer(Modifier.height(4.dp))
                             streamEntries.forEachIndexed { index, entry ->
                                 androidx.compose.runtime.key(entry) {
-                                    val hostLabel = listOfNotNull(
-                                        entry.proxy.host?.takeIf { it.isNotBlank() },
-                                        entry.proxy.port?.toString(),
-                                    ).joinToString(":").ifBlank { context.getString(R.string.stream_proxy) }
+                                    val hostLabel = com.github.andreyasadchy.xtra.util.StreamProxyHelper
+                                        .formatDisplayLabel(entry.proxy.host, entry.proxy.port)
+                                        .takeIf { it != "—" }
+                                        ?: context.getString(R.string.stream_proxy)
                                     StreamProxyRow(
                                         label = hostLabel,
                                         enabled = entry.enabled,

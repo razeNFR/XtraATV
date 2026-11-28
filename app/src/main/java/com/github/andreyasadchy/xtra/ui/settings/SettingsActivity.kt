@@ -2630,9 +2630,9 @@ class SettingsActivity : AppCompatActivity() {
                         isChecked = swapOn
                         isEnabled = !swapIsFallback
                         summary = if (swapIsFallback) {
-                            "${getString(R.string.tv_adblock_fallback_badge)} · ${getString(R.string.tv_adblock_swap_desc)}"
+                            "${getString(R.string.tv_adblock_fallback_badge)} · ${getString(R.string.tv_adblock_summary_1440p)}"
                         } else {
-                            getString(R.string.tv_adblock_swap_desc)
+                            getString(R.string.tv_adblock_summary_1440p)
                         }
                     }
                     swapPlusPref?.apply {

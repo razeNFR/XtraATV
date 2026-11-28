@@ -1853,26 +1853,14 @@ class ExoPlayerService : BasePlaybackService() {
                                                 connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                                 writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                                 readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                                proxySelector(
-                                                    object : ProxySelector() {
-                                                        override fun select(u: URI): List<Proxy> {
-                                                            return if (Regex(MULTIVARIANT_PLAYLIST_REGEX).matches(u.host)) {
-                                                                listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)), Proxy.NO_PROXY)
-                                                            } else {
-                                                                listOf(Proxy.NO_PROXY)
-                                                            }
-                                                        }
-
-                                                        override fun connectFailed(u: URI, sa: SocketAddress, e: IOException) {}
-                                                    }
+                                                com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                                    this,
+                                                    proxyHost,
+                                                    proxyPort,
+                                                    proxyUser,
+                                                    proxyPassword,
+                                                    hostFilterRegex = Regex(MULTIVARIANT_PLAYLIST_REGEX),
                                                 )
-                                                if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                                    proxyAuthenticator { _, response ->
-                                                        response.request.newBuilder().header(
-                                                            "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                                        ).build()
-                                                    }
-                                                }
                                             }.build()
                                         } else null
                                         HttpEngineDataSource.Factory(
@@ -1897,26 +1885,14 @@ class ExoPlayerService : BasePlaybackService() {
                                                 connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                                 writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                                 readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                                proxySelector(
-                                                    object : ProxySelector() {
-                                                        override fun select(u: URI): List<Proxy> {
-                                                            return if (Regex(MULTIVARIANT_PLAYLIST_REGEX).matches(u.host)) {
-                                                                listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)), Proxy.NO_PROXY)
-                                                            } else {
-                                                                listOf(Proxy.NO_PROXY)
-                                                            }
-                                                        }
-
-                                                        override fun connectFailed(u: URI, sa: SocketAddress, e: IOException) {}
-                                                    }
+                                                com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                                    this,
+                                                    proxyHost,
+                                                    proxyPort,
+                                                    proxyUser,
+                                                    proxyPassword,
+                                                    hostFilterRegex = Regex(MULTIVARIANT_PLAYLIST_REGEX),
                                                 )
-                                                if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                                    proxyAuthenticator { _, response ->
-                                                        response.request.newBuilder().header(
-                                                            "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                                        ).build()
-                                                    }
-                                                }
                                             }.build()
                                         } else null
                                         CronetDataSource.Factory(
@@ -1946,26 +1922,14 @@ class ExoPlayerService : BasePlaybackService() {
                                                 connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                                 writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                                 readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                                proxySelector(
-                                                    object : ProxySelector() {
-                                                        override fun select(u: URI): List<Proxy> {
-                                                            return if (Regex(MULTIVARIANT_PLAYLIST_REGEX).matches(u.host)) {
-                                                                listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)), Proxy.NO_PROXY)
-                                                            } else {
-                                                                listOf(Proxy.NO_PROXY)
-                                                            }
-                                                        }
-
-                                                        override fun connectFailed(u: URI, sa: SocketAddress, e: IOException) {}
-                                                    }
+                                                com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                                    this,
+                                                    proxyHost,
+                                                    proxyPort,
+                                                    proxyUser,
+                                                    proxyPassword,
+                                                    hostFilterRegex = Regex(MULTIVARIANT_PLAYLIST_REGEX),
                                                 )
-                                                if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                                    proxyAuthenticator { _, response ->
-                                                        response.request.newBuilder().header(
-                                                            "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                                        ).build()
-                                                    }
-                                                }
                                             }.build()
                                         } else null
                                         OkHttpDataSource.Factory(
@@ -3062,26 +3026,14 @@ class ExoPlayerService : BasePlaybackService() {
                                             connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                             writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                             readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                            proxySelector(
-                                                object : ProxySelector() {
-                                                    override fun select(u: URI): List<Proxy> {
-                                                        return if (Regex(MEDIA_PLAYLIST_REGEX).matches(u.host)) {
-                                                            listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)), Proxy.NO_PROXY)
-                                                        } else {
-                                                            listOf(Proxy.NO_PROXY)
-                                                        }
-                                                    }
-
-                                                    override fun connectFailed(u: URI, sa: SocketAddress, e: IOException) {}
-                                                }
+                                            com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                                this,
+                                                proxyHost,
+                                                proxyPort,
+                                                proxyUser,
+                                                proxyPassword,
+                                                hostFilterRegex = Regex(MEDIA_PLAYLIST_REGEX),
                                             )
-                                            if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                                proxyAuthenticator { _, response ->
-                                                    response.request.newBuilder().header(
-                                                        "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                                    ).build()
-                                                }
-                                            }
                                         }.build()
                                     } else null
                                     HttpEngineDataSource.Factory(
@@ -3106,26 +3058,14 @@ class ExoPlayerService : BasePlaybackService() {
                                             connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                             writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                             readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                            proxySelector(
-                                                object : ProxySelector() {
-                                                    override fun select(u: URI): List<Proxy> {
-                                                        return if (Regex(MEDIA_PLAYLIST_REGEX).matches(u.host)) {
-                                                            listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)), Proxy.NO_PROXY)
-                                                        } else {
-                                                            listOf(Proxy.NO_PROXY)
-                                                        }
-                                                    }
-
-                                                    override fun connectFailed(u: URI, sa: SocketAddress, e: IOException) {}
-                                                }
+                                            com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                                this,
+                                                proxyHost,
+                                                proxyPort,
+                                                proxyUser,
+                                                proxyPassword,
+                                                hostFilterRegex = Regex(MEDIA_PLAYLIST_REGEX),
                                             )
-                                            if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                                proxyAuthenticator { _, response ->
-                                                    response.request.newBuilder().header(
-                                                        "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                                    ).build()
-                                                }
-                                            }
                                         }.build()
                                     } else null
                                     CronetDataSource.Factory(
@@ -3147,26 +3087,14 @@ class ExoPlayerService : BasePlaybackService() {
                                             connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                             writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                             readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                            proxySelector(
-                                                object : ProxySelector() {
-                                                    override fun select(u: URI): List<Proxy> {
-                                                        return if (Regex(MEDIA_PLAYLIST_REGEX).matches(u.host)) {
-                                                            listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)), Proxy.NO_PROXY)
-                                                        } else {
-                                                            listOf(Proxy.NO_PROXY)
-                                                        }
-                                                    }
-
-                                                    override fun connectFailed(u: URI, sa: SocketAddress, e: IOException) {}
-                                                }
+                                            com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                                this,
+                                                proxyHost,
+                                                proxyPort,
+                                                proxyUser,
+                                                proxyPassword,
+                                                hostFilterRegex = Regex(MEDIA_PLAYLIST_REGEX),
                                             )
-                                            if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                                proxyAuthenticator { _, response ->
-                                                    response.request.newBuilder().header(
-                                                        "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                                    ).build()
-                                                }
-                                            }
                                         }.build()
                                     } else null
                                     OkHttpDataSource.Factory(

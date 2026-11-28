@@ -14,11 +14,33 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="7dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="12dp"
+                android:text="@string/proxy_protocol"
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+            <Spinner
+                android:id="@+id/protocolSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="44dp" />
+        </LinearLayout>
+
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/hostInput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/proxy_host">
+            android:hint="@string/proxy_host_protocol_hint">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:layout_width="match_parent"

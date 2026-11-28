@@ -2881,6 +2881,24 @@ private fun StreamCard(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
+                // optional stream language badge at the top right (disabled by default)
+                if (playbackContext.prefs().getBoolean(C.TV_SHOW_STREAM_LANGUAGE, false)) {
+                    stream.displayLanguageCode?.let { langCode ->
+                        Text(
+                            langCode,
+                            fontSize = if (small) 10.sp else 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(Color(0xB3000000))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
             Row(
                 modifier = Modifier

@@ -87,6 +87,8 @@ object C {
     const val UI_FOLLOW_BUTTON = "ui_follow_button"
     const val UI_ACTIVATE_NOTIFICATIONS_WHEN_FOLLOWING = "ui_activate_notifications_when_following"
     const val UI_UPTIME = "ui_uptime"
+    const val UI_STREAM_LANGUAGE = "ui_stream_language"
+    const val TV_SHOW_STREAM_LANGUAGE = "tv_show_stream_language"
     const val UI_TV_PREVIEW = "ui_tv_preview"
     const val UI_TV_PREVIEW_SOUND = "ui_tv_preview_sound"
     const val TV_HOME_CARDS = "tv_home_cards"

@@ -24,4 +24,5 @@ class Stream(
     @SerialName("thumbnail_url")
     val thumbnailURL: String? = null,
     val tags: List<String>? = null,
+    val language: String? = null,
 )

@@ -324,7 +324,7 @@
     <string name="proxy_port">Port</string>
     <string name="proxy_user">Nom d\'utilisateur</string>
     <string name="proxy_password">Mot de passe</string>
-    <string name="proxy_settings">Paramètres du proxy HTTP</string>
+    <string name="proxy_settings">Paramètres du proxy (HTTP / SOCKS)</string>
     <string name="stop_download">Arrêter le téléchargement</string>
     <string name="resume_download">Reprendre le téléchargement</string>
     <string name="show_view_count_icon">Afficher le nombre de vues et les icônes de durée du direct</string>
@@ -932,7 +932,7 @@
     <string name="tv_proxy_mode_always">Toujours</string>
     <string name="tv_proxy_mode_ads">Pendant les pubs</string>
     <string name="tv_proxies_1440p">Les proxys publics s\'arrêtent au 1080p. Pour le 1440p, utilise un proxy qui le diffuse, ou choisis \"Pendant les pubs\" pour l\'avoir en dehors des pubs.</string>
-    <string name="tv_adblock_summary_1440p">Pendant une pub, bascule sur un flux sans pub. Le 1440p fonctionne ; la qualité peut baisser le temps d\'une pub.</string>
+    <string name="tv_adblock_summary_1440p">Passe temporairement en 360p pendant les publicités puis revient en qualité maximale (compatible 1440p).</string>
     <string name="tv_chat_sub_prime">Prime</string>
     <string name="tv_chat_sub_tier">Palier %1$d</string>
     <string name="tv_chat_sub">%1$s s\'est abonné</string>
@@ -1153,7 +1153,7 @@
     <string name="tv_adblock_swap_locked_hint">Activé par défaut. Active un proxy personnalisé ou HTTP pour pouvoir le désactiver.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Reste actif en secours automatique tant qu\'Adblock (Swap+) ou Adblock (VOD) est activé.</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">Expérimental — lit le direct via sa VOD en cours (~30 s de décalage, chat synchronisé) pour éviter les pubs. Fonctionne partout comme le Swap classique (lecteur principal, Multi-Stream et PiP) et bascule sur Swap+ ou Swap si aucune VOD n\'est disponible. Peut ne pas fonctionner à 100 %.</string>
+    <string name="tv_adblock_exp_summary">Lit le live depuis la VOD en cours (~30 s de retard) pour éviter les pubs. Compatible 1440p (nécessite les VODs actives sur la chaîne).</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) actif</string>
     <string name="tv_adblock_exp_proxies_disabled">Les proxys ne peuvent pas être activés avec Adblock (Swap+) ou Adblock (VOD).</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Désactive d\'abord les proxys personnalisés et HTTP.</string>
@@ -1498,11 +1498,11 @@
     <string name="tv_chat_qr_regenerate">Régénérer le lien QR</string>
     <string name="tv_chat_qr_regenerated">Nouveau lien QR généré — anciens appareils déconnectés</string>
     <string name="tv_chat_qr_reconnect">Reconnecter</string>
-    <string name="tv_adblock_swap_desc">Bascule sur un flux de secours pendant les pubs (baisse possible pendant la pub).</string>
+    <string name="tv_adblock_swap_desc">Bascule en 360p pendant les pubs. Compatible 1440p.</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Expérimental — bloque les pubs sans coupure, avec moins de baisse de qualité et latence normale (Swap utilisé en PiP/Multi-Stream).</string>
-    <string name="tv_adblock_swap_plus_summary">Expérimental — coupe les pubs en continu sans coupure, avec moins de baisse de qualité et une latence normale (contrairement à Adblock (VOD)). Non utilisé en Multi-Stream ni PiP, qui restent sur Swap. Secours automatique sur Swap si besoin. Peut ne pas fonctionner à 100 %.</string>
-    <string name="tv_adblock_vod_desc">Expérimental — via la VOD du live (~30 s), fonctionne partout (PiP/Multi-Stream).</string>
+    <string name="tv_adblock_swap_plus_desc">Sans coupure, 1080p max (pas de 1440p). Swap utilisé en multi-stream &amp; PiP.</string>
+    <string name="tv_adblock_swap_plus_summary">Remplace les publicités à la volée sans coupure ni baisse en 360p. Limité au 1080p max (non compatible 1440p). En multi-stream et PiP, le mode Swap prend le relais.</string>
+    <string name="tv_adblock_vod_desc">~30 s de retard, zéro pub. Compatible 1440p (nécessite les VODs).</string>
     <string name="tv_vod_audio_recovery">Récupérer l\'audio coupé des VOD</string>
     <string name="tv_vod_audio_recovery_summary">Tente de restaurer l\'audio coupé (DMCA) dans les VOD, le retour arrière DVR et Adblock (VOD) si l\'audio d\'origine est encore disponible chez Twitch (ne fonctionne pas à 100 % selon les VOD). Affiche les zones vertes (récupérées) et rouges (coupées) sur la barre.</string>
     <string name="tv_vod_audio_recovered_toast">Audio coupé récupéré (~%1$d min)</string>
@@ -1549,8 +1549,15 @@
     <string name="interface_mode_tv">TV</string>
     <string name="interface_mode_mobile">Mobile</string>
     <string name="mobile_accent_color_title">Couleur d\'accentuation</string>
-    <string name="mobile_adblock_swap_plus_desc">Remplacement fluide des pubs dans le lecteur principal en préservant la 1440p / HEVC / AV1. Bascule sur Swap classique si indisponible.</string>
-    <string name="mobile_adblock_swap_plus_summary">Remplacement fluide dans le lecteur (préserve 1440p / HEVC / AV1, repli Swap classique)</string>
-    <string name="mobile_adblock_vod_desc">Lit le flux VOD en direct pour un visionnage sans pub. Repli automatique si indisponible.</string>
-    <string name="mobile_adblock_vod_summary">Lit le flux VOD en direct sans pub avec repli automatique</string>
+    <string name="mobile_adblock_swap_plus_desc">Flux sans coupure en 1080p max (non compatible 1440p).</string>
+    <string name="mobile_adblock_swap_plus_summary">Remplace les publicités à la volée sans coupure ni baisse en 360p. Limité au 1080p max (non compatible 1440p).</string>
+    <string name="mobile_adblock_vod_desc">~30 s de retard, zéro pub. Compatible 1440p (nécessite les VODs).</string>
+    <string name="mobile_adblock_vod_summary">Lit le live depuis la VOD en cours (~30 s de retard) pour éviter les pubs. Compatible 1440p (nécessite les VODs actives sur la chaîne).</string>
+    <string name="proxy_protocol">Protocole</string>
+    <string name="proxy_host_protocol_hint">Hôte (ex. 10.0.1.20 ou socks5://hôte:port)</string>
+    <string name="show_stream_language">Afficher la langue du stream</string>
+    <string name="show_stream_language_summary">Affiche un petit badge de code langue sur les miniatures de streams</string>
+    <string name="tv_remote_action_scroll_chat">Défiler le chat</string>
+    <string name="tv_chat_scroll_hint_paused">Chat en pause · ▲▼ Défiler · OK Direct · Retour Quitter</string>
+    <string name="tv_chat_scroll_hint_live">Chat en direct · ▲▼ Défiler · Retour Quitter</string>
 </resources>

@@ -325,7 +325,7 @@
     <string name="proxy_port">Port</string>
     <string name="proxy_user">Kullanıcı adı</string>
     <string name="proxy_password">Şifre</string>
-    <string name="proxy_settings">HTTP proxy ayarları</string>
+    <string name="proxy_settings">Proxy ayarları (HTTP / SOCKS)</string>
     <string name="stop_download">İndirmeyi durdur</string>
     <string name="resume_download">İndirmeye devam et</string>
     <string name="show_view_count_icon">İzleyici sayısı ve yayın süresi simgelerini göster</string>
@@ -933,7 +933,7 @@
     <string name="tv_proxy_mode_always">Her zaman</string>
     <string name="tv_proxy_mode_ads">Reklamlarda</string>
     <string name="tv_proxies_1440p">Herkese açık proxy\'ler 1080p ile sınırlı. 1440p için onu yayınlayan bir proxy kullan ya da reklamlar dışında 1440p için \"Reklamlarda\" seçeneğini seç.</string>
-    <string name="tv_adblock_summary_1440p">Reklam sırasında reklamsız bir yayına geçer. 1440p çalışır; reklam süresince kalite düşebilir.</string>
+    <string name="tv_adblock_summary_1440p">Reklamlar sırasında geçici olarak 360p\'ye geçer, ardından tam kaliteye döner (1440p desteklenir).</string>
     <string name="tv_chat_sub_prime">Prime</string>
     <string name="tv_chat_sub_tier">Seviye %1$d</string>
     <string name="tv_chat_sub">%1$s abone oldu</string>
@@ -1154,7 +1154,7 @@
     <string name="tv_adblock_swap_locked_hint">Varsayılan olarak etkindir. Kapatmak için özel veya HTTP akış proxy\'sini etkinleştirin.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Adblock (Swap+) veya Adblock (VOD) etkinken otomatik yedek olarak açık kalır.</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">Deneysel — reklamsız izlemek için yayını devam eden VOD üzerinden oynatır (~30 sn gecikme, senkronize sohbet). Swap gibi her yerde çalışır (ana oynatıcı, Çoklu Yayın ve PiP) ve VOD yoksa Swap+ veya Swap moduna geçer.</string>
+    <string name="tv_adblock_exp_summary">Canlı yayını aktif VOD üzerinden (~30 sn gecikmeli) reklamsız oynatır. 1440p desteklenir (kanalda VOD açık olmalıdır).</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) etkin</string>
     <string name="tv_adblock_exp_proxies_disabled">Adblock (Swap+) veya Adblock (VOD) etkinken proxy açılamaz.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Önce özel ve HTTP akış proxy\'lerini kapatın.</string>
@@ -1499,11 +1499,11 @@
     <string name="tv_chat_qr_regenerate">QR bağlantısını yenile</string>
     <string name="tv_chat_qr_regenerated">Yeni QR bağlantısı oluşturuldu — önceki cihazların bağlantısı kesildi</string>
     <string name="tv_chat_qr_reconnect">Yeniden bağlan</string>
-    <string name="tv_adblock_swap_desc">Reklam sırasında yedek akışa geçer (reklam boyunca kalite düşebilir).</string>
+    <string name="tv_adblock_swap_desc">Reklamlarda 360p\'ye düşer. 1440p desteklenir.</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Deneysel — kesintisiz, daha az kalite düşüşü ve normal gecikmeyle reklam engeller (PiP/Multi-Stream\'de Swap kullanılır).</string>
-    <string name="tv_adblock_swap_plus_summary">Deneysel — Adblock (VOD)\'un aksine normal canlı gecikmeyle, kesintisiz ve daha az kalite düşüşüyle reklamları engeller (Multi-Stream ve PiP\'te Swap kullanılır). Gerekirse otomatik olarak Swap\'a geçer. Her yayında %100 çalışmayabilir.</string>
-    <string name="tv_adblock_vod_desc">Deneysel — canlı VOD üzerinden (~30 sn), her yerde çalışır (PiP/Çoklu Yayın).</string>
+    <string name="tv_adblock_swap_plus_desc">Kesintisiz, en fazla 1080p (1440p yok). Çoklu yayın ve PiP\'te Swap kullanılır.</string>
+    <string name="tv_adblock_swap_plus_summary">Reklamları donmadan veya 360p\'ye düşmeden değiştirir. En fazla 1080p (1440p desteklenmez). Çoklu yayın ve PiP\'te Swap devreye girer.</string>
+    <string name="tv_adblock_vod_desc">~30 sn gecikme, reklamsız. 1440p desteklenir (VOD gerekir).</string>
     <string name="tv_vod_audio_recovery">Sessize alınan VOD sesini kurtar</string>
     <string name="tv_vod_audio_recovery_summary">Orijinal ses Twitch\'te hâlâ mevcutsa VOD, canlı DVR geri sarma ve Adblock (VOD) içindeki DMCA sessiz bölümlerini kurtarmayı dener (VOD\'a bağlı olarak %100 garanti değildir). Çubukta yeşil (kurtarıldı) ve kırmızı (sessiz) alanları gösterir.</string>
     <string name="tv_vod_audio_recovered_toast">Sessiz ses kurtarıldı (~%1$d dk)</string>
@@ -1550,8 +1550,15 @@
     <string name="interface_mode_tv">TV</string>
     <string name="interface_mode_mobile">Mobil</string>
     <string name="mobile_accent_color_title">Vurgu rengi</string>
-    <string name="mobile_adblock_swap_plus_desc">1440p / HEVC / AV1 korunarak ana oynatıcıda kesintisiz reklam değişimi. Kullanılamazsa klasik Swap\'a geçer.</string>
-    <string name="mobile_adblock_swap_plus_summary">Oynatıcı içi kesintisiz reklam değişimi (1440p / HEVC / AV1 korunur, otomatik Swap yedeği)</string>
-    <string name="mobile_adblock_vod_desc">Reklamsız izleme için canlı VOD akışını oynatır. Kullanılamazsa otomatik olarak geri döner.</string>
-    <string name="mobile_adblock_vod_summary">Otomatik yedekleme ile reklamsız canlı VOD akışı oynatır</string>
+    <string name="mobile_adblock_swap_plus_desc">Kesintisiz yayın, en fazla 1080p (1440p desteklenmez).</string>
+    <string name="mobile_adblock_swap_plus_summary">Reklamları donmadan veya 360p\'ye düşmeden değiştirir. En fazla 1080p (1440p desteklenmez).</string>
+    <string name="mobile_adblock_vod_desc">~30 sn gecikme, reklamsız. 1440p desteklenir (VOD gerekir).</string>
+    <string name="mobile_adblock_vod_summary">Canlı yayını aktif VOD üzerinden (~30 sn gecikmeli) reklamsız oynatır. 1440p desteklenir (kanalda VOD açık olmalıdır).</string>
+    <string name="proxy_protocol">Protokol</string>
+    <string name="proxy_host_protocol_hint">Sunucu (örn. 10.0.1.20 veya socks5://host:port)</string>
+    <string name="show_stream_language">Yayın dilini göster</string>
+    <string name="show_stream_language_summary">Yayın küçük resimlerinde küçük bir dil kodu rozeti gösterir</string>
+    <string name="tv_remote_action_scroll_chat">Sohbeti kaydır</string>
+    <string name="tv_chat_scroll_hint_paused">Sohbet duraklatıldı · ▲▼ Kaydır · OK En son · Geri Çıkış</string>
+    <string name="tv_chat_scroll_hint_live">Canlı sohbet · ▲▼ Kaydır · Geri Çıkış</string>
 </resources>

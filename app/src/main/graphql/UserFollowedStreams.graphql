@@ -18,6 +18,7 @@ query UserFollowedStreams($first: Int, $after: Cursor) {
                     stream {
                         broadcaster {
                             broadcastSettings {
+                                language
                                 title
                             }
                         }

@@ -2206,6 +2206,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun hideChat() {
+        if (isTv) exitTvChatScrollMode()
         isChatOpen = false
         hideChatLayout()
         if (requireContext().prefs().getBoolean(C.PLAYER_CHAT_TOGGLE, true)) {
@@ -3678,6 +3679,174 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private var tvChatScrolling = false
+    private var tvChatScrollBackDown = false
+    private var tvChatScrollCenterDown = false
+    private var tvChatScrollExitKeyDown = false
+    private var tvChatScrollHintView: TextView? = null
+
+    fun isTvChatScrolling(): Boolean = isTv && isMaximized && tvChatScrolling
+
+    fun enterTvChatScrollMode() {
+        val ctx = context ?: return
+        val b = _binding ?: return
+        if (!isTv || !isMaximized) return
+        if (ctx.prefs().getBoolean(C.CHAT_DISABLE, false) || playbackService?.type == BasePlaybackService.OFFLINE_VIDEO) {
+            return
+        }
+        if (tvChatFreeMoving) {
+            exitTvChatFreeMove(restorePrevious = false)
+        }
+        if (!isChatOpen) {
+            showChat()
+        }
+        hideControlsForFreeMove()
+        tvChatScrolling = true
+        tvChatScrollBackDown = false
+        tvChatScrollCenterDown = false
+        tvChatScrollExitKeyDown = false
+        val density = resources.displayMetrics.density
+        b.chatLayout.foreground = android.graphics.drawable.GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            setStroke((2.5f * density).toInt(), com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
+            cornerRadius = 10f * density
+        }
+        chatFragment?.setTvScrollPaused(true)
+        updateTvChatScrollHint(paused = true)
+    }
+
+    fun exitTvChatScrollMode() {
+        if (!tvChatScrolling && tvChatScrollHintView == null) return
+        tvChatScrolling = false
+        tvChatScrollBackDown = false
+        tvChatScrollCenterDown = false
+        tvChatScrollExitKeyDown = false
+        tvChatScrollHintView?.let { _binding?.slidingLayout?.removeView(it) }
+        tvChatScrollHintView = null
+        if (_binding != null && !tvChatFreeMoving) {
+            binding.chatLayout.foreground = null
+        }
+        chatFragment?.setTvScrollPaused(false)
+    }
+
+    private fun updateTvChatScrollHint(paused: Boolean) {
+        val b = _binding ?: return
+        val ctx = context ?: return
+        val density = resources.displayMetrics.density
+        val vertical = resources.getDimensionPixelSize(R.dimen.tv_overscan_vertical)
+        val pill = tvChatScrollHintView ?: TextView(ctx).apply {
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xE6141318.toInt())
+                cornerRadius = 999 * density
+                setStroke((2 * density).toInt(), com.github.andreyasadchy.xtra.ui.tv.TvAccent.color)
+            }
+            val padH = (16 * density).toInt()
+            val padV = (8 * density).toInt()
+            setPadding(padH, padV, padH, padV)
+            elevation = 28 * density
+            isFocusable = false
+            b.slidingLayout.addView(
+                this,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.TOP or Gravity.CENTER_HORIZONTAL,
+                ).apply {
+                    topMargin = vertical
+                }
+            )
+            tvChatScrollHintView = this
+        }
+        pill.text = getString(
+            if (paused) R.string.tv_chat_scroll_hint_paused else R.string.tv_chat_scroll_hint_live
+        )
+        pill.visibility = View.VISIBLE
+    }
+
+    fun onTvChatScrollKey(event: KeyEvent): Boolean {
+        if (!isTvChatScrolling()) return false
+        val ctx = context ?: return false
+        val customAction = com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.customShortActionForKey(ctx, event.keyCode)
+        if (customAction == com.github.andreyasadchy.xtra.ui.tv.TvRemoteKeys.ACTION_SCROLL_CHAT &&
+            event.keyCode != KeyEvent.KEYCODE_DPAD_UP &&
+            event.keyCode != KeyEvent.KEYCODE_DPAD_DOWN &&
+            event.keyCode != KeyEvent.KEYCODE_PAGE_UP &&
+            event.keyCode != KeyEvent.KEYCODE_PAGE_DOWN
+        ) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                tvChatScrollExitKeyDown = true
+            } else if (event.action == KeyEvent.ACTION_UP && tvChatScrollExitKeyDown) {
+                exitTvChatScrollMode()
+            }
+            return true
+        }
+        val density = resources.displayMetrics.density
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    val stepDp = when {
+                        event.repeatCount <= 0 -> 48f
+                        event.repeatCount <= 4 -> 72f
+                        event.repeatCount <= 12 -> 104f
+                        else -> 140f
+                    }
+                    val stepPx = maxOf(1, kotlin.math.round(stepDp * density).toInt())
+                    val delta = if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) -stepPx else stepPx
+                    val atBottom = chatFragment?.scrollTvChatBy(delta) ?: true
+                    updateTvChatScrollHint(paused = !atBottom)
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_PAGE_UP,
+            KeyEvent.KEYCODE_PAGE_DOWN,
+            KeyEvent.KEYCODE_CHANNEL_UP,
+            KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    val vh = chatFragment?.tvChatViewportHeight()?.takeIf { it > 0 }
+                        ?: kotlin.math.round(240f * density).toInt()
+                    val stepPx = maxOf(1, (vh * 0.75f).toInt())
+                    val up = event.keyCode == KeyEvent.KEYCODE_PAGE_UP || event.keyCode == KeyEvent.KEYCODE_CHANNEL_UP
+                    val atBottom = chatFragment?.scrollTvChatBy(if (up) -stepPx else stepPx) ?: true
+                    updateTvChatScrollHint(paused = !atBottom)
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    tvChatScrollCenterDown = true
+                } else if (event.action == KeyEvent.ACTION_UP && tvChatScrollCenterDown) {
+                    tvChatScrollCenterDown = false
+                    if (chatFragment?.isTvChatAtBottom() == false) {
+                        chatFragment?.scrollTvChatToBottom()
+                        updateTvChatScrollHint(paused = false)
+                    } else {
+                        exitTvChatScrollMode()
+                    }
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_BACK,
+            KeyEvent.KEYCODE_ESCAPE -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    tvChatScrollBackDown = true
+                } else if (event.action == KeyEvent.ACTION_UP && tvChatScrollBackDown) {
+                    exitTvChatScrollMode()
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_VOLUME_UP,
+            KeyEvent.KEYCODE_VOLUME_DOWN,
+            KeyEvent.KEYCODE_VOLUME_MUTE -> return false
+            else -> return true
+        }
+    }
+
     private fun nudgeTvChatFreeMove(keyCode: Int, repeatCount: Int) {
         val b = _binding ?: return
         val prefs = requireContext().prefs()
@@ -3947,6 +4116,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val tabRequesters = androidx.compose.runtime.remember { List(3) { androidx.compose.ui.focus.FocusRequester() } }
             val firstRowReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
             val lastRowReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+            val footerScrollReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
             val footerUsersReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
             val footerRestartReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
             val footerResetReq = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
@@ -3974,41 +4144,59 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     )
                 },
                 footer = {
-                    androidx.compose.foundation.layout.Row(
+                    androidx.compose.foundation.layout.Column(
                         modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                     ) {
-                        FooterActionChip(
-                            label = getString(R.string.tv_chat_manage_users),
-                            icon = R.drawable.tv_ic_person,
-                            requester = footerUsersReq,
-                            rightTarget = footerRestartReq,
-                            upTarget = lastRowReq,
+                        androidx.compose.foundation.layout.Row(
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
                         ) {
-                            com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.showPlayerBlockPanel(
-                                context = context,
-                                alignEnd = alignEnd,
-                                recentChatters = chatFragment?.getRecentChatters().orEmpty(),
-                            )
+                            FooterActionChip(
+                                label = getString(R.string.tv_remote_action_scroll_chat),
+                                icon = R.drawable.tv_ic_history,
+                                requester = footerScrollReq,
+                                upTarget = lastRowReq,
+                                downTarget = footerUsersReq,
+                            ) {
+                                dismiss()
+                                enterTvChatScrollMode()
+                            }
                         }
-                        FooterActionChip(
-                            label = getString(R.string.tv_restart_chat),
-                            icon = R.drawable.tv_ic_refresh,
-                            requester = footerRestartReq,
-                            leftTarget = footerUsersReq,
-                            rightTarget = footerResetReq,
-                            upTarget = lastRowReq,
+                        androidx.compose.foundation.layout.Row(
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                         ) {
-                            restartTvChat()
-                            dismiss()
-                        }
-                        FooterActionChip(
-                            label = getString(R.string.tv_reset),
-                            icon = R.drawable.tv_ic_replay,
-                            requester = footerResetReq,
-                            leftTarget = footerRestartReq,
-                            upTarget = lastRowReq,
-                        ) {
+                            FooterActionChip(
+                                label = getString(R.string.tv_chat_manage_users),
+                                icon = R.drawable.tv_ic_person,
+                                requester = footerUsersReq,
+                                rightTarget = footerRestartReq,
+                                upTarget = footerScrollReq,
+                            ) {
+                                com.github.andreyasadchy.xtra.util.chat.ChatBlocklist.showPlayerBlockPanel(
+                                    context = context,
+                                    alignEnd = alignEnd,
+                                    recentChatters = chatFragment?.getRecentChatters().orEmpty(),
+                                )
+                            }
+                            FooterActionChip(
+                                label = getString(R.string.tv_restart_chat),
+                                icon = R.drawable.tv_ic_refresh,
+                                requester = footerRestartReq,
+                                leftTarget = footerUsersReq,
+                                rightTarget = footerResetReq,
+                                upTarget = footerScrollReq,
+                            ) {
+                                restartTvChat()
+                                dismiss()
+                            }
+                            FooterActionChip(
+                                label = getString(R.string.tv_reset),
+                                icon = R.drawable.tv_ic_replay,
+                                requester = footerResetReq,
+                                leftTarget = footerRestartReq,
+                                upTarget = footerScrollReq,
+                            ) {
                             prefs.edit {
                                 remove(C.TV_CHAT_POSITION)
                                 remove(C.TV_CHAT_POS_OVERLAY)
@@ -4041,6 +4229,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             }
                             dismiss()
                         }
+                    }
                     }
                 },
             ) {
@@ -4133,7 +4322,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             label = getString(R.string.tv_free_move_button),
                             icon = R.drawable.tv_ic_move,
                             compact = true,
-                            modifier = if (!hasFourthPlacementRow) androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq) else androidx.compose.ui.Modifier,
+                            modifier = if (!hasFourthPlacementRow) androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerScrollReq) else androidx.compose.ui.Modifier,
                         ) {
                             dismiss()
                             startTvChatFreeMove()
@@ -4147,7 +4336,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 valueText = { "$it dp" },
                                 icon = R.drawable.tv_ic_fullscreen,
                                 compact = true,
-                                modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq),
+                                modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerScrollReq),
                             ) {
                                 update(C.TV_CHAT_MARGIN, it)
                             }
@@ -4158,7 +4347,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 selected = if (prefs.getBoolean(C.TV_CHAT_BAND_OVERLAY, false)) 1 else 0,
                                 icon = R.drawable.tv_ic_chat_layout,
                                 compact = true,
-                                modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq),
+                                modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerScrollReq),
                             ) {
                                 prefs.edit { putBoolean(C.TV_CHAT_BAND_OVERLAY, it == 1) }
                                 if (_binding != null) {
@@ -4230,7 +4419,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             valueText = { "$it %" },
                             icon = R.drawable.tv_ic_opacity,
                             compact = true,
-                            modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq),
+                            modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerScrollReq),
                         ) {
                             update(C.TV_CHAT_OPACITY, it)
                         }
@@ -4434,7 +4623,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             selected = sharedBadges.intValue,
                             icon = R.drawable.tv_ic_shield,
                             compact = true,
-                            modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerUsersReq),
+                            modifier = androidx.compose.ui.Modifier.panelLastRow(lastRowReq, footerScrollReq),
                         ) {
                             sharedBadges.intValue = it
                             prefs.edit { putBoolean(C.CHAT_SHARED_BADGES, it == 1) }
@@ -5702,6 +5891,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             Keys.ACTION_CHAT_PANEL -> {
                 if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
                     showChatLayoutPanel()
+                }
+            }
+            Keys.ACTION_SCROLL_CHAT -> {
+                if (!requireContext().prefs().getBoolean(C.CHAT_DISABLE, false) && playbackService?.type != BasePlaybackService.OFFLINE_VIDEO) {
+                    if (isTvChatScrolling()) {
+                        exitTvChatScrollMode()
+                    } else {
+                        enterTvChatScrollMode()
+                    }
                 }
             }
             Keys.ACTION_STREAM_SWITCHER -> (activity as? MainActivity)?.showStreamSwitcher()
@@ -9351,6 +9549,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             hideTvPlayerOsd(animate = false)
             if (isTv) {
                 exitTvChatFreeMove(restorePrevious = false)
+                exitTvChatScrollMode()
                 restoreTvOledProtection()
                 cancelTvStreamEndCountdown()
                 // the mini player is not reached with the D-pad, "Now playing" in the side menu brings it back

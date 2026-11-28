@@ -73,6 +73,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -1602,16 +1603,31 @@ class TvSettingsFragment : Fragment() {
             }
         }
 
+        val firstRowRequester = remember { FocusRequester() }
+
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
                 ActionPillButton(
                     label = "+ ${context.getString(R.string.add_item)}",
-                    modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                            onNavigateLeft(); true
-                        } else false
-                    },
+                    modifier = Modifier
+                        .focusRequester(firstRequester)
+                        .focusProperties {
+                            if (list.isNotEmpty()) down = firstRowRequester
+                        }
+                        .onPreviewKeyEvent { ev ->
+                            if (ev.type == KeyEventType.KeyDown) {
+                                when (ev.key) {
+                                    Key.DirectionLeft -> {
+                                        onNavigateLeft(); true
+                                    }
+                                    Key.DirectionDown -> if (list.isNotEmpty()) {
+                                        runCatching { firstRowRequester.requestFocus() }; true
+                                    } else false
+                                    else -> false
+                                }
+                            } else false
+                        },
                 ) {
                     val item = CustomProxy(position = list.size)
                     showCustomProxyEditDialog(item) { url, addQueryParams ->
@@ -1655,6 +1671,8 @@ class TvSettingsFragment : Fragment() {
                         canMoveUp = index > 0,
                         canMoveDown = index < list.lastIndex,
                         canDelete = true,
+                        mainRowRequester = if (index == 0) firstRowRequester else null,
+                        upRequester = if (index == 0) firstRequester else null,
                         onNavigateLeft = onNavigateLeft,
                         onToggle = {
                             proxy.enabled = !proxy.enabled
@@ -1717,6 +1735,7 @@ class TvSettingsFragment : Fragment() {
         val context = LocalContext.current
         val list by streamProxyViewModel.list.collectAsState()
         val stamp = refreshStamp.intValue
+        val firstRowRequester = remember { FocusRequester() }
 
         LaunchedEffect(focusRightTrigger.intValue) {
             val trigger = focusRightTrigger.intValue
@@ -1735,11 +1754,24 @@ class TvSettingsFragment : Fragment() {
                 SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
                 ActionPillButton(
                     label = "+ ${context.getString(R.string.add_item)}",
-                    modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                            onNavigateLeft(); true
-                        } else false
-                    },
+                    modifier = Modifier
+                        .focusRequester(firstRequester)
+                        .focusProperties {
+                            if (list.isNotEmpty()) down = firstRowRequester
+                        }
+                        .onPreviewKeyEvent { ev ->
+                            if (ev.type == KeyEventType.KeyDown) {
+                                when (ev.key) {
+                                    Key.DirectionLeft -> {
+                                        onNavigateLeft(); true
+                                    }
+                                    Key.DirectionDown -> if (list.isNotEmpty()) {
+                                        runCatching { firstRowRequester.requestFocus() }; true
+                                    } else false
+                                    else -> false
+                                }
+                            } else false
+                        },
                 ) {
                     val item = StreamProxy(position = list.size)
                     showStreamProxyEditDialog(item) { host, port, user, pass, tok, multi, media ->
@@ -1768,10 +1800,7 @@ class TvSettingsFragment : Fragment() {
                 itemsIndexed(list.toList(), key = { idx, p -> if (p.id != 0) "sp_${p.id}" else "sp_new_$idx" }) { index, proxy ->
                     @Suppress("UNUSED_EXPRESSION")
                     stamp
-                    val label = buildString {
-                        append(proxy.host.orEmpty().ifBlank { "—" })
-                        proxy.port?.let { append(":$it") }
-                    }
+                    val label = com.github.andreyasadchy.xtra.util.StreamProxyHelper.formatDisplayLabel(proxy.host, proxy.port)
                     ManagedEntityRow(
                         title = label,
                         subtitle = proxy.username?.takeIf { it.isNotBlank() },
@@ -1780,6 +1809,8 @@ class TvSettingsFragment : Fragment() {
                         canMoveUp = index > 0,
                         canMoveDown = index < list.lastIndex,
                         canDelete = true,
+                        mainRowRequester = if (index == 0) firstRowRequester else null,
+                        upRequester = if (index == 0) firstRequester else null,
                         onNavigateLeft = onNavigateLeft,
                         onToggle = {
                             proxy.enabled = !proxy.enabled
@@ -1845,6 +1876,7 @@ class TvSettingsFragment : Fragment() {
         val context = LocalContext.current
         val list by videoSwapViewModel.list.collectAsState()
         val stamp = refreshStamp.intValue
+        val firstRowRequester = remember { FocusRequester() }
 
         LaunchedEffect(focusRightTrigger.intValue) {
             val trigger = focusRightTrigger.intValue
@@ -1863,11 +1895,24 @@ class TvSettingsFragment : Fragment() {
                 SubScreenHeaderTitle(headerTitle = title, parentBreadcrumb = parentBreadcrumb, modifier = Modifier.weight(1f))
                 ActionPillButton(
                     label = "+ ${context.getString(R.string.add_item)}",
-                    modifier = Modifier.focusRequester(firstRequester).onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                            onNavigateLeft(); true
-                        } else false
-                    },
+                    modifier = Modifier
+                        .focusRequester(firstRequester)
+                        .focusProperties {
+                            if (list.isNotEmpty()) down = firstRowRequester
+                        }
+                        .onPreviewKeyEvent { ev ->
+                            if (ev.type == KeyEventType.KeyDown) {
+                                when (ev.key) {
+                                    Key.DirectionLeft -> {
+                                        onNavigateLeft(); true
+                                    }
+                                    Key.DirectionDown -> if (list.isNotEmpty()) {
+                                        runCatching { firstRowRequester.requestFocus() }; true
+                                    } else false
+                                    else -> false
+                                }
+                            } else false
+                        },
                 ) {
                     val item = VideoSwap(position = list.size)
                     showVideoSwapEditDialog(item) { platform, playerType ->
@@ -1907,6 +1952,8 @@ class TvSettingsFragment : Fragment() {
                         canMoveUp = index > 1,
                         canMoveDown = !isPrimary && index < list.lastIndex,
                         canDelete = !isPrimary,
+                        mainRowRequester = if (index == 0) firstRowRequester else null,
+                        upRequester = if (index == 0) firstRequester else null,
                         onNavigateLeft = onNavigateLeft,
                         onToggle = {
                             if (!isPrimary) {
@@ -1993,6 +2040,8 @@ class TvSettingsFragment : Fragment() {
         canMoveUp: Boolean,
         canMoveDown: Boolean,
         canDelete: Boolean,
+        mainRowRequester: FocusRequester? = null,
+        upRequester: FocusRequester? = null,
         onNavigateLeft: () -> Unit,
         onToggle: () -> Unit,
         onMoveUp: () -> Unit,
@@ -2002,6 +2051,11 @@ class TvSettingsFragment : Fragment() {
     ) {
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
+        val upModifier = if (upRequester != null) {
+            Modifier.focusProperties { up = upRequester }
+        } else {
+            Modifier
+        }
 
         Row(
             modifier = Modifier
@@ -2016,6 +2070,8 @@ class TvSettingsFragment : Fragment() {
             Row(
                 modifier = Modifier
                     .weight(1f)
+                    .then(if (mainRowRequester != null) Modifier.focusRequester(mainRowRequester) else Modifier)
+                    .then(upModifier)
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (focused) TvColors.focused else Color.Transparent)
                     .onPreviewKeyEvent { ev ->
@@ -2055,19 +2111,19 @@ class TvSettingsFragment : Fragment() {
                     TvListPanel.Switch(enabled, focused)
                 }
             }
-            if (canMoveUp) SmallTextChip("↑", onMoveUp)
-            if (canMoveDown) SmallTextChip("↓", onMoveDown)
-            SmallTextChip("✎", onEdit)
-            if (canDelete) SmallIconPill(iconRes = R.drawable.tv_ic_close, onClick = onDelete)
+            if (canMoveUp) SmallTextChip("↑", upModifier, onMoveUp)
+            if (canMoveDown) SmallTextChip("↓", upModifier, onMoveDown)
+            SmallTextChip("✎", upModifier, onEdit)
+            if (canDelete) SmallIconPill(iconRes = R.drawable.tv_ic_close, modifier = upModifier, onClick = onDelete)
         }
     }
 
     @Composable
-    private fun SmallTextChip(text: String, onClick: () -> Unit) {
+    private fun SmallTextChip(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .size(34.dp)
                 .clip(CircleShape)
                 .background(if (focused) TvColors.focused else Color(0x1AFFFFFF))
@@ -3342,12 +3398,30 @@ class TvSettingsFragment : Fragment() {
         onSave: (String?, String?, String?, String?, Boolean, Boolean, Boolean) -> Unit,
     ) {
         val binding = DialogStreamProxyEditBinding.inflate(layoutInflater)
+        val protocols = com.github.andreyasadchy.xtra.util.StreamProxyHelper.ProxyProtocol.entries
+        binding.protocolSpinner.adapter = android.widget.ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_dropdown_item,
+            protocols.map { it.displayName },
+        )
+        val parsedInitial = com.github.andreyasadchy.xtra.util.StreamProxyHelper.parse(item.host, item.port)
+        binding.protocolSpinner.setSelection(
+            protocols.indexOf(parsedInitial?.protocol ?: com.github.andreyasadchy.xtra.util.StreamProxyHelper.ProxyProtocol.HTTP).coerceAtLeast(0)
+        )
         val dialog = requireContext().getAlertDialogBuilder()
             .setView(binding.root)
             .setPositiveButton(android.R.string.ok) { _, _ ->
+                val selectedProtocol = protocols.getOrElse(binding.protocolSpinner.selectedItemPosition) {
+                    com.github.andreyasadchy.xtra.util.StreamProxyHelper.ProxyProtocol.HTTP
+                }
+                val (storedHost, resolvedPort) = com.github.andreyasadchy.xtra.util.StreamProxyHelper.formatStoredHost(
+                    selectedProtocol = selectedProtocol,
+                    rawHost = binding.hostInput.editText?.text?.toString(),
+                    rawPort = binding.portInput.editText?.text?.toString(),
+                )
                 onSave(
-                    binding.hostInput.editText?.text?.toString(),
-                    binding.portInput.editText?.text?.toString(),
+                    storedHost,
+                    resolvedPort?.toString(),
                     binding.userInput.editText?.text?.toString(),
                     binding.passwordInput.editText?.text?.toString(),
                     binding.proxyPlaybackAccessTokenCheckBox.isChecked,
@@ -3359,8 +3433,8 @@ class TvSettingsFragment : Fragment() {
             .create()
         val disableSoftKeyboard = requireContext().prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
         listOf(
-            binding.hostInput.editText to item.host.orEmpty(),
-            binding.portInput.editText to (item.port?.toString().orEmpty()),
+            binding.hostInput.editText to (parsedInitial?.host ?: item.host.orEmpty()),
+            binding.portInput.editText to ((parsedInitial?.port ?: item.port)?.toString().orEmpty()),
             binding.userInput.editText to item.username.orEmpty(),
             binding.passwordInput.editText to item.password.orEmpty(),
         ).forEach { (et, initial) ->

@@ -324,7 +324,7 @@
     <string name="proxy_port">端口</string>
     <string name="proxy_user">用户名</string>
     <string name="proxy_password">密码</string>
-    <string name="proxy_settings">HTTP 代理设置</string>
+    <string name="proxy_settings">代理设置 (HTTP / SOCKS)</string>
     <string name="stop_download">停止下载</string>
     <string name="resume_download">继续下载</string>
     <string name="show_view_count_icon">显示观看数量与上线时间图标</string>
@@ -932,7 +932,7 @@
     <string name="tv_proxy_mode_always">始终</string>
     <string name="tv_proxy_mode_ads">仅在广告期间</string>
     <string name="tv_proxies_1440p">公共代理最高 1080p。要 1440p，请使用支持它的代理，或选择“仅在广告期间”，广告以外即可获得 1440p。</string>
-    <string name="tv_adblock_summary_1440p">广告期间切换到无广告的流。1440p 可用；广告期间画质可能会降低。</string>
+    <string name="tv_adblock_summary_1440p">广告期间临时切换至 360p，结束后恢复最高画质（支持 1440p）。</string>
     <string name="tv_chat_sub_prime">Prime</string>
     <string name="tv_chat_sub_tier">%1$d 级</string>
     <string name="tv_chat_sub">%1$s 订阅了</string>
@@ -1153,7 +1153,7 @@
     <string name="tv_adblock_swap_locked_hint">默认开启。启用自定义代理或 HTTP 流代理后才可关闭。</string>
     <string name="tv_adblock_swap_locked_exp_hint">启用 Adblock (Swap+) 或 Adblock (VOD) 时保持开启作为自动回退。</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">实验性 — 通过正在录制的VOD播放直播（约30秒延迟，聊天自动同步）以避开广告。与Swap一样支持主播放器、多流和画中画，无VOD时自动回退至Swap+或Swap。</string>
+    <string name="tv_adblock_exp_summary">通过当前直播回放 VOD 播放（约延迟 30 秒）以跳过广告。支持 1440p（需频道开启回放）。</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) 已启用</string>
     <string name="tv_adblock_exp_proxies_disabled">启用 Adblock (Swap+) 或 Adblock (VOD) 时无法开启代理。</string>
     <string name="tv_adblock_exp_disabled_by_proxy">请先关闭自定义代理和 HTTP 流代理。</string>
@@ -1498,11 +1498,11 @@
     <string name="tv_chat_qr_regenerate">重新生成二维码链接</string>
     <string name="tv_chat_qr_regenerated">已生成新的二维码链接 — 先前设备已断开</string>
     <string name="tv_chat_qr_reconnect">重新连接</string>
-    <string name="tv_adblock_swap_desc">广告期间切换至备用流（广告期间画质可能暂时下降）。</string>
+    <string name="tv_adblock_swap_desc">广告期间降至 360p。支持 1440p。</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">实验性 — 无中断拦截广告，画质下降更少且保持正常延迟（PiP/多画面使用 Swap）。</string>
-    <string name="tv_adblock_swap_plus_summary">实验性 — 连续无中断拦截广告，画质下降更少且保持正常直播延迟（不同于 Adblock (VOD)）。不用于多画面和 PiP（仍使用 Swap）。必要时自动回退到 Swap。可能无法在所有直播中 100% 生效。</string>
-    <string name="tv_adblock_vod_desc">实验性 — 通过实时VOD播放（约30秒延迟），支持全模式（含画中画/多流）。</string>
+    <string name="tv_adblock_swap_plus_desc">无缝去广告，最高 1080p（不支持 1440p）。多路直播和画中画使用 Swap。</string>
+    <string name="tv_adblock_swap_plus_summary">无缝替换广告，不卡顿也不降至 360p。最高 1080p（不支持 1440p）。在多路直播和画中画中将回退至 Swap。</string>
+    <string name="tv_adblock_vod_desc">延迟约 30 秒，无广告。支持 1440p（需开启回放 VOD）。</string>
     <string name="tv_vod_audio_recovery">恢复 VOD 静音音频</string>
     <string name="tv_vod_audio_recovery_summary">当原始音频仍在 Twitch 可用时，尝试恢复 VOD、直播 DVR 回看及 Adblock (VOD) 中被 DMCA 静音的片段（视具体 VOD 而定，不保证 100% 成功）。进度条显示绿色（已恢复）和红色（静音）。</string>
     <string name="tv_vod_audio_recovered_toast">已恢复静音音频（约 %1$d 分钟）</string>
@@ -1549,8 +1549,15 @@
     <string name="interface_mode_tv">电视</string>
     <string name="interface_mode_mobile">手机</string>
     <string name="mobile_accent_color_title">强调色</string>
-    <string name="mobile_adblock_swap_plus_desc">在主播放器内无缝替换广告，同时保留 1440p / HEVC / AV1。不可用时自动回退至经典 Swap。</string>
-    <string name="mobile_adblock_swap_plus_summary">播放器内无缝广告替换（保留 1440p / HEVC / AV1，自动回退经典 Swap）</string>
-    <string name="mobile_adblock_vod_desc">播放实时 VOD 流以实现无广告观看。不可用时自动回退。</string>
-    <string name="mobile_adblock_vod_summary">无广告实时 VOD 播放并支持自动回退</string>
+    <string name="mobile_adblock_swap_plus_desc">无缝播放，最高 1080p（不支持 1440p）。</string>
+    <string name="mobile_adblock_swap_plus_summary">无缝替换广告，不卡顿也不降至 360p。最高 1080p（不支持 1440p）。</string>
+    <string name="mobile_adblock_vod_desc">延迟约 30 秒，无广告。支持 1440p（需开启回放 VOD）。</string>
+    <string name="mobile_adblock_vod_summary">通过当前直播回放 VOD 播放（约延迟 30 秒）以跳过广告。支持 1440p（需频道开启回放）。</string>
+    <string name="proxy_protocol">协议</string>
+    <string name="proxy_host_protocol_hint">主机（例如 10.0.1.20 或 socks5://host:port）</string>
+    <string name="show_stream_language">显示直播语言</string>
+    <string name="show_stream_language_summary">在直播缩略图右上角显示小巧的语言代码徽章</string>
+    <string name="tv_remote_action_scroll_chat">滚动聊天</string>
+    <string name="tv_chat_scroll_hint_paused">聊天已暂停 · ▲▼ 滚动 · 确认 回到底部 · 返回 退出</string>
+    <string name="tv_chat_scroll_hint_live">实时聊天 · ▲▼ 滚动 · 返回 退出</string>
 </resources>

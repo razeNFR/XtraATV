@@ -98,6 +98,7 @@ class GameStreamsDataSource(
                     createdAt = it.createdAt?.toString(),
                     viewerCount = it.viewersCount,
                     tags = it.freeformTags?.mapNotNull { tag -> tag.name },
+                    language = it.broadcaster?.broadcastSettings?.language,
                 ).takeIf { stream ->
                     stream.channelId != null || stream.channelLogin != null
                 }
@@ -137,6 +138,7 @@ class GameStreamsDataSource(
                     createdAt = it.createdAt,
                     viewerCount = it.viewersCount,
                     tags = it.freeformTags?.mapNotNull { tag -> tag.name },
+                    language = it.language,
                 ).takeIf { stream ->
                     stream.channelId != null || stream.channelLogin != null
                 }
@@ -184,6 +186,7 @@ class GameStreamsDataSource(
                 createdAt = it.startedAt,
                 viewerCount = it.viewerCount,
                 tags = it.tags,
+                language = it.language,
             ).takeIf { stream ->
                 stream.channelId != null || stream.channelLogin != null
             }

@@ -324,7 +324,7 @@
     <string name="proxy_port">通訊埠</string>
     <string name="proxy_user">使用者名稱</string>
     <string name="proxy_password">密碼</string>
-    <string name="proxy_settings">HTTP Proxy 設定</string>
+    <string name="proxy_settings">代理設定 (HTTP / SOCKS)</string>
     <string name="stop_download">停止下載</string>
     <string name="resume_download">繼續下載</string>
     <string name="show_view_count_icon">顯示觀看數量與上線時間圖示</string>
@@ -932,7 +932,7 @@
     <string name="tv_proxy_mode_always">始終</string>
     <string name="tv_proxy_mode_ads">僅在廣告期間</string>
     <string name="tv_proxies_1440p">公共代理最高 1080p。要 1440p，請使用支援它的代理，或選擇「僅在廣告期間」，廣告以外即可獲得 1440p。</string>
-    <string name="tv_adblock_summary_1440p">廣告期間切換到無廣告的串流。1440p 可用；廣告期間畫質可能會降低。</string>
+    <string name="tv_adblock_summary_1440p">廣告期間暫時切換至 360p，結束後恢復最高畫質（支援 1440p）。</string>
     <string name="tv_chat_sub_prime">Prime</string>
     <string name="tv_chat_sub_tier">%1$d 級</string>
     <string name="tv_chat_sub">%1$s 訂閱了</string>
@@ -1153,7 +1153,7 @@
     <string name="tv_adblock_swap_locked_hint">預設開啟。啟用自訂代理或 HTTP 串流代理後才可關閉。</string>
     <string name="tv_adblock_swap_locked_exp_hint">啟用 Adblock (Swap+) 或 Adblock (VOD) 時保持開啟作為自動備援。</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">實驗性 — 透過錄製中的VOD播放直播（約30秒延遲，聊天室自動同步）以避開廣告。與Swap一樣支援主播放器、多串流與子母畫面，無VOD時自動退回至Swap+或Swap。</string>
+    <string name="tv_adblock_exp_summary">透過目前直播 VOD 播放（約延遲 30 秒）以略過廣告。支援 1440p（需頻道開啟 VOD）。</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) 已啟用</string>
     <string name="tv_adblock_exp_proxies_disabled">啟用 Adblock (Swap+) 或 Adblock (VOD) 時無法開啟代理。</string>
     <string name="tv_adblock_exp_disabled_by_proxy">請先關閉自訂代理與 HTTP 串流代理。</string>
@@ -1498,11 +1498,11 @@
     <string name="tv_chat_qr_regenerate">重新產生 QR 連結</string>
     <string name="tv_chat_qr_regenerated">已產生新的 QR 連結 — 先前的裝置已中斷連線</string>
     <string name="tv_chat_qr_reconnect">重新連線</string>
-    <string name="tv_adblock_swap_desc">廣告期間切換至備用串流（廣告期間畫質可能暫時下降）。</string>
+    <string name="tv_adblock_swap_desc">廣告期間降至 360p。支援 1440p。</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">實驗性 — 無中斷攔截廣告，畫質下降更少且維持正常延遲（PiP/多畫面使用 Swap）。</string>
-    <string name="tv_adblock_swap_plus_summary">實驗性 — 連續無中斷攔截廣告，畫質下降更少且維持正常直播延遲（不同於 Adblock (VOD)）。不用於多畫面與 PiP（仍使用 Swap）。必要時自動退回 Swap。可能無法在所有直播中 100% 生效。</string>
-    <string name="tv_adblock_vod_desc">實驗性 — 透過即時VOD播放（約30秒延遲），支援全模式（含子母畫面/多串流）。</string>
+    <string name="tv_adblock_swap_plus_desc">無縫去廣告，最高 1080p（不支援 1440p）。多畫面與子母畫面使用 Swap。</string>
+    <string name="tv_adblock_swap_plus_summary">無縫替換廣告，不卡頓也不降至 360p。最高 1080p（不支援 1440p）。在多畫面與子母畫面中將由 Swap 接手。</string>
+    <string name="tv_adblock_vod_desc">延遲約 30 秒，無廣告。支援 1440p（需開啟 VOD）。</string>
     <string name="tv_vod_audio_recovery">還原 VOD 靜音音訊</string>
     <string name="tv_vod_audio_recovery_summary">當原始音訊仍在 Twitch 可用時，嘗試還原 VOD、直播 DVR 回看與 Adblock (VOD) 中被 DMCA 靜音的片段（視個別 VOD 而定，不保證 100% 成功）。進度條顯示綠色（已還原）與紅色（靜音）。</string>
     <string name="tv_vod_audio_recovered_toast">已還原靜音音訊（約 %1$d 分鐘）</string>
@@ -1549,8 +1549,15 @@
     <string name="interface_mode_tv">電視</string>
     <string name="interface_mode_mobile">手機</string>
     <string name="mobile_accent_color_title">強調色</string>
-    <string name="mobile_adblock_swap_plus_desc">在主播放器內無縫替換廣告，同時保留 1440p / HEVC / AV1。無法使用時自動退回經典 Swap。</string>
-    <string name="mobile_adblock_swap_plus_summary">播放器內無縫廣告替換（保留 1440p / HEVC / AV1，自動退回經典 Swap）</string>
-    <string name="mobile_adblock_vod_desc">播放即時 VOD 串流以實現無廣告觀看。無法使用時自動退回。</string>
-    <string name="mobile_adblock_vod_summary">無廣告即時 VOD 播放並支援自動退回</string>
+    <string name="mobile_adblock_swap_plus_desc">無縫播放，最高 1080p（不支援 1440p）。</string>
+    <string name="mobile_adblock_swap_plus_summary">無縫替換廣告，不卡頓也不降至 360p。最高 1080p（不支援 1440p）。</string>
+    <string name="mobile_adblock_vod_desc">延遲約 30 秒，無廣告。支援 1440p（需開啟 VOD）。</string>
+    <string name="mobile_adblock_vod_summary">透過目前直播 VOD 播放（約延遲 30 秒）以略過廣告。支援 1440p（需頻道開啟 VOD）。</string>
+    <string name="proxy_protocol">通訊協定</string>
+    <string name="proxy_host_protocol_hint">主機（例如 10.0.1.20 或 socks5://host:port）</string>
+    <string name="show_stream_language">顯示直播語言</string>
+    <string name="show_stream_language_summary">在直播縮圖右上角顯示小巧的語言代碼標籤</string>
+    <string name="tv_remote_action_scroll_chat">捲動聊天室</string>
+    <string name="tv_chat_scroll_hint_paused">聊天已暫停 · ▲▼ 捲動 · 確認 回到最新 · 返回 離開</string>
+    <string name="tv_chat_scroll_hint_live">即時聊天 · ▲▼ 捲動 · 返回 離開</string>
 </resources>
