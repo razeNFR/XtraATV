@@ -1236,5 +1236,239 @@ class TvShadowAdblockTest {
         assertTrue(avcOnly.contains("1080p60_avc.m3u8"))
         assertFalse(avcOnly.contains("1440p60_hevc.m3u8"))
     }
+
+    @Test
+    fun midrollAfterCleanPrefetchDoesNotShiftMediaSequenceOrReplayPrefetchedSegment() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val cleanWithPrefetch = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:980
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:31.938Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_980.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:33.938Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_981.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:35.938Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_982.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:37.938Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_983.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:39.938Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_984.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:41.938Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_985.ts
+            #EXT-X-TWITCH-PREFETCH:https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173819.ts
+            #EXT-X-TWITCH-PREFETCH:https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173829.ts
+        """.trimIndent()
+
+        val cleanRes = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariant1080Url,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariant1080Url, cleanWithPrefetch),
+            primaryRawText = cleanWithPrefetch,
+            window = window,
+            shadowPlaylist = null,
+            shadowVariantUrl = null,
+            shadowFresh = false,
+        )
+        assertEquals("primary", cleanRes.sourceUsed)
+
+        // Xtra's HlsPlaylistParser exposes 6 regular + 2 prefetch = 8 segments (minEndMediaSequence = 988)
+        val floorAfterPrefetch = TvShadowAdblock.ContinuityFloor(
+            minMediaSequence = 980L,
+            minEndMediaSequence = 988L,
+            minDiscontinuitySequence = 0L,
+            minDiscontinuitySequenceForReset = 0L,
+        )
+
+        val midrollAd = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:982
+            #EXT-X-DATERANGE:ID="stitched-ad-777",CLASS="twitch-stitched-ad",START-DATE="2026-11-28T11:51:46.000Z",DURATION=30.0
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:46.000Z
+            #EXTINF:2.000,Amazon|ad_777
+            https://d2v02pertd.cloudfront.net/ad/ad_986.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:48.000Z
+            #EXTINF:2.000,Amazon|ad_777
+            https://d2v02pertd.cloudfront.net/ad/ad_987.ts
+        """.trimIndent()
+
+        // Shadow shares exact same Twitch segment URLs (including already-prefetched seg_2173819 & seg_2173829)
+        val shadowClean = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:985
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:43.938Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173819.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:45.938Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173829.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:51:47.938Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173841.ts
+        """.trimIndent()
+
+        val spliceRes = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariant1080Url,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariant1080Url, midrollAd),
+            primaryRawText = midrollAd,
+            window = window,
+            shadowPlaylist = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadowClean),
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            continuityFloor = floorAfterPrefetch,
+        )
+
+        assertEquals("shadow", spliceRes.sourceUsed)
+        assertEquals("mediaSequence must NOT shift when clean prefetches are seeded", 980L, extractMediaSequence(spliceRes.outputPlaylist))
+        assertEquals(1, Regex("seg_2173819\\.ts").findAll(spliceRes.outputPlaylist).count())
+        assertEquals(1, Regex("seg_2173829\\.ts").findAll(spliceRes.outputPlaylist).count())
+        assertTrue(spliceRes.outputPlaylist.contains("seg_2173841.ts"))
+    }
+
+    @Test
+    fun exitSpliceWithNegativeClockDriftSkipsAlreadyPlayedSegmentByUri() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val prerollAd = buildFullAdPlaylist(mediaSeq = 995L, startSec = 0, count = 4)
+        val shadowLive = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:1000
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:52:10.521Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173965.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:52:12.521Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173975.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:52:14.521Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173987.ts
+        """.trimIndent()
+
+        val shadowParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadowLive)
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariant1080Url,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariant1080Url, prerollAd),
+            primaryRawText = prerollAd,
+            window = window,
+            shadowPlaylist = shadowParsed,
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            isInitialPlaylist = true,
+        )
+
+        // Primary returns after ad break with -348ms PDT shift on seg_2173987 (same segment shadow just served!)
+        val primaryReturn = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:1002
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:52:16.173Z
+            #EXTINF:2.000,live
+            https://edge-other.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173987.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-28T11:52:18.173Z
+            #EXTINF:2.000,live
+            https://edge-other.j.cloudfront.hls.ttvnw.net/v1/segment/seg_2173997.ts
+        """.trimIndent()
+        val primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariant1080Url, primaryReturn)
+
+        var res: TvShadowAdblock.DecisionResult? = null
+        for (poll in 1..3) {
+            res = TvShadowAdblock.processMediaPlaylistDecision(
+                variantUrl = primaryVariant1080Url,
+                primaryParsed = primaryParsed,
+                primaryRawText = primaryReturn,
+                window = window,
+                shadowPlaylist = shadowParsed,
+                shadowVariantUrl = shadowVariantUrl,
+                shadowFresh = true,
+            )
+        }
+
+        assertEquals("primary", res!!.sourceUsed)
+        assertEquals("seg_2173987 must NOT be replayed despite -348ms PDT drift", 1, Regex("seg_2173987\\.ts").findAll(res.outputPlaylist).count())
+        assertTrue(res.outputPlaylist.contains("seg_2173997.ts"))
+    }
+
+    @Test
+    fun cleanPlaybackAfterAdBreakDoesNotDuplicateSegmentWhenPdtDrifts() {
+        val window = TvShadowAdblock.ContinuityWindow()
+        val ad = buildFullAdPlaylist(mediaSeq = 500L, startSec = 0, count = 4)
+        val shadow = buildCleanPlaylist(mediaSeq = 600L, startSec = 0, count = 3, prefix = "https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/shadow")
+        val shadowParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(shadowVariantUrl, shadow)
+        TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariant1080Url,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariant1080Url, ad),
+            primaryRawText = ad,
+            window = window,
+            shadowPlaylist = shadowParsed,
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+            isInitialPlaylist = true,
+        )
+
+        val cleanPoll1 = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:610
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:08.000Z
+            #EXTINF:1.317,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_short_1317.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:09.317Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_after_short.ts
+        """.trimIndent()
+        val parsed1 = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariant1080Url, cleanPoll1)
+        for (i in 1..3) {
+            TvShadowAdblock.processMediaPlaylistDecision(
+                variantUrl = primaryVariant1080Url,
+                primaryParsed = parsed1,
+                primaryRawText = cleanPoll1,
+                window = window,
+                shadowPlaylist = shadowParsed,
+                shadowVariantUrl = shadowVariantUrl,
+                shadowFresh = true,
+            )
+        }
+
+        // Next clean poll drifts PDT by +700ms on seg_after_short (exceeds 450ms PDT tolerance)
+        val cleanPoll2 = """
+            #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-MEDIA-SEQUENCE:611
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:10.017Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_after_short.ts
+            #EXT-X-PROGRAM-DATE-TIME:2026-11-26T12:00:12.017Z
+            #EXTINF:2.000,live
+            https://91334ab1a2f2.j.cloudfront.hls.ttvnw.net/v1/segment/seg_next_clean.ts
+        """.trimIndent()
+        val res2 = TvShadowAdblock.processMediaPlaylistDecision(
+            variantUrl = primaryVariant1080Url,
+            primaryParsed = TvShadowAdblock.parseAndClassifyMediaPlaylist(primaryVariant1080Url, cleanPoll2),
+            primaryRawText = cleanPoll2,
+            window = window,
+            shadowPlaylist = shadowParsed,
+            shadowVariantUrl = shadowVariantUrl,
+            shadowFresh = true,
+        )
+
+        assertEquals("primary", res2.sourceUsed)
+        assertEquals(1, Regex("seg_after_short\\.ts").findAll(res2.outputPlaylist).count())
+        assertTrue(res2.outputPlaylist.contains("seg_next_clean.ts"))
+    }
 }
+
 

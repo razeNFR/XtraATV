@@ -752,6 +752,8 @@ object TvShadowAdblock {
         private val window = ArrayDeque<WindowSegment>(MAX_WINDOW_SIZE + 4)
         private val seenOrder = ArrayDeque<String>(SEEN_IDENTITY_LIMIT + 16)
         private val seenSet = HashSet<String>(SEEN_IDENTITY_LIMIT * 2)
+        private val seenUriOrder = ArrayDeque<String>(SEEN_IDENTITY_LIMIT + 16)
+        private val seenUriSet = HashSet<String>(SEEN_IDENTITY_LIMIT * 2)
         private val seenPdtMs = ArrayDeque<Pair<Long, Long>>(SEEN_IDENTITY_LIMIT + 16) // (pdtMs, durMs)
 
         var mediaSequence: Long = -1L
@@ -786,6 +788,8 @@ object TvShadowAdblock {
             window.clear()
             seenOrder.clear()
             seenSet.clear()
+            seenUriOrder.clear()
+            seenUriSet.clear()
             seenPdtMs.clear()
             mediaSequence = -1L
             discontinuitySequence = 0L
@@ -840,6 +844,8 @@ object TvShadowAdblock {
                     window.clear()
                     seenOrder.clear()
                     seenSet.clear()
+                    seenUriOrder.clear()
+                    seenUriSet.clear()
                     seenPdtMs.clear()
                     activeSourceId = null
                     lastServedStartMs = null
@@ -1102,9 +1108,20 @@ object TvShadowAdblock {
         }
 
         private fun segmentIdentityKey(seg: HlsSegment): String =
-            seg.pdtMs?.let { "pdt:$it" } ?: "uri:${seg.uri.substringBefore('?')}"
+            seg.pdtMs?.let { "pdt:$it" } ?: segmentUriKey(seg.uri)
+
+        private fun segmentUriKey(uri: String): String {
+            val clean = uri.trim().substringBefore('?')
+            val segMarker = clean.indexOf("/v1/segment/")
+            return if (segMarker >= 0) {
+                "seg:${clean.substring(segMarker + "/v1/segment/".length)}"
+            } else {
+                "uri:$clean"
+            }
+        }
 
         private fun isAlreadySeen(seg: HlsSegment): Boolean {
+            if (seenUriSet.contains(segmentUriKey(seg.uri))) return true
             val key = segmentIdentityKey(seg)
             if (seenSet.contains(key)) return true
             val pdt = seg.pdtMs ?: return false
@@ -1119,6 +1136,14 @@ object TvShadowAdblock {
         }
 
         private fun markSeen(seg: HlsSegment) {
+            val uriKey = segmentUriKey(seg.uri)
+            if (seenUriSet.add(uriKey)) {
+                seenUriOrder.addLast(uriKey)
+                if (seenUriOrder.size > SEEN_IDENTITY_LIMIT) {
+                    val oldestUri = seenUriOrder.removeFirst()
+                    seenUriSet.remove(oldestUri)
+                }
+            }
             val key = segmentIdentityKey(seg)
             if (seenSet.add(key)) {
                 seenOrder.addLast(key)
@@ -1204,12 +1229,13 @@ object TvShadowAdblock {
         }
 
         // First mid-roll after clean passthrough: seed ContinuityWindow from the last clean snapshot
+        // (including clean #EXT-X-TWITCH-PREFETCH segments already exposed to Media3 as 2s live-edge segments)
         // and bridge any newer non-ad prefix segments from primaryParsed (including when only prefetch entered the ad).
         if (primaryHasAd && window.isEmpty()) {
             window.lastCleanSnapshot?.let { snap ->
                 window.ingest(
                     sourceId = "primary",
-                    segments = snap.segments,
+                    segments = buildCleanSnapshotSeedSegments(snap),
                     sourceMediaSequence = snap.mediaSequence,
                     sourceDiscontinuitySequence = snap.discontinuitySequence,
                     prefetches = emptyList(),
@@ -1385,6 +1411,48 @@ object TvShadowAdblock {
             )
         }
         return DecisionResult(primaryRawText, "passthrough", 0)
+    }
+
+    private fun buildCleanSnapshotSeedSegments(snap: ParsedPlaylist): List<HlsSegment> {
+        if (snap.prefetchLines.isEmpty() || snap.prefetchAdCount > 0 || snap.segments.isEmpty()) {
+            return snap.segments
+        }
+        val out = ArrayList<HlsSegment>(snap.segments.size + snap.prefetchLines.size)
+        out.addAll(snap.segments)
+        val lastSeg = snap.segments.last()
+        var nextPdtMs = lastSeg.pdtMs?.let { it + (lastSeg.durationSec * 1_000.0).roundToLong().coerceAtLeast(1L) }
+        for (prefLine in snap.prefetchLines) {
+            val prefUri = prefLine.removePrefix("#EXT-X-TWITCH-PREFETCH:").trim()
+            if (prefUri.isEmpty()) continue
+            val lower = prefUri.lowercase()
+            if (lower.contains("/stitched/") ||
+                lower.contains("amazon-adsystem") ||
+                lower.contains("/ad/") ||
+                lower.contains("/ads/") ||
+                lower.contains("adsegment")
+            ) {
+                break
+            }
+            val pdtMs = nextPdtMs
+            out.add(
+                HlsSegment(
+                    uri = prefUri,
+                    durationSec = 2.0,
+                    title = "live",
+                    pdtIso = pdtMs?.let { Instant.fromEpochMilliseconds(it).toString() },
+                    pdtMs = pdtMs,
+                    mapLine = snap.activeMapLine ?: lastSeg.mapLine,
+                    keyLine = lastSeg.keyLine,
+                    byteRangeLine = null,
+                    attachedTags = emptyList(),
+                    classification = SegmentClass.CONTENT,
+                )
+            )
+            if (nextPdtMs != null) {
+                nextPdtMs += 2_000L
+            }
+        }
+        return out
     }
 
     // -------------------------------------------------------------------------
@@ -2123,8 +2191,23 @@ object TvShadowAdblock {
         if (hasAd) {
             val now = SystemClock.elapsedRealtime()
             state.lastPrimaryAdAtMs = now
-            val needsFastRefresh = state.shadowVariantUrl != null &&
-                (now - state.shadowFetchedAtMs) >= SHADOW_STALE_ON_AD_MS
+            val lastContentEndMs = synchronized(state.lock) {
+                state.window.lastServedEndMs
+                    ?: state.window.lastCleanSnapshot?.let { snap ->
+                        val seed = buildCleanSnapshotSeedSegments(snap)
+                        seed.lastOrNull()?.let { last ->
+                            last.pdtMs?.let { it + (last.durationSec * 1_000.0).roundToLong() }
+                        }
+                    }
+            }
+            val shadowLastPdtMs = state.shadowParsed?.segments?.lastOrNull()?.pdtMs
+            val shadowLagsLiveEdge = lastContentEndMs != null &&
+                shadowLastPdtMs != null &&
+                shadowLastPdtMs < lastContentEndMs - 500L
+            val needsFastRefresh = state.shadowVariantUrl != null && (
+                (now - state.shadowFetchedAtMs) >= SHADOW_STALE_ON_AD_MS ||
+                    (shadowLagsLiveEdge && (now - state.shadowFetchedAtMs) >= 200L)
+                )
             if (needsFastRefresh) {
                 runBlocking {
                     refreshShadowVariantNow(appCtx, state)
