@@ -7,7 +7,7 @@
 
 ### Improvements & Fixes
 - **Clearer Adblock Descriptions (TV & Mobile)**: Removed the "Experimental" label from **Swap+** and **VOD**, clarified that **Swap** drops to 360p during ads and supports **1440p** (along with **VOD**), and noted that **Swap+** runs up to **1080p** (and uses Swap in Multi-Stream & PiP on TV).
-- **More Reliable Swap+ Pre-Rolls**: Fixed a rare case where opening a 1440p channel with **Swap+** could fall back to classic Swap for the first pre-roll.
+- **Smoother & More Reliable Swap+**: Fixed cases where opening a 1440p channel with **Swap+** could fall back to classic Swap on the first pre-roll, and improved mid-roll ad-break transitions to prevent audio/video hiccups, repeats, and stream restarts.
 - **TV Voice Input Focus**: After dictating a chat message with the microphone, focus now moves automatically to the **Send** button so pressing OK sends the message instead of re-recording.
 - **Fire TV On-Screen Keyboard**: Pressing Next, Done, or Back on the Fire TV keyboard now closes the keyboard and keeps your text instead of sending the message automatically.
 - **TV Proxy Settings Navigation**: Fixed D-pad navigation in the Proxy settings screen so you can move freely between **+ Add**, existing proxies, and the edit/delete buttons.
