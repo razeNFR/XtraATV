@@ -2794,7 +2794,7 @@ class MultiStreamFragment : Fragment() {
             val swapEnabled = com.github.andreyasadchy.xtra.ui.tv.TvExperimentalAdblock.isSwapAdblockEnabled(context)
             val normal = if (!backup) {
                 try {
-                    ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, login)
+                    ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, login, allowSwapPlus = false)
                 } catch (e: Exception) {
                     null
                 }
@@ -2931,7 +2931,7 @@ class MultiStreamFragment : Fragment() {
                     }
                 }
                 val normal = try {
-                    ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, login)
+                    ExoPlayerService.loadStreamPlaylistUrl(app, app.xtraModule, login, allowSwapPlus = false)
                 } catch (e: Exception) {
                     null
                 } ?: continue

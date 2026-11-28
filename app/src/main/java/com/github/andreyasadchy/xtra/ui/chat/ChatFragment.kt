@@ -109,6 +109,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     private var adapter: ChatAdapter? = null
 
     private var isChatTouched = false
+    private var tvScrollPaused = false
     private var showChatStatus = false
     private var hasRecentEmotes = false
     private var latestRecentEmoteNames = emptyList<String>()
@@ -889,7 +890,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                         }
                                         adapter.notifyItemRangeRemoved(0, removeCount)
                                     }
-                                    if (!isChatTouched && binding.btnDown.isGone) {
+                                    if (!isChatTouched && !tvScrollPaused && binding.btnDown.isGone) {
                                         if (adapter.singleLine) {
                                             binding.recyclerView.smoothScrollToPosition(lastIndex - removeCount)
                                         } else {
@@ -909,7 +910,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 val lastIndex = result.second
                                 adapter?.let { adapter ->
                                     adapter.notifyItemRangeInserted(0, messages.size)
-                                    if (!isChatTouched && binding.btnDown.isGone) {
+                                    if (!isChatTouched && !tvScrollPaused && binding.btnDown.isGone) {
                                         binding.recyclerView.scrollToPosition(lastIndex)
                                     }
                                 }
@@ -1042,11 +1043,11 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         val b = _binding ?: return
         val ad = adapter ?: return
         ad.notifyDataSetChanged()
-        if (!isChatTouched && b.btnDown.isGone) {
+        if (!isChatTouched && !tvScrollPaused && b.btnDown.isGone) {
             val lastIndex = synchronized(viewModel.chatMessages) { viewModel.chatMessages.lastIndex }
             if (lastIndex >= 0) {
                 b.recyclerView.post {
-                    if (_binding != null && !isChatTouched && b.btnDown.isGone) {
+                    if (_binding != null && !isChatTouched && !tvScrollPaused && b.btnDown.isGone) {
                         val idx = synchronized(viewModel.chatMessages) { viewModel.chatMessages.lastIndex }
                         if (idx >= 0) {
                             b.recyclerView.scrollToPosition(idx)
@@ -1056,6 +1057,54 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             }
         }
     }
+
+    /** TV-only: pauses or resumes automatic scrolling to latest chat messages. */
+    fun setTvScrollPaused(paused: Boolean) {
+        tvScrollPaused = paused
+        val b = _binding ?: return
+        if (!paused) {
+            scrollTvChatToBottom()
+        } else {
+            b.btnDown.isVisible = b.recyclerView.canScrollVertically(1) && adapter?.singleLine != true
+        }
+    }
+
+    /**
+     * TV-only: scrolls chat vertically by [deltaYPx] (negative = older messages, positive = newer).
+     * Returns true when chat is at the latest message (auto-scroll live), false when paused on older messages.
+     */
+    fun scrollTvChatBy(deltaYPx: Int): Boolean {
+        val b = _binding ?: return true
+        b.recyclerView.scrollBy(0, deltaYPx)
+        val atBottom = !b.recyclerView.canScrollVertically(1)
+        if (deltaYPx < 0) {
+            tvScrollPaused = !atBottom
+        } else if (deltaYPx > 0 && atBottom) {
+            tvScrollPaused = false
+        }
+        b.btnDown.isVisible = !atBottom && adapter?.singleLine != true
+        return atBottom
+    }
+
+    /** TV-only: jumps directly to the latest message and resumes live auto-scroll. */
+    fun scrollTvChatToBottom() {
+        tvScrollPaused = false
+        val b = _binding ?: return
+        val lastIndex = synchronized(viewModel.chatMessages) { viewModel.chatMessages.lastIndex }
+        if (lastIndex >= 0) {
+            b.recyclerView.scrollToPosition(lastIndex)
+        }
+        b.btnDown.visibility = View.GONE
+    }
+
+    /** TV-only: returns true if chat is currently showing the latest messages. */
+    fun isTvChatAtBottom(): Boolean {
+        val b = _binding ?: return true
+        return !b.recyclerView.canScrollVertically(1)
+    }
+
+    /** TV-only: returns the visible height of the chat list in pixels (used for page-up/down steps). */
+    fun tvChatViewportHeight(): Int = _binding?.recyclerView?.height ?: 0
 
     fun onChatShown() {
         if (!isAdded) return

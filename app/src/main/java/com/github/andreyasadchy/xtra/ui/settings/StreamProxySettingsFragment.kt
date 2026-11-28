@@ -173,18 +173,39 @@ class StreamProxySettingsFragment : Fragment() {
 
     private fun showEditDialog(item: StreamProxy, positiveButtonListener: (String?, String?, String?, String?, Boolean, Boolean, Boolean) -> Unit) {
         val binding = DialogStreamProxyEditBinding.inflate(layoutInflater)
+        val protocols = com.github.andreyasadchy.xtra.util.StreamProxyHelper.ProxyProtocol.entries
+        binding.protocolSpinner.adapter = android.widget.ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_dropdown_item,
+            protocols.map { it.displayName },
+        )
+        val parsedInitial = com.github.andreyasadchy.xtra.util.StreamProxyHelper.parse(item.host, item.port)
+        binding.protocolSpinner.setSelection(
+            protocols.indexOf(parsedInitial?.protocol ?: com.github.andreyasadchy.xtra.util.StreamProxyHelper.ProxyProtocol.HTTP).coerceAtLeast(0)
+        )
+        fun deliverResult() {
+            val selectedProtocol = protocols.getOrElse(binding.protocolSpinner.selectedItemPosition) {
+                com.github.andreyasadchy.xtra.util.StreamProxyHelper.ProxyProtocol.HTTP
+            }
+            val (storedHost, resolvedPort) = com.github.andreyasadchy.xtra.util.StreamProxyHelper.formatStoredHost(
+                selectedProtocol = selectedProtocol,
+                rawHost = binding.hostInput.editText?.text?.toString(),
+                rawPort = binding.portInput.editText?.text?.toString(),
+            )
+            positiveButtonListener(
+                storedHost,
+                resolvedPort?.toString(),
+                binding.userInput.editText?.text?.toString(),
+                binding.passwordInput.editText?.text?.toString(),
+                binding.proxyPlaybackAccessTokenCheckBox.isChecked,
+                binding.proxyMultivariantPlaylistCheckBox.isChecked,
+                binding.proxyMediaPlaylistCheckBox.isChecked,
+            )
+        }
         val dialog = requireContext().getAlertDialogBuilder()
             .setView(binding.root)
             .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
-                positiveButtonListener(
-                    binding.hostInput.editText?.text?.toString(),
-                    binding.portInput.editText?.text?.toString(),
-                    binding.userInput.editText?.text?.toString(),
-                    binding.passwordInput.editText?.text?.toString(),
-                    binding.proxyPlaybackAccessTokenCheckBox.isChecked,
-                    binding.proxyMultivariantPlaylistCheckBox.isChecked,
-                    binding.proxyMediaPlaylistCheckBox.isChecked,
-                )
+                deliverResult()
             }
             .setNegativeButton(getString(android.R.string.cancel), null)
             .create()
@@ -192,7 +213,7 @@ class StreamProxySettingsFragment : Fragment() {
             requireContext().prefs().getBoolean(C.TV_DISABLE_SOFT_KEYBOARD, false)
         binding.hostInput.editText?.apply {
             if (disableSoftKeyboard) showSoftInputOnFocus = false
-            val string = item.host ?: ""
+            val string = parsedInitial?.host ?: item.host ?: ""
             text.replace(0, length(), string, 0, string.length)
             if (requestFocus() && !disableSoftKeyboard) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -205,7 +226,7 @@ class StreamProxySettingsFragment : Fragment() {
         }
         binding.portInput.editText?.apply {
             if (disableSoftKeyboard) showSoftInputOnFocus = false
-            val string = item.port?.toString() ?: ""
+            val string = (parsedInitial?.port ?: item.port)?.toString() ?: ""
             text.replace(0, length(), string, 0, string.length)
         }
         binding.userInput.editText?.apply {
@@ -219,15 +240,7 @@ class StreamProxySettingsFragment : Fragment() {
             text.replace(0, length(), string, 0, string.length)
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_DONE) {
-                    positiveButtonListener(
-                        binding.hostInput.editText?.text?.toString(),
-                        binding.portInput.editText?.text?.toString(),
-                        binding.userInput.editText?.text?.toString(),
-                        binding.passwordInput.editText?.text?.toString(),
-                        binding.proxyPlaybackAccessTokenCheckBox.isChecked,
-                        binding.proxyMultivariantPlaylistCheckBox.isChecked,
-                        binding.proxyMediaPlaylistCheckBox.isChecked,
-                    )
+                    deliverResult()
                     dialog.dismiss()
                     true
                 } else {

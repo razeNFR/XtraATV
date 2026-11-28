@@ -60,6 +60,15 @@
                 tools:text="8:21:33"
                 tools:visibility="visible" />
 
+            <com.github.andreyasadchy.xtra.ui.view.TextWithShadow
+                android:id="@+id/languageBadge"
+                style="@style/TvThumbnailBadge"
+                android:visibility="gone"
+                app:layout_constraintEnd_toEndOf="@+id/thumbnail"
+                app:layout_constraintTop_toTopOf="@+id/thumbnail"
+                tools:text="EN"
+                tools:visibility="visible" />
+
             <ImageView
                 android:id="@+id/userImage"
                 android:layout_width="36dp"

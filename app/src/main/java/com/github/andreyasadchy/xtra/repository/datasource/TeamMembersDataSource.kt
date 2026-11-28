@@ -42,6 +42,7 @@ class TeamMembersDataSource(
                             createdAt = it.stream?.createdAt?.toString(),
                             viewerCount = it.stream?.viewersCount,
                             tags = it.stream?.freeformTags?.mapNotNull { tag -> tag.name },
+                            language = it.stream?.broadcaster?.broadcastSettings?.language,
                         )
                     }
                 } ?: emptyList()

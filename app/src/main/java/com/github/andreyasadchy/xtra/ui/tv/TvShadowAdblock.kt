@@ -752,6 +752,8 @@ object TvShadowAdblock {
         private val window = ArrayDeque<WindowSegment>(MAX_WINDOW_SIZE + 4)
         private val seenOrder = ArrayDeque<String>(SEEN_IDENTITY_LIMIT + 16)
         private val seenSet = HashSet<String>(SEEN_IDENTITY_LIMIT * 2)
+        private val seenUriOrder = ArrayDeque<String>(SEEN_IDENTITY_LIMIT + 16)
+        private val seenUriSet = HashSet<String>(SEEN_IDENTITY_LIMIT * 2)
         private val seenPdtMs = ArrayDeque<Pair<Long, Long>>(SEEN_IDENTITY_LIMIT + 16) // (pdtMs, durMs)
 
         var mediaSequence: Long = -1L
@@ -786,6 +788,8 @@ object TvShadowAdblock {
             window.clear()
             seenOrder.clear()
             seenSet.clear()
+            seenUriOrder.clear()
+            seenUriSet.clear()
             seenPdtMs.clear()
             mediaSequence = -1L
             discontinuitySequence = 0L
@@ -840,6 +844,8 @@ object TvShadowAdblock {
                     window.clear()
                     seenOrder.clear()
                     seenSet.clear()
+                    seenUriOrder.clear()
+                    seenUriSet.clear()
                     seenPdtMs.clear()
                     activeSourceId = null
                     lastServedStartMs = null
@@ -892,25 +898,65 @@ object TvShadowAdblock {
                 -1L
             }
 
-            // Clock-aligned selection: never serve a segment whose start precedes lastServedEndMs
-            // beyond 45% of a segment's duration, and never re-serve an already seen identity.
-            val fresh = ArrayList<HlsSegment>(nonAd.size)
-            for (seg in nonAd) {
-                if (isAlreadySeen(seg)) continue
-                if (!firstPass && prevLastEndMs != null && seg.pdtMs != null) {
-                    val segDurMs = (seg.durationSec * 1_000.0).roundToLong().coerceAtLeast(1_000L)
-                    val tolMs = (segDurMs * 0.45).roundToLong().coerceAtLeast(450L)
-                    if (seg.pdtMs < prevLastEndMs - tolMs) {
-                        markSeen(seg)
-                        continue
+            // Primary/shadow streams from Twitch share the exact same origin segment URIs even when their
+            // PROGRAM-DATE-TIME clocks drift apart by 10+ seconds over long sessions. Prefer URI-anchored
+            // alignment when switching sources so clock skew can never reject valid live segments or stall ExoPlayer.
+            val lastWindowUriKey = window.lastOrNull()?.let { segmentUriKey(it.uri) }
+            var lastSeenUriIdx = -1
+            if (!firstPass && sourceChanged) {
+                for (i in nonAd.indices) {
+                    if (seenUriSet.contains(segmentUriKey(nonAd[i].uri))) {
+                        lastSeenUriIdx = i
                     }
                 }
-                fresh.add(seg)
+            }
+            val uriAnchoredToWindowTail = lastSeenUriIdx >= 0 &&
+                lastWindowUriKey != null &&
+                segmentUriKey(nonAd[lastSeenUriIdx].uri) == lastWindowUriKey
+
+            val fresh = ArrayList<HlsSegment>(nonAd.size)
+            val rejectedByPdt = ArrayList<HlsSegment>(nonAd.size)
+            if (lastSeenUriIdx >= 0) {
+                for (i in (lastSeenUriIdx + 1) until nonAd.size) {
+                    val seg = nonAd[i]
+                    if (seenUriSet.contains(segmentUriKey(seg.uri))) continue
+                    fresh.add(seg)
+                }
+            } else {
+                // Clock-aligned selection: never serve a segment whose start precedes lastServedEndMs
+                // beyond 45% of a segment's duration, and never re-serve an already seen identity.
+                for (seg in nonAd) {
+                    if (isAlreadySeen(seg)) continue
+                    if (!firstPass && prevLastEndMs != null && seg.pdtMs != null) {
+                        val segDurMs = (seg.durationSec * 1_000.0).roundToLong().coerceAtLeast(1_000L)
+                        val tolMs = (segDurMs * 0.45).roundToLong().coerceAtLeast(450L)
+                        if (seg.pdtMs < prevLastEndMs - tolMs) {
+                            rejectedByPdt.add(seg)
+                            continue
+                        }
+                    }
+                    fresh.add(seg)
+                }
+
+                // Anti-stall guard: if switching sources and every segment was rejected by a large cross-server
+                // PROGRAM-DATE-TIME clock offset (> 4s behind), re-anchor at the new source's live edge instead
+                // of freezing the playlist until Media3 throws PlaylistStuckException.
+                if (!firstPass && sourceChanged && fresh.isEmpty() && rejectedByPdt.isNotEmpty() && prevLastEndMs != null) {
+                    val newestPdt = rejectedByPdt.last().pdtMs
+                    if (newestPdt != null && newestPdt < prevLastEndMs - 4_000L) {
+                        val candidates = rejectedByPdt.filterNot { seenUriSet.contains(segmentUriKey(it.uri)) }
+                        fresh.addAll(candidates.takeLast(2))
+                    } else {
+                        rejectedByPdt.forEach { markSeen(it) }
+                    }
+                } else {
+                    rejectedByPdt.forEach { markSeen(it) }
+                }
             }
 
             // If the first eligible segment overlaps slightly backwards (< prevLastEndMs) while the very
             // next segment is closer (or equal) to prevLastEndMs, start from the next segment to minimize |Δ|.
-            if (!firstPass && prevLastEndMs != null && fresh.size >= 2) {
+            if (!firstPass && lastSeenUriIdx < 0 && prevLastEndMs != null && fresh.size >= 2) {
                 val firstPdt = fresh[0].pdtMs
                 val secondPdt = fresh[1].pdtMs
                 if (firstPdt != null && secondPdt != null && firstPdt < prevLastEndMs) {
@@ -925,8 +971,6 @@ object TvShadowAdblock {
                 return IngestResult(0)
             }
 
-            val needDiscontinuity = sourceChanged
-
             val toAppend: List<HlsSegment>
             if (firstPass) {
                 toAppend = fresh.takeLast(BASE_WINDOW_SIZE)
@@ -936,12 +980,32 @@ object TvShadowAdblock {
                 // Mark any earlier segments in firstPass as seen too
                 fresh.forEach { markSeen(it) }
             } else {
+                if (sourceChanged) {
+                    // Reset old server's PDT clock cache on source switch while keeping seenUriSet intact:
+                    // prevents a drifted shadow PDT from falsely matching and dropping primary's next segment 2s later.
+                    seenPdtMs.clear()
+                    seenSet.clear()
+                    seenOrder.clear()
+                }
                 // Strictly cap to MAX_INGEST_PER_PASS (3) new segments per refresh — never bulk-dump
                 toAppend = fresh.take(MAX_INGEST_PER_PASS)
                 toAppend.forEach { markSeen(it) }
             }
 
-            if (needDiscontinuity) {
+            // Omit EXT-X-DISCONTINUITY when URI-anchored directly onto the previous segment on the exact same
+            // codec/container/init-map stream: Media3 keeps its running TimestampAdjuster with zero audio glitch.
+            val prevWindowTail = window.lastOrNull()
+            val firstNew = toAppend.first()
+            val seamlessContinuation = sourceChanged &&
+                prevWindowTail != null &&
+                uriAnchoredToWindowTail &&
+                firstNew.mapLine == prevWindowTail.mapLine &&
+                firstNew.keyLine == prevWindowTail.keyLine &&
+                (primaryCodec.isNullOrEmpty() || shadowCodec.isNullOrEmpty() || primaryCodec == shadowCodec) &&
+                (primaryContainer.isNullOrEmpty() || shadowContainer.isNullOrEmpty() || primaryContainer == shadowContainer)
+            val needDiscontinuity = sourceChanged && !seamlessContinuation
+
+            if (sourceChanged) {
                 currentWindowLimit = MAX_WINDOW_SIZE
                 spliceCount++
             } else if (currentWindowLimit > BASE_WINDOW_SIZE) {
@@ -1102,9 +1166,20 @@ object TvShadowAdblock {
         }
 
         private fun segmentIdentityKey(seg: HlsSegment): String =
-            seg.pdtMs?.let { "pdt:$it" } ?: "uri:${seg.uri.substringBefore('?')}"
+            seg.pdtMs?.let { "pdt:$it" } ?: segmentUriKey(seg.uri)
+
+        private fun segmentUriKey(uri: String): String {
+            val clean = uri.trim().substringBefore('?')
+            val segMarker = clean.indexOf("/v1/segment/")
+            return if (segMarker >= 0) {
+                "seg:${clean.substring(segMarker + "/v1/segment/".length)}"
+            } else {
+                "uri:$clean"
+            }
+        }
 
         private fun isAlreadySeen(seg: HlsSegment): Boolean {
+            if (seenUriSet.contains(segmentUriKey(seg.uri))) return true
             val key = segmentIdentityKey(seg)
             if (seenSet.contains(key)) return true
             val pdt = seg.pdtMs ?: return false
@@ -1119,6 +1194,14 @@ object TvShadowAdblock {
         }
 
         private fun markSeen(seg: HlsSegment) {
+            val uriKey = segmentUriKey(seg.uri)
+            if (seenUriSet.add(uriKey)) {
+                seenUriOrder.addLast(uriKey)
+                if (seenUriOrder.size > SEEN_IDENTITY_LIMIT) {
+                    val oldestUri = seenUriOrder.removeFirst()
+                    seenUriSet.remove(oldestUri)
+                }
+            }
             val key = segmentIdentityKey(seg)
             if (seenSet.add(key)) {
                 seenOrder.addLast(key)
@@ -1204,12 +1287,13 @@ object TvShadowAdblock {
         }
 
         // First mid-roll after clean passthrough: seed ContinuityWindow from the last clean snapshot
+        // (including clean #EXT-X-TWITCH-PREFETCH segments already exposed to Media3 as 2s live-edge segments)
         // and bridge any newer non-ad prefix segments from primaryParsed (including when only prefetch entered the ad).
         if (primaryHasAd && window.isEmpty()) {
             window.lastCleanSnapshot?.let { snap ->
                 window.ingest(
                     sourceId = "primary",
-                    segments = snap.segments,
+                    segments = buildCleanSnapshotSeedSegments(snap),
                     sourceMediaSequence = snap.mediaSequence,
                     sourceDiscontinuitySequence = snap.discontinuitySequence,
                     prefetches = emptyList(),
@@ -1387,6 +1471,48 @@ object TvShadowAdblock {
         return DecisionResult(primaryRawText, "passthrough", 0)
     }
 
+    private fun buildCleanSnapshotSeedSegments(snap: ParsedPlaylist): List<HlsSegment> {
+        if (snap.prefetchLines.isEmpty() || snap.prefetchAdCount > 0 || snap.segments.isEmpty()) {
+            return snap.segments
+        }
+        val out = ArrayList<HlsSegment>(snap.segments.size + snap.prefetchLines.size)
+        out.addAll(snap.segments)
+        val lastSeg = snap.segments.last()
+        var nextPdtMs = lastSeg.pdtMs?.let { it + (lastSeg.durationSec * 1_000.0).roundToLong().coerceAtLeast(1L) }
+        for (prefLine in snap.prefetchLines) {
+            val prefUri = prefLine.removePrefix("#EXT-X-TWITCH-PREFETCH:").trim()
+            if (prefUri.isEmpty()) continue
+            val lower = prefUri.lowercase()
+            if (lower.contains("/stitched/") ||
+                lower.contains("amazon-adsystem") ||
+                lower.contains("/ad/") ||
+                lower.contains("/ads/") ||
+                lower.contains("adsegment")
+            ) {
+                break
+            }
+            val pdtMs = nextPdtMs
+            out.add(
+                HlsSegment(
+                    uri = prefUri,
+                    durationSec = 2.0,
+                    title = "live",
+                    pdtIso = pdtMs?.let { Instant.fromEpochMilliseconds(it).toString() },
+                    pdtMs = pdtMs,
+                    mapLine = snap.activeMapLine ?: lastSeg.mapLine,
+                    keyLine = lastSeg.keyLine,
+                    byteRangeLine = null,
+                    attachedTags = emptyList(),
+                    classification = SegmentClass.CONTENT,
+                )
+            )
+            if (nextPdtMs != null) {
+                nextPdtMs += 2_000L
+            }
+        }
+        return out
+    }
+
     // -------------------------------------------------------------------------
     // Live Shadow Session Manager (Section 6 & Section 12)
     // -------------------------------------------------------------------------
@@ -1499,7 +1625,8 @@ object TvShadowAdblock {
         val state = channels.computeIfAbsent(norm) { ChannelState(it) }
         state.closeJob?.cancel()
         state.closeJob = null
-        if (forceH264 && !state.forceH264) {
+        val codecJustSwitched = forceH264 && !state.forceH264
+        if (codecJustSwitched) {
             state.forceH264 = true
             state.invalidateShadow()
             state.shadowMasterVariants = emptyList()
@@ -1512,10 +1639,10 @@ object TvShadowAdblock {
         synchronized(state.lock) {
             state.window.reset()
         }
-        if (state.isShadowFresh() && !forceH264) {
+        if (state.isShadowFresh() && !codecJustSwitched) {
             ensureRefreshLoop(appCtx, state)
         } else {
-            warmShadowAsync(appCtx, state, force = forceH264)
+            warmShadowAsync(appCtx, state, force = codecJustSwitched)
         }
     }
 
@@ -2049,40 +2176,30 @@ object TvShadowAdblock {
             state.closeJob = null
 
             val topVariant = variants.maxByOrNull { it.bandwidth }
-            val topFamily = topVariant?.videoCodecFamily.orEmpty()
+            val nonAvcVariant = variants.firstOrNull { it.videoCodecFamily.isNotEmpty() && it.videoCodecFamily != "avc1" }
             val hasPrimaryAvc = variants.any { it.videoCodecFamily == "avc1" }
 
-            // If primary offers HEVC/AV1 alongside H.264, check if the pre-warmed shadow already knows its codecs
-            // (wait briefly if pre-warm is already in flight) so we align immediately on the 1st open without
-            // falling back to Classic Swap or reloading mid-preroll.
-            if (topFamily.isNotEmpty() && topFamily != "avc1" && hasPrimaryAvc && !state.forceH264) {
-                if (state.shadowMasterVariants.isEmpty() && state.warmJob?.isActive == true) {
-                    runBlocking {
-                        withTimeoutOrNull(1_200L) {
-                            state.warmJob?.join()
-                        }
-                    }
+            // Safety net: Swap+ requests supported_codecs=avc1 upfront, but if a primary master ever returns mixed
+            // codecs (e.g. HEVC/AV1 alongside H.264, regardless of bitrate ordering), strip non-H.264 variants so
+            // ExoPlayer stays aligned with the H.264 shadow stream from the very first segment.
+            if (nonAvcVariant != null && hasPrimaryAvc) {
+                state.forceH264 = true
+                val avcTop = variants.filter { it.videoCodecFamily == "avc1" }.maxByOrNull { it.bandwidth }
+                if (avcTop != null) {
+                    state.primaryVariantMeta = avcTop
+                    if (avcTop.height > 0) state.targetHeight = avcTop.height
                 }
-                val shadowVariants = state.shadowMasterVariants
-                if (shadowVariants.isNotEmpty() && shadowVariants.none { it.videoCodecFamily == topFamily }) {
-                    state.forceH264 = true
-                    val avcTop = variants.filter { it.videoCodecFamily == "avc1" }.maxByOrNull { it.bandwidth }
-                    if (avcTop != null) {
-                        state.primaryVariantMeta = avcTop
-                        if (avcTop.height > 0) state.targetHeight = avcTop.height
-                    }
-                    runCatching {
-                        Log.i(
-                            TAG,
-                            "Shadow lacks codec=$topFamily on $login -> aligning primary master to H.264 (avc1) on 1st open",
-                        )
-                    }
-                    val avcFiltered = filterMasterToCodecFamily(filtered, "avc1")
-                    if (!state.isShadowFresh()) {
-                        warmShadowAsync(appCtx, state, force = true)
-                    }
-                    return avcFiltered
+                runCatching {
+                    Log.i(
+                        TAG,
+                        "Swap+ aligning ${nonAvcVariant.videoCodecFamily} primary master on $login to H.264 (avc1)",
+                    )
                 }
+                val avcFiltered = filterMasterToCodecFamily(filtered, "avc1")
+                if (!state.isShadowFresh()) {
+                    warmShadowAsync(appCtx, state, force = true)
+                }
+                return avcFiltered
             }
 
             if (topVariant != null && state.primaryVariantMeta == null) {
@@ -2132,8 +2249,23 @@ object TvShadowAdblock {
         if (hasAd) {
             val now = SystemClock.elapsedRealtime()
             state.lastPrimaryAdAtMs = now
-            val needsFastRefresh = state.shadowVariantUrl != null &&
-                (now - state.shadowFetchedAtMs) >= SHADOW_STALE_ON_AD_MS
+            val lastContentEndMs = synchronized(state.lock) {
+                state.window.lastServedEndMs
+                    ?: state.window.lastCleanSnapshot?.let { snap ->
+                        val seed = buildCleanSnapshotSeedSegments(snap)
+                        seed.lastOrNull()?.let { last ->
+                            last.pdtMs?.let { it + (last.durationSec * 1_000.0).roundToLong() }
+                        }
+                    }
+            }
+            val shadowLastPdtMs = state.shadowParsed?.segments?.lastOrNull()?.pdtMs
+            val shadowLagsLiveEdge = lastContentEndMs != null &&
+                shadowLastPdtMs != null &&
+                shadowLastPdtMs < lastContentEndMs - 500L
+            val needsFastRefresh = state.shadowVariantUrl != null && (
+                (now - state.shadowFetchedAtMs) >= SHADOW_STALE_ON_AD_MS ||
+                    (shadowLagsLiveEdge && (now - state.shadowFetchedAtMs) >= 200L)
+                )
             if (needsFastRefresh) {
                 runBlocking {
                     refreshShadowVariantNow(appCtx, state)

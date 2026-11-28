@@ -5,6 +5,7 @@ query SearchStreams($query: String!, $first: Int, $after: Cursor) {
             node {
                 broadcaster {
                     broadcastSettings {
+                        language
                         title
                     }
                     displayName

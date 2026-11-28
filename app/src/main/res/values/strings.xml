@@ -343,7 +343,7 @@
     <string name="proxy_port">Port</string>
     <string name="proxy_user">Username</string>
     <string name="proxy_password">Password</string>
-    <string name="proxy_settings">HTTP proxy settings</string>
+    <string name="proxy_settings">Proxy settings (HTTP / SOCKS)</string>
     <string name="stop_download">Stop download</string>
     <string name="resume_download">Resume download</string>
     <string name="show_view_count_icon">Show view count and uptime icons</string>
@@ -951,7 +951,7 @@
     <string name="tv_proxy_mode_always">Always</string>
     <string name="tv_proxy_mode_ads">During ads</string>
     <string name="tv_proxies_1440p">Public proxies stop at 1080p. For 1440p, use a proxy that streams it, or choose \"During ads\" to get it outside of the ads.</string>
-    <string name="tv_adblock_summary_1440p">During an ad, switches to a stream without ads. The 1440p works; the quality may drop while the ad lasts.</string>
+    <string name="tv_adblock_summary_1440p">Temporarily switches to 360p during ads, then restores full quality (1440p supported).</string>
     <string name="tv_chat_sub_prime">Prime</string>
     <string name="tv_chat_sub_tier">Tier %1$d</string>
     <string name="tv_chat_sub">%1$s subscribed</string>
@@ -1173,7 +1173,7 @@
     <string name="tv_adblock_swap_locked_hint">Enabled by default. Activate a custom or HTTP stream proxy to turn it off.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Stays active as automatic fallback while Adblock (Swap+) or Adblock (VOD) is enabled.</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">Experimental — plays live broadcasts via their ongoing VOD (~30s delay, synced chat) to avoid ads. Works everywhere like Swap (main player, Multi-Stream, and PiP) and falls back to Swap+ or Swap if no VOD is available. May not work 100% on every channel.</string>
+    <string name="tv_adblock_exp_summary">Plays the live stream via its active VOD (~30s behind live) with no ads. 1440p supported (requires VODs enabled on the channel).</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) active</string>
     <string name="tv_adblock_exp_proxies_disabled">Proxies cannot be enabled while Adblock (Swap+) or Adblock (VOD) is active.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Disable custom and HTTP stream proxies first.</string>
@@ -1518,11 +1518,11 @@
     <string name="tv_chat_qr_regenerate">Regenerate QR link</string>
     <string name="tv_chat_qr_regenerated">New QR link generated — previous devices disconnected</string>
     <string name="tv_chat_qr_reconnect">Reconnect</string>
-    <string name="tv_adblock_swap_desc">Switches to a backup stream during ads (may drop quality during the ad).</string>
+    <string name="tv_adblock_swap_desc">Drops to 360p during ads. 1440p supported.</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Experimental — seamless ad blocking with less quality drop and normal latency (Swap used in PiP/Multi-Stream).</string>
-    <string name="tv_adblock_swap_plus_summary">Experimental — blocks ads continuously without cuts, with less quality drop and normal live latency (unlike Adblock (VOD)). Not used in Multi-Stream or PiP, which stay on Swap. Falls back to Swap if needed. May not work 100% on every stream.</string>
-    <string name="tv_adblock_vod_desc">Experimental — via ongoing VOD (~30s delay), works everywhere (PiP/Multi-Stream).</string>
+    <string name="tv_adblock_swap_plus_desc">Seamless, up to 1080p (no 1440p). Uses Swap in multi-stream &amp; PiP.</string>
+    <string name="tv_adblock_swap_plus_summary">Seamlessly replaces ads without freezing or dropping to 360p. Up to 1080p max (1440p not supported). Falls back to Swap in multi-stream and PiP.</string>
+    <string name="tv_adblock_vod_desc">~30s delay, no ads. 1440p supported (requires VODs).</string>
     <string name="tv_vod_audio_recovery">Recover muted VOD audio</string>
     <string name="tv_vod_audio_recovery_summary">Attempts to restore DMCA-muted audio in VODs, live DVR rewind, and Adblock (VOD) when the original audio is still available on Twitch (not 100% guaranteed depending on the VOD). Shows green (recovered) and red (muted) ranges on the seek bar.</string>
     <string name="tv_vod_audio_recovered_toast">Muted audio recovered (~%1$d min)</string>
@@ -1569,8 +1569,15 @@
     <string name="interface_mode_tv">TV</string>
     <string name="interface_mode_mobile">Mobile</string>
     <string name="mobile_accent_color_title">Accent color</string>
-    <string name="mobile_adblock_swap_plus_desc">Seamless ad replacement inside the main player while preserving 1440p / HEVC / AV1. Falls back to Classic Swap if unavailable.</string>
-    <string name="mobile_adblock_swap_plus_summary">Seamless in-player ad replacement (preserves 1440p / HEVC / AV1, automatic Classic Swap fallback)</string>
-    <string name="mobile_adblock_vod_desc">Plays the live VOD stream for an ad-free experience. Falls back automatically if unavailable.</string>
-    <string name="mobile_adblock_vod_summary">Plays the live VOD stream for ad-free playback with automatic fallback</string>
+    <string name="mobile_adblock_swap_plus_desc">Seamless stream, up to 1080p max (1440p not supported).</string>
+    <string name="mobile_adblock_swap_plus_summary">Seamlessly replaces ads without freezing or dropping to 360p. Up to 1080p max (1440p not supported).</string>
+    <string name="mobile_adblock_vod_desc">~30s delay, no ads. 1440p supported (requires VODs).</string>
+    <string name="mobile_adblock_vod_summary">Plays the live stream via its active VOD (~30s behind live) with no ads. 1440p supported (requires VODs enabled on the channel).</string>
+    <string name="proxy_protocol">Protocol</string>
+    <string name="proxy_host_protocol_hint">Host (e.g. 10.0.1.20 or socks5://host:port)</string>
+    <string name="show_stream_language">Show stream language</string>
+    <string name="show_stream_language_summary">Display a small language code badge on stream thumbnails</string>
+    <string name="tv_remote_action_scroll_chat">Scroll chat</string>
+    <string name="tv_chat_scroll_hint_paused">Chat paused · ▲▼ Scroll · OK Latest · Back Exit</string>
+    <string name="tv_chat_scroll_hint_live">Live chat · ▲▼ Scroll · Back Exit</string>
 </resources>

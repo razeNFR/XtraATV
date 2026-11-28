@@ -49,7 +49,8 @@ class StreamsAdapter(
         override fun areContentsTheSame(oldItem: Stream, newItem: Stream): Boolean =
             oldItem.viewerCount == newItem.viewerCount &&
                     oldItem.gameName == newItem.gameName &&
-                    oldItem.title == newItem.title
+                    oldItem.title == newItem.title &&
+                    oldItem.language == newItem.language
     }) {
 
     override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
@@ -292,6 +293,23 @@ class StreamsAdapter(
                         }
                     } else {
                         uptime.visibility = View.GONE
+                    }
+                    val showLanguageBadge = context.prefs().getBoolean(
+                        if (isTv) C.TV_SHOW_STREAM_LANGUAGE else C.UI_STREAM_LANGUAGE,
+                        false,
+                    )
+                    val langCode = if (showLanguageBadge && item.thumbnailURL != null) item.displayLanguageCode else null
+                    if (langCode != null) {
+                        languageBadge.visibility = View.VISIBLE
+                        languageBadge.text = langCode
+                        val flagDrawable = StreamLanguageBadge.createFlagDrawable(context, langCode)
+                        languageBadge.compoundDrawablePadding = if (flagDrawable != null) {
+                            (5 * context.resources.displayMetrics.density).toInt()
+                        } else 0
+                        languageBadge.setCompoundDrawablesRelative(flagDrawable, null, null, null)
+                    } else {
+                        languageBadge.visibility = View.GONE
+                        languageBadge.setCompoundDrawablesRelative(null, null, null, null)
                     }
                     val maxMobileTags = when {
                         isTv -> Int.MAX_VALUE

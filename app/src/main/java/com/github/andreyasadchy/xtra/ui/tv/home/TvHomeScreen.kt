@@ -2881,6 +2881,71 @@ private fun StreamCard(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
+                // optional stream language badge at the top right (disabled by default)
+                if (playbackContext.prefs().getBoolean(C.TV_SHOW_STREAM_LANGUAGE, false)) {
+                    stream.displayLanguageCode?.let { langCode ->
+                        val flagSpec = com.github.andreyasadchy.xtra.ui.common.StreamLanguageBadge.flagSpec(langCode)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(Color(0xBC000000))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            if (flagSpec != null) {
+                                val flagW = if (small) 12.dp else 14.dp
+                                val flagH = if (small) 8.5.dp else 10.dp
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = flagW, height = flagH)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .border(0.5.dp, Color(0x38FFFFFF), RoundedCornerShape(2.dp)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    when (flagSpec) {
+                                        is com.github.andreyasadchy.xtra.ui.common.StreamLanguageBadge.FlagSpec.Vertical -> {
+                                            Row(Modifier.fillMaxSize()) {
+                                                flagSpec.colors.forEach { argb ->
+                                                    Box(Modifier.weight(1f).fillMaxHeight().background(Color(argb)))
+                                                }
+                                            }
+                                        }
+                                        is com.github.andreyasadchy.xtra.ui.common.StreamLanguageBadge.FlagSpec.Horizontal -> {
+                                            Column(Modifier.fillMaxSize()) {
+                                                flagSpec.colors.forEach { argb ->
+                                                    Box(Modifier.weight(1f).fillMaxWidth().background(Color(argb)))
+                                                }
+                                            }
+                                        }
+                                        is com.github.andreyasadchy.xtra.ui.common.StreamLanguageBadge.FlagSpec.Dot -> {
+                                            Box(
+                                                modifier = Modifier.fillMaxSize().background(Color(flagSpec.bgColor)),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(if (small) 4.5.dp else 5.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color(flagSpec.dotColor)),
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.width(5.dp))
+                            }
+                            Text(
+                                langCode,
+                                fontSize = if (small) 10.sp else 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
             }
             Row(
                 modifier = Modifier

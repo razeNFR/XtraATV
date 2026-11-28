@@ -273,6 +273,10 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
             // a clock face for the sleep timer is made for a touch screen; the live notifications of Android are replaced
             // by the live banner of Xtra TV; seek-to-live uses Xtra TV's Direct button and remote shortcut
             "sleep_timer_use_time_picker", "live_notifications_enabled", "player_use_video_swap", "player_seeklive",
+            // mobile-only UI display toggles (kept clean on TV; TV has its own customization screen)
+            "compactStreamsV2", "ui_rounduserimage", "ui_truncateviewcount", "ui_uptime", "ui_stream_language",
+            "ui_tags", "ui_broadcasterscount", "ui_followpager", "ui_savedpager", "ui_gamepager",
+            "ui_bookmark_time_left", "ui_store_recent_searches",
         )
     }
 }

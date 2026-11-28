@@ -1504,8 +1504,12 @@ class SettingsActivity : AppCompatActivity() {
             findPreference<SwitchPreferenceCompat>(C.UI_ROUND_USER_IMAGE)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_TRUNCATE_VIEW_COUNT)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_UPTIME)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(C.UI_STREAM_LANGUAGE)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_TAGS)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_BROADCASTERS_COUNT)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(C.UI_FOLLOW_PAGER)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(C.UI_SAVED_PAGER)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(C.UI_GAME_PAGER)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_BOOKMARK_TIME_LEFT)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_SCROLL_TOP)?.onPreferenceChangeListener = changeListener
             findPreference<ListPreference>(C.PORTRAIT_COLUMN_COUNT)?.onPreferenceChangeListener = changeListener
@@ -2630,9 +2634,9 @@ class SettingsActivity : AppCompatActivity() {
                         isChecked = swapOn
                         isEnabled = !swapIsFallback
                         summary = if (swapIsFallback) {
-                            "${getString(R.string.tv_adblock_fallback_badge)} · ${getString(R.string.tv_adblock_swap_desc)}"
+                            "${getString(R.string.tv_adblock_fallback_badge)} · ${getString(R.string.tv_adblock_summary_1440p)}"
                         } else {
-                            getString(R.string.tv_adblock_swap_desc)
+                            getString(R.string.tv_adblock_summary_1440p)
                         }
                     }
                     swapPlusPref?.apply {

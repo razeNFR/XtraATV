@@ -325,7 +325,7 @@
     <string name="proxy_port">Port</string>
     <string name="proxy_user">Username</string>
     <string name="proxy_password">Password</string>
-    <string name="proxy_settings">HTTP proxy settings</string>
+    <string name="proxy_settings">Pengaturan proxy (HTTP / SOCKS)</string>
     <string name="stop_download">Stop download</string>
     <string name="resume_download">Resume download</string>
     <string name="show_view_count_icon">Show view count and uptime icons</string>
@@ -933,7 +933,7 @@
     <string name="tv_proxy_mode_always">Selalu</string>
     <string name="tv_proxy_mode_ads">Saat iklan</string>
     <string name="tv_proxies_1440p">Proxy publik maksimal 1080p. Untuk 1440p, gunakan proxy yang menyiarkannya, atau pilih \"Saat iklan\" agar 1440p tetap di luar iklan.</string>
-    <string name="tv_adblock_summary_1440p">Saat iklan, beralih ke stream tanpa iklan. 1440p berfungsi; kualitas bisa turun selama iklan.</string>
+    <string name="tv_adblock_summary_1440p">Beralih sementara ke 360p saat iklan, lalu kembali ke kualitas penuh (mendukung 1440p).</string>
     <string name="tv_chat_sub_prime">Prime</string>
     <string name="tv_chat_sub_tier">Tingkat %1$d</string>
     <string name="tv_chat_sub">%1$s berlangganan</string>
@@ -1154,7 +1154,7 @@
     <string name="tv_adblock_swap_locked_hint">Aktif secara bawaan. Aktifkan proksi kustom atau HTTP untuk mematikannya.</string>
     <string name="tv_adblock_swap_locked_exp_hint">Tetap aktif sebagai cadangan otomatis saat Adblock (Swap+) atau Adblock (VOD) aktif.</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">Eksperimental — memutar siaran langsung melalui VOD berjalan (~30 dtk jeda, obrolan sinkron) tanpa iklan. Bekerja di mana saja seperti Swap (pemutar utama, Multi-Stream, dan PiP) dan otomatis beralih ke Swap+ atau Swap jika VOD tidak tersedia.</string>
+    <string name="tv_adblock_exp_summary">Memutar siaran langsung melalui VOD aktif (jeda ~30 dtk) tanpa iklan. Mendukung 1440p (memerlukan VOD aktif di saluran).</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) aktif</string>
     <string name="tv_adblock_exp_proxies_disabled">Proxy tidak dapat diaktifkan saat Adblock (Swap+) atau Adblock (VOD) aktif.</string>
     <string name="tv_adblock_exp_disabled_by_proxy">Nonaktifkan proxy kustom dan HTTP terlebih dahulu.</string>
@@ -1499,11 +1499,11 @@
     <string name="tv_chat_qr_regenerate">Buat ulang tautan QR</string>
     <string name="tv_chat_qr_regenerated">Tautan QR baru dibuat — perangkat sebelumnya terputus</string>
     <string name="tv_chat_qr_reconnect">Sambung ulang</string>
-    <string name="tv_adblock_swap_desc">Beralih ke stream cadangan saat iklan (kualitas bisa turun sementara).</string>
+    <string name="tv_adblock_swap_desc">Turun ke 360p saat iklan. Mendukung 1440p.</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">Eksperimental — blokir iklan tanpa jeda, penurunan kualitas lebih minim, dan latensi normal (Swap dipakai di PiP/Multi-Stream).</string>
-    <string name="tv_adblock_swap_plus_summary">Eksperimental — memblokir iklan secara mulus tanpa jeda, penurunan kualitas lebih minim, dan latensi siaran normal (tidak seperti Adblock (VOD)). Tidak dipakai di Multi-Stream atau PiP (tetap pakai Swap). Otomatis beralih ke Swap jika perlu. Mungkin tidak bekerja 100% di semua siaran.</string>
-    <string name="tv_adblock_vod_desc">Eksperimental — via VOD berjalan (~30 dtk), aktif di semua mode (PiP/Multi-Stream).</string>
+    <string name="tv_adblock_swap_plus_desc">Mulus, maks 1080p (tanpa 1440p). Menggunakan Swap di multi-stream &amp; PiP.</string>
+    <string name="tv_adblock_swap_plus_summary">Mengganti iklan secara mulus tanpa macet atau turun ke 360p. Maksimal 1080p (1440p tidak didukung). Di multi-stream dan PiP menggunakan Swap.</string>
+    <string name="tv_adblock_vod_desc">Jeda ~30 dtk, tanpa iklan. Mendukung 1440p (perlu VOD).</string>
     <string name="tv_vod_audio_recovery">Pulihkan audio VOD yang dibisukan</string>
     <string name="tv_vod_audio_recovery_summary">Mencoba memulihkan audio yang dibisukan DMCA di VOD, rewind DVR live, dan Adblock (VOD) jika audio asli masih tersedia di Twitch (tidak 100% berhasil tergantung VOD). Menampilkan area hijau (pulih) dan merah (bisu) di bilah.</string>
     <string name="tv_vod_audio_recovered_toast">Audio bisu dipulihkan (~%1$d mnt)</string>
@@ -1550,8 +1550,15 @@
     <string name="interface_mode_tv">TV</string>
     <string name="interface_mode_mobile">Seluler</string>
     <string name="mobile_accent_color_title">Warna aksen</string>
-    <string name="mobile_adblock_swap_plus_desc">Penggantian iklan mulus di pemutar utama sambil mempertahankan 1440p / HEVC / AV1. Beralih ke Swap klasik jika tidak tersedia.</string>
-    <string name="mobile_adblock_swap_plus_summary">Penggantian iklan mulus di pemutar (mempertahankan 1440p / HEVC / AV1, cadangan Swap klasik)</string>
-    <string name="mobile_adblock_vod_desc">Memutar aliran VOD langsung tanpa iklan. Beralih otomatis jika tidak tersedia.</string>
-    <string name="mobile_adblock_vod_summary">Memutar aliran VOD langsung tanpa iklan dengan cadangan otomatis</string>
+    <string name="mobile_adblock_swap_plus_desc">Stream mulus, maks 1080p (1440p tidak didukung).</string>
+    <string name="mobile_adblock_swap_plus_summary">Mengganti iklan secara mulus tanpa macet atau turun ke 360p. Maksimal 1080p (1440p tidak didukung).</string>
+    <string name="mobile_adblock_vod_desc">Jeda ~30 dtk, tanpa iklan. Mendukung 1440p (perlu VOD).</string>
+    <string name="mobile_adblock_vod_summary">Memutar siaran langsung melalui VOD aktif (jeda ~30 dtk) tanpa iklan. Mendukung 1440p (memerlukan VOD aktif di saluran).</string>
+    <string name="proxy_protocol">Protokol</string>
+    <string name="proxy_host_protocol_hint">Host (mis. 10.0.1.20 atau socks5://host:port)</string>
+    <string name="show_stream_language">Tampilkan bahasa stream</string>
+    <string name="show_stream_language_summary">Tampilkan lencana kode bahasa kecil pada thumbnail stream</string>
+    <string name="tv_remote_action_scroll_chat">Gulir chat</string>
+    <string name="tv_chat_scroll_hint_paused">Chat dijeda · ▲▼ Gulir · OK Terbaru · Kembali Keluar</string>
+    <string name="tv_chat_scroll_hint_live">Chat langsung · ▲▼ Gulir · Kembali Keluar</string>
 </resources>

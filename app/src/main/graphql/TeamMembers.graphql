@@ -11,6 +11,7 @@ query TeamMembers($name: String!, $first: Int, $after: Cursor) {
                     stream {
                         broadcaster {
                             broadcastSettings {
+                                language
                                 title
                             }
                         }

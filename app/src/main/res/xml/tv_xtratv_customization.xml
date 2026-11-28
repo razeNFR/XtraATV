@@ -80,4 +80,12 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="tv_show_stream_language"
+        android:summary="@string/show_stream_language_summary"
+        android:title="@string/show_stream_language"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
 </androidx.preference.PreferenceScreen>

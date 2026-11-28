@@ -112,9 +112,17 @@ class XtraModule(application: Application) {
         user: String?,
         password: String?,
     ): CronetEngine? {
+        val parsed = com.github.andreyasadchy.xtra.util.StreamProxyHelper.parse(host, port) ?: return null
+        if (parsed.isSocks) return null
+        val effectivePort = parsed.port ?: return null
         val app = context.applicationContext
         if (!CronetProvider.getAllProviders(app).any { it.isEnabled }) return null
-        val key = "$host:$port:${user.orEmpty()}:${password.orEmpty()}"
+        val scheme = if (parsed.protocol == com.github.andreyasadchy.xtra.util.StreamProxyHelper.ProxyProtocol.HTTPS) {
+            org.chromium.net.Proxy.HTTPS
+        } else {
+            org.chromium.net.Proxy.HTTP
+        }
+        val key = "${parsed.protocol.scheme}://${parsed.host}:$effectivePort:${user.orEmpty()}:${password.orEmpty()}"
         cachedProxyCronetEngines[key]?.let { return it }
         val proxyHeaders = if (!user.isNullOrBlank() && !password.isNullOrBlank()) {
             mapOf("Proxy-Authorization" to android.util.Base64.encodeToString("$user:$password".toByteArray(), android.util.Base64.NO_WRAP)).entries.toList()
@@ -131,9 +139,9 @@ class XtraModule(application: Application) {
                 org.chromium.net.ProxyOptions(
                     listOf(
                         org.chromium.net.Proxy(
-                            org.chromium.net.Proxy.HTTP,
-                            host,
-                            port,
+                            scheme,
+                            parsed.host,
+                            effectivePort,
                             cronetExecutor.value,
                             object : org.chromium.net.Proxy.Callback() {
                                 override fun onBeforeTunnelRequest(request: org.chromium.net.Proxy.Callback.Request) {
@@ -168,8 +176,16 @@ class XtraModule(application: Application) {
         password: String?,
     ): HttpEngine? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) < 7) return null
+        val parsed = com.github.andreyasadchy.xtra.util.StreamProxyHelper.parse(host, port) ?: return null
+        if (parsed.isSocks) return null
+        val effectivePort = parsed.port ?: return null
         val app = context.applicationContext
-        val key = "$host:$port:${user.orEmpty()}:${password.orEmpty()}"
+        val scheme = if (parsed.protocol == com.github.andreyasadchy.xtra.util.StreamProxyHelper.ProxyProtocol.HTTPS) {
+            android.net.http.Proxy.SCHEME_HTTPS
+        } else {
+            android.net.http.Proxy.SCHEME_HTTP
+        }
+        val key = "${parsed.protocol.scheme}://${parsed.host}:$effectivePort:${user.orEmpty()}:${password.orEmpty()}"
         cachedProxyHttpEngines[key]?.let { return it }
         val proxyHeaders = if (!user.isNullOrBlank() && !password.isNullOrBlank()) {
             listOf(android.util.Pair("Proxy-Authorization", android.util.Base64.encodeToString("$user:$password".toByteArray(), android.util.Base64.NO_WRAP)))
@@ -180,9 +196,9 @@ class XtraModule(application: Application) {
                 android.net.http.ProxyOptions.fromProxyList(
                     listOf(
                         android.net.http.Proxy.createHttpProxy(
-                            android.net.http.Proxy.SCHEME_HTTP,
-                            host,
-                            port,
+                            scheme,
+                            parsed.host,
+                            effectivePort,
                             cronetExecutor.value,
                             object : android.net.http.Proxy.HttpConnectCallback {
                                 override fun onBeforeRequest(request: android.net.http.Proxy.HttpConnectCallback.Request) {

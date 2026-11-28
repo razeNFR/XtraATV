@@ -66,6 +66,7 @@ object TvRemoteKeys {
     const val ACTION_CYCLE_CHAT_PREV = "cycle_chat_prev"
     const val ACTION_TOGGLE_CHAT = "toggle_chat"
     const val ACTION_CHAT_PANEL = "chat_panel"
+    const val ACTION_SCROLL_CHAT = "scroll_chat"
     const val ACTION_STREAM_SWITCHER = "stream_switcher"
     const val ACTION_GO_LIVE = "go_live"
     const val ACTION_PLAY_PAUSE = "play_pause"
@@ -94,6 +95,7 @@ object TvRemoteKeys {
         ACTION_CYCLE_CHAT_PREV,
         ACTION_TOGGLE_CHAT,
         ACTION_CHAT_PANEL,
+        ACTION_SCROLL_CHAT,
         ACTION_RESTART_CHAT,
         ACTION_STREAM_SWITCHER,
         ACTION_GO_LIVE,
@@ -215,6 +217,7 @@ object TvRemoteKeys {
         ACTION_CYCLE_CHAT_PREV -> context.getString(R.string.tv_remote_action_cycle_chat_prev)
         ACTION_TOGGLE_CHAT -> context.getString(R.string.tv_remote_action_toggle_chat)
         ACTION_CHAT_PANEL -> context.getString(R.string.tv_remote_action_chat_panel)
+        ACTION_SCROLL_CHAT -> context.getString(R.string.tv_remote_action_scroll_chat)
         ACTION_RESTART_CHAT -> context.getString(R.string.tv_restart_chat)
         ACTION_STREAM_SWITCHER -> context.getString(R.string.tv_remote_action_stream_switcher)
         ACTION_GO_LIVE -> context.getString(R.string.tv_go_to_live)

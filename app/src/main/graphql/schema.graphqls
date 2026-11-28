@@ -35,6 +35,7 @@ type Broadcast {
 }
 
 type BroadcastSettings {
+    language: String
     title: String
 }
 

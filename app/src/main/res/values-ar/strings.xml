@@ -324,7 +324,7 @@
     <string name="proxy_port">Port</string>
     <string name="proxy_user">Username</string>
     <string name="proxy_password">Password</string>
-    <string name="proxy_settings">HTTP proxy settings</string>
+    <string name="proxy_settings">إعدادات الوكيل (HTTP / SOCKS)</string>
     <string name="stop_download">Stop download</string>
     <string name="resume_download">Resume download</string>
     <string name="show_view_count_icon">Show view count and uptime icons</string>
@@ -932,7 +932,7 @@
     <string name="tv_proxy_mode_always">دائمًا</string>
     <string name="tv_proxy_mode_ads">أثناء الإعلانات</string>
     <string name="tv_proxies_1440p">البروكسيات العامة تتوقف عند 1080p. للحصول على 1440p استخدم بروكسيًا يبثّه، أو اختر \"أثناء الإعلانات\" لتحصل عليه خارج الإعلانات.</string>
-    <string name="tv_adblock_summary_1440p">أثناء الإعلان، ينتقل إلى بث بلا إعلانات. يعمل 1440p؛ قد تنخفض الجودة طوال مدة الإعلان.</string>
+    <string name="tv_adblock_summary_1440p">ينتقل مؤقتًا إلى 360p أثناء الإعلانات ثم يعود إلى الجودة الكاملة (يدعم 1440p).</string>
     <string name="tv_chat_sub_prime">Prime</string>
     <string name="tv_chat_sub_tier">المستوى %1$d</string>
     <string name="tv_chat_sub">اشترك %1$s</string>
@@ -1153,7 +1153,7 @@
     <string name="tv_adblock_swap_locked_hint">مفعّل افتراضياً. فعّل وكيل بث مخصص أو HTTP لتتمكن من إيقافه.</string>
     <string name="tv_adblock_swap_locked_exp_hint">يبقى نشطًا كخيار احتياطي تلقائي مع Adblock (Swap+) أو Adblock (VOD).</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">تجريبي — يشغّل البث عبر VOD الجاري (تأخير ~30 ث ودردشة متزامنة) لتجنب الإعلانات. يعمل في كل مكان مثل Swap (المشغّل الرئيسي والبث المتعدد وPiP) وينتقل إلى Swap+ أو Swap إذا لم يتوفر VOD.</string>
+    <string name="tv_adblock_exp_summary">يشغّل البث المباشر عبر فيديو VOD النشط (تأخير ~30 ثانية) بدون إعلانات. يدعم 1440p (يتطلب تفعيل VODs في القناة).</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) نشط</string>
     <string name="tv_adblock_exp_proxies_disabled">لا يمكن تفعيل الوكلاء أثناء تفعيل Adblock (Swap+) أو Adblock (VOD).</string>
     <string name="tv_adblock_exp_disabled_by_proxy">قم بتعطيل الوكلاء المخصصة ووكلاء HTTP أولاً.</string>
@@ -1498,11 +1498,11 @@
     <string name="tv_chat_qr_regenerate">إعادة إنشاء رابط QR</string>
     <string name="tv_chat_qr_regenerated">تم إنشاء رابط QR جديد — تم فصل الأجهزة السابقة</string>
     <string name="tv_chat_qr_reconnect">إعادة الاتصال</string>
-    <string name="tv_adblock_swap_desc">ينتقل إلى بث احتياطي أثناء الإعلانات (قد تنخفض الجودة مؤقتًا).</string>
+    <string name="tv_adblock_swap_desc">ينخفض إلى 360p أثناء الإعلانات. يدعم 1440p.</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">تجريبي — يحجب الإعلانات دون انقطاع مع انخفاض أقل في الجودة وزمن تأخير طبيعي (يُستخدم Swap في PiP/Multi-Stream).</string>
-    <string name="tv_adblock_swap_plus_summary">تجريبي — يحجب الإعلانات بشكل مستمر دون انقطاع مع انخفاض أقل في الجودة وزمن تأخير طبيعي (بخلاف Adblock (VOD)). لا يُستخدم في Multi-Stream أو PiP (يبقيان على Swap). يتحول تلقائياً إلى Swap عند الحاجة. قد لا يعمل 100% على كل البثوث.</string>
-    <string name="tv_adblock_vod_desc">تجريبي — عبر VOD المباشر (~30 ث)، يعمل في كل مكان (PiP/البث المتعدد).</string>
+    <string name="tv_adblock_swap_plus_desc">بدون تقطيع، حتى 1080p فقط (لا يدعم 1440p). يستخدم Swap في البث المتعدد وPiP.</string>
+    <string name="tv_adblock_swap_plus_summary">يستبدل الإعلانات بسلاسة دون توقف أو انخفاض إلى 360p. بحد أقصى 1080p (لا يدعم 1440p). في البث المتعدد وPiP يتم استخدام Swap.</string>
+    <string name="tv_adblock_vod_desc">تأخير ~30 ثانية بدون إعلانات. يدعم 1440p (يتطلب VODs).</string>
     <string name="tv_vod_audio_recovery">استعادة صوت VOD المكتوم</string>
     <string name="tv_vod_audio_recovery_summary">يحاول استعادة الصوت المكتوم بسبب DMCA في VOD والرجوع المباشر DVR وAdblock (VOD) إذا كان الصوت الأصلي لا يزال متوفراً على Twitch (غير مضمون بنسبة 100% حسب كل VOD). يعرض مقاطع خضراء (مستعادة) وحمراء (مكتومة) على الشريط.</string>
     <string name="tv_vod_audio_recovered_toast">تمت استعادة الصوت المكتوم (~%1$d د)</string>
@@ -1549,8 +1549,15 @@
     <string name="interface_mode_tv">التلفاز</string>
     <string name="interface_mode_mobile">الهاتف</string>
     <string name="mobile_accent_color_title">لون التمييز</string>
-    <string name="mobile_adblock_swap_plus_desc">استبدال سلس للإعلانات داخل المشغل الرئيسي مع الحفاظ على 1440p / HEVC / AV1. يعود إلى Swap الكلاسيكي عند عدم التوفر.</string>
-    <string name="mobile_adblock_swap_plus_summary">استبدال سلس داخل المشغل (يحافظ على 1440p / HEVC / AV1 مع رجوع تلقائي لـ Swap)</string>
-    <string name="mobile_adblock_vod_desc">يشغل بث VOD المباشر بدون إعلانات. يعود تلقائياً إذا لم يكن متاحاً.</string>
-    <string name="mobile_adblock_vod_summary">يشغل بث VOD المباشر بدون إعلانات مع رجوع تلقائي</string>
+    <string name="mobile_adblock_swap_plus_desc">بث سلس حتى 1080p كحد أقصى (لا يدعم 1440p).</string>
+    <string name="mobile_adblock_swap_plus_summary">يستبدل الإعلانات بسلاسة دون توقف أو انخفاض إلى 360p. بحد أقصى 1080p (لا يدعم 1440p).</string>
+    <string name="mobile_adblock_vod_desc">تأخير ~30 ثانية بدون إعلانات. يدعم 1440p (يتطلب VODs).</string>
+    <string name="mobile_adblock_vod_summary">يشغّل البث المباشر عبر فيديو VOD النشط (تأخير ~30 ثانية) بدون إعلانات. يدعم 1440p (يتطلب تفعيل VODs في القناة).</string>
+    <string name="proxy_protocol">البروتوكول</string>
+    <string name="proxy_host_protocol_hint">المضيف (مثل 10.0.1.20 أو socks5://host:port)</string>
+    <string name="show_stream_language">إظهار لغة البث</string>
+    <string name="show_stream_language_summary">عرض شارة صغيرة لرمز اللغة على صور البث المصغرة</string>
+    <string name="tv_remote_action_scroll_chat">تمرير الدردشة</string>
+    <string name="tv_chat_scroll_hint_paused">الدردشة متوقفة · ▲▼ تمرير · OK الأحدث · رجوع خروج</string>
+    <string name="tv_chat_scroll_hint_live">دردشة مباشرة · ▲▼ تمرير · رجوع خروج</string>
 </resources>

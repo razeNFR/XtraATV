@@ -6,6 +6,7 @@ query GameStreams($id: ID, $slug: String, $name: String, $sort: StreamSort, $tag
                 node {
                     broadcaster {
                         broadcastSettings {
+                            language
                             title
                         }
                         displayName

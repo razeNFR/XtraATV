@@ -5,6 +5,7 @@ query TopStreams($sort: StreamSort, $tags: [String!], $languages: [Language!], $
             node {
                 broadcaster {
                     broadcastSettings {
+                        language
                         title
                     }
                     displayName

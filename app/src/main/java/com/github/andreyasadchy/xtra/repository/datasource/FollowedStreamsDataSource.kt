@@ -139,6 +139,7 @@ class FollowedStreamsDataSource(
                     createdAt = it.stream?.createdAt?.toString(),
                     viewerCount = it.stream?.viewersCount,
                     tags = it.stream?.freeformTags?.mapNotNull { tag -> tag.name },
+                    language = it.stream?.broadcaster?.broadcastSettings?.language,
                 )
             }
         }
@@ -176,6 +177,7 @@ class FollowedStreamsDataSource(
                     createdAt = it.stream?.createdAt,
                     viewerCount = it.stream?.viewersCount,
                     tags = it.stream?.freeformTags?.mapNotNull { tag -> tag.name },
+                    language = it.stream?.language,
                 )
             }
         }
@@ -221,6 +223,7 @@ class FollowedStreamsDataSource(
                 createdAt = it.startedAt,
                 viewerCount = it.viewerCount,
                 tags = it.tags,
+                language = it.language,
             )
         }
         offset = response.pagination?.cursor
@@ -258,6 +261,7 @@ class FollowedStreamsDataSource(
                         createdAt = it.stream.createdAt?.toString(),
                         viewerCount = it.stream.viewersCount,
                         tags = it.stream.freeformTags?.mapNotNull { tag -> tag.name },
+                        language = it.stream.broadcaster?.broadcastSettings?.language,
                     )
                 } else null
             }
@@ -301,6 +305,7 @@ class FollowedStreamsDataSource(
                     createdAt = it.startedAt,
                     viewerCount = it.viewerCount,
                     tags = it.tags,
+                    language = it.language,
                 )
             } else null
         }

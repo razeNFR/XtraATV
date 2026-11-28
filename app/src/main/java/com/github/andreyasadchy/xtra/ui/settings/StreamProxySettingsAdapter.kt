@@ -50,7 +50,7 @@ class StreamProxySettingsAdapter: ListAdapter<StreamProxy, StreamProxySettingsAd
                     }
                     false
                 }
-                text.text = item.host
+                text.text = com.github.andreyasadchy.xtra.util.StreamProxyHelper.formatDisplayLabel(item.host, item.port)
                 checkBox.isChecked = item.enabled
                 checkBox.setOnCheckedChangeListener { _, isChecked ->
                     item.enabled = isChecked

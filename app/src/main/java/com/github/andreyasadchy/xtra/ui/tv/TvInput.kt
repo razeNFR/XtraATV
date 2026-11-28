@@ -190,6 +190,8 @@ fun TvTextField(
     focusRequester: FocusRequester = remember { FocusRequester() },
     onLeft: (() -> Unit)? = null,
     onEditingChange: ((Boolean) -> Unit)? = null,
+    submitOnImeAction: Boolean = true,
+    onImeDone: (() -> Unit)? = null,
     onSubmit: () -> Unit,
 ) {
     val appContext = LocalContext.current
@@ -312,12 +314,19 @@ fun TvTextField(
                         singleLine = true,
                         textStyle = TextStyle(color = textColor, fontSize = 18.sp),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = imeAction),
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = if (submitOnImeAction) imeAction else ImeAction.Done,
+                        ),
                         keyboardActions = KeyboardActions(onAny = {
                             keyboard?.hide()
                             editing = false
-                            focusRequester.requestFocus()
-                            onSubmit()
+                            if (submitOnImeAction) {
+                                runCatching { focusRequester.requestFocus() }
+                                onSubmit()
+                            } else {
+                                onImeDone?.invoke() ?: runCatching { focusRequester.requestFocus() }
+                            }
                         }),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -610,6 +619,7 @@ fun TvSearchBar(
 private fun TvSendPillButton(
     contentDescription: String,
     ready: Boolean,
+    modifier: Modifier = Modifier,
     size: Dp = 46.dp,
     onClick: () -> Unit,
 ) {
@@ -617,7 +627,7 @@ private fun TvSendPillButton(
     val focused by interaction.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (focused) 1.08f else 1f, label = "sendScale")
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
@@ -910,12 +920,24 @@ fun ChatComposer(
     var isTextEditing by remember { mutableStateOf(false) }
     var drawerHasFocus by remember { mutableStateOf(false) }
     val voice = remember { VoiceState() }
+    var focusSendTrigger by remember { mutableIntStateOf(0) }
     val input = rememberVoiceInput(voice) {
         text = it
+        if (it.isNotBlank()) {
+            focusSendTrigger++
+        }
     }
     val requester = remember { FocusRequester() }
+    val sendBtnRequester = remember { FocusRequester() }
     val emoteBtnRequester = remember { FocusRequester() }
     val tabRequesters = remember(emoteGroups.size) { List(emoteGroups.size) { FocusRequester() } }
+    LaunchedEffect(focusSendTrigger) {
+        if (focusSendTrigger > 0) {
+            withFrameNanos { }
+            withFrameNanos { }
+            runCatching { sendBtnRequester.requestFocus() }
+        }
+    }
     val context = LocalContext.current
     val emoteMap = remember(emoteGroups) {
         buildMap {
@@ -1145,11 +1167,19 @@ fun ChatComposer(
                             hint = hint,
                             height = 42.dp,
                             voice = voice,
-                            imeAction = ImeAction.Send,
+                            imeAction = ImeAction.Done,
                             leadingIcon = null,
                             emotes = emoteMap,
                             focusRequester = requester,
                             onEditingChange = { isTextEditing = it },
+                            submitOnImeAction = false,
+                            onImeDone = {
+                                if (text.isNotBlank()) {
+                                    focusSendTrigger++
+                                } else {
+                                    runCatching { requester.requestFocus() }
+                                }
+                            },
                             modifier = Modifier.weight(1f),
                         ) {
                             onSend(text)
@@ -1208,6 +1238,7 @@ fun ChatComposer(
                         TvSendPillButton(
                             contentDescription = sendLabel,
                             ready = text.isNotBlank(),
+                            modifier = Modifier.focusRequester(sendBtnRequester),
                             size = 42.dp,
                         ) {
                             onSend(text)
@@ -1239,11 +1270,19 @@ fun ChatComposer(
                         onValueChange = { text = it },
                         hint = hint,
                         voice = voice,
-                        imeAction = ImeAction.Send,
+                        imeAction = ImeAction.Done,
                         leadingIcon = null,
                         emotes = emoteMap,
                         focusRequester = requester,
                         onEditingChange = { isTextEditing = it },
+                        submitOnImeAction = false,
+                        onImeDone = {
+                            if (text.isNotBlank()) {
+                                focusSendTrigger++
+                            } else {
+                                runCatching { requester.requestFocus() }
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                     ) {
                         onSend(text)
@@ -1270,7 +1309,11 @@ fun ChatComposer(
                     Spacer(Modifier.width(10.dp))
                     VoiceButton(voice, input, onStart = { text = "" })
                     Spacer(Modifier.width(10.dp))
-                    TvIconButton(R.drawable.ic_send_black_24dp, sendLabel) {
+                    TvIconButton(
+                        icon = R.drawable.ic_send_black_24dp,
+                        contentDescription = sendLabel,
+                        modifier = Modifier.focusRequester(sendBtnRequester),
+                    ) {
                         onSend(text)
                     }
                 }

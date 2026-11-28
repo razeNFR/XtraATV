@@ -167,14 +167,13 @@ class PlayerRepository(
                                 connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                 writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                 readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)))
-                                if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                    proxyAuthenticator { _, response ->
-                                        response.request.newBuilder().header(
-                                            "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                        ).build()
-                                    }
-                                }
+                                com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                    this,
+                                    proxyHost,
+                                    proxyPort,
+                                    proxyUser,
+                                    proxyPassword,
+                                )
                             }.build().newCall(Request.Builder().apply {
                                 url(url)
                                 proxyRequestHeaders.forEach {
@@ -216,14 +215,13 @@ class PlayerRepository(
                                 connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                 writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                 readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)))
-                                if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                    proxyAuthenticator { _, response ->
-                                        response.request.newBuilder().header(
-                                            "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                        ).build()
-                                    }
-                                }
+                                com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                    this,
+                                    proxyHost,
+                                    proxyPort,
+                                    proxyUser,
+                                    proxyPassword,
+                                )
                             }.build().newCall(Request.Builder().apply {
                                 url(url)
                                 proxyRequestHeaders.forEach {
@@ -242,14 +240,13 @@ class PlayerRepository(
                             connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                             writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                             readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                            proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)))
-                            if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                proxyAuthenticator { _, response ->
-                                    response.request.newBuilder().header(
-                                        "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                    ).build()
-                                }
-                            }
+                            com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                this,
+                                proxyHost,
+                                proxyPort,
+                                proxyUser,
+                                proxyPassword,
+                            )
                         }.build().newCall(Request.Builder().apply {
                             url(url)
                             proxyRequestHeaders.forEach {
@@ -325,14 +322,13 @@ class PlayerRepository(
                                 connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                 writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                 readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)))
-                                if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                    proxyAuthenticator { _, response ->
-                                        response.request.newBuilder().header(
-                                            "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                        ).build()
-                                    }
-                                }
+                                com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                    this,
+                                    proxyHost,
+                                    proxyPort,
+                                    proxyUser,
+                                    proxyPassword,
+                                )
                             }.build().newCall(Request.Builder().apply {
                                 url(url)
                                 proxyRequestHeaders.forEach {
@@ -378,14 +374,13 @@ class PlayerRepository(
                                 connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                 writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                                 readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                                proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)))
-                                if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                    proxyAuthenticator { _, response ->
-                                        response.request.newBuilder().header(
-                                            "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                        ).build()
-                                    }
-                                }
+                                com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                    this,
+                                    proxyHost,
+                                    proxyPort,
+                                    proxyUser,
+                                    proxyPassword,
+                                )
                             }.build().newCall(Request.Builder().apply {
                                 url(url)
                                 proxyRequestHeaders.forEach {
@@ -406,14 +401,13 @@ class PlayerRepository(
                             connectTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                             writeTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
                             readTimeout(proxyTimeout, TimeUnit.MILLISECONDS)
-                            proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)))
-                            if (!proxyUser.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
-                                proxyAuthenticator { _, response ->
-                                    response.request.newBuilder().header(
-                                        "Proxy-Authorization", Credentials.basic(proxyUser, proxyPassword)
-                                    ).build()
-                                }
-                            }
+                            com.github.andreyasadchy.xtra.util.StreamProxyHelper.applyToOkHttpBuilder(
+                                this,
+                                proxyHost,
+                                proxyPort,
+                                proxyUser,
+                                proxyPassword,
+                            )
                         }.build().newCall(Request.Builder().apply {
                             url(url)
                             proxyRequestHeaders.forEach {

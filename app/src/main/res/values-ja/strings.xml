@@ -324,7 +324,7 @@
     <string name="proxy_port">ポート</string>
     <string name="proxy_user">ユーザー名</string>
     <string name="proxy_password">パスワード</string>
-    <string name="proxy_settings">HTTP プロキシ設定</string>
+    <string name="proxy_settings">プロキシ設定 (HTTP / SOCKS)</string>
     <string name="stop_download">ダウンロードを一時停止</string>
     <string name="resume_download">ダウンロードを再開</string>
     <string name="show_view_count_icon">視聴者数と経過時間にアイコンを表示</string>
@@ -932,7 +932,7 @@
     <string name="tv_proxy_mode_always">常に</string>
     <string name="tv_proxy_mode_ads">広告中のみ</string>
     <string name="tv_proxies_1440p">公開プロキシは1080pまでです。1440pには1440pを配信するプロキシを使うか、「広告中のみ」を選ぶと広告以外で1440pになります。</string>
-    <string name="tv_adblock_summary_1440p">広告中は広告のない配信に切り替えます。1440pは使えます。広告の間は画質が下がることがあります。</string>
+    <string name="tv_adblock_summary_1440p">広告中は一時的に360pに切り替え、終了後に元の画質に戻します（1440p対応）。</string>
     <string name="tv_chat_sub_prime">Prime</string>
     <string name="tv_chat_sub_tier">ティア%1$d</string>
     <string name="tv_chat_sub">%1$sがサブスクしました</string>
@@ -1153,7 +1153,7 @@
     <string name="tv_adblock_swap_locked_hint">標準で有効です。オフにするにはカスタムプロキシまたはHTTPプロキシを有効にしてください。</string>
     <string name="tv_adblock_swap_locked_exp_hint">Adblock (Swap+) または Adblock (VOD) 有効中は自動フォールバックとして有効のままになります。</string>
     <string name="tv_adblock_exp_title">Adblock (VOD)</string>
-    <string name="tv_adblock_exp_summary">実験的 — 進行中のVOD経由でライブを再生（約30秒遅延・チャット自動同期）して広告を回避します。Swapと同様にメイン・マルチストリーム・PiPすべてで動作し、VODがない場合は自動でSwap+またはSwapに切り替わります。</string>
+    <string name="tv_adblock_exp_summary">配信中のVOD経由でライブを再生（約30秒遅延）し広告を回避します。1440p対応（チャンネルでVODが有効な場合）。</string>
     <string name="tv_adblock_exp_switched">Adblock (VOD) 有効</string>
     <string name="tv_adblock_exp_proxies_disabled">Adblock (Swap+) または Adblock (VOD) が有効な間はプロキシを使用できません。</string>
     <string name="tv_adblock_exp_disabled_by_proxy">先にカスタムプロキシとHTTPプロキシを無効にしてください。</string>
@@ -1498,11 +1498,11 @@
     <string name="tv_chat_qr_regenerate">QRリンクを再生成</string>
     <string name="tv_chat_qr_regenerated">新しいQRリンクを生成しました — 以前の端末は切断されました</string>
     <string name="tv_chat_qr_reconnect">再接続</string>
-    <string name="tv_adblock_swap_desc">広告中に予備ストリームへ切替（広告中は画質が下がる場合があります）。</string>
+    <string name="tv_adblock_swap_desc">広告中は360pに低下。1440p対応。</string>
     <string name="tv_adblock_swap_plus_title">Adblock (Swap+)</string>
-    <string name="tv_adblock_swap_plus_desc">試験的 — 途切れにくく画質低下も抑えつつ通常遅延で広告をブロック（PiP・マルチストリームはSwapを使用）。</string>
-    <string name="tv_adblock_swap_plus_summary">試験的 — Adblock (VOD) と異なり通常の遅延を保ったまま、途切れにくく画質低下を抑えて広告を連続ブロックします（マルチストリームとPiPはSwapを使用）。必要時は自動でSwapにフォールバックします。100%動作しない場合があります。</string>
-    <string name="tv_adblock_vod_desc">実験的 — 進行中VOD再生（約30秒遅延）、マルチ/PiP含む全域対応。</string>
+    <string name="tv_adblock_swap_plus_desc">途切れなし・最大1080p（1440p非対応）。マルチストリームとPiPはSwap使用。</string>
+    <string name="tv_adblock_swap_plus_summary">途切れや360p低下なしで広告をシームレスに置換します。最大1080p（1440p非対応）。マルチストリームとPiPではSwapを使用します。</string>
+    <string name="tv_adblock_vod_desc">約30秒遅延・広告なし。1440p対応（VOD有効が必要）。</string>
     <string name="tv_vod_audio_recovery">ミュートされたVOD音声を復元</string>
     <string name="tv_vod_audio_recovery_summary">Twitchに元音声が残っている場合、VOD・ライブDVR巻き戻し・Adblock (VOD) のDMCAミュート音声の復元を試みます（VODによっては100%復元できるわけではありません）。シークバーに緑（復元）と赤（ミュート）を表示します。</string>
     <string name="tv_vod_audio_recovered_toast">ミュート音声を復元しました（約%1$d分）</string>
@@ -1549,8 +1549,15 @@
     <string name="interface_mode_tv">TV</string>
     <string name="interface_mode_mobile">モバイル</string>
     <string name="mobile_accent_color_title">アクセントカラー</string>
-    <string name="mobile_adblock_swap_plus_desc">1440p / HEVC / AV1 を維持したままメインプレーヤー内で広告をシームレスに置換します。利用できない場合は従来の Swap に切り替わります。</string>
-    <string name="mobile_adblock_swap_plus_summary">プレーヤー内で広告をシームレス置換（1440p / HEVC / AV1維持、従来のSwapへ自動フォールバック）</string>
-    <string name="mobile_adblock_vod_desc">ライブVODストリームを広告なしで再生します。利用できない場合は自動で切り替わります。</string>
-    <string name="mobile_adblock_vod_summary">自動フォールバック付きの広告なしライブVOD再生</string>
+    <string name="mobile_adblock_swap_plus_desc">途切れなし・最大1080p（1440p非対応）。</string>
+    <string name="mobile_adblock_swap_plus_summary">途切れや360p低下なしで広告をシームレスに置換します。最大1080p（1440p非対応）。</string>
+    <string name="mobile_adblock_vod_desc">約30秒遅延・広告なし。1440p対応（VOD有効が必要）。</string>
+    <string name="mobile_adblock_vod_summary">配信中のVOD経由でライブを再生（約30秒遅延）し広告を回避します。1440p対応（チャンネルでVODが有効な場合）。</string>
+    <string name="proxy_protocol">プロトコル</string>
+    <string name="proxy_host_protocol_hint">ホスト (例: 10.0.1.20 または socks5://host:port)</string>
+    <string name="show_stream_language">配信言語を表示</string>
+    <string name="show_stream_language_summary">配信サムネイルに小さな言語コードバッジを表示します</string>
+    <string name="tv_remote_action_scroll_chat">チャットをスクロール</string>
+    <string name="tv_chat_scroll_hint_paused">一時停止中 · ▲▼ スクロール · OK 最新へ · 戻る 終了</string>
+    <string name="tv_chat_scroll_hint_live">ライブチャット · ▲▼ スクロール · 戻る 終了</string>
 </resources>
