@@ -104,4 +104,315 @@ class StreamProxyHelperTest {
         assertNull(Stream(language = "").displayLanguageCode)
         assertNull(Stream(language = null).displayLanguageCode)
     }
+
+    @Test
+    fun endToEndSocks5NoAuthMullvadStyleWorksWithOkHttp() {
+        val target = startHttpEchoServer("SOCKS5-NOAUTH-OK")
+        val proxy = startSocks5Server(expectedUser = null, expectedPass = null)
+        try {
+            val client = okhttp3.OkHttpClient.Builder().apply {
+                StreamProxyHelper.applyToOkHttpBuilder(
+                    builder = this,
+                    rawHost = "socks://127.0.0.1",
+                    rawPort = proxy.port,
+                    user = null,
+                    password = null,
+                )
+            }.build()
+            val req = okhttp3.Request.Builder().url("http://127.0.0.1:${target.port}/playlist.m3u8").build()
+            client.newCall(req).execute().use { resp ->
+                assertEquals(200, resp.code)
+                assertEquals("SOCKS5-NOAUTH-OK", resp.body.string())
+            }
+            assertEquals(1, proxy.handledConnections.get())
+        } finally {
+            proxy.close()
+            target.close()
+        }
+    }
+
+    @Test
+    fun endToEndSocks5WithUsernamePasswordAuthWorksWithOkHttp() {
+        val target = startHttpEchoServer("SOCKS5-AUTH-OK")
+        val proxy = startSocks5Server(expectedUser = "mullvadUser", expectedPass = "secret123")
+        try {
+            val client = okhttp3.OkHttpClient.Builder().apply {
+                StreamProxyHelper.applyToOkHttpBuilder(
+                    builder = this,
+                    rawHost = "socks5://127.0.0.1",
+                    rawPort = proxy.port,
+                    user = "mullvadUser",
+                    password = "secret123",
+                )
+            }.build()
+            val req = okhttp3.Request.Builder().url("http://127.0.0.1:${target.port}/gql").build()
+            client.newCall(req).execute().use { resp ->
+                assertEquals(200, resp.code)
+                assertEquals("SOCKS5-AUTH-OK", resp.body.string())
+            }
+            assertEquals(1, proxy.handledConnections.get())
+        } finally {
+            proxy.close()
+            target.close()
+        }
+    }
+
+    @Test
+    fun endToEndSocks4aWorksWithOkHttp() {
+        val target = startHttpEchoServer("SOCKS4A-OK")
+        val proxy = startSocks4aServer(expectedUser = "u4")
+        try {
+            val client = okhttp3.OkHttpClient.Builder().apply {
+                StreamProxyHelper.applyToOkHttpBuilder(
+                    builder = this,
+                    rawHost = "socks4://127.0.0.1",
+                    rawPort = proxy.port,
+                    user = "u4",
+                    password = null,
+                )
+            }.build()
+            val req = okhttp3.Request.Builder().url("http://127.0.0.1:${target.port}/playlist.m3u8").build()
+            client.newCall(req).execute().use { resp ->
+                assertEquals(200, resp.code)
+                assertEquals("SOCKS4A-OK", resp.body.string())
+            }
+            assertEquals(1, proxy.handledConnections.get())
+        } finally {
+            proxy.close()
+            target.close()
+        }
+    }
+
+    @Test
+    fun endToEndHostFilterRoutesMatchingHostsThroughSocks5AndBypassesOthers() {
+        val target = startHttpEchoServer("FILTERED-OK")
+        val proxy = startSocks5Server(expectedUser = null, expectedPass = null)
+        try {
+            // Only proxy "localhost", bypass "127.0.0.1" (simulating playlist vs direct video segments)
+            val client = okhttp3.OkHttpClient.Builder().apply {
+                StreamProxyHelper.applyToOkHttpBuilder(
+                    builder = this,
+                    rawHost = "socks5://127.0.0.1",
+                    rawPort = proxy.port,
+                    user = null,
+                    password = null,
+                    hostFilterRegex = Regex("^localhost$"),
+                )
+            }.build()
+
+            client.newCall(okhttp3.Request.Builder().url("http://localhost:${target.port}/master.m3u8").build()).execute().use { resp ->
+                assertEquals(200, resp.code)
+                assertEquals("FILTERED-OK", resp.body.string())
+            }
+            assertEquals(1, proxy.handledConnections.get())
+
+            client.newCall(okhttp3.Request.Builder().url("http://127.0.0.1:${target.port}/segment.ts").build()).execute().use { resp ->
+                assertEquals(200, resp.code)
+                assertEquals("FILTERED-OK", resp.body.string())
+            }
+            // Direct segment request must NOT hit the SOCKS5 proxy
+            assertEquals(1, proxy.handledConnections.get())
+        } finally {
+            proxy.close()
+            target.close()
+        }
+    }
+
+    @Test
+    fun endToEndHostFilterRoutesMatchingHostsThroughSocks4aAndBypassesOthers() {
+        val target = startHttpEchoServer("FILTERED4-OK")
+        val proxy = startSocks4aServer(expectedUser = null)
+        try {
+            val client = okhttp3.OkHttpClient.Builder().apply {
+                StreamProxyHelper.applyToOkHttpBuilder(
+                    builder = this,
+                    rawHost = "socks4://127.0.0.1",
+                    rawPort = proxy.port,
+                    user = null,
+                    password = null,
+                    hostFilterRegex = Regex("^localhost$"),
+                )
+            }.build()
+
+            client.newCall(okhttp3.Request.Builder().url("http://localhost:${target.port}/master.m3u8").build()).execute().use { resp ->
+                assertEquals(200, resp.code)
+                assertEquals("FILTERED4-OK", resp.body.string())
+            }
+            assertEquals(1, proxy.handledConnections.get())
+
+            client.newCall(okhttp3.Request.Builder().url("http://127.0.0.1:${target.port}/segment.ts").build()).execute().use { resp ->
+                assertEquals(200, resp.code)
+                assertEquals("FILTERED4-OK", resp.body.string())
+            }
+            assertEquals(1, proxy.handledConnections.get())
+        } finally {
+            proxy.close()
+            target.close()
+        }
+    }
+
+    private class LocalTestServer(
+        private val serverSocket: java.net.ServerSocket,
+        val handledConnections: java.util.concurrent.atomic.AtomicInteger,
+        private val thread: Thread,
+    ) : AutoCloseable {
+        val port: Int get() = serverSocket.localPort
+        override fun close() {
+            runCatching { serverSocket.close() }
+            thread.interrupt()
+        }
+    }
+
+    private fun startHttpEchoServer(responseBody: String): LocalTestServer {
+        val ss = java.net.ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))
+        val count = java.util.concurrent.atomic.AtomicInteger(0)
+        val t = Thread {
+            while (!ss.isClosed) {
+                val client = try { ss.accept() } catch (_: Exception) { break }
+                Thread {
+                    client.use { sock ->
+                        count.incrementAndGet()
+                        val reader = sock.getInputStream().bufferedReader()
+                        while (true) {
+                            val line = reader.readLine() ?: break
+                            if (line.isEmpty()) break
+                        }
+                        val bytes = responseBody.toByteArray(Charsets.UTF_8)
+                        val headers = "HTTP/1.1 200 OK\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
+                        sock.getOutputStream().write(headers.toByteArray(Charsets.US_ASCII))
+                        sock.getOutputStream().write(bytes)
+                        sock.getOutputStream().flush()
+                    }
+                }.start()
+            }
+        }.apply { isDaemon = true; start() }
+        return LocalTestServer(ss, count, t)
+    }
+
+    private fun startSocks5Server(expectedUser: String?, expectedPass: String?): LocalTestServer {
+        val ss = java.net.ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))
+        val count = java.util.concurrent.atomic.AtomicInteger(0)
+        val t = Thread {
+            while (!ss.isClosed) {
+                val client = try { ss.accept() } catch (_: Exception) { break }
+                Thread {
+                    client.use { sock ->
+                        val inp = java.io.DataInputStream(sock.getInputStream())
+                        val out = sock.getOutputStream()
+                        val ver = inp.readUnsignedByte()
+                        if (ver != 0x05) return@use
+                        val nMethods = inp.readUnsignedByte()
+                        val methods = ByteArray(nMethods)
+                        inp.readFully(methods)
+                        if (expectedUser != null && expectedPass != null) {
+                            if (0x02.toByte() !in methods) {
+                                out.write(byteArrayOf(0x05, 0xFF.toByte()))
+                                out.flush()
+                                return@use
+                            }
+                            out.write(byteArrayOf(0x05, 0x02))
+                            out.flush()
+                            val authVer = inp.readUnsignedByte()
+                            val uLen = inp.readUnsignedByte()
+                            val uBytes = ByteArray(uLen).also { inp.readFully(it) }
+                            val pLen = inp.readUnsignedByte()
+                            val pBytes = ByteArray(pLen).also { inp.readFully(it) }
+                            val ok = authVer == 0x01 &&
+                                String(uBytes, Charsets.UTF_8) == expectedUser &&
+                                String(pBytes, Charsets.UTF_8) == expectedPass
+                            out.write(byteArrayOf(0x01, if (ok) 0x00 else 0x01))
+                            out.flush()
+                            if (!ok) return@use
+                        } else {
+                            out.write(byteArrayOf(0x05, 0x00))
+                            out.flush()
+                        }
+
+                        val reqVer = inp.readUnsignedByte()
+                        val cmd = inp.readUnsignedByte()
+                        inp.readUnsignedByte() // RSV
+                        val atyp = inp.readUnsignedByte()
+                        if (reqVer != 0x05 || cmd != 0x01) return@use
+                        val destHost = when (atyp) {
+                            0x01 -> {
+                                val addr = ByteArray(4).also { inp.readFully(it) }
+                                java.net.InetAddress.getByAddress(addr).hostAddress!!
+                            }
+                            0x03 -> {
+                                val len = inp.readUnsignedByte()
+                                val dom = ByteArray(len).also { inp.readFully(it) }
+                                String(dom, Charsets.UTF_8)
+                            }
+                            0x04 -> {
+                                val addr = ByteArray(16).also { inp.readFully(it) }
+                                java.net.InetAddress.getByAddress(addr).hostAddress!!
+                            }
+                            else -> return@use
+                        }
+                        val destPort = inp.readUnsignedShort()
+                        java.net.Socket(destHost, destPort).use { upstream ->
+                            count.incrementAndGet()
+                            out.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0, 0))
+                            out.flush()
+                            relaySockets(sock, upstream)
+                        }
+                    }
+                }.start()
+            }
+        }.apply { isDaemon = true; start() }
+        return LocalTestServer(ss, count, t)
+    }
+
+    private fun startSocks4aServer(expectedUser: String?): LocalTestServer {
+        val ss = java.net.ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))
+        val count = java.util.concurrent.atomic.AtomicInteger(0)
+        val t = Thread {
+            while (!ss.isClosed) {
+                val client = try { ss.accept() } catch (_: Exception) { break }
+                Thread {
+                    client.use { sock ->
+                        val inp = java.io.DataInputStream(sock.getInputStream())
+                        val out = sock.getOutputStream()
+                        val vn = inp.readUnsignedByte()
+                        val cd = inp.readUnsignedByte()
+                        val destPort = inp.readUnsignedShort()
+                        val ip = ByteArray(4).also { inp.readFully(it) }
+                        val user = readNullTerminated(inp)
+                        val is4a = ip[0] == 0.toByte() && ip[1] == 0.toByte() && ip[2] == 0.toByte() && ip[3] != 0.toByte()
+                        val destHost = if (is4a) readNullTerminated(inp) else java.net.InetAddress.getByAddress(ip).hostAddress!!
+                        if (vn != 0x04 || cd != 0x01 || (expectedUser != null && user != expectedUser)) {
+                            out.write(byteArrayOf(0x00, 0x5B, 0, 0, 0, 0, 0, 0))
+                            out.flush()
+                            return@use
+                        }
+                        java.net.Socket(destHost, destPort).use { upstream ->
+                            count.incrementAndGet()
+                            out.write(byteArrayOf(0x00, 0x5A, 0, 0, 0, 0, 0, 0))
+                            out.flush()
+                            relaySockets(sock, upstream)
+                        }
+                    }
+                }.start()
+            }
+        }.apply { isDaemon = true; start() }
+        return LocalTestServer(ss, count, t)
+    }
+
+    private fun readNullTerminated(inp: java.io.DataInputStream): String {
+        val buf = java.io.ByteArrayOutputStream()
+        while (true) {
+            val b = inp.read()
+            if (b <= 0) break
+            buf.write(b)
+        }
+        return buf.toString(Charsets.UTF_8.name())
+    }
+
+    private fun relaySockets(a: java.net.Socket, b: java.net.Socket) {
+        val t1 = Thread {
+            runCatching { a.getInputStream().copyTo(b.getOutputStream()); b.shutdownOutput() }
+        }.apply { isDaemon = true; start() }
+        runCatching { b.getInputStream().copyTo(a.getOutputStream()); a.shutdownOutput() }
+        runCatching { t1.join(2_000) }
+    }
 }

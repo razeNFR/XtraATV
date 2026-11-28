@@ -301,7 +301,13 @@ object StreamProxyHelper {
                 super.close()
             }
             override fun isConnected() = delegate?.isConnected ?: super.isConnected()
+            override fun isBound() = delegate?.isBound ?: super.isBound()
             override fun isClosed() = delegate?.isClosed ?: super.isClosed()
+            override fun getInetAddress() = delegate?.inetAddress ?: super.getInetAddress()
+            override fun getPort() = delegate?.port ?: super.getPort()
+            override fun getLocalAddress() = delegate?.localAddress ?: super.getLocalAddress()
+            override fun getLocalPort() = delegate?.localPort ?: super.getLocalPort()
+            override fun getRemoteSocketAddress() = delegate?.remoteSocketAddress ?: super.getRemoteSocketAddress()
             override fun setSoTimeout(timeout: Int) {
                 delegate?.soTimeout = timeout
                 super.setSoTimeout(timeout)
