@@ -898,25 +898,65 @@ object TvShadowAdblock {
                 -1L
             }
 
-            // Clock-aligned selection: never serve a segment whose start precedes lastServedEndMs
-            // beyond 45% of a segment's duration, and never re-serve an already seen identity.
-            val fresh = ArrayList<HlsSegment>(nonAd.size)
-            for (seg in nonAd) {
-                if (isAlreadySeen(seg)) continue
-                if (!firstPass && prevLastEndMs != null && seg.pdtMs != null) {
-                    val segDurMs = (seg.durationSec * 1_000.0).roundToLong().coerceAtLeast(1_000L)
-                    val tolMs = (segDurMs * 0.45).roundToLong().coerceAtLeast(450L)
-                    if (seg.pdtMs < prevLastEndMs - tolMs) {
-                        markSeen(seg)
-                        continue
+            // Primary/shadow streams from Twitch share the exact same origin segment URIs even when their
+            // PROGRAM-DATE-TIME clocks drift apart by 10+ seconds over long sessions. Prefer URI-anchored
+            // alignment when switching sources so clock skew can never reject valid live segments or stall ExoPlayer.
+            val lastWindowUriKey = window.lastOrNull()?.let { segmentUriKey(it.uri) }
+            var lastSeenUriIdx = -1
+            if (!firstPass && sourceChanged) {
+                for (i in nonAd.indices) {
+                    if (seenUriSet.contains(segmentUriKey(nonAd[i].uri))) {
+                        lastSeenUriIdx = i
                     }
                 }
-                fresh.add(seg)
+            }
+            val uriAnchoredToWindowTail = lastSeenUriIdx >= 0 &&
+                lastWindowUriKey != null &&
+                segmentUriKey(nonAd[lastSeenUriIdx].uri) == lastWindowUriKey
+
+            val fresh = ArrayList<HlsSegment>(nonAd.size)
+            val rejectedByPdt = ArrayList<HlsSegment>(nonAd.size)
+            if (lastSeenUriIdx >= 0) {
+                for (i in (lastSeenUriIdx + 1) until nonAd.size) {
+                    val seg = nonAd[i]
+                    if (seenUriSet.contains(segmentUriKey(seg.uri))) continue
+                    fresh.add(seg)
+                }
+            } else {
+                // Clock-aligned selection: never serve a segment whose start precedes lastServedEndMs
+                // beyond 45% of a segment's duration, and never re-serve an already seen identity.
+                for (seg in nonAd) {
+                    if (isAlreadySeen(seg)) continue
+                    if (!firstPass && prevLastEndMs != null && seg.pdtMs != null) {
+                        val segDurMs = (seg.durationSec * 1_000.0).roundToLong().coerceAtLeast(1_000L)
+                        val tolMs = (segDurMs * 0.45).roundToLong().coerceAtLeast(450L)
+                        if (seg.pdtMs < prevLastEndMs - tolMs) {
+                            rejectedByPdt.add(seg)
+                            continue
+                        }
+                    }
+                    fresh.add(seg)
+                }
+
+                // Anti-stall guard: if switching sources and every segment was rejected by a large cross-server
+                // PROGRAM-DATE-TIME clock offset (> 4s behind), re-anchor at the new source's live edge instead
+                // of freezing the playlist until Media3 throws PlaylistStuckException.
+                if (!firstPass && sourceChanged && fresh.isEmpty() && rejectedByPdt.isNotEmpty() && prevLastEndMs != null) {
+                    val newestPdt = rejectedByPdt.last().pdtMs
+                    if (newestPdt != null && newestPdt < prevLastEndMs - 4_000L) {
+                        val candidates = rejectedByPdt.filterNot { seenUriSet.contains(segmentUriKey(it.uri)) }
+                        fresh.addAll(candidates.takeLast(2))
+                    } else {
+                        rejectedByPdt.forEach { markSeen(it) }
+                    }
+                } else {
+                    rejectedByPdt.forEach { markSeen(it) }
+                }
             }
 
             // If the first eligible segment overlaps slightly backwards (< prevLastEndMs) while the very
             // next segment is closer (or equal) to prevLastEndMs, start from the next segment to minimize |Δ|.
-            if (!firstPass && prevLastEndMs != null && fresh.size >= 2) {
+            if (!firstPass && lastSeenUriIdx < 0 && prevLastEndMs != null && fresh.size >= 2) {
                 val firstPdt = fresh[0].pdtMs
                 val secondPdt = fresh[1].pdtMs
                 if (firstPdt != null && secondPdt != null && firstPdt < prevLastEndMs) {
@@ -930,8 +970,6 @@ object TvShadowAdblock {
                 lastPrefetches = if (allowPrefetches) prefetches else emptyList()
                 return IngestResult(0)
             }
-
-            val needDiscontinuity = sourceChanged
 
             val toAppend: List<HlsSegment>
             if (firstPass) {
@@ -947,7 +985,20 @@ object TvShadowAdblock {
                 toAppend.forEach { markSeen(it) }
             }
 
-            if (needDiscontinuity) {
+            // Omit EXT-X-DISCONTINUITY when URI-anchored directly onto the previous segment on the exact same
+            // codec/container/init-map stream: Media3 keeps its running TimestampAdjuster with zero audio glitch.
+            val prevWindowTail = window.lastOrNull()
+            val firstNew = toAppend.first()
+            val seamlessContinuation = sourceChanged &&
+                prevWindowTail != null &&
+                uriAnchoredToWindowTail &&
+                firstNew.mapLine == prevWindowTail.mapLine &&
+                firstNew.keyLine == prevWindowTail.keyLine &&
+                (primaryCodec.isNullOrEmpty() || shadowCodec.isNullOrEmpty() || primaryCodec == shadowCodec) &&
+                (primaryContainer.isNullOrEmpty() || shadowContainer.isNullOrEmpty() || primaryContainer == shadowContainer)
+            val needDiscontinuity = sourceChanged && !seamlessContinuation
+
+            if (sourceChanged) {
                 currentWindowLimit = MAX_WINDOW_SIZE
                 spliceCount++
             } else if (currentWindowLimit > BASE_WINDOW_SIZE) {
