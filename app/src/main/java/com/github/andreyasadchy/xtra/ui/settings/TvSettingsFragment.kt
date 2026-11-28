@@ -1603,7 +1603,21 @@ class TvSettingsFragment : Fragment() {
             }
         }
 
-        val firstRowRequester = remember { FocusRequester() }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        val rowRequesters = remember { HashMap<Int, FocusRequester>() }
+        fun rowReq(idx: Int): FocusRequester = rowRequesters.getOrPut(idx) { FocusRequester() }
+        fun focusRow(targetIdx: Int) {
+            if (targetIdx !in list.indices) return
+            scope.launch {
+                val req = rowReq(targetIdx)
+                if (!runCatching { req.requestFocus() }.getOrDefault(false)) {
+                    runCatching { listState.scrollToItem(targetIdx) }
+                    withFrameNanos { }
+                    runCatching { req.requestFocus() }
+                }
+            }
+        }
 
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -1612,18 +1626,17 @@ class TvSettingsFragment : Fragment() {
                     label = "+ ${context.getString(R.string.add_item)}",
                     modifier = Modifier
                         .focusRequester(firstRequester)
-                        .focusProperties {
-                            if (list.isNotEmpty()) down = firstRowRequester
-                        }
                         .onPreviewKeyEvent { ev ->
                             if (ev.type == KeyEventType.KeyDown) {
                                 when (ev.key) {
                                     Key.DirectionLeft -> {
                                         onNavigateLeft(); true
                                     }
-                                    Key.DirectionDown -> if (list.isNotEmpty()) {
-                                        runCatching { firstRowRequester.requestFocus() }; true
-                                    } else false
+                                    Key.DirectionDown -> {
+                                        if (list.isNotEmpty()) focusRow(0)
+                                        true
+                                    }
+                                    Key.DirectionUp, Key.DirectionRight -> true
                                     else -> false
                                 }
                             } else false
@@ -1646,6 +1659,7 @@ class TvSettingsFragment : Fragment() {
             }
             Spacer(Modifier.height(12.dp))
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
@@ -1671,8 +1685,13 @@ class TvSettingsFragment : Fragment() {
                         canMoveUp = index > 0,
                         canMoveDown = index < list.lastIndex,
                         canDelete = true,
-                        mainRowRequester = if (index == 0) firstRowRequester else null,
-                        upRequester = if (index == 0) firstRequester else null,
+                        mainRowRequester = rowReq(index),
+                        onNavigateUp = {
+                            if (index == 0) runCatching { firstRequester.requestFocus() } else focusRow(index - 1)
+                        },
+                        onNavigateDown = {
+                            if (index < list.lastIndex) focusRow(index + 1)
+                        },
                         onNavigateLeft = onNavigateLeft,
                         onToggle = {
                             proxy.enabled = !proxy.enabled
@@ -1715,6 +1734,11 @@ class TvSettingsFragment : Fragment() {
                                     reloadProxyCount()
                                     refreshStamp.intValue++
                                     (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                                    if (list.isEmpty()) {
+                                        runCatching { firstRequester.requestFocus() }
+                                    } else {
+                                        focusRow(index.coerceAtMost(list.lastIndex))
+                                    }
                                 }
                                 .setNegativeButton(context.getString(android.R.string.cancel), null)
                                 .show()
@@ -1735,7 +1759,21 @@ class TvSettingsFragment : Fragment() {
         val context = LocalContext.current
         val list by streamProxyViewModel.list.collectAsState()
         val stamp = refreshStamp.intValue
-        val firstRowRequester = remember { FocusRequester() }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        val rowRequesters = remember { HashMap<Int, FocusRequester>() }
+        fun rowReq(idx: Int): FocusRequester = rowRequesters.getOrPut(idx) { FocusRequester() }
+        fun focusRow(targetIdx: Int) {
+            if (targetIdx !in list.indices) return
+            scope.launch {
+                val req = rowReq(targetIdx)
+                if (!runCatching { req.requestFocus() }.getOrDefault(false)) {
+                    runCatching { listState.scrollToItem(targetIdx) }
+                    withFrameNanos { }
+                    runCatching { req.requestFocus() }
+                }
+            }
+        }
 
         LaunchedEffect(focusRightTrigger.intValue) {
             val trigger = focusRightTrigger.intValue
@@ -1756,18 +1794,17 @@ class TvSettingsFragment : Fragment() {
                     label = "+ ${context.getString(R.string.add_item)}",
                     modifier = Modifier
                         .focusRequester(firstRequester)
-                        .focusProperties {
-                            if (list.isNotEmpty()) down = firstRowRequester
-                        }
                         .onPreviewKeyEvent { ev ->
                             if (ev.type == KeyEventType.KeyDown) {
                                 when (ev.key) {
                                     Key.DirectionLeft -> {
                                         onNavigateLeft(); true
                                     }
-                                    Key.DirectionDown -> if (list.isNotEmpty()) {
-                                        runCatching { firstRowRequester.requestFocus() }; true
-                                    } else false
+                                    Key.DirectionDown -> {
+                                        if (list.isNotEmpty()) focusRow(0)
+                                        true
+                                    }
+                                    Key.DirectionUp, Key.DirectionRight -> true
                                     else -> false
                                 }
                             } else false
@@ -1793,6 +1830,7 @@ class TvSettingsFragment : Fragment() {
             }
             Spacer(Modifier.height(12.dp))
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
@@ -1809,8 +1847,13 @@ class TvSettingsFragment : Fragment() {
                         canMoveUp = index > 0,
                         canMoveDown = index < list.lastIndex,
                         canDelete = true,
-                        mainRowRequester = if (index == 0) firstRowRequester else null,
-                        upRequester = if (index == 0) firstRequester else null,
+                        mainRowRequester = rowReq(index),
+                        onNavigateUp = {
+                            if (index == 0) runCatching { firstRequester.requestFocus() } else focusRow(index - 1)
+                        },
+                        onNavigateDown = {
+                            if (index < list.lastIndex) focusRow(index + 1)
+                        },
                         onNavigateLeft = onNavigateLeft,
                         onToggle = {
                             proxy.enabled = !proxy.enabled
@@ -1856,6 +1899,11 @@ class TvSettingsFragment : Fragment() {
                                     streamProxyViewModel.deleteProxy(proxy)
                                     refreshStamp.intValue++
                                     (activity as? MainActivity)?.onTvAdblockOrProxyChanged()
+                                    if (list.isEmpty()) {
+                                        runCatching { firstRequester.requestFocus() }
+                                    } else {
+                                        focusRow(index.coerceAtMost(list.lastIndex))
+                                    }
                                 }
                                 .setNegativeButton(context.getString(android.R.string.cancel), null)
                                 .show()
@@ -1876,7 +1924,21 @@ class TvSettingsFragment : Fragment() {
         val context = LocalContext.current
         val list by videoSwapViewModel.list.collectAsState()
         val stamp = refreshStamp.intValue
-        val firstRowRequester = remember { FocusRequester() }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        val rowRequesters = remember { HashMap<Int, FocusRequester>() }
+        fun rowReq(idx: Int): FocusRequester = rowRequesters.getOrPut(idx) { FocusRequester() }
+        fun focusRow(targetIdx: Int) {
+            if (targetIdx !in list.indices) return
+            scope.launch {
+                val req = rowReq(targetIdx)
+                if (!runCatching { req.requestFocus() }.getOrDefault(false)) {
+                    runCatching { listState.scrollToItem(targetIdx) }
+                    withFrameNanos { }
+                    runCatching { req.requestFocus() }
+                }
+            }
+        }
 
         LaunchedEffect(focusRightTrigger.intValue) {
             val trigger = focusRightTrigger.intValue
@@ -1897,18 +1959,17 @@ class TvSettingsFragment : Fragment() {
                     label = "+ ${context.getString(R.string.add_item)}",
                     modifier = Modifier
                         .focusRequester(firstRequester)
-                        .focusProperties {
-                            if (list.isNotEmpty()) down = firstRowRequester
-                        }
                         .onPreviewKeyEvent { ev ->
                             if (ev.type == KeyEventType.KeyDown) {
                                 when (ev.key) {
                                     Key.DirectionLeft -> {
                                         onNavigateLeft(); true
                                     }
-                                    Key.DirectionDown -> if (list.isNotEmpty()) {
-                                        runCatching { firstRowRequester.requestFocus() }; true
-                                    } else false
+                                    Key.DirectionDown -> {
+                                        if (list.isNotEmpty()) focusRow(0)
+                                        true
+                                    }
+                                    Key.DirectionUp, Key.DirectionRight -> true
                                     else -> false
                                 }
                             } else false
@@ -1926,6 +1987,7 @@ class TvSettingsFragment : Fragment() {
             }
             Spacer(Modifier.height(12.dp))
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
@@ -1952,8 +2014,13 @@ class TvSettingsFragment : Fragment() {
                         canMoveUp = index > 1,
                         canMoveDown = !isPrimary && index < list.lastIndex,
                         canDelete = !isPrimary,
-                        mainRowRequester = if (index == 0) firstRowRequester else null,
-                        upRequester = if (index == 0) firstRequester else null,
+                        mainRowRequester = rowReq(index),
+                        onNavigateUp = {
+                            if (index == 0) runCatching { firstRequester.requestFocus() } else focusRow(index - 1)
+                        },
+                        onNavigateDown = {
+                            if (index < list.lastIndex) focusRow(index + 1)
+                        },
                         onNavigateLeft = onNavigateLeft,
                         onToggle = {
                             if (!isPrimary) {
@@ -2000,6 +2067,11 @@ class TvSettingsFragment : Fragment() {
                                     list.remove(swap)
                                     videoSwapViewModel.deleteVideoSwap(swap)
                                     refreshStamp.intValue++
+                                    if (list.isEmpty()) {
+                                        runCatching { firstRequester.requestFocus() }
+                                    } else {
+                                        focusRow(index.coerceAtMost(list.lastIndex))
+                                    }
                                 }
                                 .setNegativeButton(context.getString(android.R.string.cancel), null)
                                 .show()
@@ -2040,8 +2112,9 @@ class TvSettingsFragment : Fragment() {
         canMoveUp: Boolean,
         canMoveDown: Boolean,
         canDelete: Boolean,
-        mainRowRequester: FocusRequester? = null,
-        upRequester: FocusRequester? = null,
+        mainRowRequester: FocusRequester,
+        onNavigateUp: () -> Unit,
+        onNavigateDown: () -> Unit,
         onNavigateLeft: () -> Unit,
         onToggle: () -> Unit,
         onMoveUp: () -> Unit,
@@ -2051,11 +2124,50 @@ class TvSettingsFragment : Fragment() {
     ) {
         val interaction = remember { MutableInteractionSource() }
         val focused by interaction.collectIsFocusedAsState()
-        val upModifier = if (upRequester != null) {
-            Modifier.focusProperties { up = upRequester }
-        } else {
-            Modifier
+        val moveUpReq = remember { FocusRequester() }
+        val moveDownReq = remember { FocusRequester() }
+        val editReq = remember { FocusRequester() }
+        val deleteReq = remember { FocusRequester() }
+
+        val slots = buildList {
+            add(mainRowRequester)
+            if (canMoveUp) add(moveUpReq)
+            if (canMoveDown) add(moveDownReq)
+            add(editReq)
+            if (canDelete) add(deleteReq)
         }
+
+        fun slotModifier(req: FocusRequester): Modifier = Modifier
+            .focusRequester(req)
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val pos = slots.indexOf(req)
+                when (ev.key) {
+                    Key.DirectionLeft -> {
+                        if (pos <= 0) {
+                            onNavigateLeft()
+                        } else {
+                            runCatching { slots[pos - 1].requestFocus() }
+                        }
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        if (pos in 0 until slots.lastIndex) {
+                            runCatching { slots[pos + 1].requestFocus() }
+                        }
+                        true
+                    }
+                    Key.DirectionUp -> {
+                        onNavigateUp()
+                        true
+                    }
+                    Key.DirectionDown -> {
+                        onNavigateDown()
+                        true
+                    }
+                    else -> false
+                }
+            }
 
         Row(
             modifier = Modifier
@@ -2070,15 +2182,9 @@ class TvSettingsFragment : Fragment() {
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .then(if (mainRowRequester != null) Modifier.focusRequester(mainRowRequester) else Modifier)
-                    .then(upModifier)
+                    .then(slotModifier(mainRowRequester))
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (focused) TvColors.focused else Color.Transparent)
-                    .onPreviewKeyEvent { ev ->
-                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
-                            onNavigateLeft(); true
-                        } else false
-                    }
                     .clickable(interactionSource = interaction, indication = null, onClick = if (showToggle) onToggle else onEdit)
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -2111,10 +2217,10 @@ class TvSettingsFragment : Fragment() {
                     TvListPanel.Switch(enabled, focused)
                 }
             }
-            if (canMoveUp) SmallTextChip("↑", upModifier, onMoveUp)
-            if (canMoveDown) SmallTextChip("↓", upModifier, onMoveDown)
-            SmallTextChip("✎", upModifier, onEdit)
-            if (canDelete) SmallIconPill(iconRes = R.drawable.tv_ic_close, modifier = upModifier, onClick = onDelete)
+            if (canMoveUp) SmallTextChip("↑", slotModifier(moveUpReq), onMoveUp)
+            if (canMoveDown) SmallTextChip("↓", slotModifier(moveDownReq), onMoveDown)
+            SmallTextChip("✎", slotModifier(editReq), onEdit)
+            if (canDelete) SmallIconPill(iconRes = R.drawable.tv_ic_close, modifier = slotModifier(deleteReq), onClick = onDelete)
         }
     }
 

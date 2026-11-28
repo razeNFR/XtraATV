@@ -302,8 +302,14 @@ class StreamsAdapter(
                     if (langCode != null) {
                         languageBadge.visibility = View.VISIBLE
                         languageBadge.text = langCode
+                        val flagDrawable = StreamLanguageBadge.createFlagDrawable(context, langCode)
+                        languageBadge.compoundDrawablePadding = if (flagDrawable != null) {
+                            (5 * context.resources.displayMetrics.density).toInt()
+                        } else 0
+                        languageBadge.setCompoundDrawablesRelative(flagDrawable, null, null, null)
                     } else {
                         languageBadge.visibility = View.GONE
+                        languageBadge.setCompoundDrawablesRelative(null, null, null, null)
                     }
                     val maxMobileTags = when {
                         isTv -> Int.MAX_VALUE

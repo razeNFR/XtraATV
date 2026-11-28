@@ -171,7 +171,9 @@ class MainActivity : AppCompatActivity() {
         prefs = prefs()
         showLastCrash()
         migrateSettings()
-        forceDisplaySettings()
+        if (com.github.andreyasadchy.xtra.ui.view.TvUi.isTv(this)) {
+            forceDisplaySettings()
+        }
         // favorite channels, read before the followed streams are loaded (TV and mobile)
         com.github.andreyasadchy.xtra.ui.tv.TvFavorites.load(this)
         if (resources.getBoolean(R.bool.isTv)) {
