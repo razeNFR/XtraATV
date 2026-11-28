@@ -1978,13 +1978,29 @@ class ExoPlayerService : BasePlaybackService() {
                                     baseParserFactory
                                 }
                             )
-                            setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(
-                                if (useCustomProxy || proxyMultivariantPlaylist) {
-                                    1
+                            setLoadErrorHandlingPolicy(
+                                if (useShadowAdblock) {
+                                    object : DefaultLoadErrorHandlingPolicy(6) {
+                                        override fun getRetryDelayMsFor(
+                                            loadErrorInfo: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo,
+                                        ): Long {
+                                            val httpErr = loadErrorInfo.exception as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
+                                            if (httpErr?.responseCode == 403) {
+                                                return androidx.media3.common.C.TIME_UNSET
+                                            }
+                                            return super.getRetryDelayMsFor(loadErrorInfo)
+                                        }
+                                    }
                                 } else {
-                                    6
+                                    DefaultLoadErrorHandlingPolicy(
+                                        if (useCustomProxy || proxyMultivariantPlaylist) {
+                                            1
+                                        } else {
+                                            6
+                                        }
+                                    )
                                 }
-                            ))
+                            )
                         }.createMediaSource(
                             MediaItem.Builder().apply {
                                 setUri(url.toUri())

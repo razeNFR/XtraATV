@@ -980,6 +980,13 @@ object TvShadowAdblock {
                 // Mark any earlier segments in firstPass as seen too
                 fresh.forEach { markSeen(it) }
             } else {
+                if (sourceChanged) {
+                    // Reset old server's PDT clock cache on source switch while keeping seenUriSet intact:
+                    // prevents a drifted shadow PDT from falsely matching and dropping primary's next segment 2s later.
+                    seenPdtMs.clear()
+                    seenSet.clear()
+                    seenOrder.clear()
+                }
                 // Strictly cap to MAX_INGEST_PER_PASS (3) new segments per refresh — never bulk-dump
                 toAppend = fresh.take(MAX_INGEST_PER_PASS)
                 toAppend.forEach { markSeen(it) }
